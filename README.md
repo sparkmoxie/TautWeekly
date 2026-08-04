@@ -21,6 +21,7 @@ them locally; send controlled tests; then schedule production delivery.
 <img src="platforms/windows/assets/trending.gif" alt="Animated upward-trend emoji" width="104">
 
 [Live documentation](https://sparkmoxie.github.io/TautWeekly/) ·
+[Email States Preview](https://sparkmoxie.github.io/TautWeekly/examples/preview-all-00-INDEX.html) ·
 [Release downloads](#release-downloads) ·
 [Security](SECURITY.md) ·
 [Contributing](CONTRIBUTING.md)

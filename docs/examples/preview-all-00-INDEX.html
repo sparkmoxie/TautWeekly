@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Production-faithful TautWeekly for Plex newsletter state showcase using real public Plex artwork and a dated ratings snapshot.">
+  <title>TautWeekly for Plex — Email States Preview</title>
+  <style>
+    :root{color-scheme:dark;--gold:#e5a00d;--ink:#0f0f0f;--panel:#181818;--line:#2b2b2b;--muted:#969696}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;background:#090909;color:#fff;font-family:Arial,Helvetica,sans-serif}
+    button{font:inherit}
+    .labbar{position:sticky;z-index:20;top:0;border-bottom:1px solid #252525;background:rgba(9,9,9,.94);backdrop-filter:blur(14px)}
+    .labbar-inner{display:flex;align-items:center;justify-content:space-between;gap:20px;max-width:1080px;margin:auto;padding:13px 20px}
+    .labbrand{display:flex;align-items:center;gap:11px;min-width:0}.labmark{display:grid;width:34px;height:34px;place-items:center;border-radius:7px;background:var(--gold);color:#111;font-size:12px;font-weight:900}.labbrand strong{font-size:14px}.labbrand span{display:block;padding-top:2px;color:#777;font-size:10px;letter-spacing:.8px;text-transform:uppercase}
+    .labactions{display:flex;gap:7px}.labaction{min-height:34px;padding:0 12px;border:1px solid #303030;border-radius:7px;background:#151515;color:#bbb;font-size:11px;font-weight:800;cursor:pointer}.labaction:hover,.labaction[aria-pressed=true]{border-color:#765409;color:#fff}.labaction.primary{border-color:var(--gold);background:var(--gold);color:#111}
+    .intro{max-width:1080px;margin:auto;padding:34px 20px 21px}.eyebrow{color:var(--gold);font-size:10px;font-weight:900;letter-spacing:1.5px}.intro h1{max-width:720px;margin:8px 0 8px;font-size:clamp(29px,5vw,48px);line-height:1.02}.intro p{max-width:760px;margin:0;color:#8f8f8f;font-size:13px;line-height:1.6}.privacy{display:inline-flex;margin-top:15px;padding:7px 10px;border:1px solid #2b2b2b;border-radius:999px;color:#a4a4a4;font-size:10px;font-weight:700}
+    .statebar{border-block:1px solid #1f1f1f;background:#0c0c0c}.states{display:flex;max-width:1080px;margin:auto;padding:10px 20px;gap:7px;overflow-x:auto;scrollbar-color:#3b3b3b #111}.state{display:flex;align-items:center;gap:8px;min-width:max-content;padding:8px 11px;border:1px solid #2a2a2a;border-radius:7px;background:#141414;color:#8d8d8d;font-size:10px;font-weight:800;cursor:pointer}.state:hover{color:#ddd}.state[aria-selected=true]{border-color:var(--gold);background:#211a0d;color:#fff}.state b{color:var(--gold);font-size:9px}
+    .workspace{max-width:1080px;margin:auto;padding:22px 20px 62px}.previewmeta{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;max-width:640px;margin:0 auto 14px}.previewmeta strong{display:block;font-size:14px}.previewmeta span{display:block;padding-top:4px;color:#717171;font-size:10px}.arrows{display:flex;gap:6px}.arrow{display:grid;width:34px;height:34px;place-items:center;border:1px solid #2a2a2a;border-radius:7px;background:#131313;color:#aaa;cursor:pointer}.arrow:hover{border-color:#6e4f0b;color:#fff}
+    .email-stage{overflow:hidden;border:1px solid #202020;border-radius:12px;background:#0f0f0f;box-shadow:0 25px 70px rgba(0,0,0,.35)}
+    .allstack{display:grid;gap:34px}.allitem{overflow:hidden;border:1px solid #242424;border-radius:12px}.allhead{padding:14px 17px;border-bottom:1px solid #242424;background:#121212}.allhead b{display:block;font-size:12px}.allhead span{display:block;padding-top:4px;color:#777;font-size:10px}
+    .notice{max-width:760px;margin:25px auto 0;color:#666;font-size:10px;line-height:1.6;text-align:center}
+    .design-hot-mobile{display:none}
+    @media only screen and (max-width:620px){
+      .labbar{position:static}.labbrand span,.labaction span{display:none}.intro{padding-top:26px}.workspace{padding-inline:0}.previewmeta{padding-inline:12px}.email-stage,.allitem{border-inline:0;border-radius:0}.container{width:100%!important}.pad{padding-left:12px!important;padding-right:12px!important}.design-hot-desktop{display:none!important}.design-hot-mobile{display:table-row!important}.design-mobile-banner{width:100%!important;height:150px!important;object-fit:cover!important}.labbar-inner,.intro,.states{padding-inline:12px}.statebar{position:sticky;z-index:12;top:0}.notice{padding-inline:18px}
+    }
+    /* Add ?fixture=mobile to force the email-client breakpoint during visual QA. */
+    .mobile-fixture .workspace{max-width:390px;padding-inline:0}.mobile-fixture .previewmeta{padding-inline:12px}.mobile-fixture .email-stage,.mobile-fixture .allitem{border-inline:0;border-radius:0}.mobile-fixture .container{width:100%!important}.mobile-fixture .pad{padding-left:12px!important;padding-right:12px!important}.mobile-fixture .design-hot-desktop{display:none!important}.mobile-fixture .design-hot-mobile{display:table-row!important}.mobile-fixture .design-mobile-banner{width:100%!important;height:150px!important;object-fit:cover!important}.mobile-fixture .notice{padding-inline:18px}
+    @media print{.labbar,.intro,.statebar,.previewmeta,.notice{display:none!important}.workspace{max-width:none;padding:0}.email-stage,.allitem{border:0;border-radius:0;box-shadow:none}.allitem{break-after:page}.allhead{display:none}}
+  </style>
+</head>
+<body>
+  <header class="labbar">
+    <div class="labbar-inner">
+      <div class="labbrand"><div class="labmark">TW</div><div><strong>TautWeekly for Plex</strong><span>Production-faithful preview gallery</span></div></div>
+      <div class="labactions">
+        <button class="labaction" id="rotate" type="button" aria-label="Rotate real release titles"><span>Rotate releases</span> ↻</button>
+        <button class="labaction" id="show-all" type="button" aria-pressed="false"><span>Show all</span> 8</button>
+        <button class="labaction primary" type="button" onclick="window.print()"><span>Print / Save</span> ↓</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="intro">
+    <div class="eyebrow">RENDERER REFERENCE · AUGUST 4, 2026 SNAPSHOT</div>
+    <h1>The real email layout, across every state.</h1>
+    <p>This specimen follows the generated 640-pixel, table-first newsletter: the same hierarchy, spacing, hero swap, release cards, recap grid, welcome panels, quiet states, and anonymous Binge Champion behavior. Real titles and public Plex Discover artwork make the density representative.</p>
+    <div class="privacy">DEMO VIEWER · DEMO SERVER · NO PLEX TOKEN · SYNTHETIC WATCH COUNTS</div>
+  </section>
+
+  <nav class="statebar" aria-label="Newsletter preview states"><div class="states" id="states"></div></nav>
+
+  <main class="workspace">
+    <div class="previewmeta">
+      <div><strong id="state-title"></strong><span id="state-description"></span></div>
+      <div class="arrows"><button class="arrow" id="previous" type="button" aria-label="Previous preview">←</button><button class="arrow" id="next" type="button" aria-label="Next preview">→</button></div>
+    </div>
+    <div id="preview"></div>
+    <p class="notice">Posters and title art load from public Plex Discover image hosts and remain property of their respective owners. Rotten Tomatoes and IMDb scores are dated visual-fixture snapshots and may change. Watch counts are synthetic. Plex, Tautulli, Rotten Tomatoes, and IMDb are names or marks of their respective owners; no affiliation or endorsement is implied.</p>
+  </main>
+
+  <script>
+  (()=>{"use strict";
+    const asset=name=>`https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/${name}`;
+    const movies=[
+      {title:"Spider-Man: Brand New Day",year:2026,genre:"Action, Adventure, and more",critic:89,audience:98,page:"https://watch.plex.tv/en-GB/movie/spider-man-brand-new-day-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F2%2Fgracenote%2F2133a25098d005ea0977d902ba9d540d.jpg",logo:"https://metadata-static.plex.tv/3/683a142553/3bad437b599b2da6db72cd0e4c015d20.png",summary:"Peter Parker begins a new chapter in this latest big-screen adventure."},
+      {title:"The Odyssey",year:2026,genre:"Adventure, Action, and Fantasy",critic:94,audience:97,page:"https://watch.plex.tv/movie/the-odyssey-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2Fc%2Fgracenote%2Fcb1dd1409ea8ef188be9c04e8d1faad6.jpg",logo:"https://metadata-static.plex.tv/3/683a142553/321ea14806ea389a6e77027ec870ce49.png",summary:"A sweeping journey home unfolds across mythic seas and impossible trials."},
+      {title:"Hadestown: The Musical",year:2026,genre:"Music, Musical, and Drama",critic:97,audience:99,page:"https://watch.plex.tv/en-GB/movie/hadestown-the-musical-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F2%2Fgracenote%2F26774a44c97892de55843819348f33db.jpg",logo:"https://metadata-static.plex.tv/3/683a142553/3cf15af64a8ee101215762cfe1a77eb9.png",summary:"The acclaimed stage musical brings its underworld love story to the screen."},
+      {title:"Motor City",year:2026,genre:"Action, Crime, and Drama",critic:62,audience:66,page:"https://watch.plex.tv/en-GB/movie/motor-city",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2Ff%2Fgracenote%2Ff25321dcfbe6eb638742b445ea5fbeb0.jpg",logo:"https://metadata-static.plex.tv/a/683a142553/a8642e7ca570d7117e35fd2d9ff2a94a.png",summary:"A hard-edged crime story races through the streets of Detroit."},
+      {title:"The Invite",year:2026,genre:"Drama and Thriller",critic:97,audience:89,page:"https://watch.plex.tv/movie/the-invite-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2Fd%2Fgracenote%2Fd3df9d69cadaa122a54fec29ef73a949.jpg",logo:"https://metadata-static.plex.tv/e/683a142553/ebd98116997dd1d6dc7027e1fd5a872b.png",summary:"An intimate gathering takes a tense and unexpected turn."},
+      {title:"Supergirl",year:2026,genre:"Action, Adventure, and Science Fiction",critic:52,audience:73,page:"https://watch.plex.tv/movie/supergirl-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F0%2Fplex%2F04c6c613-c4ef-4543-a7c1-49d5d775e7b1.jpg",logo:"https://metadata-static.plex.tv/f/683a142553/f683e7e2d3183515699e0d2dc0035ebd.png",summary:"Kara Zor-El takes flight in a new interstellar adventure."},
+      {title:"Moana",year:2026,genre:"Adventure, Family, and Fantasy",critic:31,audience:88,page:"https://watch.plex.tv/movie/moana-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2Ff%2Fgracenote%2Ff2749180e11773f79345eb6d6875584b.jpg",logo:"https://metadata-static.plex.tv/0/683a142553/051f94ee09ce1366fc8029ec6694372d.png",summary:"A wayfinder answers the ocean's call in this live-action voyage."},
+      {title:"Couture",year:2026,genre:"Drama",critic:51,audience:46,page:"https://watch.plex.tv/movie/couture-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2Fc%2Fgracenote%2Fcb86b21295468900a103a63296991667.jpg",logo:"https://metadata-static.plex.tv/e/683a142553/e08eda1dd256f2545e00b36076cd2efd.png",summary:"Lives intersect behind the runway during a transformative fashion week."}
+    ];
+    const shows=[
+      {title:"Lioness",genre:"Drama and Thriller",page:"https://watch.plex.tv/show/lioness",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F8%2Fgracenote%2F8d3a03035e1022986d7004ed1684ea8e.jpg",episodes:[["S02 EP08","The Compass Points Home","8.2"],["S02 EP07","The Devil Has Aces","7.7"]],extra:0},
+      {title:"House of the Dragon",genre:"Drama and Fantasy",page:"https://watch.plex.tv/show/house-of-the-dragon",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F2%2Fgracenote%2F2d650eaa545bf768f438604a7291fe6e.jpg",episodes:[["S02 EP04","The Red Dragon and the Gold","9.4"],["S02 EP07","The Red Sowing","8.8"],["S02 EP08","The Queen Who Ever Was","6.5"]],extra:2},
+      {title:"Ted Lasso",genre:"Comedy and Drama",page:"https://watch.plex.tv/show/ted-lasso",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F2%2Fgracenote%2F2f0b1d2133dc5b47908e9f2c90273c8a.jpg",episodes:[["S03 EP06","Sunflowers","8.9"],["S03 EP11","Mom City","9.3"],["S03 EP12","So Long, Farewell","9.4"]],extra:0},
+      {title:"Star Trek: Strange New Worlds",genre:"Science Fiction and Drama",page:"https://watch.plex.tv/show/star-trek-strange-new-worlds",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F6%2Fgracenote%2F6caeccc8f78714e6a3712d02a6c95ae7.jpg",episodes:[["S04 EP02","The Griffin Incident","7.1"],["S02 EP09","Subspace Rhapsody","6.8"],["S02 EP10","Hegemony (1)","8.6"]],extra:11}
+    ];
+    const states=[
+      {id:"manual-welcome",n:"01",name:"Manual welcome",description:"One-off onboarding; no weekly recap or award.",recent:true,welcomeOnly:true,activity:"none",mode:"new",volume:"normal",winner:false},
+      {id:"new-no-history",n:"02",name:"New · no history",description:"First scheduled drop; welcome and anonymous award only.",recent:true,welcomeOnly:false,activity:"none",mode:"new",volume:"normal",winner:false},
+      {id:"new-with-history",n:"03",name:"New · with history",description:"Welcome plus itemized private stats and award.",recent:true,welcomeOnly:false,activity:"itemized",mode:"new",volume:"normal",winner:false},
+      {id:"high-usage-winner",n:"04",name:"High usage · winner",description:"Aggregate cards and gold Binge Champion treatment.",recent:false,welcomeOnly:false,activity:"winner",mode:"new",volume:"many",winner:true},
+      {id:"high-usage-observer",n:"05",name:"High usage · observer",description:"Same anonymous winning totals; neutral recipient card.",recent:false,welcomeOnly:false,activity:"high",mode:"new",volume:"many",winner:false},
+      {id:"established-normal",n:"06",name:"Established · normal",description:"Production item-detail cards for a smaller watch week.",recent:false,welcomeOnly:false,activity:"itemized",mode:"new",volume:"normal",winner:false},
+      {id:"established-quiet",n:"07",name:"Quiet · latest releases",description:"No personal activity; Trending hero and latest additions.",recent:false,welcomeOnly:false,activity:"quiet",mode:"latest",volume:"normal",winner:false},
+      {id:"established-warmup",n:"08",name:"Stats warming up",description:"Collection-window warmup with the shared anonymous award.",recent:false,welcomeOnly:false,activity:"warmup",mode:"new",volume:"normal",winner:false}
+    ];
+    let active=0,offset=0,showAll=false;
+    const esc=value=>String(value).replace(/[&<>\"]/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'\"':"&quot;"})[char]);
+    const rotate=items=>items.map((_,index)=>items[(index+offset)%items.length]);
+    const plural=(count,one,many)=>count===1?one:many;
+
+    function score(source,value){
+      if(value==null)return "";
+      const file=source==="critic"?(value>=60?"rt_ripe.png":"rt_rotten.png"):(value>=60?"rt_upright.png":"rt_spilled.png");
+      const label=source==="critic"?"Rotten Tomatoes critic":"Rotten Tomatoes audience";
+      return `<span style="display:inline-block;margin-left:7px;white-space:nowrap"><img src="${asset(file)}" alt="${label}" width="18" height="18" style="display:inline-block;width:18px;height:18px;object-fit:contain;border:0;vertical-align:-4px;margin-right:4px">${value}%</span>`;
+    }
+    function ratingLine(item){return `<span>${item.year}</span>${score("critic",item.critic)}${score("audience",item.audience)}`}
+    function poster(item,width,extra=""){return `<img src="${item.poster}" width="${width}" alt="${esc(item.title)} poster" style="display:block;width:${width}px;max-width:100%;height:auto;border:0;${extra}">`}
+
+    function welcomeBlock(state){
+      if(!state.recent)return "";
+      const copy=state.welcomeOnly?"Your access to DEMO SERVER is live. Grab the remote — you’re cleared for departure.":"Your access to DEMO SERVER is live. This is your first Friday drop — new releases are below, and your private watch readout will come online as you stream.";
+      return `<tr><td class="pad" style="padding:4px 20px 26px"><table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #e5a00d;border-radius:10px;border-collapse:separate"><tr><td style="padding:20px 22px"><div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.4px"><span style="display:inline-block;vertical-align:middle">WELCOME ABOARD</span><img src="${asset("welcome.gif")}" width="18" height="18" alt="Welcome aboard" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-left:6px"></div><div style="padding-top:7px;font-size:22px;line-height:1.2;color:#fff;font-weight:800">Access granted, Demo Viewer.</div><div style="padding-top:7px;font-size:13px;line-height:1.5;color:#9b9b9b">${copy}</div></td></tr></table></td></tr>`;
+    }
+
+    function heroBlock(state,item){
+      if(!item)return "";
+      const quiet=state.mode==="latest",label=quiet?"TRENDING THIS WEEK":"HOT NEW RELEASE",icon=quiet?"popcorn.gif":"hot.gif",border=(!state.recent&&!state.welcomeOnly)?"#e5a00d":"#2b2b2b",plays=quiet?"Most watched across DEMO SERVER this week • 24 plays":"Most-watched new addition this week • 12 plays";
+      const identity=item.logo?`<div class="design-desktop-logo-wrap" style="padding-top:8px"><img class="design-desktop-logo" src="${item.logo}" alt="${esc(item.title)} logo" style="display:block;max-width:280px;max-height:96px;width:auto;height:auto;border:0"></div>`:`<div style="padding-top:5px;font-size:23px;line-height:1.2;color:#fff;font-weight:800">${esc(item.title)}</div>`;
+      return `<tr class="design-hot-desktop"><td class="pad" style="padding:4px 20px 26px"><table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid ${border};border-radius:10px;border-collapse:separate"><tr><td width="205" valign="top" style="padding:16px 0 16px 16px">${poster(item,180,"height:270px;object-fit:cover;border-radius:8px")}</td><td valign="top" style="padding:16px 20px"><table width="100%" height="270" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:270px"><tr><td valign="top"><img src="${asset(icon)}" width="42" height="42" alt="${label}" style="display:block;width:42px;height:42px;border:0"><div style="padding-top:8px;font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.3px">${label}</div>${identity}<div style="padding-top:4px;color:#969696;font-size:13px;font-weight:500;line-height:1.35">${esc(item.genre)}</div><div style="padding-top:11px;font-size:12px;color:#e5a00d;font-weight:700">${ratingLine(item)}</div><div style="padding-top:10px;font-size:13px;line-height:1.45;color:#969696">${esc(item.summary)}</div></td></tr><tr><td valign="bottom" style="padding-top:12px;font-size:12px;line-height:1.4;color:#e5a00d">${plays}</td></tr></table></td></tr></table></td></tr><tr class="design-hot-mobile" style="display:none"><td class="pad" style="padding:4px 12px 15px"><table cellspacing="0" cellpadding="0" border="0"><tr><td valign="middle" style="padding-right:9px"><img src="${asset(icon)}" width="34" height="34" alt="${label}" style="display:block;width:34px;height:34px;border:0"></td><td valign="middle" style="font-size:11px;line-height:34px;color:#e5a00d;font-weight:800;letter-spacing:1.3px;white-space:nowrap">${label}</td></tr></table></td></tr><tr class="design-hot-mobile" style="display:none"><td class="pad" style="padding:0 12px 26px"><table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid ${border};border-radius:10px;border-collapse:separate;overflow:hidden"><tr><td style="padding:0"><div style="position:relative;overflow:hidden"><img class="design-mobile-banner" src="${item.poster}" alt="${esc(item.title)} banner" style="display:block;width:100%;height:160px;object-fit:cover;object-position:center 28%;border:0"></div></td></tr><tr><td style="padding:16px 18px 20px"><div style="font-size:23px;line-height:1.2;color:#fff;font-weight:800;text-align:left">${esc(item.title)}</div><div style="padding-top:4px;color:#969696;font-size:13px;line-height:1.35">${esc(item.genre)}</div><div style="padding-top:11px;font-size:12px;color:#e5a00d;font-weight:700">${ratingLine(item)}</div><div style="padding-top:14px;font-size:13px;line-height:1.5;color:#969696">${esc(item.summary)}</div><div style="padding-top:22px;font-size:12px;line-height:1.4;color:#e5a00d">${plays}</div></td></tr></table></td></tr>`;
+    }
+
+    function movieCard(item){
+      return `<table width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;overflow:hidden"><tr><td style="padding:0"><img src="${item.poster}" alt="${esc(item.title)} poster" style="display:block;width:100%;aspect-ratio:2/3;object-fit:cover;border:0"></td></tr><tr><td height="130" valign="top" style="height:130px;padding:12px 12px 14px"><div style="color:#fff;font-size:16px;font-weight:700;line-height:1.25">${esc(item.title)}</div><div style="padding-top:5px;color:#969696;font-size:12px;line-height:1.35">${esc(item.genre)}</div><div style="padding-top:11px;font-size:12px;color:#e5a00d;font-weight:700">${ratingLine(item)}</div></td></tr></table>`;
+    }
+    function tvCard(item){
+      const episodeRows=item.episodes.slice(0,3).map(ep=>`<div style="padding-top:2px;color:#b0b0b0;font-size:13px;font-weight:600;line-height:1.35">${esc(ep[0])}: ${esc(ep[1])}${ep[2]?`<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:11px;font-weight:700;white-space:nowrap"><img src="${asset("imdb.png")}" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px">${ep[2]}</span>`:""}</div>`).join("");
+      const extra=item.extra?`<div style="padding-top:10px;color:#e5a00d;font-size:12px;font-weight:700;line-height:1.35">${item.extra} additional ${plural(item.extra,"episode","episodes")} recently added</div>`:"";
+      return `<table width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;overflow:hidden"><tr><td style="padding:0"><img src="${item.poster}" alt="${esc(item.title)} poster" style="display:block;width:100%;aspect-ratio:2/3;object-fit:cover;border:0"></td></tr><tr><td height="203" valign="top" style="height:203px;padding:12px 12px 14px"><div style="height:34px;color:#fff;font-size:16px;font-weight:700;line-height:1.25">${esc(item.title)}</div><div style="height:132px;padding-top:2px;overflow:hidden">${episodeRows}${extra}</div></td></tr></table>`;
+    }
+    function cardRows(items,kind){
+      let html="";
+      for(let i=0;i<items.length;i+=2){html+="<tr>";for(let j=0;j<2;j++){const item=items[i+j];html+=item?`<td width="50%" valign="top" style="padding:0 6px 18px">${kind==="movie"?movieCard(item):tvCard(item)}</td>`:`<td width="50%" style="padding:0 6px 18px"></td>`}html+="</tr>"}
+      return html;
+    }
+    function releaseBlocks(state,movieItems,tvItems){
+      const label=state.mode==="latest"?"LATEST RELEASES":"NEW RELEASES";
+      let html="";
+      if(movieItems.length)html+=`<tr><td class="pad" style="padding:0 20px 10px"><div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px">${label}</div><div style="padding-top:3px;font-size:24px;color:#fff;font-weight:800">Movies</div></td></tr><tr><td class="pad" style="padding:0 14px 8px"><table width="100%" cellspacing="0" cellpadding="0" border="0">${cardRows(movieItems,"movie")}</table></td></tr>`;
+      if(tvItems.length)html+=`<tr><td class="pad" style="padding:${movieItems.length?"8px":"0"} 20px 10px">${movieItems.length?"":`<div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px">${label}</div>`}<div style="padding-top:3px;font-size:24px;color:#fff;font-weight:800">TV</div></td></tr><tr><td class="pad" style="padding:0 14px 14px"><table width="100%" cellspacing="0" cellpadding="0" border="0">${cardRows(tvItems,"tv")}</table></td></tr>`;
+      return html;
+    }
+
+    function detailRows(items,type){
+      return items.map((item,index)=>{
+        let details;
+        if(type==="movie"){
+          const miniScore=(source,value)=>{const file=source==="critic"?(value>=60?"rt_ripe.png":"rt_rotten.png"):(value>=60?"rt_upright.png":"rt_spilled.png"),label=source==="critic"?"Rotten Tomatoes critic":"Rotten Tomatoes audience";return `<span style="display:inline-block;white-space:nowrap"><img src="${asset(file)}" alt="${label}" width="14" height="14" style="display:inline-block;width:14px;height:14px;border:0;vertical-align:-3px;margin-right:3px">${value}%</span>`};
+          details=`<div style="font-size:12px;line-height:1.3;color:#fff;font-weight:800">${esc(item.title)}</div><div style="padding-top:3px;font-size:10px;line-height:1.3;color:#9b9b9b;font-weight:500">${esc(item.genre)}</div><div style="padding-top:4px;font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700">${miniScore("critic",item.critic)}<span style="display:inline-block;width:6px"></span>${miniScore("audience",item.audience)}</div>`;
+        }else{
+          const episode=item.episodes[index%item.episodes.length];
+          details=`<div style="font-size:11px;line-height:1.25;color:#fff;font-weight:800">${esc(item.title)}</div><div style="padding-top:3px;font-size:10px;line-height:1.3;color:#9b9b9b">${esc(episode[0])}: ${esc(episode[1])}</div><div style="padding-top:4px;font-size:10px;line-height:1.3;color:#e5a00d;font-weight:700"><span style="display:inline-block;white-space:nowrap"><img src="${asset("imdb.png")}" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px">${episode[2]}</span></div>`;
+        }
+        return `<tr><td width="50" valign="middle" style="width:50px;padding:7px 8px 7px 0;border-bottom:1px solid #292929"><img src="${item.poster}" width="42" height="62" alt="${esc(item.title)} poster" style="display:block;width:42px;height:62px;object-fit:cover;border:1px solid #363636;border-radius:5px"></td><td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929">${details}</td></tr>`;
+      }).join("");
+    }
+    function compactMetric(icon,value,label,height=138,note=""){
+      return `<table width="100%" height="${height}" cellspacing="0" cellpadding="0" border="0" style="height:${height}px"><tr><td valign="middle"><img src="${asset(icon)}" width="42" height="42" alt="${esc(label)}" style="display:block;width:42px;height:42px;border:0"><div style="padding-top:10px;font-size:27px;font-weight:800;color:#fff;line-height:1.1">${value}</div><div style="padding-top:5px;font-size:12px;color:#8e8e8e">${label}</div>${note?`<div style="padding-top:8px;font-size:10px;color:#e5a00d;font-weight:700">${note}</div>`:""}</td></tr></table>`;
+    }
+    function detailMetric(icon,value,label,items,type,height=216){
+      return `<table width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td style="padding-bottom:7px;border-bottom:1px solid #292929"><table cellspacing="0" cellpadding="0" border="0"><tr><td valign="middle" style="padding-right:8px"><img src="${asset(icon)}" width="30" height="30" alt="${esc(label)}" style="display:block;width:30px;height:30px;border:0"></td><td valign="middle"><div style="font-size:18px;font-weight:800;color:#fff;line-height:1">${value}</div><div style="padding-top:3px;font-size:10px;color:#8e8e8e;letter-spacing:.6px">${label.toUpperCase()}</div></td></tr></table></td></tr>${detailRows(items,type)}</table>`;
+    }
+    function bingeCard(state,height=138){
+      const winner=state.winner,border=winner?"#e5a00d":"#2b2b2b",background=winner?"#211a0d":"#181818",eyebrow=winner?"YOU WON • BINGE CHAMPION":"BINGE CHAMPION AWARD";
+      return `<table width="100%" height="${height}" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${height}px;background:${background};border:1px solid ${border};border-radius:10px;border-collapse:separate"><tr><td height="${height}" valign="middle" style="height:${height}px;padding:17px"><div style="font-size:9px;color:#e5a00d;font-weight:900;letter-spacing:1.1px">${eyebrow}</div><img src="${asset("trophy.gif")}" width="${winner?54:42}" height="${winner?54:42}" alt="Binge Champion award" style="display:block;width:${winner?54:42}px;height:${winner?54:42}px;border:0;margin-top:9px"><div style="padding-top:8px;font-size:${winner?18:16}px;line-height:1.25;font-weight:900;color:#fff">61h 20m watched</div><div style="padding-top:6px;font-size:10px;line-height:1.4;color:${winner?"#f3c45a":"#8e8e8e"};font-weight:700">8 movies • 47 TV shows</div></td></tr></table>`;
+    }
+    function standaloneBinge(state){
+      const winner=state.winner,border=winner?"#e5a00d":"#2b2b2b",background=winner?"#211a0d":"#181818",eyebrow=winner?"YOU WON • BINGE CHAMPION":"BINGE CHAMPION AWARD";
+      return `<tr><td class="pad" style="padding:0 20px 24px"><table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:${background};border:1px solid ${border};border-radius:10px;border-collapse:separate"><tr><td width="84" valign="middle" style="padding:18px 0 18px 20px"><img src="${asset("trophy.gif")}" width="56" height="56" alt="Binge Champion award" style="display:block;width:56px;height:56px;border:0"></td><td valign="middle" style="padding:18px 20px 18px 12px"><div style="font-size:10px;color:#e5a00d;font-weight:900;letter-spacing:1.2px">${eyebrow}</div><div style="padding-top:5px;font-size:20px;line-height:1.25;color:#fff;font-weight:900">61h 20m watched</div><div style="padding-top:5px;font-size:12px;line-height:1.45;color:${winner?"#f3c45a":"#929292"}">8 movies • 47 TV shows</div></td></tr></table></td></tr>`;
+    }
+    function statsBlock(state){
+      if(state.welcomeOnly)return "";
+      if(state.activity==="none")return standaloneBinge(state);
+      if(state.activity==="quiet"||state.activity==="warmup"){
+        const warm=state.activity==="warmup",eyebrow=warm?"STATS ARE WARMING UP":"QUIET IN THIS SECTOR",headline=warm?"The sensors are online.":"No watch activity this week.",copy=warm?"Your weekly watch recap will begin filling in as you stream. Check back next Friday for the full readout.":"Warp Core still engaging. Your recap will be ready when you beam back aboard.",icon=warm?"pending.gif":"quiet.gif";
+        return `<tr><td class="pad" style="padding:8px 20px 12px"><div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px">YOUR WEEK ON PLEX</div></td></tr><tr><td class="pad" style="padding:0 20px 16px"><table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate"><tr><td width="72" valign="middle" style="padding:20px 0 20px 20px"><img src="${asset(icon)}" width="48" height="48" alt="${eyebrow}" style="display:block;width:48px;height:48px;border:0"></td><td valign="middle" style="padding:20px 22px 20px 12px"><div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.3px">${eyebrow}</div><div style="padding-top:6px;font-size:20px;line-height:1.25;color:#fff;font-weight:800">${headline}</div><div style="padding-top:6px;font-size:13px;line-height:1.5;color:#969696">${copy}</div></td></tr></table></td></tr>${standaloneBinge(state)}`;
+      }
+      const itemized=state.activity==="itemized",winner=state.activity==="winner",height=itemized?286:138,movieCount=winner?8:state.activity==="high"?12:2,episodeCount=winner?47:state.activity==="high"?43:3,time=winner?"61h 20m":state.activity==="high"?"49h 36m":"7h 48m",plays=winner?55:state.activity==="high"?55:5;
+      const movieContent=itemized?detailMetric("movies.gif",movieCount,"movies watched",rotate(movies).slice(0,2),"movie",height):compactMetric("movies.gif",movieCount,"movies watched",height);
+      const tvContent=itemized?detailMetric("tv.gif",episodeCount,"episodes streamed",rotate(shows).slice(0,3),"tv",height):compactMetric("tv.gif",episodeCount,"episodes streamed",height);
+      const metricCell=(content,left)=>`<td width="50%" valign="top" style="padding:0 ${left?"5px":"0"} 10px ${left?"0":"5px"}"><table width="100%" height="${height}" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${height}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate"><tr><td height="${height}" valign="top" style="height:${height}px;padding:14px">${content}</td></tr></table></td>`;
+      return `<tr><td class="pad" style="padding:8px 20px 12px"><div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px">YOUR WEEK ON PLEX</div></td></tr><tr><td class="pad" style="padding:0 20px 24px"><table width="100%" cellspacing="0" cellpadding="0" border="0"><tr>${metricCell(movieContent,true)}${metricCell(tvContent,false)}</tr><tr>${metricCell(compactMetric("clock.gif",time,"total watched",height,`${plays} qualifying plays`),true)}<td width="50%" valign="top" style="padding:0 0 10px 5px">${bingeCard(state,height)}</td></tr></table></td></tr>`;
+    }
+
+    function welcomeInfo(){
+      const row=(icon,title,copy,top)=>`<div style="padding-top:${top}px;font-size:13px;color:#e5a00d;font-weight:800"><img src="${asset(icon)}" width="18" height="18" alt="${title}" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px"><span style="display:inline-block;vertical-align:middle">${title}</span></div><div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0">${copy}</div>`;
+      return `<tr><td class="pad" style="padding:10px 20px 22px"><table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate"><tr><td style="padding:20px 22px">${row("action.gif","FRIDAY DROPS","Every Friday morning you’ll get the newest movies and TV additions.",0)}${row("watched.gif","YOUR PRIVATE READOUT","As you stream, your weekly email builds a private recap with watch time, movies, episodes, posters, and ratings.",18)}${row("lockinfo.gif","JUST YOUR STATS","Your detailed viewing recap stays in your email. The Binge Champion movie/TV play split and total watch time are shared server-wide; the champion’s identity stays private.",18)}</td></tr></table></td></tr>`;
+    }
+    function trendingBlock(state){
+      if(state.mode!=="new")return "";
+      const item=rotate(shows)[0];
+      return `<tr><td class="pad" style="padding:0 20px 26px"><table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate"><tr><td width="70" valign="middle" style="padding:12px 0 12px 12px"><img src="${item.poster}" width="52" height="78" alt="${esc(item.title)} poster" style="display:block;width:52px;height:78px;object-fit:cover;border:0;border-radius:4px"></td><td width="56" valign="middle" style="padding:16px 0 16px 14px"><img src="${asset("trending.gif")}" width="42" height="42" alt="Trending this week" style="display:block;width:42px;height:42px;border:0"></td><td valign="middle" style="padding:16px 18px 16px 10px"><div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.3px">TRENDING THIS WEEK</div><div style="padding-top:5px;font-size:18px;line-height:1.25;color:#fff;font-weight:800">${esc(item.title)}</div><div style="padding-top:4px;font-size:12px;line-height:1.4;color:#8e8e8e">Most watched across DEMO SERVER this week • 24 plays</div></td></tr></table></td></tr>`;
+    }
+
+    function email(state){
+      const moviePool=rotate(movies),showPool=rotate(shows),quiet=state.mode==="latest",many=state.volume==="many";
+      let hero=quiet?showPool[0]:moviePool[0];
+      if(quiet&&hero&&!hero.year)hero={...hero,year:2026,critic:82,audience:null,summary:"The week's most-watched series leads a quieter library update.",logo:""};
+      const releaseMovies=moviePool.slice(quiet?0:1,quiet?4:(many?7:5));
+      const releaseTv=showPool.filter(item=>item!==hero).slice(0,many?4:3);
+      const movieCount=quiet?0:releaseMovies.length+1,tvCount=quiet?0:releaseTv.length;
+      const releaseLine=quiet?"NO NEW RELEASES THIS WEEK":`${movieCount} ${plural(movieCount,"NEW MOVIE","NEW MOVIES")} • ${tvCount} ${plural(tvCount,"TV TITLE","TV TITLES")}`;
+      const intro=state.welcomeOnly?"Welcome to DEMO SERVER — you’re all set. Here’s what’s new and what to expect from your Friday drops.":quiet?"Your Friday Plex drop is here — this week’s server favorites, latest library additions, and your private weekly recap.":"Your Friday Plex drop is here — fresh releases plus your private weekly recap.";
+      const headerMeta=(!state.recent&&!state.welcomeOnly)?`<div style="padding-top:10px;font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:.8px">${releaseLine}</div><div style="padding-top:6px;font-size:12px;color:#666">July 31 – August 6, 2026</div>`:"";
+      const movedMeta=(state.recent||state.welcomeOnly)?`<tr><td class="pad" style="padding:0 20px 18px"><div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:.8px">${releaseLine}</div><div style="padding-top:6px;font-size:12px;color:#666">July 31 – August 6, 2026</div></td></tr>`:"";
+      const footer=(state.recent||state.welcomeOnly)?"":`<tr><td class="pad" align="center" style="padding:12px 20px 26px;color:#5f5f5f;font-size:11px;line-height:1.5">Your watch recap is generated privately from DEMO SERVER history.<br>Other users do not receive your detailed individual viewing stats.<br>The Binge Champion movie/TV play split and total watch time are shared server-wide; the champion's identity stays private.</td></tr>`;
+      return `<div class="email-stage"><table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#0f0f0f"><tr><td align="center" style="padding:28px 10px"><table class="container" width="640" cellspacing="0" cellpadding="0" border="0" style="width:640px;max-width:640px"><tr><td class="pad" style="padding:0 20px 18px"><div style="font-size:13px;font-weight:800;letter-spacing:2px;color:#e5a00d">PLEX</div><div style="padding-top:8px;font-size:30px;line-height:1.15;font-weight:800;color:#fff">Hey Demo Viewer,</div><div style="padding-top:8px;font-size:15px;line-height:1.55;color:#a9a9a9">${intro}</div>${headerMeta}</td></tr>${welcomeBlock(state)}${movedMeta}${heroBlock(state,hero)}${releaseBlocks(state,releaseMovies,releaseTv)}${statsBlock(state)}${state.recent||state.welcomeOnly?welcomeInfo():""}${trendingBlock(state)}<tr><td class="pad" align="center" style="padding:8px 20px 18px"><a href="https://app.plex.tv/desktop/" style="display:inline-block;background:#e5a00d;color:#111;text-decoration:none;font-size:14px;font-weight:800;padding:13px 24px;border-radius:7px">OPEN PLEX</a></td></tr>${footer}</table></td></tr></table></div>`;
+    }
+
+    function nav(){document.getElementById("states").innerHTML=states.map((state,index)=>`<button class="state" type="button" data-index="${index}" aria-selected="${index===active&&!showAll}"><b>${state.n}</b>${state.name}</button>`).join("")}
+    function render(){
+      const state=states[active],preview=document.getElementById("preview"),button=document.getElementById("show-all");
+      document.getElementById("state-title").textContent=showAll?"All eight production states":state.name;
+      document.getElementById("state-description").textContent=showAll?"Complete long-page regression stack.":state.description;
+      button.setAttribute("aria-pressed",String(showAll));button.innerHTML=showAll?"<span>Single view</span> 1":"<span>Show all</span> 8";
+      if(showAll){preview.className="allstack";preview.innerHTML=states.map(item=>`<section class="allitem"><div class="allhead"><b>${item.n} · ${item.name}</b><span>${item.description}</span></div>${email(item)}</section>`).join("")}else{preview.className="";preview.innerHTML=email(state);history.replaceState(null,"",`#${state.id}`)}
+      nav();
+    }
+    document.getElementById("states").addEventListener("click",event=>{const button=event.target.closest("button[data-index]");if(!button)return;active=Number(button.dataset.index);showAll=false;render();document.querySelector(".workspace").scrollIntoView({behavior:"smooth",block:"start"})});
+    document.getElementById("previous").onclick=()=>{showAll=false;active=(active-1+states.length)%states.length;render()};
+    document.getElementById("next").onclick=()=>{showAll=false;active=(active+1)%states.length;render()};
+    document.getElementById("rotate").onclick=()=>{offset=(offset+1)%movies.length;render()};
+    document.getElementById("show-all").onclick=()=>{showAll=!showAll;render()};
+    document.addEventListener("keydown",event=>{if(event.target.matches("button,a"))return;if(event.key==="ArrowLeft")document.getElementById("previous").click();if(event.key==="ArrowRight")document.getElementById("next").click()});
+    if(new URLSearchParams(location.search).get("fixture")==="mobile")document.body.classList.add("mobile-fixture");
+    const hashIndex=states.findIndex(state=>`#${state.id}`===location.hash);if(hashIndex>=0)active=hashIndex;render();
+  })();
+  </script>
+</body>
+</html>

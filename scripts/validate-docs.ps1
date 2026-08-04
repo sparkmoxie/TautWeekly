@@ -13,7 +13,8 @@ $pages = @(
     'nas-docker/quickstart.html',
     'mac/index.html',
     'linux/index.html',
-    'freebsd/index.html'
+    'freebsd/index.html',
+    'examples/preview-all-00-INDEX.html'
 )
 $terminalPages = 0
 $renderedUrls = @{
@@ -24,6 +25,7 @@ $renderedUrls = @{
     'mac/index.html'              = 'https://sparkmoxie.github.io/TautWeekly/mac/'
     'linux/index.html'            = 'https://sparkmoxie.github.io/TautWeekly/linux/'
     'freebsd/index.html'          = 'https://sparkmoxie.github.io/TautWeekly/freebsd/'
+    'examples/preview-all-00-INDEX.html' = 'https://sparkmoxie.github.io/TautWeekly/examples/preview-all-00-INDEX.html'
 }
 
 foreach ($relative in $pages) {
@@ -35,15 +37,21 @@ foreach ($relative in $pages) {
         $combined += [IO.File]::ReadAllText((Join-Path $docs 'assets/site.js'))
     }
 
-    foreach ($pattern in @(
+    $requiredPatterns = @(
         '(?i)<!doctype\s+html',
         '(?i)<title>[^<]+</title>',
         '(?i)<meta[^>]+name=["'']viewport["'']',
-        '(?i)search',
-        '(?i)progress',
-        '(?i)position\s*:\s*sticky',
         '(?i)@media'
-    )) {
+    )
+    if ($relative -ne 'examples/preview-all-00-INDEX.html') {
+        $requiredPatterns += @(
+            '(?i)search',
+            '(?i)progress',
+            '(?i)position\s*:\s*sticky'
+        )
+    }
+
+    foreach ($pattern in $requiredPatterns) {
         if ($combined -notmatch $pattern) {
             throw "Documentation feature '$pattern' is missing from $relative"
         }
