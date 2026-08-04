@@ -9,10 +9,10 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Added a standalone, responsive eight-state newsletter showcase with real
-  public Plex Discover posters and title art, dated Rotten Tomatoes score
-  examples, dense movie/TV releases, both anonymous Binge Champion treatments,
-  onboarding and warmup variants, and the production quiet-week latest-release
-  fallback.
+  public Plex Discover posters and title art, dated Rotten Tomatoes movie and
+  IMDb episode score examples, production-formatted TV episode rows, dense
+  movie/TV releases, both anonymous Binge Champion treatments, onboarding and
+  warmup variants, and the production quiet-week latest-release fallback.
 
 ## [0.5.0] - 2026-08-04
 

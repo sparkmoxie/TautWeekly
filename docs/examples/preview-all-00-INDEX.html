@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Production-faithful TautWeekly for Plex newsletter state showcase using real public Plex artwork and a dated ratings snapshot.">
-  <title>TautWeekly for Plex — Production Newsletter Preview</title>
+  <title>TautWeekly for Plex — Email States Preview</title>
   <style>
     :root{color-scheme:dark;--gold:#e5a00d;--ink:#0f0f0f;--panel:#181818;--line:#2b2b2b;--muted:#969696}
     *{box-sizing:border-box}
@@ -57,7 +57,7 @@
       <div class="arrows"><button class="arrow" id="previous" type="button" aria-label="Previous preview">←</button><button class="arrow" id="next" type="button" aria-label="Next preview">→</button></div>
     </div>
     <div id="preview"></div>
-    <p class="notice">Posters and title art load from public Plex Discover image hosts and remain property of their respective owners. Rotten Tomatoes scores are a dated visual-fixture snapshot and may change. Watch counts are synthetic. Plex, Tautulli, and Rotten Tomatoes are names or marks of their respective owners; no affiliation or endorsement is implied.</p>
+    <p class="notice">Posters and title art load from public Plex Discover image hosts and remain property of their respective owners. Rotten Tomatoes and IMDb scores are dated visual-fixture snapshots and may change. Watch counts are synthetic. Plex, Tautulli, Rotten Tomatoes, and IMDb are names or marks of their respective owners; no affiliation or endorsement is implied.</p>
   </main>
 
   <script>
@@ -74,12 +74,10 @@
       {title:"Couture",year:2026,genre:"Drama",critic:51,audience:46,page:"https://watch.plex.tv/movie/couture-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2Fc%2Fgracenote%2Fcb86b21295468900a103a63296991667.jpg",logo:"https://metadata-static.plex.tv/e/683a142553/e08eda1dd256f2545e00b36076cd2efd.png",summary:"Lives intersect behind the runway during a transformative fashion week."}
     ];
     const shows=[
-      {title:"Lioness",genre:"Drama and Thriller",page:"https://watch.plex.tv/show/lioness",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F8%2Fgracenote%2F8d3a03035e1022986d7004ed1684ea8e.jpg",episodes:[["LATEST","Latest episode",null],["PREVIOUS","Previous episode",null],["EARLIER","Earlier episode",null]],extra:0},
-      {title:"House of the Dragon",genre:"Drama and Fantasy",page:"https://watch.plex.tv/show/house-of-the-dragon",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F2%2Fgracenote%2F2d650eaa545bf768f438604a7291fe6e.jpg",episodes:[["LATEST","Latest episode",null],["PREVIOUS","Previous episode",null],["EARLIER","Earlier episode",null]],extra:2},
-      {title:"Ted Lasso",genre:"Comedy and Drama",page:"https://watch.plex.tv/show/ted-lasso",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F2%2Fgracenote%2F2f0b1d2133dc5b47908e9f2c90273c8a.jpg",episodes:[["LATEST","Latest episode",null],["PREVIOUS","Previous episode",null],["EARLIER","Earlier episode",null]],extra:0},
-      {title:"Star Trek: Strange New Worlds",genre:"Science Fiction and Drama",page:"https://watch.plex.tv/show/star-trek-strange-new-worlds",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F6%2Fgracenote%2F6caeccc8f78714e6a3712d02a6c95ae7.jpg",episodes:[["S04 EP02","The Griffin Incident","7.1"],["S02 EP09","Subspace Rhapsody","6.8"],["S02 EP10","Hegemony (1)","8.6"]],extra:1},
-      {title:"Dark Winds",genre:"Crime and Drama",page:"https://watch.plex.tv/show/dark-winds",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2Fb%2Fplex%2Fb326a138-9b62-4255-8153-2e02ed129196.jpg",episodes:[["LATEST","Latest episode",null],["PREVIOUS","Previous episode",null]],extra:0},
-      {title:"Lucky",genre:"Drama",page:"https://watch.plex.tv/show/lucky-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F7%2Fgracenote%2F7e4a3f537c1329ed14fc6fc78dff9020.jpg",episodes:[["LATEST","Latest episode",null],["PREVIOUS","Previous episode",null],["EARLIER","Earlier episode",null]],extra:3}
+      {title:"Lioness",genre:"Drama and Thriller",page:"https://watch.plex.tv/show/lioness",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F8%2Fgracenote%2F8d3a03035e1022986d7004ed1684ea8e.jpg",episodes:[["S02 EP08","The Compass Points Home","8.2"],["S02 EP07","The Devil Has Aces","7.7"]],extra:0},
+      {title:"House of the Dragon",genre:"Drama and Fantasy",page:"https://watch.plex.tv/show/house-of-the-dragon",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F2%2Fgracenote%2F2d650eaa545bf768f438604a7291fe6e.jpg",episodes:[["S02 EP04","The Red Dragon and the Gold","9.4"],["S02 EP07","The Red Sowing","8.8"],["S02 EP08","The Queen Who Ever Was","6.5"]],extra:2},
+      {title:"Ted Lasso",genre:"Comedy and Drama",page:"https://watch.plex.tv/show/ted-lasso",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F2%2Fgracenote%2F2f0b1d2133dc5b47908e9f2c90273c8a.jpg",episodes:[["S03 EP06","Sunflowers","8.9"],["S03 EP11","Mom City","9.3"],["S03 EP12","So Long, Farewell","9.4"]],extra:0},
+      {title:"Star Trek: Strange New Worlds",genre:"Science Fiction and Drama",page:"https://watch.plex.tv/show/star-trek-strange-new-worlds",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F6%2Fgracenote%2F6caeccc8f78714e6a3712d02a6c95ae7.jpg",episodes:[["S04 EP02","The Griffin Incident","7.1"],["S02 EP09","Subspace Rhapsody","6.8"],["S02 EP10","Hegemony (1)","8.6"]],extra:11}
     ];
     const states=[
       {id:"manual-welcome",n:"01",name:"Manual welcome",description:"One-off onboarding; no weekly recap or award.",recent:true,welcomeOnly:true,activity:"none",mode:"new",volume:"normal",winner:false},
@@ -140,7 +138,17 @@
     }
 
     function detailRows(items,type){
-      return items.map((item,index)=>`<tr><td style="padding-top:8px"><table width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td width="42" valign="top"><img src="${item.poster}" width="34" height="51" alt="" style="display:block;width:34px;height:51px;object-fit:cover;border:0;border-radius:3px"></td><td valign="top"><div style="color:#fff;font-size:11px;font-weight:700;line-height:1.25">${esc(item.title)}</div><div style="padding-top:4px;color:#8e8e8e;font-size:9px;line-height:1.3">${type==="movie"?`Watched · ${item.year}`:`${esc(item.episodes[index%item.episodes.length][0])} · ${esc(item.episodes[index%item.episodes.length][1])}`}</div></td></tr></table></td></tr>`).join("");
+      return items.map((item,index)=>{
+        let details;
+        if(type==="movie"){
+          const miniScore=(source,value)=>{const file=source==="critic"?(value>=60?"rt_ripe.png":"rt_rotten.png"):(value>=60?"rt_upright.png":"rt_spilled.png"),label=source==="critic"?"Rotten Tomatoes critic":"Rotten Tomatoes audience";return `<span style="display:inline-block;white-space:nowrap"><img src="${asset(file)}" alt="${label}" width="14" height="14" style="display:inline-block;width:14px;height:14px;border:0;vertical-align:-3px;margin-right:3px">${value}%</span>`};
+          details=`<div style="font-size:12px;line-height:1.3;color:#fff;font-weight:800">${esc(item.title)}</div><div style="padding-top:3px;font-size:10px;line-height:1.3;color:#9b9b9b;font-weight:500">${esc(item.genre)}</div><div style="padding-top:4px;font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700">${miniScore("critic",item.critic)}<span style="display:inline-block;width:6px"></span>${miniScore("audience",item.audience)}</div>`;
+        }else{
+          const episode=item.episodes[index%item.episodes.length];
+          details=`<div style="font-size:11px;line-height:1.25;color:#fff;font-weight:800">${esc(item.title)}</div><div style="padding-top:3px;font-size:10px;line-height:1.3;color:#9b9b9b">${esc(episode[0])}: ${esc(episode[1])}</div><div style="padding-top:4px;font-size:10px;line-height:1.3;color:#e5a00d;font-weight:700"><span style="display:inline-block;white-space:nowrap"><img src="${asset("imdb.png")}" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px">${episode[2]}</span></div>`;
+        }
+        return `<tr><td width="50" valign="middle" style="width:50px;padding:7px 8px 7px 0;border-bottom:1px solid #292929"><img src="${item.poster}" width="42" height="62" alt="${esc(item.title)} poster" style="display:block;width:42px;height:62px;object-fit:cover;border:1px solid #363636;border-radius:5px"></td><td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929">${details}</td></tr>`;
+      }).join("");
     }
     function compactMetric(icon,value,label,height=138,note=""){
       return `<table width="100%" height="${height}" cellspacing="0" cellpadding="0" border="0" style="height:${height}px"><tr><td valign="middle"><img src="${asset(icon)}" width="42" height="42" alt="${esc(label)}" style="display:block;width:42px;height:42px;border:0"><div style="padding-top:10px;font-size:27px;font-weight:800;color:#fff;line-height:1.1">${value}</div><div style="padding-top:5px;font-size:12px;color:#8e8e8e">${label}</div>${note?`<div style="padding-top:8px;font-size:10px;color:#e5a00d;font-weight:700">${note}</div>`:""}</td></tr></table>`;
@@ -163,7 +171,7 @@
         const warm=state.activity==="warmup",eyebrow=warm?"STATS ARE WARMING UP":"QUIET IN THIS SECTOR",headline=warm?"The sensors are online.":"No watch activity this week.",copy=warm?"Your weekly watch recap will begin filling in as you stream. Check back next Friday for the full readout.":"Warp Core still engaging. Your recap will be ready when you beam back aboard.",icon=warm?"pending.gif":"quiet.gif";
         return `<tr><td class="pad" style="padding:8px 20px 12px"><div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px">YOUR WEEK ON PLEX</div></td></tr><tr><td class="pad" style="padding:0 20px 16px"><table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate"><tr><td width="72" valign="middle" style="padding:20px 0 20px 20px"><img src="${asset(icon)}" width="48" height="48" alt="${eyebrow}" style="display:block;width:48px;height:48px;border:0"></td><td valign="middle" style="padding:20px 22px 20px 12px"><div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.3px">${eyebrow}</div><div style="padding-top:6px;font-size:20px;line-height:1.25;color:#fff;font-weight:800">${headline}</div><div style="padding-top:6px;font-size:13px;line-height:1.5;color:#969696">${copy}</div></td></tr></table></td></tr>${standaloneBinge(state)}`;
       }
-      const itemized=state.activity==="itemized",winner=state.activity==="winner",height=itemized?216:138,movieCount=winner?8:state.activity==="high"?12:2,episodeCount=winner?47:state.activity==="high"?43:3,time=winner?"61h 20m":state.activity==="high"?"49h 36m":"7h 48m",plays=winner?55:state.activity==="high"?55:5;
+      const itemized=state.activity==="itemized",winner=state.activity==="winner",height=itemized?286:138,movieCount=winner?8:state.activity==="high"?12:2,episodeCount=winner?47:state.activity==="high"?43:3,time=winner?"61h 20m":state.activity==="high"?"49h 36m":"7h 48m",plays=winner?55:state.activity==="high"?55:5;
       const movieContent=itemized?detailMetric("movies.gif",movieCount,"movies watched",rotate(movies).slice(0,2),"movie",height):compactMetric("movies.gif",movieCount,"movies watched",height);
       const tvContent=itemized?detailMetric("tv.gif",episodeCount,"episodes streamed",rotate(shows).slice(0,3),"tv",height):compactMetric("tv.gif",episodeCount,"episodes streamed",height);
       const metricCell=(content,left)=>`<td width="50%" valign="top" style="padding:0 ${left?"5px":"0"} 10px ${left?"0":"5px"}"><table width="100%" height="${height}" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${height}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate"><tr><td height="${height}" valign="top" style="height:${height}px;padding:14px">${content}</td></tr></table></td>`;
