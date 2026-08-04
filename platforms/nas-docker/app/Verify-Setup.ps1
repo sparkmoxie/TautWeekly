@@ -1,5 +1,5 @@
 ﻿param(
-    [string]$DataRoot = $(if ($env:PLEXWEEKLY_DATA_DIR) { $env:PLEXWEEKLY_DATA_DIR } else { "/data" })
+    [string]$DataRoot = $(if ($env:TAUTWEEKLY_DATA_DIR) { $env:TAUTWEEKLY_DATA_DIR } else { "/data" })
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -13,7 +13,7 @@ function WARN([string]$Text) { Write-Host "[WARN] $Text" -ForegroundColor Yellow
 function FAIL([string]$Text) { Write-Host "[FAIL] $Text" -ForegroundColor Red }
 
 Write-Host ""
-Write-Host "PLEXWEEKLY NAS SETUP VERIFICATION" -ForegroundColor Cyan
+Write-Host "TAUTWEEKLY FOR PLEX NAS SETUP VERIFICATION" -ForegroundColor Cyan
 Write-Host "================================="
 
 if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
@@ -37,7 +37,7 @@ foreach ($cmd in @("identify","convert","python3","flock")) {
 OK "ImageMagick, Python preview server, and file locking are available"
 
 if (-not (Test-Path $configPath)) {
-    FAIL "config.json is missing. Run ./plexweekly.sh setup."
+    FAIL "config.json is missing. Run ./tautweekly.sh setup."
     exit 1
 }
 OK "config.json exists"
@@ -198,7 +198,7 @@ foreach ($name in ($animated + @("rt_ripe.png","rt_rotten.png","rt_upright.png",
     }
 }
 if ($mirrorFailure) {
-    WARN "Run ./plexweekly.sh repair-assets, then verify again."
+    WARN "Run ./tautweekly.sh repair-assets, then verify again."
     exit 1
 }
 
@@ -211,13 +211,13 @@ try {
 }
 catch {
     FAIL "preview asset web check failed: $($_.Exception.Message)"
-    WARN "Inspect ./plexweekly.sh logs and confirm the container was recreated from v1.0.7."
+    WARN "Inspect ./tautweekly.sh logs and confirm the container was recreated from v1.0.7."
     exit 1
 }
 
 Write-Host ""
-OK "PlexWeekly NAS Portable is ready for preview and test email."
+OK "TautWeekly for Plex NAS Portable is ready for preview and test email."
 Write-Host "SAFE NEXT STEPS:" -ForegroundColor Cyan
-Write-Host "  ./plexweekly.sh list-users"
-Write-Host "  ./plexweekly.sh preview-all"
-Write-Host "  ./plexweekly.sh send-test-all"
+Write-Host "  ./tautweekly.sh list-users"
+Write-Host "  ./tautweekly.sh preview-all"
+Write-Host "  ./tautweekly.sh send-test-all"

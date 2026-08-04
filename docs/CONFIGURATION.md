@@ -1,6 +1,6 @@
 # Configuration reference
 
-PlexWeekly writes live settings to `config.json`. Docker editions keep it under
+TautWeekly for Plex writes live settings to `config.json`. Docker editions keep it under
 `data/`; Windows keeps it beside the application. Start from the platform's
 `config.example.json` only when manual setup is required—the guided setup is
 preferred.
@@ -9,13 +9,13 @@ preferred.
 
 | Key | Required | Purpose |
 |---|---:|---|
-| `TautulliUrl` | Yes | Base URL reachable from the PlexWeekly runtime, such as `http://media.example.test:8181` |
+| `TautulliUrl` | Yes | Base URL reachable from the TautWeekly for Plex runtime, such as `http://media.example.test:8181` |
 | `ApiKey` | Yes | Tautulli API key; treat as a secret |
 | `PlexWebUrl` | Yes | Destination for “Open Plex” links; defaults to the Plex web app |
 | `PlexServerUrl` | No | Direct Plex base URL for richer metadata and artwork |
 | `PlexToken` | No | Direct Plex token; treat as a secret |
 
-PlexWeekly's core activity flow uses Tautulli. Direct Plex access is optional
+TautWeekly for Plex's core activity flow uses Tautulli. Direct Plex access is optional
 and improves selected metadata and artwork paths.
 
 ## Branding and mail

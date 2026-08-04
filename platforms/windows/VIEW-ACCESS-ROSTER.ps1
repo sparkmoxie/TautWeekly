@@ -8,7 +8,7 @@ if (-not (Test-Path $path)) {
 $state = Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json
 
 Write-Host ""
-Write-Host "PlexWeekly access roster"
+Write-Host "TautWeekly for Plex access roster"
 Write-Host "Baseline: $($state.BaselineUtc)"
 Write-Host ""
 

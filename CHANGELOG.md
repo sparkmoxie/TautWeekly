@@ -1,10 +1,34 @@
 # Changelog
 
-All notable public changes to PlexWeekly will be documented here. The project
+All notable public changes to TautWeekly for Plex will be documented here. The project
 uses [Semantic Versioning](https://semver.org/) for GitHub releases and follows
 the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-08-04
+
+### Changed
+
+- Renamed the public product to **TautWeekly for Plex** and standardized the
+  repository, Pages site, documentation, UI, email, source, and release
+  branding around `TautWeekly`.
+- Renamed the PowerShell entry points to `TautWeekly.ps1`, Docker launchers to
+  `tautweekly.sh` and `tautweekly-docker.ps1`, and release archives to the
+  `TautWeekly-<platform>` convention.
+- Renamed Docker services, images, internal application paths, operation
+  locks, backups, and environment variables to the lowercase `tautweekly` or
+  uppercase `TAUTWEEKLY_` convention.
+- Moved repository and rendered documentation links to
+  `sparkmoxie/TautWeekly` and `sparkmoxie.github.io/TautWeekly`.
+
+### Migration
+
+- Preserve private configuration and the Docker `data` directory, but replace
+  program files with the 0.2.0 package and use the newly named launchers.
+- Recreate Docker services with `docker compose up -d --build` after replacing
+  the application files. Windows users should verify the scheduled-task name
+  in `config.json` before reinstalling the schedule.
 
 ## [0.1.1] - 2026-08-03
 

@@ -1,5 +1,5 @@
 ﻿param(
-    [string]$DataRoot = $(if ($env:PLEXWEEKLY_DATA_DIR) { $env:PLEXWEEKLY_DATA_DIR } else { "/data" })
+    [string]$DataRoot = $(if ($env:TAUTWEEKLY_DATA_DIR) { $env:TAUTWEEKLY_DATA_DIR } else { "/data" })
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -58,7 +58,7 @@ function Load-State {
     return (Add-MissingStateProperties ([PSCustomObject]@{}))
 }
 
-Log "PlexWeekly scheduler started. TZ=$([string]$env:TZ); local time=$(Get-Date -Format o)."
+Log "TautWeekly for Plex scheduler started. TZ=$([string]$env:TZ); local time=$(Get-Date -Format o)."
 $lastMissingConfigWarning = [DateTime]::MinValue
 
 while ($true) {
@@ -71,7 +71,7 @@ while ($true) {
 
         if (-not (Test-Path $configPath)) {
             if (((Get-Date) - $lastMissingConfigWarning).TotalMinutes -ge 5) {
-                Log "Waiting for /data/config.json. Run ./plexweekly.sh setup." "WARN"
+                Log "Waiting for /data/config.json. Run ./tautweekly.sh setup." "WARN"
                 $lastMissingConfigWarning = Get-Date
             }
             Start-Sleep -Seconds 30
@@ -130,7 +130,7 @@ while ($true) {
         Save-Json $state $statePath
 
         Log "Scheduled send window reached. Beginning one guarded SendAll attempt."
-        & /opt/plexweekly/bin/run-mode.sh SendAll --confirm-send-all
+        & /opt/tautweekly/bin/run-mode.sh SendAll --confirm-send-all
         $exitCode = $LASTEXITCODE
 
         $state = Load-State
@@ -142,7 +142,7 @@ while ($true) {
         }
         elseif ($exitCode -eq 75) {
             $state.LastResult = "blocked-by-active-lock"
-            Log "Scheduled SendAll did not start because another PlexWeekly operation held the lock." "ERROR"
+            Log "Scheduled SendAll did not start because another TautWeekly for Plex operation held the lock." "ERROR"
         }
         else {
             $state.LastResult = "failed"

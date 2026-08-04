@@ -3,23 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="PlexWeekly installation and operations documentation for Windows, NAS/Docker, and macOS.">
-  <title>PlexWeekly Documentation</title>
+  <meta name="description" content="TautWeekly for Plex installation and operations documentation for Windows, NAS/Docker, and macOS.">
+  <title>TautWeekly for Plex Documentation</title>
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
   <div class="progress" id="scroll-progress" aria-hidden="true"></div>
   <header class="site-header">
-    <a class="brand" href="./" aria-label="PlexWeekly documentation home">
-      <span class="brand-mark">PW</span>
-      <span>Plex<span>Weekly</span></span>
+    <a class="brand" href="./" aria-label="TautWeekly for Plex documentation home">
+      <span class="brand-mark">TW</span>
+      <span>Taut<span>Weekly</span> <em>for Plex</em></span>
     </a>
     <nav aria-label="Primary navigation">
       <a href="#platforms">Platforms</a>
       <a href="#workflow">Workflow</a>
       <a href="#architecture">Architecture</a>
       <a href="#security">Security</a>
-      <a href="https://github.com/sparkmoxie/PlexWeekly">GitHub</a>
+      <a href="https://github.com/sparkmoxie/TautWeekly">GitHub</a>
     </nav>
     <label class="search">
       <span class="sr-only">Search this page</span>
@@ -33,28 +33,28 @@
       <div class="hero-copy">
         <div class="eyebrow">Portable · preview-first · source available</div>
         <h1>Your Plex week,<br><span>carefully delivered.</span></h1>
-        <p>PlexWeekly turns Tautulli activity into polished personal newsletters.
+        <p>TautWeekly for Plex turns Tautulli activity into polished personal newsletters.
           Choose a platform, verify the integration, inspect every email state,
           and enable delivery only when the result is ready.</p>
         <div class="actions">
           <a class="button primary" href="#platforms">Choose a platform</a>
-          <a class="button" href="https://github.com/sparkmoxie/PlexWeekly/releases/latest">Download latest release</a>
+          <a class="button" href="https://github.com/sparkmoxie/TautWeekly/releases/latest">Download latest release</a>
         </div>
         <div class="pills" aria-label="Supported platforms">
           <span>Windows</span><span>NAS / Docker</span><span>macOS</span>
         </div>
       </div>
       <div class="terminal" aria-label="Example safe setup workflow">
-        <div class="terminal-head"><span></span><span></span><span></span><b>plexweekly — safe launch</b></div>
-        <pre><span class="muted">$</span> ./plexweekly.sh verify
+        <div class="terminal-head"><span></span><span></span><span></span><b>tautweekly — safe launch</b></div>
+        <pre><span class="muted">$</span> ./tautweekly.sh verify
 <span class="ok">✓</span> Tautulli connection
 <span class="ok">✓</span> SMTP STARTTLS settings
 <span class="ok">✓</span> Private runtime storage
 
-<span class="muted">$</span> ./plexweekly.sh preview-all
+<span class="muted">$</span> ./tautweekly.sh preview-all
 <span class="gold">→</span> Six browser previews created
 
-<span class="muted">$</span> ./plexweekly.sh send-test-all
+<span class="muted">$</span> ./tautweekly.sh send-test-all
 <span class="gold">→</span> TestEmail only <span class="cursor">▋</span></pre>
       </div>
     </section>
@@ -123,7 +123,7 @@
         <p>Tautulli is the primary data source; direct Plex access is optional.
           Credentials and state remain local to the operator.</p>
       </div>
-      <div class="diagram"><img src="assets/architecture.svg" alt="PlexWeekly data flow from Tautulli and optional Plex through the renderer to preview and SMTP delivery"></div>
+      <div class="diagram"><img src="assets/architecture.svg" alt="TautWeekly for Plex data flow from Tautulli and optional Plex through the renderer to preview and SMTP delivery"></div>
       <div class="link-grid">
         <a href="CONFIGURATION.md"><span>Reference</span><b>Configuration fields</b></a>
         <a href="TROUBLESHOOTING.md"><span>Operate</span><b>Troubleshooting</b></a>
@@ -148,9 +148,9 @@
   </main>
 
   <footer>
-    <span>PlexWeekly documentation</span>
+    <span>TautWeekly for Plex documentation</span>
     <span>Independent community project · not affiliated with Plex or Tautulli</span>
-    <a href="https://github.com/sparkmoxie/PlexWeekly/blob/HEAD/THIRD_PARTY_NOTICES.md">Third-party notices</a>
+    <a href="https://github.com/sparkmoxie/TautWeekly/blob/HEAD/THIRD_PARTY_NOTICES.md">Third-party notices</a>
   </footer>
   <script src="assets/site.js"></script>
 </body>

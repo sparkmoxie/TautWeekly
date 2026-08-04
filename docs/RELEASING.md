@@ -19,7 +19,7 @@ reviewed commit on `main`.
 5. Create and push an annotated tag from `main`:
 
    ```bash
-   git tag -a v1.2.3 -m "PlexWeekly v1.2.3"
+   git tag -a v1.2.3 -m "TautWeekly for Plex v1.2.3"
    git push origin v1.2.3
    ```
 

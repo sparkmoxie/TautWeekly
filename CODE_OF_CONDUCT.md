@@ -1,6 +1,6 @@
 # Community code of conduct
 
-PlexWeekly welcomes constructive participation from people of every background
+TautWeekly for Plex welcomes constructive participation from people of every background
 and experience level.
 
 ## Expected behavior
@@ -27,4 +27,4 @@ restrict participation when needed to protect the community. Reports will be
 handled as confidentially as practical.
 
 This policy applies in repository discussions, issues, pull requests, reviews,
-and other spaces where someone represents PlexWeekly.
+and other spaces where someone represents TautWeekly for Plex.

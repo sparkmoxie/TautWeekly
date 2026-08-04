@@ -29,7 +29,11 @@ jobs:
       - name: Build release archives and checksums
         shell: pwsh
         run: ./scripts/build-releases.ps1
+      - name: Test launcher permissions
+        run: |
+          tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/tautweekly.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/tautweekly.sh | grep -q '^-rwx'
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "PlexWeekly $GITHUB_REF_NAME"
+        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "TautWeekly for Plex $GITHUB_REF_NAME"

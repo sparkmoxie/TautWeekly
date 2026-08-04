@@ -15,11 +15,11 @@ $pages = @(
 )
 $terminalPages = 0
 $renderedUrls = @{
-    'index.html'                  = 'https://sparkmoxie.github.io/PlexWeekly/'
-    'windows/index.html'          = 'https://sparkmoxie.github.io/PlexWeekly/windows/'
-    'nas-docker/index.html'       = 'https://sparkmoxie.github.io/PlexWeekly/nas-docker/'
-    'nas-docker/quickstart.html'  = 'https://sparkmoxie.github.io/PlexWeekly/nas-docker/quickstart.html'
-    'mac/index.html'              = 'https://sparkmoxie.github.io/PlexWeekly/mac/'
+    'index.html'                  = 'https://sparkmoxie.github.io/TautWeekly/'
+    'windows/index.html'          = 'https://sparkmoxie.github.io/TautWeekly/windows/'
+    'nas-docker/index.html'       = 'https://sparkmoxie.github.io/TautWeekly/nas-docker/'
+    'nas-docker/quickstart.html'  = 'https://sparkmoxie.github.io/TautWeekly/nas-docker/quickstart.html'
+    'mac/index.html'              = 'https://sparkmoxie.github.io/TautWeekly/mac/'
 }
 
 foreach ($relative in $pages) {
@@ -100,7 +100,7 @@ foreach ($markdown in $markdownFiles) {
     $content = [IO.File]::ReadAllText($markdown.FullName)
     foreach ($link in [regex]::Matches($content, '!?(?:\[[^\]]*\])\((?<target>[^)\s]+\.html(?:#[^)\s]+)?)\)')) {
         $target = $link.Groups['target'].Value
-        if (-not $target.StartsWith('https://sparkmoxie.github.io/PlexWeekly/', [StringComparison]::OrdinalIgnoreCase)) {
+        if (-not $target.StartsWith('https://sparkmoxie.github.io/TautWeekly/', [StringComparison]::OrdinalIgnoreCase)) {
             throw "HTML documentation must link to rendered Pages, not source: $($markdown.FullName) -> $target"
         }
     }

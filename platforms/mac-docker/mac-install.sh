@@ -69,7 +69,7 @@ if [[ ! -f .env ]]; then
   timezone="$(prompt_default "IANA timezone" "$timezone_default")"
   preview_port="$(prompt_default "Local preview port" "8787")"
   cat > .env <<EOF
-COMPOSE_PROJECT_NAME=plexweekly
+COMPOSE_PROJECT_NAME=tautweekly
 TZ=$timezone
 PUID=$uid_value
 PGID=$gid_value
@@ -82,34 +82,34 @@ EOF
   ok ".env created with macOS UID $uid_value and GID $gid_value"
 fi
 
-say "Building PlexWeekly Mac Portable"
+say "Building TautWeekly for Plex Mac Portable"
 compose_cmd build --pull
 compose_cmd up -d
 
 for _ in $(seq 1 60); do
-  if compose_cmd exec -T plexweekly true >/dev/null 2>&1; then break; fi
+  if compose_cmd exec -T tautweekly true >/dev/null 2>&1; then break; fi
   sleep 2
 done
-compose_cmd exec -T plexweekly true >/dev/null 2>&1 || fail "The PlexWeekly container did not become ready. Run docker compose logs plexweekly."
-ok "PlexWeekly container is running"
+compose_cmd exec -T tautweekly true >/dev/null 2>&1 || fail "The TautWeekly for Plex container did not become ready. Run docker compose logs tautweekly."
+ok "TautWeekly for Plex container is running"
 
 if [[ -f data/config.json ]]; then
-  if confirm "A PlexWeekly config already exists. Run setup again?" n; then
-    compose_cmd exec plexweekly pwsh -NoLogo -NoProfile -File /opt/plexweekly/Setup-First.ps1
+  if confirm "A TautWeekly for Plex config already exists. Run setup again?" n; then
+    compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
   else
     ok "Existing data/config.json preserved"
   fi
 else
-  say "Interactive PlexWeekly setup"
-  compose_cmd exec plexweekly pwsh -NoLogo -NoProfile -File /opt/plexweekly/Setup-First.ps1
+  say "Interactive TautWeekly for Plex setup"
+  compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
 fi
 
-compose_cmd restart plexweekly >/dev/null
+compose_cmd restart tautweekly >/dev/null
 sleep 5
 
 say "Verification"
-if ! compose_cmd exec plexweekly pwsh -NoLogo -NoProfile -File /opt/plexweekly/Verify-Setup.ps1; then
-  fail "Verification failed. Correct the reported issue, then run ./plexweekly.sh verify."
+if ! compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1; then
+  fail "Verification failed. Correct the reported issue, then run ./tautweekly.sh verify."
 fi
 
 preview_url="$(awk -F= '$1=="PREVIEW_BASE_URL"{print substr($0,index($0,"=")+1)}' .env | tail -1)"
@@ -117,13 +117,13 @@ preview_url="${preview_url:-http://localhost:8787}"
 
 cat <<EOF
 
-PlexWeekly Mac Portable is installed.
+TautWeekly for Plex Mac Portable is installed.
 
 Next safe checks:
-  ./plexweekly.sh list-users
-  ./plexweekly.sh preview-all
-  ./plexweekly.sh send-test-all
-  ./plexweekly.sh schedule-status
+  ./tautweekly.sh list-users
+  ./tautweekly.sh preview-all
+  ./tautweekly.sh send-test-all
+  ./tautweekly.sh schedule-status
 
 Preview site:
   $preview_url/

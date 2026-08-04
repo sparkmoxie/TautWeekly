@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible PlexWeekly problem without exposing private data.
+description: Report a reproducible TautWeekly for Plex problem without exposing private data.
 title: "[Bug]: "
 labels: [bug]
 body:

@@ -4,8 +4,8 @@ Start with the platform verifier and correct the first reported failure.
 
 ## Tautulli cannot be reached
 
-- Confirm the URL opens from the PlexWeekly runtime, not only from your laptop.
-- In Docker, `127.0.0.1` refers to the PlexWeekly container. Use a shared-network
+- Confirm the URL opens from the TautWeekly for Plex runtime, not only from your laptop.
+- In Docker, `127.0.0.1` refers to the TautWeekly for Plex container. Use a shared-network
   service name, `host.docker.internal` on Docker Desktop, or a resolvable host
   name.
 - Confirm Tautulli's published port and API key.
@@ -22,8 +22,8 @@ Start with the platform verifier and correct the first reported failure.
 ## Preview does not open
 
 Windows writes previews under `output/`. Docker editions serve previews on the
-configured bind and port. Run `./plexweekly.sh status` and
-`./plexweekly.sh logs`, then confirm `PREVIEW_BASE_URL` matches the URL the
+configured bind and port. Run `./tautweekly.sh status` and
+`./tautweekly.sh logs`, then confirm `PREVIEW_BASE_URL` matches the URL the
 browser should use.
 
 ## Container permission errors
@@ -33,7 +33,7 @@ directory. Do not solve the problem by running the application as root. On
 Unix-like hosts, restore launcher permissions with:
 
 ```bash
-chmod +x plexweekly.sh qnap-install.sh mac-install.sh INSTALL-MAC.command app/*.sh app/bin/*.sh
+chmod +x tautweekly.sh qnap-install.sh mac-install.sh INSTALL-MAC.command app/*.sh app/bin/*.sh
 ```
 
 Use only the files that exist in your platform distribution.
@@ -43,7 +43,7 @@ Use only the files that exist in your platform distribution.
 - Confirm scheduling is enabled.
 - Confirm timezone, day, time, grace window, and the same-day attempt guard.
 - Windows: run `09-VERIFY-SCHEDULE.bat` as administrator.
-- Docker: run `./plexweekly.sh schedule-status` and inspect container logs.
+- Docker: run `./tautweekly.sh schedule-status` and inspect container logs.
 
 ## Mail-client rendering differs from preview
 

@@ -2,10 +2,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
-    throw "PlexWeekly Portable setup is supported on Windows only."
+    throw "TautWeekly for Plex Portable setup is supported on Windows only."
 }
 if ($PSVersionTable.PSVersion -lt [Version]"5.1") {
-    throw "PlexWeekly Portable requires Windows PowerShell 5.1 or newer. Found $($PSVersionTable.PSVersion)."
+    throw "TautWeekly for Plex Portable requires Windows PowerShell 5.1 or newer. Found $($PSVersionTable.PSVersion)."
 }
 
 $root = $PSScriptRoot
@@ -71,7 +71,7 @@ function Read-SecretPlainText {
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor DarkYellow
-Write-Host "PLEXWEEKLY PORTABLE SETUP" -ForegroundColor Yellow
+Write-Host "TAUTWEEKLY FOR PLEX PORTABLE SETUP" -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor DarkYellow
 Write-Host ""
 Write-Host "This wizard writes config.json in this folder."
@@ -101,7 +101,7 @@ $plexWebUrl = Read-Default "Open Plex button URL" "https://app.plex.tv/desktop/"
 Write-Host ""
 Write-Host "Optional direct Plex settings" -ForegroundColor Cyan
 Write-Host "These improve clearLogo/metadata support, especially when Plex is remote or"
-Write-Host "the scheduled task runs as SYSTEM. Leave blank to let PlexWeekly auto-discover."
+Write-Host "the scheduled task runs as SYSTEM. Leave blank to let TautWeekly for Plex auto-discover."
 $plexServerUrl = Read-Default "Direct Plex server URL, e.g. http://plex.example.test:32400"
 $plexToken = Read-SecretPlainText "Plex token (optional; press Enter for auto-discovery)" $true
 
@@ -146,7 +146,7 @@ $tempTime = [DateTime]::MinValue
 if (-not [DateTime]::TryParseExact($scheduleTime, "HH:mm", [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$tempTime)) {
     throw "ScheduleTime must use 24-hour HH:mm format, for example 09:30 or 18:45."
 }
-$taskName = Read-Default "Windows scheduled-task name" "PlexWeekly Newsletter"
+$taskName = Read-Default "Windows scheduled-task name" "TautWeekly for Plex Newsletter"
 
 $config = [ordered]@{
     TautulliUrl = $tautulliUrl.TrimEnd('/')

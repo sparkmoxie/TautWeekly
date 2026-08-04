@@ -1,6 +1,6 @@
 # Security policy
 
-PlexWeekly handles SMTP credentials, a Tautulli API key, and optionally a Plex
+TautWeekly for Plex handles SMTP credentials, a Tautulli API key, and optionally a Plex
 token. Treat every live configuration file and backup as a secret-bearing
 artifact.
 

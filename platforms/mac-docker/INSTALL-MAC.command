@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")" || exit 1
 clear
-printf '\033[1;33mPLEXWEEKLY MAC PORTABLE INSTALLER\033[0m\n\n'
-chmod +x mac-install.sh plexweekly.sh INSTALL-MAC.command 2>/dev/null || true
+printf '\033[1;33mTAUTWEEKLY FOR PLEX MAC PORTABLE INSTALLER\033[0m\n\n'
+chmod +x mac-install.sh tautweekly.sh INSTALL-MAC.command 2>/dev/null || true
 ./mac-install.sh
 status=$?
 printf '\n'

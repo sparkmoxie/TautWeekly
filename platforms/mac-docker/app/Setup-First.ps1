@@ -1,5 +1,5 @@
 ﻿param(
-    [string]$DataRoot = $(if ($env:PLEXWEEKLY_DATA_DIR) { $env:PLEXWEEKLY_DATA_DIR } else { "/data" })
+    [string]$DataRoot = $(if ($env:TAUTWEEKLY_DATA_DIR) { $env:TAUTWEEKLY_DATA_DIR } else { "/data" })
 )
 
 Set-StrictMode -Version Latest
@@ -10,7 +10,7 @@ if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
 }
 
 $configPath = Join-Path $DataRoot "config.json"
-$examplePath = "/opt/plexweekly/config.example.json"
+$examplePath = "/opt/tautweekly/config.example.json"
 
 function Read-Default {
     param([string]$Prompt, [string]$Default = "")
@@ -71,7 +71,7 @@ function Read-SecretPlainText {
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor DarkYellow
-Write-Host "PLEXWEEKLY MAC PORTABLE SETUP" -ForegroundColor Yellow
+Write-Host "TAUTWEEKLY FOR PLEX MAC PORTABLE SETUP" -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor DarkYellow
 Write-Host ""
 Write-Host "This wizard writes /data/config.json in the persistent Docker Desktop volume."
@@ -85,7 +85,7 @@ if (Test-Path $configPath) {
     Write-Host "An existing config.json was found:" -ForegroundColor Yellow
     Write-Host "  $configPath"
     if (-not (Read-YesNo "Replace it with a new configuration?" $false)) {
-        Write-Host "Existing config preserved. Run ./plexweekly.sh verify next." -ForegroundColor Green
+        Write-Host "Existing config preserved. Run ./tautweekly.sh verify next." -ForegroundColor Green
         exit 0
     }
     $backup = Join-Path $DataRoot ("config.backup.{0}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
@@ -201,4 +201,4 @@ Write-Host "Configuration created successfully:" -ForegroundColor Green
 Write-Host "  $configPath"
 Write-Host ""
 Write-Host "IMPORTANT: config.json contains credentials. Never publish or share it."
-Write-Host "NEXT: ./plexweekly.sh verify"
+Write-Host "NEXT: ./tautweekly.sh verify"

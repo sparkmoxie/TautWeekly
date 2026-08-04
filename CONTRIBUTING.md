@@ -1,6 +1,6 @@
-# Contributing to PlexWeekly
+# Contributing to TautWeekly for Plex
 
-Thanks for helping make PlexWeekly safer and easier to operate.
+Thanks for helping make TautWeekly for Plex safer and easier to operate.
 
 ## Before opening a change
 

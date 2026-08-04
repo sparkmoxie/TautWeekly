@@ -1,6 +1,6 @@
 # macOS Docker Desktop installation
 
-[Open the rendered interactive macOS walkthrough](https://sparkmoxie.github.io/PlexWeekly/mac/)
+[Open the rendered interactive macOS walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
 
 The macOS distribution runs the PowerShell newsletter engine in Docker Desktop
 and provides Mac-native setup and preview helpers.
@@ -18,13 +18,13 @@ Current source baseline: **1.0.3**.
 ## Install
 
 1. Download and extract
-   [`PlexWeekly-mac-docker.tar.gz`](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.tar.gz)
-   or the equivalent [ZIP archive](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.zip).
+   [`TautWeekly-mac-docker.tar.gz`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.tar.gz)
+   or the equivalent [ZIP archive](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.zip).
 2. Open Terminal in the extracted directory.
 3. Make the launchers executable and start the guided installer:
 
 ```bash
-chmod +x INSTALL-MAC.command mac-install.sh plexweekly.sh app/*.sh app/bin/*.sh
+chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh app/*.sh app/bin/*.sh
 ./mac-install.sh
 ```
 
@@ -52,12 +52,12 @@ user-defined Docker network, use its service name.
 ## Safe acceptance sequence
 
 ```bash
-./plexweekly.sh verify
-./plexweekly.sh list-users
-./plexweekly.sh preview-all
-./plexweekly.sh open-preview
-./plexweekly.sh send-test-all
-./plexweekly.sh schedule-status
+./tautweekly.sh verify
+./tautweekly.sh list-users
+./tautweekly.sh preview-all
+./tautweekly.sh open-preview
+./tautweekly.sh send-test-all
+./tautweekly.sh schedule-status
 ```
 
 During preview review, confirm the adaptive one-item cards, movie genres,
@@ -66,7 +66,7 @@ Binge Champion winner disclosure, and counted Trending section.
 Enable automation only after reviewing browser previews and TestEmail messages:
 
 ```bash
-./plexweekly.sh schedule-enable
+./tautweekly.sh schedule-enable
 ```
 
 The macOS Compose default binds previews to `127.0.0.1`. Keep that default
@@ -75,8 +75,8 @@ unless trusted-LAN access is intentional.
 ## Data and updates
 
 Private runtime data lives in `data/`. Back it up with
-`./plexweekly.sh backup`, keep the archive private, and update the image with
-`./plexweekly.sh update`. Re-run verification and controlled previews after an
+`./tautweekly.sh backup`, keep the archive private, and update the image with
+`./tautweekly.sh update`. Re-run verification and controlled previews after an
 update.
 
 See [configuration](../CONFIGURATION.md), [security](../SECURITY.md), and

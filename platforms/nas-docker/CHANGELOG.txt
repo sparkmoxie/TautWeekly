@@ -1,4 +1,4 @@
-PLEXWEEKLY NAS PORTABLE CHANGELOG
+TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
 v1.0.7
@@ -63,7 +63,7 @@ v1.0.1
 v1.0.0
 ------
 - dedicated QNAP/Linux Docker Compose edition
-- current six-state PlexWeekly production renderer
+- current six-state TautWeekly for Plex production renderer
 - persistent /data configuration, state, logs, assets and previews
 - browser preview service on port 8787 by default
 - internal timezone-aware weekly scheduler, disabled by default
