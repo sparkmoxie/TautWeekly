@@ -6,6 +6,26 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Added a standalone native Linux distribution with PowerShell 7.2+, a
+  hardened systemd service, protected `/var/lib/tautweekly` storage, safe
+  in-place upgrades, and matching administrative commands.
+- Added a FreeBSD 15.1+ amd64 beta distribution using FreeBSD Podman Linux
+  containers, rc.d lifecycle integration, protected `/var/db/tautweekly`
+  storage, image pinning, updates, and private backups.
+- Added rich searchable Linux and FreeBSD Pages walkthroughs, standalone
+  Markdown install guides, platform troubleshooting, security boundaries, and
+  support-matrix entries.
+- Added Linux and FreeBSD ZIP/TAR.GZ release artifacts, checksum coverage,
+  launcher-permission checks, and platform-contract validation.
+
+### Changed
+
+- Made container runtime wrappers honor configurable application and data roots
+  so the canonical renderer can be packaged for native Linux without source
+  drift.
+
 ## [0.4.0] - 2026-08-04
 
 ### Added

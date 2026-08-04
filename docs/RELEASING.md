@@ -11,12 +11,16 @@ reviewed commit on `main`.
    ```powershell
    pwsh ./scripts/validate-repository.ps1
    pwsh ./scripts/validate-unraid-template.ps1
+   pwsh ./scripts/validate-platforms.ps1
    pwsh ./scripts/check-links.ps1
    pwsh ./scripts/build-releases.ps1 -Version 1.2.3
    ```
 
-4. Inspect `dist/SHA256SUMS.txt` and list every archive to confirm that no live
-   configuration, state, logs, or generated output is present.
+4. Inspect `dist/SHA256SUMS.txt` and list all nine archives to confirm that no
+   live configuration, state, logs, or generated output is present. Confirm the
+   Linux archive contains the canonical application payload and systemd unit;
+   confirm the FreeBSD archive contains the same payload, Dockerfile, and rc.d
+   integration.
 5. Create and push an annotated tag from `main`:
 
    ```bash
@@ -27,8 +31,9 @@ reviewed commit on `main`.
 6. The release workflow rebuilds the archives, generates SHA-256 checksums, and
    creates the GitHub release. The Container workflow publishes matching
    `linux/amd64` and `linux/arm64` tags to
-   `ghcr.io/sparkmoxie/tautweekly`. Download the published artifacts, inspect
-   the multi-platform image manifest, and verify both independently.
+   `ghcr.io/sparkmoxie/tautweekly`. That image is consumed by NAS and FreeBSD
+   Podman installations. Download the published artifacts, inspect the
+   multi-platform image manifest, and verify both independently.
 
 7. Keep the container package public so Unraid Community Apps can pull it
    anonymously. Validate `ca_profile.xml` and `templates/tautweekly.xml` before

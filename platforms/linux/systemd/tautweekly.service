@@ -1,0 +1,32 @@
+[Unit]
+Description=TautWeekly for Plex newsletter scheduler and preview service
+Documentation=https://sparkmoxie.github.io/TautWeekly/linux/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=tautweekly
+Group=tautweekly
+EnvironmentFile=-/etc/tautweekly/tautweekly.env
+Environment=TAUTWEEKLY_APP_DIR=/opt/tautweekly
+Environment=TAUTWEEKLY_DATA_DIR=/var/lib/tautweekly
+Environment=TAUTWEEKLY_CONFIG=/var/lib/tautweekly/config.json
+ExecStart=/opt/tautweekly/run-service.sh
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=35s
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/tautweekly
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

@@ -18,6 +18,7 @@ jobs:
         run: |
           ./scripts/validate-repository.ps1
           ./scripts/validate-unraid-template.ps1
+          ./scripts/validate-platforms.ps1
       - name: Validate relative links
         shell: pwsh
         run: ./scripts/check-links.ps1
@@ -69,8 +70,17 @@ jobs:
         run: |
           test -x platforms/nas-docker/tautweekly.sh
           test -x platforms/mac-docker/tautweekly.sh
+          test -x platforms/linux/install-linux.sh
+          test -x platforms/linux/tautweekly
+          test -x platforms/freebsd-podman/install-freebsd.sh
+          test -x platforms/freebsd-podman/tautweekly
+          test -x platforms/freebsd-podman/rc.d/tautweekly
           tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/tautweekly.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/tautweekly.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/install-linux.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/tautweekly | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/install-freebsd.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/rc.d/tautweekly | grep -q '^-rwx'
       - name: Upload release candidates
         uses: actions/upload-artifact@v4
         with:

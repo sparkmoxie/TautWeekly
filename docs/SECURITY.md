@@ -4,8 +4,11 @@
 
 `config.json` stores a Tautulli API key and SMTP password in plain text, and may
 store a Plex token. Limit filesystem access to the account that runs
-TautWeekly for Plex. Docker installations use `UMASK=077` and a non-root UID/GID; Windows
-installations should use a private directory with appropriate NTFS permissions.
+TautWeekly for Plex. Docker installations use `UMASK=077` and a non-root UID/GID;
+Windows installations should use a private directory with appropriate NTFS
+permissions. Native Linux uses a dedicated service account and mode-0700
+`/var/lib/tautweekly`; FreeBSD uses mode-0700 `/var/db/tautweekly` mounted into
+the container with a non-root runtime identity.
 
 Backups contain the same secrets. Encrypt them or place them in protected
 storage, and define a retention period.

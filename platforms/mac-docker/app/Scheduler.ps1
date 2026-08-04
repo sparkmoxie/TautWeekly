@@ -5,6 +5,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $configPath = Join-Path $DataRoot "config.json"
+$appRoot = if ($env:TAUTWEEKLY_APP_DIR) { [string]$env:TAUTWEEKLY_APP_DIR } else { $PSScriptRoot }
+$runModePath = Join-Path (Join-Path $appRoot "bin") "run-mode.sh"
 $statePath = Join-Path $DataRoot "scheduler-state.json"
 $heartbeatPath = Join-Path $DataRoot "scheduler-heartbeat.json"
 $logDir = Join-Path $DataRoot "logs"
@@ -71,7 +73,7 @@ while ($true) {
 
         if (-not (Test-Path $configPath)) {
             if (((Get-Date) - $lastMissingConfigWarning).TotalMinutes -ge 5) {
-                Log "Waiting for /data/config.json. Run ./tautweekly.sh setup." "WARN"
+                Log "Waiting for $configPath. Run the platform setup command." "WARN"
                 $lastMissingConfigWarning = Get-Date
             }
             Start-Sleep -Seconds 30
@@ -130,7 +132,7 @@ while ($true) {
         Save-Json $state $statePath
 
         Log "Scheduled send window reached. Beginning one guarded SendAll attempt."
-        & /opt/tautweekly/bin/run-mode.sh SendAll --confirm-send-all
+        & $runModePath SendAll --confirm-send-all
         $exitCode = $LASTEXITCODE
 
         $state = Load-State

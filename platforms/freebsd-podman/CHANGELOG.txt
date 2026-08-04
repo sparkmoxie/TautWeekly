@@ -1,0 +1,6 @@
+TautWeekly for Plex FreeBSD Podman platform changelog
+
+v1.0.0
+- Added FreeBSD amd64 operation through the maintained Linux OCI image and Podman Linux emulation.
+- Added rc.d lifecycle integration, private host storage, localhost-only preview defaults, and guarded updates.
+- Added guided setup, preview, test, exclusion, scheduling, backup, and troubleshooting commands.

@@ -16,6 +16,10 @@ and terminal demonstrations.
   · [QNAP Container Station Compose](../platforms/nas-docker/compose.qnap.yaml)
 - [macOS interactive walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
   · [Markdown guide](mac/README.md)
+- [Native Linux interactive walkthrough](https://sparkmoxie.github.io/TautWeekly/linux/)
+  · [Markdown guide](linux/README.md)
+- [FreeBSD Podman interactive walkthrough](https://sparkmoxie.github.io/TautWeekly/freebsd/)
+  · [Markdown guide](freebsd/README.md)
 
 ## Operate and maintain
 

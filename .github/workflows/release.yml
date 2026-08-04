@@ -18,6 +18,7 @@ jobs:
         run: |
           ./scripts/validate-repository.ps1
           ./scripts/validate-unraid-template.ps1
+          ./scripts/validate-platforms.ps1
           ./scripts/check-links.ps1
           ./scripts/validate-docs.ps1
           ./scripts/validate-powershell.ps1
@@ -35,6 +36,10 @@ jobs:
         run: |
           tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/tautweekly.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/tautweekly.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/install-linux.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/tautweekly | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/install-freebsd.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/rc.d/tautweekly | grep -q '^-rwx'
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -22,6 +22,7 @@ Run the repository checks before opening a pull request:
 
 ```powershell
 pwsh ./scripts/validate-repository.ps1
+pwsh ./scripts/validate-platforms.ps1
 pwsh ./scripts/check-links.ps1
 pwsh ./scripts/build-releases.ps1 -Version dev
 ```
@@ -29,14 +30,15 @@ pwsh ./scripts/build-releases.ps1 -Version dev
 On a Unix-like host, also run:
 
 ```bash
-find platforms scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
-shellcheck $(find platforms scripts -type f -name '*.sh')
+./scripts/validate-shell.sh
 docker compose -f platforms/nas-docker/compose.yaml config --quiet
 docker compose -f platforms/mac-docker/compose.yaml config --quiet
 ```
 
 PowerShell changes must parse under the runtime declared by their platform:
-Windows PowerShell 5.1 for Windows and PowerShell 7.2 or newer for Docker.
+Windows PowerShell 5.1 for Windows and PowerShell 7.2 or newer for Docker and
+native Linux. FreeBSD uses the maintained Linux OCI runtime; its host wrappers
+must remain POSIX sh and rc.d compatible.
 
 ## Pull requests
 

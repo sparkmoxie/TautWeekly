@@ -1,0 +1,94 @@
+#!/bin/sh
+# shellcheck disable=SC2034
+# PROVIDE: tautweekly
+# REQUIRE: NETWORKING linux podman
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+# rc.subr consumes these assignments dynamically.
+name="tautweekly"
+rcvar="tautweekly_enable"
+desc="TautWeekly for Plex newsletter scheduler and preview service"
+start_cmd="tautweekly_start"
+stop_cmd="tautweekly_stop"
+status_cmd="tautweekly_status"
+restart_cmd="tautweekly_restart"
+
+load_rc_config "$name"
+: "${tautweekly_enable:=NO}"
+: "${tautweekly_env:=/usr/local/etc/tautweekly/tautweekly.env}"
+
+tautweekly_load_env()
+{
+    if [ ! -r "$tautweekly_env" ]; then
+        echo "Required settings file is missing: $tautweekly_env" >&2
+        return 1
+    fi
+    # The file is root-owned mode 0600 and contains only service assignments.
+    # shellcheck source=/dev/null
+    . "$tautweekly_env"
+    : "${TAUTWEEKLY_IMAGE:=ghcr.io/sparkmoxie/tautweekly:latest}"
+    : "${TAUTWEEKLY_CONTAINER:=tautweekly}"
+    : "${TAUTWEEKLY_DATA_DIR:=/var/db/tautweekly}"
+    : "${TAUTWEEKLY_TIMEZONE:=Etc/UTC}"
+    : "${TAUTWEEKLY_PUID:=8787}"
+    : "${TAUTWEEKLY_PGID:=8787}"
+    : "${TAUTWEEKLY_PREVIEW_BIND:=127.0.0.1}"
+    : "${TAUTWEEKLY_PREVIEW_PORT:=8787}"
+    : "${TAUTWEEKLY_PREVIEW_BASE_URL:=http://127.0.0.1:8787}"
+    PODMAN="/usr/local/bin/podman"
+}
+
+tautweekly_start()
+{
+    tautweekly_load_env || return 1
+    if [ ! -x "$PODMAN" ]; then
+        echo "Podman is not installed at $PODMAN" >&2
+        return 1
+    fi
+    install -d -m 0700 -o "$TAUTWEEKLY_PUID" -g "$TAUTWEEKLY_PGID" "$TAUTWEEKLY_DATA_DIR"
+    "$PODMAN" rm -f "$TAUTWEEKLY_CONTAINER" >/dev/null 2>&1 || true
+    "$PODMAN" run --detach \
+        --name "$TAUTWEEKLY_CONTAINER" \
+        --os=linux \
+        --pull=never \
+        --label io.containers.autoupdate=registry \
+        --stop-timeout=30 \
+        -e "TZ=$TAUTWEEKLY_TIMEZONE" \
+        -e "PUID=$TAUTWEEKLY_PUID" \
+        -e "PGID=$TAUTWEEKLY_PGID" \
+        -e "UMASK=077" \
+        -e "TAUTWEEKLY_DATA_DIR=/data" \
+        -e "TAUTWEEKLY_CONFIG=/data/config.json" \
+        -e "TAUTWEEKLY_PREVIEW_BASE_URL=$TAUTWEEKLY_PREVIEW_BASE_URL" \
+        -p "$TAUTWEEKLY_PREVIEW_BIND:$TAUTWEEKLY_PREVIEW_PORT:8080/tcp" \
+        -v "$TAUTWEEKLY_DATA_DIR:/data:rw" \
+        "$TAUTWEEKLY_IMAGE"
+}
+
+tautweekly_stop()
+{
+    tautweekly_load_env || return 1
+    "$PODMAN" stop --time 30 "$TAUTWEEKLY_CONTAINER" >/dev/null 2>&1 || true
+}
+
+tautweekly_status()
+{
+    tautweekly_load_env || return 1
+    running="$("$PODMAN" inspect --format '{{.State.Running}}' "$TAUTWEEKLY_CONTAINER" 2>/dev/null || true)"
+    if [ "$running" = "true" ]; then
+        echo "TautWeekly for Plex is running in $TAUTWEEKLY_CONTAINER."
+        return 0
+    fi
+    echo "TautWeekly for Plex is not running."
+    return 1
+}
+
+tautweekly_restart()
+{
+    tautweekly_stop
+    tautweekly_start
+}
+
+run_rc_command "$1"

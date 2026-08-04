@@ -12,6 +12,8 @@
 ![Unraid](https://img.shields.io/badge/Unraid-Community%20Apps-f15a2c?logo=unraid)
 ![Container](https://img.shields.io/badge/GHCR-amd64%20%7C%20arm64-2496ed?logo=docker)
 ![macOS](https://img.shields.io/badge/macOS-Docker%20Desktop-000000?logo=apple)
+![Linux](https://img.shields.io/badge/Linux-native%20systemd-4d8f28?logo=linux)
+![FreeBSD](https://img.shields.io/badge/FreeBSD-Podman%20beta-b7292f?logo=freebsd)
 
 Generate polished activity, welcome, quiet-week, and milestone emails; inspect
 them locally; send controlled tests; then schedule production delivery.
@@ -41,19 +43,16 @@ them locally; send controlled tests; then schedule production delivery.
 
 ## Choose a platform
 
-| | Windows portable | NAS / Docker | macOS / Docker Desktop |
-|---|---|---|---|
-| Source baseline | 1.6.11 | 1.1.0 | 1.0.3 |
-| Runtime | Windows PowerShell 5.1+ | PowerShell 7.2+ in Docker | PowerShell 7.2+ in Docker Desktop |
-| Scheduler | Windows Task Scheduler | Built-in container scheduler | Built-in container scheduler |
-| Preview | Local generated HTML | Port 8787, configurable bind | Localhost port 8787 by default |
-| Best fit | Always-on Windows host | QNAP, Unraid, Linux NAS, Docker host | Intel or Apple silicon Mac |
-| Interactive walkthrough | [Open Windows](https://sparkmoxie.github.io/TautWeekly/windows/) | [Open NAS / Docker](https://sparkmoxie.github.io/TautWeekly/nas-docker/) | [Open macOS](https://sparkmoxie.github.io/TautWeekly/mac/) |
-| Install guide | [Windows](docs/windows/README.md) | [NAS / Docker](docs/nas-docker/README.md) | [macOS](docs/mac/README.md) |
-| Source | [`platforms/windows`](platforms/windows) | [`platforms/nas-docker`](platforms/nas-docker) | [`platforms/mac-docker`](platforms/mac-docker) |
+| Platform | Runtime and scheduler | Preview | Best fit | Guides and source |
+|---|---|---|---|---|
+| Windows portable · baseline 1.6.11 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/) · [Install](docs/windows/README.md) · [Source](platforms/windows) |
+| NAS / Docker · baseline 1.1.0 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Install](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
+| macOS · baseline 1.0.3 | PowerShell 7 in Docker Desktop · internal scheduler | Localhost port 8787 by default | Intel or Apple silicon Mac | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/) · [Install](docs/mac/README.md) · [Source](platforms/mac-docker) |
+| Native Linux · baseline 1.0.0 | PowerShell 7.2+ · hardened systemd service | Localhost port 8787 by default | Current Ubuntu, Debian, or RHEL host without Docker | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/linux/) · [Install](docs/linux/README.md) · [Source](platforms/linux) |
+| FreeBSD Podman · baseline 1.0.0 | Maintained Linux OCI image · rc.d | Localhost port 8787 by default | FreeBSD 15.1+ amd64 host · **beta** | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Install](docs/freebsd/README.md) · [Source](platforms/freebsd-podman) |
 
-All three distributions preserve the supplied working renderer and safety
-gates. Their setup and lifecycle wrappers are platform-specific.
+All five distributions preserve the working renderer and safety gates. Their
+setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
 
 ## Current newsletter behavior
 
@@ -85,6 +84,8 @@ You can revise exclusions later without rerunning SMTP or schedule setup:
 | Windows | `14-MANAGE-USER-EXCLUSIONS.bat` |
 | NAS / Docker | `./tautweekly.sh exclude-users` |
 | macOS / Docker Desktop | `./tautweekly.sh exclude-users` |
+| Native Linux | `sudo tautweekly exclude-users` |
+| FreeBSD / Podman | `sudo tautweekly exclude-users` |
 
 Excluded users are skipped by scheduled delivery and confirmed `SendAll`
 runs. Preview and TestEmail modes can still use them as sample data, and an
@@ -110,6 +111,56 @@ do not share its output publicly.
 
 [Open the rendered Windows walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/)
 · [Read the Markdown install guide](docs/windows/README.md)
+
+</details>
+
+<details>
+<summary><strong>Native Linux with systemd</strong></summary>
+
+Install PowerShell 7.2 or newer from Microsoft's supported repository for your
+distribution, download and verify the Linux release, then run:
+
+```bash
+sudo ./install-linux.sh
+sudo tautweekly setup
+sudo tautweekly verify
+sudo tautweekly exclude-users
+sudo tautweekly preview-all
+sudo tautweekly send-test-all
+```
+
+Application code is root-owned under `/opt/tautweekly`; configuration, state,
+logs, previews, custom assets, and backups stay in the protected
+`/var/lib/tautweekly` data directory. The preview listener defaults to
+localhost.
+
+[Open the rendered Linux walkthrough](https://sparkmoxie.github.io/TautWeekly/linux/)
+· [Read the Markdown install guide](docs/linux/README.md)
+
+</details>
+
+<details>
+<summary><strong>FreeBSD with Podman</strong></summary>
+
+The initial beta supports FreeBSD 15.1+ on amd64. It uses FreeBSD's documented
+Podman Linux-container path and native rc.d lifecycle rather than an unsupported
+native PowerShell build:
+
+```sh
+sudo ./install-freebsd.sh
+sudo tautweekly setup
+sudo tautweekly verify
+sudo tautweekly exclude-users
+sudo tautweekly preview-all
+sudo tautweekly send-test-all
+```
+
+Private runtime data remains under `/var/db/tautweekly`; the public GHCR image
+contains no live configuration. Keep previews on localhost and complete the
+full acceptance sequence on the FreeBSD host before scheduling.
+
+[Open the rendered FreeBSD walkthrough](https://sparkmoxie.github.io/TautWeekly/freebsd/)
+· [Read the Markdown install guide](docs/freebsd/README.md)
 
 </details>
 
@@ -182,7 +233,7 @@ flowchart LR
     R --> V["Local preview"]
     R --> M["SMTP test and delivery"]
     E <--> S["Private config and state"]
-    C["Task Scheduler or\ncontainer scheduler"] --> E
+    C["Task Scheduler, systemd, rc.d,\nor container scheduler"] --> E
 ```
 
 Tautulli supplies users, activity, history, and recently added metadata. Direct
@@ -192,8 +243,8 @@ guards first-run behavior, welcomes, and repeat schedule attempts.
 
 ## Release downloads
 
-TautWeekly for Plex `v0.3.0` publishes five installable archives, a checksum
-manifest, and the multi-architecture NAS image.
+Tagged releases publish nine installable archives, a checksum manifest, and the
+multi-architecture OCI image used by NAS and FreeBSD deployments.
 The stable links below follow the latest published release.
 
 > [!NOTE]
@@ -205,6 +256,8 @@ The stable links below follow the latest published release.
 | Windows | `TautWeekly-windows.zip` | [ZIP](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-windows.zip) |
 | NAS / Docker | `TautWeekly-nas-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.zip) |
 | macOS / Docker Desktop | `TautWeekly-mac-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.zip) |
+| Native Linux | `TautWeekly-linux.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-linux.tar.gz) · [ZIP](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-linux.zip) |
+| FreeBSD / Podman | `TautWeekly-freebsd-podman.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-freebsd-podman.tar.gz) · [ZIP](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-freebsd-podman.zip) |
 | Integrity manifest | `SHA256SUMS.txt` | [SHA-256 checksums](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/SHA256SUMS.txt) |
 | NAS container | `ghcr.io/sparkmoxie/tautweekly:latest` | [GHCR package](https://github.com/sparkmoxie/TautWeekly/pkgs/container/tautweekly) |
 
@@ -232,6 +285,8 @@ shasum -a 256 -c SHA256SUMS.txt
 | Unraid 6.12+ | Community Applications target | Official v2 template plus amd64/arm64 image; catalog publication is moderated by Unraid |
 | QNAP Container Station | Documented Compose deployment | Pull-based Container Station application; QPKG/App Center packaging is not applicable to this Docker distribution |
 | Current Docker Desktop on Intel or Apple silicon macOS | Supported source target | Shell, JSON, and Compose validation; macOS UI flow is not CI-tested |
+| Current PowerShell-supported Ubuntu, Debian, or RHEL with systemd | Supported native source target | PowerShell, shell, data-boundary, systemd-contract, archive, and link validation; distro package-manager UI is not CI-tested |
+| FreeBSD 15.1+ amd64 with Podman Linux containers | Beta source target | POSIX shell, rc.d-contract, archive, and shared OCI validation; a real FreeBSD host is required for acceptance |
 | PowerShell versions older than the platform minimum | Unsupported | Runtime guard exits with an explanatory error |
 
 ## Documentation
@@ -241,10 +296,14 @@ shasum -a 256 -c SHA256SUMS.txt
 - [Rendered NAS / Docker walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
 - [Rendered NAS / Docker Compose quick start](https://sparkmoxie.github.io/TautWeekly/nas-docker/quickstart.html)
 - [Rendered macOS walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
+- [Rendered native Linux walkthrough](https://sparkmoxie.github.io/TautWeekly/linux/)
+- [Rendered FreeBSD Podman walkthrough](https://sparkmoxie.github.io/TautWeekly/freebsd/)
 - [Documentation source index](docs/README.md)
 - [Windows installation](docs/windows/README.md)
 - [NAS / Docker installation](docs/nas-docker/README.md)
 - [macOS installation](docs/mac/README.md)
+- [Native Linux installation](docs/linux/README.md)
+- [FreeBSD Podman installation](docs/freebsd/README.md)
 - [Configuration reference](docs/CONFIGURATION.md)
 - [Security and hardening](docs/SECURITY.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
@@ -252,7 +311,8 @@ shasum -a 256 -c SHA256SUMS.txt
 
 ## Project status and safety
 
-The public repository begins from three previously packaged platform baselines.
+The public repository began from three packaged platform baselines and now also
+maintains native Linux and FreeBSD Podman lifecycle distributions.
 Automation validates source hygiene and packaging, but it cannot validate your
 Tautulli dataset, SMTP provider, Plex permissions, mail-client rendering, NAS
 vendor UI, or network/firewall policy. Operate on a preview-and-test basis.
@@ -265,5 +325,5 @@ under the [MIT License](LICENSE). Asset provenance is recorded in
 
 TautWeekly for Plex is an independent community project. It is not affiliated with,
 endorsed by, or sponsored by Plex, Tautulli, IMDb, Rotten Tomatoes, Docker,
-QNAP, Unraid, Apple, or Microsoft. All product names and marks belong to their
-respective owners.
+QNAP, Unraid, Apple, Microsoft, Red Hat, Debian, Canonical, or the FreeBSD
+Project. All product names and marks belong to their respective owners.
