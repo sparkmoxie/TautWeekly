@@ -171,9 +171,9 @@ vendor UI, or network/firewall policy. Operate on a preview-and-test basis.
 
 ## License and affiliation
 
-Original PlexWeekly source code and documentation are licensed under the
-[MIT License](LICENSE). Bundled emoji and rating-service assets have separate
-notices and ownership boundaries in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+PlexWeekly source code, documentation, and bundled custom artwork are licensed
+under the [MIT License](LICENSE). Asset provenance is recorded in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 PlexWeekly is an independent community project. It is not affiliated with,
 endorsed by, or sponsored by Plex, Tautulli, IMDb, Rotten Tomatoes, Docker,

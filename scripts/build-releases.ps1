@@ -43,7 +43,6 @@ function Copy-Platform {
     Copy-Item -LiteralPath (Join-Path $Root $GuidePath) -Destination (Join-Path $destination 'README.md') -Force
     Copy-Item -LiteralPath (Join-Path $Root 'LICENSE') -Destination $destination -Force
     Copy-Item -LiteralPath (Join-Path $Root 'THIRD_PARTY_NOTICES.md') -Destination $destination -Force
-    Copy-Item -LiteralPath (Join-Path $Root 'licenses') -Destination $destination -Recurse -Force
     $metadata = @(
         'PlexWeekly public release'
         "Repository version: $Version"

@@ -41,10 +41,10 @@ function Ensure-AnimatedGif {
     }
 
     if ($frames -eq 1) {
-        Write-Host "$Name is static. Replacing with the official animated GIF..." -ForegroundColor Yellow
+        Write-Host "$Name is static. Restoring the canonical PlexWeekly animation..." -ForegroundColor Yellow
     }
     else {
-        Write-Host "$Name is missing. Downloading the official animated GIF..."
+        Write-Host "$Name is missing. Restoring the canonical PlexWeekly animation..."
     }
 
     $temp = "$path.download"
@@ -62,11 +62,11 @@ function Ensure-AnimatedGif {
 
 Ensure-AnimatedGif `
     -Name "movies.gif" `
-    -Url "https://fonts.gstatic.com/s/e/notoemoji/latest/1f39e_fe0f/512.gif"
+    -Url "https://raw.githubusercontent.com/sparkmoxie/PlexWeekly/main/platforms/windows/assets/movies.gif"
 
 Ensure-AnimatedGif `
     -Name "tv.gif" `
-    -Url "https://fonts.gstatic.com/s/e/notoemoji/latest/1f4fa/512.gif"
+    -Url "https://raw.githubusercontent.com/sparkmoxie/PlexWeekly/main/platforms/windows/assets/tv.gif"
 
 Write-Host ""
 Write-Host "Animated movie and TV assets are ready." -ForegroundColor Green
