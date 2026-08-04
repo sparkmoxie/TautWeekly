@@ -4,7 +4,7 @@ All notable public changes to TautWeekly for Plex will be documented here. The p
 uses [Semantic Versioning](https://semver.org/) for GitHub releases and follows
 the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.5.0] - 2026-08-04
 
 ### Added
 
