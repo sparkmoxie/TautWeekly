@@ -67,6 +67,28 @@ gates. Their setup and lifecycle wrappers are platform-specific.
 - The four personal-stat cards share a content-driven equal height, including
   zero-, one-, and multi-item states.
 
+## Exclude newsletter recipients
+
+Every primary setup wizard now loads the Tautulli user roster immediately
+after the URL and API key are entered. Select one or more numbered rows (ranges
+such as `2,4-6` are accepted), press Enter to keep the current selection, or
+type `none` to clear it. The wizard stores stable Tautulli IDs in
+`ExcludedUserIds`; it never copies a live roster into source files.
+
+You can revise exclusions later without rerunning SMTP or schedule setup:
+
+| Platform | Standalone command |
+|---|---|
+| Windows | `14-MANAGE-USER-EXCLUSIONS.bat` |
+| NAS / Docker | `./tautweekly.sh exclude-users` |
+| macOS / Docker Desktop | `./tautweekly.sh exclude-users` |
+
+Excluded users are skipped by scheduled delivery and confirmed `SendAll`
+runs. Preview and TestEmail modes can still use them as sample data, and an
+administrator can still deliberately invoke the separately confirmed one-off
+welcome command. The selector displays recipient names and email addresses;
+do not share its output publicly.
+
 ## Installation at a glance
 
 <details>
@@ -76,7 +98,8 @@ gates. Their setup and lifecycle wrappers are platform-specific.
    [`TautWeekly-windows.zip`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-windows.zip)
    into a permanent writable folder, or use
    [`platforms/windows`](platforms/windows) from the current source tree.
-2. Run `00-SETUP-FIRST.bat` and enter your own Tautulli and SMTP values.
+2. Run `00-SETUP-FIRST.bat`, enter your own Tautulli and SMTP values, and
+   select any users to exclude from weekly delivery.
 3. Run `01-VERIFY-SETUP.bat`.
 4. Preview with `03-PREVIEW-NEWSLETTER.bat`, then send a controlled test with
    `04-SEND-TEST.bat`.
@@ -114,6 +137,7 @@ docker compose pull
 docker compose up -d
 ./tautweekly.sh setup
 ./tautweekly.sh verify
+./tautweekly.sh exclude-users  # optional later revision
 ./tautweekly.sh preview-all
 ```
 
@@ -133,6 +157,7 @@ Use a hostname reachable from inside the container for Tautulli. Keep port
 chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh
 ./mac-install.sh
 ./tautweekly.sh verify
+./tautweekly.sh exclude-users  # optional later revision
 ./tautweekly.sh preview-all
 ```
 

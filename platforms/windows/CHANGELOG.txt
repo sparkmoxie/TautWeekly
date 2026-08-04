@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
+Unreleased
+----------
+- adds interactive stable-ID user exclusions to primary setup
+- adds 14-MANAGE-USER-EXCLUSIONS.bat for later recipient-policy updates
+- preserves existing user-ID and email exclusions when setup is intentionally rebuilt
+
 v1.6.11 Portable
 ----------------
 - fixes PowerShell 5.1 strict-mode failure when exactly one movie or episode is itemized

@@ -546,6 +546,7 @@ docker compose ps</pre></div>
             <h3>Run the interactive setup wizard</h3>
             <div class="code-block"><button class="copy-button">Copy</button><pre>chmod +x tautweekly.sh
 ./tautweekly.sh setup</pre></div>
+            <p>After entering the Tautulli URL and API key, select numbered users or ranges to exclude from scheduled and SendAll delivery.</p>
             <p>The Plex URL and token are optional. Pressing Enter at the token prompt safely leaves it blank.</p>
           </div>
         </article>
@@ -595,7 +596,8 @@ docker compose ps</pre></div>
       </div>
       <div class="timeline panel">
         <article class="timeline-step"><div class="step-number">01</div><div class="step-content"><h3>Verify the installation</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./tautweekly.sh verify</pre></div><p>Checks configuration, Tautulli, assets, SMTP reachability, schedule syntax, and an actual browser-served GIF.</p></div></article>
-        <article class="timeline-step"><div class="step-number">02</div><div class="step-content"><h3>Inspect available users</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./tautweekly.sh list-users</pre></div></div></article>
+        <article class="timeline-step"><div class="step-number">02</div><div class="step-content"><h3>Inspect users and confirm exclusions</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./tautweekly.sh list-users
+./tautweekly.sh exclude-users</pre></div><p>The exclusion command updates only stable user IDs. Press Enter to keep the list or type <code>none</code> to clear it.</p></div></article>
         <article class="timeline-step"><div class="step-number">03</div><div class="step-content"><h3>Generate all six previews</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./tautweekly.sh preview-all</pre></div><p>This creates manual welcome, both new-user branches, normal, quiet, and warm-up previews.</p></div></article>
         <article class="timeline-step"><div class="step-number">04</div><div class="step-content"><h3>Open the preview index</h3><div class="code-block"><button class="copy-button">Copy</button><pre>http://NAS_LAN_IP:8787/preview-all-00-INDEX.html</pre></div></div></article>
         <article class="timeline-step"><div class="step-number">05</div><div class="step-content"><h3>Send all six to TestEmail</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./tautweekly.sh send-test-all</pre></div><p>No Plex user receives these six messages.</p></div></article>
@@ -758,6 +760,7 @@ docker compose up -d
           <tbody>
             <tr><td><code>verify</code></td><td><span class="risk safe">SAFE</span></td><td>Runs complete setup and asset verification.</td></tr>
             <tr><td><code>list-users</code></td><td><span class="risk safe">SAFE</span></td><td>Lists users available through Tautulli.</td></tr>
+            <tr><td><code>exclude-users</code></td><td><span class="risk safe">CONFIG</span></td><td>Updates stable recipient exclusions without rerunning setup.</td></tr>
             <tr><td><code>preview [user]</code></td><td><span class="risk safe">SAFE</span></td><td>Creates one local/browser preview.</td></tr>
             <tr><td><code>preview-all [user]</code></td><td><span class="risk safe">SAFE</span></td><td>Creates all six deterministic HTML previews.</td></tr>
             <tr><td><code>send-test [user]</code></td><td><span class="risk test">TESTEMAIL</span></td><td>Sends one real MIME/CID message only to TestEmail.</td></tr>
@@ -780,7 +783,7 @@ docker compose up -d
         </table>
       </div>
 
-      <div class="callout green"><div class="callout-icon">✓</div><div><strong>Recommended final sequence</strong><p><code>verify</code> → <code>list-users</code> → <code>preview-all</code> → <code>send-test-all</code> → <code>schedule-status</code> → <code>schedule-enable</code>.</p></div></div>
+      <div class="callout green"><div class="callout-icon">✓</div><div><strong>Recommended final sequence</strong><p><code>verify</code> → <code>list-users</code> → <code>exclude-users</code> → <code>preview-all</code> → <code>send-test-all</code> → <code>schedule-status</code> → <code>schedule-enable</code>.</p></div></div>
     </section>
 
 

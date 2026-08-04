@@ -11,6 +11,7 @@ if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
 
 $configPath = Join-Path $DataRoot "config.json"
 $examplePath = "/opt/tautweekly/config.example.json"
+. (Join-Path $PSScriptRoot "User-Exclusions.ps1")
 
 function Read-Default {
     param([string]$Prompt, [string]$Default = "")
@@ -81,12 +82,26 @@ Write-Host ""
 New-Item -ItemType Directory -Force -Path $DataRoot | Out-Null
 
 $defaults = Get-Content -Path $examplePath -Raw -Encoding UTF8 | ConvertFrom-Json
+$existingExcludedUserIds = @()
+$existingExcludedEmails = @()
 if (Test-Path $configPath) {
     Write-Host "An existing config.json was found:" -ForegroundColor Yellow
     Write-Host "  $configPath"
     if (-not (Read-YesNo "Replace it with a new configuration?" $false)) {
         Write-Host "Existing config preserved. Run ./tautweekly.sh verify next." -ForegroundColor Green
         exit 0
+    }
+    try {
+        $existingConfig = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($null -ne $existingConfig.PSObject.Properties["ExcludedUserIds"]) {
+            $existingExcludedUserIds = @($existingConfig.ExcludedUserIds)
+        }
+        if ($null -ne $existingConfig.PSObject.Properties["ExcludedEmails"]) {
+            $existingExcludedEmails = @($existingConfig.ExcludedEmails)
+        }
+    }
+    catch {
+        Write-Host "WARNING: Existing exclusions could not be read and will not be carried forward." -ForegroundColor Yellow
     }
     $backup = Join-Path $DataRoot ("config.backup.{0}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
     Copy-Item $configPath $backup -Force
@@ -100,6 +115,21 @@ Write-Host "for example http://media.example.test:8181. Do not use 127.0.0.1."
 $tautulliUrl = Read-Default "Tautulli URL" ([string]$defaults.TautulliUrl)
 $apiKey = Read-Default "Tautulli API key"
 if ([string]::IsNullOrWhiteSpace($apiKey)) { throw "Tautulli API key is required." }
+
+$excludedUserIds = @($existingExcludedUserIds)
+try {
+    $selectableUsers = @(Get-TautWeeklySelectableUsers -TautulliUrl $tautulliUrl -ApiKey $apiKey)
+    if ($selectableUsers.Count -gt 0) {
+        $excludedUserIds = @(Read-TautWeeklyExcludedUserIds -Users $selectableUsers -CurrentExcludedUserIds $excludedUserIds)
+    }
+    else {
+        Write-Host "WARNING: Tautulli returned no users. Existing exclusions will be preserved." -ForegroundColor Yellow
+    }
+}
+catch {
+    Write-Host "WARNING: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "Setup will continue. Run ./tautweekly.sh exclude-users after verification." -ForegroundColor Yellow
+}
 
 $serverName = Read-Default "Plex server/newsletter display name" "My Plex"
 $serverLabel = Read-Default "Small header label" "PLEX"
@@ -187,8 +217,8 @@ $config = [ordered]@{
     MinimumEpisodeSeconds = 120
     MaxMovies = 8
     MaxTv = 8
-    ExcludedUserIds = @()
-    ExcludedEmails = @()
+    ExcludedUserIds = @($excludedUserIds)
+    ExcludedEmails = @($existingExcludedEmails)
     RecentAccessDays = 7
 }
 

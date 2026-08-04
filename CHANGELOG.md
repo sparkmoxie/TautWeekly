@@ -6,6 +6,20 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Added interactive Tautulli user exclusion selection to every platform's
+  primary setup and a standalone exclusion manager for later recipient-policy
+  updates.
+- Added Windows and Docker launch commands, selection behavior tests, and
+  matching Markdown and rendered walkthrough guidance.
+
+### Changed
+
+- Setup replacement now carries forward existing `ExcludedUserIds` and
+  `ExcludedEmails`; a temporary Tautulli lookup failure no longer silently
+  clears established exclusions.
+
 ## [0.3.0] - 2026-08-04
 
 ### Added

@@ -24,6 +24,8 @@ storage, and define a retention period.
 - Keep `TestEmail` under operator control.
 - Review all six preview states and test messages after setup or upgrades.
 - Review exclusions and the user roster before a bulk send.
+- Treat exclusion-selector output as private: it contains Tautulli names, IDs,
+  and recipient email addresses.
 - Keep the built-in recipient delay unless your SMTP provider explicitly allows
   a different rate.
 - Do not bypass the confirmation switches or wrapper prompts.
