@@ -1,6 +1,26 @@
 PLEXWEEKLY NAS PORTABLE CHANGELOG
 =================================
 
+v1.0.7
+------
+- fixes single-item adaptive collection handling
+- explicitly preserves MovieItems and EpisodeItems as arrays
+- retains genre, ratings, Binge Champion, Trending, Docker, and scheduler behavior
+
+v1.0.6
+------
+- adds globally formatted genre beneath itemized watched-movie titles
+- preserves mini posters and Rotten Tomatoes critic and audience scores
+- applies to all Docker preview, test, and scheduled delivery paths
+
+v1.0.5
+------
+- adds adaptive itemized watched-movie and episode cards
+- keeps all four statistics cards dynamically equal in height
+- adds the server-wide Binge Champion user award with winner emphasis
+- adds counted poster-based Trending without duplication
+- updates recipient privacy language and documentation
+
 v1.0.4
 ------
 - fixed blank optional Plex-token prompt crash

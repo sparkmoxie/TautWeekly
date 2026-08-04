@@ -1,4 +1,3 @@
-PlexWeekly NAS Portable v1.0.4
-Platforms: QNAP Container Station, Unraid, Docker Desktop, generic Linux Docker
-Cleanup release: optional-token, GIF verification, and browser-preview asset fixes
-Newsletter renderer: current six-state production branch
+PlexWeekly NAS Portable v1.0.7
+Platforms: QNAP, Unraid, Docker Desktop, generic Linux Docker
+Hotfix: preserve array semantics for exactly one adaptive movie or episode

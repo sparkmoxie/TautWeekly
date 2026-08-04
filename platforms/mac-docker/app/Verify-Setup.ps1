@@ -211,7 +211,7 @@ try {
 }
 catch {
     FAIL "preview asset web check failed: $($_.Exception.Message)"
-    WARN "Inspect ./plexweekly.sh logs and confirm the container was recreated from v1.0.4."
+    WARN "Inspect ./plexweekly.sh logs and confirm the container was recreated from v1.0.3."
     exit 1
 }
 

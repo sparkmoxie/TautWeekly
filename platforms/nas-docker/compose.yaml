@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: plexweekly-nas:1.0.4
+    image: plexweekly-nas:1.0.7
     container_name: plexweekly
     restart: unless-stopped
     environment:

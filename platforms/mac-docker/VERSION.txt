@@ -1,4 +1,3 @@
-PlexWeekly Mac Portable v1.0.0
-Host: macOS with Docker Desktop
-Architectures: Apple silicon arm64 and Intel x86_64
-Source branch: PlexWeekly NAS/Docker Portable v1.0.4
+PlexWeekly Mac Portable v1.0.3
+Platform: macOS with Docker Desktop
+Hotfix: preserve array semantics for exactly one adaptive movie or episode

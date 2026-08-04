@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: plexweekly-mac:1.0.0
+    image: plexweekly-mac:1.0.3
     container_name: plexweekly
     restart: unless-stopped
     environment:
