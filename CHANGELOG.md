@@ -6,6 +6,27 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-04
+
+### Added
+
+- Added an official Unraid Community Applications v2 Docker template and root
+  `ca_profile.xml` with safe appdata, port, identity, and timezone defaults.
+- Added automated amd64/arm64 container publishing to
+  `ghcr.io/sparkmoxie/tautweekly` with OCI source metadata, SBOM, provenance,
+  version tags, and a stable `latest` tag.
+- Added a pull-based QNAP Container Station Compose application while keeping
+  the source Dockerfile and local-build workflow maintainable.
+- Added repository validation for Community Applications metadata and Docker
+  template configuration.
+
+### Changed
+
+- Updated the NAS/Docker baseline to 1.1.0 and made routine NAS installation
+  and updates pull the published image without touching persistent data.
+- Documented why QNAP App Center is not used for the Docker edition: App Center
+  catalogs native QPKG packages, while Container Station is QNAP's Compose UI.
+
 ## [0.2.0] - 2026-08-04
 
 ### Changed

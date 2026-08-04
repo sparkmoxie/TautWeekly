@@ -91,8 +91,8 @@ else
   echo "Existing .env preserved."
 fi
 
-printf '\nBuilding TautWeekly for Plex NAS Portable...\n'
-compose_cmd build --pull
+printf '\nPulling the current TautWeekly for Plex container image...\n'
+compose_cmd pull tautweekly
 compose_cmd up -d
 wait_for_container
 
@@ -108,7 +108,7 @@ if ! compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/V
 fi
 cat <<'EOF'
 
-Installation/build is complete.
+Installation is complete.
 
 Recommended acceptance sequence:
   ./tautweekly.sh verify

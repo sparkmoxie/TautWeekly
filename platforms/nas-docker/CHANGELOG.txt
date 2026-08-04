@@ -1,6 +1,14 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.1.0
+------
+- publishes a versioned amd64/arm64 image at ghcr.io/sparkmoxie/tautweekly
+- adds an official Unraid Community Apps v2 template with safe appdata defaults
+- changes standard NAS updates to pull the published image while preserving data
+- adds a paste-ready QNAP Container Station Compose application
+- keeps local Dockerfile builds available for development and source maintenance
+
 v1.0.7
 ------
 - fixes single-item adaptive collection handling

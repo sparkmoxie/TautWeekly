@@ -12,6 +12,8 @@ and terminal demonstrations.
 - [NAS / Docker interactive walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
   · [Compose quick start](https://sparkmoxie.github.io/TautWeekly/nas-docker/quickstart.html)
   · [Markdown guide](nas-docker/README.md)
+  · [Unraid template](../templates/tautweekly.xml)
+  · [QNAP Container Station Compose](../platforms/nas-docker/compose.qnap.yaml)
 - [macOS interactive walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
   · [Markdown guide](mac/README.md)
 
@@ -23,7 +25,6 @@ and terminal demonstrations.
 - [Release process](RELEASING.md)
 
 The `.html` files in the platform directories are self-contained Pages
-walkthroughs. The Pages workflow deploys from the repository's current default
-branch: `public-launch` during launch review and `main` after the pull request
-is merged and the default branch is changed. The Markdown files are the
-canonical source-oriented guides for reading directly on GitHub.
+walkthroughs. The Pages workflow deploys from the repository's default `main`
+branch. The Markdown files are the canonical source-oriented guides for reading
+directly on GitHub.

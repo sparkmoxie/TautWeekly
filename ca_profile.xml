@@ -1,0 +1,6 @@
+<CommunityApplications>
+  <Profile>TautWeekly for Plex is a preview-first weekly Plex activity newsletter powered by Tautulli. This repository maintains the official Docker image and Unraid Community Apps template. Use the GitHub issue tracker for support.</Profile>
+  <Icon>https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/nas-docker/app/assets-default/popcorn.gif</Icon>
+  <WebPage>https://github.com/sparkmoxie/TautWeekly</WebPage>
+  <Forum>https://github.com/sparkmoxie/TautWeekly/issues</Forum>
+</CommunityApplications>

@@ -100,6 +100,11 @@ foreach ($markdown in $markdownFiles) {
     $content = [IO.File]::ReadAllText($markdown.FullName)
     foreach ($link in [regex]::Matches($content, '!?(?:\[[^\]]*\])\((?<target>[^)\s]+\.html(?:#[^)\s]+)?)\)')) {
         $target = $link.Groups['target'].Value
+        $absolute = $null
+        if ([Uri]::TryCreate($target, [UriKind]::Absolute, [ref]$absolute) -and
+            $absolute.Host -notin @('github.com', 'raw.githubusercontent.com')) {
+            continue
+        }
         if (-not $target.StartsWith('https://sparkmoxie.github.io/TautWeekly/', [StringComparison]::OrdinalIgnoreCase)) {
             throw "HTML documentation must link to rendered Pages, not source: $($markdown.FullName) -> $target"
         }
