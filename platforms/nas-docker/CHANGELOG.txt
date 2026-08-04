@@ -1,0 +1,58 @@
+PLEXWEEKLY NAS PORTABLE CHANGELOG
+=================================
+
+v1.0.4
+------
+- fixed blank optional Plex-token prompt crash
+- fixed animated GIF verification parsing
+- replaced browser-preview ../assets URLs with assets/ URLs
+- mirrors /data/assets into the /data/output web root
+- removes the old output/assets symlink workaround when present
+- verifies and health-checks a real browser-served GIF
+- added Docker Desktop PowerShell command wrapper and quick-start guide
+- qnap-install.sh now exits when verification fails
+- normalized current version headers and preview paths
+
+v1.0.3
+------
+- corrected regular movie-card genre spacing
+- added movie genre beneath desktop clearLogo and fallback-title heroes
+- added movie genre beneath mobile hero text title
+- applied genre to movie-based quiet-week Trending hero
+- retained QNAP/Unraid deployment, TV overflow count correction, and six-state tests
+- updated rich HTML README and standalone walkthrough
+
+v1.0.2
+------
+- fixed missing TV overflow footer when Tautulli returns show or season rows
+- counts child episodes added inside the newsletter window
+- retains EpisodeCount and recent-season child counts as fallbacks
+- reserves additional TV-card footer space
+- preserves approved movie genre styling
+- updated rich QNAP/Unraid HTML guide
+
+v1.0.1
+------
+- TV cards retain the three-row episode cap
+- added exact additional-episode footer for totals above three
+- added movie genre metadata directly below card titles
+- genre row uses first two genres plus ', and more' when applicable
+- updated rich QNAP/Unraid HTML walkthrough
+- retained scheduler, persistent state, six-state suite, and SMTP behavior
+
+v1.0.0
+------
+- dedicated QNAP/Linux Docker Compose edition
+- current six-state PlexWeekly production renderer
+- persistent /data configuration, state, logs, assets and previews
+- browser preview service on port 8787 by default
+- internal timezone-aware weekly scheduler, disabled by default
+- same-day attempt guard recorded before bulk delivery begins
+- ImageMagick-based Linux clearLogo inspection/conversion
+- guided QNAP installer and cross-command helper
+- x86-64 and ARM64 preflight; 32-bit hosts rejected
+- non-root PUID/PGID runtime; UID/GID 0 rejected
+- compatibility with `docker compose` and `docker-compose`
+- scheduler config/state migration for older imported files
+- clean web/scheduler child-process shutdown
+- rich HTML and plain-text documentation

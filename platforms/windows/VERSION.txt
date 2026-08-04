@@ -1,0 +1,4 @@
+PlexWeekly Portable v1.6.8
+Platform: Windows PowerShell 5.1+
+Cleanup release: optional-secret input hardening and six-state documentation correction
+Newsletter renderer: unchanged from v1.6.7

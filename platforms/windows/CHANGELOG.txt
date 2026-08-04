@@ -1,0 +1,100 @@
+PLEXWEEKLY PORTABLE CHANGELOG
+===============================
+
+v1.6.8 Portable
+---------------
+- hardened blank optional-secret handling in SETUP-FIRST.ps1
+- pressing Enter at the optional Plex-token prompt no longer aborts setup
+- corrected stale four-state README text to the full six-state suite
+- normalized current README, audit, script, and version headers
+- no newsletter renderer or delivery behavior changes
+
+v1.6.7 Portable
+---------------
+- corrected regular movie-card spacing so genre sits directly below the title
+- removed the fixed-height movie detail table that distributed blank space
+- added movie genres beneath desktop clearLogo heroes
+- added movie genres beneath desktop text-title fallback heroes
+- added movie genres beneath mobile hero text titles
+- applied the same behavior to movie-based quiet-week Trending heroes
+- retained TV overflow counting, six-state previews, ratings, and IMDb logic
+- updated the included rich HTML walkthrough
+
+v1.6.6 Portable
+---------------
+- fixed missing TV overflow footer when Tautulli returns show or season rows
+- counts child episodes added inside the newsletter window
+- preserves original EpisodeCount and recent-season counts as fallbacks
+- reserves more TV-card detail space so the footer cannot be clipped by wrapped IMDb rows
+- retains approved movie genre formatting below the title
+- rich HTML walkthrough is now included inside the ZIP
+
+v1.6.5 Portable
+---------------
+- TV cards retain the three-row episode cap
+- added exact additional-episode footer for totals above three
+- added movie genre metadata directly below card titles
+- genre row uses first two genres plus ', and more' when applicable
+- aligned movie/TV card spacing across previews and delivery
+- retained six-state suite, ratings, scheduler, SMTP, state, and throttle behavior
+
+v1.6.4 Portable
+---------------
+- PreviewAll expanded from four to six deterministic email states
+- added established-user quiet/no-activity preview and TestEmail variant
+- added established-user initial warm-up preview and TestEmail variant
+- normal established-user preview now always exercises populated stats
+- preview index now includes six cards
+- SendTestAll now sends six messages to TestEmail only
+- no production recipient-classification, SMTP, scheduler, state, or throttle changes
+
+v1.6.3 Portable
+---------------
+- TV episode lines now render as S01 EP02: Episode Title
+- season numbers are always padded to two digits
+- episode numbers remain unpadded
+- IMDb icon/score remains inline when available
+- applies globally through the shared TV-card renderer
+- no data, SMTP, scheduler, recipient, state, movie, or throttle changes
+
+v1.6.1 Portable
+---------------
+- show/season additions resolve up to 3 latest episodes through Tautulli
+  get_children_metadata when recently-added lacks episode rows
+- existing IMDb episode enrichment applies to those resolved episodes
+- generic "New series" TV-card fallback removed
+- 01-VERIFY-SETUP.bat now requires get_children_metadata
+- shared across preview/test/welcome/Friday/quiet-week paths
+- no SMTP, scheduler, recipient, movie-card, or throttling changes
+
+v1.6.0 Portable
+---------------
+- based on validated v1.5.3 production branch
+- includes audience RT score percent sign
+- generic server/sender identity
+- generic SMTP password/auth/TLS configuration
+- optional direct PlexServerUrl/PlexToken configuration
+- folder-relative Windows Task Scheduler installer
+- configurable weekly day/time/task name
+- schedule-day-aware newsletter wording
+- self-contained animated movie/TV fallback assets
+- PreviewAll production-renderer regression mode
+- SendTestAll production-MIME regression mode
+- guided setup wizard
+- expanded verification suite
+- Tautulli core API command compatibility check when API docs are available
+- explicit STARTTLS SMTP boundary; port 465 implicit SMTPS rejected
+- best-effort NTFS ACL hardening for config.json credentials
+- detailed portable README and engineering audit
+
+Inherited v1.5.3 behavior
+-------------------------
+- v1.5 production email design
+- RT PNG state icons
+- TV IMDb handling
+- responsive mobile Hot New Release / Trending hero
+- mobile hero logo suppression
+- quiet-release fallback mode
+- dynamic preheader behavior
+- email-aware clearLogo contrast selection
+- PowerShell plaintext-preheader interpolation fix

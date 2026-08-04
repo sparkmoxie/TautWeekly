@@ -1,0 +1,38 @@
+# Credentials and live configuration
+**/config.json
+**/config.backup.*.json
+**/.env
+**/*.pem
+**/*.key
+**/*.pfx
+
+# PlexWeekly runtime state
+**/state.json
+**/access-state.json
+**/scheduler-state.json
+**/logs/
+**/output/
+**/*.log
+**/*.log.*
+
+# Persistent Docker data (keep only the directory sentinel)
+**/data/*
+!**/data/.keep
+
+# Repair/download scratch files
+**/assets/*.download
+
+# Local release builds
+dist/
+release-staging/
+*.zip
+*.tar.gz
+SHA256SUMS.txt
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.tmp

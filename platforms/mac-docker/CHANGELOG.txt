@@ -1,0 +1,15 @@
+PLEXWEEKLY MAC PORTABLE CHANGELOG
+================================
+
+v1.0.0
+------
+- split Mac-specific edition from NAS/Docker Portable v1.0.4
+- added mac-install.sh and INSTALL-MAC.command
+- uses macOS UID/GID in generated .env
+- binds previews to localhost by default
+- added host.docker.internal guidance for native Mac Tautulli and Plex
+- added open-preview command
+- removed QNAP, Unraid, and Windows Docker Desktop wrappers
+- retained six-state regression, scheduler, asset fixes, TV overflow counts,
+  movie genres, IMDb enrichment, and current email renderer
+- added rich Mac-only README.html
