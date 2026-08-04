@@ -16,8 +16,8 @@ them locally; send controlled tests; then schedule production delivery.
 
 <img src="platforms/windows/assets/trending.gif" alt="Animated upward-trend emoji" width="104">
 
-[Documentation](docs/README.md) ·
-[Releases](https://github.com/sparkmoxie/PlexWeekly/releases) ·
+[Live documentation](https://sparkmoxie.github.io/PlexWeekly/) ·
+[Release downloads](#release-downloads) ·
 [Security](SECURITY.md) ·
 [Contributing](CONTRIBUTING.md)
 
@@ -69,8 +69,9 @@ gates. Their setup and lifecycle wrappers are platform-specific.
 <details>
 <summary><strong>Windows portable</strong></summary>
 
-1. Download and extract `PlexWeekly-windows.zip` into a permanent writable
-   folder.
+1. Use [`platforms/windows`](platforms/windows) from the current source tree,
+   or download and extract `PlexWeekly-windows.zip` after the first tagged
+   release, into a permanent writable folder.
 2. Run `00-SETUP-FIRST.bat` and enter your own Tautulli and SMTP values.
 3. Run `01-VERIFY-SETUP.bat`.
 4. Preview with `03-PREVIEW-NEWSLETTER.bat`, then send a controlled test with
@@ -137,17 +138,20 @@ guards first-run behavior, welcomes, and repeat schedule attempts.
 
 ## Release downloads
 
-Tagged releases publish unpacked source in this repository and three installable
-archives:
+No GitHub Release has been published yet. The current, usable source is linked
+below. After the first reviewed version tag is pushed, the release workflow
+will add the named installable archives and checksum manifest to GitHub
+Releases.
 
-| Platform | Published artifact | Download |
+| Platform | Tagged-release artifact | Current source |
 |---|---|---|
-| Windows | `PlexWeekly-windows.zip` | [Open releases](https://github.com/sparkmoxie/PlexWeekly/releases) |
-| NAS / Docker | `PlexWeekly-nas-docker.tar.gz` or `.zip` | [Open releases](https://github.com/sparkmoxie/PlexWeekly/releases) |
-| macOS / Docker Desktop | `PlexWeekly-mac-docker.tar.gz` or `.zip` | [Open releases](https://github.com/sparkmoxie/PlexWeekly/releases) |
-| Integrity manifest | `SHA256SUMS.txt` | [Open releases](https://github.com/sparkmoxie/PlexWeekly/releases) |
+| Windows | `PlexWeekly-windows.zip` | [`platforms/windows`](platforms/windows) |
+| NAS / Docker | `PlexWeekly-nas-docker.tar.gz` or `.zip` | [`platforms/nas-docker`](platforms/nas-docker) |
+| macOS / Docker Desktop | `PlexWeekly-mac-docker.tar.gz` or `.zip` | [`platforms/mac-docker`](platforms/mac-docker) |
+| Integrity manifest | `SHA256SUMS.txt` | [Release process](docs/RELEASING.md) |
 
-There is no `latest` download until the first version tag is published.
+There is no `latest` download until the first version tag is published. The
+README does not present the empty Releases page as a download destination.
 
 Verify a Windows download:
 
@@ -173,7 +177,8 @@ shasum -a 256 -c SHA256SUMS.txt
 
 ## Documentation
 
-- [GitHub Pages source and documentation index](docs/README.md)
+- [Live GitHub Pages documentation](https://sparkmoxie.github.io/PlexWeekly/)
+- [Documentation source index](docs/README.md)
 - [Windows installation](docs/windows/README.md)
 - [NAS / Docker installation](docs/nas-docker/README.md)
 - [macOS installation](docs/mac/README.md)

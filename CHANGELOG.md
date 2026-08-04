@@ -6,6 +6,15 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Pointed the README documentation entry at the live Pages site, removed
+  premature download links to an empty Releases page, and made current source
+  locations explicit until the first version tag is published.
+- Made the Pages deployment follow the repository's current default launch
+  branch and replaced a stale `blob/main` footer link with a default-branch
+  (`HEAD`) URL.
+
 ### Added
 
 - Initial public, maintainable source tree for Windows, NAS/Docker, and macOS

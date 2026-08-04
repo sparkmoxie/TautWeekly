@@ -19,6 +19,7 @@ and terminal demonstrations.
 - [Release process](RELEASING.md)
 
 The `.html` files in the platform directories are self-contained Pages
-walkthroughs. They publish after the Pages workflow runs on `main`. The
-Markdown files are the canonical source-oriented guides for reading directly
-on GitHub.
+walkthroughs. The Pages workflow deploys from the repository's current default
+branch: `public-launch` during launch review and `main` after the pull request
+is merged and the default branch is changed. The Markdown files are the
+canonical source-oriented guides for reading directly on GitHub.
