@@ -9,6 +9,8 @@
 [![License: MIT](https://img.shields.io/badge/code%20license-MIT-e5a00d.svg)](LICENSE)
 ![Windows](https://img.shields.io/badge/Windows-PowerShell%205.1-0078d4?logo=windows)
 ![NAS](https://img.shields.io/badge/NAS-Docker%20Compose-2496ed?logo=docker)
+![Unraid](https://img.shields.io/badge/Unraid-Community%20Apps-f15a2c?logo=unraid)
+![Container](https://img.shields.io/badge/GHCR-amd64%20%7C%20arm64-2496ed?logo=docker)
 ![macOS](https://img.shields.io/badge/macOS-Docker%20Desktop-000000?logo=apple)
 
 Generate polished activity, welcome, quiet-week, and milestone emails; inspect
@@ -39,7 +41,7 @@ them locally; send controlled tests; then schedule production delivery.
 
 | | Windows portable | NAS / Docker | macOS / Docker Desktop |
 |---|---|---|---|
-| Source baseline | 1.6.11 | 1.0.7 | 1.0.3 |
+| Source baseline | 1.6.11 | 1.1.0 | 1.0.3 |
 | Runtime | Windows PowerShell 5.1+ | PowerShell 7.2+ in Docker | PowerShell 7.2+ in Docker Desktop |
 | Scheduler | Windows Task Scheduler | Built-in container scheduler | Built-in container scheduler |
 | Preview | Local generated HTML | Port 8787, configurable bind | Localhost port 8787 by default |
@@ -88,9 +90,27 @@ gates. Their setup and lifecycle wrappers are platform-specific.
 <details>
 <summary><strong>NAS / Docker Compose</strong></summary>
 
+On Unraid, install **TautWeekly for Plex** from the Community Applications
+Apps tab. The template uses `/mnt/user/appdata/tautweekly`, port `8787`, and
+non-root Unraid defaults. After installation, open the container Console and
+run:
+
+```bash
+pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
+pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
+```
+
+The published image is available for 64-bit Intel/AMD and ARM hosts at
+`ghcr.io/sparkmoxie/tautweekly:latest`.
+
+For QNAP, use Container Station with the supplied
+[`compose.qnap.yaml`](platforms/nas-docker/compose.qnap.yaml), or use the
+guided release installer. QNAP App Center uses native QPKG packages, so the
+Docker edition belongs in Container Station rather than App Center.
+
 ```bash
 cp .env.example .env
-docker compose build --pull
+docker compose pull
 docker compose up -d
 ./tautweekly.sh setup
 ./tautweekly.sh verify
@@ -144,13 +164,13 @@ guards first-run behavior, welcomes, and repeat schedule attempts.
 
 ## Release downloads
 
-TautWeekly for Plex `v0.2.0` publishes five installable archives and a checksum manifest.
+TautWeekly for Plex `v0.3.0` publishes five installable archives, a checksum
+manifest, and the multi-architecture NAS image.
 The stable links below follow the latest published release.
 
 > [!NOTE]
-> Version 0.2.0 standardizes every public and runtime identifier on the new
-> TautWeekly naming convention. Preserve private configuration and Docker
-> `data`, replace the program files, and use the newly named launchers.
+> Preserve private configuration and Docker `data` during upgrades. The
+> published container and Unraid template never contain live credentials.
 
 | Platform | Published artifact | Download |
 |---|---|---|
@@ -158,6 +178,7 @@ The stable links below follow the latest published release.
 | NAS / Docker | `TautWeekly-nas-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.zip) |
 | macOS / Docker Desktop | `TautWeekly-mac-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.zip) |
 | Integrity manifest | `SHA256SUMS.txt` | [SHA-256 checksums](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/SHA256SUMS.txt) |
+| NAS container | `ghcr.io/sparkmoxie/tautweekly:latest` | [GHCR package](https://github.com/sparkmoxie/TautWeekly/pkgs/container/tautweekly) |
 
 [Read the latest release notes](https://github.com/sparkmoxie/TautWeekly/releases/latest)
 and verify every archive before installation.
@@ -179,8 +200,9 @@ shasum -a 256 -c SHA256SUMS.txt
 | Environment | Support level | Validation |
 |---|---|---|
 | Windows 10/11, Windows PowerShell 5.1+ | Supported source target | PowerShell syntax validation on Windows CI |
-| Docker Engine + Compose v2 on x86-64 or ARM64 Linux | Supported source target | Shell, JSON, and Compose validation; image build remains environment-dependent |
-| QNAP Container Station / Unraid | Documented deployment | Uses the NAS Compose source; hardware-specific UI behavior is not CI-tested |
+| Docker Engine + Compose v2 on x86-64 or ARM64 Linux | Supported image and source target | Multi-architecture image build, shell, JSON, and Compose validation |
+| Unraid 6.12+ | Community Applications target | Official v2 template plus amd64/arm64 image; catalog publication is moderated by Unraid |
+| QNAP Container Station | Documented Compose deployment | Pull-based Container Station application; QPKG/App Center packaging is not applicable to this Docker distribution |
 | Current Docker Desktop on Intel or Apple silicon macOS | Supported source target | Shell, JSON, and Compose validation; macOS UI flow is not CI-tested |
 | PowerShell versions older than the platform minimum | Unsupported | Runtime guard exits with an explanatory error |
 

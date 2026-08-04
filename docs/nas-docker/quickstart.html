@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>TautWeekly for Plex NAS Portable v1.0.7 — Docker Compose Guide</title>
+<title>TautWeekly for Plex NAS Portable v1.1.0 — Docker Compose Guide</title>
 <style>
 :root {
   --bg:#080808;
@@ -317,7 +317,7 @@ details[open] summary::before{content:"–"}
       <span class="plex-mark"></span>
       <span class="brand-copy">
         <strong>TAUTWEEKLY FOR PLEX</strong>
-        <span>NAS Portable v1.0.7 · Docker Compose guide</span>
+        <span>NAS Portable v1.1.0 · Unraid Apps and Docker Compose guide</span>
       </span>
     </a>
     <div class="top-search">
@@ -337,7 +337,7 @@ details[open] summary::before{content:"–"}
       <a href="#requirements"><span class="nav-dot"></span>Requirements</a>
       <a href="#extract"><span class="nav-dot"></span>Extract package</a>
       <a href="#environment"><span class="nav-dot"></span>Configure .env</a>
-      <a href="#build"><span class="nav-dot"></span>Build & start</a>
+      <a href="#build"><span class="nav-dot"></span>Pull & start</a>
       <a href="#tautulli"><span class="nav-dot"></span>Connect Tautulli</a>
       <a href="#acceptance"><span class="nav-dot"></span>Acceptance tests</a>
       <a href="#schedule"><span class="nav-dot"></span>Enable schedule</a>
@@ -347,12 +347,12 @@ details[open] summary::before{content:"–"}
       <a href="#troubleshooting"><span class="nav-dot"></span>Troubleshooting</a>
       <a href="#reference"><span class="nav-dot"></span>Command reference</a>
       <hr>
-      <div class="sidebar-note">Standalone, offline, and specific to the v1.0.7 Compose package.</div>
+      <div class="sidebar-note">Standalone, offline, and specific to the v1.1.0 NAS package.</div>
     </nav>
   </aside>
 
   <main>
-    <section class="hero searchable" id="overview" data-search="overview docker compose nas tautweekly v1.0.7">
+    <section class="hero searchable" id="overview" data-search="overview docker compose nas tautweekly unraid apps v1.1.0">
       <div class="hero-copy">
         <div class="kicker"><span class="kicker-dot"></span>READ ME FIRST · DOCKER COMPOSE EDITION</div>
         <h1>Run TautWeekly for Plex<br><span>natively on your NAS.</span></h1>
@@ -370,7 +370,7 @@ details[open] summary::before{content:"–"}
             <span class="console-title">tautweekly / compose</span>
           </div>
           <div class="console-body">
-            <div><span class="prompt">$</span> docker compose build --pull</div>
+            <div><span class="prompt">$</span> docker compose pull</div>
             <div><span class="prompt">$</span> docker compose up -d</div>
             <div><span class="prompt">$</span> ./tautweekly.sh setup</div>
             <br>
@@ -519,17 +519,17 @@ PREVIEW_BASE_URL=http://media.example.test:8787</pre></div>
       </div>
     </section>
 
-    <section class="content-section searchable" id="build" data-search="build start up compose setup wizard config">
+    <section class="content-section searchable" id="build" data-search="pull image start up compose setup wizard config">
       <div class="section-heading">
-        <div><div class="section-eyebrow">Step 3</div><h2>Build, start, and configure</h2></div>
+        <div><div class="section-eyebrow">Step 3</div><h2>Pull, start, and configure</h2></div>
         <p>The image is built locally from the included Dockerfile.</p>
       </div>
       <div class="timeline panel">
         <article class="timeline-step">
           <div class="step-number">01</div>
           <div class="step-content">
-            <h3>Build the image</h3>
-            <div class="code-block"><button class="copy-button">Copy</button><pre>docker compose build --pull</pre></div>
+            <h3>Pull the published image</h3>
+            <div class="code-block"><button class="copy-button">Copy</button><pre>docker compose pull</pre></div>
           </div>
         </article>
         <article class="timeline-step">
@@ -557,7 +557,7 @@ docker compose ps</pre></div>
           </div>
         </article>
       </div>
-      <div class="callout green"><div class="callout-icon">✓</div><div><strong>Alternative QNAP workflow</strong><p>On QNAP, <code>./qnap-install.sh</code> creates <code>.env</code>, builds, starts, runs setup, restarts, and verifies. The manual Compose workflow above is easier to adapt across QNAP, Unraid, and generic Linux NAS systems.</p></div></div>
+      <div class="callout green"><div class="callout-icon">✓</div><div><strong>Alternative QNAP workflow</strong><p>On QNAP, <code>./qnap-install.sh</code> creates <code>.env</code>, pulls the published image, starts, runs setup, restarts, and verifies. Container Station can also create an application from <code>compose.qnap.yaml</code>.</p></div></div>
     </section>
 
     <section class="content-section searchable" id="tautulli" data-search="tautulli url network localhost nas ip custom docker network api key plex">
@@ -684,8 +684,8 @@ docker compose ps</pre></div>
         </article>
         <article class="card">
           <div class="card-badge">UP</div>
-          <h3>Rebuild after replacing project files</h3>
-          <div class="code-block"><button class="copy-button">Copy</button><pre>docker compose build --pull
+          <h3>Pull a published update</h3>
+          <div class="code-block"><button class="copy-button">Copy</button><pre>docker compose pull
 docker compose up -d
 ./tautweekly.sh repair-assets
 ./tautweekly.sh verify</pre></div>
@@ -699,12 +699,13 @@ docker compose up -d
         <div><div class="section-eyebrow">NAS-specific paths</div><h2>QNAP, Unraid, and generic Linux</h2></div>
         <p>The Compose service is the same; only host paths and identity defaults differ.</p>
       </div>
+      <div class="callout green"><div class="callout-icon">APP</div><div><strong>Unraid users can install from Community Applications.</strong><p>Search for <em>TautWeekly for Plex</em>, install the official template, then open the container Console and run <code>Setup-First.ps1</code> followed by <code>Verify-Setup.ps1</code>. Manual Compose remains available for custom stacks.</p></div></div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Platform</th><th>Suggested project folder</th><th>PUID / PGID guidance</th><th>Notes</th></tr></thead>
           <tbody>
             <tr><td><strong>QNAP</strong></td><td><code>/share/Container/tautweekly</code></td><td>Use the IDs returned by <code>id -u</code> and <code>id -g</code>; avoid root.</td><td>Container Station with Docker Compose. <code>qnap-install.sh</code> is available.</td></tr>
-            <tr><td><strong>Unraid</strong></td><td><code>/mnt/user/appdata/tautweekly</code></td><td>Common defaults are <code>99</code> and <code>100</code>.</td><td>Use Compose Manager or the Compose CLI; do not run <code>qnap-install.sh</code>.</td></tr>
+            <tr><td><strong>Unraid</strong></td><td><code>/mnt/user/appdata/tautweekly</code></td><td>Template defaults are <code>99</code> and <code>100</code>.</td><td>Install from Apps; use Compose Manager only for a custom stack.</td></tr>
             <tr><td><strong>Generic Linux NAS</strong></td><td><code>/srv/containers/tautweekly</code> or <code>/opt/tautweekly</code></td><td>Use a dedicated non-root service account with write access.</td><td>Use the manual Compose workflow in this guide.</td></tr>
           </tbody>
         </table>
@@ -770,7 +771,7 @@ docker compose up -d
             <tr><td><code>schedule-disable</code></td><td><span class="risk system">SYSTEM</span></td><td>Stops future automatic sends.</td></tr>
             <tr><td><code>schedule-reset</code></td><td><span class="risk send">REAL RISK</span></td><td>Clears today’s automatic-attempt guard.</td></tr>
             <tr><td><code>backup</code></td><td><span class="risk safe">SAFE</span></td><td>Creates a dated TAR.GZ of the host <code>data/</code> directory.</td></tr>
-            <tr><td><code>update</code></td><td><span class="risk system">SYSTEM</span></td><td>Builds with current project files and recreates the service.</td></tr>
+            <tr><td><code>update</code></td><td><span class="risk system">SYSTEM</span></td><td>Pulls the current published image and recreates the service.</td></tr>
             <tr><td><code>logs</code></td><td><span class="risk safe">SAFE</span></td><td>Follows recent service logs.</td></tr>
             <tr><td><code>status</code></td><td><span class="risk safe">SAFE</span></td><td>Displays Compose service status.</td></tr>
             <tr><td><code>restart</code></td><td><span class="risk system">SYSTEM</span></td><td>Restarts only the TautWeekly for Plex container.</td></tr>
@@ -856,7 +857,7 @@ docker compose up -d
 </section>
 
 <footer class="footer">
-      <span>TautWeekly for Plex NAS Portable v1.0.7 · Standalone Docker Compose guide</span>
+      <span>TautWeekly for Plex NAS Portable v1.1.0 · Unraid Apps and Docker Compose guide</span>
       <span>Offline HTML · Embedded media · No external dependencies</span>
     </footer>
   </main>

@@ -10,6 +10,15 @@ bundled artwork is distributed under the repository's [MIT License](LICENSE).
 The Windows asset-repair helper retrieves the canonical custom movie and TV
 animations from this repository rather than from an external artwork project.
 
+## Container runtime components
+
+The published NAS container is built on Debian and installs PowerShell,
+ImageMagick, Python, tini, gosu, curl, and their operating-system dependencies.
+Those components are not TautWeekly for Plex artwork or original source and
+remain subject to their respective upstream licenses. The build downloads the
+official PowerShell archives for amd64 and arm64 and verifies their published
+SHA-256 digests before installation.
+
 ## Product names and services
 
 Plex, Plex Media Server, Tautulli, Docker, QNAP, Unraid, Apple, macOS, Windows,

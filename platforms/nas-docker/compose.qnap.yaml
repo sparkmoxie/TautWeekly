@@ -1,0 +1,24 @@
+services:
+  tautweekly:
+    image: ghcr.io/sparkmoxie/tautweekly:latest
+    container_name: tautweekly
+    restart: unless-stopped
+    environment:
+      TZ: Etc/UTC
+      PUID: 1000
+      PGID: 1000
+      UMASK: "077"
+      TAUTWEEKLY_DATA_DIR: /data
+      TAUTWEEKLY_CONFIG: /data/config.json
+      TAUTWEEKLY_PREVIEW_BASE_URL: ""
+    volumes:
+      - /share/Container/tautweekly/data:/data
+    ports:
+      - "8787:8080"
+    healthcheck:
+      test: ["CMD", "/opt/tautweekly/healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    stop_grace_period: 30s

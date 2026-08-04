@@ -81,7 +81,7 @@ case "$cmd" in
     echo "Created tautweekly-data-backup-$stamp.tar.gz"
     ;;
   update)
-    compose_cmd build --pull
+    compose_cmd pull tautweekly
     compose_cmd up -d
     ;;
   help|*)

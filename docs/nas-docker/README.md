@@ -7,7 +7,7 @@ This distribution runs TautWeekly for Plex as a dedicated Docker Compose service
 Tautulli. It targets QNAP Container Station, Unraid, and general Linux Docker
 hosts on x86-64 or ARM64.
 
-Current source baseline: **1.0.7**.
+Current source baseline: **1.1.0**.
 
 ## Requirements
 
@@ -17,7 +17,50 @@ Current source baseline: **1.0.7**.
 - A Tautulli API key.
 - A trusted host port for the local preview service; default 8787.
 
-## Install from a release
+## Install from Unraid Apps
+
+In Unraid Community Applications, search for **TautWeekly for Plex**, review
+the port and appdata path, and select **Install**. The maintained template is
+[`templates/tautweekly.xml`](../../templates/tautweekly.xml) and pulls
+`ghcr.io/sparkmoxie/tautweekly:latest` for amd64 or arm64 automatically.
+
+After installation, open **Docker > TautWeekly for Plex > Console** and run:
+
+```bash
+pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
+pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
+/opt/tautweekly/bin/run-mode.sh ListUsers
+/opt/tautweekly/bin/run-mode.sh PreviewAll
+```
+
+Open `http://UNRAID_HOST:8787/preview-all/preview-all-00-INDEX.html` and review
+every state before sending a TestEmail or enabling the schedule. Port 8787 is
+a private LAN preview service; never expose it to the public internet.
+
+Community Applications listings are moderated. The template can be audited
+directly from its [raw URL](https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/templates/tautweekly.xml).
+See the official [Unraid submission requirements](https://ca.unraid.net/submit/help)
+and [repository XML format](https://ca.unraid.net/submit/help/repository-xml).
+
+## Install on QNAP Container Station
+
+QNAP's Docker-native path is **Container Station > Create Application**. Paste
+[`compose.qnap.yaml`](../../platforms/nas-docker/compose.qnap.yaml), change the
+timezone and non-root PUID/PGID, and confirm the host data path before creating
+the application. QNAP documents Compose applications in Container Station;
+App Center repositories distribute native QPKG applications instead, so this
+Docker edition is not presented as a QPKG.
+
+References: [QNAP Container Station application creation](https://docs.qnap.com/operating-system/qne-network/1.0.x/en-us/container-creation-1A95801A.html)
+and [QNAP App Center repository settings](https://docs.qnap.com/operating-system/qts/5.0.x/en-us/app-center-settings-8C55F8A1.html).
+
+The guided SSH installer remains available from the release archive:
+
+```bash
+./qnap-install.sh
+```
+
+## Install from a release on another Docker host
 
 Download the latest
 [`TautWeekly-nas-docker.tar.gz`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.tar.gz)
@@ -30,18 +73,12 @@ cd TautWeekly-nas-docker
 chmod +x qnap-install.sh tautweekly.sh app/*.sh app/bin/*.sh
 ```
 
-For QNAP, run the guided installer:
-
-```bash
-./qnap-install.sh
-```
-
-For Unraid or a general Docker host, use the portable Compose workflow:
+For a general Docker host, use the portable Compose workflow:
 
 ```bash
 cp .env.example .env
 # Edit .env: timezone, UID/GID, preview bind, and preview URL.
-docker compose build --pull
+docker compose pull
 docker compose up -d
 ./tautweekly.sh setup
 ./tautweekly.sh verify

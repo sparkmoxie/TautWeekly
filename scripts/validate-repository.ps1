@@ -23,8 +23,10 @@ function Add-Pass {
 $required = @(
     'README.md', 'LICENSE', 'SECURITY.md', 'CONTRIBUTING.md', 'CHANGELOG.md',
     'CODE_OF_CONDUCT.md', 'THIRD_PARTY_NOTICES.md', '.gitignore', '.gitattributes',
+    'ca_profile.xml', 'templates/tautweekly.xml',
     'platforms/windows/TautWeekly.ps1',
     'platforms/nas-docker/compose.yaml',
+    'platforms/nas-docker/compose.qnap.yaml',
     'platforms/nas-docker/tautweekly.sh',
     'platforms/nas-docker/app/TautWeekly.ps1',
     'platforms/mac-docker/compose.yaml',
@@ -32,8 +34,10 @@ $required = @(
     'platforms/mac-docker/app/TautWeekly.ps1',
     'docs/index.html', 'docs/windows/README.md', 'docs/nas-docker/README.md',
     'docs/mac/README.md', 'scripts/build-releases.ps1',
+    'scripts/validate-unraid-template.ps1',
     '.github/workflows/ci.yml', '.github/workflows/pages.yml',
-    '.github/workflows/release.yml'
+    '.github/workflows/release.yml',
+    '.github/workflows/container.yml'
 )
 
 foreach ($relative in $required) {
