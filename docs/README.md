@@ -9,10 +9,10 @@ and terminal demonstrations.
 
 - [Open the complete standalone preview](https://sparkmoxie.github.io/TautWeekly/examples/preview-all-00-INDEX.html)
 
-The single-file gallery renders nine newsletter lifecycle and density states,
+The single-file gallery renders eight newsletter lifecycle and density states,
 including high usage, both Binge Champion treatments, onboarding, warmup,
-quiet weeks with recent releases, and a true no-activity/no-release week. Demo
-counts are synthetic; real public Plex Discover artwork and a dated Rotten
+and quiet weeks with the production latest-release fallback. Demo counts are
+synthetic; real public Plex Discover artwork and a dated Rotten
 Tomatoes score snapshot are used only to make the visual regression fixture
 representative. No Plex token or private server data is embedded.
 

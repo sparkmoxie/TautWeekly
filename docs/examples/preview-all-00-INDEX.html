@@ -36,7 +36,7 @@
       <div class="labbrand"><div class="labmark">TW</div><div><strong>TautWeekly for Plex</strong><span>Production-faithful preview gallery</span></div></div>
       <div class="labactions">
         <button class="labaction" id="rotate" type="button" aria-label="Rotate real release titles"><span>Rotate releases</span> ↻</button>
-        <button class="labaction" id="show-all" type="button" aria-pressed="false"><span>Show all</span> 9</button>
+        <button class="labaction" id="show-all" type="button" aria-pressed="false"><span>Show all</span> 8</button>
         <button class="labaction primary" type="button" onclick="window.print()"><span>Print / Save</span> ↓</button>
       </div>
     </div>
@@ -89,8 +89,7 @@
       {id:"high-usage-observer",n:"05",name:"High usage · observer",description:"Same anonymous winning totals; neutral recipient card.",recent:false,welcomeOnly:false,activity:"high",mode:"new",volume:"many",winner:false},
       {id:"established-normal",n:"06",name:"Established · normal",description:"Production item-detail cards for a smaller watch week.",recent:false,welcomeOnly:false,activity:"itemized",mode:"new",volume:"normal",winner:false},
       {id:"established-quiet",n:"07",name:"Quiet · latest releases",description:"No personal activity; Trending hero and latest additions.",recent:false,welcomeOnly:false,activity:"quiet",mode:"latest",volume:"normal",winner:false},
-      {id:"quiet-no-releases",n:"08",name:"Quiet · no releases",description:"No activity and no invented release fallback.",recent:false,welcomeOnly:false,activity:"quiet",mode:"empty",volume:"none",winner:false},
-      {id:"established-warmup",n:"09",name:"Stats warming up",description:"Collection-window warmup with the shared anonymous award.",recent:false,welcomeOnly:false,activity:"warmup",mode:"new",volume:"normal",winner:false}
+      {id:"established-warmup",n:"08",name:"Stats warming up",description:"Collection-window warmup with the shared anonymous award.",recent:false,welcomeOnly:false,activity:"warmup",mode:"new",volume:"normal",winner:false}
     ];
     let active=0,offset=0,showAll=false;
     const esc=value=>String(value).replace(/[&<>\"]/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'\"':"&quot;"})[char]);
@@ -133,7 +132,6 @@
       return html;
     }
     function releaseBlocks(state,movieItems,tvItems){
-      if(state.mode==="empty")return "";
       const label=state.mode==="latest"?"LATEST RELEASES":"NEW RELEASES";
       let html="";
       if(movieItems.length)html+=`<tr><td class="pad" style="padding:0 20px 10px"><div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px">${label}</div><div style="padding-top:3px;font-size:24px;color:#fff;font-weight:800">Movies</div></td></tr><tr><td class="pad" style="padding:0 14px 8px"><table width="100%" cellspacing="0" cellpadding="0" border="0">${cardRows(movieItems,"movie")}</table></td></tr>`;
@@ -183,14 +181,14 @@
     }
 
     function email(state){
-      const moviePool=rotate(movies),showPool=rotate(shows),quiet=state.mode==="latest",empty=state.mode==="empty",many=state.volume==="many";
-      let hero=empty?null:quiet?showPool[0]:moviePool[0];
+      const moviePool=rotate(movies),showPool=rotate(shows),quiet=state.mode==="latest",many=state.volume==="many";
+      let hero=quiet?showPool[0]:moviePool[0];
       if(quiet&&hero&&!hero.year)hero={...hero,year:2026,critic:82,audience:null,summary:"The week's most-watched series leads a quieter library update.",logo:""};
-      const releaseMovies=empty?[]:moviePool.slice(quiet?0:1,quiet?4:(many?7:5));
-      const releaseTv=empty?[]:showPool.filter(item=>item!==hero).slice(0,many?4:3);
-      const movieCount=empty?0:(quiet?0:releaseMovies.length+1),tvCount=empty?0:(quiet?0:releaseTv.length);
-      const releaseLine=quiet||empty?"NO NEW RELEASES THIS WEEK":`${movieCount} ${plural(movieCount,"NEW MOVIE","NEW MOVIES")} • ${tvCount} ${plural(tvCount,"TV TITLE","TV TITLES")}`;
-      const intro=state.welcomeOnly?"Welcome to DEMO SERVER — you’re all set. Here’s what’s new and what to expect from your Friday drops.":quiet||empty?"Your Friday Plex drop is here — this week’s server favorites, latest library additions, and your private weekly recap.":"Your Friday Plex drop is here — fresh releases plus your private weekly recap.";
+      const releaseMovies=moviePool.slice(quiet?0:1,quiet?4:(many?7:5));
+      const releaseTv=showPool.filter(item=>item!==hero).slice(0,many?4:3);
+      const movieCount=quiet?0:releaseMovies.length+1,tvCount=quiet?0:releaseTv.length;
+      const releaseLine=quiet?"NO NEW RELEASES THIS WEEK":`${movieCount} ${plural(movieCount,"NEW MOVIE","NEW MOVIES")} • ${tvCount} ${plural(tvCount,"TV TITLE","TV TITLES")}`;
+      const intro=state.welcomeOnly?"Welcome to DEMO SERVER — you’re all set. Here’s what’s new and what to expect from your Friday drops.":quiet?"Your Friday Plex drop is here — this week’s server favorites, latest library additions, and your private weekly recap.":"Your Friday Plex drop is here — fresh releases plus your private weekly recap.";
       const headerMeta=(!state.recent&&!state.welcomeOnly)?`<div style="padding-top:10px;font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:.8px">${releaseLine}</div><div style="padding-top:6px;font-size:12px;color:#666">July 31 – August 6, 2026</div>`:"";
       const movedMeta=(state.recent||state.welcomeOnly)?`<tr><td class="pad" style="padding:0 20px 18px"><div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:.8px">${releaseLine}</div><div style="padding-top:6px;font-size:12px;color:#666">July 31 – August 6, 2026</div></td></tr>`:"";
       const footer=(state.recent||state.welcomeOnly)?"":`<tr><td class="pad" align="center" style="padding:12px 20px 26px;color:#5f5f5f;font-size:11px;line-height:1.5">Your watch recap is generated privately from DEMO SERVER history.<br>Other users do not receive your detailed individual viewing stats.<br>The Binge Champion movie/TV play split and total watch time are shared server-wide; the champion's identity stays private.</td></tr>`;
@@ -200,9 +198,9 @@
     function nav(){document.getElementById("states").innerHTML=states.map((state,index)=>`<button class="state" type="button" data-index="${index}" aria-selected="${index===active&&!showAll}"><b>${state.n}</b>${state.name}</button>`).join("")}
     function render(){
       const state=states[active],preview=document.getElementById("preview"),button=document.getElementById("show-all");
-      document.getElementById("state-title").textContent=showAll?"All nine production states":state.name;
+      document.getElementById("state-title").textContent=showAll?"All eight production states":state.name;
       document.getElementById("state-description").textContent=showAll?"Complete long-page regression stack.":state.description;
-      button.setAttribute("aria-pressed",String(showAll));button.innerHTML=showAll?"<span>Single view</span> 1":"<span>Show all</span> 9";
+      button.setAttribute("aria-pressed",String(showAll));button.innerHTML=showAll?"<span>Single view</span> 1":"<span>Show all</span> 8";
       if(showAll){preview.className="allstack";preview.innerHTML=states.map(item=>`<section class="allitem"><div class="allhead"><b>${item.n} · ${item.name}</b><span>${item.description}</span></div>${email(item)}</section>`).join("")}else{preview.className="";preview.innerHTML=email(state);history.replaceState(null,"",`#${state.id}`)}
       nav();
     }
