@@ -48,6 +48,9 @@ jobs:
       - name: Test user-exclusion selection
         shell: powershell
         run: .\scripts\test-user-exclusions.ps1
+      - name: Test Binge Champion privacy and ranking
+        shell: powershell
+        run: .\scripts\test-binge-champion.ps1
 
   release-archives:
     name: Reproducible release archives

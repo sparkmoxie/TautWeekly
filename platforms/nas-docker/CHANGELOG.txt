@@ -6,6 +6,8 @@ Unreleased
 - adds interactive stable-ID user exclusions to primary setup
 - adds ./tautweekly.sh exclude-users for later recipient-policy updates
 - preserves existing user-ID and email exclusions when setup is intentionally rebuilt
+- ranks Binge Champion by qualifying watch time with total plays as the tie-breaker
+- shares anonymous movie/TV play counts and total time; only the winner sees gold
 
 v1.1.0
 ------

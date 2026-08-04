@@ -32,12 +32,12 @@ storage, and define a retention period.
 
 ## Recipient privacy
 
-Scheduled weekly messages share the Binge Champion winner's Tautulli friendly
-name, qualifying-play count, and total watch time with all newsletter
-recipients. Detailed personal recap rows remain private to each recipient, and
-one-off welcome messages do not contain the award. Before enabling production
-delivery, review friendly names for unintended personal information and make
-sure recipients understand the server-wide award disclosure.
+Scheduled weekly messages share only the Binge Champion's anonymous aggregate:
+qualifying movie plays, TV-show plays, and total watch time. The champion's
+friendly name, username, user ID, and watched titles are not disclosed. Only
+the winning recipient sees the gold **YOU WON** treatment. Detailed personal
+recap rows remain private to each recipient, and one-off welcome messages do not
+contain the award.
 
 ## Credential rotation
 

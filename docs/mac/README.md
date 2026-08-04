@@ -62,7 +62,8 @@ user-defined Docker network, use its service name.
 ```
 
 During preview review, confirm the adaptive one-item cards, movie genres,
-Binge Champion winner disclosure, and counted Trending section.
+anonymous Binge Champion movie/TV/time aggregate, gold winner treatment, and
+counted Trending section.
 
 Enable automation only after reviewing browser previews and TestEmail messages:
 

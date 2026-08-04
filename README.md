@@ -32,10 +32,12 @@ them locally; send controlled tests; then schedule production delivery.
 > controlled test recipient before enabling a schedule or `SendAll`.
 
 > [!IMPORTANT]
-> Scheduled weekly emails disclose the Binge Champion winner's Tautulli
-> friendly name, qualifying-play count, and watch time to every newsletter
-> recipient. One-off welcome emails do not include the award. Review the user
-> roster, friendly names, and recipient expectations before production sends.
+> Scheduled weekly emails share an anonymous Binge Champion aggregate with
+> every recipient: qualifying movie plays, TV-show plays, and total watch time.
+> The user with the most qualifying watch time wins; total plays break an exact
+> tie. Only the winner receives the gold **YOU WON** treatment. Friendly names,
+> usernames, IDs, and titles are never disclosed by the award, and one-off
+> welcome emails do not include it.
 
 ## Choose a platform
 
@@ -60,8 +62,9 @@ gates. Their setup and lifecycle wrappers are platform-specific.
 - One to three streamed episodes render with show artwork, season/episode
   labels, episode titles, and IMDb scores. Four or more items use compact
   numeric cards.
-- Binge Champion ranks qualifying activity by Plex user, breaks play-count
-  ties by watch time, and emphasizes the winner's own newsletter.
+- Binge Champion ranks Plex users by qualifying watch time, breaks exact-time
+  ties by total plays, and shows every recipient the same anonymous movie-play,
+  TV-play, and watch-time aggregate. Only the winner's card turns gold.
 - Trending remains a separate server-wide media-title feature with poster and
   exact play count; quiet-release hero layouts do not repeat it.
 - The four personal-stat cards share a content-driven equal height, including

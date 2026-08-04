@@ -102,7 +102,8 @@ runs in the same container, which is not the supported deployment model.
 ```
 
 During preview review, confirm the adaptive one-item cards, movie genres,
-Binge Champion winner disclosure, and counted Trending section.
+anonymous Binge Champion movie/TV/time aggregate, gold winner treatment, and
+counted Trending section.
 
 Only after the previews and controlled TestEmail messages are approved:
 
