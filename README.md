@@ -32,10 +32,12 @@ them locally; send controlled tests; then schedule production delivery.
 > controlled test recipient before enabling a schedule or `SendAll`.
 
 > [!IMPORTANT]
-> Scheduled weekly emails disclose the Binge Champion winner's Tautulli
-> friendly name, qualifying-play count, and watch time to every newsletter
-> recipient. One-off welcome emails do not include the award. Review the user
-> roster, friendly names, and recipient expectations before production sends.
+> Scheduled weekly emails share an anonymous Binge Champion aggregate with
+> every recipient: qualifying movie plays, TV-show plays, and total watch time.
+> The user with the most qualifying watch time wins; total plays break an exact
+> tie. Only the winner receives the gold **YOU WON** treatment. Friendly names,
+> usernames, IDs, and titles are never disclosed by the award, and one-off
+> welcome emails do not include it.
 
 ## Choose a platform
 
@@ -60,12 +62,35 @@ gates. Their setup and lifecycle wrappers are platform-specific.
 - One to three streamed episodes render with show artwork, season/episode
   labels, episode titles, and IMDb scores. Four or more items use compact
   numeric cards.
-- Binge Champion ranks qualifying activity by Plex user, breaks play-count
-  ties by watch time, and emphasizes the winner's own newsletter.
+- Binge Champion ranks Plex users by qualifying watch time, breaks exact-time
+  ties by total plays, and shows every recipient the same anonymous movie-play,
+  TV-play, and watch-time aggregate. Only the winner's card turns gold.
 - Trending remains a separate server-wide media-title feature with poster and
   exact play count; quiet-release hero layouts do not repeat it.
 - The four personal-stat cards share a content-driven equal height, including
   zero-, one-, and multi-item states.
+
+## Exclude newsletter recipients
+
+Every primary setup wizard now loads the Tautulli user roster immediately
+after the URL and API key are entered. Select one or more numbered rows (ranges
+such as `2,4-6` are accepted), press Enter to keep the current selection, or
+type `none` to clear it. The wizard stores stable Tautulli IDs in
+`ExcludedUserIds`; it never copies a live roster into source files.
+
+You can revise exclusions later without rerunning SMTP or schedule setup:
+
+| Platform | Standalone command |
+|---|---|
+| Windows | `14-MANAGE-USER-EXCLUSIONS.bat` |
+| NAS / Docker | `./tautweekly.sh exclude-users` |
+| macOS / Docker Desktop | `./tautweekly.sh exclude-users` |
+
+Excluded users are skipped by scheduled delivery and confirmed `SendAll`
+runs. Preview and TestEmail modes can still use them as sample data, and an
+administrator can still deliberately invoke the separately confirmed one-off
+welcome command. The selector displays recipient names and email addresses;
+do not share its output publicly.
 
 ## Installation at a glance
 
@@ -76,7 +101,8 @@ gates. Their setup and lifecycle wrappers are platform-specific.
    [`TautWeekly-windows.zip`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-windows.zip)
    into a permanent writable folder, or use
    [`platforms/windows`](platforms/windows) from the current source tree.
-2. Run `00-SETUP-FIRST.bat` and enter your own Tautulli and SMTP values.
+2. Run `00-SETUP-FIRST.bat`, enter your own Tautulli and SMTP values, and
+   select any users to exclude from weekly delivery.
 3. Run `01-VERIFY-SETUP.bat`.
 4. Preview with `03-PREVIEW-NEWSLETTER.bat`, then send a controlled test with
    `04-SEND-TEST.bat`.
@@ -114,6 +140,7 @@ docker compose pull
 docker compose up -d
 ./tautweekly.sh setup
 ./tautweekly.sh verify
+./tautweekly.sh exclude-users  # optional later revision
 ./tautweekly.sh preview-all
 ```
 
@@ -133,6 +160,7 @@ Use a hostname reachable from inside the container for Tautulli. Keep port
 chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh
 ./mac-install.sh
 ./tautweekly.sh verify
+./tautweekly.sh exclude-users  # optional later revision
 ./tautweekly.sh preview-all
 ```
 

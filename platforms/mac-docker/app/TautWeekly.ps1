@@ -1683,17 +1683,27 @@ function Get-BingeChampion {
                 FriendlyName = $friendlyName
                 Plays        = 0
                 Seconds      = [int64]0
+                MoviePlays   = 0
+                TvPlays      = 0
             }
         }
 
-        $totals[$key].Plays += (Get-HistoryRowPlayCount -Row $row)
+        $rowPlays = Get-HistoryRowPlayCount -Row $row
+        $totals[$key].Plays += $rowPlays
         $totals[$key].Seconds += $seconds
+
+        if ($type -eq "movie") {
+            $totals[$key].MoviePlays += $rowPlays
+        }
+        elseif ($type -eq "episode") {
+            $totals[$key].TvPlays += $rowPlays
+        }
     }
 
     $top = @(
         $totals.Values |
-        Where-Object { $_.Plays -gt 0 } |
-        Sort-Object Plays, Seconds -Descending |
+        Where-Object { $_.Seconds -gt 0 } |
+        Sort-Object Seconds, Plays -Descending |
         Select-Object -First 1
     )
 
@@ -1719,8 +1729,51 @@ function Get-BingeChampion {
         UserId        = [string]$winner.UserId
         FriendlyName  = [string]$winner.FriendlyName
         Plays         = Safe-Int $winner.Plays
+        MoviePlays    = Safe-Int $winner.MoviePlays
+        TvPlays       = Safe-Int $winner.TvPlays
         Seconds       = [int64]$winner.Seconds
         TotalTimeText = Format-WatchTime ([int64]$winner.Seconds)
+    }
+}
+
+function Get-BingeChampionDisplay {
+    param(
+        [object]$BingeChampion,
+        [object]$User
+    )
+
+    if ($null -eq $BingeChampion) {
+        return [PSCustomObject]@{
+            Available     = $false
+            IsWinner      = $false
+            TotalTimeText = ""
+            MoviePlays    = 0
+            TvPlays       = 0
+        }
+    }
+
+    $isWinner = $false
+    $winnerId = [string]$BingeChampion.UserId
+    if (-not [string]::IsNullOrWhiteSpace($winnerId) -and
+        [string]$User.UserId -eq $winnerId) {
+        $isWinner = $true
+    }
+    elseif ([string]::IsNullOrWhiteSpace($winnerId) -and
+        [string]$User.FriendlyName -ieq [string]$BingeChampion.FriendlyName) {
+        $isWinner = $true
+    }
+
+    $totalTimeText = [string]$BingeChampion.TotalTimeText
+    if ([string]::IsNullOrWhiteSpace($totalTimeText)) {
+        $totalTimeText = Format-WatchTime ([int64]$BingeChampion.Seconds)
+    }
+
+    return [PSCustomObject]@{
+        Available     = $true
+        IsWinner      = $isWinner
+        TotalTimeText = $totalTimeText
+        MoviePlays    = Safe-Int $BingeChampion.MoviePlays
+        TvPlays       = Safe-Int $BingeChampion.TvPlays
     }
 }
 
@@ -4727,41 +4780,31 @@ $tvCards
 "@
     }
 
-    # Binge Champion is a server-wide USER award.
-    # It is never the same thing as Trending, which ranks media titles.
-    $bingeWinnerName = "Awaiting the first qualifying stream"
+    # Binge Champion ranks users by qualifying watch time. Every recipient sees
+    # the same anonymous movie/TV play split and total watch time. Only the
+    # winner receives the gold YOU WON treatment.
+    $bingeDisplay = Get-BingeChampionDisplay -BingeChampion $BingeChampion -User $User
+    $bingeTimeText = ""
     $bingeMetricText = "The weekly award will appear here once viewing activity is available."
-    $bingeWinnerId = ""
-    $isBingeWinner = $false
+    $isBingeWinner = [bool]$bingeDisplay.IsWinner
 
-    if ($null -ne $BingeChampion) {
-        $bingeWinnerName = HtmlEncode (Truncate-Text ([string]$BingeChampion.FriendlyName) 44)
-        $bingeWinnerId = [string]$BingeChampion.UserId
-        $bingePlays = Safe-Int $BingeChampion.Plays
-        $bingePlayWord = if ($bingePlays -eq 1) { "qualifying play" } else { "qualifying plays" }
-        $bingeTime = [string]$BingeChampion.TotalTimeText
-        $bingeMetricText = "$bingePlays $bingePlayWord"
-        if (-not [string]::IsNullOrWhiteSpace($bingeTime)) {
-            $bingeMetricText += " • $bingeTime watched"
-        }
-
-        if (-not [string]::IsNullOrWhiteSpace($bingeWinnerId) -and
-            [string]$User.UserId -eq $bingeWinnerId) {
-            $isBingeWinner = $true
-        }
-        elseif ([string]::IsNullOrWhiteSpace($bingeWinnerId) -and
-            [string]$User.FriendlyName -ieq [string]$BingeChampion.FriendlyName) {
-            $isBingeWinner = $true
-        }
+    if ($bingeDisplay.Available) {
+        $bingeTimeText = [string]$bingeDisplay.TotalTimeText
+        $bingeMoviePlays = Safe-Int $bingeDisplay.MoviePlays
+        $bingeTvPlays = Safe-Int $bingeDisplay.TvPlays
+        $bingeMovieWord = if ($bingeMoviePlays -eq 1) { "movie" } else { "movies" }
+        $bingeTvWord = if ($bingeTvPlays -eq 1) { "TV show" } else { "TV shows" }
+        $bingeMetricText = "$bingeMoviePlays $bingeMovieWord • $bingeTvPlays $bingeTvWord"
     }
 
     $bingeBorder = if ($isBingeWinner) { "#e5a00d" } else { "#2b2b2b" }
     $bingeBackground = if ($isBingeWinner) { "#211a0d" } else { "#181818" }
     $bingeEyebrow = if ($isBingeWinner) { "YOU WON • BINGE CHAMPION" } else { "BINGE CHAMPION AWARD" }
-    $bingeHeadline = if ($isBingeWinner) { "You’re this week’s champion!" } else { $bingeWinnerName }
-    $bingeWinnerLine = if ($isBingeWinner) {
-        '<div style="padding-top:4px;font-size:12px;color:#f3c45a;font-weight:800;">' + $bingeWinnerName + '</div>'
-    } else { "" }
+    $bingeHeadline = if ($bingeDisplay.Available) {
+        "$bingeTimeText watched"
+    } else {
+        "Awaiting the first qualifying stream"
+    }
 
     # Do not assign these collections through an `if` expression.
     # Windows PowerShell 5.1 can unwrap a one-item result into a scalar, and
@@ -4955,7 +4998,6 @@ $tvCards
           <div style="font-size:9px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">$(HtmlEncode $bingeEyebrow)</div>
           <img src="$trophyIconSrc" width="$(if ($isBingeWinner) { 54 } else { 42 })" height="$(if ($isBingeWinner) { 54 } else { 42 })" alt="Binge Champion award" style="display:block;width:$(if ($isBingeWinner) { 54 } else { 42 })px;height:$(if ($isBingeWinner) { 54 } else { 42 })px;border:0;margin-top:9px;">
           <div style="padding-top:8px;font-size:$(if ($isBingeWinner) { 18 } else { 16 })px;line-height:1.25;font-weight:900;color:#ffffff;">$(HtmlEncode $bingeHeadline)</div>
-          $bingeWinnerLine
           <div style="padding-top:6px;font-size:10px;line-height:1.4;color:$(if ($isBingeWinner) { '#f3c45a' } else { '#8e8e8e' });font-weight:700;">$(HtmlEncode $bingeMetricText)</div>
         </td>
       </tr>
@@ -4982,7 +5024,6 @@ $tvCards
       <td valign="middle" style="padding:18px 20px 18px 12px;">
         <div style="font-size:10px;color:#e5a00d;font-weight:900;letter-spacing:1.2px;">$(HtmlEncode $bingeEyebrow)</div>
         <div style="padding-top:5px;font-size:20px;line-height:1.25;color:#ffffff;font-weight:900;">$(HtmlEncode $bingeHeadline)</div>
-        $bingeWinnerLine
         <div style="padding-top:5px;font-size:12px;line-height:1.45;color:$(if ($isBingeWinner) { '#f3c45a' } else { '#929292' });">$(HtmlEncode $bingeMetricText)</div>
       </td>
     </tr>
@@ -5036,7 +5077,7 @@ $tvCards
           <img src="$lockInfoIconSrc" width="18" height="18" alt="Just Your Stats" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
           <span style="display:inline-block;vertical-align:middle;">JUST YOUR STATS</span>
         </div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The weekly Binge Champion winner and winning aggregate are shared server-wide.</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion movie/TV play split and total watch time are shared server-wide; the champion’s identity stays private.</div>
       </td>
     </tr>
   </table>
@@ -5057,7 +5098,7 @@ $tvCards
 <td class="pad" align="center" style="padding:12px 20px 26px;color:#5f5f5f;font-size:11px;line-height:1.5;">
   Your watch recap is generated privately from $(HtmlEncode $footerServerName) server’s history.<br>
   Other users do not receive your detailed individual viewing stats.<br>
-  The Binge Champion winner and winning aggregate are shared server-wide.
+  The Binge Champion movie/TV play split and total watch time are shared server-wide; the champion's identity stays private.
 </td>
 </tr>
 "@
@@ -5202,18 +5243,17 @@ function Build-PlainText {
     }
 
     if ($null -ne $BingeChampion) {
-        $winnerName = [string]$BingeChampion.FriendlyName
-        $winnerPlays = Safe-Int $BingeChampion.Plays
-        $winnerPlayWord = if ($winnerPlays -eq 1) { "qualifying play" } else { "qualifying plays" }
-        $winnerLine = if (
-            -not [string]::IsNullOrWhiteSpace([string]$BingeChampion.UserId) -and
-            [string]$BingeChampion.UserId -eq [string]$User.UserId
-        ) {
+        $bingeDisplay = Get-BingeChampionDisplay -BingeChampion $BingeChampion -User $User
+        $winnerLine = if ($bingeDisplay.IsWinner) {
             "YOU WON THE BINGE CHAMPION AWARD"
         } else {
             "BINGE CHAMPION AWARD"
         }
-        $footerFeature += "`r`n${winnerLine}: $winnerName — $winnerPlays $winnerPlayWord, $($BingeChampion.TotalTimeText) watched"
+        $moviePlays = Safe-Int $bingeDisplay.MoviePlays
+        $tvPlays = Safe-Int $bingeDisplay.TvPlays
+        $movieWord = if ($moviePlays -eq 1) { "movie" } else { "movies" }
+        $tvWord = if ($tvPlays -eq 1) { "TV show" } else { "TV shows" }
+        $footerFeature += "`r`n${winnerLine}: $moviePlays $movieWord • $tvPlays $tvWord • $($bingeDisplay.TotalTimeText) watched"
     }
     else {
         $footerFeature += "`r`nBINGE CHAMPION AWARD: Awaiting the first qualifying stream."
@@ -5353,7 +5393,7 @@ function Build-WelcomeHtml {
         <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">As you stream, your weekly email builds a private recap with watch time, movies, episodes, posters, and ratings.</div>
 
         <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">🔒 JUST YOUR STATS</div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The weekly Binge Champion winner and winning aggregate are shared server-wide.</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion movie/TV play split and total watch time are shared server-wide; the champion’s identity stays private.</div>
       </td>
     </tr>
   </table>

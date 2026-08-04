@@ -51,6 +51,23 @@ STARTTLS settings.
 | `SendDelaySeconds` | 10 | Pause between real production recipients |
 | `TestSendDelaySeconds` | 2 | Pause between controlled test messages |
 
+### Interactive user exclusions
+
+The guided setup queries Tautulli after `TautulliUrl` and `ApiKey` are entered,
+then shows a numbered roster. Enter rows or ranges such as `2,4-6`, press Enter
+to keep the current list, or type `none` to clear every exclusion. Unknown IDs
+already in the configuration are preserved when a new known-user selection is
+saved, which avoids dropping an exclusion merely because a user is temporarily
+absent from the current Tautulli response.
+
+Use `14-MANAGE-USER-EXCLUSIONS.bat` on Windows or
+`./tautweekly.sh exclude-users` on either Docker edition to revise
+`ExcludedUserIds` independently. The standalone command does not change
+`ExcludedEmails`, SMTP values, or scheduling. Both lists affect scheduled and
+confirmed SendAll delivery. Preview and TestEmail modes remain available for
+rendering checks, while a one-off welcome is a separate, explicitly confirmed
+administrator action.
+
 ## Scheduling
 
 | Key | Purpose |

@@ -31,7 +31,8 @@ Windows machine.
    temporary extraction view.
 4. Run `00-SETUP-FIRST.bat`.
 5. Enter your own Tautulli, branding, SMTP, test-recipient, and schedule values.
-   The direct Plex URL and token are optional.
+   After the Tautulli URL and API key, select any users to exclude from weekly
+   delivery. The direct Plex URL and token are optional.
 6. Run `01-VERIFY-SETUP.bat` and correct every failure before continuing.
 
 The setup wizard creates `config.json`. That file is deliberately ignored by
@@ -44,8 +45,9 @@ Run the numbered launchers in this order:
 1. `02-LIST-USERS.bat` — review recognized recipients and identifiers.
 2. `05-PREVIEW-ALL-EMAIL-TYPES.bat` — generate six local HTML regression
    previews without sending mail.
-   Confirm the adaptive one-item cards, movie genres, Binge Champion winner,
-   and counted Trending section render as expected.
+   Confirm the adaptive one-item cards, movie genres, anonymous Binge Champion
+   movie/TV/time aggregate, gold winner treatment, and counted Trending section
+   render as expected.
 3. `06-SEND-TEST-ALL-EMAIL-TYPES.bat` — send those six variants only to the
    configured `TestEmail`.
 4. `08-INSTALL-SCHEDULE.bat` — install automation only after the previews and
@@ -54,6 +56,25 @@ Run the numbered launchers in this order:
 
 `07-SEND-WELCOME-NOW.bat` and `11-SEND-ALL-NOW.bat` send to real users and have
 explicit confirmation gates. Read their warnings before use.
+
+## Manage user exclusions
+
+The primary setup lists Tautulli users and accepts comma-separated row numbers
+or ranges such as `2,4-6`. Press Enter to keep the displayed selection or type
+`none` to clear it. Selections are stored as stable Tautulli IDs in
+`ExcludedUserIds`.
+
+To revise the list without rebuilding the rest of `config.json`, run:
+
+```text
+14-MANAGE-USER-EXCLUSIONS.bat
+```
+
+Users in that list are skipped by scheduled delivery and confirmed SendAll
+runs. Preview and TestEmail commands remain available for safe layout testing;
+the separately confirmed one-off welcome command remains an explicit
+administrator action. The selector displays names and email addresses, so do
+not publish screenshots or terminal output.
 
 ## Runtime files
 

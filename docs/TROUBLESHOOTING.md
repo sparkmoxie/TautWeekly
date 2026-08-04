@@ -19,6 +19,17 @@ Start with the platform verifier and correct the first reported failure.
 - Preserve password whitespace unless the provider displays grouped characters
   and `SmtpStripPasswordSpaces` is intentionally enabled.
 
+## User exclusions cannot be loaded
+
+Primary setup continues when the Tautulli roster is temporarily unavailable;
+it preserves exclusions from an existing configuration and prints the
+standalone command to retry. First run the platform verifier, then use
+`14-MANAGE-USER-EXCLUSIONS.bat` on Windows or
+`./tautweekly.sh exclude-users` on Docker. Confirm the Tautulli API key can run
+both `get_user_names` and `get_user`, and that the runtime can reach the exact
+configured URL. No exclusion changes are saved when the standalone lookup
+returns no selectable users.
+
 ## Preview does not open
 
 Windows writes previews under `output/`. Docker editions serve previews on the

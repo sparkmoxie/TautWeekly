@@ -29,6 +29,7 @@ After installation, open **Docker > TautWeekly for Plex > Console** and run:
 ```bash
 pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
 pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
+pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1
 /opt/tautweekly/bin/run-mode.sh ListUsers
 /opt/tautweekly/bin/run-mode.sh PreviewAll
 ```
@@ -82,6 +83,7 @@ docker compose pull
 docker compose up -d
 ./tautweekly.sh setup
 ./tautweekly.sh verify
+./tautweekly.sh exclude-users
 ```
 
 Use a hostname reachable from inside the container, for example
@@ -93,13 +95,15 @@ runs in the same container, which is not the supported deployment model.
 ```bash
 ./tautweekly.sh verify
 ./tautweekly.sh list-users
+./tautweekly.sh exclude-users
 ./tautweekly.sh preview-all
 ./tautweekly.sh send-test-all
 ./tautweekly.sh schedule-status
 ```
 
 During preview review, confirm the adaptive one-item cards, movie genres,
-Binge Champion winner disclosure, and counted Trending section.
+anonymous Binge Champion movie/TV/time aggregate, gold winner treatment, and
+counted Trending section.
 
 Only after the previews and controlled TestEmail messages are approved:
 
@@ -109,6 +113,26 @@ Only after the previews and controlled TestEmail messages are approved:
 
 `welcome` and `send-all` target real Plex users and require interactive
 confirmation.
+
+## Manage user exclusions
+
+Primary setup queries Tautulli after the URL and API key are entered. Select
+comma-separated rows or ranges such as `2,4-6`; press Enter to keep the current
+selection or type `none` to clear it. The stable IDs are saved in
+`ExcludedUserIds`.
+
+Run `./tautweekly.sh exclude-users` whenever the recipient policy changes.
+Unraid Apps users can instead run this from the container Console:
+
+```bash
+pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1
+```
+
+The command changes only `ExcludedUserIds`; manually maintained
+`ExcludedEmails` entries are preserved. Excluded users are skipped by the
+scheduler and SendAll. Preview/TestEmail modes and the separately confirmed
+one-off welcome remain explicit administrator tools. Treat the displayed
+names and email addresses as private recipient data.
 
 ## Networking
 

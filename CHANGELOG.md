@@ -6,6 +6,27 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-04
+
+### Added
+
+- Added interactive Tautulli user exclusion selection to every platform's
+  primary setup and a standalone exclusion manager for later recipient-policy
+  updates.
+- Added Windows and Docker launch commands, selection behavior tests, and
+  matching Markdown and rendered walkthrough guidance.
+
+### Changed
+
+- Setup replacement now carries forward existing `ExcludedUserIds` and
+  `ExcludedEmails`; a temporary Tautulli lookup failure no longer silently
+  clears established exclusions.
+- Binge Champion now ranks qualifying users by total watch time, with total
+  plays as the exact-time tie-breaker.
+- Binge Champion output now shares only anonymous movie-play, TV-play, and
+  watch-time totals. Friendly names, user identifiers, and titles are hidden;
+  only the winner receives the gold **YOU WON** treatment.
+
 ## [0.3.0] - 2026-08-04
 
 ### Added

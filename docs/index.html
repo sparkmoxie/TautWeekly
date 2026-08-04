@@ -137,10 +137,12 @@
         <div><div class="eyebrow">Credential boundary</div><h2>Runtime data is never source data.</h2>
           <p>Live configuration contains an SMTP credential and Tautulli API key,
             and may contain a Plex token. State, logs, previews, and backups may
-            reveal recipients and server activity.</p>
+            reveal recipients and server activity. Weekly Binge Champion cards
+            share only anonymous movie/TV play counts and total watch time; the
+            champion's identity and titles remain private.</p>
           <a class="button primary" href="SECURITY.md">Read the hardening guide</a>
         </div>
-        <ul><li>Never commit live config or `.env`</li><li>Keep port 8787 private</li><li>Use application passwords</li><li>Rotate exposed credentials</li></ul>
+        <ul><li>Never commit live config or `.env`</li><li>Keep port 8787 private</li><li>Binge Champion identity stays private</li><li>Use application passwords</li><li>Rotate exposed credentials</li></ul>
       </div>
     </section>
 

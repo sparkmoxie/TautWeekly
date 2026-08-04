@@ -54,6 +54,7 @@ user-defined Docker network, use its service name.
 ```bash
 ./tautweekly.sh verify
 ./tautweekly.sh list-users
+./tautweekly.sh exclude-users
 ./tautweekly.sh preview-all
 ./tautweekly.sh open-preview
 ./tautweekly.sh send-test-all
@@ -61,7 +62,8 @@ user-defined Docker network, use its service name.
 ```
 
 During preview review, confirm the adaptive one-item cards, movie genres,
-Binge Champion winner disclosure, and counted Trending section.
+anonymous Binge Champion movie/TV/time aggregate, gold winner treatment, and
+counted Trending section.
 
 Enable automation only after reviewing browser previews and TestEmail messages:
 
@@ -71,6 +73,19 @@ Enable automation only after reviewing browser previews and TestEmail messages:
 
 The macOS Compose default binds previews to `127.0.0.1`. Keep that default
 unless trusted-LAN access is intentional.
+
+## Manage user exclusions
+
+During primary setup, the wizard queries Tautulli and lets you select numbered
+users or ranges such as `2,4-6`. Press Enter to keep the current selection or
+type `none` to clear it. Run `./tautweekly.sh exclude-users` later to update
+only the stable IDs in `ExcludedUserIds`; existing `ExcludedEmails` values are
+left unchanged.
+
+Excluded users are skipped by automatic delivery and SendAll. Preview and
+TestEmail modes can still use them for safe rendering checks, and the one-off
+welcome remains a separately confirmed administrator action. Do not share the
+selector's names or email addresses publicly.
 
 ## Data and updates
 
