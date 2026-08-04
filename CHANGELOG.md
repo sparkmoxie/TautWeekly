@@ -15,12 +15,25 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   walkthroughs.
 - Cross-platform validation, release packaging, checksums, Pages deployment,
   and tagged-release automation.
+- Adaptive personal activity cards with posters, movie genres and ratings,
+  episode metadata, and equal content-driven heights.
+- A server-wide Binge Champion user award and counted Trending title feature.
+
+### Fixed
+
+- Preserved array semantics for exactly one adaptive movie or episode under
+  Windows PowerShell 5.1 strict mode.
+
+### Changed
+
+- Scheduled weekly mail now discloses the Binge Champion friendly name and
+  winning aggregate; one-off welcome mail remains award-free.
 
 ### Source baselines
 
-- Windows portable implementation: 1.6.8.
-- NAS/Docker implementation: 1.0.4.
-- macOS Docker Desktop implementation: 1.0.0.
+- Windows portable implementation: 1.6.11.
+- NAS/Docker implementation: 1.0.7.
+- macOS Docker Desktop implementation: 1.0.3.
 
 These baseline numbers describe the imported platform distributions. Future
 public GitHub releases use one repository-level semantic version.

@@ -29,11 +29,17 @@ them locally; send controlled tests; then schedule production delivery.
 > logs, previews, generated newsletters, or backups. Preview first and use a
 > controlled test recipient before enabling a schedule or `SendAll`.
 
+> [!IMPORTANT]
+> Scheduled weekly emails disclose the Binge Champion winner's Tautulli
+> friendly name, qualifying-play count, and watch time to every newsletter
+> recipient. One-off welcome emails do not include the award. Review the user
+> roster, friendly names, and recipient expectations before production sends.
+
 ## Choose a platform
 
 | | Windows portable | NAS / Docker | macOS / Docker Desktop |
 |---|---|---|---|
-| Source baseline | 1.6.8 | 1.0.4 | 1.0.0 |
+| Source baseline | 1.6.11 | 1.0.7 | 1.0.3 |
 | Runtime | Windows PowerShell 5.1+ | PowerShell 7.2+ in Docker | PowerShell 7.2+ in Docker Desktop |
 | Scheduler | Windows Task Scheduler | Built-in container scheduler | Built-in container scheduler |
 | Preview | Local generated HTML | Port 8787, configurable bind | Localhost port 8787 by default |
@@ -43,6 +49,20 @@ them locally; send controlled tests; then schedule production delivery.
 
 All three distributions preserve the supplied working renderer and safety
 gates. Their setup and lifecycle wrappers are platform-specific.
+
+## Current newsletter behavior
+
+- One to three watched movies render as itemized rows with a mini poster,
+  title, formatted genres, and Rotten Tomatoes critic and audience scores.
+- One to three streamed episodes render with show artwork, season/episode
+  labels, episode titles, and IMDb scores. Four or more items use compact
+  numeric cards.
+- Binge Champion ranks qualifying activity by Plex user, breaks play-count
+  ties by watch time, and emphasizes the winner's own newsletter.
+- Trending remains a separate server-wide media-title feature with poster and
+  exact play count; quiet-release hero layouts do not repeat it.
+- The four personal-stat cards share a content-driven equal height, including
+  zero-, one-, and multi-item states.
 
 ## Installation at a glance
 

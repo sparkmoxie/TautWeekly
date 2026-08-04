@@ -5,6 +5,8 @@
 The macOS distribution runs the PowerShell newsletter engine in Docker Desktop
 and provides Mac-native setup and preview helpers.
 
+Current source baseline: **1.0.3**.
+
 ## Requirements
 
 - An Intel or Apple silicon Mac.
@@ -55,6 +57,9 @@ user-defined Docker network, use its service name.
 ./plexweekly.sh send-test-all
 ./plexweekly.sh schedule-status
 ```
+
+During preview review, confirm the adaptive one-item cards, movie genres,
+Binge Champion winner disclosure, and counted Trending section.
 
 Enable automation only after reviewing browser previews and TestEmail messages:
 

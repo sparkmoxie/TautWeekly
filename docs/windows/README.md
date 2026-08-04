@@ -5,6 +5,8 @@
 The Windows distribution runs directly in Windows PowerShell and uses Windows
 Task Scheduler for optional automation.
 
+Current source baseline: **1.6.11**.
+
 ## Requirements
 
 - Windows 10 or 11.
@@ -40,6 +42,8 @@ Run the numbered launchers in this order:
 1. `02-LIST-USERS.bat` — review recognized recipients and identifiers.
 2. `05-PREVIEW-ALL-EMAIL-TYPES.bat` — generate six local HTML regression
    previews without sending mail.
+   Confirm the adaptive one-item cards, movie genres, Binge Champion winner,
+   and counted Trending section render as expected.
 3. `06-SEND-TEST-ALL-EMAIL-TYPES.bat` — send those six variants only to the
    configured `TestEmail`.
 4. `08-INSTALL-SCHEDULE.bat` — install automation only after the previews and

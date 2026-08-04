@@ -6,6 +6,8 @@ This distribution runs PlexWeekly as a dedicated Docker Compose service beside
 Tautulli. It targets QNAP Container Station, Unraid, and general Linux Docker
 hosts on x86-64 or ARM64.
 
+Current source baseline: **1.0.7**.
+
 ## Requirements
 
 - Docker Engine and Docker Compose v2, or a compatible vendor Compose UI.
@@ -52,6 +54,9 @@ runs in the same container, which is not the supported deployment model.
 ./plexweekly.sh send-test-all
 ./plexweekly.sh schedule-status
 ```
+
+During preview review, confirm the adaptive one-item cards, movie genres,
+Binge Champion winner disclosure, and counted Trending section.
 
 Only after the previews and controlled TestEmail messages are approved:
 
