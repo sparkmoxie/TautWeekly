@@ -1,0 +1,34 @@
+# Security policy
+
+PlexWeekly handles SMTP credentials, a Tautulli API key, and optionally a Plex
+token. Treat every live configuration file and backup as a secret-bearing
+artifact.
+
+## Reporting a vulnerability
+
+Please do not open a public issue for a suspected vulnerability. Use GitHub's
+**Security → Report a vulnerability** flow for this repository so details can
+be reviewed privately.
+
+Include the affected platform, version or commit, reproduction steps, impact,
+and any suggested mitigation. Do not include real credentials, tokens, server
+addresses, recipient data, or generated newsletters.
+
+## Supported versions
+
+Until the first tagged release, security fixes target the latest commit on
+`main`. After releases begin, the latest release and `main` receive security
+updates; older distributions are supported on a best-effort basis.
+
+## Operator responsibilities
+
+- Keep `config.json`, `.env`, state files, logs, previews, and backups private.
+- Use provider-specific application passwords where available.
+- Bind the preview service to localhost unless LAN access is intentional and
+  protected by host firewall rules.
+- Never expose preview port 8787 directly to the public internet.
+- Preview and test with a controlled recipient before enabling scheduled sends.
+- Revoke and replace any credential that may have entered a commit, log, issue,
+  or release archive.
+
+See [the security guide](docs/SECURITY.md) for platform-specific hardening.
