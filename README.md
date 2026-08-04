@@ -144,7 +144,7 @@ guards first-run behavior, welcomes, and repeat schedule attempts.
 
 ## Release downloads
 
-PlexWeekly `v0.1.0` publishes five installable archives and a checksum manifest.
+PlexWeekly `v0.1.1` publishes five installable archives and a checksum manifest.
 The stable links below follow the latest published release.
 
 | Platform | Published artifact | Download |

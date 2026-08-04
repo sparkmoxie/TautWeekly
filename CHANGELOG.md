@@ -6,6 +6,15 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-03
+
+### Fixed
+
+- Preserved Docker dotfiles in ZIP release archives, including
+  `.dockerignore`, `.env.example`, and `data/.keep`.
+- Added a build-time ZIP payload parity check so archive creation fails if any
+  staged source file is omitted.
+
 ## [0.1.0] - 2026-08-03
 
 ### Fixed

@@ -6,6 +6,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 if ([string]::IsNullOrWhiteSpace($Root)) { $Root = Split-Path -Parent $PSScriptRoot }
 if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME -replace '^v','' } else { 'dev' }
@@ -61,7 +63,47 @@ function Copy-Platform {
 function New-Zip {
     param([string]$FolderName, [string]$ArchiveName)
     $archive = Join-Path $dist $ArchiveName
-    Compress-Archive -LiteralPath (Join-Path $staging $FolderName) -DestinationPath $archive -CompressionLevel Optimal
+    $source = Join-Path $staging $FolderName
+    $expected = @(
+        Get-ChildItem -LiteralPath $source -Force -Recurse -File | ForEach-Object {
+            $relative = $_.FullName.Substring($source.Length).TrimStart('\','/').Replace('\','/')
+            "$FolderName/$relative"
+        }
+    ) | Sort-Object -Unique
+
+    $stream = [IO.File]::Open($archive, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    $zip = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Create, $true)
+    try {
+        foreach ($file in (Get-ChildItem -LiteralPath $source -Force -Recurse -File)) {
+            $relative = $file.FullName.Substring($source.Length).TrimStart('\','/').Replace('\','/')
+            $entryName = "$FolderName/$relative"
+            [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $zip,
+                $file.FullName,
+                $entryName,
+                [IO.Compression.CompressionLevel]::Optimal
+            )
+        }
+    }
+    finally {
+        $zip.Dispose()
+        $stream.Dispose()
+    }
+
+    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    try {
+        $actual = @(
+            $zip.Entries | Where-Object { -not [string]::IsNullOrEmpty($_.Name) } |
+                ForEach-Object { $_.FullName.Replace('\','/') }
+        ) | Sort-Object -Unique
+    }
+    finally {
+        $zip.Dispose()
+    }
+    $difference = @(Compare-Object -ReferenceObject $expected -DifferenceObject $actual)
+    if ($difference.Count -gt 0) {
+        throw "ZIP payload differs from release staging for ${ArchiveName}: $($difference.InputObject -join ', ')"
+    }
     return $archive
 }
 
