@@ -1,0 +1,159 @@
+#!/bin/sh
+set -eu
+
+env_file="${TAUTWEEKLY_ENV_FILE:-/usr/local/etc/tautweekly/tautweekly.env}"
+if [ ! -r "$env_file" ]; then
+  echo "Settings file not found: $env_file" >&2
+  exit 66
+fi
+# shellcheck source=/dev/null
+. "$env_file"
+: "${TAUTWEEKLY_CONTAINER:=tautweekly}"
+: "${TAUTWEEKLY_DATA_DIR:=/var/db/tautweekly}"
+: "${TAUTWEEKLY_IMAGE:=ghcr.io/sparkmoxie/tautweekly:latest}"
+podman="/usr/local/bin/podman"
+
+require_root()
+{
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "Run this command as root with sudo or doas." >&2
+    exit 77
+  fi
+}
+
+container_exec()
+{
+  require_root
+  if [ -t 0 ] && [ -t 1 ]; then
+    "$podman" exec -it "$TAUTWEEKLY_CONTAINER" "$@"
+  else
+    "$podman" exec -i "$TAUTWEEKLY_CONTAINER" "$@"
+  fi
+}
+
+run_mode()
+{
+  container_exec /opt/tautweekly/bin/run-mode.sh "$@"
+}
+
+prompt_user()
+{
+  value="${1:-}"
+  if [ -z "$value" ]; then
+    printf 'UserId, username, friendly name, or email: '
+    read -r value
+  fi
+  if [ -z "$value" ]; then
+    echo "A user identifier is required." >&2
+    exit 64
+  fi
+  printf '%s' "$value"
+}
+
+confirm()
+{
+  printf '%s [y/N]: ' "$1"
+  read -r answer
+  case "$answer" in y|Y|yes|YES|Yes) return 0 ;; *) return 1 ;; esac
+}
+
+cmd="${1:-help}"
+shift || true
+case "$cmd" in
+  setup) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1 ;;
+  verify) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1 ;;
+  list-users) run_mode ListUsers ;;
+  exclude-users|manage-exclusions) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1 ;;
+  preview) user="$(prompt_user "${1:-}")"; run_mode Preview "$user" ;;
+  preview-all) user="$(prompt_user "${1:-}")"; run_mode PreviewAll "$user" ;;
+  send-test)
+    user="$(prompt_user "${1:-}")"
+    confirm "Send one test email to TestEmail using $user?" || exit 0
+    run_mode SendTest "$user"
+    ;;
+  send-test-all)
+    user="$(prompt_user "${1:-}")"
+    confirm "Send all six regression emails to TestEmail using $user?" || exit 0
+    run_mode SendTestAll "$user"
+    ;;
+  welcome)
+    user="$(prompt_user "${1:-}")"
+    confirm "Send the real one-off welcome to the selected Plex user's email?" || exit 0
+    run_mode SendWelcome "$user" --confirm-welcome
+    ;;
+  send-all)
+    echo "WARNING: This sends one real newsletter to every eligible Plex user."
+    confirm "Have you reviewed a current TestEmail and do you want to continue?" || exit 0
+    run_mode SendAll --confirm-send-all
+    ;;
+  roster) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/View-Access-Roster.ps1 ;;
+  repair-assets) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Repair-Assets.ps1 ;;
+  schedule-status) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action Status ;;
+  schedule-enable)
+    confirm "Enable the configured automatic weekly send?" || exit 0
+    container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action Enable
+    ;;
+  schedule-disable) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action Disable ;;
+  schedule-reset)
+    echo "This clears today's automatic-attempt guard. A later scheduler poll may send again today."
+    confirm "Clear the guard?" || exit 0
+    container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action ResetToday
+    ;;
+  start|stop|restart|status)
+    require_root
+    service tautweekly "$cmd"
+    ;;
+  logs)
+    require_root
+    "$podman" logs --tail 200 -f "$TAUTWEEKLY_CONTAINER"
+    ;;
+  shell) container_exec /bin/bash ;;
+  backup)
+    require_root
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    archive="${PWD}/tautweekly-private-data-$stamp.tar.gz"
+    was_running=false
+    if service tautweekly status >/dev/null 2>&1; then
+      service tautweekly stop
+      was_running=true
+    fi
+    if ! tar -czf "$archive" -C "$(dirname "$TAUTWEEKLY_DATA_DIR")" "$(basename "$TAUTWEEKLY_DATA_DIR")"; then
+      $was_running && service tautweekly start
+      exit 1
+    fi
+    chmod 600 "$archive"
+    $was_running && service tautweekly start
+    echo "Created private backup: $archive"
+    ;;
+  update)
+    require_root
+    "$podman" pull --os=linux "$TAUTWEEKLY_IMAGE"
+    service tautweekly restart
+    ;;
+  help|*)
+    cat <<'EOF'
+TautWeekly for Plex FreeBSD Podman commands
+
+  sudo tautweekly setup
+  sudo tautweekly verify
+  sudo tautweekly list-users
+  sudo tautweekly exclude-users
+  sudo tautweekly preview [user]
+  sudo tautweekly preview-all [user]
+  sudo tautweekly send-test [user]
+  sudo tautweekly send-test-all [user]
+  sudo tautweekly welcome [user]
+  sudo tautweekly send-all
+  sudo tautweekly roster
+  sudo tautweekly schedule-status
+  sudo tautweekly schedule-enable
+  sudo tautweekly schedule-disable
+  sudo tautweekly schedule-reset
+  sudo tautweekly status|start|stop|restart
+  sudo tautweekly logs
+  sudo tautweekly backup
+  sudo tautweekly update
+  sudo tautweekly shell
+EOF
+    ;;
+esac

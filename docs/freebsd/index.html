@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Interactive FreeBSD Podman installation and operations walkthrough for TautWeekly for Plex.">
+  <title>FreeBSD Podman walkthrough | TautWeekly for Plex</title>
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .hero{min-height:610px}.hero h1 span{color:#ff7a45}.eyebrow{color:#ff7a45}.freebsd-mark{background:#b7292f}.hero-copy>p{max-width:670px}.guide-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.guide-card{padding:25px;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(150deg,#1a1a1d,#121214)}.guide-card h3{margin:0 0 9px}.guide-card p,.guide-card li{color:var(--muted)}.guide-card b{display:grid;place-items:center;width:38px;height:38px;margin-bottom:18px;border:1px solid #555;border-radius:50%;color:#ff7a45;font-size:12px}.command-block{position:relative;margin:17px 0;padding:22px 72px 22px 22px;border:1px solid #3b3b40;border-radius:13px;background:#0d0d0f;white-space:pre-wrap;color:#ddd;font:13px/1.75 "SFMono-Regular",Consolas,monospace}.command-block button{position:absolute;top:12px;right:12px;padding:6px 9px;border:1px solid #555;border-radius:7px;color:#ddd;background:#242428;cursor:pointer}.warning{display:grid;grid-template-columns:auto 1fr;gap:20px;padding:28px;border:1px solid rgba(255,122,69,.5);border-radius:var(--radius);background:rgba(255,122,69,.08)}.warning i{display:grid;place-items:center;width:55px;height:55px;border-radius:15px;background:#ff7a45;color:#17110e;font-style:normal;font-size:23px;font-weight:900}.warning h3{margin:0 0 6px}.warning p{margin:0;color:#ccc}.path-table{width:100%;border-collapse:collapse;background:var(--panel)}.path-table th,.path-table td{padding:14px 16px;border:1px solid var(--line);text-align:left;vertical-align:top}.path-table th{color:#ff9a70;font-size:12px;text-transform:uppercase}.path-table td{color:#c5c5ca}.page-toc{position:sticky;top:85px}.freebsd-terminal{border-color:rgba(255,122,69,.4)}.freebsd-terminal .gold{color:#ff9a70}
+    @media(max-width:980px){.guide-grid{grid-template-columns:1fr}.path-table{display:block;overflow-x:auto}.page-toc{position:static}}
+    @media(max-width:640px){.command-block{padding:18px 60px 18px 15px;font-size:11px}.warning{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="progress" id="scroll-progress" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="TautWeekly documentation home"><span class="brand-mark freebsd-mark">BSD</span><span>Taut<span>Weekly</span> <em>for Plex</em></span></a>
+    <nav aria-label="Walkthrough navigation"><a href="#requirements">Requirements</a><a href="#install">Install</a><a href="#acceptance">Acceptance</a><a href="#security">Security</a><a href="#updates">Updates</a></nav>
+    <label class="search"><span class="sr-only">Search FreeBSD guide</span><input id="site-search" type="search" placeholder="Search FreeBSD guide…" autocomplete="off"><kbd>/</kbd></label>
+  </header>
+
+  <main>
+    <section class="hero searchable" data-search="freebsd podman linux containers rc.d overview beta">
+      <div class="hero-copy">
+        <div class="eyebrow">FreeBSD · Podman · rc.d</div>
+        <h1>Native lifecycle.<br><span>Maintained container.</span></h1>
+        <p>Run the published TautWeekly OCI application through FreeBSD's documented Linux-container support, control it with <code>service(8)</code>, keep private state under <code>/var/db</code>, and expose previews only through localhost.</p>
+        <div class="pills"><span>FreeBSD 15.1+</span><span>amd64</span><span>Podman</span><span>Linux emulation</span><span>Beta</span></div>
+        <div class="actions"><a class="button primary" href="#install">Start installation</a><a class="button" href="https://github.com/sparkmoxie/TautWeekly/releases/latest">Download release</a></div>
+      </div>
+      <div class="terminal freebsd-terminal" aria-label="FreeBSD controlled setup demonstration">
+        <div class="terminal-head"><span></span><span></span><span></span><b>freebsd — controlled launch</b></div>
+        <pre><span class="muted">$</span> sudo ./install-freebsd.sh
+<span class="ok">✓</span> Linux emulation ready
+<span class="ok">✓</span> Podman service ready
+<span class="ok">✓</span> rc.d integration installed
+
+<span class="muted">$</span> sudo tautweekly verify
+<span class="ok">✓</span> Tautulli · SMTP · storage
+
+<span class="muted">$</span> sudo tautweekly send-test-all
+<span class="gold">→</span> TestEmail only <span class="cursor">▋</span></pre>
+      </div>
+    </section>
+
+    <section class="metrics searchable" data-search="platform facts beta secrets preview"><div><strong>rc.d</strong><span>FreeBSD service lifecycle</span></div><div><strong>OCI</strong><span>same maintained renderer</span></div><div><strong>127.0.0.1</strong><span>default preview bind</span></div><div><strong>0</strong><span>credentials in image or environment</span></div></section>
+
+    <section id="requirements" class="section searchable" data-search="requirements freebsd version amd64 pkg root podman linux emulation ghcr">
+      <div class="section-heading"><div><div class="eyebrow">Before installation</div><h2>A clear compatibility boundary</h2></div><p>This first FreeBSD track targets the host combination documented and testable today. It does not claim native PowerShell support.</p></div>
+      <div class="guide-grid">
+        <article class="guide-card"><b>01</b><h3>FreeBSD host</h3><p>Use FreeBSD 15.1 or newer on amd64 with a supported package repository and root access.</p></article>
+        <article class="guide-card"><b>02</b><h3>Linux container path</h3><p>The installer enables FreeBSD Linux emulation and the Podman service, then verifies the public OCI image can be pulled.</p></article>
+        <article class="guide-card"><b>03</b><h3>Network boundary</h3><p>Allow outbound access to GHCR, Tautulli, SMTP STARTTLS, and any optional Plex metadata endpoint.</p></article>
+      </div>
+      <div class="warning"><i>β</i><div><h3>Why this track is beta</h3><p>Static scripts, archive integrity, and the Linux OCI payload run in GitHub CI, but GitHub-hosted runners do not boot this FreeBSD service. Complete preview and TestEmail acceptance on the target host before scheduling.</p></div></div>
+    </section>
+
+    <section id="install" class="section searchable" data-search="download checksum sha256 extract install pkg podman setup">
+      <div class="section-heading"><div><div class="eyebrow">Installation</div><h2>Inspect every host change</h2></div><p>The installer may add Podman with <code>pkg</code>, enables the Linux and Podman services, installs one rc.d service, and preserves existing settings and data.</p></div>
+      <article class="guide-card">
+        <h3>1. Compare the published checksum</h3>
+        <div class="command-block" id="verify-command">grep 'TautWeekly-freebsd-podman.tar.gz' SHA256SUMS.txt
+sha256 -r TautWeekly-freebsd-podman.tar.gz<button data-copy="#verify-command">Copy</button></div>
+        <h3>2. Extract and install</h3>
+        <div class="command-block" id="install-command">tar -xzf TautWeekly-freebsd-podman.tar.gz
+cd TautWeekly-freebsd-podman
+sudo ./install-freebsd.sh
+sudo tautweekly setup
+sudo tautweekly verify<button data-copy="#install-command">Copy</button></div>
+      </article>
+    </section>
+
+    <section id="acceptance" class="section searchable" data-search="acceptance workflow users exclusions preview test schedule send production">
+      <div class="section-heading"><div><div class="eyebrow">Acceptance gate</div><h2>Observe before delivery</h2></div><p>Excluded users remain usable as sample data for previews and TestEmail, but scheduled and confirmed production delivery omits them.</p></div>
+      <div class="timeline"><div><b>01</b><h3>Configure</h3><p>Write secrets only inside private container data.</p></div><div><b>02</b><h3>Verify</h3><p>Check API, SMTP, files, timezone, and schedule.</p></div><div><b>03</b><h3>Preview</h3><p>Render all deterministic states without mail.</p></div><div><b>04</b><h3>TestEmail</h3><p>Validate MIME in the actual mail client.</p></div><div><b>05</b><h3>Opt in</h3><p>Enable the scheduler after roster review.</p></div></div>
+      <div class="command-block" id="acceptance-command">sudo tautweekly list-users
+sudo tautweekly exclude-users
+sudo tautweekly preview-all
+sudo tautweekly send-test-all
+sudo tautweekly schedule-status
+# only after review:
+sudo tautweekly schedule-enable<button data-copy="#acceptance-command">Copy</button></div>
+    </section>
+
+    <section id="security" class="section searchable" data-search="security credentials config private data localhost ssh tunnel paths permissions">
+      <div class="section-heading"><div><div class="eyebrow">Security boundary</div><h2>Image public. Runtime private.</h2></div><p>SMTP and API secrets never enter the image or service environment. They remain in a host-mounted mode-0700 data directory.</p></div>
+      <table class="path-table"><thead><tr><th>Path</th><th>Purpose</th><th>Treatment</th></tr></thead><tbody><tr><td><code>/var/db/tautweekly</code></td><td>Configuration, state, logs, output, assets, backups</td><td>Private; never attach publicly</td></tr><tr><td><code>/usr/local/etc/tautweekly/tautweekly.env</code></td><td>Image tag, timezone, identity, preview bind</td><td>Root-owned mode 0600; no SMTP/API secrets</td></tr><tr><td><code>/usr/local/etc/rc.d/tautweekly</code></td><td>Service lifecycle</td><td>Root-owned executable</td></tr></tbody></table>
+      <div class="command-block" id="tunnel-command">ssh -L 8787:127.0.0.1:8787 admin@example.com
+# open http://127.0.0.1:8787 locally<button data-copy="#tunnel-command">Copy</button></div>
+    </section>
+
+    <section id="updates" class="section searchable" data-search="update backup pin image tag rollback local build troubleshoot logs">
+      <div class="section-heading"><div><div class="eyebrow">Lifecycle</div><h2>Back up, pin, test</h2></div><p>Keep data independent of the image. Pin a version tag for deterministic production and complete the acceptance gate after every update.</p></div>
+      <div class="guide-grid">
+        <article class="guide-card"><h3>Private backup</h3><div class="command-block" id="backup-command">sudo tautweekly backup<button data-copy="#backup-command">Copy</button></div><p>The wrapper stops the container briefly so state and configuration are captured consistently.</p></article>
+        <article class="guide-card"><h3>Pull and restart</h3><div class="command-block" id="update-command">sudo tautweekly update
+sudo tautweekly verify
+sudo tautweekly send-test-all<button data-copy="#update-command">Copy</button></div></article>
+        <article class="guide-card"><h3>Observe</h3><div class="command-block" id="logs-command">sudo service tautweekly status
+sudo podman logs --tail 200 tautweekly<button data-copy="#logs-command">Copy</button></div></article>
+      </div>
+      <div class="warning"><i>!</i><div><h3>Do not use a public preview bind casually.</h3><p>The preview service has no built-in authentication. Keep <code>127.0.0.1</code> and use SSH, or place an authenticated TLS reverse proxy in front of it.</p></div></div>
+    </section>
+
+    <div class="no-results" id="no-results" hidden>No sections matched. Try “Podman,” “install,” “preview,” “security,” or “update.”</div>
+  </main>
+  <footer><span>TautWeekly for Plex · FreeBSD Podman walkthrough</span><span>Independent community project · not affiliated with Plex, Tautulli, or FreeBSD</span><a href="README.md">Markdown guide</a></footer>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

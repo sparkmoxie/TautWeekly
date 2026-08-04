@@ -24,18 +24,20 @@ Start with the platform verifier and correct the first reported failure.
 Primary setup continues when the Tautulli roster is temporarily unavailable;
 it preserves exclusions from an existing configuration and prints the
 standalone command to retry. First run the platform verifier, then use
-`14-MANAGE-USER-EXCLUSIONS.bat` on Windows or
-`./tautweekly.sh exclude-users` on Docker. Confirm the Tautulli API key can run
+`14-MANAGE-USER-EXCLUSIONS.bat` on Windows,
+`./tautweekly.sh exclude-users` on Docker, or
+`sudo tautweekly exclude-users` on Linux and FreeBSD. Confirm the Tautulli API key can run
 both `get_user_names` and `get_user`, and that the runtime can reach the exact
 configured URL. No exclusion changes are saved when the standalone lookup
 returns no selectable users.
 
 ## Preview does not open
 
-Windows writes previews under `output/`. Docker editions serve previews on the
-configured bind and port. Run `./tautweekly.sh status` and
-`./tautweekly.sh logs`, then confirm `PREVIEW_BASE_URL` matches the URL the
-browser should use.
+Windows writes previews under `output/`. Docker, Linux, and FreeBSD editions
+serve previews on the configured bind and port. Use the platform `status` and
+`logs` commands, then confirm the preview base URL matches the URL the browser
+should use. Native Linux and FreeBSD default to localhost; use the documented
+SSH tunnel for remote access.
 
 ## Container permission errors
 
@@ -55,6 +57,24 @@ Use only the files that exist in your platform distribution.
 - Confirm timezone, day, time, grace window, and the same-day attempt guard.
 - Windows: run `09-VERIFY-SCHEDULE.bat` as administrator.
 - Docker: run `./tautweekly.sh schedule-status` and inspect container logs.
+- Linux and FreeBSD: run `sudo tautweekly schedule-status`, then inspect the
+  systemd journal or Podman logs respectively.
+
+## Native Linux service does not start
+
+Run `sudo systemctl status tautweekly` and
+`sudo journalctl -u tautweekly -n 200 --no-pager`. Confirm PowerShell 7.2 or
+newer, Python 3, and util-linux are installed. Application code must remain
+root-owned under `/opt/tautweekly`; private data must be writable only by the
+`tautweekly` service account under `/var/lib/tautweekly`.
+
+## FreeBSD Podman container does not start
+
+Confirm FreeBSD 15.1+ amd64, then run `sudo service linux status`,
+`sudo service podman status`, and
+`sudo podman run --rm --os=linux alpine uname -s`. If that Linux-container
+probe fails, correct the FreeBSD/Podman host before troubleshooting TautWeekly.
+Use `sudo podman logs tautweekly` for application startup errors.
 
 ## Mail-client rendering differs from preview
 

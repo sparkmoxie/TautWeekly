@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+env_file="${TAUTWEEKLY_ENV_FILE:-/etc/tautweekly/tautweekly.env}"
+if [[ -r "$env_file" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$env_file"
+  set +a
+fi
+
+app_root="${TAUTWEEKLY_APP_DIR:-/opt/tautweekly}"
+data_root="${TAUTWEEKLY_DATA_DIR:-/var/lib/tautweekly}"
+service_user="${TAUTWEEKLY_SERVICE_USER:-tautweekly}"
+export TAUTWEEKLY_APP_DIR="$app_root"
+export TAUTWEEKLY_DATA_DIR="$data_root"
+export TAUTWEEKLY_CONFIG="${TAUTWEEKLY_CONFIG:-$data_root/config.json}"
+
+require_root() {
+  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+    echo "Run this command with sudo so it can use the protected TautWeekly service account and data directory." >&2
+    exit 77
+  fi
+}
+
+run_as_service_user() {
+  require_root
+  runuser -u "$service_user" -- env \
+    TZ="${TZ:-Etc/UTC}" \
+    TAUTWEEKLY_APP_DIR="$app_root" \
+    TAUTWEEKLY_DATA_DIR="$data_root" \
+    TAUTWEEKLY_CONFIG="$TAUTWEEKLY_CONFIG" \
+    TAUTWEEKLY_PREVIEW_BASE_URL="${TAUTWEEKLY_PREVIEW_BASE_URL:-}" \
+    "$@"
+}
+
+run_ps() {
+  local script="$1"
+  shift
+  run_as_service_user pwsh -NoLogo -NoProfile -File "$app_root/$script" "$@"
+}
+
+run_mode() {
+  run_as_service_user "$app_root/bin/run-mode.sh" "$@"
+}
+
+prompt_user() {
+  local value="${1:-}"
+  if [[ -z "$value" ]]; then
+    read -r -p "UserId, username, friendly name, or email: " value
+  fi
+  [[ -n "$value" ]] || { echo "A user identifier is required." >&2; exit 64; }
+  printf '%s' "$value"
+}
+
+confirm() {
+  local prompt="$1" answer
+  read -r -p "$prompt [y/N]: " answer
+  [[ "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]
+}
+
+cmd="${1:-help}"
+shift || true
+case "$cmd" in
+  setup)
+    require_root
+    systemctl stop tautweekly.service 2>/dev/null || true
+    run_ps Setup-First.ps1 -DataRoot "$data_root"
+    systemctl start tautweekly.service
+    ;;
+  verify) run_ps Verify-Setup.ps1 -DataRoot "$data_root" ;;
+  list-users) run_mode ListUsers ;;
+  exclude-users|manage-exclusions) run_ps Manage-User-Exclusions.ps1 -ConfigPath "$TAUTWEEKLY_CONFIG" ;;
+  preview)
+    user="$(prompt_user "${1:-}")"
+    run_mode Preview "$user"
+    ;;
+  preview-all)
+    user="$(prompt_user "${1:-}")"
+    run_mode PreviewAll "$user"
+    ;;
+  send-test)
+    user="$(prompt_user "${1:-}")"
+    confirm "Send one test email to TestEmail using $user?" || exit 0
+    run_mode SendTest "$user"
+    ;;
+  send-test-all)
+    user="$(prompt_user "${1:-}")"
+    confirm "Send all six regression emails to TestEmail using $user?" || exit 0
+    run_mode SendTestAll "$user"
+    ;;
+  welcome)
+    user="$(prompt_user "${1:-}")"
+    confirm "Send the real one-off welcome to the selected Plex user's email?" || exit 0
+    run_mode SendWelcome "$user" --confirm-welcome
+    ;;
+  send-all)
+    echo "WARNING: This sends one real newsletter to every eligible Plex user."
+    confirm "Have you reviewed a current TestEmail and do you want to continue?" || exit 0
+    run_mode SendAll --confirm-send-all
+    ;;
+  roster) run_ps View-Access-Roster.ps1 -DataRoot "$data_root" ;;
+  repair-assets) run_ps Repair-Assets.ps1 -DataRoot "$data_root" ;;
+  schedule-status) run_ps Schedule-Control.ps1 -Action Status -DataRoot "$data_root" ;;
+  schedule-enable)
+    confirm "Enable the configured automatic weekly send?" || exit 0
+    run_ps Schedule-Control.ps1 -Action Enable -DataRoot "$data_root"
+    ;;
+  schedule-disable) run_ps Schedule-Control.ps1 -Action Disable -DataRoot "$data_root" ;;
+  schedule-reset)
+    echo "This clears today's automatic-attempt guard. A later scheduler poll may send again today."
+    confirm "Clear the guard?" || exit 0
+    run_ps Schedule-Control.ps1 -Action ResetToday -DataRoot "$data_root"
+    ;;
+  start|stop|restart|status)
+    require_root
+    systemctl "$cmd" tautweekly.service
+    ;;
+  logs)
+    require_root
+    journalctl -u tautweekly.service -n 200 -f
+    ;;
+  backup)
+    require_root
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    archive="${PWD}/tautweekly-private-data-$stamp.tar.gz"
+    was_active=false
+    if systemctl is-active --quiet tautweekly.service; then
+      systemctl stop tautweekly.service
+      was_active=true
+    fi
+    if ! tar -czf "$archive" -C "$(dirname "$data_root")" "$(basename "$data_root")"; then
+      $was_active && systemctl start tautweekly.service
+      exit 1
+    fi
+    chmod 600 "$archive"
+    $was_active && systemctl start tautweekly.service
+    echo "Created private backup: $archive"
+    ;;
+  update)
+    cat <<'EOF'
+Native Linux updates are package based. Download and extract the newer Linux
+release, verify SHA256SUMS.txt, then run: sudo ./install-linux.sh --upgrade
+The installer replaces application files and preserves /var/lib/tautweekly.
+EOF
+    ;;
+  help|*)
+    cat <<'EOF'
+TautWeekly for Plex native Linux commands
+
+  sudo tautweekly setup
+  sudo tautweekly verify
+  sudo tautweekly list-users
+  sudo tautweekly exclude-users
+  sudo tautweekly preview [user]
+  sudo tautweekly preview-all [user]
+  sudo tautweekly send-test [user]
+  sudo tautweekly send-test-all [user]
+  sudo tautweekly welcome [user]
+  sudo tautweekly send-all
+  sudo tautweekly roster
+  sudo tautweekly schedule-status
+  sudo tautweekly schedule-enable
+  sudo tautweekly schedule-disable
+  sudo tautweekly schedule-reset
+  sudo tautweekly status|start|stop|restart
+  sudo tautweekly logs
+  sudo tautweekly backup
+  tautweekly update
+EOF
+    ;;
+esac

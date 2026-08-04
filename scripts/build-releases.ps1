@@ -120,6 +120,14 @@ try {
     [void](Copy-Platform -SourceName 'nas-docker' -FolderName 'TautWeekly-nas-docker' -GuidePath 'docs/nas-docker/README.md')
     [void](Copy-Platform -SourceName 'mac-docker' -FolderName 'TautWeekly-mac-docker' -GuidePath 'docs/mac/README.md')
 
+    $linuxDestination = Copy-Platform -SourceName 'linux' -FolderName 'TautWeekly-linux' -GuidePath 'docs/linux/README.md'
+    Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/app') -Destination (Join-Path $linuxDestination 'app') -Recurse -Force
+
+    $freeBsdDestination = Copy-Platform -SourceName 'freebsd-podman' -FolderName 'TautWeekly-freebsd-podman' -GuidePath 'docs/freebsd/README.md'
+    Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/app') -Destination (Join-Path $freeBsdDestination 'app') -Recurse -Force
+    Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/Dockerfile') -Destination $freeBsdDestination -Force
+    Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/.dockerignore') -Destination $freeBsdDestination -Force
+
     $forbidden = Get-ChildItem -LiteralPath $staging -Force -Recurse | Where-Object {
         ($_.PSIsContainer -and $_.Name -in @('logs','output')) -or
         (-not $_.PSIsContainer -and $_.Name -in @('config.json','.env','state.json','access-state.json','scheduler-state.json')) -or
@@ -135,6 +143,10 @@ try {
         (New-TarGz -FolderName 'TautWeekly-nas-docker' -ArchiveName 'TautWeekly-nas-docker.tar.gz')
         (New-Zip -FolderName 'TautWeekly-mac-docker' -ArchiveName 'TautWeekly-mac-docker.zip')
         (New-TarGz -FolderName 'TautWeekly-mac-docker' -ArchiveName 'TautWeekly-mac-docker.tar.gz')
+        (New-Zip -FolderName 'TautWeekly-linux' -ArchiveName 'TautWeekly-linux.zip')
+        (New-TarGz -FolderName 'TautWeekly-linux' -ArchiveName 'TautWeekly-linux.tar.gz')
+        (New-Zip -FolderName 'TautWeekly-freebsd-podman' -ArchiveName 'TautWeekly-freebsd-podman.zip')
+        (New-TarGz -FolderName 'TautWeekly-freebsd-podman' -ArchiveName 'TautWeekly-freebsd-podman.tar.gz')
     )
 
     $checksumLines = foreach ($archive in ($archives | Sort-Object)) {

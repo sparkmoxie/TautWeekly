@@ -1,0 +1,7 @@
+TautWeekly for Plex native Linux platform changelog
+
+v1.0.0
+- Added native PowerShell 7 operation without Docker.
+- Added a hardened systemd service and protected service account.
+- Added guided setup, preview, test, exclusion, scheduling, backup, and upgrade commands.
+- Defaulted the preview listener to localhost and kept private data outside the application directory.

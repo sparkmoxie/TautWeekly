@@ -1,9 +1,10 @@
 # Configuration reference
 
-TautWeekly for Plex writes live settings to `config.json`. Docker editions keep it under
-`data/`; Windows keeps it beside the application. Start from the platform's
-`config.example.json` only when manual setup is required—the guided setup is
-preferred.
+TautWeekly for Plex writes live settings to `config.json`. Docker editions keep
+it under `data/`; Windows keeps it beside the application; native Linux uses
+`/var/lib/tautweekly`; and FreeBSD uses `/var/db/tautweekly`. Start from the
+platform's `config.example.json` only when manual setup is required—the guided
+setup is preferred.
 
 ## Tautulli and Plex
 
@@ -60,8 +61,9 @@ already in the configuration are preserved when a new known-user selection is
 saved, which avoids dropping an exclusion merely because a user is temporarily
 absent from the current Tautulli response.
 
-Use `14-MANAGE-USER-EXCLUSIONS.bat` on Windows or
-`./tautweekly.sh exclude-users` on either Docker edition to revise
+Use `14-MANAGE-USER-EXCLUSIONS.bat` on Windows,
+`./tautweekly.sh exclude-users` on either Docker edition, or
+`sudo tautweekly exclude-users` on Linux and FreeBSD to revise
 `ExcludedUserIds` independently. The standalone command does not change
 `ExcludedEmails`, SMTP values, or scheduling. Both lists affect scheduled and
 confirmed SendAll delivery. Preview and TestEmail modes remain available for
@@ -73,13 +75,13 @@ administrator action.
 | Key | Purpose |
 |---|---|
 | `ScheduleDay`, `ScheduleTime` | Local delivery day and 24-hour time |
-| `ScheduleEnabled` | Docker scheduler opt-in; defaults to false in examples |
+| `ScheduleEnabled` | Container and native-service scheduler opt-in; defaults to false in examples |
 | `ScheduleGraceMinutes` | How long a delayed scheduler poll may still attempt the send |
 | `SchedulerPollSeconds` | Container scheduler poll interval |
 | `ScheduledTaskName` | Windows Task Scheduler identity |
 
-Set the Docker `TZ` environment value to the intended IANA timezone so schedule
-evaluation matches the operator's expectation.
+Set the platform timezone environment value to the intended IANA timezone so
+schedule evaluation matches the operator's expectation.
 
 ## Docker environment
 
@@ -94,3 +96,12 @@ evaluation matches the operator's expectation.
 
 Never paste live values into an issue, pull request, repository file, or public
 release archive.
+
+## Native service environment
+
+Native Linux reads root-owned non-secret service values from
+`/etc/tautweekly/tautweekly.env`. FreeBSD reads them from
+`/usr/local/etc/tautweekly/tautweekly.env`. These files define the timezone,
+data path, preview bind/port, and—on FreeBSD—the OCI image reference. Keep SMTP,
+Tautulli, and Plex secrets in the private `config.json`, not in service
+environment files.

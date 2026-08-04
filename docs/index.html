@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="TautWeekly for Plex installation and operations documentation for Windows, NAS/Docker, and macOS.">
+  <meta name="description" content="TautWeekly for Plex installation and operations documentation for Windows, NAS/Docker, macOS, Linux, and FreeBSD.">
   <title>TautWeekly for Plex Documentation</title>
   <link rel="stylesheet" href="assets/styles.css">
 </head>
@@ -29,7 +29,7 @@
   </header>
 
   <main>
-    <section class="hero searchable" data-search="overview newsletter plex tautulli portable windows docker mac">
+    <section class="hero searchable" data-search="overview newsletter plex tautulli portable windows docker mac linux freebsd podman">
       <div class="hero-copy">
         <div class="eyebrow">Portable · preview-first · source available</div>
         <h1>Your Plex week,<br><span>carefully delivered.</span></h1>
@@ -41,7 +41,7 @@
           <a class="button" href="https://github.com/sparkmoxie/TautWeekly/releases/latest">Download latest release</a>
         </div>
         <div class="pills" aria-label="Supported platforms">
-          <span>Windows</span><span>NAS / Docker</span><span>macOS</span>
+          <span>Windows</span><span>NAS / Docker</span><span>macOS</span><span>Linux</span><span>FreeBSD</span>
         </div>
       </div>
       <div class="terminal" aria-label="Example safe setup workflow">
@@ -60,15 +60,15 @@
     </section>
 
     <section class="metrics searchable" data-search="source baseline versions checksums automation">
-      <div><strong>3</strong><span>maintained platform implementations</span></div>
+      <div><strong>5</strong><span>maintained platform distributions</span></div>
       <div><strong>6</strong><span>deterministic preview states</span></div>
       <div><strong>SHA-256</strong><span>release integrity manifest</span></div>
       <div><strong>0</strong><span>credentials shipped</span></div>
     </section>
 
-    <section id="platforms" class="section searchable" data-search="install platform windows nas docker qnap unraid macos apple silicon intel">
+    <section id="platforms" class="section searchable" data-search="install platform windows nas docker qnap unraid macos apple silicon intel linux systemd freebsd podman">
       <div class="section-heading">
-        <div><div class="eyebrow">Installation tracks</div><h2>One renderer, three operating models</h2></div>
+        <div><div class="eyebrow">Installation tracks</div><h2>One renderer, five operating models</h2></div>
         <p>Each guide is standalone and keeps its platform's setup, scheduling,
           preview, and recovery workflow intact.</p>
       </div>
@@ -99,6 +99,24 @@
             localhost-only previews by default.</p>
           <ul><li>Source baseline 1.0.3</li><li>Guided Terminal installer</li><li>Mac preview helper</li></ul>
           <div class="card-actions"><a href="mac/">Interactive guide</a><a href="mac/README.md">Markdown</a></div>
+        </article>
+        <article class="card">
+          <div class="card-icon linux">LIN</div>
+          <span class="tag">Native PowerShell</span>
+          <h3>Linux</h3>
+          <p>A Docker-free systemd service with protected private storage and a
+            localhost-only preview listener.</p>
+          <ul><li>Source baseline 1.0.0</li><li>PowerShell 7.2+</li><li>Ubuntu, Debian, and RHEL</li></ul>
+          <div class="card-actions"><a href="linux/">Interactive guide</a><a href="linux/README.md">Markdown</a></div>
+        </article>
+        <article class="card">
+          <div class="card-icon freebsd">BSD</div>
+          <span class="tag">Podman · Beta</span>
+          <h3>FreeBSD</h3>
+          <p>The maintained Linux OCI renderer under FreeBSD Podman, controlled
+            by rc.d with private host storage.</p>
+          <ul><li>Source baseline 1.0.0</li><li>FreeBSD 15.1+ amd64</li><li>Linux-container support</li></ul>
+          <div class="card-actions"><a href="freebsd/">Interactive guide</a><a href="freebsd/README.md">Markdown</a></div>
         </article>
       </div>
     </section>

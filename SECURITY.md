@@ -16,9 +16,9 @@ addresses, recipient data, or generated newsletters.
 
 ## Supported versions
 
-Until the first tagged release, security fixes target the latest commit on
-`main`. After releases begin, the latest release and `main` receive security
-updates; older distributions are supported on a best-effort basis.
+The latest release and `main` receive security updates; older distributions are
+supported on a best-effort basis. FreeBSD Podman support is currently beta and
+requires host acceptance testing before scheduled use.
 
 ## Operator responsibilities
 

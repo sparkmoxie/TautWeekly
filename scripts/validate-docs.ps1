@@ -11,7 +11,9 @@ $pages = @(
     'windows/index.html',
     'nas-docker/index.html',
     'nas-docker/quickstart.html',
-    'mac/index.html'
+    'mac/index.html',
+    'linux/index.html',
+    'freebsd/index.html'
 )
 $terminalPages = 0
 $renderedUrls = @{
@@ -20,6 +22,8 @@ $renderedUrls = @{
     'nas-docker/index.html'       = 'https://sparkmoxie.github.io/TautWeekly/nas-docker/'
     'nas-docker/quickstart.html'  = 'https://sparkmoxie.github.io/TautWeekly/nas-docker/quickstart.html'
     'mac/index.html'              = 'https://sparkmoxie.github.io/TautWeekly/mac/'
+    'linux/index.html'            = 'https://sparkmoxie.github.io/TautWeekly/linux/'
+    'freebsd/index.html'          = 'https://sparkmoxie.github.io/TautWeekly/freebsd/'
 }
 
 foreach ($relative in $pages) {
@@ -51,7 +55,7 @@ foreach ($relative in $pages) {
         throw "Duplicate HTML id(s) in ${relative}: $($duplicates.Name -join ', ')"
     }
 
-    if ($relative -in @('windows/index.html', 'nas-docker/index.html', 'mac/index.html')) {
+    if ($relative -in @('windows/index.html', 'nas-docker/index.html', 'mac/index.html', 'linux/index.html', 'freebsd/index.html')) {
         foreach ($section in [regex]::Matches($html, '(?is)<section\b(?<attrs>[^>]*)>')) {
             $attributes = $section.Groups['attrs'].Value
             if ($attributes -notmatch '(?i)\bdata-search\s*=') { continue }
@@ -59,8 +63,8 @@ foreach ($relative in $pages) {
                 throw "Searchable section without a class in $relative"
             }
             $classes = @($Matches['classes'] -split '\s+')
-            if ('section' -notin $classes -and 'hero' -notin $classes) {
-                throw "Searchable section is outside the styled/search-filtered .section set in ${relative}: $($attributes.Trim())"
+            if ('section' -notin $classes -and 'hero' -notin $classes -and 'metrics' -notin $classes) {
+                throw "Searchable section is outside the styled/search-filtered section sets in ${relative}: $($attributes.Trim())"
             }
         }
     }

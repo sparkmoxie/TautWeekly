@@ -1,0 +1,154 @@
+# FreeBSD installation with Podman
+
+The FreeBSD distribution runs the maintained TautWeekly Linux OCI image through
+FreeBSD's Podman Linux-container support. It integrates with the native `rc.d`
+service system and keeps configuration, state, generated output, and backups in
+`/var/db/tautweekly`.
+
+[Open the rendered FreeBSD walkthrough](https://sparkmoxie.github.io/TautWeekly/freebsd/)
+
+## Supported target
+
+- FreeBSD 15.1 or newer on amd64.
+- Root access through `sudo`, `doas`, or a root shell.
+- The configured FreeBSD package repository and internet access to GHCR.
+- FreeBSD Linux emulation and Podman; the installer enables both.
+
+FreeBSD documents the Podman services, automatic container startup, and Linux
+container execution in the
+[OCI Containers handbook chapter](https://docs.freebsd.org/en/books/handbook/containers/).
+This platform is marked **beta** because GitHub-hosted CI performs static,
+archive, and OCI checks but does not boot a FreeBSD host. Test preview and SMTP
+delivery before enabling the scheduler.
+
+This is not Docker-on-FreeBSD and it does not depend on a native FreeBSD
+PowerShell build. The published Linux OCI image supplies the supported
+PowerShell runtime and identical application renderer.
+
+## Download and verify
+
+Download `TautWeekly-freebsd-podman.tar.gz` and `SHA256SUMS.txt` from the
+[latest release](https://github.com/sparkmoxie/TautWeekly/releases/latest):
+
+```sh
+grep 'TautWeekly-freebsd-podman.tar.gz' SHA256SUMS.txt
+sha256 -r TautWeekly-freebsd-podman.tar.gz
+tar -xzf TautWeekly-freebsd-podman.tar.gz
+cd TautWeekly-freebsd-podman
+```
+
+Restore launcher permissions when transferring the ZIP through a filesystem
+that does not preserve them:
+
+```sh
+chmod +x install-freebsd.sh tautweekly rc.d/tautweekly app/*.sh app/bin/*.sh
+```
+
+## Install
+
+```sh
+sudo ./install-freebsd.sh
+sudo tautweekly setup
+sudo tautweekly verify
+```
+
+The installer performs explicit host changes: it installs Podman with `pkg` if
+needed, enables and starts FreeBSD Linux emulation and the Podman service,
+creates an unprivileged numeric data owner, installs the `rc.d` integration,
+pulls the public GHCR image, and starts the container. It preserves an existing
+settings file and private data directory.
+
+Review the roster and every mail state before enabling automatic sends:
+
+```sh
+sudo tautweekly list-users
+sudo tautweekly exclude-users
+sudo tautweekly preview-all
+sudo tautweekly send-test-all
+sudo tautweekly schedule-status
+sudo tautweekly schedule-enable
+```
+
+## Files and trust boundaries
+
+| Path | Purpose |
+|---|---|
+| `/var/db/tautweekly` | Private `config.json`, state, logs, previews, custom assets, and backups |
+| `/usr/local/etc/tautweekly/tautweekly.env` | Root-owned image, timezone, identity, bind, port, and URL settings |
+| `/usr/local/etc/rc.d/tautweekly` | Native FreeBSD service lifecycle |
+| `/usr/local/sbin/tautweekly` | Administrative command wrapper |
+| `ghcr.io/sparkmoxie/tautweekly` | Multi-architecture Linux OCI application image |
+
+The settings file contains no SMTP or API credential. Those secrets remain in
+`/var/db/tautweekly/config.json`, which must never be committed or shared.
+Backups, logs, and previews are also private.
+
+Port 8787 binds to `127.0.0.1` by default. Use an SSH tunnel for remote preview:
+
+```sh
+ssh -L 8787:127.0.0.1:8787 admin@example.com
+```
+
+Open `http://127.0.0.1:8787/` locally. Do not publish the unauthenticated
+preview server directly to the internet.
+
+## Operations
+
+```text
+sudo tautweekly setup                 create or replace private configuration
+sudo tautweekly verify                validate API, mail, storage, and schedule
+sudo tautweekly list-users            inspect Tautulli recipients
+sudo tautweekly exclude-users         revise stable user exclusions
+sudo tautweekly preview-all USER      render all deterministic browser states
+sudo tautweekly send-test-all USER    send only to TestEmail
+sudo tautweekly send-all              guarded production delivery
+sudo tautweekly schedule-status       inspect scheduler state
+sudo tautweekly status                inspect the rc.d service
+sudo tautweekly logs                  follow container logs
+sudo tautweekly backup                stop briefly and archive private data
+sudo tautweekly update                pull the configured image and restart
+```
+
+The wrapper always requires an explicit confirmation for real welcome or
+production delivery. Excluded users remain available to preview and TestEmail
+modes but are omitted from scheduled and confirmed `SendAll` delivery.
+
+## Update and pinning
+
+Before an image update, create a private backup and record the current image ID:
+
+```sh
+sudo tautweekly backup
+sudo podman image inspect ghcr.io/sparkmoxie/tautweekly:latest --format '{{.Id}}'
+sudo tautweekly update
+sudo tautweekly verify
+sudo tautweekly send-test-all
+```
+
+For deterministic production updates, set `TAUTWEEKLY_IMAGE` in
+`/usr/local/etc/tautweekly/tautweekly.env` to a version tag rather than
+`latest`, then restart the service. The release archive also contains the
+Dockerfile and complete application source for local inspection or building:
+
+```sh
+sudo podman build --os=linux -t localhost/tautweekly:local .
+```
+
+Set `TAUTWEEKLY_IMAGE=localhost/tautweekly:local` and restart only after the
+local image build succeeds.
+
+## Troubleshooting
+
+- `cannot clone: Operation not supported`: confirm FreeBSD 15.1+, run
+  `sudo service linux start`, and verify the host's Podman package is current.
+- Image does not start: run `sudo podman run --rm --os=linux alpine uname -s`
+  to isolate Linux-container support from TautWeekly.
+- Service remains stopped: run `sudo service tautweekly status` and
+  `sudo podman logs tautweekly`.
+- Preview is unreachable: retain the localhost bind and use the SSH tunnel
+  above; confirm `sockstat -4 -l | grep 8787`.
+- Permission error: restore the numeric owner with
+  `sudo chown -R 8787:8787 /var/db/tautweekly` and keep directory mode `0700`.
+
+TautWeekly for Plex is an independent community project and is not affiliated
+with, endorsed by, or sponsored by Plex, Tautulli, or the FreeBSD Project.
