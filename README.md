@@ -1,11 +1,11 @@
 <div align="center">
 
-# PlexWeekly
+# TautWeekly for Plex
 
 **A portable, preview-first weekly Plex activity newsletter powered by Tautulli.**
 
-[![CI](https://github.com/sparkmoxie/PlexWeekly/actions/workflows/ci.yml/badge.svg)](https://github.com/sparkmoxie/PlexWeekly/actions/workflows/ci.yml)
-[![Pages](https://github.com/sparkmoxie/PlexWeekly/actions/workflows/pages.yml/badge.svg)](https://sparkmoxie.github.io/PlexWeekly/)
+[![CI](https://github.com/sparkmoxie/TautWeekly/actions/workflows/ci.yml/badge.svg)](https://github.com/sparkmoxie/TautWeekly/actions/workflows/ci.yml)
+[![Pages](https://github.com/sparkmoxie/TautWeekly/actions/workflows/pages.yml/badge.svg)](https://sparkmoxie.github.io/TautWeekly/)
 [![License: MIT](https://img.shields.io/badge/code%20license-MIT-e5a00d.svg)](LICENSE)
 ![Windows](https://img.shields.io/badge/Windows-PowerShell%205.1-0078d4?logo=windows)
 ![NAS](https://img.shields.io/badge/NAS-Docker%20Compose-2496ed?logo=docker)
@@ -16,7 +16,7 @@ them locally; send controlled tests; then schedule production delivery.
 
 <img src="platforms/windows/assets/trending.gif" alt="Animated upward-trend emoji" width="104">
 
-[Live documentation](https://sparkmoxie.github.io/PlexWeekly/) ·
+[Live documentation](https://sparkmoxie.github.io/TautWeekly/) ·
 [Release downloads](#release-downloads) ·
 [Security](SECURITY.md) ·
 [Contributing](CONTRIBUTING.md)
@@ -24,7 +24,7 @@ them locally; send controlled tests; then schedule production delivery.
 </div>
 
 > [!WARNING]
-> PlexWeekly configuration contains an SMTP credential and Tautulli API key,
+> TautWeekly for Plex configuration contains an SMTP credential and Tautulli API key,
 > and may contain a Plex token. Never commit `config.json`, `.env`, state,
 > logs, previews, generated newsletters, or backups. Preview first and use a
 > controlled test recipient before enabling a schedule or `SendAll`.
@@ -44,7 +44,7 @@ them locally; send controlled tests; then schedule production delivery.
 | Scheduler | Windows Task Scheduler | Built-in container scheduler | Built-in container scheduler |
 | Preview | Local generated HTML | Port 8787, configurable bind | Localhost port 8787 by default |
 | Best fit | Always-on Windows host | QNAP, Unraid, Linux NAS, Docker host | Intel or Apple silicon Mac |
-| Interactive walkthrough | [Open Windows](https://sparkmoxie.github.io/PlexWeekly/windows/) | [Open NAS / Docker](https://sparkmoxie.github.io/PlexWeekly/nas-docker/) | [Open macOS](https://sparkmoxie.github.io/PlexWeekly/mac/) |
+| Interactive walkthrough | [Open Windows](https://sparkmoxie.github.io/TautWeekly/windows/) | [Open NAS / Docker](https://sparkmoxie.github.io/TautWeekly/nas-docker/) | [Open macOS](https://sparkmoxie.github.io/TautWeekly/mac/) |
 | Install guide | [Windows](docs/windows/README.md) | [NAS / Docker](docs/nas-docker/README.md) | [macOS](docs/mac/README.md) |
 | Source | [`platforms/windows`](platforms/windows) | [`platforms/nas-docker`](platforms/nas-docker) | [`platforms/mac-docker`](platforms/mac-docker) |
 
@@ -71,7 +71,7 @@ gates. Their setup and lifecycle wrappers are platform-specific.
 <summary><strong>Windows portable</strong></summary>
 
 1. Download and extract
-   [`PlexWeekly-windows.zip`](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-windows.zip)
+   [`TautWeekly-windows.zip`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-windows.zip)
    into a permanent writable folder, or use
    [`platforms/windows`](platforms/windows) from the current source tree.
 2. Run `00-SETUP-FIRST.bat` and enter your own Tautulli and SMTP values.
@@ -80,7 +80,7 @@ gates. Their setup and lifecycle wrappers are platform-specific.
    `04-SEND-TEST.bat`.
 5. Install the schedule only after review.
 
-[Open the rendered Windows walkthrough](https://sparkmoxie.github.io/PlexWeekly/windows/)
+[Open the rendered Windows walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/)
 · [Read the Markdown install guide](docs/windows/README.md)
 
 </details>
@@ -92,16 +92,16 @@ gates. Their setup and lifecycle wrappers are platform-specific.
 cp .env.example .env
 docker compose build --pull
 docker compose up -d
-./plexweekly.sh setup
-./plexweekly.sh verify
-./plexweekly.sh preview-all
+./tautweekly.sh setup
+./tautweekly.sh verify
+./tautweekly.sh preview-all
 ```
 
 Use a hostname reachable from inside the container for Tautulli. Keep port
 8787 on a trusted network and do not expose it publicly.
 
-[Open the rendered NAS / Docker walkthrough](https://sparkmoxie.github.io/PlexWeekly/nas-docker/)
-· [Open the rendered Compose quick start](https://sparkmoxie.github.io/PlexWeekly/nas-docker/quickstart.html)
+[Open the rendered NAS / Docker walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
+· [Open the rendered Compose quick start](https://sparkmoxie.github.io/TautWeekly/nas-docker/quickstart.html)
 · [Read the Markdown install guide](docs/nas-docker/README.md)
 
 </details>
@@ -110,16 +110,16 @@ Use a hostname reachable from inside the container for Tautulli. Keep port
 <summary><strong>macOS with Docker Desktop</strong></summary>
 
 ```bash
-chmod +x INSTALL-MAC.command mac-install.sh plexweekly.sh
+chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh
 ./mac-install.sh
-./plexweekly.sh verify
-./plexweekly.sh preview-all
+./tautweekly.sh verify
+./tautweekly.sh preview-all
 ```
 
 The installer detects the host UID/GID and keeps previews on localhost by
 default.
 
-[Open the rendered macOS walkthrough](https://sparkmoxie.github.io/PlexWeekly/mac/)
+[Open the rendered macOS walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
 · [Read the Markdown install guide](docs/mac/README.md)
 
 </details>
@@ -128,7 +128,7 @@ default.
 
 ```mermaid
 flowchart LR
-    T["Tautulli API"] --> E["PlexWeekly PowerShell engine"]
+    T["Tautulli API"] --> E["TautWeekly for Plex PowerShell engine"]
     P["Plex Media Server\noptional metadata"] -.-> E
     E --> R["HTML + plain-text renderer"]
     R --> V["Local preview"]
@@ -144,23 +144,28 @@ guards first-run behavior, welcomes, and repeat schedule attempts.
 
 ## Release downloads
 
-PlexWeekly `v0.1.1` publishes five installable archives and a checksum manifest.
+TautWeekly for Plex `v0.2.0` publishes five installable archives and a checksum manifest.
 The stable links below follow the latest published release.
+
+> [!NOTE]
+> Version 0.2.0 standardizes every public and runtime identifier on the new
+> TautWeekly naming convention. Preserve private configuration and Docker
+> `data`, replace the program files, and use the newly named launchers.
 
 | Platform | Published artifact | Download |
 |---|---|---|
-| Windows | `PlexWeekly-windows.zip` | [ZIP](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-windows.zip) |
-| NAS / Docker | `PlexWeekly-nas-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-nas-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-nas-docker.zip) |
-| macOS / Docker Desktop | `PlexWeekly-mac-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.zip) |
-| Integrity manifest | `SHA256SUMS.txt` | [SHA-256 checksums](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/SHA256SUMS.txt) |
+| Windows | `TautWeekly-windows.zip` | [ZIP](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-windows.zip) |
+| NAS / Docker | `TautWeekly-nas-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.zip) |
+| macOS / Docker Desktop | `TautWeekly-mac-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.zip) |
+| Integrity manifest | `SHA256SUMS.txt` | [SHA-256 checksums](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/SHA256SUMS.txt) |
 
-[Read the latest release notes](https://github.com/sparkmoxie/PlexWeekly/releases/latest)
+[Read the latest release notes](https://github.com/sparkmoxie/TautWeekly/releases/latest)
 and verify every archive before installation.
 
 Verify a Windows download:
 
 ```powershell
-Get-FileHash .\PlexWeekly-windows.zip -Algorithm SHA256
+Get-FileHash .\TautWeekly-windows.zip -Algorithm SHA256
 ```
 
 Verify Unix downloads from the release directory:
@@ -181,11 +186,11 @@ shasum -a 256 -c SHA256SUMS.txt
 
 ## Documentation
 
-- [Live GitHub Pages documentation](https://sparkmoxie.github.io/PlexWeekly/)
-- [Rendered Windows walkthrough](https://sparkmoxie.github.io/PlexWeekly/windows/)
-- [Rendered NAS / Docker walkthrough](https://sparkmoxie.github.io/PlexWeekly/nas-docker/)
-- [Rendered NAS / Docker Compose quick start](https://sparkmoxie.github.io/PlexWeekly/nas-docker/quickstart.html)
-- [Rendered macOS walkthrough](https://sparkmoxie.github.io/PlexWeekly/mac/)
+- [Live GitHub Pages documentation](https://sparkmoxie.github.io/TautWeekly/)
+- [Rendered Windows walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/)
+- [Rendered NAS / Docker walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
+- [Rendered NAS / Docker Compose quick start](https://sparkmoxie.github.io/TautWeekly/nas-docker/quickstart.html)
+- [Rendered macOS walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
 - [Documentation source index](docs/README.md)
 - [Windows installation](docs/windows/README.md)
 - [NAS / Docker installation](docs/nas-docker/README.md)
@@ -204,11 +209,11 @@ vendor UI, or network/firewall policy. Operate on a preview-and-test basis.
 
 ## License and affiliation
 
-PlexWeekly source code, documentation, and bundled custom artwork are licensed
+TautWeekly for Plex source code, documentation, and bundled custom artwork are licensed
 under the [MIT License](LICENSE). Asset provenance is recorded in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-PlexWeekly is an independent community project. It is not affiliated with,
+TautWeekly for Plex is an independent community project. It is not affiliated with,
 endorsed by, or sponsored by Plex, Tautulli, IMDb, Rotten Tomatoes, Docker,
 QNAP, Unraid, Apple, or Microsoft. All product names and marks belong to their
 respective owners.

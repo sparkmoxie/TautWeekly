@@ -2,11 +2,11 @@
 cd /d "%~dp0"
 echo.
 echo ============================================================
-echo PLEXWEEKLY - REAL ONE-OFF WELCOME
+echo TAUTWEEKLY FOR PLEX - REAL ONE-OFF WELCOME
 echo WARNING: This sends to the selected user's ACTUAL email.
 echo ============================================================
 echo.
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0PlexWeekly.ps1" -Mode ListUsers
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0TautWeekly.ps1" -Mode ListUsers
 echo.
 set /p USERID=Enter UserId, username, friendly name, or email to welcome:
 if "%USERID%"=="" exit /b 1
@@ -17,6 +17,6 @@ if /I not "%CONFIRM%"=="WELCOME" (
   pause
   exit /b 0
 )
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0PlexWeekly.ps1" -Mode SendWelcome -UserId "%USERID%" -ConfirmWelcome
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0TautWeekly.ps1" -Mode SendWelcome -UserId "%USERID%" -ConfirmWelcome
 echo.
 pause

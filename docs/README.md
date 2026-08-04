@@ -1,18 +1,18 @@
-# PlexWeekly documentation
+# TautWeekly for Plex documentation
 
-The [live GitHub Pages home](https://sparkmoxie.github.io/PlexWeekly/)
+The [live GitHub Pages home](https://sparkmoxie.github.io/TautWeekly/)
 preserves the supplied Plex-inspired dark walkthrough experience, including
 search, sticky navigation, scroll progress, responsive layouts, copy controls,
 and terminal demonstrations.
 
 ## Install by platform
 
-- [Windows interactive walkthrough](https://sparkmoxie.github.io/PlexWeekly/windows/)
+- [Windows interactive walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/)
   · [Markdown guide](windows/README.md)
-- [NAS / Docker interactive walkthrough](https://sparkmoxie.github.io/PlexWeekly/nas-docker/)
-  · [Compose quick start](https://sparkmoxie.github.io/PlexWeekly/nas-docker/quickstart.html)
+- [NAS / Docker interactive walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
+  · [Compose quick start](https://sparkmoxie.github.io/TautWeekly/nas-docker/quickstart.html)
   · [Markdown guide](nas-docker/README.md)
-- [macOS interactive walkthrough](https://sparkmoxie.github.io/PlexWeekly/mac/)
+- [macOS interactive walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
   · [Markdown guide](mac/README.md)
 
 ## Operate and maintain

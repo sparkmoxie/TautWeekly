@@ -14,7 +14,7 @@ python3 -m http.server 8080 --bind 0.0.0.0 --directory /data/output \
   >>/data/logs/preview-server.log 2>&1 &
 WEB_PID=$!
 
-pwsh -NoLogo -NoProfile -NonInteractive -File /opt/plexweekly/Scheduler.ps1 &
+pwsh -NoLogo -NoProfile -NonInteractive -File /opt/tautweekly/Scheduler.ps1 &
 SCHED_PID=$!
 
 if wait "$SCHED_PID"; then

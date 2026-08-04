@@ -20,12 +20,12 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 mkdir -p /data/logs /data/output /data/assets
-exec 9>/data/.plexweekly-operation.lock
+exec 9>/data/.tautweekly-operation.lock
 if ! flock -w 30 9; then
-  echo "Another PlexWeekly operation is already running. Try again after it finishes." >&2
+  echo "Another TautWeekly for Plex operation is already running. Try again after it finishes." >&2
   exit 75
 fi
-ARGS=( -NoLogo -NoProfile -NonInteractive -File /opt/plexweekly/PlexWeekly.ps1 -Mode "$MODE" -ConfigPath /data/config.json )
+ARGS=( -NoLogo -NoProfile -NonInteractive -File /opt/tautweekly/TautWeekly.ps1 -Mode "$MODE" -ConfigPath /data/config.json )
 if [[ -n "$USER_ID" ]]; then ARGS+=( -UserId "$USER_ID" ); fi
 if [[ -n "$CONFIRM_SEND_ALL" ]]; then ARGS+=( "$CONFIRM_SEND_ALL" ); fi
 if [[ -n "$CONFIRM_WELCOME" ]]; then ARGS+=( "$CONFIRM_WELCOME" ); fi

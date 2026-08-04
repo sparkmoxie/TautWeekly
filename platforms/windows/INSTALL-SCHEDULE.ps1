@@ -3,15 +3,15 @@ $ErrorActionPreference = "Stop"
 
 $root = $PSScriptRoot
 $configPath = Join-Path $root "config.json"
-$engine = Join-Path $root "PlexWeekly.ps1"
+$engine = Join-Path $root "TautWeekly.ps1"
 
-if (-not (Test-Path $engine)) { throw "PlexWeekly.ps1 not found at $engine" }
+if (-not (Test-Path $engine)) { throw "TautWeekly.ps1 not found at $engine" }
 if (-not (Test-Path $configPath)) { throw "config.json is missing. Run 00-SETUP-FIRST.bat first." }
 $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
 $taskName = if ($null -ne $config.PSObject.Properties["ScheduledTaskName"] -and -not [string]::IsNullOrWhiteSpace([string]$config.ScheduledTaskName)) {
     [string]$config.ScheduledTaskName
-} else { "PlexWeekly Newsletter" }
+} else { "TautWeekly for Plex Newsletter" }
 
 $dayText = if ($null -ne $config.PSObject.Properties["ScheduleDay"] -and -not [string]::IsNullOrWhiteSpace([string]$config.ScheduleDay)) {
     [string]$config.ScheduleDay
@@ -58,13 +58,13 @@ Register-ScheduledTask `
     -Trigger $trigger `
     -Settings $settings `
     -Principal $principal `
-    -Description "Sends the PlexWeekly personalized newsletter on $dayText at $timeText using local Windows time." `
+    -Description "Sends the TautWeekly for Plex personalized newsletter on $dayText at $timeText using local Windows time." `
     -Force | Out-Null
 
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
 $info = $task | Get-ScheduledTaskInfo
 Write-Host ""
-Write-Host "PlexWeekly schedule installed." -ForegroundColor Green
+Write-Host "TautWeekly for Plex schedule installed." -ForegroundColor Green
 Write-Host "Task:       $taskName"
 Write-Host "Folder:     $root"
 Write-Host "Schedule:   Every $dayText at $timeText (local Windows time)"

@@ -63,74 +63,74 @@ switch ($Command) {
     "build" { Invoke-Compose @("build","--pull") }
     "up" { Invoke-Compose @("up","-d") }
     "down" { Invoke-Compose @("down") }
-    "restart" { Invoke-Compose @("restart","plexweekly") }
+    "restart" { Invoke-Compose @("restart","tautweekly") }
     "status" { Invoke-Compose @("ps") }
-    "logs" { Invoke-Compose @("logs","-f","--tail=200","plexweekly") }
-    "shell" { Invoke-Compose @("exec","plexweekly","bash") }
-    "setup" { Invoke-Compose @("exec","plexweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/plexweekly/Setup-First.ps1") }
-    "verify" { Invoke-Compose @("exec","plexweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/plexweekly/Verify-Setup.ps1") }
-    "list-users" { Invoke-Compose @("exec","plexweekly","/opt/plexweekly/bin/run-mode.sh","ListUsers") }
+    "logs" { Invoke-Compose @("logs","-f","--tail=200","tautweekly") }
+    "shell" { Invoke-Compose @("exec","tautweekly","bash") }
+    "setup" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Setup-First.ps1") }
+    "verify" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Verify-Setup.ps1") }
+    "list-users" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","ListUsers") }
     "preview" {
         $id = Resolve-User $User
-        Invoke-Compose @("exec","plexweekly","/opt/plexweekly/bin/run-mode.sh","Preview",$id)
+        Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","Preview",$id)
     }
     "preview-all" {
         $id = Resolve-User $User
-        Invoke-Compose @("exec","plexweekly","/opt/plexweekly/bin/run-mode.sh","PreviewAll",$id)
+        Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","PreviewAll",$id)
     }
     "send-test" {
         $id = Resolve-User $User
         if (Confirm-Action "Send one message to TestEmail using $id?") {
-            Invoke-Compose @("exec","plexweekly","/opt/plexweekly/bin/run-mode.sh","SendTest",$id)
+            Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","SendTest",$id)
         }
     }
     "send-test-all" {
         $id = Resolve-User $User
         if (Confirm-Action "Send all six regression messages to TestEmail using $id?") {
-            Invoke-Compose @("exec","plexweekly","/opt/plexweekly/bin/run-mode.sh","SendTestAll",$id)
+            Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","SendTestAll",$id)
         }
     }
     "welcome" {
         $id = Resolve-User $User
         if (Confirm-Action "Send a real one-off welcome to the selected Plex user?") {
-            Invoke-Compose @("exec","plexweekly","/opt/plexweekly/bin/run-mode.sh","SendWelcome",$id,"--confirm-welcome")
+            Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","SendWelcome",$id,"--confirm-welcome")
         }
     }
     "send-all" {
         if (Confirm-Action "Send one real newsletter to every eligible Plex user?") {
-            Invoke-Compose @("exec","plexweekly","/opt/plexweekly/bin/run-mode.sh","SendAll","--confirm-send-all")
+            Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","SendAll","--confirm-send-all")
         }
     }
-    "roster" { Invoke-Compose @("exec","plexweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/plexweekly/View-Access-Roster.ps1") }
-    "repair-assets" { Invoke-Compose @("exec","plexweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/plexweekly/Repair-Assets.ps1") }
-    "schedule-status" { Invoke-Compose @("exec","plexweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/plexweekly/Schedule-Control.ps1","-Action","Status") }
+    "roster" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/View-Access-Roster.ps1") }
+    "repair-assets" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Repair-Assets.ps1") }
+    "schedule-status" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Schedule-Control.ps1","-Action","Status") }
     "schedule-enable" {
         if (Confirm-Action "Enable the configured automatic weekly send?") {
-            Invoke-Compose @("exec","plexweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/plexweekly/Schedule-Control.ps1","-Action","Enable")
+            Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Schedule-Control.ps1","-Action","Enable")
         }
     }
-    "schedule-disable" { Invoke-Compose @("exec","plexweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/plexweekly/Schedule-Control.ps1","-Action","Disable") }
+    "schedule-disable" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Schedule-Control.ps1","-Action","Disable") }
     "schedule-reset" {
         Write-Warning "This clears today's automatic-attempt guard and can permit another real send today."
         if (Confirm-Action "Clear the guard?") {
-            Invoke-Compose @("exec","plexweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/plexweekly/Schedule-Control.ps1","-Action","ResetToday")
+            Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Schedule-Control.ps1","-Action","ResetToday")
         }
     }
     default {
         @"
-PlexWeekly Docker Desktop / PowerShell commands
+TautWeekly for Plex Docker Desktop / PowerShell commands
 
-  .\plexweekly-docker.ps1 build
-  .\plexweekly-docker.ps1 up
-  .\plexweekly-docker.ps1 setup
-  .\plexweekly-docker.ps1 verify
-  .\plexweekly-docker.ps1 list-users
-  .\plexweekly-docker.ps1 preview-all
-  .\plexweekly-docker.ps1 send-test-all
-  .\plexweekly-docker.ps1 schedule-status
-  .\plexweekly-docker.ps1 schedule-enable
-  .\plexweekly-docker.ps1 logs
-  .\plexweekly-docker.ps1 status
+  .\tautweekly-docker.ps1 build
+  .\tautweekly-docker.ps1 up
+  .\tautweekly-docker.ps1 setup
+  .\tautweekly-docker.ps1 verify
+  .\tautweekly-docker.ps1 list-users
+  .\tautweekly-docker.ps1 preview-all
+  .\tautweekly-docker.ps1 send-test-all
+  .\tautweekly-docker.ps1 schedule-status
+  .\tautweekly-docker.ps1 schedule-enable
+  .\tautweekly-docker.ps1 logs
+  .\tautweekly-docker.ps1 status
 
 The wrapper requires Docker Desktop in Linux-container mode.
 "@ | Write-Host

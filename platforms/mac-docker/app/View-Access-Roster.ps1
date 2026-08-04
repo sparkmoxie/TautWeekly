@@ -1,12 +1,12 @@
-﻿param([string]$DataRoot = $(if ($env:PLEXWEEKLY_DATA_DIR) { $env:PLEXWEEKLY_DATA_DIR } else { "/data" }))
+﻿param([string]$DataRoot = $(if ($env:TAUTWEEKLY_DATA_DIR) { $env:TAUTWEEKLY_DATA_DIR } else { "/data" }))
 $path = Join-Path $DataRoot "access-state.json"
 if (-not (Test-Path $path)) {
-    Write-Host "No access roster exists yet. Run ./plexweekly.sh list-users or preview first."
+    Write-Host "No access roster exists yet. Run ./tautweekly.sh list-users or preview first."
     exit 0
 }
 $state = Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json
 Write-Host ""
-Write-Host "PlexWeekly access roster"
+Write-Host "TautWeekly for Plex access roster"
 Write-Host "Baseline: $($state.BaselineUtc)"
 Write-Host ""
 $rows = foreach ($prop in $state.Users.PSObject.Properties) {

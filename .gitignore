@@ -6,7 +6,7 @@
 **/*.key
 **/*.pfx
 
-# PlexWeekly runtime state
+# TautWeekly for Plex runtime state
 **/state.json
 **/access-state.json
 **/scheduler-state.json

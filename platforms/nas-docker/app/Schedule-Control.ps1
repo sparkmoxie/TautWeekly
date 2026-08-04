@@ -1,7 +1,7 @@
 ﻿param(
     [ValidateSet("Status","Enable","Disable","ResetToday")]
     [string]$Action = "Status",
-    [string]$DataRoot = $(if ($env:PLEXWEEKLY_DATA_DIR) { $env:PLEXWEEKLY_DATA_DIR } else { "/data" })
+    [string]$DataRoot = $(if ($env:TAUTWEEKLY_DATA_DIR) { $env:TAUTWEEKLY_DATA_DIR } else { "/data" })
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -56,7 +56,7 @@ $timeValue = [string](Get-Value $config "ScheduleTime" "09:30")
 $graceValue = [int](Get-Value $config "ScheduleGraceMinutes" 60)
 
 Write-Host ""
-Write-Host "PLEXWEEKLY SCHEDULE STATUS" -ForegroundColor Cyan
+Write-Host "TAUTWEEKLY FOR PLEX SCHEDULE STATUS" -ForegroundColor Cyan
 Write-Host "Enabled:       $enabledValue"
 Write-Host "Day/time:      $dayValue $timeValue"
 Write-Host "Grace minutes: $graceValue"

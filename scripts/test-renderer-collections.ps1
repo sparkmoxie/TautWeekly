@@ -12,9 +12,9 @@ if ([string]::IsNullOrWhiteSpace($Root)) {
 $Root = [IO.Path]::GetFullPath($Root)
 
 $rendererPaths = @(
-    'platforms/windows/PlexWeekly.ps1',
-    'platforms/nas-docker/app/PlexWeekly.ps1',
-    'platforms/mac-docker/app/PlexWeekly.ps1'
+    'platforms/windows/TautWeekly.ps1',
+    'platforms/nas-docker/app/TautWeekly.ps1',
+    'platforms/mac-docker/app/TautWeekly.ps1'
 )
 
 $requiredFunctions = @(

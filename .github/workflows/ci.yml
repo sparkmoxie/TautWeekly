@@ -55,10 +55,16 @@ jobs:
         run: for file in dist/*.zip; do unzip -t "$file"; done
       - name: Test TAR.GZ archives
         run: for file in dist/*.tar.gz; do tar -tzf "$file" >/dev/null; done
+      - name: Test launcher permissions
+        run: |
+          test -x platforms/nas-docker/tautweekly.sh
+          test -x platforms/mac-docker/tautweekly.sh
+          tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/tautweekly.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/tautweekly.sh | grep -q '^-rwx'
       - name: Upload release candidates
         uses: actions/upload-artifact@v4
         with:
-          name: plexweekly-release-candidates
+          name: tautweekly-release-candidates
           path: dist/
           if-no-files-found: error
           retention-days: 7

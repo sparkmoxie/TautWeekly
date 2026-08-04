@@ -1,7 +1,7 @@
-﻿param([string]$DataRoot = $(if ($env:PLEXWEEKLY_DATA_DIR) { $env:PLEXWEEKLY_DATA_DIR } else { "/data" }))
+﻿param([string]$DataRoot = $(if ($env:TAUTWEEKLY_DATA_DIR) { $env:TAUTWEEKLY_DATA_DIR } else { "/data" }))
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-$source = "/opt/plexweekly/assets-default"
+$source = "/opt/tautweekly/assets-default"
 $target = Join-Path $DataRoot "assets"
 New-Item -ItemType Directory -Force -Path $target | Out-Null
 foreach ($item in Get-ChildItem $source -File) {

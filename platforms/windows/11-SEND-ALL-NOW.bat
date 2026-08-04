@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 echo.
 echo ============================================================
-echo PLEXWEEKLY - REAL BULK SEND
+echo TAUTWEEKLY FOR PLEX - REAL BULK SEND
 echo WARNING: One personalized email is sent to every eligible user.
 echo Review 02-LIST-USERS.bat and exclusions before continuing.
 echo ============================================================
@@ -13,6 +13,6 @@ if /I not "%CONFIRM%"=="SEND" (
   pause
   exit /b 0
 )
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0PlexWeekly.ps1" -Mode SendAll -ConfirmSendAll
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0TautWeekly.ps1" -Mode SendAll -ConfirmSendAll
 echo.
 pause

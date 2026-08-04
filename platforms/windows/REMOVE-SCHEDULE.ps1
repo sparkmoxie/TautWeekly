@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $configPath = Join-Path $PSScriptRoot "config.json"
-$taskName = "PlexWeekly Newsletter"
+$taskName = "TautWeekly for Plex Newsletter"
 if (Test-Path $configPath) {
     try {
         $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json

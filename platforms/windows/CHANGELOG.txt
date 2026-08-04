@@ -1,4 +1,4 @@
-PLEXWEEKLY PORTABLE CHANGELOG
+TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
 v1.6.11 Portable

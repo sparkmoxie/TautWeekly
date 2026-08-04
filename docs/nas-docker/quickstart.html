@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>PlexWeekly NAS Portable v1.0.7 — Docker Compose Guide</title>
+<title>TautWeekly for Plex NAS Portable v1.0.7 — Docker Compose Guide</title>
 <style>
 :root {
   --bg:#080808;
@@ -316,7 +316,7 @@ details[open] summary::before{content:"–"}
     <a class="brand" href="#overview">
       <span class="plex-mark"></span>
       <span class="brand-copy">
-        <strong>PLEXWEEKLY</strong>
+        <strong>TAUTWEEKLY FOR PLEX</strong>
         <span>NAS Portable v1.0.7 · Docker Compose guide</span>
       </span>
     </a>
@@ -352,10 +352,10 @@ details[open] summary::before{content:"–"}
   </aside>
 
   <main>
-    <section class="hero searchable" id="overview" data-search="overview docker compose nas plexweekly v1.0.7">
+    <section class="hero searchable" id="overview" data-search="overview docker compose nas tautweekly v1.0.7">
       <div class="hero-copy">
         <div class="kicker"><span class="kicker-dot"></span>READ ME FIRST · DOCKER COMPOSE EDITION</div>
-        <h1>Run PlexWeekly<br><span>natively on your NAS.</span></h1>
+        <h1>Run TautWeekly for Plex<br><span>natively on your NAS.</span></h1>
         <p>A focused walkthrough for deploying the NAS Portable package with Docker Compose, connecting it to Tautulli, testing every email state, and enabling weekly delivery without modifying the Tautulli container.</p>
         <div class="hero-actions">
           <a class="button primary" href="#extract">Start the install →</a>
@@ -367,19 +367,19 @@ details[open] summary::before{content:"–"}
         <div class="hero-console">
           <div class="console-top">
             <span class="console-dot"></span><span class="console-dot"></span><span class="console-dot"></span>
-            <span class="console-title">plexweekly / compose</span>
+            <span class="console-title">tautweekly / compose</span>
           </div>
           <div class="console-body">
             <div><span class="prompt">$</span> docker compose build --pull</div>
             <div><span class="prompt">$</span> docker compose up -d</div>
-            <div><span class="prompt">$</span> ./plexweekly.sh setup</div>
+            <div><span class="prompt">$</span> ./tautweekly.sh setup</div>
             <br>
             <div class="ok">[OK] Tautulli API connected</div>
             <div class="ok">[OK] Animated assets verified</div>
             <div class="ok">[OK] Preview web server healthy</div>
             <div class="ok">[OK] Six email states available</div>
             <br>
-            <div><span class="blue">NEXT:</span> ./plexweekly.sh preview-all</div>
+            <div><span class="blue">NEXT:</span> ./tautweekly.sh preview-all</div>
             <div class="muted">No Plex user receives this preview.</div>
             <br>
             <div><span class="prompt">$</span> <span class="blink">|</span></div>
@@ -400,7 +400,7 @@ details[open] summary::before{content:"–"}
     <section class="content-section searchable" id="architecture" data-search="architecture compose container data volume port healthcheck">
       <div class="section-heading">
         <div><div class="section-eyebrow">Deployment model</div><h2>What Docker Compose creates</h2></div>
-        <p>PlexWeekly remains independent from Tautulli while communicating through its HTTP API.</p>
+        <p>TautWeekly for Plex remains independent from Tautulli while communicating through its HTTP API.</p>
       </div>
       <div class="panel">
         <div class="arch-grid">
@@ -412,7 +412,7 @@ details[open] summary::before{content:"–"}
           <div class="arch-arrow">→</div>
           <div class="arch-node">
             <div class="arch-icon"><span style="font-size:34px;color:var(--plex)">◆</span></div>
-            <h3>PlexWeekly container</h3>
+            <h3>TautWeekly for Plex container</h3>
             <p>PowerShell 7, ImageMagick, internal scheduler, email renderer, and preview server.</p>
           </div>
           <div class="arch-arrow">→</div>
@@ -451,16 +451,16 @@ details[open] summary::before{content:"–"}
           <div class="card-badge">ZIP</div>
           <h3>Graphical or Windows-first extraction</h3>
           <p>Use the ZIP when extracting with File Explorer or another graphical archive utility, then copy the folder to your NAS.</p>
-          <div class="code-block"><button class="copy-button">Copy</button><pre>PlexWeekly-nas-docker.zip</pre></div>
+          <div class="code-block"><button class="copy-button">Copy</button><pre>TautWeekly-nas-docker.zip</pre></div>
         </article>
         <article class="card">
           <div class="card-badge">TGZ</div>
           <h3>Linux/NAS extraction</h3>
           <p>Use TAR.GZ when extracting directly on the NAS over SSH.</p>
-          <div class="code-block"><button class="copy-button">Copy</button><pre>mkdir -p /srv/containers/plexweekly
-tar -xzf PlexWeekly-nas-docker.tar.gz \
+          <div class="code-block"><button class="copy-button">Copy</button><pre>mkdir -p /srv/containers/tautweekly
+tar -xzf TautWeekly-nas-docker.tar.gz \
   --strip-components=1 \
-  -C /srv/containers/plexweekly</pre></div>
+  -C /srv/containers/tautweekly</pre></div>
         </article>
       </div>
       <div class="callout blue"><div class="callout-icon">i</div><div><strong>Recommended project folder</strong><p>The folder containing <code>compose.yaml</code> should itself be persistent. Compose uses the relative mount <code>./data:/data</code>.</p></div></div>
@@ -476,7 +476,7 @@ tar -xzf PlexWeekly-nas-docker.tar.gz \
           <div class="step-number">01</div>
           <div class="step-content">
             <h3>Create the file</h3>
-            <div class="code-block"><button class="copy-button">Copy</button><pre>cd /srv/containers/plexweekly
+            <div class="code-block"><button class="copy-button">Copy</button><pre>cd /srv/containers/tautweekly
 cp .env.example .env</pre></div>
           </div>
         </article>
@@ -493,7 +493,7 @@ id -g</pre></div>
           <div class="step-number">03</div>
           <div class="step-content">
             <h3>Edit the values</h3>
-            <div class="code-block"><button class="copy-button">Copy</button><pre>COMPOSE_PROJECT_NAME=plexweekly
+            <div class="code-block"><button class="copy-button">Copy</button><pre>COMPOSE_PROJECT_NAME=tautweekly
 TZ=America/Phoenix
 PUID=1000
 PGID=1000
@@ -544,8 +544,8 @@ docker compose ps</pre></div>
           <div class="step-number">03</div>
           <div class="step-content">
             <h3>Run the interactive setup wizard</h3>
-            <div class="code-block"><button class="copy-button">Copy</button><pre>chmod +x plexweekly.sh
-./plexweekly.sh setup</pre></div>
+            <div class="code-block"><button class="copy-button">Copy</button><pre>chmod +x tautweekly.sh
+./tautweekly.sh setup</pre></div>
             <p>The Plex URL and token are optional. Pressing Enter at the token prompt safely leaves it blank.</p>
           </div>
         </article>
@@ -553,7 +553,7 @@ docker compose ps</pre></div>
           <div class="step-number">04</div>
           <div class="step-content">
             <h3>Restart after configuration</h3>
-            <div class="code-block"><button class="copy-button">Copy</button><pre>docker compose restart plexweekly</pre></div>
+            <div class="code-block"><button class="copy-button">Copy</button><pre>docker compose restart tautweekly</pre></div>
           </div>
         </article>
       </div>
@@ -562,7 +562,7 @@ docker compose ps</pre></div>
 
     <section class="content-section searchable" id="tautulli" data-search="tautulli url network localhost nas ip custom docker network api key plex">
       <div class="section-heading">
-        <div><div class="section-eyebrow">Step 4</div><h2>Point PlexWeekly at Tautulli</h2></div>
+        <div><div class="section-eyebrow">Step 4</div><h2>Point TautWeekly for Plex at Tautulli</h2></div>
         <p>Choose the address according to where Tautulli runs.</p>
       </div>
       <div class="grid-3">
@@ -585,7 +585,7 @@ docker compose ps</pre></div>
           <div class="code-block"><button class="copy-button">Copy</button><pre>http://media.example.test:32400</pre></div>
         </article>
       </div>
-      <div class="callout red"><div class="callout-icon">!</div><div><strong>Never use <code>127.0.0.1:8181</code> for another container.</strong><p>Inside PlexWeekly, localhost points back to the PlexWeekly container—not the NAS host and not Tautulli.</p></div></div>
+      <div class="callout red"><div class="callout-icon">!</div><div><strong>Never use <code>127.0.0.1:8181</code> for another container.</strong><p>Inside TautWeekly for Plex, localhost points back to the TautWeekly for Plex container—not the NAS host and not Tautulli.</p></div></div>
     </section>
 
     <section class="content-section searchable" id="acceptance" data-search="verify preview all send test six states testemail acceptance">
@@ -594,11 +594,11 @@ docker compose ps</pre></div>
         <p>Keep automatic delivery disabled until these checks pass.</p>
       </div>
       <div class="timeline panel">
-        <article class="timeline-step"><div class="step-number">01</div><div class="step-content"><h3>Verify the installation</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh verify</pre></div><p>Checks configuration, Tautulli, assets, SMTP reachability, schedule syntax, and an actual browser-served GIF.</p></div></article>
-        <article class="timeline-step"><div class="step-number">02</div><div class="step-content"><h3>Inspect available users</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh list-users</pre></div></div></article>
-        <article class="timeline-step"><div class="step-number">03</div><div class="step-content"><h3>Generate all six previews</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh preview-all</pre></div><p>This creates manual welcome, both new-user branches, normal, quiet, and warm-up previews.</p></div></article>
+        <article class="timeline-step"><div class="step-number">01</div><div class="step-content"><h3>Verify the installation</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./tautweekly.sh verify</pre></div><p>Checks configuration, Tautulli, assets, SMTP reachability, schedule syntax, and an actual browser-served GIF.</p></div></article>
+        <article class="timeline-step"><div class="step-number">02</div><div class="step-content"><h3>Inspect available users</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./tautweekly.sh list-users</pre></div></div></article>
+        <article class="timeline-step"><div class="step-number">03</div><div class="step-content"><h3>Generate all six previews</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./tautweekly.sh preview-all</pre></div><p>This creates manual welcome, both new-user branches, normal, quiet, and warm-up previews.</p></div></article>
         <article class="timeline-step"><div class="step-number">04</div><div class="step-content"><h3>Open the preview index</h3><div class="code-block"><button class="copy-button">Copy</button><pre>http://NAS_LAN_IP:8787/preview-all-00-INDEX.html</pre></div></div></article>
-        <article class="timeline-step"><div class="step-number">05</div><div class="step-content"><h3>Send all six to TestEmail</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh send-test-all</pre></div><p>No Plex user receives these six messages.</p></div></article>
+        <article class="timeline-step"><div class="step-number">05</div><div class="step-content"><h3>Send all six to TestEmail</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./tautweekly.sh send-test-all</pre></div><p>No Plex user receives these six messages.</p></div></article>
       </div>
       <div class="grid-3" style="margin-top:16px">
         <article class="card"><div class="card-badge">1</div><h3>Manual welcome</h3><p>One-off onboarding without weekly statistics.</p></article>
@@ -618,30 +618,30 @@ docker compose ps</pre></div>
         <article class="card"><div class="card-badge">1×</div><h3>Same-day guard</h3><p>The attempt is recorded before sending to reduce duplicate delivery after restarts.</p></article>
         <article class="card"><div class="card-badge">10s</div><h3>Recipient delay</h3><p>Production SendAll retains the configured delay between individual recipients.</p></article>
       </div>
-      <div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh schedule-status
-./plexweekly.sh schedule-enable
+      <div class="code-block"><button class="copy-button">Copy</button><pre>./tautweekly.sh schedule-status
+./tautweekly.sh schedule-enable
 
 # Disable later:
-./plexweekly.sh schedule-disable</pre></div>
+./tautweekly.sh schedule-disable</pre></div>
       <div class="callout red"><div class="callout-icon">!</div><div><strong>Use <code>schedule-reset</code> cautiously.</strong><p>It clears today’s automatic-attempt guard. A later scheduler poll may allow another real SendAll on the same day.</p></div></div>
     </section>
 
     <section class="content-section searchable" id="operations" data-search="operations status logs restart down up shell commands compose">
       <div class="section-heading">
         <div><div class="section-eyebrow">Operations</div><h2>Routine Docker Compose controls</h2></div>
-        <p>Use the wrapper for PlexWeekly actions and Compose itself for container lifecycle operations.</p>
+        <p>Use the wrapper for TautWeekly for Plex actions and Compose itself for container lifecycle operations.</p>
       </div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Task</th><th>Command</th><th>Effect</th></tr></thead>
           <tbody>
             <tr><td><strong>Status</strong></td><td><code>docker compose ps</code></td><td>Shows container state and health.</td></tr>
-            <tr><td><strong>Logs</strong></td><td><code>./plexweekly.sh logs</code></td><td>Follows the last 200 container log lines.</td></tr>
-            <tr><td><strong>Restart</strong></td><td><code>./plexweekly.sh restart</code></td><td>Restarts only the PlexWeekly service.</td></tr>
+            <tr><td><strong>Logs</strong></td><td><code>./tautweekly.sh logs</code></td><td>Follows the last 200 container log lines.</td></tr>
+            <tr><td><strong>Restart</strong></td><td><code>./tautweekly.sh restart</code></td><td>Restarts only the TautWeekly for Plex service.</td></tr>
             <tr><td><strong>Stop</strong></td><td><code>docker compose down</code></td><td>Removes the disposable container/network but preserves <code>data/</code>.</td></tr>
             <tr><td><strong>Start</strong></td><td><code>docker compose up -d</code></td><td>Recreates the service from the current image and configuration.</td></tr>
-            <tr><td><strong>Shell</strong></td><td><code>./plexweekly.sh shell</code></td><td>Opens a Bash shell inside the container for diagnostics.</td></tr>
-            <tr><td><strong>Repair assets</strong></td><td><code>./plexweekly.sh repair-assets</code></td><td>Refreshes email assets and the browser-preview asset mirror.</td></tr>
+            <tr><td><strong>Shell</strong></td><td><code>./tautweekly.sh shell</code></td><td>Opens a Bash shell inside the container for diagnostics.</td></tr>
+            <tr><td><strong>Repair assets</strong></td><td><code>./tautweekly.sh repair-assets</code></td><td>Refreshes email assets and the browser-preview asset mirror.</td></tr>
           </tbody>
         </table>
       </div>
@@ -657,7 +657,7 @@ docker compose ps</pre></div>
 ├── compose.yaml
 ├── Dockerfile
 ├── .env
-├── plexweekly.sh
+├── tautweekly.sh
 └── data/
     ├── config.json
     ├── state.json
@@ -679,7 +679,7 @@ docker compose ps</pre></div>
         <article class="card">
           <div class="card-badge">BK</div>
           <h3>Create a dated backup</h3>
-          <div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh backup</pre></div>
+          <div class="code-block"><button class="copy-button">Copy</button><pre>./tautweekly.sh backup</pre></div>
           <p>The backup includes credentials because it contains <code>config.json</code>. Store it privately.</p>
         </article>
         <article class="card">
@@ -687,8 +687,8 @@ docker compose ps</pre></div>
           <h3>Rebuild after replacing project files</h3>
           <div class="code-block"><button class="copy-button">Copy</button><pre>docker compose build --pull
 docker compose up -d
-./plexweekly.sh repair-assets
-./plexweekly.sh verify</pre></div>
+./tautweekly.sh repair-assets
+./tautweekly.sh verify</pre></div>
           <p>Do not delete the existing <code>data/</code> folder during an update.</p>
         </article>
       </div>
@@ -703,9 +703,9 @@ docker compose up -d
         <table>
           <thead><tr><th>Platform</th><th>Suggested project folder</th><th>PUID / PGID guidance</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td><strong>QNAP</strong></td><td><code>/share/Container/plexweekly</code></td><td>Use the IDs returned by <code>id -u</code> and <code>id -g</code>; avoid root.</td><td>Container Station with Docker Compose. <code>qnap-install.sh</code> is available.</td></tr>
-            <tr><td><strong>Unraid</strong></td><td><code>/mnt/user/appdata/plexweekly</code></td><td>Common defaults are <code>99</code> and <code>100</code>.</td><td>Use Compose Manager or the Compose CLI; do not run <code>qnap-install.sh</code>.</td></tr>
-            <tr><td><strong>Generic Linux NAS</strong></td><td><code>/srv/containers/plexweekly</code> or <code>/opt/plexweekly</code></td><td>Use a dedicated non-root service account with write access.</td><td>Use the manual Compose workflow in this guide.</td></tr>
+            <tr><td><strong>QNAP</strong></td><td><code>/share/Container/tautweekly</code></td><td>Use the IDs returned by <code>id -u</code> and <code>id -g</code>; avoid root.</td><td>Container Station with Docker Compose. <code>qnap-install.sh</code> is available.</td></tr>
+            <tr><td><strong>Unraid</strong></td><td><code>/mnt/user/appdata/tautweekly</code></td><td>Common defaults are <code>99</code> and <code>100</code>.</td><td>Use Compose Manager or the Compose CLI; do not run <code>qnap-install.sh</code>.</td></tr>
+            <tr><td><strong>Generic Linux NAS</strong></td><td><code>/srv/containers/tautweekly</code> or <code>/opt/tautweekly</code></td><td>Use a dedicated non-root service account with write access.</td><td>Use the manual Compose workflow in this guide.</td></tr>
           </tbody>
         </table>
       </div>
@@ -718,11 +718,11 @@ docker compose up -d
       </div>
       <details>
         <summary>Container is unhealthy</summary>
-        <div class="details-body">Run <code>docker compose ps</code> and <code>./plexweekly.sh logs</code>. The healthcheck requests the preview root and <code>/assets/movies.gif</code>. A failed asset request can make the service unhealthy even when the process is still running.</div>
+        <div class="details-body">Run <code>docker compose ps</code> and <code>./tautweekly.sh logs</code>. The healthcheck requests the preview root and <code>/assets/movies.gif</code>. A failed asset request can make the service unhealthy even when the process is still running.</div>
       </details>
       <details>
         <summary>Preview page loads but GIFs or icons are missing</summary>
-        <div class="details-body">Update to v1.0.7, then run <code>./plexweekly.sh repair-assets</code> and <code>./plexweekly.sh verify</code>. The current release maintains a real <code>/data/output/assets</code> mirror inside the preview web root; no manual symlink is required.</div>
+        <div class="details-body">Update to v1.0.7, then run <code>./tautweekly.sh repair-assets</code> and <code>./tautweekly.sh verify</code>. The current release maintains a real <code>/data/output/assets</code> mirror inside the preview web root; no manual symlink is required.</div>
       </details>
       <details>
         <summary>Verification says an animated GIF is unreadable</summary>
@@ -730,7 +730,7 @@ docker compose up -d
       </details>
       <details>
         <summary>Tautulli connection fails</summary>
-        <div class="details-body">Confirm the URL is reachable from inside the PlexWeekly container. Use <code>NAS_IP:8181</code> for a published port or <code>tautulli:8181</code> on a shared Docker network. Do not use <code>127.0.0.1</code>.</div>
+        <div class="details-body">Confirm the URL is reachable from inside the TautWeekly for Plex container. Use <code>NAS_IP:8181</code> for a published port or <code>tautulli:8181</code> on a shared Docker network. Do not use <code>127.0.0.1</code>.</div>
       </details>
       <details>
         <summary>Permission denied under <code>data/</code></summary>
@@ -748,7 +748,7 @@ docker compose up -d
 
     <section class="content-section searchable" id="reference" data-search="reference commands safe test real send system">
       <div class="section-heading">
-        <div><div class="section-eyebrow">Complete reference</div><h2><code>plexweekly.sh</code> command map</h2></div>
+        <div><div class="section-eyebrow">Complete reference</div><h2><code>tautweekly.sh</code> command map</h2></div>
         <p>Risk labels distinguish local inspection, TestEmail delivery, real recipients, and scheduler changes.</p>
       </div>
       <div class="table-wrap">
@@ -773,7 +773,7 @@ docker compose up -d
             <tr><td><code>update</code></td><td><span class="risk system">SYSTEM</span></td><td>Builds with current project files and recreates the service.</td></tr>
             <tr><td><code>logs</code></td><td><span class="risk safe">SAFE</span></td><td>Follows recent service logs.</td></tr>
             <tr><td><code>status</code></td><td><span class="risk safe">SAFE</span></td><td>Displays Compose service status.</td></tr>
-            <tr><td><code>restart</code></td><td><span class="risk system">SYSTEM</span></td><td>Restarts only the PlexWeekly container.</td></tr>
+            <tr><td><code>restart</code></td><td><span class="risk system">SYSTEM</span></td><td>Restarts only the TautWeekly for Plex container.</td></tr>
             <tr><td><code>shell</code></td><td><span class="risk system">ADVANCED</span></td><td>Opens a Bash shell inside the container.</td></tr>
           </tbody>
         </table>
@@ -856,7 +856,7 @@ docker compose up -d
 </section>
 
 <footer class="footer">
-      <span>PlexWeekly NAS Portable v1.0.7 · Standalone Docker Compose guide</span>
+      <span>TautWeekly for Plex NAS Portable v1.0.7 · Standalone Docker Compose guide</span>
       <span>Offline HTML · Embedded media · No external dependencies</span>
     </footer>
   </main>

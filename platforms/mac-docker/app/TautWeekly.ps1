@@ -4,31 +4,37 @@
 
     [string]$UserId = "",
 
-    [string]$ConfigPath = "$PSScriptRoot\config.json",
+    [string]$ConfigPath = $(if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_CONFIG)) { [string]$env:TAUTWEEKLY_CONFIG } else { "/data/config.json" }),
 
     [switch]$ConfirmSendAll,
 
     [switch]$ConfirmWelcome
 )
 
-# PlexWeekly Portable v1.6.11 — production newsletter engine.
-# Includes validated production renderer changes through v1.5.14 plus portable
-# server, SMTP, schedule, preview, and safety controls.
+# TautWeekly for Plex Mac Portable v1.0.3 — Docker Desktop production newsletter engine.
+# Uses the current six-state portable production renderer with regression
+# previews, latest TV episode backfill, IMDb enrichment, and RT audience %.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-if ($PSVersionTable.PSVersion -lt [Version]"5.1") {
-    throw "PlexWeekly Portable requires Windows PowerShell 5.1 or newer. Found $($PSVersionTable.PSVersion)."
+if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
+    throw "TautWeekly for Plex Mac Portable requires PowerShell 7.2 or newer. Found $($PSVersionTable.PSVersion)."
 }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $ScriptRoot = $PSScriptRoot
-$OutputDir = Join-Path $ScriptRoot "output"
+$DataRoot = if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_DATA_DIR)) {
+    [string]$env:TAUTWEEKLY_DATA_DIR
+}
+else {
+    "/data"
+}
+$OutputDir = Join-Path $DataRoot "output"
 $PosterDir = Join-Path $OutputDir "posters"
 $DesignMediaDir = Join-Path $OutputDir "media"
-$AssetsDir = Join-Path $ScriptRoot "assets"
-$LogDir = Join-Path $ScriptRoot "logs"
-$StatePath = Join-Path $ScriptRoot "state.json"
-$AccessStatePath = Join-Path $ScriptRoot "access-state.json"
+$AssetsDir = Join-Path $DataRoot "assets"
+$LogDir = Join-Path $DataRoot "logs"
+$StatePath = Join-Path $DataRoot "state.json"
+$AccessStatePath = Join-Path $DataRoot "access-state.json"
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 New-Item -ItemType Directory -Force -Path $PosterDir | Out-Null
@@ -36,7 +42,29 @@ New-Item -ItemType Directory -Force -Path $DesignMediaDir | Out-Null
 New-Item -ItemType Directory -Force -Path $AssetsDir | Out-Null
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
-$LogFile = Join-Path $LogDir ("plex_weekly_{0}.log" -f (Get-Date -Format "yyyyMMdd"))
+$PreviewAssetsDir = Join-Path $OutputDir "assets"
+
+function Sync-PreviewAssets {
+    # Browser previews are served with /data/output as the web root. Keep a
+    # real mirrored assets directory under that root so previews work on QNAP,
+    # Unraid, Docker Desktop bind mounts, and ordinary Linux Docker volumes.
+    if (Test-Path -LiteralPath $PreviewAssetsDir) {
+        $existing = Get-Item -LiteralPath $PreviewAssetsDir -Force
+        if (($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            Remove-Item -LiteralPath $PreviewAssetsDir -Force
+        }
+    }
+
+    New-Item -ItemType Directory -Force -Path $PreviewAssetsDir | Out-Null
+
+    foreach ($asset in Get-ChildItem -LiteralPath $AssetsDir -File -ErrorAction Stop) {
+        Copy-Item -LiteralPath $asset.FullName -Destination (Join-Path $PreviewAssetsDir $asset.Name) -Force
+    }
+}
+
+Sync-PreviewAssets
+
+$LogFile = Join-Path $LogDir ("tautweekly_{0}.log" -f (Get-Date -Format "yyyyMMdd"))
 
 # Direct-Plex preview caches. These must exist before StrictMode code reads
 # them inside Get-DesignPlexContext / Get-DesignPlexMetadata.
@@ -52,6 +80,25 @@ function Write-Log {
     $line = "{0} [{1}] {2}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Level, $Message
     Add-Content -Path $LogFile -Value $line -Encoding UTF8
     Write-Host $line
+}
+
+function Get-PreviewPublicUrl {
+    param([string]$Path)
+
+    $baseUrl = [string]$env:TAUTWEEKLY_PREVIEW_BASE_URL
+    if ([string]::IsNullOrWhiteSpace($baseUrl) -or
+        [string]::IsNullOrWhiteSpace($Path)) {
+        return ""
+    }
+
+    try {
+        $relative = [IO.Path]::GetRelativePath($OutputDir, $Path)
+        $relative = $relative.Replace([IO.Path]::DirectorySeparatorChar, '/')
+        return $baseUrl.TrimEnd('/') + '/' + $relative.TrimStart('/')
+    }
+    catch {
+        return ""
+    }
 }
 
 function HtmlEncode {
@@ -106,7 +153,7 @@ function Get-SafeFilePart {
     return $safe.Trim('_')
 }
 
-function Get-PlexWeeklyState {
+function Get-TautWeeklyState {
     $firstRun = $null
 
     if (Test-Path $StatePath) {
@@ -122,18 +169,18 @@ function Get-PlexWeeklyState {
             }
         }
         catch {
-            Write-Log "Could not read state.json; rebuilding PlexWeekly state." "WARN"
+            Write-Log "Could not read state.json; rebuilding TautWeekly for Plex state." "WARN"
         }
     }
 
     if ($null -eq $firstRun) {
         # Preserve install age across this upgrade by using the oldest existing
-        # PlexWeekly daily log when one exists.
+        # TautWeekly for Plex daily log when one exists.
         $oldestLogDate = $null
-        $logFiles = @(Get-ChildItem -Path $LogDir -Filter "plex_weekly_*.log" -File -ErrorAction SilentlyContinue)
+        $logFiles = @(Get-ChildItem -Path $LogDir -Filter "tautweekly_*.log" -File -ErrorAction SilentlyContinue)
 
         foreach ($file in $logFiles) {
-            if ($file.BaseName -match '^plex_weekly_(\d{8})$') {
+            if ($file.BaseName -match '^tautweekly_(\d{8})$') {
                 try {
                     $candidate = [DateTime]::ParseExact(
                         $Matches[1],
@@ -322,7 +369,7 @@ function Mark-UserWelcomed {
 }
 
 if (-not (Test-Path $ConfigPath)) {
-    throw "Config file not found: $ConfigPath`nRun setup-config.bat first."
+    throw "Config file not found: $ConfigPath`nRun ./tautweekly.sh setup from the NAS project folder first."
 }
 
 $Config = Get-Content -Path $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -453,10 +500,10 @@ function Resolve-TautulliUserId {
     }
 
     if ($matches.Count -gt 1) {
-        throw "More than one Tautulli user matched '$Identifier'. Please use the numeric UserId from list-users.bat."
+        throw "More than one Tautulli user matched '$Identifier'. Please use the numeric UserId from ./tautweekly.sh list-users."
     }
 
-    throw "No Tautulli user matched '$Identifier'. Run list-users.bat and enter the numeric UserId, username, friendly name, or email."
+    throw "No Tautulli user matched '$Identifier'. Run ./tautweekly.sh list-users and enter the numeric UserId, username, friendly name, or email."
 }
 
 function Get-History {
@@ -1703,7 +1750,7 @@ function Get-DesignPlexContext {
         }
     }
         catch {
-            Write-Log "PlexWeekly: could not retrieve Plex server URL from Tautulli: $($_.Exception.Message)" "WARN"
+            Write-Log "TautWeekly for Plex: could not retrieve Plex server URL from Tautulli: $($_.Exception.Message)" "WARN"
         }
     }
 
@@ -1714,112 +1761,24 @@ function Get-DesignPlexContext {
         $token = [string]$env:PLEX_TOKEN
     }
 
-    # On Windows, Plex Media Server stores PlexOnlineToken in HKCU. Check
-    # PowerShell's normal view first, then explicitly check both 64-bit and
-    # 32-bit registry views because Plex Media Server may use either registry view.
-    if ([string]::IsNullOrWhiteSpace($token)) {
-        try {
-            $plexReg = Get-ItemProperty `
-                -Path "HKCU:\Software\Plex, Inc.\Plex Media Server" `
-                -Name "PlexOnlineToken" `
-                -ErrorAction Stop
-
-            if ($null -ne $plexReg.PSObject.Properties["PlexOnlineToken"]) {
-                $token = [string]$plexReg.PlexOnlineToken
-            }
-        }
-        catch { }
-    }
-
-    if ([string]::IsNullOrWhiteSpace($token)) {
-        foreach ($view in @(
-            [Microsoft.Win32.RegistryView]::Registry64,
-            [Microsoft.Win32.RegistryView]::Registry32
-        )) {
-            try {
-                $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
-                    [Microsoft.Win32.RegistryHive]::CurrentUser,
-                    $view
-                )
-                try {
-                    $plexKey = $baseKey.OpenSubKey("Software\Plex, Inc.\Plex Media Server")
-                    if ($null -ne $plexKey) {
-                        try {
-                            $candidate = [string]$plexKey.GetValue("PlexOnlineToken", "")
-                            if (-not [string]::IsNullOrWhiteSpace($candidate)) {
-                                $token = $candidate
-                                break
-                            }
-                        }
-                        finally {
-                            $plexKey.Dispose()
-                        }
-                    }
-                }
-                finally {
-                    $baseKey.Dispose()
-                }
-            }
-            catch { }
-        }
-    }
-
-    # Native Tautulli can run under a different Windows user/service account.
-    # Search common profile locations plus any running Tautulli process datadir.
+    # In the Mac Docker container there is no host registry to inspect. Prefer an
+    # explicit PlexToken, PLEX_TOKEN, or an optional read-only Tautulli
+    # config.ini mount. Direct Plex access is optional; Tautulli fallbacks
+    # remain available when no token can be resolved.
     if ([string]::IsNullOrWhiteSpace($token)) {
         $configCandidates = New-Object System.Collections.Generic.List[string]
 
-        try {
-            $configCandidates.Add((Join-Path $env:LOCALAPPDATA "Tautulli\config.ini"))
-        } catch { }
-
-        try {
-            $configCandidates.Add((Join-Path $ScriptRoot "config.ini"))
-        } catch { }
-
-        try {
-            $profilesRoot = if (-not [string]::IsNullOrWhiteSpace($env:SystemDrive)) {
-                Join-Path $env:SystemDrive "Users"
+        foreach ($candidate in @(
+            [string]$env:TAUTULLI_CONFIG_PATH,
+            "/tautulli/config.ini",
+            "/config/config.ini",
+            (Join-Path $DataRoot "tautulli-config.ini")
+        )) {
+            if (-not [string]::IsNullOrWhiteSpace($candidate) -and
+                -not $configCandidates.Contains($candidate)) {
+                $configCandidates.Add($candidate)
             }
-            else {
-                Split-Path -Parent ([Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile))
-            }
-            $tautulliConfigPattern = Join-Path $profilesRoot "*\AppData\Local\Tautulli\config.ini"
-            foreach ($cfg in @(
-                Get-ChildItem $tautulliConfigPattern `
-                    -File -ErrorAction SilentlyContinue
-            )) {
-                if (-not $configCandidates.Contains($cfg.FullName)) {
-                    $configCandidates.Add($cfg.FullName)
-                }
-            }
-        } catch { }
-
-        try {
-            foreach ($proc in @(
-                Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-                Where-Object {
-                    $_.Name -match '(?i)tautulli' -or
-                    $_.CommandLine -match '(?i)tautulli'
-                }
-            )) {
-                $cmd = [string]$proc.CommandLine
-
-                if ($cmd -match '(?i)--datadir(?:=|\s+)"?([^"]+)"?') {
-                    $candidate = Join-Path ([string]$Matches[1]) "config.ini"
-                    if (-not $configCandidates.Contains($candidate)) {
-                        $configCandidates.Add($candidate)
-                    }
-                }
-
-                if (-not [string]::IsNullOrWhiteSpace([string]$proc.ExecutablePath)) {
-                    $candidate = Join-Path (Split-Path -Parent ([string]$proc.ExecutablePath)) "config.ini"
-                    if (-not $configCandidates.Contains($candidate)) {
-                        $configCandidates.Add($candidate)
-                    }
-                }
-            }
-        } catch { }
+        }
 
         foreach ($candidatePath in $configCandidates) {
             if (-not (Test-Path $candidatePath)) { continue }
@@ -1831,7 +1790,7 @@ function Get-DesignPlexContext {
                         if (-not [string]::IsNullOrWhiteSpace($candidateToken) -and
                             $candidateToken -notmatch '^(none|null)$') {
                             $token = $candidateToken.Trim()
-                            Write-Log ("PlexWeekly: Plex token loaded from Tautulli config: " + $candidatePath)
+                            Write-Log ("TautWeekly for Plex: Plex token loaded from mounted Tautulli config: " + $candidatePath)
                             break
                         }
                     }
@@ -1844,7 +1803,7 @@ function Get-DesignPlexContext {
     }
 
     if ([string]::IsNullOrWhiteSpace($token)) {
-        Write-Log "PlexWeekly: Plex token unavailable from environment, Plex registry, or discovered Tautulli configs." "WARN"
+        Write-Log "TautWeekly for Plex: Plex token unavailable from config, environment, or optional mounted Tautulli config." "WARN"
     }
 
     $available = (
@@ -1859,10 +1818,10 @@ function Get-DesignPlexContext {
     }
 
     if ($available) {
-        Write-Log "PlexWeekly: direct Plex metadata access enabled."
+        Write-Log "TautWeekly for Plex: direct Plex metadata access enabled."
     }
     else {
-        Write-Log "PlexWeekly: direct Plex metadata unavailable; Tautulli fallbacks will be used." "WARN"
+        Write-Log "TautWeekly for Plex: direct Plex metadata unavailable; Tautulli fallbacks will be used." "WARN"
     }
 
     return $script:DesignPlexContext
@@ -1891,7 +1850,7 @@ function Invoke-DesignPlexJson {
             return Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 60
         }
         catch {
-            Write-Log "PlexWeekly direct Plex request failed for $Path`: $($_.Exception.Message)" "WARN"
+            Write-Log "TautWeekly for Plex direct Plex request failed for $Path`: $($_.Exception.Message)" "WARN"
             return $null
         }
     }
@@ -1913,7 +1872,7 @@ function Invoke-DesignPlexLegacyJson {
         return Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 60
     }
     catch {
-        Write-Log "PlexWeekly legacy Plex request failed for $Path`: $($_.Exception.Message)" "WARN"
+        Write-Log "TautWeekly for Plex legacy Plex request failed for $Path`: $($_.Exception.Message)" "WARN"
         return $null
     }
 }
@@ -1994,7 +1953,7 @@ function Get-DesignEpisodeImdbRating {
         }
     }
     catch {
-        Write-Log ("PlexWeekly direct Plex IMDb JSON lookup failed for episode {0}: {1}" -f `
+        Write-Log ("TautWeekly for Plex direct Plex IMDb JSON lookup failed for episode {0}: {1}" -f `
             $RatingKey,
             $_.Exception.Message
         ) "WARN"
@@ -2041,7 +2000,7 @@ function Get-DesignEpisodeImdbRating {
             }
         }
         catch {
-            Write-Log ("PlexWeekly direct Plex IMDb XML lookup failed for episode {0}: {1}" -f `
+            Write-Log ("TautWeekly for Plex direct Plex IMDb XML lookup failed for episode {0}: {1}" -f `
                 $RatingKey,
                 $_.Exception.Message
             ) "WARN"
@@ -2143,6 +2102,18 @@ function Invoke-DesignPlexLegacyXml {
     }
 }
 
+function Get-ImageMagickTool {
+    param([ValidateSet("identify","convert")][string]$Name)
+
+    $command = Get-Command $Name -ErrorAction SilentlyContinue
+    if ($null -ne $command) { return [string]$command.Source }
+
+    $magick = Get-Command "magick" -ErrorAction SilentlyContinue
+    if ($null -ne $magick) { return [string]$magick.Source }
+
+    return ""
+}
+
 function Get-DesignLogoVisualScore {
     param([string]$Path)
 
@@ -2160,49 +2131,72 @@ function Get-DesignLogoVisualScore {
         return $result
     }
 
-    $bitmap = $null
-
     try {
-        Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
-
-        $bitmap = New-Object System.Drawing.Bitmap($Path)
-        $result.Width = $bitmap.Width
-        $result.Height = $bitmap.Height
-
-        if ($bitmap.Width -le 0 -or $bitmap.Height -le 0) {
-            throw "Logo bitmap has invalid dimensions."
+        $identify = Get-ImageMagickTool -Name "identify"
+        $convert = Get-ImageMagickTool -Name "convert"
+        if ([string]::IsNullOrWhiteSpace($identify) -or
+            [string]::IsNullOrWhiteSpace($convert)) {
+            throw "ImageMagick identify/convert commands are unavailable."
         }
 
-        # Sample instead of reading every pixel. ClearLogo assets are usually
-        # large transparent PNGs and this keeps the operation inexpensive.
-        $largestDimension = [Math]::Max($bitmap.Width, $bitmap.Height)
-        $step = [Math]::Max(1, [int][Math]::Floor($largestDimension / 220.0))
+        if ([IO.Path]::GetFileName($identify) -match '^magick(?:\.exe)?$') {
+            $dimensions = (& $identify "identify" "-format" "%w %h" $Path 2>$null | Out-String).Trim()
+        }
+        else {
+            $dimensions = (& $identify "-format" "%w %h" $Path 2>$null | Out-String).Trim()
+        }
+
+        if ($LASTEXITCODE -ne 0 -or $dimensions -notmatch '^(\d+)\s+(\d+)$') {
+            throw "ImageMagick could not read logo dimensions."
+        }
+
+        $result.Width = [int]$Matches[1]
+        $result.Height = [int]$Matches[2]
+        if ($result.Width -le 0 -or $result.Height -le 0) {
+            throw "Logo image has invalid dimensions."
+        }
+
+        $convertArgs = @(
+            $Path,
+            "-alpha", "on",
+            "-resize", "220x220>",
+            "-depth", "8",
+            "txt:-"
+        )
+
+        if ([IO.Path]::GetFileName($convert) -match '^magick(?:\.exe)?$') {
+            $pixelLines = @(& $convert "convert" @convertArgs 2>$null)
+        }
+        else {
+            $pixelLines = @(& $convert @convertArgs 2>$null)
+        }
+
+        if ($LASTEXITCODE -ne 0 -or $pixelLines.Count -eq 0) {
+            throw "ImageMagick could not sample logo pixels."
+        }
 
         [double]$weightedLuma = 0
         [double]$totalWeight = 0
         [double]$brightWeight = 0
 
-        for ($y = 0; $y -lt $bitmap.Height; $y += $step) {
-            for ($x = 0; $x -lt $bitmap.Width; $x += $step) {
-                $pixel = $bitmap.GetPixel($x, $y)
-
-                # Ignore fully/mostly transparent canvas.
-                if ($pixel.A -lt 32) { continue }
-
-                $alphaWeight = $pixel.A / 255.0
-                $luma = (
-                    (0.2126 * $pixel.R) +
-                    (0.7152 * $pixel.G) +
-                    (0.0722 * $pixel.B)
-                ) / 255.0
-
-                $weightedLuma += ($luma * $alphaWeight)
-                $totalWeight += $alphaWeight
-
-                if ($luma -ge 0.62) {
-                    $brightWeight += $alphaWeight
-                }
+        foreach ($line in $pixelLines) {
+            # ImageMagick txt: output at 8-bit depth normally begins with:
+            # 0,0: (R,G,B,A) ...
+            if ([string]$line -notmatch '^\s*\d+,\d+:\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)') {
+                continue
             }
+
+            $red = [double]$Matches[1]
+            $green = [double]$Matches[2]
+            $blue = [double]$Matches[3]
+            $alpha = [double]$Matches[4]
+            if ($alpha -lt 32) { continue }
+
+            $alphaWeight = $alpha / 255.0
+            $luma = ((0.2126 * $red) + (0.7152 * $green) + (0.0722 * $blue)) / 255.0
+            $weightedLuma += ($luma * $alphaWeight)
+            $totalWeight += $alphaWeight
+            if ($luma -ge 0.62) { $brightWeight += $alphaWeight }
         }
 
         if ($totalWeight -le 0) {
@@ -2211,10 +2205,6 @@ function Get-DesignLogoVisualScore {
 
         $averageLuma = $weightedLuma / $totalWeight
         $brightFraction = $brightWeight / $totalWeight
-
-        # The hero card background is #181818. Favor artwork whose visible
-        # pixels are intrinsically bright, with a smaller bonus for having a
-        # large proportion of strongly bright pixels.
         $score = ($averageLuma * 0.75) + ($brightFraction * 0.25)
 
         $result.Valid = $true
@@ -2224,11 +2214,6 @@ function Get-DesignLogoVisualScore {
     }
     catch {
         $result.Error = $_.Exception.Message
-    }
-    finally {
-        if ($null -ne $bitmap) {
-            $bitmap.Dispose()
-        }
     }
 
     return $result
@@ -2371,7 +2356,7 @@ function Get-DesignBestClearLogoAsset {
 
         if ($readable.Count -eq 0) {
             $diag.Decision = "No sufficiently bright clearLogo candidate; use text title fallback."
-            Write-Log "PlexWeekly: clearLogo variants exist, but none are readable enough for the dark email hero. Using text title." "WARN"
+            Write-Log "TautWeekly for Plex: clearLogo variants exist, but none are readable enough for the dark email hero. Using text title." "WARN"
             return $result
         }
 
@@ -2410,19 +2395,19 @@ function Get-DesignBestClearLogoAsset {
         $finalName = "logo_" + $safeKey + ".png"
         $finalPath = Join-Path $DesignMediaDir $finalName
 
-        $bitmap = $null
-        try {
-            Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
-            $bitmap = New-Object System.Drawing.Bitmap([string]$chosen.LocalPath)
-            $bitmap.Save(
-                $finalPath,
-                [System.Drawing.Imaging.ImageFormat]::Png
-            )
+        $convert = Get-ImageMagickTool -Name "convert"
+        if ([string]::IsNullOrWhiteSpace($convert)) {
+            throw "ImageMagick convert command is unavailable."
         }
-        finally {
-            if ($null -ne $bitmap) {
-                $bitmap.Dispose()
-            }
+
+        if ([IO.Path]::GetFileName($convert) -match '^magick(?:\.exe)?$') {
+            & $convert "convert" ([string]$chosen.LocalPath) "PNG32:$finalPath" 2>$null
+        }
+        else {
+            & $convert ([string]$chosen.LocalPath) "PNG32:$finalPath" 2>$null
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "ImageMagick could not convert the chosen clearLogo to PNG."
         }
 
         if ((Test-Path $finalPath) -and (Get-Item $finalPath).Length -gt 256) {
@@ -2430,7 +2415,7 @@ function Get-DesignBestClearLogoAsset {
             $diag.Decision = "Chose highest-contrast clearLogo for #181818 email hero."
 
             Write-Log (
-                "PlexWeekly: chose clearLogo candidate {0}/{1} for dark hero (score {2}; Plex selected={3})." -f `
+                "TautWeekly for Plex: chose clearLogo candidate {0}/{1} for dark hero (score {2}; Plex selected={3})." -f `
                 ($result.ChosenIndex + 1),
                 $result.CandidateCount,
                 $result.ChosenScore,
@@ -2440,7 +2425,7 @@ function Get-DesignBestClearLogoAsset {
     }
     catch {
         $diag.Error = $_.Exception.Message
-        Write-Log ("PlexWeekly clearLogo selection failed: " + $diag.Error) "WARN"
+        Write-Log ("TautWeekly for Plex clearLogo selection failed: " + $diag.Error) "WARN"
     }
     finally {
         foreach ($candidateFile in $candidateFiles) {
@@ -2502,7 +2487,7 @@ function Save-DesignPlexDiagnostic {
     $diagPath = Join-Path $DesignMediaDir $diagName
     $diag | ConvertTo-Json -Depth 8 | Set-Content -Path $diagPath -Encoding UTF8
 
-    Write-Log "PlexWeekly: saved Plex rating/image diagnostic to preview-output\media\$diagName"
+    Write-Log "TautWeekly for Plex: saved Plex rating/image diagnostic to preview-output\media\$diagName"
 }
 
 function Get-DesignPlexAsset {
@@ -2534,7 +2519,7 @@ function Get-DesignPlexAsset {
         }
     }
     catch {
-        Write-Log "PlexWeekly: Plex asset download failed ($OutputName): $($_.Exception.Message)" "WARN"
+        Write-Log "TautWeekly for Plex: Plex asset download failed ($OutputName): $($_.Exception.Message)" "WARN"
     }
 
     Remove-Item $local -Force -ErrorAction SilentlyContinue
@@ -2655,7 +2640,7 @@ function Get-DesignLogoExportSimple {
         }
         catch { }
 
-        Write-Log "PlexWeekly: requesting selected logo from Tautulli exporter (level 9)..."
+        Write-Log "TautWeekly for Plex: requesting selected logo from Tautulli exporter (level 9)..."
 
         $exportParams = @{
             rating_key       = $RatingKey
@@ -2793,11 +2778,11 @@ function Get-DesignLogoExportSimple {
             throw "Export completed, but no logo image was found in the archive."
         }
 
-        Write-Log "PlexWeekly: selected logo acquired through Tautulli exporter."
+        Write-Log "TautWeekly for Plex: selected logo acquired through Tautulli exporter."
     }
     catch {
         $diag.Error = $_.Exception.Message
-        Write-Log ("PlexWeekly logo probe failed: " + $diag.Error) "WARN"
+        Write-Log ("TautWeekly for Plex logo probe failed: " + $diag.Error) "WARN"
     }
     finally {
         try {
@@ -2879,7 +2864,7 @@ function Get-DesignRichExport {
             }
         }
         catch {
-            Write-Log "PlexWeekly: could not enumerate exporter fields; using full metadata level only." "WARN"
+            Write-Log "TautWeekly for Plex: could not enumerate exporter fields; using full metadata level only." "WARN"
         }
 
         $params = @{
@@ -2899,7 +2884,7 @@ function Get-DesignRichExport {
             $params.custom_fields = ($customFields -join ",")
         }
 
-        Write-Log ("PlexWeekly: rich Tautulli export for {0} (RT ratings{1}; selected-logo level 9)..." -f `
+        Write-Log ("TautWeekly for Plex: rich Tautulli export for {0} (RT ratings{1}; selected-logo level 9)..." -f `
             $RatingKey,
             $(if ($NeedLogo) { " + logo" } else { "" })
         )
@@ -3209,7 +3194,7 @@ function Add-DesignRatingMetadata {
             }
         }
         catch {
-            Write-Log "PlexWeekly Tautulli RT lookup failed for $($item.Title): $($_.Exception.Message)" "WARN"
+            Write-Log "TautWeekly for Plex Tautulli RT lookup failed for $($item.Title): $($_.Exception.Message)" "WARN"
         }
 
         # Optional secondary source: Plex's full Rating[] if direct access
@@ -3261,7 +3246,7 @@ function Add-DesignRatingMetadata {
                 }
             }
             catch {
-                Write-Log "PlexWeekly optional direct Plex rating lookup failed for $($item.Title): $($_.Exception.Message)" "WARN"
+                Write-Log "TautWeekly for Plex optional direct Plex rating lookup failed for $($item.Title): $($_.Exception.Message)" "WARN"
             }
         }
 
@@ -3343,7 +3328,7 @@ function Get-DesignRtIconUrl {
         return "cid:" + $cid
     }
 
-    return "../assets/" + $assetName
+    return "assets/" + $assetName
 }
 
 function Get-DesignRatingLine {
@@ -3486,7 +3471,7 @@ function Get-DesignLogoFromExporter {
     $downloadPath = Join-Path $DesignMediaDir ("export_" + $safeKey + ".zip")
 
     try {
-        Write-Log "PlexWeekly: requesting Plex logo export for rating key $RatingKey..."
+        Write-Log "TautWeekly for Plex: requesting Plex logo export for rating key $RatingKey..."
         $request = Invoke-TautulliApi -Command "export_metadata" -Parameters @{
             rating_key       = $RatingKey
             file_format      = "json"
@@ -3502,7 +3487,7 @@ function Get-DesignLogoFromExporter {
 
         $exportId = Safe-Int $request.export_id
         if ($exportId -le 0) {
-            Write-Log "PlexWeekly: Tautulli did not return an export id for the logo." "WARN"
+            Write-Log "TautWeekly for Plex: Tautulli did not return an export id for the logo." "WARN"
             return ""
         }
 
@@ -3521,7 +3506,7 @@ function Get-DesignLogoFromExporter {
         }
 
         if (-not $complete) {
-            Write-Log "PlexWeekly: logo export did not finish in time; continuing without a logo." "WARN"
+            Write-Log "TautWeekly for Plex: logo export did not finish in time; continuing without a logo." "WARN"
             return ""
         }
 
@@ -3534,7 +3519,7 @@ function Get-DesignLogoFromExporter {
 
         $bytes = [IO.File]::ReadAllBytes($downloadPath)
         if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x50 -or $bytes[1] -ne 0x4B) {
-            Write-Log "PlexWeekly: logo export download was not a zip archive." "WARN"
+            Write-Log "TautWeekly for Plex: logo export download was not a zip archive." "WARN"
             return ""
         }
 
@@ -3551,15 +3536,15 @@ function Get-DesignLogoFromExporter {
         if ($candidate.Count -gt 0) {
             Copy-Item -Path $candidate[0].FullName -Destination $logoPath -Force
             if ((Test-Path $logoPath) -and (Get-Item $logoPath).Length -gt 512) {
-                Write-Log "PlexWeekly: real Plex logo acquired."
+                Write-Log "TautWeekly for Plex: real Plex logo acquired."
                 return "media/" + $logoName
             }
         }
 
-        Write-Log "PlexWeekly: no logo PNG was present in the Tautulli export." "WARN"
+        Write-Log "TautWeekly for Plex: no logo PNG was present in the Tautulli export." "WARN"
     }
     catch {
-        Write-Log "PlexWeekly logo export failed: $($_.Exception.Message)" "WARN"
+        Write-Log "TautWeekly for Plex logo export failed: $($_.Exception.Message)" "WARN"
     }
     finally {
         Remove-Item $downloadPath -Force -ErrorAction SilentlyContinue
@@ -3634,11 +3619,11 @@ function Get-DesignHeroAssets {
         }
     }
     catch {
-        Write-Log "PlexWeekly metadata/art lookup failed: $($_.Exception.Message)" "WARN"
+        Write-Log "TautWeekly for Plex metadata/art lookup failed: $($_.Exception.Message)" "WARN"
     }
 
     # Plex may select a clearLogo that works on its own artwork but becomes
-    # unreadable on PlexWeekly's #181818 hero card. Evaluate every available
+    # unreadable on TautWeekly for Plex's #181818 hero card. Evaluate every available
     # clearLogo and choose the brightest/highest-contrast variant for email.
     try {
         $logoSelection = Get-DesignBestClearLogoAsset -RatingKey $ratingKey
@@ -3649,11 +3634,11 @@ function Get-DesignHeroAssets {
         )
 
         if (-not [string]::IsNullOrWhiteSpace($result.LogoSrc)) {
-            Write-Log "PlexWeekly: email-optimized clearLogo acquired from Plex /clearLogos."
+            Write-Log "TautWeekly for Plex: email-optimized clearLogo acquired from Plex /clearLogos."
         }
     }
     catch {
-        Write-Log "PlexWeekly email-aware /clearLogos lookup failed: $($_.Exception.Message)" "WARN"
+        Write-Log "TautWeekly for Plex email-aware /clearLogos lookup failed: $($_.Exception.Message)" "WARN"
     }
 
     # Secondary direct Plex metadata/image-array fallback.
@@ -3693,13 +3678,13 @@ function Get-DesignHeroAssets {
                     -OutputName $logoName
 
                 if (-not [string]::IsNullOrWhiteSpace($result.LogoSrc)) {
-                    Write-Log "PlexWeekly: clearLogo acquired from Plex Image[] metadata."
+                    Write-Log "TautWeekly for Plex: clearLogo acquired from Plex Image[] metadata."
                 }
             }
         }
     }
     catch {
-        Write-Log "PlexWeekly direct Plex logo lookup failed: $($_.Exception.Message)" "WARN"
+        Write-Log "TautWeekly for Plex direct Plex logo lookup failed: $($_.Exception.Message)" "WARN"
     }
 
     # Primary fallback: let Tautulli export the selected logo using the
@@ -4060,7 +4045,7 @@ function Get-TvEpisodeLinesHtml {
             ""
         }
         else {
-            $imdbSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
+            $imdbSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "assets/imdb.png" }
             '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:11px;font-weight:700;white-space:nowrap;">' +
             '<img src="' + $imdbSrc + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
             (HtmlEncode $imdb) +
@@ -4431,21 +4416,21 @@ $tvCards
         "PLEX"
     }
 
-    $moviesIconSrc = if ($ImageMode -eq "Email") { "cid:icon_movies" } else { "../assets/movies.gif" }
-    $tvIconSrc = if ($ImageMode -eq "Email") { "cid:icon_tv" } else { "../assets/tv.gif" }
-    $clockIconSrc = if ($ImageMode -eq "Email") { "cid:icon_clock" } else { "../assets/clock.gif" }
-    $trophyIconSrc = if ($ImageMode -eq "Email") { "cid:icon_trophy" } else { "../assets/trophy.gif" }
-    $hotIconSrc = if ($ImageMode -eq "Email") { "cid:icon_hot" } else { "../assets/hot.gif" }
-    $trendingIconSrc = if ($ImageMode -eq "Email") { "cid:icon_trending" } else { "../assets/trending.gif" }
-    $pendingIconSrc = if ($ImageMode -eq "Email") { "cid:icon_pending" } else { "../assets/pending.gif" }
-    $quietIconSrc = if ($ImageMode -eq "Email") { "cid:icon_quiet" } else { "../assets/quiet.gif" }
-    $welcomeIconSrc = if ($ImageMode -eq "Email") { "cid:icon_welcome" } else { "../assets/welcome.gif" }
-    $actionIconSrc = if ($ImageMode -eq "Email") { "cid:icon_action" } else { "../assets/action.gif" }
-    $watchedIconSrc = if ($ImageMode -eq "Email") { "cid:icon_watched" } else { "../assets/watched.gif" }
-    $lockInfoIconSrc = if ($ImageMode -eq "Email") { "cid:icon_lockinfo" } else { "../assets/lockinfo.gif" }
-    $bingeIconSrc = if ($ImageMode -eq "Email") { "cid:icon_binge" } else { "../assets/watchlist.gif" }
-    $popcornIconSrc = if ($ImageMode -eq "Email") { "cid:icon_popcorn" } else { "../assets/popcorn.gif" }
-    $imdbIconSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
+    $moviesIconSrc = if ($ImageMode -eq "Email") { "cid:icon_movies" } else { "assets/movies.gif" }
+    $tvIconSrc = if ($ImageMode -eq "Email") { "cid:icon_tv" } else { "assets/tv.gif" }
+    $clockIconSrc = if ($ImageMode -eq "Email") { "cid:icon_clock" } else { "assets/clock.gif" }
+    $trophyIconSrc = if ($ImageMode -eq "Email") { "cid:icon_trophy" } else { "assets/trophy.gif" }
+    $hotIconSrc = if ($ImageMode -eq "Email") { "cid:icon_hot" } else { "assets/hot.gif" }
+    $trendingIconSrc = if ($ImageMode -eq "Email") { "cid:icon_trending" } else { "assets/trending.gif" }
+    $pendingIconSrc = if ($ImageMode -eq "Email") { "cid:icon_pending" } else { "assets/pending.gif" }
+    $quietIconSrc = if ($ImageMode -eq "Email") { "cid:icon_quiet" } else { "assets/quiet.gif" }
+    $welcomeIconSrc = if ($ImageMode -eq "Email") { "cid:icon_welcome" } else { "assets/welcome.gif" }
+    $actionIconSrc = if ($ImageMode -eq "Email") { "cid:icon_action" } else { "assets/action.gif" }
+    $watchedIconSrc = if ($ImageMode -eq "Email") { "cid:icon_watched" } else { "assets/watched.gif" }
+    $lockInfoIconSrc = if ($ImageMode -eq "Email") { "cid:icon_lockinfo" } else { "assets/lockinfo.gif" }
+    $bingeIconSrc = if ($ImageMode -eq "Email") { "cid:icon_binge" } else { "assets/watchlist.gif" }
+    $popcornIconSrc = if ($ImageMode -eq "Email") { "cid:icon_popcorn" } else { "assets/popcorn.gif" }
+    $imdbIconSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "assets/imdb.png" }
 
     # Recently accepted access: special welcome banner.
     $welcomeBlock = ""
@@ -5084,7 +5069,7 @@ $tvCards
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Plex Weekly</title>
+<title>TautWeekly for Plex</title>
 <style>
 /* Email-safe table-first layout; only the featured hero swaps at the mobile breakpoint. */
 .design-hot-mobile { display:none; }
@@ -5456,7 +5441,7 @@ function Send-NewsletterMail {
         $smtpPassword = [string]$Config.SmtpPassword
     }
     elseif ($null -ne $Config.PSObject.Properties["SmtpAppPassword"]) {
-        # Backward compatibility with pre-portable PlexWeekly configs.
+        # Backward compatibility with pre-portable TautWeekly for Plex configs.
         $smtpPassword = [string]$Config.SmtpAppPassword
     }
 
@@ -5878,8 +5863,8 @@ if ($Mode -eq "SendWelcome") {
 # ---------------------------------------------------------------------------
 # COMMON DATA FOR FRIDAY PREVIEW / TEST / SEND
 # ---------------------------------------------------------------------------
-$plexWeeklyState = Get-PlexWeeklyState
-Write-Log ("PlexWeekly age: {0} day(s); warm-up mode: {1}" -f $plexWeeklyState.AgeDays, $plexWeeklyState.IsWarmingUp)
+$tautWeeklyState = Get-TautWeeklyState
+Write-Log ("TautWeekly for Plex age: {0} day(s); warm-up mode: {1}" -f $tautWeeklyState.AgeDays, $tautWeeklyState.IsWarmingUp)
 
 $accessState = if ($Mode -in @("PreviewAll","SendTestAll")) {
     # The all-variant test harness must not change first-seen/welcome tracking.
@@ -5997,7 +5982,7 @@ function Build-ForUser {
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
         -TrendingTitle $trendingTitle `
-        -SystemWarmingUp $plexWeeklyState.IsWarmingUp `
+        -SystemWarmingUp $tautWeeklyState.IsWarmingUp `
         -RecentAccess $recentAccess `
         -WelcomeOnly $false `
         -QuietReleaseMode $isQuietReleaseWeek `
@@ -6013,7 +5998,7 @@ function Build-ForUser {
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
         -TrendingTitle $trendingTitle `
-        -SystemWarmingUp $plexWeeklyState.IsWarmingUp `
+        -SystemWarmingUp $tautWeeklyState.IsWarmingUp `
         -RecentAccess $recentAccess `
         -QuietReleaseMode $isQuietReleaseWeek `
         -BingeChampion $bingeChampion `
@@ -6259,7 +6244,7 @@ function Build-AllEmailVariants {
         -StartLabel $startLabel `
         -EndLabel $endLabel
 
-    # 5) Established user with zero activity during PlexWeekly's first 7 days.
+    # 5) Established user with zero activity during TautWeekly for Plex's first 7 days.
     $warmupHtml = Build-NewsletterHtml `
         -User $user `
         -Stats $zeroStats `
@@ -6386,7 +6371,7 @@ function Build-AllEmailVariants {
 # ---------------------------------------------------------------------------
 if ($Mode -eq "PreviewAll") {
     if ([string]::IsNullOrWhiteSpace($UserId)) {
-        throw "PreviewAll mode requires a user identifier. Run list-users.bat first."
+        throw "PreviewAll mode requires a user identifier. Run ./tautweekly.sh list-users first."
     }
 
     $bundle = Build-AllEmailVariants -Id $UserId -ImageMode "Preview"
@@ -6426,11 +6411,11 @@ if ($Mode -eq "PreviewAll") {
     $indexHtml = @"
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PlexWeekly — All Email Types</title>
+<title>TautWeekly for Plex — All Email Types</title>
 <style>
 body{margin:0;background:#0f0f0f;color:#fff;font-family:Arial,Helvetica,sans-serif;padding:32px 18px}.wrap{max-width:900px;margin:auto}.eyebrow{color:#e5a00d;font-size:12px;font-weight:800;letter-spacing:1.5px}.card{margin-top:14px;padding:18px 20px;background:#181818;border:1px solid #2b2b2b;border-radius:10px}.title{font-size:18px;font-weight:800}.subject{color:#aaa;margin-top:7px;font-size:13px;line-height:1.45}.btn{display:inline-block;margin-top:13px;background:#e5a00d;color:#111;text-decoration:none;font-weight:800;padding:10px 15px;border-radius:7px}.note{margin-top:20px;color:#999;font-size:12px;line-height:1.55;border-left:3px solid #e5a00d;padding-left:12px}.meta{color:#888;font-size:13px;line-height:1.55;margin-top:8px}
 </style></head><body><div class="wrap">
-<div class="eyebrow">PLEXWEEKLY — ALL EMAIL TYPES</div>
+<div class="eyebrow">TAUTWEEKLY FOR PLEX — ALL EMAIL TYPES</div>
 <h1 style="margin:8px 0 0;font-size:30px;">$serverName · $userName</h1>
 <div class="meta">Window: $(HtmlEncode $startLabel) – $(HtmlEncode $endLabel)<br>Release mode: $(if ($isQuietReleaseWeek) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' })</div>
 $($cards.ToString())
@@ -6445,7 +6430,10 @@ $($cards.ToString())
     Write-Host ""
     Write-Host "Created all-email-type preview: $indexPath" -ForegroundColor Green
     Write-Host "No email was sent and access-state.json was not modified by this mode."
-    Start-Process $indexPath
+    $publicUrl = Get-PreviewPublicUrl -Path $indexPath
+    if (-not [string]::IsNullOrWhiteSpace($publicUrl)) {
+        Write-Host "Browser URL: $publicUrl" -ForegroundColor Cyan
+    }
     exit 0
 }
 
@@ -6466,7 +6454,7 @@ if ($Mode -eq "SendTestAll") {
 
     for ($i = 0; $i -lt $bundle.Variants.Count; $i++) {
         $variant = $bundle.Variants[$i]
-        $testSubject = "[PlexWeekly TEST $($i + 1)/$($bundle.Variants.Count)] $($variant.Subject)"
+        $testSubject = "[TautWeekly for Plex TEST $($i + 1)/$($bundle.Variants.Count)] $($variant.Subject)"
         Write-Log "Sending $($variant.Label) test to $($Config.TestEmail)..."
         Send-NewsletterMail `
             -To ([string]$Config.TestEmail) `
@@ -6490,7 +6478,7 @@ if ($Mode -eq "SendTestAll") {
 # ---------------------------------------------------------------------------
 if ($Mode -eq "Preview") {
     if ([string]::IsNullOrWhiteSpace($UserId)) {
-        throw "Preview mode requires a user identifier. Run list-users.bat first."
+        throw "Preview mode requires a user identifier. Run ./tautweekly.sh list-users first."
     }
 
     $result = Build-ForUser -Id $UserId -ImageMode "Preview"
@@ -6499,7 +6487,7 @@ if ($Mode -eq "Preview") {
     Set-Content -Path $previewPath -Value $result.Html -Encoding UTF8
 
     Write-Host ""
-    Write-Host "PLEXWEEKLY PREVIEW"
+    Write-Host "TAUTWEEKLY FOR PLEX PREVIEW"
     Write-Host "------------------"
     Write-Host ("User:              {0}" -f $result.User.FriendlyName)
     Write-Host ("Release mode:      {0}" -f $(if ($isQuietReleaseWeek) { "QUIET" } else { "NORMAL" }))
@@ -6509,7 +6497,10 @@ if ($Mode -eq "Preview") {
     Write-Host ("Recent access:     {0}" -f $result.RecentAccess)
     Write-Host ""
     Write-Host "Preview created: $previewPath"
-    Start-Process $previewPath
+    $publicUrl = Get-PreviewPublicUrl -Path $previewPath
+    if (-not [string]::IsNullOrWhiteSpace($publicUrl)) {
+        Write-Host "Browser URL: $publicUrl" -ForegroundColor Cyan
+    }
     exit 0
 }
 

@@ -10,7 +10,7 @@ function WARN([string]$Text) { Write-Host "[WARN] $Text" -ForegroundColor Yellow
 function FAIL([string]$Text) { Write-Host "[FAIL] $Text" -ForegroundColor Red }
 
 Write-Host ""
-Write-Host "PLEXWEEKLY SETUP VERIFICATION" -ForegroundColor Cyan
+Write-Host "TAUTWEEKLY FOR PLEX SETUP VERIFICATION" -ForegroundColor Cyan
 Write-Host "=============================="
 
 if ($PSVersionTable.PSVersion -lt [Version]"5.1") {
@@ -113,7 +113,7 @@ if ($smtpAuth) {
     }
     $password = [string](Get-Prop "SmtpPassword")
     if ([string]::IsNullOrWhiteSpace($password)) {
-        # Backward compatibility with older private PlexWeekly configs.
+        # Backward compatibility with older private TautWeekly for Plex configs.
         $password = [string](Get-Prop "SmtpAppPassword")
     }
     if ([string]::IsNullOrWhiteSpace($password) -or $password -match '^PASTE_') {
@@ -161,7 +161,7 @@ try {
                 FAIL ("Tautulli API is missing required command(s): " + ($missingCommands -join ", "))
                 exit 1
             }
-            OK "Tautulli exposes the core API commands PlexWeekly requires"
+            OK "Tautulli exposes the core API commands TautWeekly for Plex requires"
         }
         else {
             WARN "Tautulli API docs command did not return a command list; functional preview will be the final compatibility test."
@@ -279,7 +279,7 @@ if ($assetFailure) {
 }
 
 Write-Host ""
-OK "PlexWeekly Portable is ready for browser preview and test email."
+OK "TautWeekly for Plex Portable is ready for browser preview and test email."
 Write-Host ""
 Write-Host "NEXT SAFE STEPS:" -ForegroundColor Cyan
 Write-Host "  02-LIST-USERS.bat"

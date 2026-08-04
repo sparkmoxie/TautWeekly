@@ -1,6 +1,6 @@
 # Windows portable installation
 
-[Open the rendered interactive Windows walkthrough](https://sparkmoxie.github.io/PlexWeekly/windows/)
+[Open the rendered interactive Windows walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/)
 
 The Windows distribution runs directly in Windows PowerShell and uses Windows
 Task Scheduler for optional automation.
@@ -24,7 +24,7 @@ Windows machine.
 ## Install
 
 1. Download
-   [`PlexWeekly-windows.zip`](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-windows.zip)
+   [`TautWeekly-windows.zip`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-windows.zip)
    from the latest GitHub release.
 2. Verify its SHA-256 value against `SHA256SUMS.txt`.
 3. Extract it into a permanent directory. Do not run it from Downloads or a
@@ -57,7 +57,7 @@ explicit confirmation gates. Read their warnings before use.
 
 ## Runtime files
 
-PlexWeekly creates these files and directories beside the application:
+TautWeekly for Plex creates these files and directories beside the application:
 
 - `config.json` — credentials and settings.
 - `state.json` — first-run state.

@@ -2,8 +2,8 @@
 
 ## Bundled artwork
 
-All images, animations, icons, and SVG source files bundled with PlexWeekly are
-original custom PlexWeekly artwork. No bundled artwork is sourced from a
+All images, animations, icons, and SVG source files bundled with TautWeekly for Plex are
+original custom TautWeekly for Plex artwork. No bundled artwork is sourced from a
 third-party asset library, and no separate artwork license is required. The
 bundled artwork is distributed under the repository's [MIT License](LICENSE).
 

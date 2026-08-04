@@ -23,9 +23,13 @@ function Add-Pass {
 $required = @(
     'README.md', 'LICENSE', 'SECURITY.md', 'CONTRIBUTING.md', 'CHANGELOG.md',
     'CODE_OF_CONDUCT.md', 'THIRD_PARTY_NOTICES.md', '.gitignore', '.gitattributes',
-    'platforms/windows/PlexWeekly.ps1',
+    'platforms/windows/TautWeekly.ps1',
     'platforms/nas-docker/compose.yaml',
+    'platforms/nas-docker/tautweekly.sh',
+    'platforms/nas-docker/app/TautWeekly.ps1',
     'platforms/mac-docker/compose.yaml',
+    'platforms/mac-docker/tautweekly.sh',
+    'platforms/mac-docker/app/TautWeekly.ps1',
     'docs/index.html', 'docs/windows/README.md', 'docs/nas-docker/README.md',
     'docs/mac/README.md', 'scripts/build-releases.ps1',
     '.github/workflows/ci.yml', '.github/workflows/pages.yml',
@@ -72,6 +76,28 @@ $textFiles = Get-ChildItem -LiteralPath $Root -Force -Recurse -File | Where-Obje
     $_.FullName -notmatch '[\\/]\.git(?:[\\/]|$)' -and
     $_.FullName -notmatch '[\\/]dist(?:[\\/]|$)' -and
     ($_.Extension -in $textExtensions -or $_.Name -in $textNames)
+}
+
+$retiredBrandPattern = '(?i)Plex' + '[\s_.-]*' + 'Weekly'
+$retiredBrandFindings = [System.Collections.Generic.List[string]]::new()
+foreach ($item in $items) {
+    if ($item.Name -match $retiredBrandPattern) {
+        $relative = $item.FullName.Substring($Root.Length).TrimStart('\','/')
+        $retiredBrandFindings.Add("path: $relative")
+    }
+}
+foreach ($file in $textFiles) {
+    $content = [IO.File]::ReadAllText($file.FullName)
+    if ($content -match $retiredBrandPattern) {
+        $relative = $file.FullName.Substring($Root.Length).TrimStart('\','/')
+        $retiredBrandFindings.Add("text: $relative")
+    }
+}
+if ($retiredBrandFindings.Count -gt 0) {
+    Add-Failure "Retired product branding is present: $($retiredBrandFindings -join ', ')"
+}
+else {
+    Add-Pass 'No retired product branding is present in paths or text files.'
 }
 
 $checks = [ordered]@{

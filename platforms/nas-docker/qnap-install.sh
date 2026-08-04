@@ -25,9 +25,9 @@ detect_nas_ip() {
 
 wait_for_container() {
   local attempts=60
-  printf 'Waiting for the PlexWeekly container to become ready'
+  printf 'Waiting for the TautWeekly for Plex container to become ready'
   for ((i=1; i<=attempts; i++)); do
-    if compose_cmd exec -T plexweekly true >/dev/null 2>&1; then
+    if compose_cmd exec -T tautweekly true >/dev/null 2>&1; then
       printf ' ready.\n'
       return 0
     fi
@@ -36,7 +36,7 @@ wait_for_container() {
   done
   printf '\nContainer did not become ready within 120 seconds.\n' >&2
   compose_cmd ps >&2 || true
-  compose_cmd logs --tail=100 plexweekly >&2 || true
+  compose_cmd logs --tail=100 tautweekly >&2 || true
   return 1
 }
 
@@ -76,7 +76,7 @@ if [[ ! -f .env ]]; then
   NAS_IP="$(detect_nas_ip)"
 
   cat > .env <<EOF
-COMPOSE_PROJECT_NAME=plexweekly
+COMPOSE_PROJECT_NAME=tautweekly
 TZ=$TZ_VALUE
 PUID=$PUID_VALUE
 PGID=$PGID_VALUE
@@ -91,19 +91,19 @@ else
   echo "Existing .env preserved."
 fi
 
-printf '\nBuilding PlexWeekly NAS Portable...\n'
+printf '\nBuilding TautWeekly for Plex NAS Portable...\n'
 compose_cmd build --pull
 compose_cmd up -d
 wait_for_container
 
 printf '\nRunning the configuration wizard...\n'
-compose_cmd exec plexweekly pwsh -NoLogo -NoProfile -File /opt/plexweekly/Setup-First.ps1
-compose_cmd restart plexweekly
+compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
+compose_cmd restart tautweekly
 wait_for_container
 
 printf '\nRunning verification...\n'
-if ! compose_cmd exec plexweekly pwsh -NoLogo -NoProfile -File /opt/plexweekly/Verify-Setup.ps1; then
-  echo "Verification failed. Review the messages above and run ./plexweekly.sh verify after correcting them." >&2
+if ! compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1; then
+  echo "Verification failed. Review the messages above and run ./tautweekly.sh verify after correcting them." >&2
   exit 1
 fi
 cat <<'EOF'
@@ -111,11 +111,11 @@ cat <<'EOF'
 Installation/build is complete.
 
 Recommended acceptance sequence:
-  ./plexweekly.sh verify
-  ./plexweekly.sh list-users
-  ./plexweekly.sh preview-all
-  ./plexweekly.sh send-test-all
-  ./plexweekly.sh schedule-status
+  ./tautweekly.sh verify
+  ./tautweekly.sh list-users
+  ./tautweekly.sh preview-all
+  ./tautweekly.sh send-test-all
+  ./tautweekly.sh schedule-status
 
 Automatic sending remains disabled unless you explicitly enabled it in setup.
 EOF

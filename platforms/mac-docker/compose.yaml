@@ -1,25 +1,25 @@
 services:
-  plexweekly:
+  tautweekly:
     build:
       context: .
       dockerfile: Dockerfile
-    image: plexweekly-mac:1.0.3
-    container_name: plexweekly
+    image: tautweekly-mac:1.0.3
+    container_name: tautweekly
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Etc/UTC}
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
       UMASK: ${UMASK:-077}
-      PLEXWEEKLY_DATA_DIR: /data
-      PLEXWEEKLY_CONFIG: /data/config.json
-      PLEXWEEKLY_PREVIEW_BASE_URL: ${PREVIEW_BASE_URL:-}
+      TAUTWEEKLY_DATA_DIR: /data
+      TAUTWEEKLY_CONFIG: /data/config.json
+      TAUTWEEKLY_PREVIEW_BASE_URL: ${PREVIEW_BASE_URL:-}
     volumes:
       - ./data:/data
     ports:
       - "${PREVIEW_BIND:-0.0.0.0}:${PREVIEW_PORT:-8787}:8080"
     healthcheck:
-      test: ["CMD", "/opt/plexweekly/healthcheck.sh"]
+      test: ["CMD", "/opt/tautweekly/healthcheck.sh"]
       interval: 60s
       timeout: 10s
       retries: 3

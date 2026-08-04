@@ -50,10 +50,10 @@ function Copy-Platform {
     Copy-Item -LiteralPath (Join-Path $Root 'LICENSE') -Destination $destination -Force
     Copy-Item -LiteralPath (Join-Path $Root 'THIRD_PARTY_NOTICES.md') -Destination $destination -Force
     $metadata = @(
-        'PlexWeekly public release'
+        'TautWeekly for Plex public release'
         "Repository version: $Version"
         "Platform source baseline: $Baseline"
-        'Source: https://github.com/sparkmoxie/PlexWeekly'
+        'Source: https://github.com/sparkmoxie/TautWeekly'
         'Credentials and runtime state are intentionally excluded.'
     ) -join [Environment]::NewLine
     [IO.File]::WriteAllText((Join-Path $destination 'RELEASE-METADATA.txt'), $metadata + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
@@ -116,9 +116,9 @@ function New-TarGz {
 }
 
 try {
-    [void](Copy-Platform -SourceName 'windows' -FolderName 'PlexWeekly-windows' -GuidePath 'docs/windows/README.md')
-    [void](Copy-Platform -SourceName 'nas-docker' -FolderName 'PlexWeekly-nas-docker' -GuidePath 'docs/nas-docker/README.md')
-    [void](Copy-Platform -SourceName 'mac-docker' -FolderName 'PlexWeekly-mac-docker' -GuidePath 'docs/mac/README.md')
+    [void](Copy-Platform -SourceName 'windows' -FolderName 'TautWeekly-windows' -GuidePath 'docs/windows/README.md')
+    [void](Copy-Platform -SourceName 'nas-docker' -FolderName 'TautWeekly-nas-docker' -GuidePath 'docs/nas-docker/README.md')
+    [void](Copy-Platform -SourceName 'mac-docker' -FolderName 'TautWeekly-mac-docker' -GuidePath 'docs/mac/README.md')
 
     $forbidden = Get-ChildItem -LiteralPath $staging -Force -Recurse | Where-Object {
         ($_.PSIsContainer -and $_.Name -in @('logs','output')) -or
@@ -130,11 +130,11 @@ try {
     }
 
     $archives = @(
-        (New-Zip -FolderName 'PlexWeekly-windows' -ArchiveName 'PlexWeekly-windows.zip')
-        (New-Zip -FolderName 'PlexWeekly-nas-docker' -ArchiveName 'PlexWeekly-nas-docker.zip')
-        (New-TarGz -FolderName 'PlexWeekly-nas-docker' -ArchiveName 'PlexWeekly-nas-docker.tar.gz')
-        (New-Zip -FolderName 'PlexWeekly-mac-docker' -ArchiveName 'PlexWeekly-mac-docker.zip')
-        (New-TarGz -FolderName 'PlexWeekly-mac-docker' -ArchiveName 'PlexWeekly-mac-docker.tar.gz')
+        (New-Zip -FolderName 'TautWeekly-windows' -ArchiveName 'TautWeekly-windows.zip')
+        (New-Zip -FolderName 'TautWeekly-nas-docker' -ArchiveName 'TautWeekly-nas-docker.zip')
+        (New-TarGz -FolderName 'TautWeekly-nas-docker' -ArchiveName 'TautWeekly-nas-docker.tar.gz')
+        (New-Zip -FolderName 'TautWeekly-mac-docker' -ArchiveName 'TautWeekly-mac-docker.zip')
+        (New-TarGz -FolderName 'TautWeekly-mac-docker' -ArchiveName 'TautWeekly-mac-docker.tar.gz')
     )
 
     $checksumLines = foreach ($archive in ($archives | Sort-Object)) {
@@ -143,7 +143,7 @@ try {
     }
     [IO.File]::WriteAllLines((Join-Path $dist 'SHA256SUMS.txt'), $checksumLines, [Text.UTF8Encoding]::new($false))
 
-    Write-Host "Built PlexWeekly $Version release artifacts:"
+    Write-Host "Built TautWeekly for Plex $Version release artifacts:"
     Get-ChildItem -LiteralPath $dist -File | Sort-Object Name | ForEach-Object {
         Write-Host ("  {0} ({1:N0} bytes)" -f $_.Name,$_.Length)
     }
