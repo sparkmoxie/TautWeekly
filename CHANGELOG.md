@@ -14,6 +14,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   movie/TV releases, both anonymous Binge Champion treatments, onboarding and
   warmup variants, and the production quiet-week latest-release fallback.
 
+### Fixed
+
+- Treat Tautulli episode `rating_image` and `rating` fields as optional when
+  building personal statistics, preventing `preview-all` from failing under
+  strict PowerShell property handling when either field is omitted.
+
 ## [0.5.0] - 2026-08-04
 
 ### Added

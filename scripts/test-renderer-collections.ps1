@@ -18,7 +18,10 @@ $rendererPaths = @(
 )
 
 $requiredFunctions = @(
+    'Get-OptionalStringProperty',
     'Safe-Int',
+    'Safe-Int64',
+    'New-ReleaseData',
     'Get-HistoryRowPlayCount',
     'Format-WatchTime',
     'Get-UserStats'
@@ -102,6 +105,31 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($oneEpisode.EpisodeItems -is [object[]]) "$relativePath collapsed one episode into a scalar"
     Assert-True ($oneEpisode.EpisodeItems.Count -eq 1) "$relativePath lost the one-episode item"
     Assert-True ($oneEpisode.MovieItems.Count -eq 0) "$relativePath created an unexpected movie"
+    Assert-True ($oneEpisode.EpisodeItems[0].ImdbRating -eq '8.5') "$relativePath lost an available episode IMDb rating"
+
+    $episodeWithoutRatingMetadata = [PSCustomObject]@{
+        media_type             = 'episode'
+        play_duration          = 1800
+        watched_status         = 0
+        percent_complete       = 50
+        rating_key             = 'episode-without-rating'
+        grandparent_rating_key = 'show-without-rating'
+        grandparent_title      = 'Show Without Rating'
+        parent_title           = 'Season 1'
+        title                  = 'Unrated Episode'
+        year                   = '2026'
+        added_at               = 1785800000
+        parent_media_index     = 1
+        media_index            = 2
+    }
+    $missingRating = Get-UserStats -History @($episodeWithoutRatingMetadata)
+    Assert-True ($missingRating.EpisodeItems.Count -eq 1) "$relativePath rejected an episode without rating metadata"
+    Assert-True ([string]::IsNullOrWhiteSpace([string]$missingRating.EpisodeItems[0].ImdbRating)) "$relativePath invented an IMDb rating for missing metadata"
+
+    $missingReleaseRating = New-ReleaseData -RecentItems @($episodeWithoutRatingMetadata)
+    Assert-True ($missingReleaseRating.TV.Count -eq 1) "$relativePath rejected a TV release without rating metadata"
+    Assert-True ($missingReleaseRating.TV[0].Episodes.Count -eq 1) "$relativePath lost an unrated TV release episode"
+    Assert-True ([string]::IsNullOrWhiteSpace([string]$missingReleaseRating.TV[0].Episodes[0].ImdbRating)) "$relativePath invented a release IMDb rating for missing metadata"
 
     $empty = Get-UserStats -History @()
     Assert-True ($empty.MovieItems -is [object[]]) "$relativePath lost the empty movie array"
