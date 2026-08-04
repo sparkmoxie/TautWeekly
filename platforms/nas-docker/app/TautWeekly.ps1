@@ -126,6 +126,24 @@ function Safe-Int {
     return 0
 }
 
+function Get-OptionalStringProperty {
+    param(
+        [AllowNull()][object]$InputObject,
+        [string]$Name
+    )
+
+    if ($null -eq $InputObject -or [string]::IsNullOrWhiteSpace($Name)) {
+        return ""
+    }
+
+    $property = $InputObject.PSObject.Properties[$Name]
+    if ($null -eq $property -or $null -eq $property.Value) {
+        return ""
+    }
+
+    return [string]$property.Value
+}
+
 function Safe-Int64 {
     param([AllowNull()][object]$Value)
     if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return [int64]0 }
@@ -670,10 +688,11 @@ function New-ReleaseData {
 
                 $episodeTitle = [string]$item.title
                 if (-not [string]::IsNullOrWhiteSpace($episodeTitle)) {
-                    $ratingImage = [string]$item.rating_image
+                    $ratingImage = Get-OptionalStringProperty -InputObject $item -Name "rating_image"
+                    $ratingValue = Get-OptionalStringProperty -InputObject $item -Name "rating"
                     $nativeImdbRating = ""
-                    if ($ratingImage -like 'imdb://*' -and -not [string]::IsNullOrWhiteSpace([string]$item.rating)) {
-                        $nativeImdbRating = [string]$item.rating
+                    if ($ratingImage -like 'imdb://*' -and -not [string]::IsNullOrWhiteSpace($ratingValue)) {
+                        $nativeImdbRating = $ratingValue
                     }
 
                     $entry.Episodes.Add([PSCustomObject]@{
@@ -951,11 +970,12 @@ function Get-TvEpisodeSnapshotFromTautulli {
         if ($shownSeen.ContainsKey($dedupeKey)) { continue }
         $shownSeen[$dedupeKey] = $true
 
-        $ratingImage = [string]$episode.rating_image
+        $ratingImage = Get-OptionalStringProperty -InputObject $episode -Name "rating_image"
+        $ratingValue = Get-OptionalStringProperty -InputObject $episode -Name "rating"
         $nativeImdbRating = ""
         if ($ratingImage -match '(?i)^imdb://' -and
-            -not [string]::IsNullOrWhiteSpace([string]$episode.rating)) {
-            $nativeImdbRating = [string]$episode.rating
+            -not [string]::IsNullOrWhiteSpace($ratingValue)) {
+            $nativeImdbRating = $ratingValue
         }
 
         $result.Add([PSCustomObject]@{
@@ -1077,7 +1097,8 @@ function Enrich-TvEpisodeMetadata {
                 $episode.Season = $seasonIndex
             }
 
-            $ratingImage = [string]$meta.rating_image
+            $ratingImage = Get-OptionalStringProperty -InputObject $meta -Name "rating_image"
+            $ratingValue = Get-OptionalStringProperty -InputObject $meta -Name "rating"
             if (-not [string]::IsNullOrWhiteSpace($ratingImage)) {
                 $episode.RatingImage = $ratingImage
             }
@@ -1087,7 +1108,6 @@ function Enrich-TvEpisodeMetadata {
             # Fast path: Tautulli explicitly identifies IMDb as the selected
             # episode rating provider.
             if ($ratingImage -match '(?i)^imdb://') {
-                $ratingValue = [string]$meta.rating
                 if (-not [string]::IsNullOrWhiteSpace($ratingValue)) {
                     $episode.ImdbRating = $ratingValue
                 }
@@ -1264,9 +1284,11 @@ function Get-UserStats {
                     $episodeSeen[$dedupeKey] = $true
 
                     $nativeImdb = ""
-                    if ([string]$row.rating_image -match '(?i)^imdb://' -and
-                        -not [string]::IsNullOrWhiteSpace([string]$row.rating)) {
-                        $nativeImdb = [string]$row.rating
+                    $ratingImage = Get-OptionalStringProperty -InputObject $row -Name "rating_image"
+                    $ratingValue = Get-OptionalStringProperty -InputObject $row -Name "rating"
+                    if ($ratingImage -match '(?i)^imdb://' -and
+                        -not [string]::IsNullOrWhiteSpace($ratingValue)) {
+                        $nativeImdb = $ratingValue
                     }
 
                     $episodeItems.Add([PSCustomObject]@{
@@ -1354,9 +1376,11 @@ function Add-UserStatsMediaMetadata {
                         rating_key = [string]$episode.RatingKey
                     }
 
-                    if ([string]$meta.rating_image -match '(?i)^imdb://' -and
-                        -not [string]::IsNullOrWhiteSpace([string]$meta.rating)) {
-                        $episode.ImdbRating = [string]$meta.rating
+                    $ratingImage = Get-OptionalStringProperty -InputObject $meta -Name "rating_image"
+                    $ratingValue = Get-OptionalStringProperty -InputObject $meta -Name "rating"
+                    if ($ratingImage -match '(?i)^imdb://' -and
+                        -not [string]::IsNullOrWhiteSpace($ratingValue)) {
+                        $episode.ImdbRating = $ratingValue
                     }
                 }
 
@@ -3224,8 +3248,10 @@ function Add-DesignRatingMetadata {
                 rating_key = $ratingKey
             }
 
-            $ratingImage = [string]$meta.rating_image
-            $audienceImage = [string]$meta.audience_rating_image
+            $ratingImage = Get-OptionalStringProperty -InputObject $meta -Name "rating_image"
+            $audienceImage = Get-OptionalStringProperty -InputObject $meta -Name "audience_rating_image"
+            $ratingValue = Get-OptionalStringProperty -InputObject $meta -Name "rating"
+            $audienceRatingValue = Get-OptionalStringProperty -InputObject $meta -Name "audience_rating"
 
             if ([string]$item.Type -eq "movie") {
                 if ($null -ne $meta.PSObject.Properties["genres"]) {
@@ -3237,12 +3263,12 @@ function Add-DesignRatingMetadata {
             }
 
             if ($ratingImage -like 'rottentomatoes://image.rating.*') {
-                $critic = Convert-DesignRatingPercent $meta.rating
+                $critic = Convert-DesignRatingPercent $ratingValue
                 $criticImage = $ratingImage
             }
 
             if ($audienceImage -like 'rottentomatoes://image.rating.*') {
-                $audience = Convert-DesignRatingPercent $meta.audience_rating
+                $audience = Convert-DesignRatingPercent $audienceRatingValue
                 $audienceImageState = $audienceImage
             }
         }
