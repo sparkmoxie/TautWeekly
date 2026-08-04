@@ -11,6 +11,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Pointed the README documentation entry at the live Pages site, removed
   premature download links to an empty Releases page, and made current source
   locations explicit until the first version tag is published.
+- Replaced user-facing links to HTML source blobs with rendered GitHub Pages
+  URLs for the documentation home, all three platform walkthroughs, and the
+  NAS / Docker Compose quick start.
 - Made the Pages deployment follow the repository's current default launch
   branch and replaced a stale `blob/main` footer link with a default-branch
   (`HEAD`) URL.

@@ -5,7 +5,7 @@
 **A portable, preview-first weekly Plex activity newsletter powered by Tautulli.**
 
 [![CI](https://github.com/sparkmoxie/PlexWeekly/actions/workflows/ci.yml/badge.svg)](https://github.com/sparkmoxie/PlexWeekly/actions/workflows/ci.yml)
-[![Pages](https://github.com/sparkmoxie/PlexWeekly/actions/workflows/pages.yml/badge.svg)](https://github.com/sparkmoxie/PlexWeekly/actions/workflows/pages.yml)
+[![Pages](https://github.com/sparkmoxie/PlexWeekly/actions/workflows/pages.yml/badge.svg)](https://sparkmoxie.github.io/PlexWeekly/)
 [![License: MIT](https://img.shields.io/badge/code%20license-MIT-e5a00d.svg)](LICENSE)
 ![Windows](https://img.shields.io/badge/Windows-PowerShell%205.1-0078d4?logo=windows)
 ![NAS](https://img.shields.io/badge/NAS-Docker%20Compose-2496ed?logo=docker)
@@ -44,6 +44,7 @@ them locally; send controlled tests; then schedule production delivery.
 | Scheduler | Windows Task Scheduler | Built-in container scheduler | Built-in container scheduler |
 | Preview | Local generated HTML | Port 8787, configurable bind | Localhost port 8787 by default |
 | Best fit | Always-on Windows host | QNAP, Unraid, Linux NAS, Docker host | Intel or Apple silicon Mac |
+| Interactive walkthrough | [Open Windows](https://sparkmoxie.github.io/PlexWeekly/windows/) | [Open NAS / Docker](https://sparkmoxie.github.io/PlexWeekly/nas-docker/) | [Open macOS](https://sparkmoxie.github.io/PlexWeekly/mac/) |
 | Install guide | [Windows](docs/windows/README.md) | [NAS / Docker](docs/nas-docker/README.md) | [macOS](docs/mac/README.md) |
 | Source | [`platforms/windows`](platforms/windows) | [`platforms/nas-docker`](platforms/nas-docker) | [`platforms/mac-docker`](platforms/mac-docker) |
 
@@ -78,7 +79,8 @@ gates. Their setup and lifecycle wrappers are platform-specific.
    `04-SEND-TEST.bat`.
 5. Install the schedule only after review.
 
-[Complete Windows guide](docs/windows/README.md)
+[Open the rendered Windows walkthrough](https://sparkmoxie.github.io/PlexWeekly/windows/)
+· [Read the Markdown install guide](docs/windows/README.md)
 
 </details>
 
@@ -97,7 +99,9 @@ docker compose up -d
 Use a hostname reachable from inside the container for Tautulli. Keep port
 8787 on a trusted network and do not expose it publicly.
 
-[Complete NAS / Docker guide](docs/nas-docker/README.md)
+[Open the rendered NAS / Docker walkthrough](https://sparkmoxie.github.io/PlexWeekly/nas-docker/)
+· [Open the rendered Compose quick start](https://sparkmoxie.github.io/PlexWeekly/nas-docker/quickstart.html)
+· [Read the Markdown install guide](docs/nas-docker/README.md)
 
 </details>
 
@@ -114,7 +118,8 @@ chmod +x INSTALL-MAC.command mac-install.sh plexweekly.sh
 The installer detects the host UID/GID and keeps previews on localhost by
 default.
 
-[Complete macOS guide](docs/mac/README.md)
+[Open the rendered macOS walkthrough](https://sparkmoxie.github.io/PlexWeekly/mac/)
+· [Read the Markdown install guide](docs/mac/README.md)
 
 </details>
 
@@ -178,6 +183,10 @@ shasum -a 256 -c SHA256SUMS.txt
 ## Documentation
 
 - [Live GitHub Pages documentation](https://sparkmoxie.github.io/PlexWeekly/)
+- [Rendered Windows walkthrough](https://sparkmoxie.github.io/PlexWeekly/windows/)
+- [Rendered NAS / Docker walkthrough](https://sparkmoxie.github.io/PlexWeekly/nas-docker/)
+- [Rendered NAS / Docker Compose quick start](https://sparkmoxie.github.io/PlexWeekly/nas-docker/quickstart.html)
+- [Rendered macOS walkthrough](https://sparkmoxie.github.io/PlexWeekly/mac/)
 - [Documentation source index](docs/README.md)
 - [Windows installation](docs/windows/README.md)
 - [NAS / Docker installation](docs/nas-docker/README.md)

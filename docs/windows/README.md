@@ -1,6 +1,6 @@
 # Windows portable installation
 
-[Open the interactive Windows walkthrough source](index.html)
+[Open the rendered interactive Windows walkthrough](https://sparkmoxie.github.io/PlexWeekly/windows/)
 
 The Windows distribution runs directly in Windows PowerShell and uses Windows
 Task Scheduler for optional automation.

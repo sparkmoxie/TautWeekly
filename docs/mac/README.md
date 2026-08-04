@@ -1,6 +1,6 @@
 # macOS Docker Desktop installation
 
-[Open the interactive macOS walkthrough source](index.html)
+[Open the rendered interactive macOS walkthrough](https://sparkmoxie.github.io/PlexWeekly/mac/)
 
 The macOS distribution runs the PowerShell newsletter engine in Docker Desktop
 and provides Mac-native setup and preview helpers.

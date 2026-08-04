@@ -1,6 +1,7 @@
 # NAS / Docker Compose installation
 
-[Open the interactive NAS walkthrough source](index.html)
+[Open the rendered interactive NAS walkthrough](https://sparkmoxie.github.io/PlexWeekly/nas-docker/)
+· [Open the rendered Compose quick start](https://sparkmoxie.github.io/PlexWeekly/nas-docker/quickstart.html)
 
 This distribution runs PlexWeekly as a dedicated Docker Compose service beside
 Tautulli. It targets QNAP Container Station, Unraid, and general Linux Docker

@@ -1,15 +1,19 @@
 # PlexWeekly documentation
 
-The [GitHub Pages source](index.html) preserves the supplied Plex-inspired
-dark walkthrough experience, including
+The [live GitHub Pages home](https://sparkmoxie.github.io/PlexWeekly/)
+preserves the supplied Plex-inspired dark walkthrough experience, including
 search, sticky navigation, scroll progress, responsive layouts, copy controls,
 and terminal demonstrations.
 
 ## Install by platform
 
-- [Windows portable](windows/README.md)
-- [NAS / Docker Compose](nas-docker/README.md)
-- [macOS / Docker Desktop](mac/README.md)
+- [Windows interactive walkthrough](https://sparkmoxie.github.io/PlexWeekly/windows/)
+  · [Markdown guide](windows/README.md)
+- [NAS / Docker interactive walkthrough](https://sparkmoxie.github.io/PlexWeekly/nas-docker/)
+  · [Compose quick start](https://sparkmoxie.github.io/PlexWeekly/nas-docker/quickstart.html)
+  · [Markdown guide](nas-docker/README.md)
+- [macOS interactive walkthrough](https://sparkmoxie.github.io/PlexWeekly/mac/)
+  · [Markdown guide](mac/README.md)
 
 ## Operate and maintain
 

@@ -193,48 +193,48 @@ docker compose up -d
 ./plexweekly.sh preview-all</pre></div>
 </section>
 
-<section class="content-section searchable" id="adaptive-stats-award" data-search="adaptive statistics mini posters rotten tomatoes imdb binge champion award winner trending plays privacy">
-  <div class="section-heading">
-    <div><div class="section-eyebrow">Current email behavior</div><h2>Adaptive stats and the Binge Champion award</h2></div>
+<section class="section searchable" id="adaptive-stats-award" data-search="adaptive statistics mini posters rotten tomatoes imdb binge champion award winner trending plays privacy">
+  <div class="section-head">
+    <div><div class="eyebrow">Current email behavior</div><h2>Adaptive stats and the Binge Champion award</h2></div>
     <p>Light viewing weeks reveal more detail without making heavy viewing weeks excessively tall.</p>
   </div>
   <div class="grid-3">
-    <article class="card"><div class="card-badge">1–3</div><h3>Itemized movies</h3><p>Mini poster, movie title, Rotten Tomatoes critic score, and audience score.</p></article>
-    <article class="card"><div class="card-badge">1–3</div><h3>Itemized episodes</h3><p>Mini show poster, show title, Sxx EPxx episode title, and IMDb score.</p></article>
-    <article class="card"><div class="card-badge">4+</div><h3>Compact counts</h3><p>At four or more, the card returns to the large-number format to protect email length.</p></article>
+    <article class="card"><div class="icon">1–3</div><h3>Itemized movies</h3><p>Mini poster, movie title, Rotten Tomatoes critic score, and audience score.</p></article>
+    <article class="card"><div class="icon">1–3</div><h3>Itemized episodes</h3><p>Mini show poster, show title, Sxx EPxx episode title, and IMDb score.</p></article>
+    <article class="card"><div class="icon">4+</div><h3>Compact counts</h3><p>At four or more, the card returns to the large-number format to protect email length.</p></article>
   </div>
-  <div class="callout green"><div class="callout-icon">★</div><div><strong>Binge Champion is a real server-wide user award.</strong><p>The user with the most qualifying plays wins; total watch time breaks a tie. Every scheduled weekly email names the winner. The winner's own card receives a larger trophy, gold border, and “YOU WON” treatment.</p></div></div>
-  <div class="callout blue"><div class="callout-icon">i</div><div><strong>Trending is not duplicated.</strong><p>Trending ranks a media title and displays its server-wide play count once. Binge Champion ranks a person and appears in the statistics/award area.</p></div></div>
+  <div class="callout green"><i></i><div><strong>Binge Champion is a real server-wide user award.</strong><p>The user with the most qualifying plays wins; total watch time breaks a tie. Every scheduled weekly email names the winner. The winner's own card receives a larger trophy, gold border, and “YOU WON” treatment.</p></div></div>
+  <div class="callout blue"><i></i><div><strong>Trending is not duplicated.</strong><p>Trending ranks a media title and displays its server-wide play count once. Binge Champion ranks a person and appears in the statistics/award area.</p></div></div>
 </section>
 
 
-<section class="content-section searchable" id="movie-stat-genres" data-search="movie statistics genre genres mini posters rotten tomatoes adaptive stats global">
-  <div class="section-heading">
+<section class="section searchable" id="movie-stat-genres" data-search="movie statistics genre genres mini posters rotten tomatoes adaptive stats global">
+  <div class="section-head">
     <div>
-      <div class="section-eyebrow">Global movie formatting</div>
+      <div class="eyebrow">Global movie formatting</div>
       <h2>Genre now appears in watched-movie statistics</h2>
     </div>
     <p>The compact 1–3 movie recap now matches the rest of the newsletter’s movie hierarchy.</p>
   </div>
   <div class="grid-3">
     <article class="card">
-      <div class="card-badge">1–3</div>
+      <div class="icon">1–3</div>
       <h3>Adaptive movie rows</h3>
       <p>Each row includes a mini poster, title, genre, and Rotten Tomatoes critic and audience scores.</p>
     </article>
     <article class="card">
-      <div class="card-badge">GLOBAL</div>
+      <div class="icon">ALL</div>
       <h3>One genre rule</h3>
       <p>Show the first two genres and append <strong>“, and more”</strong> when additional genres exist.</p>
     </article>
     <article class="card">
-      <div class="card-badge">CLEAN</div>
+      <div class="icon">✓</div>
       <h3>No empty genre row</h3>
       <p>When metadata has no genre, the rating line moves up automatically with no blank space.</p>
     </article>
   </div>
   <div class="callout green">
-    <div class="callout-icon">✓</div>
+    <i></i>
     <div>
       <strong>Applied everywhere the adaptive movie-stat card can render.</strong>
       <p>This includes production and portable previews, individual tests, six-state test suites, scheduled weekly newsletters, and all applicable recipient states.</p>
@@ -243,25 +243,25 @@ docker compose up -d
 </section>
 
 
-<section class="content-section searchable" id="single-item-count-hotfix" data-search="count property error powershell 5.1 one movie one episode strict mode hotfix">
-  <div class="section-heading">
+<section class="section searchable" id="single-item-count-hotfix" data-search="count property error powershell 5.1 one movie one episode strict mode hotfix">
+  <div class="section-head">
     <div>
-      <div class="section-eyebrow">PowerShell 5.1 hotfix</div>
+      <div class="eyebrow">PowerShell 5.1 hotfix</div>
       <h2>Single-item adaptive cards now retain array semantics</h2>
     </div>
     <p>Exactly one watched movie or one streamed episode no longer becomes a scalar under strict mode.</p>
   </div>
   <div class="callout green">
-    <div class="callout-icon">✓</div>
+    <i></i>
     <div>
       <strong>Resolved: “The property ‘Count’ cannot be found on this object.”</strong>
       <p>MovieItems and EpisodeItems are initialized and assigned explicitly as arrays before the adaptive renderer checks their counts.</p>
     </div>
   </div>
   <div class="grid-3">
-    <article class="card"><div class="card-badge">0</div><h3>Empty collection</h3><p>Retains a valid zero-length array.</p></article>
-    <article class="card"><div class="card-badge">1</div><h3>Single item</h3><p>Remains an array instead of being unwrapped into a scalar.</p></article>
-    <article class="card"><div class="card-badge">2–3</div><h3>Multiple items</h3><p>Continues to render the adaptive poster rows normally.</p></article>
+    <article class="card"><div class="icon">0</div><h3>Empty collection</h3><p>Retains a valid zero-length array.</p></article>
+    <article class="card"><div class="icon">1</div><h3>Single item</h3><p>Remains an array instead of being unwrapped into a scalar.</p></article>
+    <article class="card"><div class="icon">2–3</div><h3>Multiple items</h3><p>Continues to render the adaptive poster rows normally.</p></article>
   </div>
 </section>
 
