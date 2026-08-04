@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a focused, safe improvement.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - All platforms
+        - Windows portable
+        - NAS / Docker Compose
+        - macOS / Docker Desktop
+        - Documentation or automation
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Explain the operator or contributor need.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include safety, migration, and compatibility considerations.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

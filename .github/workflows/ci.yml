@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  repository-validation:
+    name: Repository, shell, JSON, and Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate repository hygiene and JSON
+        shell: pwsh
+        run: ./scripts/validate-repository.ps1
+      - name: Validate relative links
+        shell: pwsh
+        run: ./scripts/check-links.ps1
+      - name: Validate documentation features and JavaScript
+        run: |
+          pwsh ./scripts/validate-docs.ps1
+          node --check docs/assets/site.js
+      - name: Validate shell scripts
+        run: ./scripts/validate-shell.sh
+      - name: Validate NAS Compose configuration
+        run: docker compose -f platforms/nas-docker/compose.yaml config --quiet
+      - name: Validate macOS Compose configuration
+        run: docker compose -f platforms/mac-docker/compose.yaml config --quiet
+
+  powershell-syntax:
+    name: PowerShell syntax
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse all PowerShell source
+        shell: powershell
+        run: .\scripts\validate-powershell.ps1
+
+  release-archives:
+    name: Reproducible release archives
+    runs-on: ubuntu-latest
+    needs: [repository-validation, powershell-syntax]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build archives and SHA-256 checksums
+        shell: pwsh
+        run: ./scripts/build-releases.ps1 -Version ci
+      - name: Test ZIP archives
+        run: for file in dist/*.zip; do unzip -t "$file"; done
+      - name: Test TAR.GZ archives
+        run: for file in dist/*.tar.gz; do tar -tzf "$file" >/dev/null; done
+      - name: Upload release candidates
+        uses: actions/upload-artifact@v4
+        with:
+          name: plexweekly-release-candidates
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
