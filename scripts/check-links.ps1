@@ -18,6 +18,7 @@ function Test-Target {
     $clean = [Net.WebUtility]::HtmlDecode($Target.Trim())
     if ([string]::IsNullOrWhiteSpace($clean) -or
         $clean.StartsWith('#') -or
+        $clean -match '\$\{[^}]+\}' -or
         $clean -match '^(?i)(?:https?:|mailto:|data:|javascript:)') {
         return
     }

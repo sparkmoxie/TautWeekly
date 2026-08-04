@@ -4,6 +4,15 @@ All notable public changes to TautWeekly for Plex will be documented here. The p
 uses [Semantic Versioning](https://semver.org/) for GitHub releases and follows
 the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- Added a standalone, responsive nine-state newsletter showcase with real
+  public Plex Discover posters and title art, dated Rotten Tomatoes score
+  examples, dense movie/TV releases, both anonymous Binge Champion treatments,
+  onboarding and warmup variants, and a true quiet/no-release edge case.
+
 ## [0.5.0] - 2026-08-04
 
 ### Added
