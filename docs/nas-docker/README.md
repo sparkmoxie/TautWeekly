@@ -19,6 +19,11 @@ Current source baseline: **1.0.7**.
 
 ## Install from a release
 
+Download the latest
+[`PlexWeekly-nas-docker.tar.gz`](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-nas-docker.tar.gz)
+or [ZIP archive](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-nas-docker.zip),
+then extract one format:
+
 ```bash
 tar -xzf PlexWeekly-nas-docker.tar.gz
 cd PlexWeekly-nas-docker

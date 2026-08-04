@@ -70,9 +70,10 @@ gates. Their setup and lifecycle wrappers are platform-specific.
 <details>
 <summary><strong>Windows portable</strong></summary>
 
-1. Use [`platforms/windows`](platforms/windows) from the current source tree,
-   or download and extract `PlexWeekly-windows.zip` after the first tagged
-   release, into a permanent writable folder.
+1. Download and extract
+   [`PlexWeekly-windows.zip`](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-windows.zip)
+   into a permanent writable folder, or use
+   [`platforms/windows`](platforms/windows) from the current source tree.
 2. Run `00-SETUP-FIRST.bat` and enter your own Tautulli and SMTP values.
 3. Run `01-VERIFY-SETUP.bat`.
 4. Preview with `03-PREVIEW-NEWSLETTER.bat`, then send a controlled test with
@@ -143,20 +144,18 @@ guards first-run behavior, welcomes, and repeat schedule attempts.
 
 ## Release downloads
 
-No GitHub Release has been published yet. The current, usable source is linked
-below. After the first reviewed version tag is pushed, the release workflow
-will add the named installable archives and checksum manifest to GitHub
-Releases.
+PlexWeekly `v0.1.0` publishes five installable archives and a checksum manifest.
+The stable links below follow the latest published release.
 
-| Platform | Tagged-release artifact | Current source |
+| Platform | Published artifact | Download |
 |---|---|---|
-| Windows | `PlexWeekly-windows.zip` | [`platforms/windows`](platforms/windows) |
-| NAS / Docker | `PlexWeekly-nas-docker.tar.gz` or `.zip` | [`platforms/nas-docker`](platforms/nas-docker) |
-| macOS / Docker Desktop | `PlexWeekly-mac-docker.tar.gz` or `.zip` | [`platforms/mac-docker`](platforms/mac-docker) |
-| Integrity manifest | `SHA256SUMS.txt` | [Release process](docs/RELEASING.md) |
+| Windows | `PlexWeekly-windows.zip` | [ZIP](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-windows.zip) |
+| NAS / Docker | `PlexWeekly-nas-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-nas-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-nas-docker.zip) |
+| macOS / Docker Desktop | `PlexWeekly-mac-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.zip) |
+| Integrity manifest | `SHA256SUMS.txt` | [SHA-256 checksums](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/SHA256SUMS.txt) |
 
-There is no `latest` download until the first version tag is published. The
-README does not present the empty Releases page as a download destination.
+[Read the latest release notes](https://github.com/sparkmoxie/PlexWeekly/releases/latest)
+and verify every archive before installation.
 
 Verify a Windows download:
 

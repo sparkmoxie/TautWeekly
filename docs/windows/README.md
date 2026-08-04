@@ -23,7 +23,9 @@ Windows machine.
 
 ## Install
 
-1. Download `PlexWeekly-windows.zip` from the latest GitHub release.
+1. Download
+   [`PlexWeekly-windows.zip`](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-windows.zip)
+   from the latest GitHub release.
 2. Verify its SHA-256 value against `SHA256SUMS.txt`.
 3. Extract it into a permanent directory. Do not run it from Downloads or a
    temporary extraction view.

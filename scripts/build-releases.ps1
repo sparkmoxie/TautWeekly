@@ -31,10 +31,14 @@ function Copy-Platform {
     param(
         [string]$SourceName,
         [string]$FolderName,
-        [string]$Baseline,
         [string]$GuidePath
     )
     $source = Join-Path (Join-Path $Root 'platforms') $SourceName
+    $versionLine = [IO.File]::ReadLines((Join-Path $source 'VERSION.txt')) | Select-Object -First 1
+    if ($versionLine -notmatch '\bv(?<baseline>[0-9]+(?:\.[0-9]+)+)\b') {
+        throw "Unable to derive the $SourceName source baseline from VERSION.txt: $versionLine"
+    }
+    $baseline = $Matches['baseline']
     $destination = Join-Path $staging $FolderName
     New-Item -ItemType Directory -Path $destination | Out-Null
     Get-ChildItem -LiteralPath $source -Force | ForEach-Object {
@@ -70,9 +74,9 @@ function New-TarGz {
 }
 
 try {
-    [void](Copy-Platform -SourceName 'windows' -FolderName 'PlexWeekly-windows' -Baseline '1.6.8' -GuidePath 'docs/windows/README.md')
-    [void](Copy-Platform -SourceName 'nas-docker' -FolderName 'PlexWeekly-nas-docker' -Baseline '1.0.4' -GuidePath 'docs/nas-docker/README.md')
-    [void](Copy-Platform -SourceName 'mac-docker' -FolderName 'PlexWeekly-mac-docker' -Baseline '1.0.0' -GuidePath 'docs/mac/README.md')
+    [void](Copy-Platform -SourceName 'windows' -FolderName 'PlexWeekly-windows' -GuidePath 'docs/windows/README.md')
+    [void](Copy-Platform -SourceName 'nas-docker' -FolderName 'PlexWeekly-nas-docker' -GuidePath 'docs/nas-docker/README.md')
+    [void](Copy-Platform -SourceName 'mac-docker' -FolderName 'PlexWeekly-mac-docker' -GuidePath 'docs/mac/README.md')
 
     $forbidden = Get-ChildItem -LiteralPath $staging -Force -Recurse | Where-Object {
         ($_.PSIsContainer -and $_.Name -in @('logs','output')) -or

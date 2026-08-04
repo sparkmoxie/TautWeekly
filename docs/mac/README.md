@@ -17,7 +17,9 @@ Current source baseline: **1.0.3**.
 
 ## Install
 
-1. Download and extract `PlexWeekly-mac-docker.tar.gz` or the equivalent ZIP.
+1. Download and extract
+   [`PlexWeekly-mac-docker.tar.gz`](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.tar.gz)
+   or the equivalent [ZIP archive](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.zip).
 2. Open Terminal in the extracted directory.
 3. Make the launchers executable and start the guided installer:
 

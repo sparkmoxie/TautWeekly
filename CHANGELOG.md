@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-03
+
 ### Fixed
 
 - Pointed the README documentation entry at the live Pages site, removed
@@ -17,6 +19,10 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Made the Pages deployment follow the repository's current default launch
   branch and replaced a stale `blob/main` footer link with a default-branch
   (`HEAD`) URL.
+- Preserved array semantics for exactly one adaptive movie or episode under
+  Windows PowerShell 5.1 strict mode.
+- Derived archive source-baseline metadata from each platform's shipped
+  `VERSION.txt` instead of stale hard-coded values.
 
 ### Added
 
@@ -30,11 +36,6 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Adaptive personal activity cards with posters, movie genres and ratings,
   episode metadata, and equal content-driven heights.
 - A server-wide Binge Champion user award and counted Trending title feature.
-
-### Fixed
-
-- Preserved array semantics for exactly one adaptive movie or episode under
-  Windows PowerShell 5.1 strict mode.
 
 ### Changed
 
