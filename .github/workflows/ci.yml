@@ -38,6 +38,9 @@ jobs:
       - name: Parse all PowerShell source
         shell: powershell
         run: .\scripts\validate-powershell.ps1
+      - name: Test adaptive renderer collection edges
+        shell: powershell
+        run: .\scripts\test-renderer-collections.ps1
 
   release-archives:
     name: Reproducible release archives
