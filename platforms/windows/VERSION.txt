@@ -1,0 +1,3 @@
+PlexWeekly Portable v1.6.11
+Platform: Windows PowerShell 5.1+
+Hotfix: preserve array semantics for exactly one adaptive movie or episode

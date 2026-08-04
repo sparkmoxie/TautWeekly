@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="PlexWeekly installation and operations documentation for Windows, NAS/Docker, and macOS.">
+  <title>PlexWeekly Documentation</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <div class="progress" id="scroll-progress" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="PlexWeekly documentation home">
+      <span class="brand-mark">PW</span>
+      <span>Plex<span>Weekly</span></span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#platforms">Platforms</a>
+      <a href="#workflow">Workflow</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#security">Security</a>
+      <a href="https://github.com/sparkmoxie/PlexWeekly">GitHub</a>
+    </nav>
+    <label class="search">
+      <span class="sr-only">Search this page</span>
+      <input id="site-search" type="search" placeholder="Search docs…" autocomplete="off">
+      <kbd>/</kbd>
+    </label>
+  </header>
+
+  <main>
+    <section class="hero searchable" data-search="overview newsletter plex tautulli portable windows docker mac">
+      <div class="hero-copy">
+        <div class="eyebrow">Portable · preview-first · source available</div>
+        <h1>Your Plex week,<br><span>carefully delivered.</span></h1>
+        <p>PlexWeekly turns Tautulli activity into polished personal newsletters.
+          Choose a platform, verify the integration, inspect every email state,
+          and enable delivery only when the result is ready.</p>
+        <div class="actions">
+          <a class="button primary" href="#platforms">Choose a platform</a>
+          <a class="button" href="https://github.com/sparkmoxie/PlexWeekly/releases/latest">Download latest release</a>
+        </div>
+        <div class="pills" aria-label="Supported platforms">
+          <span>Windows</span><span>NAS / Docker</span><span>macOS</span>
+        </div>
+      </div>
+      <div class="terminal" aria-label="Example safe setup workflow">
+        <div class="terminal-head"><span></span><span></span><span></span><b>plexweekly — safe launch</b></div>
+        <pre><span class="muted">$</span> ./plexweekly.sh verify
+<span class="ok">✓</span> Tautulli connection
+<span class="ok">✓</span> SMTP STARTTLS settings
+<span class="ok">✓</span> Private runtime storage
+
+<span class="muted">$</span> ./plexweekly.sh preview-all
+<span class="gold">→</span> Six browser previews created
+
+<span class="muted">$</span> ./plexweekly.sh send-test-all
+<span class="gold">→</span> TestEmail only <span class="cursor">▋</span></pre>
+      </div>
+    </section>
+
+    <section class="metrics searchable" data-search="source baseline versions checksums automation">
+      <div><strong>3</strong><span>maintained platform implementations</span></div>
+      <div><strong>6</strong><span>deterministic preview states</span></div>
+      <div><strong>SHA-256</strong><span>release integrity manifest</span></div>
+      <div><strong>0</strong><span>credentials shipped</span></div>
+    </section>
+
+    <section id="platforms" class="section searchable" data-search="install platform windows nas docker qnap unraid macos apple silicon intel">
+      <div class="section-heading">
+        <div><div class="eyebrow">Installation tracks</div><h2>One renderer, three operating models</h2></div>
+        <p>Each guide is standalone and keeps its platform's setup, scheduling,
+          preview, and recovery workflow intact.</p>
+      </div>
+      <div class="cards platform-cards">
+        <article class="card">
+          <div class="card-icon windows">WIN</div>
+          <span class="tag">PowerShell 5.1+</span>
+          <h3>Windows portable</h3>
+          <p>Numbered launchers, local previews, and Windows Task Scheduler on an
+            always-on Windows host.</p>
+          <ul><li>Source baseline 1.6.11</li><li>No Docker required</li><li>Admin only for schedule control</li></ul>
+          <div class="card-actions"><a href="windows/">Interactive guide</a><a href="windows/README.md">Markdown</a></div>
+        </article>
+        <article class="card featured">
+          <div class="card-icon docker">NAS</div>
+          <span class="tag">Docker Compose</span>
+          <h3>NAS / Docker</h3>
+          <p>A dedicated service with persistent data and an internal scheduler
+            for QNAP, Unraid, and general Linux hosts.</p>
+          <ul><li>Source baseline 1.0.7</li><li>x86-64 and ARM64</li><li>Configurable LAN preview</li></ul>
+          <div class="card-actions"><a href="nas-docker/">Compose guide</a><a href="nas-docker/quickstart.html">Quick start</a><a href="nas-docker/README.md">Markdown</a></div>
+        </article>
+        <article class="card">
+          <div class="card-icon mac">MAC</div>
+          <span class="tag">Docker Desktop</span>
+          <h3>macOS</h3>
+          <p>Intel and Apple silicon setup with host UID/GID discovery and
+            localhost-only previews by default.</p>
+          <ul><li>Source baseline 1.0.3</li><li>Guided Terminal installer</li><li>Mac preview helper</li></ul>
+          <div class="card-actions"><a href="mac/">Interactive guide</a><a href="mac/README.md">Markdown</a></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="workflow" class="section searchable" data-search="workflow verify preview test schedule send safety">
+      <div class="section-heading">
+        <div><div class="eyebrow">Safety sequence</div><h2>Production is the last step</h2></div>
+        <p>The same operating discipline applies across all platforms.</p>
+      </div>
+      <div class="timeline">
+        <div><b>01</b><h3>Configure</h3><p>Enter private Tautulli, SMTP, branding, and schedule values locally.</p></div>
+        <div><b>02</b><h3>Verify</h3><p>Check runtime, storage, network, API, and mail settings.</p></div>
+        <div><b>03</b><h3>Preview</h3><p>Generate six deterministic HTML states without sending mail.</p></div>
+        <div><b>04</b><h3>TestEmail</h3><p>Validate real MIME and client rendering with a controlled recipient.</p></div>
+        <div><b>05</b><h3>Schedule</h3><p>Enable automatic delivery only after roster and exclusion review.</p></div>
+      </div>
+    </section>
+
+    <section id="architecture" class="section searchable" data-search="architecture tautulli plex smtp state scheduler renderer preview">
+      <div class="section-heading">
+        <div><div class="eyebrow">System map</div><h2>Small surface, explicit boundaries</h2></div>
+        <p>Tautulli is the primary data source; direct Plex access is optional.
+          Credentials and state remain local to the operator.</p>
+      </div>
+      <div class="diagram"><img src="assets/architecture.svg" alt="PlexWeekly data flow from Tautulli and optional Plex through the renderer to preview and SMTP delivery"></div>
+      <div class="link-grid">
+        <a href="CONFIGURATION.md"><span>Reference</span><b>Configuration fields</b></a>
+        <a href="TROUBLESHOOTING.md"><span>Operate</span><b>Troubleshooting</b></a>
+        <a href="RELEASING.md"><span>Maintain</span><b>Release process</b></a>
+      </div>
+    </section>
+
+    <section id="security" class="section searchable" data-search="security secrets credentials smtp api key plex token private preview backups">
+      <div class="security-panel">
+        <div class="shield">!</div>
+        <div><div class="eyebrow">Credential boundary</div><h2>Runtime data is never source data.</h2>
+          <p>Live configuration contains an SMTP credential and Tautulli API key,
+            and may contain a Plex token. State, logs, previews, and backups may
+            reveal recipients and server activity.</p>
+          <a class="button primary" href="SECURITY.md">Read the hardening guide</a>
+        </div>
+        <ul><li>Never commit live config or `.env`</li><li>Keep port 8787 private</li><li>Use application passwords</li><li>Rotate exposed credentials</li></ul>
+      </div>
+    </section>
+
+    <div class="no-results" id="no-results" hidden>No sections matched. Try “Windows,” “Docker,” “SMTP,” “schedule,” or “security.”</div>
+  </main>
+
+  <footer>
+    <span>PlexWeekly documentation</span>
+    <span>Independent community project · not affiliated with Plex or Tautulli</span>
+    <a href="https://github.com/sparkmoxie/PlexWeekly/blob/HEAD/THIRD_PARTY_NOTICES.md">Third-party notices</a>
+  </footer>
+  <script src="assets/site.js"></script>
+</body>
+</html>

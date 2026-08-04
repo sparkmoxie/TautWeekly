@@ -1,0 +1,83 @@
+# macOS Docker Desktop installation
+
+[Open the rendered interactive macOS walkthrough](https://sparkmoxie.github.io/PlexWeekly/mac/)
+
+The macOS distribution runs the PowerShell newsletter engine in Docker Desktop
+and provides Mac-native setup and preview helpers.
+
+Current source baseline: **1.0.3**.
+
+## Requirements
+
+- An Intel or Apple silicon Mac.
+- Docker Desktop with Docker Compose available in Terminal.
+- Network access from Docker to Tautulli and an SMTP STARTTLS endpoint.
+- A Tautulli API key.
+- A permanent project directory writable by the current macOS user.
+
+## Install
+
+1. Download and extract
+   [`PlexWeekly-mac-docker.tar.gz`](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.tar.gz)
+   or the equivalent [ZIP archive](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.zip).
+2. Open Terminal in the extracted directory.
+3. Make the launchers executable and start the guided installer:
+
+```bash
+chmod +x INSTALL-MAC.command mac-install.sh plexweekly.sh app/*.sh app/bin/*.sh
+./mac-install.sh
+```
+
+Alternatively, double-click `INSTALL-MAC.command` after granting it execute
+permission.
+
+The installer detects the current UID/GID, creates a private `.env`, builds the
+container, runs interactive setup, and verifies the result. Existing `.env` and
+`data/config.json` files are preserved unless you explicitly replace them.
+
+## Service connectivity
+
+For software running directly on the Mac, Docker Desktop exposes the host as
+`host.docker.internal`:
+
+```text
+http://host.docker.internal:8181   # Tautulli
+http://host.docker.internal:32400  # optional direct Plex URL
+```
+
+For another server, use a resolvable hostname such as
+`http://media.example.test:8181`. For a Tautulli container on the same
+user-defined Docker network, use its service name.
+
+## Safe acceptance sequence
+
+```bash
+./plexweekly.sh verify
+./plexweekly.sh list-users
+./plexweekly.sh preview-all
+./plexweekly.sh open-preview
+./plexweekly.sh send-test-all
+./plexweekly.sh schedule-status
+```
+
+During preview review, confirm the adaptive one-item cards, movie genres,
+Binge Champion winner disclosure, and counted Trending section.
+
+Enable automation only after reviewing browser previews and TestEmail messages:
+
+```bash
+./plexweekly.sh schedule-enable
+```
+
+The macOS Compose default binds previews to `127.0.0.1`. Keep that default
+unless trusted-LAN access is intentional.
+
+## Data and updates
+
+Private runtime data lives in `data/`. Back it up with
+`./plexweekly.sh backup`, keep the archive private, and update the image with
+`./plexweekly.sh update`. Re-run verification and controlled previews after an
+update.
+
+See [configuration](../CONFIGURATION.md), [security](../SECURITY.md), and
+[troubleshooting](../TROUBLESHOOTING.md).

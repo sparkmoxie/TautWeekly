@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>PlexWeekly NAS Portable v1.0.7 — Docker Compose Guide</title>
+<style>
+:root {
+  --bg:#080808;
+  --bg-soft:#101010;
+  --panel:#171717;
+  --panel-2:#1f1f1f;
+  --panel-3:#252525;
+  --border:#303030;
+  --border-bright:#4a4a4a;
+  --text:#f5f5f5;
+  --muted:#a5a5a5;
+  --faint:#737373;
+  --plex:#e5a00d;
+  --plex-2:#ffbd32;
+  --green:#6bd88c;
+  --blue:#72b9ff;
+  --red:#ff7474;
+  --purple:#bd96ff;
+  --shadow:0 18px 70px rgba(0,0,0,.45);
+  --radius:18px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:92px}
+body{
+  margin:0;color:var(--text);line-height:1.58;
+  font-family:"Segoe UI",Inter,Arial,sans-serif;
+  background:
+    radial-gradient(circle at 12% 0%,rgba(229,160,13,.11),transparent 34rem),
+    radial-gradient(circle at 100% 18%,rgba(229,160,13,.055),transparent 30rem),
+    var(--bg);
+}
+button,input{font:inherit}
+a{color:inherit}
+code,pre,kbd{font-family:"Cascadia Code",Consolas,"SFMono-Regular",monospace}
+::selection{background:rgba(229,160,13,.35);color:#fff}
+
+.progress{
+  position:fixed;inset:0 auto auto 0;width:0;height:3px;z-index:999;
+  background:linear-gradient(90deg,var(--plex),#ffd66b,var(--purple));
+  box-shadow:0 0 16px rgba(229,160,13,.75)
+}
+.topbar{
+  position:sticky;top:0;z-index:60;
+  border-top:1px solid rgba(255,189,50,.24);
+  border-bottom:1px solid rgba(255,255,255,.08);
+  background:rgba(8,8,8,.88);backdrop-filter:blur(18px)
+}
+.topbar-inner{
+  max-width:1500px;min-height:68px;margin:0 auto;padding:10px 24px;
+  display:flex;align-items:center;gap:18px
+}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;min-width:max-content}
+.plex-mark{
+  width:34px;height:34px;border-radius:9px;position:relative;
+  background:linear-gradient(145deg,#ffc13c,#d58c00);
+  box-shadow:0 7px 26px rgba(229,160,13,.28);
+  animation:markPulse 3s ease-in-out infinite
+}
+.plex-mark::before{
+  content:"";position:absolute;left:12px;top:8px;width:10px;height:18px;background:#0b0b0b;
+  clip-path:polygon(0 0,100% 50%,0 100%,35% 50%)
+}
+.brand-copy strong{display:block;letter-spacing:.08em;font-size:13px}
+.brand-copy span{display:block;color:var(--muted);font-size:11px}
+.top-search{margin-left:auto;width:min(470px,44vw);position:relative}
+.top-search input{
+  width:100%;height:42px;border:1px solid var(--border);border-radius:999px;
+  background:#151515;color:var(--text);padding:0 46px 0 17px;outline:none
+}
+.top-search input:focus{border-color:var(--plex);box-shadow:0 0 0 3px rgba(229,160,13,.12)}
+.search-icon{position:absolute;right:16px;top:9px;color:var(--plex);font-size:18px}
+.search-count{color:var(--muted);font-size:12px;white-space:nowrap}
+.search-count b{color:var(--green)}
+
+.layout{
+  max-width:1500px;margin:0 auto;display:grid;grid-template-columns:270px minmax(0,1fr);
+  gap:32px;padding:30px 24px 84px
+}
+.sidebar{position:sticky;top:98px;align-self:start;max-height:calc(100vh - 118px);overflow:auto;padding-right:8px}
+.sidebar-card{
+  padding:18px;border:1px solid var(--border-bright);border-radius:17px;
+  background:linear-gradient(155deg,rgba(28,28,28,.92),rgba(16,16,16,.92));
+  box-shadow:var(--shadow)
+}
+.sidebar-title{color:var(--plex);font-size:11px;font-weight:850;letter-spacing:.17em;margin-bottom:9px}
+.sidebar a{
+  display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--muted);
+  border-radius:9px;padding:8px 9px;font-size:13px
+}
+.sidebar a:hover,.sidebar a.active{background:#272727;color:#fff}
+.nav-dot{width:6px;height:6px;border-radius:50%;background:#555}
+.sidebar a.active .nav-dot{background:var(--plex);box-shadow:0 0 9px rgba(229,160,13,.9)}
+.sidebar hr{border:0;border-top:1px solid var(--border);margin:12px 0}
+.sidebar-note{color:var(--faint);font-size:11px;padding:0 8px 4px}
+
+main{min-width:0}
+.hero{
+  position:relative;overflow:hidden;min-height:480px;
+  display:grid;grid-template-columns:1.2fr .8fr;gap:34px;align-items:center;
+  border:1px solid var(--border-bright);border-radius:27px;padding:58px;
+  background:
+    linear-gradient(105deg,rgba(15,15,15,.985) 0%,rgba(20,20,20,.93) 56%,rgba(32,23,7,.84) 100%);
+  box-shadow:var(--shadow)
+}
+.hero::before{
+  content:"";position:absolute;width:470px;height:470px;right:-175px;top:-175px;
+  border-radius:50%;border:92px solid rgba(229,160,13,.08);transform:rotate(-18deg)
+}
+.hero::after{
+  content:"";position:absolute;inset:auto 0 0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--plex),var(--purple),transparent)
+}
+.hero-copy,.hero-visual{position:relative;z-index:2}
+.kicker{
+  display:inline-flex;align-items:center;gap:8px;padding:7px 11px;
+  border:1px solid rgba(229,160,13,.36);border-radius:999px;
+  color:#ffd470;background:rgba(229,160,13,.08);
+  font-size:11px;font-weight:850;letter-spacing:.13em
+}
+.kicker-dot{width:7px;height:7px;border-radius:50%;background:var(--plex);box-shadow:0 0 12px var(--plex)}
+.hero h1{margin:18px 0 14px;font-size:clamp(43px,5vw,75px);line-height:.98;letter-spacing:-.055em}
+.hero h1 span{color:var(--plex)}
+.hero p{max-width:720px;margin:0 0 27px;color:#bdbdbd;font-size:18px}
+.hero-actions{display:flex;gap:11px;flex-wrap:wrap}
+.button{
+  min-height:44px;padding:0 16px;display:inline-flex;align-items:center;gap:8px;
+  border:1px solid var(--border-bright);border-radius:11px;background:#252525;
+  color:#fff;text-decoration:none;font-weight:760;font-size:13px
+}
+.button.primary{background:var(--plex);border-color:var(--plex);color:#0c0c0c}
+.button:hover{transform:translateY(-1px);filter:brightness(1.08)}
+
+.hero-console{
+  border:1px solid #3b3b3b;border-radius:18px;overflow:hidden;background:#0d0d0d;
+  box-shadow:0 22px 65px rgba(0,0,0,.52);transform:rotate(1.1deg)
+}
+.console-top{height:38px;padding:0 13px;display:flex;align-items:center;gap:7px;background:#1d1d1d;border-bottom:1px solid #333}
+.console-dot{width:9px;height:9px;border-radius:50%}
+.console-dot:nth-child(1){background:#ff6b5e}.console-dot:nth-child(2){background:#ffbd42}.console-dot:nth-child(3){background:#5ed36a}
+.console-title{margin-left:auto;color:#777;font:11px Consolas,monospace}
+.console-body{padding:21px;min-height:275px;color:#c8c8c8;font:12px/1.77 Consolas,monospace}
+.prompt{color:var(--plex)}.ok{color:#75d993}.muted{color:#777}.blue{color:#86c4ff}
+.blink{animation:blink 1s steps(2,end) infinite}
+@keyframes blink{50%{opacity:0}}
+@keyframes markPulse{0%,100%{box-shadow:0 7px 26px rgba(229,160,13,.26)}50%{box-shadow:0 7px 34px rgba(229,160,13,.48)}}
+
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0 0}
+.stat-card{
+  border:1px solid var(--border);border-radius:16px;background:var(--panel);
+  padding:18px;position:relative;overflow:hidden
+}
+.stat-card::after{content:"";position:absolute;inset:auto 0 0;height:2px;background:linear-gradient(90deg,var(--plex),transparent)}
+.stat-value{font-size:29px;font-weight:850;color:var(--plex)}
+.stat-label{color:var(--muted);font-size:12px}
+
+section.content-section{scroll-margin-top:94px;margin-top:64px}
+.section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:22px;margin-bottom:20px}
+.section-eyebrow{color:var(--plex);font-size:11px;font-weight:850;letter-spacing:.16em;text-transform:uppercase}
+.section-heading h2{margin:5px 0 0;font-size:clamp(29px,3vw,43px);letter-spacing:-.035em}
+.section-heading p{max-width:590px;color:var(--muted);margin:0;text-align:right}
+.panel{border:1px solid var(--border);border-radius:var(--radius);background:var(--panel);box-shadow:var(--shadow)}
+
+.arch-grid{display:grid;grid-template-columns:1fr 72px 1fr 72px 1fr;align-items:center;padding:27px}
+.arch-node{min-height:185px;border:1px solid #383838;border-radius:16px;background:#121212;padding:20px;text-align:center}
+.arch-icon{width:68px;height:68px;margin:0 auto 13px;border-radius:18px;display:grid;place-items:center;background:rgba(229,160,13,.09);border:1px solid rgba(229,160,13,.25)}
+.arch-icon img{width:46px;height:46px;object-fit:contain}
+.arch-node h3{margin:0 0 7px;font-size:17px}
+.arch-node p{margin:0;color:var(--muted);font-size:12px}
+.arch-arrow{color:var(--plex);text-align:center;font-size:29px}
+.arch-note{padding:0 27px 27px;color:var(--muted);font-size:12px}
+
+.timeline{position:relative;padding:29px}
+.timeline::before{content:"";position:absolute;left:55px;top:47px;bottom:47px;width:2px;background:linear-gradient(var(--plex),#424242)}
+.timeline-step{display:grid;grid-template-columns:53px 1fr;gap:23px;position:relative;padding:10px 0 24px}
+.step-number{
+  width:53px;height:53px;border-radius:14px;display:grid;place-items:center;
+  background:#111;border:1px solid #494949;color:var(--plex);font-weight:900;z-index:1;
+  box-shadow:0 0 0 6px var(--panel)
+}
+.step-content h3{margin:2px 0 5px;font-size:18px}
+.step-content p{color:var(--muted);margin:0 0 11px}
+
+.code-block{position:relative;border:1px solid #343434;background:#0b0b0b;border-radius:12px;padding:17px;overflow:auto;margin-top:12px}
+.code-block pre{margin:0;color:#e6e6e6;font:12px/1.68 Consolas,monospace;white-space:pre-wrap;word-break:break-word}
+.copy-button{
+  border:0;border-radius:7px;background:#2b2b2b;color:#d2d2d2;padding:6px 9px;
+  cursor:pointer;font-size:11px
+}
+.copy-button:hover{background:var(--plex);color:#111}
+.code-block .copy-button{position:absolute;top:9px;right:9px}
+.cmd{color:#f0c56c}.comment{color:#777}.path{color:#9cc9ff}
+
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}
+.grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.card{
+  border:1px solid var(--border);border-radius:17px;background:linear-gradient(150deg,#1c1c1c,#121212);
+  padding:20px;min-height:165px
+}
+.card:hover{border-color:#555;transform:translateY(-2px);box-shadow:0 14px 42px rgba(0,0,0,.24)}
+.card-badge{
+  width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
+  background:rgba(229,160,13,.1);border:1px solid rgba(229,160,13,.28);
+  color:var(--plex);font-weight:900;margin-bottom:14px
+}
+.card h3{margin:0 0 7px;font-size:17px}
+.card p{margin:0;color:var(--muted);font-size:13px}
+.card code{color:#f0c56c}
+
+.callout{
+  display:flex;gap:16px;margin-top:16px;padding:18px;border-radius:15px;
+  border:1px solid rgba(229,160,13,.3);background:rgba(229,160,13,.07)
+}
+.callout-icon{width:39px;height:39px;flex:0 0 auto;border-radius:11px;display:grid;place-items:center;background:var(--plex);color:#111;font-weight:950}
+.callout strong{display:block;margin-bottom:3px}
+.callout p{margin:0;color:#c6b58f;font-size:12px}
+.callout.red{border-color:rgba(255,116,116,.35);background:rgba(255,116,116,.07)}
+.callout.red .callout-icon{background:var(--red)}
+.callout.green{border-color:rgba(107,216,140,.35);background:rgba(107,216,140,.07)}
+.callout.green .callout-icon{background:var(--green)}
+.callout.blue{border-color:rgba(114,185,255,.35);background:rgba(114,185,255,.07)}
+.callout.blue .callout-icon{background:var(--blue)}
+
+.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:15px;background:var(--panel)}
+table{width:100%;border-collapse:collapse;min-width:720px}
+th,td{padding:14px 16px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+th{background:#202020;color:#ddd;font-size:11px;text-transform:uppercase;letter-spacing:.09em}
+td{color:#bcbcbc;font-size:13px}
+tr:last-child td{border-bottom:0}
+td strong{color:#fff}
+.risk{
+  display:inline-flex;padding:4px 8px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.1em
+}
+.risk.safe{color:#9ae8b1;background:rgba(68,190,104,.12);border:1px solid rgba(68,190,104,.35)}
+.risk.test{color:#94c9ff;background:rgba(61,142,225,.12);border:1px solid rgba(61,142,225,.35)}
+.risk.send{color:#ffaaaa;background:rgba(233,77,77,.12);border:1px solid rgba(233,77,77,.38)}
+.risk.system{color:#d2b4ff;background:rgba(147,90,230,.12);border:1px solid rgba(147,90,230,.38)}
+
+.path-tree{
+  border:1px solid #333;border-radius:15px;background:#0b0b0b;padding:20px;
+  color:#d4d4d4;font:12px/1.78 Consolas,monospace;white-space:pre-wrap
+}
+.checklist{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.checklist li{display:flex;gap:10px;color:#c0c0c0;font-size:13px}
+.checklist li::before{
+  content:"✓";flex:0 0 auto;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+  color:var(--green);background:#122017;border:1px solid #29533a;font-size:11px
+}
+
+details{border:1px solid var(--border);border-radius:13px;background:var(--panel);margin-bottom:9px;overflow:hidden}
+summary{cursor:pointer;list-style:none;padding:16px 18px;font-weight:750}
+summary::-webkit-details-marker{display:none}
+summary::before{
+  content:"+";display:inline-grid;place-items:center;width:23px;height:23px;margin-right:10px;
+  border-radius:7px;background:#292929;color:var(--plex);font-weight:900
+}
+details[open] summary::before{content:"–"}
+.details-body{padding:17px 18px;border-top:1px solid var(--border);background:#101010;color:var(--muted);font-size:13px}
+
+.hidden-by-search{display:none!important}
+.no-results{
+  display:none;margin:28px 0;padding:19px;border:1px solid rgba(229,160,13,.35);
+  border-radius:15px;background:rgba(229,160,13,.08);color:#e6cc91
+}
+.no-results.show{display:block}
+.toast{
+  position:fixed;right:22px;bottom:22px;z-index:1000;opacity:0;pointer-events:none;
+  transform:translateY(14px);transition:.2s;background:var(--plex);color:#111;
+  border-radius:10px;padding:10px 13px;font-size:12px;font-weight:850
+}
+.toast.show{opacity:1;transform:translateY(0)}
+.footer{
+  margin-top:64px;padding:29px;border-top:1px solid var(--border);
+  display:flex;justify-content:space-between;gap:20px;color:var(--faint);font-size:11px
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+@media(max-width:1160px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{display:none}
+  .hero{grid-template-columns:1fr}
+  .hero-visual{max-width:700px}
+  .arch-grid{grid-template-columns:1fr;gap:10px}
+  .arch-arrow{transform:rotate(90deg)}
+  .grid-4{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:780px){
+  .topbar-inner{padding:9px 14px}
+  .brand-copy span,.search-count{display:none}
+  .top-search{width:100%}
+  .layout{padding:18px 12px 58px}
+  .hero{padding:35px 22px;min-height:auto;border-radius:20px}
+  .hero h1{font-size:44px}
+  .hero p{font-size:15px}
+  .stats-grid,.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
+  .section-heading{align-items:flex-start;flex-direction:column}
+  .section-heading p{text-align:left}
+  .footer{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#overview">
+      <span class="plex-mark"></span>
+      <span class="brand-copy">
+        <strong>PLEXWEEKLY</strong>
+        <span>NAS Portable v1.0.7 · Docker Compose guide</span>
+      </span>
+    </a>
+    <div class="top-search">
+      <input id="search" type="search" placeholder="Search Compose, Tautulli, schedule, backup…" aria-label="Search this guide">
+      <span class="search-icon">⌕</span>
+    </div>
+    <div class="search-count" id="searchCount"><b>●</b> Guide ready</div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav class="sidebar-card" id="sideNav">
+      <div class="sidebar-title">MISSION NAVIGATION</div>
+      <a href="#overview"><span class="nav-dot"></span>Overview</a>
+      <a href="#architecture"><span class="nav-dot"></span>Architecture</a>
+      <a href="#requirements"><span class="nav-dot"></span>Requirements</a>
+      <a href="#extract"><span class="nav-dot"></span>Extract package</a>
+      <a href="#environment"><span class="nav-dot"></span>Configure .env</a>
+      <a href="#build"><span class="nav-dot"></span>Build & start</a>
+      <a href="#tautulli"><span class="nav-dot"></span>Connect Tautulli</a>
+      <a href="#acceptance"><span class="nav-dot"></span>Acceptance tests</a>
+      <a href="#schedule"><span class="nav-dot"></span>Enable schedule</a>
+      <a href="#operations"><span class="nav-dot"></span>Daily operations</a>
+      <a href="#backup"><span class="nav-dot"></span>Backup & update</a>
+      <a href="#platforms"><span class="nav-dot"></span>QNAP / Unraid / Linux</a>
+      <a href="#troubleshooting"><span class="nav-dot"></span>Troubleshooting</a>
+      <a href="#reference"><span class="nav-dot"></span>Command reference</a>
+      <hr>
+      <div class="sidebar-note">Standalone, offline, and specific to the v1.0.7 Compose package.</div>
+    </nav>
+  </aside>
+
+  <main>
+    <section class="hero searchable" id="overview" data-search="overview docker compose nas plexweekly v1.0.7">
+      <div class="hero-copy">
+        <div class="kicker"><span class="kicker-dot"></span>READ ME FIRST · DOCKER COMPOSE EDITION</div>
+        <h1>Run PlexWeekly<br><span>natively on your NAS.</span></h1>
+        <p>A focused walkthrough for deploying the NAS Portable package with Docker Compose, connecting it to Tautulli, testing every email state, and enabling weekly delivery without modifying the Tautulli container.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#extract">Start the install →</a>
+          <a class="button" href="#acceptance">Open acceptance tests</a>
+          <a class="button" href="#reference">View command reference</a>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="hero-console">
+          <div class="console-top">
+            <span class="console-dot"></span><span class="console-dot"></span><span class="console-dot"></span>
+            <span class="console-title">plexweekly / compose</span>
+          </div>
+          <div class="console-body">
+            <div><span class="prompt">$</span> docker compose build --pull</div>
+            <div><span class="prompt">$</span> docker compose up -d</div>
+            <div><span class="prompt">$</span> ./plexweekly.sh setup</div>
+            <br>
+            <div class="ok">[OK] Tautulli API connected</div>
+            <div class="ok">[OK] Animated assets verified</div>
+            <div class="ok">[OK] Preview web server healthy</div>
+            <div class="ok">[OK] Six email states available</div>
+            <br>
+            <div><span class="blue">NEXT:</span> ./plexweekly.sh preview-all</div>
+            <div class="muted">No Plex user receives this preview.</div>
+            <br>
+            <div><span class="prompt">$</span> <span class="blink">|</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="stats-grid">
+      <article class="stat-card searchable"><div class="stat-value">1</div><div class="stat-label">dedicated Compose service</div></article>
+      <article class="stat-card searchable"><div class="stat-value">1</div><div class="stat-label">persistent data mount</div></article>
+      <article class="stat-card searchable"><div class="stat-value">6</div><div class="stat-label">deterministic preview states</div></article>
+      <article class="stat-card searchable"><div class="stat-value">0</div><div class="stat-label">automatic sends enabled initially</div></article>
+    </div>
+
+    <div class="no-results" id="noResults">No guide sections matched that search. Try “Tautulli,” “PUID,” “preview,” “schedule,” or “backup.”</div>
+
+    <section class="content-section searchable" id="architecture" data-search="architecture compose container data volume port healthcheck">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Deployment model</div><h2>What Docker Compose creates</h2></div>
+        <p>PlexWeekly remains independent from Tautulli while communicating through its HTTP API.</p>
+      </div>
+      <div class="panel">
+        <div class="arch-grid">
+          <div class="arch-node">
+            <div class="arch-icon"><img src="data:image/gif;base64,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" alt=""></div>
+            <h3>Tautulli</h3>
+            <p>Existing native or containerized service, normally exposed on port 8181.</p>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-node">
+            <div class="arch-icon"><span style="font-size:34px;color:var(--plex)">◆</span></div>
+            <h3>PlexWeekly container</h3>
+            <p>PowerShell 7, ImageMagick, internal scheduler, email renderer, and preview server.</p>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-node">
+            <div class="arch-icon"><img src="data:image/gif;base64,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qBqWg2kZY4vrWfkhmPqJOSKZ/5l5IpoETumdks15uSGbDk4np3PB3emiY3qWSVmfE6Im6KCEFmrooYgmquihpi2KmmiOnuZZpKNZRiloBV362VaaTsZYp50pBWpigY062Fl8WWRYXpGlWuperLYvCuurdMWaqatF4Wpro5XlOuuuvFpFa6+7ruprrcAG29atvxar60PGOtsstM96FBAAIfkECQgAAAAsEgAIAF0AZQCBAAAA5aANGBgY////CP8AAQgcSLCgwYMBDipcyLChw4cQEQZIGLEiAIoWM2acyFGjw44eQzbkSFKkRJAmUxIkiTIly4kqYwp8iVEkTZk4b9p8ibOnTo0/e8oMGpGo0JhGR/I8epRmTYZJmSKNOtCp1KsXl55kiRVrUqpdc2qdOTbs1Z9gzfrkmVbtWqct3YaFC1OuXLh2F9Ldy7ev378V/woeTLjvx8KIEyvWq7ixY8AGH0uejHcl5cuYa2beLLkq58+NyYIeTTgr6dObBahezbq169ewY8t2jXm27du4c0/Ozbu3bwGPfwsfHrsx8eOtBygf0Fsx8ucCljPnnRj6c+m+EVtHjr154e3Hu1P//w5+uHjd5Mv/Po9bu/r1y7Onf8+b/W339OvH9044f2/7tuHn320AzibggLMVKNuBCMamYHHzNejgfuP1J2GCFKJn4YUTKiffhhy+9iBsDIa42oivlWhidBm2F+GKqqFI24swytiaiibayBqOIeq4Go8c+qgakBcKCRyNKxpJpIRKIplji/c52SOUAUoZJJUGWlkklgtqySSXEIIIY4xgkuhlg02KOWaag42ZXJkpLomgkM65SaaHFcppZ5zG7cmfY35quFugYaJm6KGIJqrooow26miipj2KmmiSnuZZpaNZhiloBW362VaeTsZYqJ0pRWpigZ062Fl8WWRYXpG1NJrqXrDGSuusdNXaqaxF8aprpJX1euuvwFqFa7C/vipsrsQW29auwybr60PKShsttdN6FBAAIfkECQgAAAAsEgAJAF0AZQCBAAAA5aANGBgY////CP8AAQgcSLCgwYMBDipcyLChw4cQEQZIGLEiAIoWM2acyFGjw44eQzbkSFKkRJAmUxIkiTIly4kqYwp8iVEkTZk4b9p8ibOnTo0/e8oMGpGo0JhGR/I8epRmTYZJmSKNOtCp1KsXl55kiRVrUqpdc2qdOTbs1Z9gzfrkmVbtWqct3YaFC1OuXLh2F9Ldy7ev378V/woeTLjvx8KIEyvWq7ixY8AGH0uejHcl5cuYa2beLLkq58+NyYIeTTgr6dObBahezbq169ewY8t2jXm27du4c0/Ozbu3bwGPfwsfHrsx8eOyBygfYFsx8ueulzOfnRi69dXSbyO+fj1788LcrXv/pw4+/PPxsrebR46+ePn1xNvDVg9/uPzX9Ov/vk/7vX7f/LWW33+8BcjagATiZuBqCCZo24KqNehgcstp59+ED1b4HWEY5gYhcBd2GNuHEorYGokhmhidhuRxqCKFylno4ouwoTgjjSvGuOFgONbIYnop9mgjjz3mOF2LRBbJ2pCCKXnij+7d6CSTfzm5JJTzBYkjlX5ZiR2W+GlJI5d9eakamXyZKQCae6nJJl1ugtmfmCpC6JyXdt6pJpLV7RmlY36GSVmgEaJm6KGIJqrooow26uiipj2KmmiSnuZZpaNZhiloBW362VaeTsZYqJ0pRWpigZ062Fl8WWRYXpG1NJrqXrDGSuusdNXaqaxF8aprpJX1euuvwFqFa7C/vipsrsQW29auwybr60PKShsttdN6FBAAIfkECQgAAAAsEgAJAF0AZQCBAAAA5aANGBgY////CP8AAQgcSLCgwYMBDipcyLChw4cQEQZIGLEiAIoWM2acyFGjw44eQzbkSFKkRJAmUxIkiTIly4kqYwp8iVEkTZk4b9p8ibOnTo0/e8oMGpGo0JhGR/I8epRmTYZJmSKNOtCp1KsXl55kiRVrUqpdc2qdOTbs1Z9gzfrkmVbtWqct3YaFC1OuXLh2F9Ldy7ev378V/woeTLjvx8KIEyvWq7ixY8AGH0uejHcl5cuYa2beLLkq58+NyYIeTTgr6dObBahezbq169ewY8t2jXm27du4c0/Ozbu3bwGPfwsfHrsx8eO5Bygf8Fox8uezlzOnjRi6ddjSYVe/zn119uaFu4v//06dsPju5FtvP289Pev17J+7Xw0//vH5quvbH44fePj9yPWnH4C+Cfgfgfwtp92BCP5moHkNCvfgYBFKqCB4EFbY24SCaVjgheVR6CFvHP41IokgqsfgidGl+N6KLMZWol8x3jZjXzXadiNfObao3IIZ9vjajnsJKaOL9MFopGpE0rXkkEjmp+SSTcL1pGtVOnVla1nStCVrXb70pXdR+hfklmGyNCaTZQ5IZZtuComfc2POSeeaGN6JZ5LB7SklZXiiJuighBZq6KGIJqoooqYtippojp7mWaSjWUYpaAVd+tlWmk7GWKedKQVqYoGNOthZfFlkWF6RpVrqXqy2Lwrrq3TFmqmrReFqa6OV5TrrrrxaRWuvu67qa63ABtvWrb8Wq+tDxjrbLLTPehQQADs=" alt=""></div>
+            <h3>Persistent <code>data/</code></h3>
+            <p>Configuration, state, assets, logs, previews, and the automatic-send guard.</p>
+          </div>
+        </div>
+        <div class="arch-note">Compose maps host port <strong>8787</strong> to container port <strong>8080</strong>, mounts <code>./data:/data</code>, uses <code>restart: unless-stopped</code>, and checks both the preview server and a served animated asset.</div>
+      </div>
+    </section>
+
+    <section class="content-section searchable" id="requirements" data-search="requirements prerequisites docker compose cpu arm64 amd64 storage ssh smtp">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Preflight</div><h2>Requirements</h2></div>
+        <p>Confirm these before extracting the package.</p>
+      </div>
+      <div class="grid-3">
+        <article class="card"><div class="card-badge">01</div><h3>Docker + Compose</h3><p><code>docker compose version</code> or the older <code>docker-compose</code> command must work.</p></article>
+        <article class="card"><div class="card-badge">02</div><h3>64-bit host</h3><p>Supported host architectures are <code>x86_64/amd64</code> and <code>aarch64/arm64</code>.</p></article>
+        <article class="card"><div class="card-badge">03</div><h3>Persistent folder</h3><p>Use a NAS share that survives container recreation and is included in backups.</p></article>
+        <article class="card"><div class="card-badge">04</div><h3>Tautulli API</h3><p>Have the Tautulli URL, published port, and API key available.</p></article>
+        <article class="card"><div class="card-badge">05</div><h3>SMTP</h3><p>Use an authenticated STARTTLS provider, typically on port 587.</p></article>
+        <article class="card"><div class="card-badge">06</div><h3>Test recipient</h3><p>Choose a private <code>TestEmail</code> before any real Plex user delivery is enabled.</p></article>
+      </div>
+    </section>
+
+    <section class="content-section searchable" id="extract" data-search="extract zip tar gz folder qnap unraid linux path">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Step 1</div><h2>Extract one archive</h2></div>
+        <p>The ZIP and TAR.GZ contain the same application. Install only one.</p>
+      </div>
+      <div class="grid-2">
+        <article class="card">
+          <div class="card-badge">ZIP</div>
+          <h3>Graphical or Windows-first extraction</h3>
+          <p>Use the ZIP when extracting with File Explorer or another graphical archive utility, then copy the folder to your NAS.</p>
+          <div class="code-block"><button class="copy-button">Copy</button><pre>PlexWeekly-nas-docker.zip</pre></div>
+        </article>
+        <article class="card">
+          <div class="card-badge">TGZ</div>
+          <h3>Linux/NAS extraction</h3>
+          <p>Use TAR.GZ when extracting directly on the NAS over SSH.</p>
+          <div class="code-block"><button class="copy-button">Copy</button><pre>mkdir -p /srv/containers/plexweekly
+tar -xzf PlexWeekly-nas-docker.tar.gz \
+  --strip-components=1 \
+  -C /srv/containers/plexweekly</pre></div>
+        </article>
+      </div>
+      <div class="callout blue"><div class="callout-icon">i</div><div><strong>Recommended project folder</strong><p>The folder containing <code>compose.yaml</code> should itself be persistent. Compose uses the relative mount <code>./data:/data</code>.</p></div></div>
+    </section>
+
+    <section class="content-section searchable" id="environment" data-search="env timezone puid pgid preview bind port base url permissions">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Step 2</div><h2>Create and edit <code>.env</code></h2></div>
+        <p>These host-specific values control permissions, timezone, and the preview address.</p>
+      </div>
+      <div class="timeline panel">
+        <article class="timeline-step">
+          <div class="step-number">01</div>
+          <div class="step-content">
+            <h3>Create the file</h3>
+            <div class="code-block"><button class="copy-button">Copy</button><pre>cd /srv/containers/plexweekly
+cp .env.example .env</pre></div>
+          </div>
+        </article>
+        <article class="timeline-step">
+          <div class="step-number">02</div>
+          <div class="step-content">
+            <h3>Find a non-root user and group</h3>
+            <div class="code-block"><button class="copy-button">Copy</button><pre>id -u
+id -g</pre></div>
+            <p>Do not configure the container to run as UID or GID <code>0</code>.</p>
+          </div>
+        </article>
+        <article class="timeline-step">
+          <div class="step-number">03</div>
+          <div class="step-content">
+            <h3>Edit the values</h3>
+            <div class="code-block"><button class="copy-button">Copy</button><pre>COMPOSE_PROJECT_NAME=plexweekly
+TZ=America/Phoenix
+PUID=1000
+PGID=1000
+UMASK=077
+PREVIEW_BIND=0.0.0.0
+PREVIEW_PORT=8787
+PREVIEW_BASE_URL=http://media.example.test:8787</pre></div>
+          </div>
+        </article>
+      </div>
+      <div class="table-wrap" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Variable</th><th>Meaning</th><th>Recommended NAS value</th></tr></thead>
+          <tbody>
+            <tr><td><code>TZ</code></td><td>Container and scheduler timezone</td><td>IANA zone such as <code>America/Phoenix</code></td></tr>
+            <tr><td><code>PUID</code>/<code>PGID</code></td><td>Ownership used inside the container</td><td>Non-root IDs that can write the project <code>data/</code> folder</td></tr>
+            <tr><td><code>UMASK</code></td><td>Permissions for new files</td><td><code>077</code></td></tr>
+            <tr><td><code>PREVIEW_BIND</code></td><td>Host interface for the preview port</td><td><code>0.0.0.0</code> for LAN access or <code>127.0.0.1</code> for host-only</td></tr>
+            <tr><td><code>PREVIEW_PORT</code></td><td>Host preview port</td><td><code>8787</code></td></tr>
+            <tr><td><code>PREVIEW_BASE_URL</code></td><td>URL shown after preview generation</td><td><code>http://NAS_LAN_IP:8787</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="content-section searchable" id="build" data-search="build start up compose setup wizard config">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Step 3</div><h2>Build, start, and configure</h2></div>
+        <p>The image is built locally from the included Dockerfile.</p>
+      </div>
+      <div class="timeline panel">
+        <article class="timeline-step">
+          <div class="step-number">01</div>
+          <div class="step-content">
+            <h3>Build the image</h3>
+            <div class="code-block"><button class="copy-button">Copy</button><pre>docker compose build --pull</pre></div>
+          </div>
+        </article>
+        <article class="timeline-step">
+          <div class="step-number">02</div>
+          <div class="step-content">
+            <h3>Start the service</h3>
+            <div class="code-block"><button class="copy-button">Copy</button><pre>docker compose up -d
+docker compose ps</pre></div>
+          </div>
+        </article>
+        <article class="timeline-step">
+          <div class="step-number">03</div>
+          <div class="step-content">
+            <h3>Run the interactive setup wizard</h3>
+            <div class="code-block"><button class="copy-button">Copy</button><pre>chmod +x plexweekly.sh
+./plexweekly.sh setup</pre></div>
+            <p>The Plex URL and token are optional. Pressing Enter at the token prompt safely leaves it blank.</p>
+          </div>
+        </article>
+        <article class="timeline-step">
+          <div class="step-number">04</div>
+          <div class="step-content">
+            <h3>Restart after configuration</h3>
+            <div class="code-block"><button class="copy-button">Copy</button><pre>docker compose restart plexweekly</pre></div>
+          </div>
+        </article>
+      </div>
+      <div class="callout green"><div class="callout-icon">✓</div><div><strong>Alternative QNAP workflow</strong><p>On QNAP, <code>./qnap-install.sh</code> creates <code>.env</code>, builds, starts, runs setup, restarts, and verifies. The manual Compose workflow above is easier to adapt across QNAP, Unraid, and generic Linux NAS systems.</p></div></div>
+    </section>
+
+    <section class="content-section searchable" id="tautulli" data-search="tautulli url network localhost nas ip custom docker network api key plex">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Step 4</div><h2>Point PlexWeekly at Tautulli</h2></div>
+        <p>Choose the address according to where Tautulli runs.</p>
+      </div>
+      <div class="grid-3">
+        <article class="card">
+          <div class="card-badge">LAN</div>
+          <h3>Published NAS port</h3>
+          <p>Use the NAS LAN address and Tautulli’s published host port.</p>
+          <div class="code-block"><button class="copy-button">Copy</button><pre>http://media.example.test:8181</pre></div>
+        </article>
+        <article class="card">
+          <div class="card-badge">NET</div>
+          <h3>Shared Docker network</h3>
+          <p>When both services share one custom network, resolve Tautulli by service name.</p>
+          <div class="code-block"><button class="copy-button">Copy</button><pre>http://tautulli:8181</pre></div>
+        </article>
+        <article class="card">
+          <div class="card-badge">PMS</div>
+          <h3>Optional direct Plex metadata</h3>
+          <p>Direct Plex URL and token improve clearLogo support. They are not required for normal Tautulli-based operation.</p>
+          <div class="code-block"><button class="copy-button">Copy</button><pre>http://media.example.test:32400</pre></div>
+        </article>
+      </div>
+      <div class="callout red"><div class="callout-icon">!</div><div><strong>Never use <code>127.0.0.1:8181</code> for another container.</strong><p>Inside PlexWeekly, localhost points back to the PlexWeekly container—not the NAS host and not Tautulli.</p></div></div>
+    </section>
+
+    <section class="content-section searchable" id="acceptance" data-search="verify preview all send test six states testemail acceptance">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Step 5</div><h2>Run the acceptance sequence</h2></div>
+        <p>Keep automatic delivery disabled until these checks pass.</p>
+      </div>
+      <div class="timeline panel">
+        <article class="timeline-step"><div class="step-number">01</div><div class="step-content"><h3>Verify the installation</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh verify</pre></div><p>Checks configuration, Tautulli, assets, SMTP reachability, schedule syntax, and an actual browser-served GIF.</p></div></article>
+        <article class="timeline-step"><div class="step-number">02</div><div class="step-content"><h3>Inspect available users</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh list-users</pre></div></div></article>
+        <article class="timeline-step"><div class="step-number">03</div><div class="step-content"><h3>Generate all six previews</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh preview-all</pre></div><p>This creates manual welcome, both new-user branches, normal, quiet, and warm-up previews.</p></div></article>
+        <article class="timeline-step"><div class="step-number">04</div><div class="step-content"><h3>Open the preview index</h3><div class="code-block"><button class="copy-button">Copy</button><pre>http://NAS_LAN_IP:8787/preview-all-00-INDEX.html</pre></div></div></article>
+        <article class="timeline-step"><div class="step-number">05</div><div class="step-content"><h3>Send all six to TestEmail</h3><div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh send-test-all</pre></div><p>No Plex user receives these six messages.</p></div></article>
+      </div>
+      <div class="grid-3" style="margin-top:16px">
+        <article class="card"><div class="card-badge">1</div><h3>Manual welcome</h3><p>One-off onboarding without weekly statistics.</p></article>
+        <article class="card"><div class="card-badge">2–3</div><h3>New-user branches</h3><p>First scheduled newsletter with and without viewing history.</p></article>
+        <article class="card"><div class="card-badge">4–6</div><h3>Established branches</h3><p>Normal activity, quiet/no activity, and initial warm-up.</p></article>
+      </div>
+    </section>
+
+    <section class="content-section searchable" id="schedule" data-search="schedule enable disable friday time timezone guard duplicate send">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Step 6</div><h2>Enable automatic delivery</h2></div>
+        <p>The scheduler runs inside the container and follows the configured timezone.</p>
+      </div>
+      <div class="grid-4">
+        <article class="card"><div class="card-badge">OFF</div><h3>Disabled initially</h3><p>Starting the container does not automatically authorize real sends.</p></article>
+        <article class="card"><div class="card-badge">TZ</div><h3>Timezone-aware</h3><p>The schedule follows <code>TZ</code> from <code>.env</code>.</p></article>
+        <article class="card"><div class="card-badge">1×</div><h3>Same-day guard</h3><p>The attempt is recorded before sending to reduce duplicate delivery after restarts.</p></article>
+        <article class="card"><div class="card-badge">10s</div><h3>Recipient delay</h3><p>Production SendAll retains the configured delay between individual recipients.</p></article>
+      </div>
+      <div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh schedule-status
+./plexweekly.sh schedule-enable
+
+# Disable later:
+./plexweekly.sh schedule-disable</pre></div>
+      <div class="callout red"><div class="callout-icon">!</div><div><strong>Use <code>schedule-reset</code> cautiously.</strong><p>It clears today’s automatic-attempt guard. A later scheduler poll may allow another real SendAll on the same day.</p></div></div>
+    </section>
+
+    <section class="content-section searchable" id="operations" data-search="operations status logs restart down up shell commands compose">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Operations</div><h2>Routine Docker Compose controls</h2></div>
+        <p>Use the wrapper for PlexWeekly actions and Compose itself for container lifecycle operations.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Task</th><th>Command</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Status</strong></td><td><code>docker compose ps</code></td><td>Shows container state and health.</td></tr>
+            <tr><td><strong>Logs</strong></td><td><code>./plexweekly.sh logs</code></td><td>Follows the last 200 container log lines.</td></tr>
+            <tr><td><strong>Restart</strong></td><td><code>./plexweekly.sh restart</code></td><td>Restarts only the PlexWeekly service.</td></tr>
+            <tr><td><strong>Stop</strong></td><td><code>docker compose down</code></td><td>Removes the disposable container/network but preserves <code>data/</code>.</td></tr>
+            <tr><td><strong>Start</strong></td><td><code>docker compose up -d</code></td><td>Recreates the service from the current image and configuration.</td></tr>
+            <tr><td><strong>Shell</strong></td><td><code>./plexweekly.sh shell</code></td><td>Opens a Bash shell inside the container for diagnostics.</td></tr>
+            <tr><td><strong>Repair assets</strong></td><td><code>./plexweekly.sh repair-assets</code></td><td>Refreshes email assets and the browser-preview asset mirror.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="content-section searchable" id="backup" data-search="backup update restore data config state access scheduler logs output">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Persistence</div><h2>Back up and update safely</h2></div>
+        <p>The container is disposable; the project folder and <code>data/</code> are the durable installation.</p>
+      </div>
+      <div class="grid-2">
+        <div class="path-tree">project/
+├── compose.yaml
+├── Dockerfile
+├── .env
+├── plexweekly.sh
+└── data/
+    ├── config.json
+    ├── state.json
+    ├── access-state.json
+    ├── scheduler-state.json
+    ├── assets/
+    ├── output/
+    └── logs/</div>
+        <div class="panel" style="padding:24px">
+          <ul class="checklist">
+            <li><code>config.json</code> contains Tautulli, SMTP, branding, schedule, and exclusions.</li>
+            <li><code>state.json</code> tracks first-run and warm-up state.</li>
+            <li><code>access-state.json</code> tracks new users and welcome delivery.</li>
+            <li><code>scheduler-state.json</code> protects against repeated automatic attempts.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-top:16px">
+        <article class="card">
+          <div class="card-badge">BK</div>
+          <h3>Create a dated backup</h3>
+          <div class="code-block"><button class="copy-button">Copy</button><pre>./plexweekly.sh backup</pre></div>
+          <p>The backup includes credentials because it contains <code>config.json</code>. Store it privately.</p>
+        </article>
+        <article class="card">
+          <div class="card-badge">UP</div>
+          <h3>Rebuild after replacing project files</h3>
+          <div class="code-block"><button class="copy-button">Copy</button><pre>docker compose build --pull
+docker compose up -d
+./plexweekly.sh repair-assets
+./plexweekly.sh verify</pre></div>
+          <p>Do not delete the existing <code>data/</code> folder during an update.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="content-section searchable" id="platforms" data-search="qnap unraid generic linux paths puid pgid compose manager">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">NAS-specific paths</div><h2>QNAP, Unraid, and generic Linux</h2></div>
+        <p>The Compose service is the same; only host paths and identity defaults differ.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Platform</th><th>Suggested project folder</th><th>PUID / PGID guidance</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><strong>QNAP</strong></td><td><code>/share/Container/plexweekly</code></td><td>Use the IDs returned by <code>id -u</code> and <code>id -g</code>; avoid root.</td><td>Container Station with Docker Compose. <code>qnap-install.sh</code> is available.</td></tr>
+            <tr><td><strong>Unraid</strong></td><td><code>/mnt/user/appdata/plexweekly</code></td><td>Common defaults are <code>99</code> and <code>100</code>.</td><td>Use Compose Manager or the Compose CLI; do not run <code>qnap-install.sh</code>.</td></tr>
+            <tr><td><strong>Generic Linux NAS</strong></td><td><code>/srv/containers/plexweekly</code> or <code>/opt/plexweekly</code></td><td>Use a dedicated non-root service account with write access.</td><td>Use the manual Compose workflow in this guide.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="content-section searchable" id="troubleshooting" data-search="troubleshooting unhealthy gif unreadable preview 404 permission denied tautulli smtp port">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Diagnostics</div><h2>Common problems</h2></div>
+        <p>Start with status, logs, and verification before changing configuration blindly.</p>
+      </div>
+      <details>
+        <summary>Container is unhealthy</summary>
+        <div class="details-body">Run <code>docker compose ps</code> and <code>./plexweekly.sh logs</code>. The healthcheck requests the preview root and <code>/assets/movies.gif</code>. A failed asset request can make the service unhealthy even when the process is still running.</div>
+      </details>
+      <details>
+        <summary>Preview page loads but GIFs or icons are missing</summary>
+        <div class="details-body">Update to v1.0.7, then run <code>./plexweekly.sh repair-assets</code> and <code>./plexweekly.sh verify</code>. The current release maintains a real <code>/data/output/assets</code> mirror inside the preview web root; no manual symlink is required.</div>
+      </details>
+      <details>
+        <summary>Verification says an animated GIF is unreadable</summary>
+        <div class="details-body">v1.0.7 fixes the ImageMagick frame-count parser by adding newline delimiters. Rebuild the container from the v1.0.7 project files and verify again.</div>
+      </details>
+      <details>
+        <summary>Tautulli connection fails</summary>
+        <div class="details-body">Confirm the URL is reachable from inside the PlexWeekly container. Use <code>NAS_IP:8181</code> for a published port or <code>tautulli:8181</code> on a shared Docker network. Do not use <code>127.0.0.1</code>.</div>
+      </details>
+      <details>
+        <summary>Permission denied under <code>data/</code></summary>
+        <div class="details-body">Confirm <code>PUID</code> and <code>PGID</code> are non-root IDs with write access to the host project folder. Repair ownership on the host, then recreate the container with <code>docker compose up -d</code>.</div>
+      </details>
+      <details>
+        <summary>Port 8787 is already in use</summary>
+        <div class="details-body">Change <code>PREVIEW_PORT</code> in <code>.env</code>, update <code>PREVIEW_BASE_URL</code> to the same port, and recreate the service.</div>
+      </details>
+      <details>
+        <summary>SMTP authentication fails</summary>
+        <div class="details-body">Confirm STARTTLS, normally port 587, the SMTP username, and the app password/provider credential. The package does not support implicit SMTPS on port 465 through the current .NET mail client.</div>
+      </details>
+    </section>
+
+    <section class="content-section searchable" id="reference" data-search="reference commands safe test real send system">
+      <div class="section-heading">
+        <div><div class="section-eyebrow">Complete reference</div><h2><code>plexweekly.sh</code> command map</h2></div>
+        <p>Risk labels distinguish local inspection, TestEmail delivery, real recipients, and scheduler changes.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Command</th><th>Risk</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>verify</code></td><td><span class="risk safe">SAFE</span></td><td>Runs complete setup and asset verification.</td></tr>
+            <tr><td><code>list-users</code></td><td><span class="risk safe">SAFE</span></td><td>Lists users available through Tautulli.</td></tr>
+            <tr><td><code>preview [user]</code></td><td><span class="risk safe">SAFE</span></td><td>Creates one local/browser preview.</td></tr>
+            <tr><td><code>preview-all [user]</code></td><td><span class="risk safe">SAFE</span></td><td>Creates all six deterministic HTML previews.</td></tr>
+            <tr><td><code>send-test [user]</code></td><td><span class="risk test">TESTEMAIL</span></td><td>Sends one real MIME/CID message only to TestEmail.</td></tr>
+            <tr><td><code>send-test-all [user]</code></td><td><span class="risk test">TESTEMAIL</span></td><td>Sends all six states only to TestEmail.</td></tr>
+            <tr><td><code>welcome [user]</code></td><td><span class="risk send">REAL SEND</span></td><td>Sends a one-off welcome to the selected Plex user and records state.</td></tr>
+            <tr><td><code>send-all</code></td><td><span class="risk send">REAL SEND</span></td><td>Sends one newsletter to every eligible user after confirmation.</td></tr>
+            <tr><td><code>roster</code></td><td><span class="risk safe">SAFE</span></td><td>Displays first-seen and welcome-state tracking.</td></tr>
+            <tr><td><code>repair-assets</code></td><td><span class="risk safe">SAFE</span></td><td>Refreshes source assets and the browser-preview mirror.</td></tr>
+            <tr><td><code>schedule-status</code></td><td><span class="risk safe">SAFE</span></td><td>Shows configured schedule and current guard state.</td></tr>
+            <tr><td><code>schedule-enable</code></td><td><span class="risk system">SYSTEM</span></td><td>Authorizes automatic weekly SendAll.</td></tr>
+            <tr><td><code>schedule-disable</code></td><td><span class="risk system">SYSTEM</span></td><td>Stops future automatic sends.</td></tr>
+            <tr><td><code>schedule-reset</code></td><td><span class="risk send">REAL RISK</span></td><td>Clears today’s automatic-attempt guard.</td></tr>
+            <tr><td><code>backup</code></td><td><span class="risk safe">SAFE</span></td><td>Creates a dated TAR.GZ of the host <code>data/</code> directory.</td></tr>
+            <tr><td><code>update</code></td><td><span class="risk system">SYSTEM</span></td><td>Builds with current project files and recreates the service.</td></tr>
+            <tr><td><code>logs</code></td><td><span class="risk safe">SAFE</span></td><td>Follows recent service logs.</td></tr>
+            <tr><td><code>status</code></td><td><span class="risk safe">SAFE</span></td><td>Displays Compose service status.</td></tr>
+            <tr><td><code>restart</code></td><td><span class="risk system">SYSTEM</span></td><td>Restarts only the PlexWeekly container.</td></tr>
+            <tr><td><code>shell</code></td><td><span class="risk system">ADVANCED</span></td><td>Opens a Bash shell inside the container.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout green"><div class="callout-icon">✓</div><div><strong>Recommended final sequence</strong><p><code>verify</code> → <code>list-users</code> → <code>preview-all</code> → <code>send-test-all</code> → <code>schedule-status</code> → <code>schedule-enable</code>.</p></div></div>
+    </section>
+
+
+<section class="content-section searchable" id="adaptive-stats-award" data-search="adaptive statistics mini posters rotten tomatoes imdb binge champion award winner trending plays privacy">
+  <div class="section-heading">
+    <div><div class="section-eyebrow">Current email behavior</div><h2>Adaptive stats and the Binge Champion award</h2></div>
+    <p>Light viewing weeks reveal more detail without making heavy viewing weeks excessively tall.</p>
+  </div>
+  <div class="grid-3">
+    <article class="card"><div class="card-badge">1–3</div><h3>Itemized movies</h3><p>Mini poster, movie title, Rotten Tomatoes critic score, and audience score.</p></article>
+    <article class="card"><div class="card-badge">1–3</div><h3>Itemized episodes</h3><p>Mini show poster, show title, Sxx EPxx episode title, and IMDb score.</p></article>
+    <article class="card"><div class="card-badge">4+</div><h3>Compact counts</h3><p>At four or more, the card returns to the large-number format to protect email length.</p></article>
+  </div>
+  <div class="callout green"><div class="callout-icon">★</div><div><strong>Binge Champion is a real server-wide user award.</strong><p>The user with the most qualifying plays wins; total watch time breaks a tie. Every scheduled weekly email names the winner. The winner's own card receives a larger trophy, gold border, and “YOU WON” treatment.</p></div></div>
+  <div class="callout blue"><div class="callout-icon">i</div><div><strong>Trending is not duplicated.</strong><p>Trending ranks a media title and displays its server-wide play count once. Binge Champion ranks a person and appears in the statistics/award area.</p></div></div>
+</section>
+
+
+<section class="content-section searchable" id="movie-stat-genres" data-search="movie statistics genre genres mini posters rotten tomatoes adaptive stats global">
+  <div class="section-heading">
+    <div>
+      <div class="section-eyebrow">Global movie formatting</div>
+      <h2>Genre now appears in watched-movie statistics</h2>
+    </div>
+    <p>The compact 1–3 movie recap now matches the rest of the newsletter’s movie hierarchy.</p>
+  </div>
+  <div class="grid-3">
+    <article class="card">
+      <div class="card-badge">1–3</div>
+      <h3>Adaptive movie rows</h3>
+      <p>Each row includes a mini poster, title, genre, and Rotten Tomatoes critic and audience scores.</p>
+    </article>
+    <article class="card">
+      <div class="card-badge">GLOBAL</div>
+      <h3>One genre rule</h3>
+      <p>Show the first two genres and append <strong>“, and more”</strong> when additional genres exist.</p>
+    </article>
+    <article class="card">
+      <div class="card-badge">CLEAN</div>
+      <h3>No empty genre row</h3>
+      <p>When metadata has no genre, the rating line moves up automatically with no blank space.</p>
+    </article>
+  </div>
+  <div class="callout green">
+    <div class="callout-icon">✓</div>
+    <div>
+      <strong>Applied everywhere the adaptive movie-stat card can render.</strong>
+      <p>This includes production and portable previews, individual tests, six-state test suites, scheduled weekly newsletters, and all applicable recipient states.</p>
+    </div>
+  </div>
+</section>
+
+
+<section class="content-section searchable" id="single-item-count-hotfix" data-search="count property error powershell 5.1 one movie one episode strict mode hotfix">
+  <div class="section-heading">
+    <div>
+      <div class="section-eyebrow">PowerShell 5.1 hotfix</div>
+      <h2>Single-item adaptive cards now retain array semantics</h2>
+    </div>
+    <p>Exactly one watched movie or one streamed episode no longer becomes a scalar under strict mode.</p>
+  </div>
+  <div class="callout green">
+    <div class="callout-icon">✓</div>
+    <div>
+      <strong>Resolved: “The property ‘Count’ cannot be found on this object.”</strong>
+      <p>MovieItems and EpisodeItems are initialized and assigned explicitly as arrays before the adaptive renderer checks their counts.</p>
+    </div>
+  </div>
+  <div class="grid-3">
+    <article class="card"><div class="card-badge">0</div><h3>Empty collection</h3><p>Retains a valid zero-length array.</p></article>
+    <article class="card"><div class="card-badge">1</div><h3>Single item</h3><p>Remains an array instead of being unwrapped into a scalar.</p></article>
+    <article class="card"><div class="card-badge">2–3</div><h3>Multiple items</h3><p>Continues to render the adaptive poster rows normally.</p></article>
+  </div>
+</section>
+
+<footer class="footer">
+      <span>PlexWeekly NAS Portable v1.0.7 · Standalone Docker Compose guide</span>
+      <span>Offline HTML · Embedded media · No external dependencies</span>
+    </footer>
+  </main>
+</div>
+
+<div class="toast" id="toast">Copied</div>
+
+<script>
+(() => {
+  const progress = document.getElementById('progress');
+  const search = document.getElementById('search');
+  const searchCount = document.getElementById('searchCount');
+  const noResults = document.getElementById('noResults');
+  const searchable = [...document.querySelectorAll('.searchable')];
+  const links = [...document.querySelectorAll('#sideNav a')];
+  const toast = document.getElementById('toast');
+
+  function updateProgress() {
+    const doc = document.documentElement;
+    const max = doc.scrollHeight - doc.clientHeight;
+    const pct = max > 0 ? (doc.scrollTop / max) * 100 : 0;
+    progress.style.width = pct + '%';
+  }
+  document.addEventListener('scroll', updateProgress, {passive:true});
+  updateProgress();
+
+  const observer = new IntersectionObserver(entries => {
+    const active = entries.filter(e => e.isIntersecting).sort((a,b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (!active) return;
+    links.forEach(link => link.classList.toggle('active', link.getAttribute('href') === '#' + active.target.id));
+  }, {rootMargin:'-22% 0px -65% 0px',threshold:[0,.15,.35]});
+  document.querySelectorAll('main section[id]').forEach(section => observer.observe(section));
+
+  function runSearch() {
+    const q = search.value.trim().toLowerCase();
+    let visible = 0;
+    searchable.forEach(item => {
+      const text = ((item.dataset.search || '') + ' ' + item.innerText).toLowerCase();
+      const matched = !q || q.split(/\s+/).every(term => text.includes(term));
+      item.classList.toggle('hidden-by-search', !matched);
+      if (matched) visible++;
+    });
+    noResults.classList.toggle('show', visible === 0);
+    searchCount.innerHTML = q ? `<b>●</b> ${visible} matches` : '<b>●</b> Guide ready';
+  }
+  search.addEventListener('input', runSearch);
+
+  function showToast() {
+    toast.classList.add('show');
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(() => toast.classList.remove('show'), 1200);
+  }
+
+  document.querySelectorAll('.code-block .copy-button').forEach(button => {
+    button.addEventListener('click', async () => {
+      const pre = button.closest('.code-block').querySelector('pre');
+      try {
+        await navigator.clipboard.writeText(pre.innerText);
+        showToast();
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(pre);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        button.textContent = 'Selected';
+        setTimeout(() => button.textContent = 'Copy', 1200);
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>

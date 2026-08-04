@@ -1,0 +1,27 @@
+services:
+  plexweekly:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: plexweekly-mac:1.0.3
+    container_name: plexweekly
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Etc/UTC}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      UMASK: ${UMASK:-077}
+      PLEXWEEKLY_DATA_DIR: /data
+      PLEXWEEKLY_CONFIG: /data/config.json
+      PLEXWEEKLY_PREVIEW_BASE_URL: ${PREVIEW_BASE_URL:-}
+    volumes:
+      - ./data:/data
+    ports:
+      - "${PREVIEW_BIND:-0.0.0.0}:${PREVIEW_PORT:-8787}:8080"
+    healthcheck:
+      test: ["CMD", "/opt/plexweekly/healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    stop_grace_period: 30s

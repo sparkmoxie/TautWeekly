@@ -1,0 +1,6597 @@
+﻿param(
+    [ValidateSet("ListUsers","Preview","PreviewAll","SendTest","SendTestAll","SendWelcome","SendAll")]
+    [string]$Mode = "ListUsers",
+
+    [string]$UserId = "",
+
+    [string]$ConfigPath = $(if (-not [string]::IsNullOrWhiteSpace([string]$env:PLEXWEEKLY_CONFIG)) { [string]$env:PLEXWEEKLY_CONFIG } else { "/data/config.json" }),
+
+    [switch]$ConfirmSendAll,
+
+    [switch]$ConfirmWelcome
+)
+
+# PlexWeekly Mac Portable v1.0.3 — Docker Desktop production newsletter engine.
+# Uses the current six-state portable production renderer with regression
+# previews, latest TV episode backfill, IMDb enrichment, and RT audience %.
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
+    throw "PlexWeekly Mac Portable requires PowerShell 7.2 or newer. Found $($PSVersionTable.PSVersion)."
+}
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+$ScriptRoot = $PSScriptRoot
+$DataRoot = if (-not [string]::IsNullOrWhiteSpace([string]$env:PLEXWEEKLY_DATA_DIR)) {
+    [string]$env:PLEXWEEKLY_DATA_DIR
+}
+else {
+    "/data"
+}
+$OutputDir = Join-Path $DataRoot "output"
+$PosterDir = Join-Path $OutputDir "posters"
+$DesignMediaDir = Join-Path $OutputDir "media"
+$AssetsDir = Join-Path $DataRoot "assets"
+$LogDir = Join-Path $DataRoot "logs"
+$StatePath = Join-Path $DataRoot "state.json"
+$AccessStatePath = Join-Path $DataRoot "access-state.json"
+
+New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+New-Item -ItemType Directory -Force -Path $PosterDir | Out-Null
+New-Item -ItemType Directory -Force -Path $DesignMediaDir | Out-Null
+New-Item -ItemType Directory -Force -Path $AssetsDir | Out-Null
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+
+$PreviewAssetsDir = Join-Path $OutputDir "assets"
+
+function Sync-PreviewAssets {
+    # Browser previews are served with /data/output as the web root. Keep a
+    # real mirrored assets directory under that root so previews work on QNAP,
+    # Unraid, Docker Desktop bind mounts, and ordinary Linux Docker volumes.
+    if (Test-Path -LiteralPath $PreviewAssetsDir) {
+        $existing = Get-Item -LiteralPath $PreviewAssetsDir -Force
+        if (($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            Remove-Item -LiteralPath $PreviewAssetsDir -Force
+        }
+    }
+
+    New-Item -ItemType Directory -Force -Path $PreviewAssetsDir | Out-Null
+
+    foreach ($asset in Get-ChildItem -LiteralPath $AssetsDir -File -ErrorAction Stop) {
+        Copy-Item -LiteralPath $asset.FullName -Destination (Join-Path $PreviewAssetsDir $asset.Name) -Force
+    }
+}
+
+Sync-PreviewAssets
+
+$LogFile = Join-Path $LogDir ("plex_weekly_{0}.log" -f (Get-Date -Format "yyyyMMdd"))
+
+# Direct-Plex preview caches. These must exist before StrictMode code reads
+# them inside Get-DesignPlexContext / Get-DesignPlexMetadata.
+$script:DesignPlexContext = $null
+$script:DesignPlexMetadataCache = @{}
+
+function Write-Log {
+    param(
+        [string]$Message,
+        [ValidateSet("INFO","WARN","ERROR")]
+        [string]$Level = "INFO"
+    )
+    $line = "{0} [{1}] {2}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Level, $Message
+    Add-Content -Path $LogFile -Value $line -Encoding UTF8
+    Write-Host $line
+}
+
+function Get-PreviewPublicUrl {
+    param([string]$Path)
+
+    $baseUrl = [string]$env:PLEXWEEKLY_PREVIEW_BASE_URL
+    if ([string]::IsNullOrWhiteSpace($baseUrl) -or
+        [string]::IsNullOrWhiteSpace($Path)) {
+        return ""
+    }
+
+    try {
+        $relative = [IO.Path]::GetRelativePath($OutputDir, $Path)
+        $relative = $relative.Replace([IO.Path]::DirectorySeparatorChar, '/')
+        return $baseUrl.TrimEnd('/') + '/' + $relative.TrimStart('/')
+    }
+    catch {
+        return ""
+    }
+}
+
+function HtmlEncode {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value) { return "" }
+    return [System.Net.WebUtility]::HtmlEncode([string]$Value)
+}
+
+function Truncate-Text {
+    param(
+        [AllowNull()][object]$Text,
+        [int]$Length = 180
+    )
+    if ($null -eq $Text) { return "" }
+    $s = ([string]$Text).Trim()
+    if ($s.Length -le $Length) { return $s }
+    return $s.Substring(0, [Math]::Max(0, $Length - 1)).TrimEnd() + "…"
+}
+
+function Safe-Int {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return 0 }
+    $n = 0
+    if ([int]::TryParse([string]$Value, [ref]$n)) { return $n }
+    return 0
+}
+
+function Safe-Int64 {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return [int64]0 }
+    [int64]$n = 0
+    if ([int64]::TryParse([string]$Value, [ref]$n)) { return $n }
+    return [int64]0
+}
+
+function Format-WatchTime {
+    param([int64]$Seconds)
+    if ($Seconds -lt 0) { $Seconds = 0 }
+    $hours = [Math]::Floor($Seconds / 3600)
+    $minutes = [Math]::Floor(($Seconds % 3600) / 60)
+    if ($hours -gt 0) {
+        return "{0}h {1}m" -f $hours, $minutes
+    }
+    return "{0}m" -f $minutes
+}
+
+function Get-SafeFilePart {
+    param([string]$Text)
+    $safe = $Text -replace '[\\/:*?"<>|]', '_'
+    $safe = $safe -replace '\s+', '_'
+    if ([string]::IsNullOrWhiteSpace($safe)) { return "user" }
+    return $safe.Trim('_')
+}
+
+function Get-PlexWeeklyState {
+    $firstRun = $null
+
+    if (Test-Path $StatePath) {
+        try {
+            $state = Get-Content -Path $StatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($null -ne $state.PSObject.Properties["FirstRunUtc"] -and
+                -not [string]::IsNullOrWhiteSpace([string]$state.FirstRunUtc)) {
+                $firstRun = [DateTime]::Parse(
+                    [string]$state.FirstRunUtc,
+                    [Globalization.CultureInfo]::InvariantCulture,
+                    [Globalization.DateTimeStyles]::RoundtripKind
+                )
+            }
+        }
+        catch {
+            Write-Log "Could not read state.json; rebuilding PlexWeekly state." "WARN"
+        }
+    }
+
+    if ($null -eq $firstRun) {
+        # Preserve install age across this upgrade by using the oldest existing
+        # PlexWeekly daily log when one exists.
+        $oldestLogDate = $null
+        $logFiles = @(Get-ChildItem -Path $LogDir -Filter "plex_weekly_*.log" -File -ErrorAction SilentlyContinue)
+
+        foreach ($file in $logFiles) {
+            if ($file.BaseName -match '^plex_weekly_(\d{8})$') {
+                try {
+                    $candidate = [DateTime]::ParseExact(
+                        $Matches[1],
+                        "yyyyMMdd",
+                        [Globalization.CultureInfo]::InvariantCulture
+                    )
+                    if ($null -eq $oldestLogDate -or $candidate -lt $oldestLogDate) {
+                        $oldestLogDate = $candidate
+                    }
+                }
+                catch { }
+            }
+        }
+
+        if ($null -ne $oldestLogDate) {
+            $firstRun = [DateTime]::SpecifyKind($oldestLogDate, [DateTimeKind]::Local).ToUniversalTime()
+        }
+        else {
+            $firstRun = [DateTime]::UtcNow
+        }
+
+        [PSCustomObject]@{
+            FirstRunUtc = $firstRun.ToString("o")
+        } | ConvertTo-Json | Set-Content -Path $StatePath -Encoding UTF8
+    }
+
+    $age = [DateTime]::UtcNow - $firstRun.ToUniversalTime()
+
+    return [PSCustomObject]@{
+        FirstRunUtc    = $firstRun.ToUniversalTime()
+        AgeDays        = [Math]::Floor($age.TotalDays)
+        IsWarmingUp    = ($age.TotalDays -lt 7)
+    }
+}
+
+function New-AccessState {
+    return [PSCustomObject]@{
+        BaselineUtc = [DateTime]::UtcNow.ToString("o")
+        Users       = [PSCustomObject]@{}
+    }
+}
+
+function Get-AccessState {
+    if (Test-Path $AccessStatePath) {
+        try {
+            $state = Get-Content -Path $AccessStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($null -eq $state.PSObject.Properties["Users"]) {
+                $state | Add-Member -NotePropertyName "Users" -NotePropertyValue ([PSCustomObject]@{})
+            }
+            return $state
+        }
+        catch {
+            Write-Log "Could not read access-state.json; rebuilding access roster." "WARN"
+        }
+    }
+
+    return New-AccessState
+}
+
+function Save-AccessState {
+    param([object]$State)
+
+    $State |
+        ConvertTo-Json -Depth 10 |
+        Set-Content -Path $AccessStatePath -Encoding UTF8
+}
+
+function Add-AccessStateUser {
+    param(
+        [object]$State,
+        [object]$User,
+        [bool]$IsBaseline
+    )
+
+    $id = [string]$User.user_id
+    if ([string]::IsNullOrWhiteSpace($id)) { return }
+
+    $entry = [PSCustomObject]@{
+        UserId         = $id
+        Username       = [string]$User.username
+        Email          = [string]$User.email
+        FirstSeenUtc   = [DateTime]::UtcNow.ToString("o")
+        IsBaseline     = $IsBaseline
+        WelcomeSentUtc = ""
+    }
+
+    $State.Users | Add-Member -NotePropertyName $id -NotePropertyValue $entry -Force
+}
+
+function Sync-AccessRoster {
+    # Tautulli's API exposes current access, not the Plex invitation acceptance
+    # timestamp. We therefore establish a baseline once, then treat a newly
+    # appearing active user as newly accepted from that point forward.
+    try {
+        Invoke-TautulliApi -Command "refresh_users_list" | Out-Null
+    }
+    catch {
+        Write-Log "User-list refresh failed; continuing with the current local user list." "WARN"
+    }
+
+    $stateExists = Test-Path $AccessStatePath
+    $state = Get-AccessState
+    $users = @(Get-TautulliUsers)
+    $changed = $false
+
+    foreach ($u in $users) {
+        $id = [string]$u.user_id
+        if ([string]::IsNullOrWhiteSpace($id)) { continue }
+
+        # Only baseline/track users that currently have active access.
+        if ((Safe-Int $u.is_active) -eq 0) { continue }
+
+        $prop = $state.Users.PSObject.Properties[$id]
+
+        if ($null -eq $prop) {
+            Add-AccessStateUser -State $state -User $u -IsBaseline:(-not $stateExists)
+            $changed = $true
+        }
+        else {
+            # Keep basic contact metadata fresh without altering first-seen time.
+            $prop.Value.Username = [string]$u.username
+            $prop.Value.Email = [string]$u.email
+            $changed = $true
+        }
+    }
+
+    if (-not $stateExists -or $changed) {
+        Save-AccessState -State $state
+    }
+
+    return $state
+}
+
+function Test-UserNeedsWelcome {
+    param(
+        [object]$State,
+        [string]$UserId
+    )
+
+    if ($null -eq $State -or $null -eq $State.Users) { return $false }
+
+    $prop = $State.Users.PSObject.Properties[[string]$UserId]
+    if ($null -eq $prop) { return $false }
+
+    $entry = $prop.Value
+    if ($entry.IsBaseline -eq $true) { return $false }
+
+    if ($null -ne $entry.PSObject.Properties["WelcomeSentUtc"] -and
+        -not [string]::IsNullOrWhiteSpace([string]$entry.WelcomeSentUtc)) {
+        return $false
+    }
+
+    try {
+        $firstSeen = [DateTime]::Parse(
+            [string]$entry.FirstSeenUtc,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind
+        ).ToUniversalTime()
+    }
+    catch {
+        return $false
+    }
+
+    $recentDays = 7
+    if ($null -ne $Config.PSObject.Properties["RecentAccessDays"]) {
+        $candidate = Safe-Int $Config.RecentAccessDays
+        if ($candidate -gt 0) { $recentDays = $candidate }
+    }
+
+    return ($firstSeen -ge [DateTime]::UtcNow.AddDays(-$recentDays))
+}
+
+function Mark-UserWelcomed {
+    param(
+        [object]$State,
+        [string]$UserId
+    )
+
+    if ($null -eq $State -or $null -eq $State.Users) { return }
+
+    $prop = $State.Users.PSObject.Properties[[string]$UserId]
+    if ($null -eq $prop) { return }
+
+    $prop.Value.WelcomeSentUtc = [DateTime]::UtcNow.ToString("o")
+    Save-AccessState -State $State
+}
+
+if (-not (Test-Path $ConfigPath)) {
+    throw "Config file not found: $ConfigPath`nRun ./plexweekly.sh setup from the NAS project folder first."
+}
+
+$Config = Get-Content -Path $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+function Require-ConfigValue {
+    param([string]$Name)
+    $prop = $Config.PSObject.Properties[$Name]
+    if ($null -eq $prop -or [string]::IsNullOrWhiteSpace([string]$prop.Value)) {
+        throw "Missing required config value '$Name' in $ConfigPath"
+    }
+}
+
+Require-ConfigValue "TautulliUrl"
+Require-ConfigValue "ApiKey"
+
+$TautulliBase = ([string]$Config.TautulliUrl).TrimEnd('/')
+
+function Get-ConfiguredServerName {
+    if ($null -ne $Config.PSObject.Properties["FooterServerName"] -and
+        -not [string]::IsNullOrWhiteSpace([string]$Config.FooterServerName)) {
+        return [string]$Config.FooterServerName
+    }
+    if ($null -ne $Config.PSObject.Properties["ServerLabel"] -and
+        -not [string]::IsNullOrWhiteSpace([string]$Config.ServerLabel)) {
+        return [string]$Config.ServerLabel
+    }
+    return "My Plex"
+}
+
+function Get-ConfiguredPlexWebUrl {
+    if ($null -ne $Config.PSObject.Properties["PlexWebUrl"] -and
+        -not [string]::IsNullOrWhiteSpace([string]$Config.PlexWebUrl)) {
+        return [string]$Config.PlexWebUrl
+    }
+    return "https://app.plex.tv/desktop/"
+}
+
+function Get-ConfiguredDeliveryDay {
+    if ($null -ne $Config.PSObject.Properties["ScheduleDay"] -and
+        -not [string]::IsNullOrWhiteSpace([string]$Config.ScheduleDay)) {
+        return ([string]$Config.ScheduleDay).Trim()
+    }
+    return "Friday"
+}
+
+function Build-TautulliUri {
+    param(
+        [string]$Command,
+        [hashtable]$Parameters = @{}
+    )
+
+    $parts = New-Object System.Collections.Generic.List[string]
+    $parts.Add("apikey=" + [Uri]::EscapeDataString([string]$Config.ApiKey))
+    $parts.Add("cmd=" + [Uri]::EscapeDataString($Command))
+
+    foreach ($key in ($Parameters.Keys | Sort-Object)) {
+        $value = $Parameters[$key]
+        if ($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string]$value)) {
+            $parts.Add(
+                ([Uri]::EscapeDataString([string]$key)) + "=" +
+                ([Uri]::EscapeDataString([string]$value))
+            )
+        }
+    }
+
+    return "$TautulliBase/api/v2?" + ($parts -join "&")
+}
+
+function Invoke-TautulliApi {
+    param(
+        [string]$Command,
+        [hashtable]$Parameters = @{}
+    )
+
+    $uri = Build-TautulliUri -Command $Command -Parameters $Parameters
+    try {
+        $raw = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec 60
+    }
+    catch {
+        throw "Tautulli API request failed for '$Command': $($_.Exception.Message)"
+    }
+
+    if ($null -eq $raw.response) {
+        throw "Unexpected Tautulli response for '$Command'."
+    }
+
+    if ([string]$raw.response.result -ne "success") {
+        throw "Tautulli '$Command' returned: $($raw.response.message)"
+    }
+
+    return $raw.response.data
+}
+
+function Get-TautulliUser {
+    param([string]$Id)
+    return Invoke-TautulliApi -Command "get_user" -Parameters @{ user_id = $Id }
+}
+
+function Get-TautulliUserNames {
+    return @(Invoke-TautulliApi -Command "get_user_names")
+}
+
+function Get-TautulliUsers {
+    return @(Invoke-TautulliApi -Command "get_users")
+}
+
+function Resolve-TautulliUserId {
+    param([string]$Identifier)
+
+    if ([string]::IsNullOrWhiteSpace($Identifier)) {
+        throw "A Tautulli user identifier is required."
+    }
+
+    $needle = $Identifier.Trim()
+    $users = Get-TautulliUsers
+
+    $matches = @(
+        $users | Where-Object {
+            ([string]$_.user_id -eq $needle) -or
+            ([string]$_.username -ieq $needle) -or
+            ([string]$_.friendly_name -ieq $needle) -or
+            ([string]$_.email -ieq $needle)
+        }
+    )
+
+    if ($matches.Count -eq 1) {
+        return [string]$matches[0].user_id
+    }
+
+    if ($matches.Count -gt 1) {
+        throw "More than one Tautulli user matched '$Identifier'. Please use the numeric UserId from ./plexweekly.sh list-users."
+    }
+
+    throw "No Tautulli user matched '$Identifier'. Run ./plexweekly.sh list-users and enter the numeric UserId, username, friendly name, or email."
+}
+
+function Get-History {
+    param(
+        [string]$AfterDate,
+        [string]$BeforeDate,
+        [string]$ForUserId = ""
+    )
+
+    $all = New-Object System.Collections.Generic.List[object]
+    $start = 0
+    $pageSize = 1000
+
+    while ($true) {
+        $params = @{
+            grouping = 1
+            after    = $AfterDate
+            before   = $BeforeDate
+            start    = $start
+            length   = $pageSize
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ForUserId)) {
+            $params.user_id = $ForUserId
+        }
+
+        $data = Invoke-TautulliApi -Command "get_history" -Parameters $params
+        $rows = @($data.data)
+
+        foreach ($row in $rows) {
+            $all.Add($row)
+        }
+
+        if ($rows.Count -lt $pageSize) { break }
+
+        $start += $rows.Count
+        $total = Safe-Int $data.recordsFiltered
+        if ($total -gt 0 -and $start -ge $total) { break }
+    }
+
+    return $all.ToArray()
+}
+
+function Get-RecentItems {
+    param(
+        [int64]$StartEpoch,
+        [int64]$EndEpochExclusive
+    )
+
+    $all = New-Object System.Collections.Generic.List[object]
+    $start = 0
+    $pageSize = 100
+    $maxPages = 20
+
+    for ($page = 0; $page -lt $maxPages; $page++) {
+        $data = Invoke-TautulliApi -Command "get_recently_added" -Parameters @{
+            count = $pageSize
+            start = $start
+        }
+
+        $rows = @($data.recently_added)
+        if ($rows.Count -eq 0) { break }
+
+        $oldest = [int64]::MaxValue
+        foreach ($row in $rows) {
+            $added = Safe-Int64 $row.added_at
+            if ($added -lt $oldest) { $oldest = $added }
+
+            if ($added -ge $StartEpoch -and $added -lt $EndEpochExclusive) {
+                $all.Add($row)
+            }
+        }
+
+        if ($oldest -lt $StartEpoch) { break }
+        if ($rows.Count -lt $pageSize) { break }
+
+        $start += $rows.Count
+    }
+
+    return $all.ToArray()
+}
+
+function New-ReleaseData {
+    param([object[]]$RecentItems)
+
+    $movieList = New-Object System.Collections.Generic.List[object]
+    $tvMap = @{}
+
+    foreach ($item in $RecentItems) {
+        $type = ([string]$item.media_type).ToLowerInvariant()
+
+        if ($type -eq "movie") {
+            $movieList.Add([PSCustomObject]@{
+                Type            = "movie"
+                ReleaseKey      = "movie:" + [string]$item.rating_key
+                RatingKey       = [string]$item.rating_key
+                PosterRatingKey = [string]$item.rating_key
+                Title           = [string]$item.title
+                Year            = [string]$item.year
+                Rating          = if ([string]$item.audience_rating) { [string]$item.audience_rating } else { [string]$item.rating }
+                Summary         = [string]$item.summary
+                AddedAt         = Safe-Int64 $item.added_at
+                EpisodeCount    = 0
+                SeasonCount     = 0
+                IsNewSeries     = $false
+                Episodes        = @()
+            })
+            continue
+        }
+
+        if ($type -in @("episode","season","show")) {
+            $showRatingKey = ""
+            $showTitle = ""
+            $posterRatingKey = ""
+
+            if ($type -eq "show") {
+                $showRatingKey = [string]$item.rating_key
+                $showTitle = [string]$item.title
+                $posterRatingKey = [string]$item.rating_key
+            }
+            else {
+                $showRatingKey = [string]$item.grandparent_rating_key
+                $showTitle = [string]$item.grandparent_title
+                $posterRatingKey = [string]$item.grandparent_rating_key
+                if ([string]::IsNullOrWhiteSpace($showTitle)) {
+                    $showTitle = [string]$item.title
+                }
+                if ([string]::IsNullOrWhiteSpace($showRatingKey)) {
+                    $showRatingKey = [string]$item.rating_key
+                    $posterRatingKey = [string]$item.rating_key
+                }
+            }
+
+            if ([string]::IsNullOrWhiteSpace($showRatingKey)) {
+                $showRatingKey = $showTitle
+            }
+
+            $mapKey = "show:" + $showRatingKey
+
+            if (-not $tvMap.ContainsKey($mapKey)) {
+                $tvMap[$mapKey] = [PSCustomObject]@{
+                    Type            = "show"
+                    ReleaseKey      = $mapKey
+                    RatingKey       = $showRatingKey
+                    PosterRatingKey = $posterRatingKey
+                    Title           = $showTitle
+                    Year            = [string]$item.year
+                    Rating          = ""
+                    Summary         = ""
+                    AddedAt         = Safe-Int64 $item.added_at
+                    EpisodeCount    = 0
+                    SeasonCount     = 0
+                    IsNewSeries     = $false
+                    Episodes        = New-Object System.Collections.Generic.List[object]
+                }
+            }
+
+            $entry = $tvMap[$mapKey]
+            if ((Safe-Int64 $item.added_at) -gt $entry.AddedAt) {
+                $entry.AddedAt = Safe-Int64 $item.added_at
+            }
+
+            if ($type -eq "episode") {
+                $entry.EpisodeCount++
+
+                $episodeTitle = [string]$item.title
+                if (-not [string]::IsNullOrWhiteSpace($episodeTitle)) {
+                    $ratingImage = [string]$item.rating_image
+                    $nativeImdbRating = ""
+                    if ($ratingImage -like 'imdb://*' -and -not [string]::IsNullOrWhiteSpace([string]$item.rating)) {
+                        $nativeImdbRating = [string]$item.rating
+                    }
+
+                    $entry.Episodes.Add([PSCustomObject]@{
+                        Title       = $episodeTitle
+                        RatingKey   = [string]$item.rating_key
+                        AddedAt     = Safe-Int64 $item.added_at
+                        ImdbRating  = $nativeImdbRating
+                        RatingImage = $ratingImage
+                        Season      = Safe-Int $item.parent_media_index
+                        Episode     = Safe-Int $item.media_index
+                    })
+                }
+            }
+            elseif ($type -eq "season") {
+                $entry.SeasonCount++
+            }
+            elseif ($type -eq "show") {
+                $entry.IsNewSeries = $true
+            }
+        }
+    }
+
+    $movies = @($movieList | Sort-Object AddedAt -Descending)
+    $tv = @($tvMap.Values | Sort-Object AddedAt -Descending)
+
+    foreach ($entry in $tv) {
+        if ($null -ne $entry.PSObject.Properties["Episodes"]) {
+            $entry.Episodes = @($entry.Episodes | Sort-Object AddedAt -Descending)
+        }
+    }
+
+    return [PSCustomObject]@{
+        Movies = $movies
+        TV     = $tv
+    }
+}
+
+
+function Get-TvEpisodeSnapshotFromTautulli {
+    param(
+        [object]$Show,
+        [int]$Limit = 3,
+        [int64]$StartEpoch = 0,
+        [int64]$EndEpochExclusive = 0
+    )
+
+    $emptyResult = [PSCustomObject]@{
+        Episodes             = @()
+        TotalRecentlyAdded   = 0
+        CountSource          = "none"
+    }
+
+    if ($null -eq $Show -or $Limit -lt 1) { return $emptyResult }
+
+    $showRatingKey = [string]$Show.RatingKey
+    if ([string]::IsNullOrWhiteSpace($showRatingKey)) { return $emptyResult }
+
+    $useRecentWindow = (
+        $StartEpoch -gt 0 -and
+        $EndEpochExclusive -gt $StartEpoch
+    )
+
+    $episodeRows = New-Object System.Collections.Generic.List[object]
+    $recentSeasonEpisodeFallback = 0
+
+    try {
+        $showChildren = Invoke-TautulliApi -Command "get_children_metadata" -Parameters @{
+            rating_key = $showRatingKey
+            media_type = "show"
+        }
+
+        $children = @()
+        if ($null -ne $showChildren -and
+            $null -ne $showChildren.PSObject.Properties["children_list"]) {
+            $children = @($showChildren.children_list | Where-Object { $null -ne $_ })
+        }
+
+        $childrenType = ""
+        if ($null -ne $showChildren -and
+            $null -ne $showChildren.PSObject.Properties["children_type"]) {
+            $childrenType = ([string]$showChildren.children_type).ToLowerInvariant()
+        }
+
+        if ($childrenType -eq "episode") {
+            foreach ($row in $children) {
+                $episodeRows.Add($row)
+            }
+        }
+        else {
+            # A show normally returns seasons first. For a normal backfill,
+            # stop after enough candidates. For weekly-count validation, inspect
+            # every season so Tautulli show/season aggregation cannot hide the
+            # true number of recently-added episodes.
+            $seasonRows = @(
+                $children |
+                Where-Object {
+                    -not [string]::IsNullOrWhiteSpace([string]$_.rating_key)
+                } |
+                Sort-Object `
+                    @{ Expression = { Safe-Int64 $_.added_at }; Descending = $true },
+                    @{ Expression = { Safe-Int $_.media_index }; Descending = $true }
+            )
+
+            foreach ($season in $seasonRows) {
+                $seasonKey = [string]$season.rating_key
+                if ([string]::IsNullOrWhiteSpace($seasonKey)) { continue }
+
+                try {
+                    $seasonChildren = Invoke-TautulliApi -Command "get_children_metadata" -Parameters @{
+                        rating_key = $seasonKey
+                        media_type = "season"
+                    }
+
+                    $seasonEpisodes = @()
+                    if ($null -ne $seasonChildren -and
+                        $null -ne $seasonChildren.PSObject.Properties["children_list"]) {
+                        $seasonEpisodes = @(
+                            $seasonChildren.children_list |
+                            Where-Object { $null -ne $_ }
+                        )
+                    }
+
+                    foreach ($episodeRow in $seasonEpisodes) {
+                        $episodeRows.Add($episodeRow)
+                    }
+
+                    # Some Tautulli/Plex combinations expose a reliable recent
+                    # timestamp on the season row while child episode timestamps
+                    # are missing or flattened. Keep this as a count fallback.
+                    if ($useRecentWindow) {
+                        $seasonAddedAt = Safe-Int64 $season.added_at
+                        if ($seasonAddedAt -ge $StartEpoch -and
+                            $seasonAddedAt -lt $EndEpochExclusive) {
+                            $recentSeasonEpisodeFallback += $seasonEpisodes.Count
+                        }
+                    }
+                }
+                catch {
+                    Write-Log ("Could not resolve episodes for TV season rating key {0}: {1}" -f `
+                        $seasonKey,
+                        $_.Exception.Message
+                    ) "WARN"
+                }
+
+                if (-not $useRecentWindow -and $episodeRows.Count -ge $Limit) {
+                    break
+                }
+            }
+        }
+    }
+    catch {
+        Write-Log ("Could not resolve TV episode snapshot for '{0}' ({1}): {2}" -f `
+            [string]$Show.Title,
+            $showRatingKey,
+            $_.Exception.Message
+        ) "WARN"
+        return $emptyResult
+    }
+
+    if ($episodeRows.Count -eq 0) { return $emptyResult }
+
+    $ordered = @(
+        $episodeRows |
+        Where-Object {
+            -not [string]::IsNullOrWhiteSpace([string]$_.title)
+        } |
+        Sort-Object `
+            @{ Expression = { Safe-Int64 $_.added_at }; Descending = $true },
+            @{ Expression = { Safe-Int $_.parent_media_index }; Descending = $true },
+            @{ Expression = { Safe-Int $_.media_index }; Descending = $true }
+    )
+
+    if ($ordered.Count -eq 0) { return $emptyResult }
+
+    $recentRows = @()
+    if ($useRecentWindow) {
+        $recentRows = @(
+            $ordered |
+            Where-Object {
+                $addedAt = Safe-Int64 $_.added_at
+                $addedAt -ge $StartEpoch -and
+                $addedAt -lt $EndEpochExclusive
+            }
+        )
+    }
+
+    # For weekly cards, show the newest episodes from the weekly window when
+    # available. If timestamps are unavailable, retain the existing latest-
+    # episode backfill behavior while leaving EpisodeCount as the fallback.
+    $displayRows = if ($useRecentWindow -and $recentRows.Count -gt 0) {
+        $recentRows
+    }
+    else {
+        $ordered
+    }
+
+    $recentSeen = @{}
+    $recentUniqueCount = 0
+    foreach ($episode in $recentRows) {
+        $ratingKey = [string]$episode.rating_key
+        $dedupeKey = if (-not [string]::IsNullOrWhiteSpace($ratingKey)) {
+            $ratingKey
+        }
+        else {
+            "{0}:{1}:{2}" -f `
+                (Safe-Int $episode.parent_media_index),
+                (Safe-Int $episode.media_index),
+                [string]$episode.title
+        }
+
+        if ($recentSeen.ContainsKey($dedupeKey)) { continue }
+        $recentSeen[$dedupeKey] = $true
+        $recentUniqueCount++
+    }
+
+    $totalRecentlyAdded = $recentUniqueCount
+    $countSource = if ($recentUniqueCount -gt 0) { "episode-added-at" } else { "none" }
+
+    if ($recentSeasonEpisodeFallback -gt $totalRecentlyAdded) {
+        $totalRecentlyAdded = $recentSeasonEpisodeFallback
+        $countSource = "recent-season-children"
+    }
+
+    # A brand-new show import can arrive as one show row. If child timestamps
+    # are missing but the show itself is inside the window, all resolved child
+    # episodes are a safer count than the three-card display limit.
+    if ($useRecentWindow -and
+        $totalRecentlyAdded -eq 0 -and
+        $null -ne $Show.PSObject.Properties["IsNewSeries"] -and
+        [bool]$Show.IsNewSeries) {
+
+        $showAddedAt = Safe-Int64 $Show.AddedAt
+        if ($showAddedAt -ge $StartEpoch -and
+            $showAddedAt -lt $EndEpochExclusive) {
+            $allSeen = @{}
+            foreach ($episode in $ordered) {
+                $ratingKey = [string]$episode.rating_key
+                $dedupeKey = if (-not [string]::IsNullOrWhiteSpace($ratingKey)) {
+                    $ratingKey
+                }
+                else {
+                    "{0}:{1}:{2}" -f `
+                        (Safe-Int $episode.parent_media_index),
+                        (Safe-Int $episode.media_index),
+                        [string]$episode.title
+                }
+
+                if ($allSeen.ContainsKey($dedupeKey)) { continue }
+                $allSeen[$dedupeKey] = $true
+            }
+
+            $totalRecentlyAdded = $allSeen.Count
+            if ($totalRecentlyAdded -gt 0) {
+                $countSource = "new-show-child-count"
+            }
+        }
+    }
+
+    $shownSeen = @{}
+    $result = New-Object System.Collections.Generic.List[object]
+
+    foreach ($episode in $displayRows) {
+        $ratingKey = [string]$episode.rating_key
+        $seasonIndex = Safe-Int $episode.parent_media_index
+        $episodeIndex = Safe-Int $episode.media_index
+        $title = [string]$episode.title
+
+        $dedupeKey = if (-not [string]::IsNullOrWhiteSpace($ratingKey)) {
+            $ratingKey
+        }
+        else {
+            "{0}:{1}:{2}" -f $seasonIndex, $episodeIndex, $title
+        }
+
+        if ($shownSeen.ContainsKey($dedupeKey)) { continue }
+        $shownSeen[$dedupeKey] = $true
+
+        $ratingImage = [string]$episode.rating_image
+        $nativeImdbRating = ""
+        if ($ratingImage -match '(?i)^imdb://' -and
+            -not [string]::IsNullOrWhiteSpace([string]$episode.rating)) {
+            $nativeImdbRating = [string]$episode.rating
+        }
+
+        $result.Add([PSCustomObject]@{
+            Title       = $title
+            RatingKey   = $ratingKey
+            AddedAt     = Safe-Int64 $episode.added_at
+            ImdbRating  = $nativeImdbRating
+            RatingImage = $ratingImage
+            Season      = $seasonIndex
+            Episode     = $episodeIndex
+        })
+
+        if ($result.Count -ge $Limit) { break }
+    }
+
+    return [PSCustomObject]@{
+        Episodes           = $result.ToArray()
+        TotalRecentlyAdded = $totalRecentlyAdded
+        CountSource        = $countSource
+    }
+}
+
+function Enrich-TvEpisodeMetadata {
+    param(
+        [object]$ReleaseData,
+        [string]$ContextLabel = "TV",
+        [int64]$StartEpoch = 0,
+        [int64]$EndEpochExclusive = 0,
+        [bool]$CountRecentEpisodes = $false
+    )
+
+    if ($null -eq $ReleaseData -or $null -eq $ReleaseData.TV) { return }
+
+    $cache = @{}
+    $lookups = 0
+    $imdbFound = 0
+
+    foreach ($show in @($ReleaseData.TV)) {
+        # Tautulli can represent a weekly TV import as episode rows, one
+        # season row, or one show row. When weekly counting is enabled, inspect
+        # child metadata so the three-row display limit does not become the
+        # reported total.
+        $existingEpisodes = @()
+        if ($null -ne $show.PSObject.Properties["Episodes"]) {
+            $existingEpisodes = @($show.Episodes)
+        }
+
+        $needsSnapshot = (
+            $existingEpisodes.Count -eq 0 -or
+            $CountRecentEpisodes
+        )
+
+        if ($needsSnapshot) {
+            $snapshot = Get-TvEpisodeSnapshotFromTautulli `
+                -Show $show `
+                -Limit 3 `
+                -StartEpoch $(if ($CountRecentEpisodes) { $StartEpoch } else { 0 }) `
+                -EndEpochExclusive $(if ($CountRecentEpisodes) { $EndEpochExclusive } else { 0 })
+
+            $snapshotEpisodes = @($snapshot.Episodes)
+            if ($snapshotEpisodes.Count -gt 0) {
+                $show.Episodes = @($snapshotEpisodes)
+                Write-Log ("TV episode snapshot: {0} -> {1} displayed episode(s)." -f `
+                    [string]$show.Title,
+                    $snapshotEpisodes.Count
+                )
+            }
+
+            if ($CountRecentEpisodes) {
+                $existingCount = Safe-Int $show.EpisodeCount
+                $snapshotCount = Safe-Int $snapshot.TotalRecentlyAdded
+                $resolvedCount = [Math]::Max($existingCount, $snapshotCount)
+                $show.EpisodeCount = $resolvedCount
+
+                Write-Log ("TV recent count: {0} -> {1} episode(s), source={2}, original={3}." -f `
+                    [string]$show.Title,
+                    $resolvedCount,
+                    [string]$snapshot.CountSource,
+                    $existingCount
+                )
+            }
+        }
+
+        if ($null -eq $show.PSObject.Properties["Episodes"]) { continue }
+
+        foreach ($episode in @($show.Episodes)) {
+            $ratingKey = [string]$episode.RatingKey
+            if ([string]::IsNullOrWhiteSpace($ratingKey)) { continue }
+
+            $meta = $null
+            if ($cache.ContainsKey($ratingKey)) {
+                $meta = $cache[$ratingKey]
+            }
+            else {
+                try {
+                    $meta = Invoke-TautulliApi -Command "get_metadata" -Parameters @{
+                        rating_key = $ratingKey
+                    }
+                    $cache[$ratingKey] = $meta
+                    $lookups++
+                }
+                catch {
+                    Write-Log ("IMDb lookup failed for episode rating key {0}: {1}" -f $ratingKey, $_.Exception.Message) "WARN"
+                    continue
+                }
+            }
+
+            if ($null -eq $meta) { continue }
+
+            # get_metadata is the authoritative item-level source for the
+            # episode index and selected Plex rating provider.
+            $episodeIndex = Safe-Int $meta.media_index
+            $seasonIndex = Safe-Int $meta.parent_media_index
+
+            if ($episodeIndex -gt 0) {
+                $episode.Episode = $episodeIndex
+            }
+            if ($seasonIndex -gt 0) {
+                $episode.Season = $seasonIndex
+            }
+
+            $ratingImage = [string]$meta.rating_image
+            if (-not [string]::IsNullOrWhiteSpace($ratingImage)) {
+                $episode.RatingImage = $ratingImage
+            }
+
+            $episode.ImdbRating = ""
+
+            # Fast path: Tautulli explicitly identifies IMDb as the selected
+            # episode rating provider.
+            if ($ratingImage -match '(?i)^imdb://') {
+                $ratingValue = [string]$meta.rating
+                if (-not [string]::IsNullOrWhiteSpace($ratingValue)) {
+                    $episode.ImdbRating = $ratingValue
+                }
+            }
+
+            # Plex UI can show IMDb alongside other providers even when
+            # Tautulli's flattened rating_image does not select IMDb.
+            # Fall back to Plex's native Rating[] / legacy XML metadata.
+            if ([string]::IsNullOrWhiteSpace([string]$episode.ImdbRating)) {
+                $episode.ImdbRating = Get-DesignEpisodeImdbRating `
+                    -RatingKey $ratingKey `
+                    -TautulliMetadata $meta
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace([string]$episode.ImdbRating)) {
+                $imdbFound++
+                Write-Log ("TV IMDb: {0} S{1}E{2} '{3}' -> {4}" -f `
+                    $show.Title,
+                    $episode.Season,
+                    $episode.Episode,
+                    $episode.Title,
+                    $episode.ImdbRating
+                )
+            }
+        }
+    }
+
+    Write-Log ("{0} episode metadata enrichment: {1} get_metadata lookup(s), {2} IMDb rating(s) found." -f `
+        $ContextLabel,
+        $lookups,
+        $imdbFound
+    )
+}
+
+function Get-LatestReleaseData {
+    param(
+        [int]$MovieLimit = 4,
+        [int]$TvLimit = 4
+    )
+
+    $all = New-Object System.Collections.Generic.List[object]
+    $start = 0
+    $pageSize = 100
+    $maxPages = 10
+
+    for ($page = 0; $page -lt $maxPages; $page++) {
+        $data = Invoke-TautulliApi -Command "get_recently_added" -Parameters @{
+            count = $pageSize
+            start = $start
+        }
+
+        $rows = @($data.recently_added)
+        if ($rows.Count -eq 0) { break }
+
+        foreach ($row in $rows) {
+            $all.Add($row)
+        }
+
+        $snapshot = New-ReleaseData -RecentItems $all.ToArray()
+        if ($snapshot.Movies.Count -ge $MovieLimit -and $snapshot.TV.Count -ge $TvLimit) {
+            break
+        }
+
+        if ($rows.Count -lt $pageSize) { break }
+        $start += $rows.Count
+    }
+
+    $result = New-ReleaseData -RecentItems $all.ToArray()
+
+    return [PSCustomObject]@{
+        Movies = @($result.Movies | Select-Object -First $MovieLimit)
+        TV     = @($result.TV | Select-Object -First $TvLimit)
+    }
+}
+
+function Get-UserStats {
+    param(
+        [object[]]$History
+    )
+
+    $watchedThreshold = if ($null -ne $Config.PSObject.Properties["WatchedPercent"]) {
+        Safe-Int $Config.WatchedPercent
+    } else { 85 }
+
+    $minEpisodeSeconds = if ($null -ne $Config.PSObject.Properties["MinimumEpisodeSeconds"]) {
+        Safe-Int $Config.MinimumEpisodeSeconds
+    } else { 120 }
+
+    $moviesWatched = 0
+    $episodesStreamed = 0
+    $qualifyingPlays = 0
+    [int64]$totalSeconds = 0
+    $titleTotals = @{}
+    $movieSeen = @{}
+    $episodeSeen = @{}
+    $movieItems = New-Object System.Collections.Generic.List[object]
+    $episodeItems = New-Object System.Collections.Generic.List[object]
+
+    foreach ($row in $History) {
+        $type = ([string]$row.media_type).ToLowerInvariant()
+        $seconds = [int64](Safe-Int $row.play_duration)
+        if ($seconds -lt 0) { $seconds = 0 }
+
+        if ($type -in @("movie","episode")) {
+            $totalSeconds += $seconds
+        }
+
+        if ($type -eq "movie") {
+            $watchedStatus = Safe-Int $row.watched_status
+            $percent = Safe-Int $row.percent_complete
+            $qualified = ($watchedStatus -gt 0 -or $percent -ge $watchedThreshold)
+
+            if ($qualified) {
+                $moviesWatched++
+                $qualifyingPlays += (Get-HistoryRowPlayCount -Row $row)
+
+                $ratingKey = [string]$row.rating_key
+                $title = [string]$row.title
+                $dedupeKey = if (-not [string]::IsNullOrWhiteSpace($ratingKey)) {
+                    "movie:" + $ratingKey
+                } else {
+                    "movie:title:" + $title.ToLowerInvariant()
+                }
+
+                if (-not $movieSeen.ContainsKey($dedupeKey)) {
+                    $movieSeen[$dedupeKey] = $true
+                    $movieItems.Add([PSCustomObject]@{
+                        Type            = "movie"
+                        RatingKey       = $ratingKey
+                        PosterRatingKey = $ratingKey
+                        Title           = $title
+                        Year            = [string]$row.year
+                        Plays           = Get-HistoryRowPlayCount -Row $row
+                    })
+                }
+            }
+
+            $topTitle = [string]$row.title
+            if (-not [string]::IsNullOrWhiteSpace($topTitle) -and $seconds -gt 0) {
+                $key = "movie:" + $topTitle
+                if (-not $titleTotals.ContainsKey($key)) {
+                    $titleTotals[$key] = [PSCustomObject]@{
+                        Title   = $topTitle
+                        Seconds = [int64]0
+                    }
+                }
+                $titleTotals[$key].Seconds += $seconds
+            }
+        }
+        elseif ($type -eq "episode") {
+            $qualified = ($seconds -ge $minEpisodeSeconds)
+
+            if ($qualified) {
+                $episodesStreamed++
+                $qualifyingPlays += (Get-HistoryRowPlayCount -Row $row)
+
+                $ratingKey = [string]$row.rating_key
+                $showRatingKey = [string]$row.grandparent_rating_key
+                $showTitle = [string]$row.grandparent_title
+                if ([string]::IsNullOrWhiteSpace($showTitle)) {
+                    $showTitle = [string]$row.parent_title
+                }
+                $episodeTitle = [string]$row.title
+                $dedupeKey = if (-not [string]::IsNullOrWhiteSpace($ratingKey)) {
+                    "episode:" + $ratingKey
+                } else {
+                    "episode:{0}:{1}:{2}" -f `
+                        (Safe-Int $row.parent_media_index),
+                        (Safe-Int $row.media_index),
+                        $episodeTitle.ToLowerInvariant()
+                }
+
+                if (-not $episodeSeen.ContainsKey($dedupeKey)) {
+                    $episodeSeen[$dedupeKey] = $true
+
+                    $nativeImdb = ""
+                    if ([string]$row.rating_image -match '(?i)^imdb://' -and
+                        -not [string]::IsNullOrWhiteSpace([string]$row.rating)) {
+                        $nativeImdb = [string]$row.rating
+                    }
+
+                    $episodeItems.Add([PSCustomObject]@{
+                        Type            = "episode"
+                        RatingKey       = $ratingKey
+                        PosterRatingKey = $showRatingKey
+                        ShowTitle       = $showTitle
+                        EpisodeTitle    = $episodeTitle
+                        Season          = Safe-Int $row.parent_media_index
+                        Episode         = Safe-Int $row.media_index
+                        ImdbRating      = $nativeImdb
+                        Plays           = Get-HistoryRowPlayCount -Row $row
+                    })
+                }
+            }
+
+            $showTitleForTop = [string]$row.grandparent_title
+            if ([string]::IsNullOrWhiteSpace($showTitleForTop)) {
+                $showTitleForTop = [string]$row.title
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($showTitleForTop) -and $seconds -gt 0) {
+                $key = "show:" + $showTitleForTop
+                if (-not $titleTotals.ContainsKey($key)) {
+                    $titleTotals[$key] = [PSCustomObject]@{
+                        Title   = $showTitleForTop
+                        Seconds = [int64]0
+                    }
+                }
+                $titleTotals[$key].Seconds += $seconds
+            }
+        }
+    }
+
+    $top = @($titleTotals.Values | Sort-Object Seconds -Descending | Select-Object -First 1)
+    $topTitleValue = if ($top.Count -gt 0) { [string]$top[0].Title } else { "" }
+
+    return [PSCustomObject]@{
+        MoviesWatched        = $moviesWatched
+        EpisodesStreamed     = $episodesStreamed
+        QualifyingPlays      = $qualifyingPlays
+        TotalSeconds         = $totalSeconds
+        TotalTimeText        = Format-WatchTime $totalSeconds
+        MostWatched          = $topTitleValue
+        MovieItems           = $movieItems.ToArray()
+        EpisodeItems         = $episodeItems.ToArray()
+    }
+}
+
+function Add-UserStatsMediaMetadata {
+    param([object]$Stats)
+
+    if ($null -eq $Stats) { return }
+
+    $movies = @()
+    if ($null -ne $Stats.PSObject.Properties["MovieItems"]) {
+        $movies = @($Stats.MovieItems)
+    }
+
+    if ((Safe-Int $Stats.MoviesWatched) -ge 1 -and
+        (Safe-Int $Stats.MoviesWatched) -le 3 -and
+        $movies.Count -gt 0) {
+        Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{
+            Movies = $movies
+            TV     = @()
+        })
+    }
+
+    $episodes = @()
+    if ($null -ne $Stats.PSObject.Properties["EpisodeItems"]) {
+        $episodes = @($Stats.EpisodeItems)
+    }
+
+    if ((Safe-Int $Stats.EpisodesStreamed) -ge 1 -and
+        (Safe-Int $Stats.EpisodesStreamed) -le 3) {
+        foreach ($episode in @($episodes | Select-Object -First 3)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$episode.ImdbRating)) {
+                continue
+            }
+
+            $meta = $null
+            try {
+                if (-not [string]::IsNullOrWhiteSpace([string]$episode.RatingKey)) {
+                    $meta = Invoke-TautulliApi -Command "get_metadata" -Parameters @{
+                        rating_key = [string]$episode.RatingKey
+                    }
+
+                    if ([string]$meta.rating_image -match '(?i)^imdb://' -and
+                        -not [string]::IsNullOrWhiteSpace([string]$meta.rating)) {
+                        $episode.ImdbRating = [string]$meta.rating
+                    }
+                }
+
+                if ([string]::IsNullOrWhiteSpace([string]$episode.ImdbRating)) {
+                    $episode.ImdbRating = Get-DesignEpisodeImdbRating `
+                        -RatingKey ([string]$episode.RatingKey) `
+                        -TautulliMetadata $meta
+                }
+            }
+            catch {
+                Write-Log "Could not enrich watched episode '$($episode.EpisodeTitle)' with IMDb: $($_.Exception.Message)" "WARN"
+            }
+        }
+    }
+}
+
+function Get-HotNewRelease {
+    param(
+        [object]$ReleaseData,
+        [object[]]$GlobalHistory
+    )
+
+    $lookup = @{}
+
+    foreach ($m in @($ReleaseData.Movies)) {
+        $lookup[$m.ReleaseKey] = [PSCustomObject]@{
+            Item    = $m
+            Seconds = [int64]0
+            Plays   = 0
+        }
+    }
+
+    foreach ($t in @($ReleaseData.TV)) {
+        $lookup[$t.ReleaseKey] = [PSCustomObject]@{
+            Item    = $t
+            Seconds = [int64]0
+            Plays   = 0
+        }
+    }
+
+    foreach ($row in $GlobalHistory) {
+        $type = ([string]$row.media_type).ToLowerInvariant()
+        $key = ""
+
+        if ($type -eq "movie") {
+            $key = "movie:" + [string]$row.rating_key
+        }
+        elseif ($type -eq "episode") {
+            $showKey = [string]$row.grandparent_rating_key
+            if (-not [string]::IsNullOrWhiteSpace($showKey)) {
+                $key = "show:" + $showKey
+            }
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($key) -and $lookup.ContainsKey($key)) {
+            $lookup[$key].Seconds += [int64](Safe-Int $row.play_duration)
+            $lookup[$key].Plays++
+        }
+    }
+
+    $watched = @(
+        $lookup.Values |
+        Where-Object { $_.Seconds -gt 0 -or $_.Plays -gt 0 } |
+        Sort-Object Seconds, Plays -Descending |
+        Select-Object -First 1
+    )
+
+    if ($watched.Count -gt 0) {
+        $winner = $watched[0]
+        return [PSCustomObject]@{
+            Item      = $winner.Item
+            Seconds   = $winner.Seconds
+            Plays     = $winner.Plays
+            IsPopular = $true
+        }
+    }
+
+    # Fresh-install fallback: feature the newest addition until enough
+    # Tautulli history exists to rank new releases by viewing activity.
+    $allNew = @()
+    $allNew += @($ReleaseData.Movies)
+    $allNew += @($ReleaseData.TV)
+
+    $newest = @($allNew | Sort-Object AddedAt -Descending | Select-Object -First 1)
+    if ($newest.Count -gt 0) {
+        return [PSCustomObject]@{
+            Item      = $newest[0]
+            Seconds   = [int64]0
+            Plays     = 0
+            IsPopular = $false
+        }
+    }
+
+    return $null
+}
+
+function Get-HistoryRowPlayCount {
+    param([object]$Row)
+
+    if ($null -ne $Row.PSObject.Properties["group_count"]) {
+        $groupCount = Safe-Int $Row.group_count
+        if ($groupCount -gt 0) { return $groupCount }
+    }
+
+    return 1
+}
+
+function Get-GlobalTitleTotals {
+    param([object[]]$GlobalHistory)
+
+    $totals = @{}
+
+    foreach ($row in $GlobalHistory) {
+        $type = ([string]$row.media_type).ToLowerInvariant()
+        $seconds = [int64](Safe-Int $row.play_duration)
+        if ($seconds -lt 0) { $seconds = 0 }
+
+        $title = ""
+        $key = ""
+        $ratingKey = ""
+        $titleType = ""
+
+        if ($type -eq "movie") {
+            $title = [string]$row.title
+            $ratingKey = [string]$row.rating_key
+            $key = if ([string]::IsNullOrWhiteSpace($ratingKey)) { "movie:title:" + $title } else { "movie:" + $ratingKey }
+            $titleType = "movie"
+        }
+        elseif ($type -eq "episode") {
+            $title = [string]$row.grandparent_title
+            if ([string]::IsNullOrWhiteSpace($title)) {
+                $title = [string]$row.title
+            }
+            $ratingKey = [string]$row.grandparent_rating_key
+            $key = if ([string]::IsNullOrWhiteSpace($ratingKey)) { "show:title:" + $title } else { "show:" + $ratingKey }
+            $titleType = "show"
+        }
+        else {
+            continue
+        }
+
+        if ([string]::IsNullOrWhiteSpace($title)) { continue }
+
+        if (-not $totals.ContainsKey($key)) {
+            $totals[$key] = [PSCustomObject]@{
+                Key       = $key
+                Title     = $title
+                Type      = $titleType
+                RatingKey = $ratingKey
+                Seconds   = [int64]0
+                Plays     = 0
+            }
+        }
+
+        $totals[$key].Seconds += $seconds
+        $totals[$key].Plays += (Get-HistoryRowPlayCount -Row $row)
+    }
+
+    return @($totals.Values)
+}
+
+function Get-GlobalTrendingStat {
+    param([object[]]$GlobalHistory)
+
+    $top = @(
+        Get-GlobalTitleTotals -GlobalHistory $GlobalHistory |
+        Where-Object { $_.Seconds -gt 0 -or $_.Plays -gt 0 } |
+        Sort-Object Seconds, Plays -Descending |
+        Select-Object -First 1
+    )
+
+    if ($top.Count -eq 0) { return $null }
+    return $top[0]
+}
+
+function Get-GlobalTrendingTitle {
+    param([object[]]$GlobalHistory)
+
+    $stat = Get-GlobalTrendingStat -GlobalHistory $GlobalHistory
+    if ($null -ne $stat) { return [string]$stat.Title }
+    return ""
+}
+
+function New-HeroItemFromGlobalStat {
+    param([object]$Stat)
+
+    if ($null -eq $Stat) { return $null }
+
+    $meta = $null
+    if (-not [string]::IsNullOrWhiteSpace([string]$Stat.RatingKey)) {
+        try {
+            $meta = Invoke-TautulliApi -Command "get_metadata" -Parameters @{
+                rating_key = [string]$Stat.RatingKey
+            }
+        }
+        catch {
+            Write-Log "Could not load metadata for server-wide hero '$($Stat.Title)': $($_.Exception.Message)" "WARN"
+        }
+    }
+
+    $title = [string]$Stat.Title
+    $year = ""
+    $summary = ""
+    $posterRatingKey = [string]$Stat.RatingKey
+    $addedAt = [int64]0
+
+    if ($null -ne $meta) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$meta.title)) { $title = [string]$meta.title }
+        $year = [string]$meta.year
+        $summary = [string]$meta.summary
+        $addedAt = Safe-Int64 $meta.added_at
+        if ([string]::IsNullOrWhiteSpace($posterRatingKey)) {
+            $posterRatingKey = [string]$meta.rating_key
+        }
+    }
+
+    return [PSCustomObject]@{
+        Type            = [string]$Stat.Type
+        ReleaseKey      = [string]$Stat.Key
+        RatingKey       = [string]$Stat.RatingKey
+        PosterRatingKey = $posterRatingKey
+        Title           = $title
+        Year            = $year
+        Rating          = ""
+        Summary         = $summary
+        AddedAt         = $addedAt
+        EpisodeCount    = 0
+        SeasonCount     = 0
+        IsNewSeries     = $false
+        Episodes        = @()
+    }
+}
+
+function Get-GlobalTrendingHero {
+    param([object[]]$GlobalHistory)
+
+    $top = @(
+        Get-GlobalTitleTotals -GlobalHistory $GlobalHistory |
+        Where-Object { $_.Seconds -gt 0 -or $_.Plays -gt 0 } |
+        Sort-Object Seconds, Plays -Descending |
+        Select-Object -First 1
+    )
+
+    if ($top.Count -eq 0) { return $null }
+
+    $item = New-HeroItemFromGlobalStat -Stat $top[0]
+    if ($null -eq $item) { return $null }
+
+    return [PSCustomObject]@{
+        Item      = $item
+        Seconds   = [int64]$top[0].Seconds
+        Plays     = Safe-Int $top[0].Plays
+        IsPopular = $true
+    }
+}
+
+function Get-BingeChampion {
+    param([object[]]$GlobalHistory)
+
+    $watchedThreshold = if ($null -ne $Config.PSObject.Properties["WatchedPercent"]) {
+        Safe-Int $Config.WatchedPercent
+    } else { 85 }
+
+    $minEpisodeSeconds = if ($null -ne $Config.PSObject.Properties["MinimumEpisodeSeconds"]) {
+        Safe-Int $Config.MinimumEpisodeSeconds
+    } else { 120 }
+
+    $totals = @{}
+
+    foreach ($row in $GlobalHistory) {
+        $type = ([string]$row.media_type).ToLowerInvariant()
+        $seconds = [int64](Safe-Int $row.play_duration)
+        if ($seconds -lt 0) { $seconds = 0 }
+
+        $qualified = $false
+        if ($type -eq "movie") {
+            $qualified = (
+                (Safe-Int $row.watched_status) -gt 0 -or
+                (Safe-Int $row.percent_complete) -ge $watchedThreshold
+            )
+        }
+        elseif ($type -eq "episode") {
+            $qualified = ($seconds -ge $minEpisodeSeconds)
+        }
+
+        if (-not $qualified) { continue }
+
+        $userId = ""
+        foreach ($propertyName in @("user_id","userId")) {
+            if ($null -ne $row.PSObject.Properties[$propertyName]) {
+                $candidate = [string]$row.$propertyName
+                if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+                    $userId = $candidate
+                    break
+                }
+            }
+        }
+
+        $friendlyName = ""
+        foreach ($propertyName in @("friendly_name","user","username")) {
+            if ($null -ne $row.PSObject.Properties[$propertyName]) {
+                $candidate = [string]$row.$propertyName
+                if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+                    $friendlyName = $candidate
+                    break
+                }
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($userId) -and
+            [string]::IsNullOrWhiteSpace($friendlyName)) {
+            continue
+        }
+
+        $key = if (-not [string]::IsNullOrWhiteSpace($userId)) {
+            "id:" + $userId
+        } else {
+            "name:" + $friendlyName.ToLowerInvariant()
+        }
+
+        if (-not $totals.ContainsKey($key)) {
+            $totals[$key] = [PSCustomObject]@{
+                UserId       = $userId
+                FriendlyName = $friendlyName
+                Plays        = 0
+                Seconds      = [int64]0
+            }
+        }
+
+        $totals[$key].Plays += (Get-HistoryRowPlayCount -Row $row)
+        $totals[$key].Seconds += $seconds
+    }
+
+    $top = @(
+        $totals.Values |
+        Where-Object { $_.Plays -gt 0 } |
+        Sort-Object Plays, Seconds -Descending |
+        Select-Object -First 1
+    )
+
+    if ($top.Count -eq 0) { return $null }
+
+    $winner = $top[0]
+    if ([string]::IsNullOrWhiteSpace([string]$winner.FriendlyName) -and
+        -not [string]::IsNullOrWhiteSpace([string]$winner.UserId)) {
+        try {
+            $resolved = Get-NewsletterUser -Id ([string]$winner.UserId)
+            $winner.FriendlyName = [string]$resolved.FriendlyName
+        }
+        catch {
+            Write-Log "Could not resolve Binge Champion user $($winner.UserId): $($_.Exception.Message)" "WARN"
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace([string]$winner.FriendlyName)) {
+        $winner.FriendlyName = "A Plex user"
+    }
+
+    return [PSCustomObject]@{
+        UserId        = [string]$winner.UserId
+        FriendlyName  = [string]$winner.FriendlyName
+        Plays         = Safe-Int $winner.Plays
+        Seconds       = [int64]$winner.Seconds
+        TotalTimeText = Format-WatchTime ([int64]$winner.Seconds)
+    }
+}
+
+function Get-DesignPlexContext {
+    if ($null -ne $script:DesignPlexContext) {
+        return $script:DesignPlexContext
+    }
+
+    $serverUrl = ""
+    $token = ""
+
+    if ($null -ne $Config.PSObject.Properties["PlexServerUrl"] -and
+        -not [string]::IsNullOrWhiteSpace([string]$Config.PlexServerUrl)) {
+        $serverUrl = ([string]$Config.PlexServerUrl).TrimEnd("/")
+    }
+
+    if ($null -ne $Config.PSObject.Properties["PlexToken"] -and
+        -not [string]::IsNullOrWhiteSpace([string]$Config.PlexToken)) {
+        $token = [string]$Config.PlexToken
+    }
+
+    if ([string]::IsNullOrWhiteSpace($serverUrl)) {
+        try {
+            $serverInfo = Invoke-TautulliApi -Command "get_server_info"
+        if ($null -ne $serverInfo.PSObject.Properties["pms_url"]) {
+            $serverUrl = ([string]$serverInfo.pms_url).TrimEnd("/")
+        }
+    }
+        catch {
+            Write-Log "PlexWeekly: could not retrieve Plex server URL from Tautulli: $($_.Exception.Message)" "WARN"
+        }
+    }
+
+    # Prefer an explicitly supplied environment token when present when no
+    # PlexToken was supplied in config.json.
+    if ([string]::IsNullOrWhiteSpace($token) -and
+        -not [string]::IsNullOrWhiteSpace([string]$env:PLEX_TOKEN)) {
+        $token = [string]$env:PLEX_TOKEN
+    }
+
+    # In the Mac Docker container there is no host registry to inspect. Prefer an
+    # explicit PlexToken, PLEX_TOKEN, or an optional read-only Tautulli
+    # config.ini mount. Direct Plex access is optional; Tautulli fallbacks
+    # remain available when no token can be resolved.
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        $configCandidates = New-Object System.Collections.Generic.List[string]
+
+        foreach ($candidate in @(
+            [string]$env:TAUTULLI_CONFIG_PATH,
+            "/tautulli/config.ini",
+            "/config/config.ini",
+            (Join-Path $DataRoot "tautulli-config.ini")
+        )) {
+            if (-not [string]::IsNullOrWhiteSpace($candidate) -and
+                -not $configCandidates.Contains($candidate)) {
+                $configCandidates.Add($candidate)
+            }
+        }
+
+        foreach ($candidatePath in $configCandidates) {
+            if (-not (Test-Path $candidatePath)) { continue }
+
+            try {
+                foreach ($line in (Get-Content -Path $candidatePath -Encoding UTF8 -ErrorAction Stop)) {
+                    if ($line -match '^\s*pms_token\s*=\s*(.+?)\s*$') {
+                        $candidateToken = [string]$Matches[1]
+                        if (-not [string]::IsNullOrWhiteSpace($candidateToken) -and
+                            $candidateToken -notmatch '^(none|null)$') {
+                            $token = $candidateToken.Trim()
+                            Write-Log ("PlexWeekly: Plex token loaded from mounted Tautulli config: " + $candidatePath)
+                            break
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            if (-not [string]::IsNullOrWhiteSpace($token)) { break }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        Write-Log "PlexWeekly: Plex token unavailable from config, environment, or optional mounted Tautulli config." "WARN"
+    }
+
+    $available = (
+        -not [string]::IsNullOrWhiteSpace($serverUrl) -and
+        -not [string]::IsNullOrWhiteSpace($token)
+    )
+
+    $script:DesignPlexContext = [PSCustomObject]@{
+        Available = $available
+        ServerUrl = $serverUrl
+        Token     = $token
+    }
+
+    if ($available) {
+        Write-Log "PlexWeekly: direct Plex metadata access enabled."
+    }
+    else {
+        Write-Log "PlexWeekly: direct Plex metadata unavailable; Tautulli fallbacks will be used." "WARN"
+    }
+
+    return $script:DesignPlexContext
+}
+
+function Invoke-DesignPlexJson {
+    param([string]$Path)
+
+    $ctx = Get-DesignPlexContext
+    if (-not $ctx.Available) { return $null }
+
+    $url = $ctx.ServerUrl + $Path
+    $headers = @{
+        "Accept"                 = "application/json"
+        "X-Plex-Token"           = [string]$ctx.Token
+        "X-Plex-Pms-Api-Version" = "1.2.2"
+    }
+
+    try {
+        return Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 60
+    }
+    catch {
+        # Some PMS builds may reject the explicit API-version header.
+        try {
+            $headers.Remove("X-Plex-Pms-Api-Version")
+            return Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 60
+        }
+        catch {
+            Write-Log "PlexWeekly direct Plex request failed for $Path`: $($_.Exception.Message)" "WARN"
+            return $null
+        }
+    }
+}
+
+function Invoke-DesignPlexLegacyJson {
+    param([string]$Path)
+
+    $ctx = Get-DesignPlexContext
+    if (-not $ctx.Available) { return $null }
+
+    $url = $ctx.ServerUrl + $Path
+    $headers = @{
+        "Accept"       = "application/json"
+        "X-Plex-Token" = [string]$ctx.Token
+    }
+
+    try {
+        return Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 60
+    }
+    catch {
+        Write-Log "PlexWeekly legacy Plex request failed for $Path`: $($_.Exception.Message)" "WARN"
+        return $null
+    }
+}
+
+function Get-DesignPlexMetadata {
+    param([string]$RatingKey)
+
+    if ([string]::IsNullOrWhiteSpace($RatingKey)) { return $null }
+
+    if ($script:DesignPlexMetadataCache.ContainsKey($RatingKey)) {
+        return $script:DesignPlexMetadataCache[$RatingKey]
+    }
+
+    $raw = Invoke-DesignPlexJson -Path ("/library/metadata/" + [Uri]::EscapeDataString($RatingKey))
+    $meta = $null
+
+    if ($null -ne $raw -and $null -ne $raw.PSObject.Properties["MediaContainer"]) {
+        $container = $raw.MediaContainer
+        if ($null -ne $container.PSObject.Properties["Metadata"]) {
+            $rows = @($container.Metadata)
+            if ($rows.Count -gt 0) {
+                $meta = $rows[0]
+            }
+        }
+    }
+
+    $script:DesignPlexMetadataCache[$RatingKey] = $meta
+    return $meta
+}
+
+function Get-DesignEpisodeImdbRating {
+    param(
+        [string]$RatingKey,
+        [AllowNull()][object]$TautulliMetadata = $null
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RatingKey)) { return "" }
+
+    $jsonRatings = @()
+    $xmlRatings = @()
+    $result = ""
+
+    # Published Plex metadata exposes a Rating[] array. Episodes may include:
+    #   image = imdb://image.rating
+    #   type  = audience
+    #   value = 8.1
+    try {
+        $plexMeta = Get-DesignPlexMetadata -RatingKey $RatingKey
+
+        if ($null -ne $plexMeta -and
+            $null -ne $plexMeta.PSObject.Properties["Rating"]) {
+
+            foreach ($ratingEntry in @($plexMeta.Rating)) {
+                $image = if ($null -ne $ratingEntry.PSObject.Properties["image"]) {
+                    [string]$ratingEntry.image
+                } else { "" }
+
+                $value = if ($null -ne $ratingEntry.PSObject.Properties["value"]) {
+                    [string]$ratingEntry.value
+                } else { "" }
+
+                $type = if ($null -ne $ratingEntry.PSObject.Properties["type"]) {
+                    [string]$ratingEntry.type
+                } else { "" }
+
+                $jsonRatings += [PSCustomObject]@{
+                    image = $image
+                    type  = $type
+                    value = $value
+                }
+
+                if ([string]::IsNullOrWhiteSpace($result) -and
+                    $image -match '(?i)^imdb://image\.rating' -and
+                    -not [string]::IsNullOrWhiteSpace($value)) {
+                    $result = $value
+                }
+            }
+        }
+    }
+    catch {
+        Write-Log ("PlexWeekly direct Plex IMDb JSON lookup failed for episode {0}: {1}" -f `
+            $RatingKey,
+            $_.Exception.Message
+        ) "WARN"
+    }
+
+    # Legacy/local PMS metadata can also expose <Rating> elements even when
+    # JSON serialization omits them. Use XML as a second native Plex source.
+    if ([string]::IsNullOrWhiteSpace($result)) {
+        try {
+            $xml = Invoke-DesignPlexLegacyXml -Path (
+                "/library/metadata/" + [Uri]::EscapeDataString($RatingKey)
+            )
+
+            if ($null -ne $xml) {
+                foreach ($node in @($xml.SelectNodes("//Rating"))) {
+                    if ($null -eq $node) { continue }
+
+                    $image = ""
+                    $value = ""
+                    $type = ""
+
+                    if ($null -ne $node.Attributes["image"]) {
+                        $image = [string]$node.Attributes["image"].Value
+                    }
+                    if ($null -ne $node.Attributes["value"]) {
+                        $value = [string]$node.Attributes["value"].Value
+                    }
+                    if ($null -ne $node.Attributes["type"]) {
+                        $type = [string]$node.Attributes["type"].Value
+                    }
+
+                    $xmlRatings += [PSCustomObject]@{
+                        image = $image
+                        type  = $type
+                        value = $value
+                    }
+
+                    if ([string]::IsNullOrWhiteSpace($result) -and
+                        $image -match '(?i)^imdb://image\.rating' -and
+                        -not [string]::IsNullOrWhiteSpace($value)) {
+                        $result = $value
+                    }
+                }
+            }
+        }
+        catch {
+            Write-Log ("PlexWeekly direct Plex IMDb XML lookup failed for episode {0}: {1}" -f `
+                $RatingKey,
+                $_.Exception.Message
+            ) "WARN"
+        }
+    }
+
+    # When nothing is found, leave a sanitized diagnostic so another miss is
+    # immediately actionable without exposing tokens or media file paths.
+    if ([string]::IsNullOrWhiteSpace($result)) {
+        try {
+            $tautRating = ""
+            $tautRatingImage = ""
+
+            if ($null -ne $TautulliMetadata) {
+                if ($null -ne $TautulliMetadata.PSObject.Properties["rating"]) {
+                    $tautRating = [string]$TautulliMetadata.rating
+                }
+                if ($null -ne $TautulliMetadata.PSObject.Properties["rating_image"]) {
+                    $tautRatingImage = [string]$TautulliMetadata.rating_image
+                }
+            }
+
+            [PSCustomObject]@{
+                RatingKey          = $RatingKey
+                TautulliRating     = $tautRating
+                TautulliRatingImage = $tautRatingImage
+                PlexJsonRatings    = $jsonRatings
+                PlexXmlRatings     = $xmlRatings
+            } |
+                ConvertTo-Json -Depth 8 |
+                Set-Content `
+                    -Path (Join-Path $DesignMediaDir ("episode_rating_probe_" + (Get-SafeFilePart $RatingKey) + ".json")) `
+                    -Encoding UTF8
+        }
+        catch { }
+    }
+
+    return $result
+}
+
+function Get-DesignPlexImages {
+    param([string]$RatingKey)
+
+    if ([string]::IsNullOrWhiteSpace($RatingKey)) { return @() }
+
+    $meta = Get-DesignPlexMetadata -RatingKey $RatingKey
+    if ($null -ne $meta -and $null -ne $meta.PSObject.Properties["Image"]) {
+        $images = @($meta.Image)
+        if ($images.Count -gt 0) {
+            return $images
+        }
+    }
+
+    # Current Plex metadata providers expose an /images endpoint as well.
+    $raw = Invoke-DesignPlexJson -Path (
+        "/library/metadata/" + [Uri]::EscapeDataString($RatingKey) + "/images"
+    )
+
+    if ($null -ne $raw -and $null -ne $raw.PSObject.Properties["MediaContainer"]) {
+        $container = $raw.MediaContainer
+        if ($null -ne $container.PSObject.Properties["Image"]) {
+            return @($container.Image)
+        }
+    }
+
+    return @()
+}
+
+function Invoke-DesignPlexLegacyXml {
+    param([string]$Path)
+
+    $ctx = Get-DesignPlexContext
+    if (-not $ctx.Available) {
+        throw "Direct Plex context is unavailable."
+    }
+
+    $url = $ctx.ServerUrl + $Path
+    $headers = @{
+        "Accept" = "application/xml"
+        "X-Plex-Token" = [string]$ctx.Token
+    }
+
+    try {
+        $response = Invoke-WebRequest `
+            -Uri $url `
+            -Headers $headers `
+            -Method Get `
+            -UseBasicParsing `
+            -TimeoutSec 60
+
+        if ([string]::IsNullOrWhiteSpace([string]$response.Content)) {
+            throw "Plex returned an empty response body."
+        }
+
+        return [xml]$response.Content
+    }
+    catch {
+        throw "Raw Plex XML request failed for $Path`: $($_.Exception.Message)"
+    }
+}
+
+function Get-ImageMagickTool {
+    param([ValidateSet("identify","convert")][string]$Name)
+
+    $command = Get-Command $Name -ErrorAction SilentlyContinue
+    if ($null -ne $command) { return [string]$command.Source }
+
+    $magick = Get-Command "magick" -ErrorAction SilentlyContinue
+    if ($null -ne $magick) { return [string]$magick.Source }
+
+    return ""
+}
+
+function Get-DesignLogoVisualScore {
+    param([string]$Path)
+
+    $result = [PSCustomObject]@{
+        Valid          = $false
+        AverageLuma    = 0.0
+        BrightFraction = 0.0
+        Score          = 0.0
+        Width          = 0
+        Height         = 0
+        Error          = ""
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path $Path)) {
+        return $result
+    }
+
+    try {
+        $identify = Get-ImageMagickTool -Name "identify"
+        $convert = Get-ImageMagickTool -Name "convert"
+        if ([string]::IsNullOrWhiteSpace($identify) -or
+            [string]::IsNullOrWhiteSpace($convert)) {
+            throw "ImageMagick identify/convert commands are unavailable."
+        }
+
+        if ([IO.Path]::GetFileName($identify) -match '^magick(?:\.exe)?$') {
+            $dimensions = (& $identify "identify" "-format" "%w %h" $Path 2>$null | Out-String).Trim()
+        }
+        else {
+            $dimensions = (& $identify "-format" "%w %h" $Path 2>$null | Out-String).Trim()
+        }
+
+        if ($LASTEXITCODE -ne 0 -or $dimensions -notmatch '^(\d+)\s+(\d+)$') {
+            throw "ImageMagick could not read logo dimensions."
+        }
+
+        $result.Width = [int]$Matches[1]
+        $result.Height = [int]$Matches[2]
+        if ($result.Width -le 0 -or $result.Height -le 0) {
+            throw "Logo image has invalid dimensions."
+        }
+
+        $convertArgs = @(
+            $Path,
+            "-alpha", "on",
+            "-resize", "220x220>",
+            "-depth", "8",
+            "txt:-"
+        )
+
+        if ([IO.Path]::GetFileName($convert) -match '^magick(?:\.exe)?$') {
+            $pixelLines = @(& $convert "convert" @convertArgs 2>$null)
+        }
+        else {
+            $pixelLines = @(& $convert @convertArgs 2>$null)
+        }
+
+        if ($LASTEXITCODE -ne 0 -or $pixelLines.Count -eq 0) {
+            throw "ImageMagick could not sample logo pixels."
+        }
+
+        [double]$weightedLuma = 0
+        [double]$totalWeight = 0
+        [double]$brightWeight = 0
+
+        foreach ($line in $pixelLines) {
+            # ImageMagick txt: output at 8-bit depth normally begins with:
+            # 0,0: (R,G,B,A) ...
+            if ([string]$line -notmatch '^\s*\d+,\d+:\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)') {
+                continue
+            }
+
+            $red = [double]$Matches[1]
+            $green = [double]$Matches[2]
+            $blue = [double]$Matches[3]
+            $alpha = [double]$Matches[4]
+            if ($alpha -lt 32) { continue }
+
+            $alphaWeight = $alpha / 255.0
+            $luma = ((0.2126 * $red) + (0.7152 * $green) + (0.0722 * $blue)) / 255.0
+            $weightedLuma += ($luma * $alphaWeight)
+            $totalWeight += $alphaWeight
+            if ($luma -ge 0.62) { $brightWeight += $alphaWeight }
+        }
+
+        if ($totalWeight -le 0) {
+            throw "Logo contains no visible pixels."
+        }
+
+        $averageLuma = $weightedLuma / $totalWeight
+        $brightFraction = $brightWeight / $totalWeight
+        $score = ($averageLuma * 0.75) + ($brightFraction * 0.25)
+
+        $result.Valid = $true
+        $result.AverageLuma = [Math]::Round($averageLuma, 4)
+        $result.BrightFraction = [Math]::Round($brightFraction, 4)
+        $result.Score = [Math]::Round($score, 4)
+    }
+    catch {
+        $result.Error = $_.Exception.Message
+    }
+
+    return $result
+}
+
+function Get-DesignBestClearLogoAsset {
+    param([string]$RatingKey)
+
+    $result = [PSCustomObject]@{
+        LogoSrc       = ""
+        CandidateCount = 0
+        ReadableCount = 0
+        ChosenIndex   = -1
+        ChosenScore   = 0.0
+        ChosenWasPlexSelected = $false
+    }
+
+    if ([string]::IsNullOrWhiteSpace($RatingKey)) {
+        return $result
+    }
+
+    $safeKey = Get-SafeFilePart $RatingKey
+    $diagPath = Join-Path $DesignMediaDir ("clearlogos_probe_" + $safeKey + ".json")
+    $rawPath = Join-Path $DesignMediaDir ("clearlogos_raw_" + $safeKey + ".xml")
+
+    $diag = [ordered]@{
+        RatingKey = $RatingKey
+        RequestPath = "/library/metadata/$RatingKey/clearLogos"
+        PhotoCount = 0
+        Candidates = @()
+        ChosenIndex = -1
+        ChosenScore = 0
+        ChosenWasPlexSelected = $false
+        Decision = ""
+        Error = ""
+    }
+
+    $candidateFiles = New-Object System.Collections.Generic.List[string]
+
+    try {
+        $xml = Invoke-DesignPlexLegacyXml -Path (
+            "/library/metadata/" +
+            [Uri]::EscapeDataString($RatingKey) +
+            "/clearLogos"
+        )
+
+        try { $xml.Save($rawPath) } catch { }
+
+        if ($null -eq $xml.MediaContainer) {
+            throw "XML response did not contain MediaContainer."
+        }
+
+        $photos = @(
+            @($xml.MediaContainer.Photo) |
+            Where-Object { $null -ne $_ }
+        )
+
+        $result.CandidateCount = $photos.Count
+        $diag.PhotoCount = $photos.Count
+
+        if ($photos.Count -eq 0) {
+            throw "Plex returned zero clearLogo candidates."
+        }
+
+        $scored = @()
+
+        for ($i = 0; $i -lt $photos.Count; $i++) {
+            $photo = $photos[$i]
+
+            $logoPath = ""
+            if (-not [string]::IsNullOrWhiteSpace([string]$photo.thumb)) {
+                $logoPath = [string]$photo.thumb
+            }
+            elseif (-not [string]::IsNullOrWhiteSpace([string]$photo.key)) {
+                $logoPath = [string]$photo.key
+            }
+
+            $candidateName = "logo_candidate_{0}_{1}.img" -f $safeKey, $i
+            $candidateRel = ""
+
+            if (-not [string]::IsNullOrWhiteSpace($logoPath)) {
+                $candidateRel = Get-DesignPlexAsset `
+                    -Url $logoPath `
+                    -OutputName $candidateName
+            }
+
+            $localPath = if ([string]::IsNullOrWhiteSpace($candidateRel)) {
+                ""
+            }
+            else {
+                Join-Path $DesignMediaDir $candidateName
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($localPath)) {
+                $candidateFiles.Add($localPath)
+            }
+
+            $visual = Get-DesignLogoVisualScore -Path $localPath
+            $isSelected = ([string]$photo.selected -eq "1")
+
+            $entry = [PSCustomObject]@{
+                Index          = $i
+                Selected       = $isSelected
+                RatingKey      = [string]$photo.ratingKey
+                Valid          = [bool]$visual.Valid
+                AverageLuma    = [double]$visual.AverageLuma
+                BrightFraction = [double]$visual.BrightFraction
+                Score          = [double]$visual.Score
+                Width          = [int]$visual.Width
+                Height         = [int]$visual.Height
+                LocalPath      = $localPath
+                Error          = [string]$visual.Error
+            }
+
+            $scored += $entry
+
+            $diag.Candidates += [PSCustomObject]@{
+                Index          = $entry.Index
+                Selected       = $entry.Selected
+                RatingKey      = $entry.RatingKey
+                Valid          = $entry.Valid
+                AverageLuma    = $entry.AverageLuma
+                BrightFraction = $entry.BrightFraction
+                Score          = $entry.Score
+                Width          = $entry.Width
+                Height         = $entry.Height
+                Error          = $entry.Error
+            }
+        }
+
+        $readable = @(
+            $scored |
+            Where-Object {
+                $_.Valid -and
+                $_.Score -ge 0.36
+            }
+        )
+
+        $result.ReadableCount = $readable.Count
+
+        if ($readable.Count -eq 0) {
+            $diag.Decision = "No sufficiently bright clearLogo candidate; use text title fallback."
+            Write-Log "PlexWeekly: clearLogo variants exist, but none are readable enough for the dark email hero. Using text title." "WARN"
+            return $result
+        }
+
+        $ranked = @(
+            $readable |
+            Sort-Object `
+                @{ Expression = "Score"; Descending = $true },
+                @{ Expression = "Selected"; Descending = $true }
+        )
+
+        $chosen = $ranked[0]
+
+        # If Plex's selected variant is essentially tied with the brightest
+        # option, preserve Plex's choice. Otherwise readability wins.
+        $selectedReadable = @(
+            $readable |
+            Where-Object { $_.Selected } |
+            Select-Object -First 1
+        )
+
+        if ($selectedReadable.Count -gt 0) {
+            $scoreGap = [double]$chosen.Score - [double]$selectedReadable[0].Score
+            if ($scoreGap -le 0.035) {
+                $chosen = $selectedReadable[0]
+            }
+        }
+
+        $result.ChosenIndex = [int]$chosen.Index
+        $result.ChosenScore = [double]$chosen.Score
+        $result.ChosenWasPlexSelected = [bool]$chosen.Selected
+
+        $diag.ChosenIndex = $result.ChosenIndex
+        $diag.ChosenScore = $result.ChosenScore
+        $diag.ChosenWasPlexSelected = $result.ChosenWasPlexSelected
+
+        $finalName = "logo_" + $safeKey + ".png"
+        $finalPath = Join-Path $DesignMediaDir $finalName
+
+        $convert = Get-ImageMagickTool -Name "convert"
+        if ([string]::IsNullOrWhiteSpace($convert)) {
+            throw "ImageMagick convert command is unavailable."
+        }
+
+        if ([IO.Path]::GetFileName($convert) -match '^magick(?:\.exe)?$') {
+            & $convert "convert" ([string]$chosen.LocalPath) "PNG32:$finalPath" 2>$null
+        }
+        else {
+            & $convert ([string]$chosen.LocalPath) "PNG32:$finalPath" 2>$null
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "ImageMagick could not convert the chosen clearLogo to PNG."
+        }
+
+        if ((Test-Path $finalPath) -and (Get-Item $finalPath).Length -gt 256) {
+            $result.LogoSrc = "media/" + $finalName
+            $diag.Decision = "Chose highest-contrast clearLogo for #181818 email hero."
+
+            Write-Log (
+                "PlexWeekly: chose clearLogo candidate {0}/{1} for dark hero (score {2}; Plex selected={3})." -f `
+                ($result.ChosenIndex + 1),
+                $result.CandidateCount,
+                $result.ChosenScore,
+                $result.ChosenWasPlexSelected
+            )
+        }
+    }
+    catch {
+        $diag.Error = $_.Exception.Message
+        Write-Log ("PlexWeekly clearLogo selection failed: " + $diag.Error) "WARN"
+    }
+    finally {
+        foreach ($candidateFile in $candidateFiles) {
+            Remove-Item $candidateFile -Force -ErrorAction SilentlyContinue
+        }
+
+        try {
+            [PSCustomObject]$diag |
+                ConvertTo-Json -Depth 10 |
+                Set-Content -Path $diagPath -Encoding UTF8
+        }
+        catch { }
+    }
+
+    return $result
+}
+
+function Save-DesignPlexDiagnostic {
+    param(
+        [string]$RatingKey,
+        [object]$Metadata,
+        [object[]]$Images
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RatingKey)) { return }
+
+    $ratings = @()
+    if ($null -ne $Metadata -and $null -ne $Metadata.PSObject.Properties["Rating"]) {
+        foreach ($r in @($Metadata.Rating)) {
+            $ratings += [PSCustomObject]@{
+                image = if ($null -ne $r.PSObject.Properties["image"]) { [string]$r.image } else { "" }
+                type  = if ($null -ne $r.PSObject.Properties["type"])  { [string]$r.type }  else { "" }
+                value = if ($null -ne $r.PSObject.Properties["value"]) { $r.value } else { $null }
+            }
+        }
+    }
+
+    $imageSummary = @()
+    foreach ($img in @($Images)) {
+        $imageSummary += [PSCustomObject]@{
+            type = if ($null -ne $img.PSObject.Properties["type"]) { [string]$img.type } else { "" }
+            url  = if ($null -ne $img.PSObject.Properties["url"])  { [string]$img.url }  else { "" }
+            alt  = if ($null -ne $img.PSObject.Properties["alt"])  { [string]$img.alt }  else { "" }
+        }
+    }
+
+    $diag = [PSCustomObject]@{
+        RatingKey = $RatingKey
+        Title = if ($null -ne $Metadata -and $null -ne $Metadata.PSObject.Properties["title"]) {
+            [string]$Metadata.title
+        } else {
+            ""
+        }
+        Ratings = $ratings
+        Images  = $imageSummary
+    }
+
+    $diagName = "plex_design_diagnostic_" + (Get-SafeFilePart $RatingKey) + ".json"
+    $diagPath = Join-Path $DesignMediaDir $diagName
+    $diag | ConvertTo-Json -Depth 8 | Set-Content -Path $diagPath -Encoding UTF8
+
+    Write-Log "PlexWeekly: saved Plex rating/image diagnostic to preview-output\media\$diagName"
+}
+
+function Get-DesignPlexAsset {
+    param(
+        [string]$Url,
+        [string]$OutputName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Url)) { return "" }
+
+    $local = Join-Path $DesignMediaDir $OutputName
+    $ctx = Get-DesignPlexContext
+
+    try {
+        if ($Url -match '^https?://') {
+            Invoke-WebRequest -Uri $Url -OutFile $local -TimeoutSec 60 | Out-Null
+        }
+        elseif ($ctx.Available) {
+            $assetUrl = $ctx.ServerUrl + $Url
+            $headers = @{ "X-Plex-Token" = [string]$ctx.Token }
+            Invoke-WebRequest -Uri $assetUrl -Headers $headers -OutFile $local -TimeoutSec 60 | Out-Null
+        }
+        else {
+            return ""
+        }
+
+        if ((Test-Path $local) -and (Get-Item $local).Length -gt 256) {
+            return "media/" + $OutputName
+        }
+    }
+    catch {
+        Write-Log "PlexWeekly: Plex asset download failed ($OutputName): $($_.Exception.Message)" "WARN"
+    }
+
+    Remove-Item $local -Force -ErrorAction SilentlyContinue
+    return ""
+}
+
+
+$script:DesignRichExportCache = @{}
+
+function Find-DesignRtRatingsRecursive {
+    param(
+        [AllowNull()][object]$Node,
+        [ref]$Critic,
+        [ref]$Audience
+    )
+
+    if ($null -eq $Node) { return }
+
+    if ($Node -is [string] -or
+        $Node -is [ValueType]) {
+        return
+    }
+
+    # Look for an object that itself represents a Plex Rating entry.
+    try {
+        $props = $Node.PSObject.Properties
+        if ($null -ne $props) {
+            $imageProp = $props["image"]
+            $valueProp = $props["value"]
+
+            if ($null -ne $imageProp -and $null -ne $valueProp) {
+                $image = [string]$imageProp.Value
+                $value = $valueProp.Value
+
+                if ($image -like "rottentomatoes://image.rating.ripe*") {
+                    $Critic.Value = Convert-DesignRatingPercent $value
+                }
+                elseif ($image -like "rottentomatoes://image.rating.upright*") {
+                    $Audience.Value = Convert-DesignRatingPercent $value
+                }
+            }
+
+            foreach ($p in $props) {
+                Find-DesignRtRatingsRecursive `
+                    -Node $p.Value `
+                    -Critic $Critic `
+                    -Audience $Audience
+            }
+            return
+        }
+    }
+    catch { }
+
+    if ($Node -is [System.Collections.IEnumerable]) {
+        foreach ($child in $Node) {
+            Find-DesignRtRatingsRecursive `
+                -Node $child `
+                -Critic $Critic `
+                -Audience $Audience
+        }
+    }
+}
+
+function Get-DesignLogoExportSimple {
+    param(
+        [string]$RatingKey,
+        [string]$MediaType = "movie"
+    )
+
+    $safeKey = Get-SafeFilePart $RatingKey
+    $diagPath = Join-Path $DesignMediaDir ("logo_probe_" + $safeKey + ".json")
+    $zipPath = Join-Path $DesignMediaDir ("logo_probe_" + $safeKey + ".zip")
+    $extractPath = Join-Path $DesignMediaDir ("logo_probe_" + $safeKey)
+
+    $diag = [ordered]@{
+        RatingKey = $RatingKey
+        MediaType = $MediaType
+        TautulliVersion = ""
+        LogoFields = @()
+        RequestedLogoLevel = 9
+        ExportId = 0
+        Complete = $false
+        Downloaded = $false
+        IsZip = $false
+        ExportedFiles = @()
+        LogoFound = $false
+        LogoSrc = ""
+        Error = ""
+    }
+
+    $exportId = 0
+
+    try {
+        try {
+            $info = Invoke-TautulliApi -Command "get_tautulli_info"
+            if ($null -ne $info.PSObject.Properties["tautulli_version"]) {
+                $diag.TautulliVersion = [string]$info.tautulli_version
+            }
+        }
+        catch { }
+
+        $logoFields = New-Object System.Collections.Generic.List[string]
+        try {
+            $fieldInfo = Invoke-TautulliApi -Command "get_export_fields" -Parameters @{
+                media_type = $MediaType
+            }
+
+            foreach ($field in @($fieldInfo.metadata_fields)) {
+                $fieldName = [string]$field.field
+                if ($fieldName -match '(?i)logo') {
+                    if (-not $logoFields.Contains($fieldName)) {
+                        $logoFields.Add($fieldName)
+                    }
+                }
+            }
+
+            $diag.LogoFields = @($logoFields)
+        }
+        catch { }
+
+        Write-Log "PlexWeekly: requesting selected logo from Tautulli exporter (level 9)..."
+
+        $exportParams = @{
+            rating_key       = $RatingKey
+            file_format      = "json"
+            metadata_level   = 1
+            media_info_level = 0
+            thumb_level      = 0
+            art_level        = 0
+            logo_level       = 9
+            squareArt_level  = 0
+            theme_level      = 0
+        }
+
+        if ($logoFields.Count -gt 0) {
+            $exportParams.custom_fields = ($logoFields -join ",")
+        }
+
+        $request = Invoke-TautulliApi -Command "export_metadata" -Parameters $exportParams
+
+        # original inline parameter block removed below
+                $exportId = Safe-Int $request.export_id
+        $diag.ExportId = $exportId
+
+        if ($exportId -le 0) {
+            throw "Tautulli did not return an export_id."
+        }
+
+        $row = $null
+        for ($i = 0; $i -lt 90; $i++) {
+            Start-Sleep -Milliseconds 750
+
+            $table = Invoke-TautulliApi -Command "get_exports_table" -Parameters @{
+                length = 250
+            }
+
+            $matches = @(
+                $table.data |
+                Where-Object { (Safe-Int $_.export_id) -eq $exportId } |
+                Select-Object -First 1
+            )
+
+            if ($matches.Count -gt 0) {
+                $row = $matches[0]
+
+                if ((Safe-Int $row.complete) -eq 1) {
+                    $diag.Complete = $true
+                    break
+                }
+            }
+        }
+
+        if (-not $diag.Complete) {
+            throw "Logo export did not complete within the timeout."
+        }
+
+        $downloadUri = Build-TautulliUri -Command "download_export" -Parameters @{
+            export_id = $exportId
+        }
+
+        Invoke-WebRequest `
+            -Uri $downloadUri `
+            -OutFile $zipPath `
+            -TimeoutSec 120 | Out-Null
+
+        if (-not (Test-Path $zipPath)) {
+            throw "Tautulli download_export did not create a file."
+        }
+
+        $diag.Downloaded = $true
+
+        $bytes = [IO.File]::ReadAllBytes($zipPath)
+        $isZip = ($bytes.Length -ge 2 -and $bytes[0] -eq 0x50 -and $bytes[1] -eq 0x4B)
+        $diag.IsZip = $isZip
+
+        if (-not $isZip) {
+            $rawBin = Join-Path $DesignMediaDir ("logo_probe_" + $safeKey + "_download.bin")
+            Copy-Item -Path $zipPath -Destination $rawBin -Force
+
+            try {
+                $rawText = Get-Content -Path $zipPath -Raw -Encoding UTF8
+                if (-not [string]::IsNullOrWhiteSpace($rawText)) {
+                    Set-Content `
+                        -Path (Join-Path $DesignMediaDir ("logo_probe_" + $safeKey + "_download.txt")) `
+                        -Value $rawText `
+                        -Encoding UTF8
+                }
+            }
+            catch { }
+
+            throw "Tautulli returned a single data file instead of a ZIP; no logo image was included."
+        }
+
+        Remove-Item $extractPath -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force -Path $extractPath | Out-Null
+        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+
+        $files = @(
+            Get-ChildItem -Path $extractPath -Recurse -File -ErrorAction SilentlyContinue
+        )
+
+        $diag.ExportedFiles = @($files | ForEach-Object { $_.Name })
+
+        $imageFiles = @(
+            $files |
+            Where-Object { $_.Extension -match '^\.(png|svg|webp|jpg|jpeg)$' }
+        )
+
+        # Prefer filenames explicitly containing logo; otherwise a logo-only
+        # level-9 export with a single image is unambiguous.
+        $candidate = @(
+            $imageFiles |
+            Where-Object { $_.Name -match '(?i)logo' } |
+            Sort-Object Length -Descending |
+            Select-Object -First 1
+        )
+
+        if ($candidate.Count -eq 0 -and $imageFiles.Count -eq 1) {
+            $candidate = @($imageFiles[0])
+        }
+
+        if ($candidate.Count -gt 0) {
+            $ext = $candidate[0].Extension.ToLowerInvariant()
+            $finalName = "logo_" + $safeKey + $ext
+            $finalPath = Join-Path $DesignMediaDir $finalName
+
+            Copy-Item -Path $candidate[0].FullName -Destination $finalPath -Force
+
+            if ((Test-Path $finalPath) -and (Get-Item $finalPath).Length -gt 64) {
+                $diag.LogoFound = $true
+                $diag.LogoSrc = "media/" + $finalName
+            }
+        }
+
+        if (-not $diag.LogoFound) {
+            throw "Export completed, but no logo image was found in the archive."
+        }
+
+        Write-Log "PlexWeekly: selected logo acquired through Tautulli exporter."
+    }
+    catch {
+        $diag.Error = $_.Exception.Message
+        Write-Log ("PlexWeekly logo probe failed: " + $diag.Error) "WARN"
+    }
+    finally {
+        try {
+            [PSCustomObject]$diag |
+                ConvertTo-Json -Depth 8 |
+                Set-Content -Path $diagPath -Encoding UTF8
+        }
+        catch { }
+
+        Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+        Remove-Item $extractPath -Recurse -Force -ErrorAction SilentlyContinue
+
+        if ($exportId -gt 0) {
+            try {
+                Invoke-TautulliApi -Command "delete_export" -Parameters @{
+                    export_id = $exportId
+                } | Out-Null
+            }
+            catch { }
+        }
+    }
+
+    return [PSCustomObject]@{
+        LogoSrc = [string]$diag.LogoSrc
+        DiagnosticFile = "media/logo_probe_" + $safeKey + ".json"
+    }
+}
+
+function Get-DesignRichExport {
+    param(
+        [string]$RatingKey,
+        [string]$MediaType = "movie",
+        [bool]$NeedLogo = $false
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RatingKey)) {
+        return [PSCustomObject]@{
+            RtCritic = ""
+            RtAudience = ""
+            LogoSrc = ""
+            DiagnosticFile = ""
+        }
+    }
+
+    $cacheKey = $RatingKey + "|" + $NeedLogo
+    if ($script:DesignRichExportCache.ContainsKey($cacheKey)) {
+        return $script:DesignRichExportCache[$cacheKey]
+    }
+
+    $safeKey = Get-SafeFilePart $RatingKey
+    $exportId = 0
+    $tmpRoot = Join-Path $DesignMediaDir ("rich_export_" + $safeKey)
+    $downloadPath = Join-Path $DesignMediaDir ("rich_export_" + $safeKey + ".zip")
+    $diagPath = Join-Path $DesignMediaDir ("rich_export_" + $safeKey + ".json")
+
+    $result = [PSCustomObject]@{
+        RtCritic = ""
+        RtAudience = ""
+        LogoSrc = ""
+        DiagnosticFile = ""
+    }
+
+    try {
+        # Ask Tautulli which rating-related fields are available so we do not
+        # rely on hard-coded exporter field names.
+        $customFields = New-Object System.Collections.Generic.List[string]
+        try {
+            $fieldInfo = Invoke-TautulliApi -Command "get_export_fields" -Parameters @{
+                media_type = $MediaType
+            }
+
+            foreach ($field in @($fieldInfo.metadata_fields)) {
+                $name = [string]$field.field
+                if ($name -match '(?i)rating|logo') {
+                    if (-not $customFields.Contains($name)) {
+                        $customFields.Add($name)
+                    }
+                }
+            }
+        }
+        catch {
+            Write-Log "PlexWeekly: could not enumerate exporter fields; using full metadata level only." "WARN"
+        }
+
+        $params = @{
+            rating_key       = $RatingKey
+            file_format      = "json"
+            metadata_level   = 9
+            media_info_level = 0
+            thumb_level      = 0
+            art_level        = 0
+            logo_level       = $(if ($NeedLogo) { 9 } else { 0 })
+            squareArt_level  = 0
+            theme_level      = 0
+            individual_files = "true"
+        }
+
+        if ($customFields.Count -gt 0) {
+            $params.custom_fields = ($customFields -join ",")
+        }
+
+        Write-Log ("PlexWeekly: rich Tautulli export for {0} (RT ratings{1}; selected-logo level 9)..." -f `
+            $RatingKey,
+            $(if ($NeedLogo) { " + logo" } else { "" })
+        )
+
+        $request = Invoke-TautulliApi -Command "export_metadata" -Parameters $params
+        $exportId = Safe-Int $request.export_id
+
+        if ($exportId -le 0) {
+            throw "Tautulli did not return an export id."
+        }
+
+        $complete = $false
+        for ($i = 0; $i -lt 75; $i++) {
+            Start-Sleep -Milliseconds 800
+
+            $table = Invoke-TautulliApi -Command "get_exports_table" -Parameters @{
+                rating_key = $RatingKey
+                length = 100
+            }
+
+            $rows = @(
+                $table.data |
+                Where-Object { (Safe-Int $_.export_id) -eq $exportId } |
+                Select-Object -First 1
+            )
+
+            if ($rows.Count -gt 0 -and (Safe-Int $rows[0].complete) -eq 1) {
+                $complete = $true
+                break
+            }
+        }
+
+        if (-not $complete) {
+            throw "Tautulli rich metadata export did not complete within 60 seconds."
+        }
+
+        $downloadUri = Build-TautulliUri -Command "download_export" -Parameters @{
+            export_id = $exportId
+        }
+
+        Invoke-WebRequest `
+            -Uri $downloadUri `
+            -OutFile $downloadPath `
+            -TimeoutSec 120 | Out-Null
+
+        if (-not (Test-Path $downloadPath) -or (Get-Item $downloadPath).Length -lt 64) {
+            throw "Downloaded export was empty."
+        }
+
+        $bytes = [IO.File]::ReadAllBytes($downloadPath)
+        if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x50 -or $bytes[1] -ne 0x4B) {
+            throw "Downloaded export was not a zip archive."
+        }
+
+        Remove-Item $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force -Path $tmpRoot | Out-Null
+        Expand-Archive -Path $downloadPath -DestinationPath $tmpRoot -Force
+
+        $critic = ""
+        $audience = ""
+
+        $jsonFiles = @(
+            Get-ChildItem -Path $tmpRoot -Recurse -File -Filter "*.json" -ErrorAction SilentlyContinue
+        )
+
+        foreach ($jsonFile in $jsonFiles) {
+            try {
+                $parsed = Get-Content -Path $jsonFile.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+                Find-DesignRtRatingsRecursive `
+                    -Node $parsed `
+                    -Critic ([ref]$critic) `
+                    -Audience ([ref]$audience)
+
+                if (-not [string]::IsNullOrWhiteSpace($critic) -and
+                    -not [string]::IsNullOrWhiteSpace($audience)) {
+                    break
+                }
+            }
+            catch { }
+        }
+
+        $result.RtCritic = $critic
+        $result.RtAudience = $audience
+
+        if ($NeedLogo) {
+            $imageFiles = @(
+                Get-ChildItem -Path $tmpRoot -Recurse -File -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.Extension -match '^\.(png|jpg|jpeg|webp|svg)$'
+                }
+            )
+
+            $logoCandidate = @(
+                $imageFiles |
+                Where-Object { $_.Name -match '(?i)clear.?logo|logo' } |
+                Sort-Object Length -Descending |
+                Select-Object -First 1
+            )
+
+            # A logo-only export normally contains only the selected logo image.
+            if ($logoCandidate.Count -eq 0 -and $imageFiles.Count -eq 1) {
+                $logoCandidate = @($imageFiles[0])
+            }
+
+            if ($logoCandidate.Count -gt 0) {
+                $ext = $logoCandidate[0].Extension.ToLowerInvariant()
+                $logoName = "logo_" + $safeKey + $ext
+                $logoPath = Join-Path $DesignMediaDir $logoName
+
+                Copy-Item `
+                    -Path $logoCandidate[0].FullName `
+                    -Destination $logoPath `
+                    -Force
+
+                if ((Test-Path $logoPath) -and (Get-Item $logoPath).Length -gt 512) {
+                    $result.LogoSrc = "media/" + $logoName
+                }
+            }
+        }
+
+        $diag = [PSCustomObject]@{
+            RatingKey = $RatingKey
+            MediaType = $MediaType
+            CustomFieldsRequested = @($customFields)
+            RtCritic = $result.RtCritic
+            RtAudience = $result.RtAudience
+            LogoExportLevel = $(if ($NeedLogo) { 9 } else { 0 })
+            LogoFound = -not [string]::IsNullOrWhiteSpace($result.LogoSrc)
+            JsonFiles = @($jsonFiles | ForEach-Object { $_.Name })
+            ExportedFiles = @(
+                Get-ChildItem -Path $tmpRoot -Recurse -File -ErrorAction SilentlyContinue |
+                ForEach-Object { $_.Name }
+            )
+        }
+
+        $diag | ConvertTo-Json -Depth 8 | Set-Content -Path $diagPath -Encoding UTF8
+        $result.DiagnosticFile = "media/" + $diagPath.Split([IO.Path]::DirectorySeparatorChar)[-1]
+
+        Write-Log ("Design rich export result: RT critic={0}, audience={1}, logo={2}" -f `
+            $(if ($result.RtCritic) { $result.RtCritic + "%" } else { "n/a" }),
+            $(if ($result.RtAudience) { $result.RtAudience } else { "n/a" }),
+            $(if ($result.LogoSrc) { "yes" } else { "no" })
+        )
+    }
+    catch {
+        Write-Log "Design rich export failed for rating key ${RatingKey}: $($_.Exception.Message)" "WARN"
+    }
+    finally {
+        Remove-Item $downloadPath -Force -ErrorAction SilentlyContinue
+        Remove-Item $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
+
+        if ($exportId -gt 0) {
+            try {
+                Invoke-TautulliApi -Command "delete_export" -Parameters @{
+                    export_id = $exportId
+                } | Out-Null
+            }
+            catch { }
+        }
+    }
+
+    $script:DesignRichExportCache[$cacheKey] = $result
+    return $result
+}
+
+function Convert-DesignRatingPercent {
+    param([AllowNull()][object]$Value)
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return "" }
+
+    [double]$n = 0
+    $ok = [double]::TryParse(
+        [string]$Value,
+        [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [ref]$n
+    )
+    if (-not $ok) { return "" }
+
+    if ($n -le 10) { $n = $n * 10 }
+    return [string][Math]::Round($n)
+}
+
+function ConvertTo-DesignGenreList {
+    param([AllowNull()][object]$Value)
+
+    if ($null -eq $Value) { return @() }
+
+    $source = @()
+    if ($Value -is [string]) {
+        $rawText = ([string]$Value).Trim()
+        if ([string]::IsNullOrWhiteSpace($rawText)) { return @() }
+
+        if ($rawText -match '[,|]') {
+            $source = @($rawText -split '\s*[,|]\s*')
+        }
+        else {
+            $source = @($rawText)
+        }
+    }
+    elseif ($Value -is [System.Collections.IEnumerable]) {
+        $source = @($Value)
+    }
+    else {
+        $source = @($Value)
+    }
+
+    $result = New-Object System.Collections.Generic.List[string]
+    $seen = @{}
+
+    foreach ($entry in $source) {
+        if ($null -eq $entry) { continue }
+
+        $text = ""
+        if ($entry -is [string]) {
+            $text = ([string]$entry).Trim()
+        }
+        else {
+            foreach ($propertyName in @("tag", "name", "title")) {
+                if ($null -ne $entry.PSObject.Properties[$propertyName]) {
+                    $candidate = ([string]$entry.$propertyName).Trim()
+                    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+                        $text = $candidate
+                        break
+                    }
+                }
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($text)) { continue }
+        $key = $text.ToLowerInvariant()
+        if ($seen.ContainsKey($key)) { continue }
+
+        $seen[$key] = $true
+        $result.Add($text)
+    }
+
+    return $result.ToArray()
+}
+
+function Get-DesignGenreLine {
+    param([object]$Item)
+
+    if ($null -eq $Item) { return "" }
+
+    $rawGenres = @()
+    if ($null -ne $Item.PSObject.Properties["DesignGenres"]) {
+        $rawGenres = @($Item.DesignGenres)
+    }
+
+    $genres = @(ConvertTo-DesignGenreList -Value $rawGenres)
+    if ($genres.Count -eq 0) { return "" }
+
+    if ($genres.Count -eq 1) {
+        return [string]$genres[0]
+    }
+
+    if ($genres.Count -eq 2) {
+        return ([string]$genres[0]) + ", " + ([string]$genres[1])
+    }
+
+    return ([string]$genres[0]) + ", " + ([string]$genres[1]) + ", and more"
+}
+
+function Add-DesignRatingMetadata {
+    param([object]$ReleaseData)
+
+    $all = @()
+    $all += @($ReleaseData.Movies)
+    $all += @($ReleaseData.TV)
+
+    foreach ($item in $all) {
+        $critic = ""
+        $audience = ""
+        $criticImage = ""
+        $audienceImageState = ""
+        $genres = @()
+        $ratingKey = [string]$item.RatingKey
+
+        # Primary source for the newsletter: Tautulli already exposes the
+        # selected Plex critic and audience scores plus their provider IDs.
+        try {
+            $meta = Invoke-TautulliApi -Command "get_metadata" -Parameters @{
+                rating_key = $ratingKey
+            }
+
+            $ratingImage = [string]$meta.rating_image
+            $audienceImage = [string]$meta.audience_rating_image
+
+            if ([string]$item.Type -eq "movie") {
+                if ($null -ne $meta.PSObject.Properties["genres"]) {
+                    $genres = @(ConvertTo-DesignGenreList -Value $meta.genres)
+                }
+                elseif ($null -ne $meta.PSObject.Properties["genre"]) {
+                    $genres = @(ConvertTo-DesignGenreList -Value $meta.genre)
+                }
+            }
+
+            if ($ratingImage -like 'rottentomatoes://image.rating.*') {
+                $critic = Convert-DesignRatingPercent $meta.rating
+                $criticImage = $ratingImage
+            }
+
+            if ($audienceImage -like 'rottentomatoes://image.rating.*') {
+                $audience = Convert-DesignRatingPercent $meta.audience_rating
+                $audienceImageState = $audienceImage
+            }
+        }
+        catch {
+            Write-Log "PlexWeekly Tautulli RT lookup failed for $($item.Title): $($_.Exception.Message)" "WARN"
+        }
+
+        # Optional secondary source: Plex's full Rating[] if direct access
+        # happens to be available on this install.
+        if ([string]::IsNullOrWhiteSpace($critic) -or
+            [string]::IsNullOrWhiteSpace($audience)) {
+            try {
+                $plexMeta = Get-DesignPlexMetadata -RatingKey $ratingKey
+
+                if ($null -ne $plexMeta -and
+                    [string]$item.Type -eq "movie" -and
+                    $genres.Count -eq 0 -and
+                    $null -ne $plexMeta.PSObject.Properties["Genre"]) {
+                    $genres = @(ConvertTo-DesignGenreList -Value $plexMeta.Genre)
+                }
+
+                if ($null -ne $plexMeta -and
+                    $null -ne $plexMeta.PSObject.Properties["Rating"]) {
+
+                    foreach ($ratingEntry in @($plexMeta.Rating)) {
+                        $image = ""
+                        $type = ""
+                        $value = $null
+
+                        if ($null -ne $ratingEntry.PSObject.Properties["image"]) {
+                            $image = [string]$ratingEntry.image
+                        }
+                        if ($null -ne $ratingEntry.PSObject.Properties["type"]) {
+                            $type = [string]$ratingEntry.type
+                        }
+                        if ($null -ne $ratingEntry.PSObject.Properties["value"]) {
+                            $value = $ratingEntry.value
+                        }
+
+                        if ([string]::IsNullOrWhiteSpace($critic) -and
+                            $image -like "rottentomatoes://image.rating.*" -and
+                            $type -eq "critic") {
+                            $critic = Convert-DesignRatingPercent $value
+                            $criticImage = $image
+                        }
+
+                        if ([string]::IsNullOrWhiteSpace($audience) -and
+                            $image -like "rottentomatoes://image.rating.*" -and
+                            $type -eq "audience") {
+                            $audience = Convert-DesignRatingPercent $value
+                            $audienceImageState = $image
+                        }
+                    }
+                }
+            }
+            catch {
+                Write-Log "PlexWeekly optional direct Plex rating lookup failed for $($item.Title): $($_.Exception.Message)" "WARN"
+            }
+        }
+
+        # Last resort: rich exporter for movies only. TV cards use episode
+        # IMDb enrichment instead; show/season RT exporter requests are noisy
+        # and are not needed for the approved email design.
+        if ([string]$item.Type -eq "movie" -and
+            ([string]::IsNullOrWhiteSpace($critic) -or
+             [string]::IsNullOrWhiteSpace($audience))) {
+
+            $rich = Get-DesignRichExport `
+                -RatingKey $ratingKey `
+                -MediaType "movie" `
+                -NeedLogo:$false
+
+            if ([string]::IsNullOrWhiteSpace($critic)) {
+                $critic = [string]$rich.RtCritic
+            }
+            if ([string]::IsNullOrWhiteSpace($audience)) {
+                $audience = [string]$rich.RtAudience
+            }
+        }
+
+        Write-Log ("Design ratings: {0} -> RT critic {1}, audience {2}" -f `
+            $item.Title,
+            $(if ($critic) { $critic + "%" } else { "n/a" }),
+            $(if ($audience) { $audience } else { "n/a" })
+        )
+
+        $item | Add-Member -NotePropertyName "DesignRtCritic" -NotePropertyValue $critic -Force
+        $item | Add-Member -NotePropertyName "DesignRtAudience" -NotePropertyValue $audience -Force
+        $item | Add-Member -NotePropertyName "DesignRtCriticImage" -NotePropertyValue $criticImage -Force
+        $item | Add-Member -NotePropertyName "DesignRtAudienceImage" -NotePropertyValue $audienceImageState -Force
+        $item | Add-Member -NotePropertyName "DesignGenres" -NotePropertyValue @($genres) -Force
+    }
+}
+
+function Get-DesignRtIconUrl {
+    param(
+        [string]$ImageState,
+        [ValidateSet("critic","audience")]
+        [string]$Kind,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode = "Preview"
+    )
+
+    $state = ([string]$ImageState).Trim().ToLowerInvariant()
+    $token = ""
+
+    if ($state -match '\.([a-z]+)$') {
+        $token = [string]$Matches[1]
+    }
+
+    $assetName = ""
+    $cid = ""
+
+    if ($Kind -eq "critic") {
+        if ($token -eq "rotten") {
+            $assetName = "rt_rotten.png"
+            $cid = "rt_rotten"
+        }
+        else {
+            $assetName = "rt_ripe.png"
+            $cid = "rt_ripe"
+        }
+    }
+    else {
+        if ($token -eq "spilled") {
+            $assetName = "rt_spilled.png"
+            $cid = "rt_spilled"
+        }
+        else {
+            $assetName = "rt_upright.png"
+            $cid = "rt_upright"
+        }
+    }
+
+    if ($ImageMode -eq "Email") {
+        return "cid:" + $cid
+    }
+
+    return "assets/" + $assetName
+}
+
+function Get-DesignRatingLine {
+    param(
+        [object]$Item,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode = "Preview"
+    )
+
+    $pieces = New-Object System.Collections.Generic.List[string]
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$Item.Year)) {
+        $pieces.Add(
+            '<span class="design-rating-year">' +
+            (HtmlEncode ([string]$Item.Year)) +
+            '</span>'
+        )
+    }
+
+    $critic = ""
+    $audience = ""
+    $criticImage = ""
+    $audienceImage = ""
+
+    if ($null -ne $Item.PSObject.Properties["DesignRtCritic"]) {
+        $critic = [string]$Item.DesignRtCritic
+    }
+    if ($null -ne $Item.PSObject.Properties["DesignRtAudience"]) {
+        $audience = [string]$Item.DesignRtAudience
+    }
+    if ($null -ne $Item.PSObject.Properties["DesignRtCriticImage"]) {
+        $criticImage = [string]$Item.DesignRtCriticImage
+    }
+    if ($null -ne $Item.PSObject.Properties["DesignRtAudienceImage"]) {
+        $audienceImage = [string]$Item.DesignRtAudienceImage
+    }
+
+    # Only if the original provider-state identifier is unavailable, infer the
+    # visual state from RT's 60% cutoff. Tautulli state always wins when present.
+    if (-not [string]::IsNullOrWhiteSpace($critic)) {
+        if ([string]::IsNullOrWhiteSpace($criticImage)) {
+            $criticImage = if ((Safe-Int $critic) -ge 60) {
+                "rottentomatoes://image.rating.ripe"
+            } else {
+                "rottentomatoes://image.rating.rotten"
+            }
+        }
+
+        $criticIcon = Get-DesignRtIconUrl -ImageState $criticImage -Kind "critic" -ImageMode $ImageMode
+        $pieces.Add(
+            '<span class="design-rating-item">' +
+            '<img src="' + (HtmlEncode $criticIcon) + '" alt="Rotten Tomatoes critic" ' +
+            'width="18" height="18" style="display:inline-block;width:18px;height:18px;object-fit:contain;border:0;vertical-align:-4px;margin-right:4px;">' +
+            (HtmlEncode ($critic + "%")) +
+            '</span>'
+        )
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($audience)) {
+        if ([string]::IsNullOrWhiteSpace($audienceImage)) {
+            $audienceImage = if ((Safe-Int $audience) -ge 60) {
+                "rottentomatoes://image.rating.upright"
+            } else {
+                "rottentomatoes://image.rating.spilled"
+            }
+        }
+
+        $audienceIcon = Get-DesignRtIconUrl -ImageState $audienceImage -Kind "audience" -ImageMode $ImageMode
+        $pieces.Add(
+            '<span class="design-rating-item">' +
+            '<img src="' + (HtmlEncode $audienceIcon) + '" alt="Rotten Tomatoes audience" ' +
+            'width="18" height="18" style="display:inline-block;width:18px;height:18px;object-fit:contain;border:0;vertical-align:-4px;margin-right:4px;">' +
+            (HtmlEncode ($audience + "%")) +
+            '</span>'
+        )
+    }
+
+    return ($pieces -join '<span style="display:inline-block;width:7px;"></span>')
+}
+
+
+function Get-DesignPmsImage {
+    param(
+        [string]$ImagePath,
+        [string]$RatingKey,
+        [string]$OutputName,
+        [string]$Fallback = "art",
+        [int]$Width = 1200,
+        [int]$Height = 450,
+        [string]$Format = "jpg"
+    )
+
+    $local = Join-Path $DesignMediaDir $OutputName
+    try {
+        $params = @{
+            width      = $Width
+            height     = $Height
+            img_format = $Format
+            fallback   = $Fallback
+            refresh    = "false"
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ImagePath)) {
+            $params.img = $ImagePath
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($RatingKey)) {
+            $params.rating_key = $RatingKey
+        }
+        else {
+            return ""
+        }
+
+        $uri = Build-TautulliUri -Command "pms_image_proxy" -Parameters $params
+        Invoke-WebRequest -Uri $uri -OutFile $local -TimeoutSec 60 | Out-Null
+        if ((Test-Path $local) -and (Get-Item $local).Length -gt 512) {
+            return "media/" + $OutputName
+        }
+    }
+    catch {
+        Write-Log "Design image fetch failed ($OutputName): $($_.Exception.Message)" "WARN"
+    }
+
+    Remove-Item $local -Force -ErrorAction SilentlyContinue
+    return ""
+}
+
+function Get-DesignLogoFromExporter {
+    param([string]$RatingKey)
+
+    if ([string]::IsNullOrWhiteSpace($RatingKey)) { return "" }
+
+    $safeKey = Get-SafeFilePart $RatingKey
+    $logoName = "logo_${safeKey}.png"
+    $logoPath = Join-Path $DesignMediaDir $logoName
+    if ((Test-Path $logoPath) -and (Get-Item $logoPath).Length -gt 512) {
+        return "media/" + $logoName
+    }
+
+    $exportId = 0
+    $tmpRoot = Join-Path $DesignMediaDir ("export_" + $safeKey)
+    $downloadPath = Join-Path $DesignMediaDir ("export_" + $safeKey + ".zip")
+
+    try {
+        Write-Log "PlexWeekly: requesting Plex logo export for rating key $RatingKey..."
+        $request = Invoke-TautulliApi -Command "export_metadata" -Parameters @{
+            rating_key       = $RatingKey
+            file_format      = "json"
+            metadata_level   = 1
+            media_info_level = 0
+            thumb_level      = 0
+            art_level        = 0
+            logo_level       = 9
+            squareArt_level  = 0
+            theme_level      = 0
+            individual_files = "false"
+        }
+
+        $exportId = Safe-Int $request.export_id
+        if ($exportId -le 0) {
+            Write-Log "PlexWeekly: Tautulli did not return an export id for the logo." "WARN"
+            return ""
+        }
+
+        $complete = $false
+        for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Milliseconds 750
+            $table = Invoke-TautulliApi -Command "get_exports_table" -Parameters @{
+                rating_key = $RatingKey
+                length     = 50
+            }
+            $row = @($table.data | Where-Object { (Safe-Int $_.export_id) -eq $exportId } | Select-Object -First 1)
+            if ($row.Count -gt 0 -and (Safe-Int $row[0].complete) -eq 1) {
+                $complete = $true
+                break
+            }
+        }
+
+        if (-not $complete) {
+            Write-Log "PlexWeekly: logo export did not finish in time; continuing without a logo." "WARN"
+            return ""
+        }
+
+        $downloadUri = Build-TautulliUri -Command "download_export" -Parameters @{ export_id = $exportId }
+        Invoke-WebRequest -Uri $downloadUri -OutFile $downloadPath -TimeoutSec 90 | Out-Null
+
+        if (-not (Test-Path $downloadPath) -or (Get-Item $downloadPath).Length -lt 64) {
+            return ""
+        }
+
+        $bytes = [IO.File]::ReadAllBytes($downloadPath)
+        if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x50 -or $bytes[1] -ne 0x4B) {
+            Write-Log "PlexWeekly: logo export download was not a zip archive." "WARN"
+            return ""
+        }
+
+        Remove-Item $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force -Path $tmpRoot | Out-Null
+        Expand-Archive -Path $downloadPath -DestinationPath $tmpRoot -Force
+
+        $pngs = @(Get-ChildItem -Path $tmpRoot -Recurse -File -Filter "*.png" -ErrorAction SilentlyContinue)
+        $candidate = @($pngs | Where-Object { $_.Name -match 'logo' } | Select-Object -First 1)
+        if ($candidate.Count -eq 0) {
+            $candidate = @($pngs | Select-Object -First 1)
+        }
+
+        if ($candidate.Count -gt 0) {
+            Copy-Item -Path $candidate[0].FullName -Destination $logoPath -Force
+            if ((Test-Path $logoPath) -and (Get-Item $logoPath).Length -gt 512) {
+                Write-Log "PlexWeekly: real Plex logo acquired."
+                return "media/" + $logoName
+            }
+        }
+
+        Write-Log "PlexWeekly: no logo PNG was present in the Tautulli export." "WARN"
+    }
+    catch {
+        Write-Log "PlexWeekly logo export failed: $($_.Exception.Message)" "WARN"
+    }
+    finally {
+        Remove-Item $downloadPath -Force -ErrorAction SilentlyContinue
+        Remove-Item $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
+        if ($exportId -gt 0) {
+            try {
+                Invoke-TautulliApi -Command "delete_export" -Parameters @{ export_id = $exportId } | Out-Null
+            }
+            catch { }
+        }
+    }
+
+    return ""
+}
+
+function Get-DesignHeroAssets {
+    param([object]$HotRelease)
+
+    $result = [PSCustomObject]@{
+        BannerSrc    = ""
+        ArtSrc       = ""
+        LogoSrc      = ""
+        SuppressLogoFallback = $false
+        MetadataFile = ""
+        DiagnosticFile = ""
+    }
+
+    if ($null -eq $HotRelease -or $null -eq $HotRelease.Item) { return $result }
+
+    $ratingKey = [string]$HotRelease.Item.RatingKey
+    if ([string]::IsNullOrWhiteSpace($ratingKey)) {
+        $ratingKey = [string]$HotRelease.Item.PosterRatingKey
+    }
+    if ([string]::IsNullOrWhiteSpace($ratingKey)) { return $result }
+
+    $tautMeta = $null
+
+    try {
+        $tautMeta = Invoke-TautulliApi -Command "get_metadata" -Parameters @{ rating_key = $ratingKey }
+        $metaName = "metadata_" + (Get-SafeFilePart $ratingKey) + ".json"
+        $metaPath = Join-Path $DesignMediaDir $metaName
+        $tautMeta | ConvertTo-Json -Depth 15 | Set-Content -Path $metaPath -Encoding UTF8
+        $result.MetadataFile = "media/" + $metaName
+
+        $banner = [string]$tautMeta.banner
+        $art = [string]$tautMeta.art
+
+        if (-not [string]::IsNullOrWhiteSpace($banner)) {
+            $result.BannerSrc = Get-DesignPmsImage `
+                -ImagePath $banner `
+                -RatingKey $ratingKey `
+                -OutputName ("banner_" + (Get-SafeFilePart $ratingKey) + ".jpg") `
+                -Fallback "art" `
+                -Width 1200 `
+                -Height 420 `
+                -Format "jpg"
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($art)) {
+            $result.ArtSrc = Get-DesignPmsImage `
+                -ImagePath $art `
+                -RatingKey $ratingKey `
+                -OutputName ("art_" + (Get-SafeFilePart $ratingKey) + ".jpg") `
+                -Fallback "art" `
+                -Width 1200 `
+                -Height 600 `
+                -Format "jpg"
+        }
+
+        if ([string]::IsNullOrWhiteSpace($result.BannerSrc)) {
+            $result.BannerSrc = $result.ArtSrc
+        }
+    }
+    catch {
+        Write-Log "PlexWeekly metadata/art lookup failed: $($_.Exception.Message)" "WARN"
+    }
+
+    # Plex may select a clearLogo that works on its own artwork but becomes
+    # unreadable on PlexWeekly's #181818 hero card. Evaluate every available
+    # clearLogo and choose the brightest/highest-contrast variant for email.
+    try {
+        $logoSelection = Get-DesignBestClearLogoAsset -RatingKey $ratingKey
+        $result.LogoSrc = [string]$logoSelection.LogoSrc
+        $result.SuppressLogoFallback = (
+            $logoSelection.CandidateCount -gt 0 -and
+            [string]::IsNullOrWhiteSpace($result.LogoSrc)
+        )
+
+        if (-not [string]::IsNullOrWhiteSpace($result.LogoSrc)) {
+            Write-Log "PlexWeekly: email-optimized clearLogo acquired from Plex /clearLogos."
+        }
+    }
+    catch {
+        Write-Log "PlexWeekly email-aware /clearLogos lookup failed: $($_.Exception.Message)" "WARN"
+    }
+
+    # Secondary direct Plex metadata/image-array fallback.
+    $plexMeta = $null
+    $plexImages = @()
+
+    try {
+        $plexMeta = Get-DesignPlexMetadata -RatingKey $ratingKey
+        $plexImages = @(Get-DesignPlexImages -RatingKey $ratingKey)
+
+        Save-DesignPlexDiagnostic `
+            -RatingKey $ratingKey `
+            -Metadata $plexMeta `
+            -Images $plexImages
+
+        $result.DiagnosticFile = "media/plex_design_diagnostic_" +
+            (Get-SafeFilePart $ratingKey) + ".json"
+
+        if ([string]::IsNullOrWhiteSpace($result.LogoSrc) -and -not $result.SuppressLogoFallback) {
+            $clearLogo = @(
+                $plexImages |
+                Where-Object {
+                    $null -ne $_.PSObject.Properties["type"] -and
+                    [string]$_.type -eq "clearLogo"
+                } |
+                Select-Object -First 1
+            )
+
+            if ($clearLogo.Count -gt 0 -and
+                $null -ne $clearLogo[0].PSObject.Properties["url"]) {
+
+                $logoUrl = [string]$clearLogo[0].url
+                $logoName = "logo_" + (Get-SafeFilePart $ratingKey) + ".png"
+
+                $result.LogoSrc = Get-DesignPlexAsset `
+                    -Url $logoUrl `
+                    -OutputName $logoName
+
+                if (-not [string]::IsNullOrWhiteSpace($result.LogoSrc)) {
+                    Write-Log "PlexWeekly: clearLogo acquired from Plex Image[] metadata."
+                }
+            }
+        }
+    }
+    catch {
+        Write-Log "PlexWeekly direct Plex logo lookup failed: $($_.Exception.Message)" "WARN"
+    }
+
+    # Primary fallback: let Tautulli export the selected logo using the
+    # authenticated Plex connection it already owns.
+    if ([string]::IsNullOrWhiteSpace($result.LogoSrc) -and -not $result.SuppressLogoFallback) {
+        $mediaType = if ($null -ne $HotRelease.Item.PSObject.Properties["Type"]) {
+            [string]$HotRelease.Item.Type
+        } else {
+            "movie"
+        }
+
+        $logoProbe = Get-DesignLogoExportSimple `
+            -RatingKey $ratingKey `
+            -MediaType $mediaType
+
+        $result.LogoSrc = [string]$logoProbe.LogoSrc
+        $result.DiagnosticFile = [string]$logoProbe.DiagnosticFile
+    }
+
+    return $result
+}
+
+function Get-PosterPath {
+    param([string]$RatingKey)
+
+    if ([string]::IsNullOrWhiteSpace($RatingKey)) { return "" }
+
+    $cid = "poster_" + (Get-SafeFilePart $RatingKey)
+    $path = Join-Path $PosterDir ($cid + ".jpg")
+
+    if (Test-Path $path) {
+        if ((Get-Item $path).Length -gt 512) { return $path }
+        Remove-Item $path -Force -ErrorAction SilentlyContinue
+    }
+
+    $uri = Build-TautulliUri -Command "pms_image_proxy" -Parameters @{
+        rating_key = $RatingKey
+        width      = 300
+        height     = 450
+        img_format = "jpg"
+        fallback   = "poster"
+    }
+
+    try {
+        Invoke-WebRequest -Uri $uri -OutFile $path -TimeoutSec 60 | Out-Null
+        if ((Test-Path $path) -and (Get-Item $path).Length -gt 512) {
+            return $path
+        }
+    }
+    catch {
+        Write-Log "Poster fetch failed for rating key ${RatingKey}: $($_.Exception.Message)" "WARN"
+    }
+
+    Remove-Item $path -Force -ErrorAction SilentlyContinue
+    return ""
+}
+
+function Prepare-PosterAssets {
+    param(
+        [object]$ReleaseData,
+        [string]$FeaturedRatingKey = "",
+        [object[]]$AdditionalItems = @()
+    )
+
+    $maxMovies = if ($null -ne $Config.PSObject.Properties["MaxMovies"]) { Safe-Int $Config.MaxMovies } else { 8 }
+    $maxTv = if ($null -ne $Config.PSObject.Properties["MaxTv"]) { Safe-Int $Config.MaxTv } else { 8 }
+
+    $selected = New-Object System.Collections.Generic.List[object]
+
+    if (-not [string]::IsNullOrWhiteSpace($FeaturedRatingKey)) {
+        $featured = @(
+            @($ReleaseData.Movies) + @($ReleaseData.TV) |
+            Where-Object { [string]$_.PosterRatingKey -eq $FeaturedRatingKey } |
+            Select-Object -First 1
+        )
+        if ($featured.Count -gt 0) {
+            $selected.Add($featured[0])
+        }
+        else {
+            # A quiet-release Trending hero may not be one of the latest cards.
+            # Fetch its poster independently so the featured hero is never blank.
+            $selected.Add([PSCustomObject]@{
+                PosterRatingKey = $FeaturedRatingKey
+            })
+        }
+    }
+
+    foreach ($m in @($ReleaseData.Movies | Select-Object -First $maxMovies)) {
+        $selected.Add($m)
+    }
+    foreach ($t in @($ReleaseData.TV | Select-Object -First $maxTv)) {
+        $selected.Add($t)
+    }
+
+    foreach ($extra in @($AdditionalItems)) {
+        if ($null -ne $extra) {
+            $selected.Add($extra)
+        }
+    }
+
+    $assets = New-Object System.Collections.Generic.List[object]
+    $seen = @{}
+
+    foreach ($item in $selected) {
+        $rk = [string]$item.PosterRatingKey
+        if ([string]::IsNullOrWhiteSpace($rk) -or $seen.ContainsKey($rk)) { continue }
+
+        $seen[$rk] = $true
+        $path = Get-PosterPath -RatingKey $rk
+        if (-not [string]::IsNullOrWhiteSpace($path)) {
+            $assets.Add([PSCustomObject]@{
+                RatingKey = $rk
+                Cid       = "poster_" + (Get-SafeFilePart $rk)
+                Path      = $path
+                FileName  = [IO.Path]::GetFileName($path)
+            })
+        }
+    }
+
+    return $assets.ToArray()
+}
+
+function Get-ImageSource {
+    param(
+        [string]$RatingKey,
+        [object[]]$PosterAssets,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RatingKey)) { return "" }
+
+    $asset = @($PosterAssets | Where-Object { $_.RatingKey -eq $RatingKey } | Select-Object -First 1)
+    if ($asset.Count -eq 0) { return "" }
+
+    if ($ImageMode -eq "Email") {
+        return "cid:" + [string]$asset[0].Cid
+    }
+
+    return "posters/" + [string]$asset[0].FileName
+}
+
+function Get-StatsMovieRatingHtml {
+    param(
+        [object]$Item,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode
+    )
+
+    $pieces = New-Object System.Collections.Generic.List[string]
+
+    $critic = if ($null -ne $Item.PSObject.Properties["DesignRtCritic"]) {
+        [string]$Item.DesignRtCritic
+    } else { "" }
+    $audience = if ($null -ne $Item.PSObject.Properties["DesignRtAudience"]) {
+        [string]$Item.DesignRtAudience
+    } else { "" }
+    $criticImage = if ($null -ne $Item.PSObject.Properties["DesignRtCriticImage"]) {
+        [string]$Item.DesignRtCriticImage
+    } else { "" }
+    $audienceImage = if ($null -ne $Item.PSObject.Properties["DesignRtAudienceImage"]) {
+        [string]$Item.DesignRtAudienceImage
+    } else { "" }
+
+    if (-not [string]::IsNullOrWhiteSpace($critic)) {
+        if ([string]::IsNullOrWhiteSpace($criticImage)) {
+            $criticImage = if ((Safe-Int $critic) -ge 60) {
+                "rottentomatoes://image.rating.ripe"
+            } else {
+                "rottentomatoes://image.rating.rotten"
+            }
+        }
+        $icon = Get-DesignRtIconUrl -ImageState $criticImage -Kind "critic" -ImageMode $ImageMode
+        $pieces.Add(
+            '<span style="display:inline-block;white-space:nowrap;">' +
+            '<img src="' + (HtmlEncode $icon) + '" alt="Rotten Tomatoes critic" width="14" height="14" style="display:inline-block;width:14px;height:14px;border:0;vertical-align:-3px;margin-right:3px;">' +
+            (HtmlEncode ($critic + "%")) +
+            '</span>'
+        )
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($audience)) {
+        if ([string]::IsNullOrWhiteSpace($audienceImage)) {
+            $audienceImage = if ((Safe-Int $audience) -ge 60) {
+                "rottentomatoes://image.rating.upright"
+            } else {
+                "rottentomatoes://image.rating.spilled"
+            }
+        }
+        $icon = Get-DesignRtIconUrl -ImageState $audienceImage -Kind "audience" -ImageMode $ImageMode
+        $pieces.Add(
+            '<span style="display:inline-block;white-space:nowrap;">' +
+            '<img src="' + (HtmlEncode $icon) + '" alt="Rotten Tomatoes audience" width="14" height="14" style="display:inline-block;width:14px;height:14px;border:0;vertical-align:-3px;margin-right:3px;">' +
+            (HtmlEncode ($audience + "%")) +
+            '</span>'
+        )
+    }
+
+    if ($pieces.Count -eq 0) {
+        return '<span style="color:#6f6f6f;">Ratings unavailable</span>'
+    }
+
+    return ($pieces -join '<span style="display:inline-block;width:6px;"></span>')
+}
+
+function Get-StatsMovieRowsHtml {
+    param(
+        [object[]]$Items,
+        [object[]]$PosterAssets,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode
+    )
+
+    $rows = New-Object System.Text.StringBuilder
+
+    foreach ($item in @($Items | Select-Object -First 3)) {
+        $title = HtmlEncode (Truncate-Text ([string]$item.Title) 42)
+        $posterSrc = Get-ImageSource `
+            -RatingKey ([string]$item.PosterRatingKey) `
+            -PosterAssets $PosterAssets `
+            -ImageMode $ImageMode
+
+        $posterHtml = if ([string]::IsNullOrWhiteSpace($posterSrc)) {
+            '<div style="width:42px;height:62px;border-radius:5px;background:#262626;border:1px solid #363636;"></div>'
+        } else {
+            '<img src="' + (HtmlEncode $posterSrc) + '" width="42" height="62" alt="' + $title + ' poster" style="display:block;width:42px;height:62px;object-fit:cover;border:1px solid #363636;border-radius:5px;">'
+        }
+
+        # Reuse the global movie genre formatter so watched-movie stats match
+        # regular movie cards and movie heroes:
+        # first two genres, then ", and more" when additional genres exist.
+        $genreText = Get-DesignGenreLine -Item $item
+        $genreHtml = ""
+        if (-not [string]::IsNullOrWhiteSpace($genreText)) {
+            $genreHtml = '<div style="padding-top:3px;font-size:10px;line-height:1.3;color:#9b9b9b;font-weight:500;">' +
+                (HtmlEncode $genreText) +
+                '</div>'
+        }
+
+        $ratingHtml = Get-StatsMovieRatingHtml -Item $item -ImageMode $ImageMode
+        $ratingPadding = if ([string]::IsNullOrWhiteSpace($genreHtml)) { "5px" } else { "4px" }
+
+        [void]$rows.Append(@"
+<tr>
+  <td width="50" valign="middle" style="width:50px;padding:7px 8px 7px 0;border-bottom:1px solid #292929;">$posterHtml</td>
+  <td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929;">
+    <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$title</div>
+    $genreHtml
+    <div style="padding-top:$ratingPadding;font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700;">$ratingHtml</div>
+  </td>
+</tr>
+"@)
+    }
+
+    return $rows.ToString()
+}
+
+function Get-StatsEpisodeRowsHtml {
+    param(
+        [object[]]$Items,
+        [object[]]$PosterAssets,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode,
+        [string]$ImdbIconSrc
+    )
+
+    $rows = New-Object System.Text.StringBuilder
+
+    foreach ($item in @($Items | Select-Object -First 3)) {
+        $showTitle = HtmlEncode (Truncate-Text ([string]$item.ShowTitle) 42)
+        $episodeTitle = HtmlEncode (Truncate-Text ([string]$item.EpisodeTitle) 38)
+        $season = Safe-Int $item.Season
+        $episodeNumber = Safe-Int $item.Episode
+
+        $prefix = ""
+        if ($episodeNumber -gt 0) {
+            $prefix = "S" + $season.ToString("00") + " EP" + $episodeNumber.ToString("00") + ": "
+        }
+
+        $posterSrc = Get-ImageSource `
+            -RatingKey ([string]$item.PosterRatingKey) `
+            -PosterAssets $PosterAssets `
+            -ImageMode $ImageMode
+
+        $posterHtml = if ([string]::IsNullOrWhiteSpace($posterSrc)) {
+            '<div style="width:42px;height:62px;border-radius:5px;background:#262626;border:1px solid #363636;"></div>'
+        } else {
+            '<img src="' + (HtmlEncode $posterSrc) + '" width="42" height="62" alt="' + $showTitle + ' poster" style="display:block;width:42px;height:62px;object-fit:cover;border:1px solid #363636;border-radius:5px;">'
+        }
+
+        $imdb = [string]$item.ImdbRating
+        $imdbHtml = if ([string]::IsNullOrWhiteSpace($imdb)) {
+            '<span style="color:#6f6f6f;">IMDb unavailable</span>'
+        } else {
+            '<span style="display:inline-block;white-space:nowrap;">' +
+            '<img src="' + (HtmlEncode $ImdbIconSrc) + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
+            (HtmlEncode $imdb) +
+            '</span>'
+        }
+
+        [void]$rows.Append(@"
+<tr>
+  <td width="50" valign="middle" style="width:50px;padding:7px 8px 7px 0;border-bottom:1px solid #292929;">$posterHtml</td>
+  <td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929;">
+    <div style="font-size:11px;line-height:1.25;color:#ffffff;font-weight:800;">$showTitle</div>
+    <div style="padding-top:3px;font-size:10px;line-height:1.3;color:#9b9b9b;">$(HtmlEncode $prefix)$episodeTitle</div>
+    <div style="padding-top:4px;font-size:10px;line-height:1.3;color:#e5a00d;font-weight:700;">$imdbHtml</div>
+  </td>
+</tr>
+"@)
+    }
+
+    return $rows.ToString()
+}
+
+function Get-TvEpisodeLinesHtml {
+    param(
+        [object]$Item,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode = "Preview"
+    )
+
+    $episodes = @()
+    if ($null -ne $Item.PSObject.Properties["Episodes"]) {
+        $episodes = @($Item.Episodes)
+    }
+
+    if ($episodes.Count -eq 0) { return "" }
+
+    $lines = New-Object System.Text.StringBuilder
+    $shown = @($episodes | Select-Object -First 3)
+
+    foreach ($episode in $shown) {
+        $episodeTitle = HtmlEncode (Truncate-Text ([string]$episode.Title) 40)
+        $seasonNumber = Safe-Int $episode.Season
+        $episodeNumber = Safe-Int $episode.Episode
+
+        $episodePrefix = ""
+        if ($seasonNumber -ge 0 -and $episodeNumber -gt 0) {
+            # Compact global TV-card format:
+            # S01 EP02: Episode Title
+            $seasonLabel = "S" + $seasonNumber.ToString("00")
+            $episodeLabel = "EP" + $episodeNumber.ToString("00")
+            $episodePrefix = "$seasonLabel $episodeLabel`: "
+        }
+        elseif ($episodeNumber -gt 0) {
+            $episodePrefix = "EP" + $episodeNumber.ToString("00") + "`: "
+        }
+
+        $subtitleText = (HtmlEncode $episodePrefix) + $episodeTitle
+
+        $imdb = ""
+        if ($null -ne $episode.PSObject.Properties["ImdbRating"]) {
+            $imdb = [string]$episode.ImdbRating
+        }
+
+        $ratingHtml = if ([string]::IsNullOrWhiteSpace($imdb)) {
+            ""
+        }
+        else {
+            $imdbSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "assets/imdb.png" }
+            '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:11px;font-weight:700;white-space:nowrap;">' +
+            '<img src="' + $imdbSrc + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
+            (HtmlEncode $imdb) +
+            '</span>'
+        }
+
+        [void]$lines.Append(
+            '<div style="padding-top:2px;color:#b0b0b0;font-size:13px;font-weight:600;line-height:1.35;">' +
+            $subtitleText + $ratingHtml +
+            '</div>'
+        )
+    }
+
+    # EpisodeCount is the authoritative weekly recently-added count when
+    # Tautulli supplied episode rows. Episodes.Count remains the fallback for
+    # release data assembled from direct episode metadata.
+    $totalRecentlyAdded = $episodes.Count
+    if ($null -ne $Item.PSObject.Properties["EpisodeCount"]) {
+        $reportedCount = Safe-Int $Item.EpisodeCount
+        if ($reportedCount -gt $totalRecentlyAdded) {
+            $totalRecentlyAdded = $reportedCount
+        }
+    }
+
+    $additionalRow = ""
+    if ($totalRecentlyAdded -gt 3) {
+        $remaining = $totalRecentlyAdded - 3
+        $episodeWord = if ($remaining -eq 1) { "episode" } else { "episodes" }
+        $additionalText = "$remaining additional $episodeWord recently added"
+
+        $additionalRow = (
+            '<tr><td height="24" valign="bottom" style="height:24px;padding-top:10px;color:#e5a00d;font-size:12px;font-weight:700;line-height:1.35;">' +
+            (HtmlEncode $additionalText) +
+            '</td></tr>'
+        )
+    }
+
+    return (
+        '<table width="100%" height="132" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:132px;border-collapse:collapse;">' +
+        '<tr><td valign="top" style="padding:0;">' + $lines.ToString() + '</td></tr>' +
+        $additionalRow +
+        '</table>'
+    )
+}
+
+function Get-ReleaseCardsHtml {
+    param(
+        [object[]]$Items,
+        [object[]]$PosterAssets,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode,
+        [ValidateSet("Movie","TV")]
+        [string]$Kind
+    )
+
+    if ($Items.Count -eq 0) {
+        return ''
+    }
+
+    $html = New-Object System.Text.StringBuilder
+    $index = 0
+
+    while ($index -lt $Items.Count) {
+        [void]$html.Append('<tr>')
+
+        for ($col = 0; $col -lt 2; $col++) {
+            if ($index -ge $Items.Count) {
+                [void]$html.Append('<td width="50%" style="padding:0 6px 18px;"></td>')
+                continue
+            }
+
+            $item = $Items[$index]
+            $title = HtmlEncode $item.Title
+            $posterSrc = Get-ImageSource -RatingKey ([string]$item.PosterRatingKey) -PosterAssets $PosterAssets -ImageMode $ImageMode
+            $posterHtml = ""
+
+            if (-not [string]::IsNullOrWhiteSpace($posterSrc)) {
+                $posterHtml = '<img src="' + (HtmlEncode $posterSrc) + '" width="100%" alt="' + $title + ' poster" style="display:block;width:100%;height:auto;border:0;border-radius:8px 8px 0 0;">'
+            }
+            else {
+                $posterHtml = '<div style="height:260px;background:#222;border-radius:8px 8px 0 0;text-align:center;color:#777;font-size:12px;line-height:260px;">Poster unavailable</div>'
+            }
+
+            $contentHeight = if ($Kind -eq "Movie") { 170 } else { 184 }
+            $contentHtml = ""
+
+            if ($Kind -eq "Movie") {
+                $genreText = Get-DesignGenreLine -Item $item
+                $genreHtml = ""
+                $metaTop = 10
+
+                if (-not [string]::IsNullOrWhiteSpace($genreText)) {
+                    $genreHtml = '<div style="padding-top:3px;color:#9b9b9b;font-size:13px;font-weight:500;line-height:1.35;">' +
+                        (HtmlEncode $genreText) +
+                        '</div>'
+                    $metaTop = 13
+                }
+
+                $meta = Get-DesignRatingLine -Item $item -ImageMode $ImageMode
+                $summary = Truncate-Text $item.Summary 150
+                $summaryText = if ([string]::IsNullOrWhiteSpace($summary)) {
+                    "&nbsp;"
+                }
+                else {
+                    HtmlEncode $summary
+                }
+
+                # Movie content intentionally uses normal-flow DIV blocks rather
+                # than a fixed-height inner table. This keeps the genre directly
+                # beneath the title instead of distributing spare table height
+                # between the genre and rating rows.
+                $contentHtml = @"
+<div style="color:#ffffff;font-size:16px;font-weight:700;line-height:1.25;">$title</div>
+$genreHtml
+<div style="padding-top:${metaTop}px;color:#e5a00d;font-size:12px;font-weight:600;line-height:1.25;">$meta</div>
+<div style="padding-top:9px;color:#9b9b9b;font-size:12px;line-height:1.45;overflow:hidden;">$summaryText</div>
+"@
+            }
+            else {
+                $episodeLines = Get-TvEpisodeLinesHtml -Item $item -ImageMode $ImageMode
+                $tvDetails = ""
+
+                if (-not [string]::IsNullOrWhiteSpace($episodeLines)) {
+                    $tvDetails = @"
+<tr>
+  <td height="132" valign="top" style="height:132px;padding-top:2px;overflow:hidden;">
+    $episodeLines
+  </td>
+</tr>
+"@
+                }
+                else {
+                    $meta = if ($item.SeasonCount -gt 0) {
+                        if ($item.SeasonCount -eq 1) { "1 new season" } else { "$($item.SeasonCount) new seasons" }
+                    }
+                    elseif ($item.IsNewSeries) {
+                        "New on Plex"
+                    }
+                    elseif ($item.EpisodeCount -gt 0) {
+                        if ($item.EpisodeCount -eq 1) { "1 new episode" } else { "$($item.EpisodeCount) new episodes" }
+                    }
+                    else {
+                        "New on Plex"
+                    }
+
+                    $tvDetails = @"
+<tr>
+  <td height="132" valign="top" style="height:132px;padding-top:4px;color:#e5a00d;font-size:12px;font-weight:600;line-height:1.35;">
+    $(HtmlEncode $meta)
+  </td>
+</tr>
+"@
+                }
+
+                $contentHtml = @"
+<table width="100%" height="166" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:166px;">
+  <tr>
+    <td height="34" valign="top" style="height:34px;color:#ffffff;font-size:16px;font-weight:700;line-height:1.25;">
+      $title
+    </td>
+  </tr>
+  $tvDetails
+</table>
+"@
+            }
+
+            [void]$html.Append(@"
+<td width="50%" valign="top" style="padding:0 6px 18px;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;overflow:hidden;">
+    <tr>
+      <td valign="top" style="padding:0;">
+        $posterHtml
+      </td>
+    </tr>
+    <tr>
+      <td height="$contentHeight" valign="top" style="height:${contentHeight}px;padding:12px 12px 14px;">
+        $contentHtml
+      </td>
+    </tr>
+  </table>
+</td>
+"@)
+            $index++
+        }
+
+        [void]$html.Append('</tr>')
+    }
+
+    return $html.ToString()
+}
+
+function Build-NewsletterHtml {
+    param(
+        [object]$User,
+        [object]$Stats,
+        [object]$ReleaseData,
+        [object]$HotRelease,
+        [string]$TrendingTitle,
+        [bool]$SystemWarmingUp,
+        [bool]$RecentAccess,
+        [bool]$WelcomeOnly = $false,
+        [bool]$QuietReleaseMode = $false,
+        [object]$BingeChampion = $null,
+        [object[]]$PosterAssets,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode,
+        [string]$StartLabel,
+        [string]$EndLabel
+    )
+
+    $maxMovies = if ($QuietReleaseMode) { 4 } elseif ($null -ne $Config.PSObject.Properties["MaxMovies"]) { Safe-Int $Config.MaxMovies } else { 8 }
+    $maxTv = if ($QuietReleaseMode) { 4 } elseif ($null -ne $Config.PSObject.Properties["MaxTv"]) { Safe-Int $Config.MaxTv } else { 8 }
+    $releaseSectionLabel = if ($QuietReleaseMode) { "LATEST RELEASES" } else { "NEW RELEASES" }
+
+    $footerServerName = Get-ConfiguredServerName
+    $deliveryDay = Get-ConfiguredDeliveryDay
+
+    $featuredReleaseKey = ""
+    if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) {
+        $featuredReleaseKey = [string]$HotRelease.Item.ReleaseKey
+    }
+
+    $movies = @(
+        $ReleaseData.Movies |
+        Where-Object {
+            [string]::IsNullOrWhiteSpace($featuredReleaseKey) -or
+            [string]$_.ReleaseKey -ne $featuredReleaseKey
+        } |
+        Select-Object -First $maxMovies
+    )
+
+    $tv = @(
+        $ReleaseData.TV |
+        Where-Object {
+            [string]::IsNullOrWhiteSpace($featuredReleaseKey) -or
+            [string]$_.ReleaseKey -ne $featuredReleaseKey
+        } |
+        Select-Object -First $maxTv
+    )
+
+    $movieCards = Get-ReleaseCardsHtml -Items $movies -PosterAssets $PosterAssets -ImageMode $ImageMode -Kind "Movie"
+    $tvCards = Get-ReleaseCardsHtml -Items $tv -PosterAssets $PosterAssets -ImageMode $ImageMode -Kind "TV"
+
+    $friendly = HtmlEncode $User.FriendlyName
+    $moviesWatched = HtmlEncode $Stats.MoviesWatched
+    $episodesStreamed = HtmlEncode $Stats.EpisodesStreamed
+    $timeText = HtmlEncode $Stats.TotalTimeText
+
+    $movieCount = @($ReleaseData.Movies).Count
+    $tvCount = @($ReleaseData.TV).Count
+
+    $headerIntro = if ($WelcomeOnly) {
+        "Welcome to $(HtmlEncode $footerServerName) — you're all set. Here's what's new and what to expect from your $deliveryDay drops."
+    }
+    elseif ($QuietReleaseMode) {
+        "Your $deliveryDay Plex drop is here — this week’s server favorites, latest library additions, and your private weekly recap."
+    }
+    else {
+        "Your $deliveryDay Plex drop is here — fresh releases plus your private weekly recap."
+    }
+
+    $movieWord = if ($movieCount -eq 1) { "NEW MOVIE" } else { "NEW MOVIES" }
+    $tvWord = if ($tvCount -eq 1) { "TV TITLE" } else { "TV TITLES" }
+    $releaseCountLine = if ($QuietReleaseMode) {
+        "NO NEW RELEASES THIS WEEK"
+    }
+    else {
+        "$movieCount $movieWord  •  $tvCount $tvWord"
+    }
+
+    $preheader = if ($QuietReleaseMode) {
+        ""
+    }
+    else {
+        Get-DynamicPreheader -ReleaseData $ReleaseData
+    }
+
+    $preheaderPadding = if ([string]::IsNullOrWhiteSpace($preheader)) {
+        ""
+    }
+    else {
+        ("&zwnj;&nbsp;" * 28)
+    }
+
+    $headerReleaseMetaBlock = if ($WelcomeOnly -or $RecentAccess) {
+        ""
+    }
+    else {
+        @"
+  <div style="padding-top:10px;font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:0.8px;">$(HtmlEncode $releaseCountLine)</div>
+  <div style="padding-top:6px;font-size:12px;color:#666666;">$(HtmlEncode $StartLabel) – $(HtmlEncode $EndLabel)</div>
+"@
+    }
+
+    $welcomeReleaseMetaBlock = if ($WelcomeOnly -or $RecentAccess) {
+        @"
+<tr>
+<td class="pad" style="padding:0 20px 18px;">
+  <div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:0.8px;">$(HtmlEncode $releaseCountLine)</div>
+  <div style="padding-top:6px;font-size:12px;color:#666666;">$(HtmlEncode $StartLabel) – $(HtmlEncode $EndLabel)</div>
+</td>
+</tr>
+"@
+    }
+    else {
+        ""
+    }
+
+    $movieReleaseSection = ""
+    if ($movies.Count -gt 0) {
+        $movieReleaseSection = @"
+<tr>
+<td class="pad" style="padding:0 20px 10px;">
+  <div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">$releaseSectionLabel</div>
+  <div style="padding-top:3px;font-size:24px;color:#ffffff;font-weight:800;">Movies</div>
+</td>
+</tr>
+<tr>
+<td class="pad" style="padding:0 14px 8px;">
+<table width="100%" cellspacing="0" cellpadding="0" border="0">
+$movieCards
+</table>
+</td>
+</tr>
+"@
+    }
+
+    $tvReleaseSection = ""
+    if ($tv.Count -gt 0) {
+        $tvTopPadding = if ($movies.Count -gt 0) { "8px" } else { "0" }
+        $tvHeadingPrefix = if ($movies.Count -gt 0) {
+            ""
+        }
+        else {
+            '<div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">' + $releaseSectionLabel + '</div>'
+        }
+
+        $tvReleaseSection = @"
+<tr>
+<td class="pad" style="padding:$tvTopPadding 20px 10px;">
+  $tvHeadingPrefix
+  <div style="padding-top:3px;font-size:24px;color:#ffffff;font-weight:800;">TV</div>
+</td>
+</tr>
+<tr>
+<td class="pad" style="padding:0 14px 14px;">
+<table width="100%" cellspacing="0" cellpadding="0" border="0">
+$tvCards
+</table>
+</td>
+</tr>
+"@
+    }
+
+    $newReleasesBlock = $movieReleaseSection + $tvReleaseSection
+
+    $mostWatched = if ([string]::IsNullOrWhiteSpace([string]$Stats.MostWatched)) {
+        "Nothing yet"
+    } else {
+        HtmlEncode (Truncate-Text $Stats.MostWatched 48)
+    }
+
+    $plexUrl = Get-ConfiguredPlexWebUrl
+
+    $serverLabel = if ($null -ne $Config.PSObject.Properties["ServerLabel"] -and -not [string]::IsNullOrWhiteSpace([string]$Config.ServerLabel)) {
+        [string]$Config.ServerLabel
+    } else {
+        "PLEX"
+    }
+
+    $moviesIconSrc = if ($ImageMode -eq "Email") { "cid:icon_movies" } else { "assets/movies.gif" }
+    $tvIconSrc = if ($ImageMode -eq "Email") { "cid:icon_tv" } else { "assets/tv.gif" }
+    $clockIconSrc = if ($ImageMode -eq "Email") { "cid:icon_clock" } else { "assets/clock.gif" }
+    $trophyIconSrc = if ($ImageMode -eq "Email") { "cid:icon_trophy" } else { "assets/trophy.gif" }
+    $hotIconSrc = if ($ImageMode -eq "Email") { "cid:icon_hot" } else { "assets/hot.gif" }
+    $trendingIconSrc = if ($ImageMode -eq "Email") { "cid:icon_trending" } else { "assets/trending.gif" }
+    $pendingIconSrc = if ($ImageMode -eq "Email") { "cid:icon_pending" } else { "assets/pending.gif" }
+    $quietIconSrc = if ($ImageMode -eq "Email") { "cid:icon_quiet" } else { "assets/quiet.gif" }
+    $welcomeIconSrc = if ($ImageMode -eq "Email") { "cid:icon_welcome" } else { "assets/welcome.gif" }
+    $actionIconSrc = if ($ImageMode -eq "Email") { "cid:icon_action" } else { "assets/action.gif" }
+    $watchedIconSrc = if ($ImageMode -eq "Email") { "cid:icon_watched" } else { "assets/watched.gif" }
+    $lockInfoIconSrc = if ($ImageMode -eq "Email") { "cid:icon_lockinfo" } else { "assets/lockinfo.gif" }
+    $bingeIconSrc = if ($ImageMode -eq "Email") { "cid:icon_binge" } else { "assets/watchlist.gif" }
+    $popcornIconSrc = if ($ImageMode -eq "Email") { "cid:icon_popcorn" } else { "assets/popcorn.gif" }
+    $imdbIconSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "assets/imdb.png" }
+
+    # Recently accepted access: special welcome banner.
+    $welcomeBlock = ""
+    if ($RecentAccess) {
+        $welcomeDescription = if ($WelcomeOnly) {
+            "Your access to $(HtmlEncode $footerServerName) is live. Grab the remote — you’re cleared for departure."
+        }
+        elseif ($QuietReleaseMode) {
+            "Your access to $(HtmlEncode $footerServerName) is live. This is your first $deliveryDay drop — what’s trending and the latest library additions are below, and your private watch readout will come online as you stream."
+        }
+        else {
+            "Your access to $(HtmlEncode $footerServerName) is live. This is your first $deliveryDay drop — new releases are below, and your private watch readout will come online as you stream."
+        }
+
+        $welcomeBlock = @"
+<tr>
+<td class="pad" style="padding:4px 20px 26px;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #e5a00d;border-radius:10px;border-collapse:separate;">
+    <tr>
+      <td valign="middle" style="padding:20px 22px;">
+        <div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">
+          <span style="display:inline-block;vertical-align:middle;">WELCOME ABOARD</span>
+          <img src="$welcomeIconSrc" width="18" height="18" alt="Welcome aboard" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-left:6px;">
+        </div>
+        <div style="padding-top:7px;font-size:22px;line-height:1.2;color:#ffffff;font-weight:800;">Access granted, $friendly.</div>
+        <div style="padding-top:7px;font-size:13px;line-height:1.5;color:#9b9b9b;">$welcomeDescription</div>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+"@
+    }
+
+    # HOT NEW RELEASE hero.
+    # Regular Friday newsletters use the same gold accent border as the
+    # Welcome Aboard panel. Welcome-related emails keep the original gray border.
+    $hotBorderColor = if (-not $WelcomeOnly -and -not $RecentAccess) {
+        "#e5a00d"
+    }
+    else {
+        "#2b2b2b"
+    }
+
+    $heroLabel = if ($QuietReleaseMode) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }
+    $heroIconSrc = if ($QuietReleaseMode) { $popcornIconSrc } else { $hotIconSrc }
+    $heroIconAlt = if ($QuietReleaseMode) { "Trending this week" } else { "Hot new release" }
+
+    $hotBlock = ""
+    if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) {
+        $hotItem = $HotRelease.Item
+        $hotTitle = HtmlEncode $hotItem.Title
+        $hotPosterSrc = Get-ImageSource -RatingKey ([string]$hotItem.PosterRatingKey) -PosterAssets $PosterAssets -ImageMode $ImageMode
+
+        $hotPosterHtml = ""
+        if (-not [string]::IsNullOrWhiteSpace($hotPosterSrc)) {
+            $hotPosterHtml = '<img src="' + (HtmlEncode $hotPosterSrc) + '" width="180" alt="' + $hotTitle + ' poster" style="display:block;width:180px;max-width:180px;height:auto;border:0;border-radius:8px;">'
+        }
+
+        $hotMeta = Get-DesignRatingLine -Item $hotItem -ImageMode $ImageMode
+        if ([string]$hotItem.Type -eq "show" -and $hotItem.EpisodeCount -gt 0) {
+            $epText = if ($hotItem.EpisodeCount -eq 1) { "1 new episode" } else { "$($hotItem.EpisodeCount) new episodes" }
+            if ([string]::IsNullOrWhiteSpace($hotMeta)) {
+                $hotMeta = $epText
+            }
+            else {
+                $hotMeta = $hotMeta + "  " + $epText
+            }
+        }
+        # Genre is displayed globally for movie heroes: desktop clearLogo,
+        # desktop text-title fallback, and mobile text-title layout.
+        $hotGenreText = ""
+        $hotGenreDesktopHtml = ""
+        $hotGenreMobileHtml = ""
+        $hotMetaDesktopTop = 8
+        $hotMetaMobileTop = 7
+
+        if ([string]$hotItem.Type -eq "movie") {
+            $hotGenreText = Get-DesignGenreLine -Item $hotItem
+
+            if (-not [string]::IsNullOrWhiteSpace($hotGenreText)) {
+                $encodedHotGenre = HtmlEncode $hotGenreText
+
+                $hotGenreDesktopHtml = '<div style="padding-top:4px;color:#969696;font-size:13px;font-weight:500;line-height:1.35;">' +
+                    $encodedHotGenre +
+                    '</div>'
+
+                $hotGenreMobileHtml = '<div style="padding-top:4px;color:#969696;font-size:13px;font-weight:500;line-height:1.35;text-align:left;">' +
+                    $encodedHotGenre +
+                    '</div>'
+
+                $hotMetaDesktopTop = 11
+                $hotMetaMobileTop = 11
+            }
+        }
+
+        # For movies, Get-DesignRatingLine returns safe HTML. Do not encode it.
+        # TV episode text is constructed internally and contains no user HTML.
+
+        # Match the New Releases movie-card summary treatment.
+        $hotSummary = Truncate-Text ([string]$hotItem.Summary) 150
+        $hotSummaryText = if ([string]::IsNullOrWhiteSpace($hotSummary)) {
+            "&nbsp;"
+        }
+        else {
+            HtmlEncode $hotSummary
+        }
+
+        $playCount = Safe-Int $HotRelease.Plays
+        $playWord = if ($playCount -eq 1) { "play" } else { "plays" }
+
+        $hotStatus = if ($QuietReleaseMode) {
+            "Most watched across $footerServerName this week • $playCount $playWord"
+        }
+        elseif ($HotRelease.IsPopular) {
+            "Most-watched new addition this week • $playCount $playWord"
+        }
+        else {
+            "Freshly added — no viewing activity yet"
+        }
+
+        $designBannerHtml = ""
+        $designBannerSrc = ""
+        if ($null -ne $designHero -and -not [string]::IsNullOrWhiteSpace([string]$designHero.BannerSrc)) {
+            $designBannerSrc = if ($ImageMode -eq "Email") { "cid:hero_banner" } else { [string]$designHero.BannerSrc }
+            $designBannerHtml = '<img class="design-mobile-banner" src="' + (HtmlEncode $designBannerSrc) + '" alt="' + $hotTitle + ' banner" style="display:block;width:100%;height:160px;object-fit:cover;border:0;">'
+        }
+
+        $designHasLogo = (
+            $null -ne $designHero -and
+            -not [string]::IsNullOrWhiteSpace([string]$designHero.LogoSrc)
+        )
+
+        # Production email intentionally embeds only PNG clearLogos. SVG and
+        # WebP support is inconsistent across email clients, so any other logo
+        # format falls back to the normal text title. Browser previews may still
+        # display formats the browser supports.
+        if ($designHasLogo -and $ImageMode -eq "Email" -and
+            [IO.Path]::GetExtension([string]$designHero.LogoSrc).ToLowerInvariant() -ne ".png") {
+            $designHasLogo = $false
+        }
+
+        if ($designHasLogo) {
+            $designLogoSrc = if ($ImageMode -eq "Email") { "cid:hero_logo" } else { [string]$designHero.LogoSrc }
+            $designDesktopIdentityHtml = @"
+<div class="design-desktop-logo-wrap" style="padding-top:8px;">
+  <img class="design-desktop-logo" src="$(HtmlEncode $designLogoSrc)" alt="$hotTitle logo" style="display:block;max-width:280px;max-height:96px;width:auto;height:auto;border:0;">
+</div>
+"@
+
+            # Mobile banner no longer renders the clearlogo overlay.
+            $designMobileLogoOverlayHtml = ""
+        }
+        else {
+            $designDesktopIdentityHtml = '<div style="padding-top:5px;font-size:23px;line-height:1.2;color:#ffffff;font-weight:800;">' + $hotTitle + '</div>'
+            $designMobileLogoOverlayHtml = ""
+        }
+
+        $hotBlock = @"
+<tr class="design-hot-desktop">
+<td class="pad" style="padding:4px 20px 26px;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid $hotBorderColor;border-radius:10px;border-collapse:separate;">
+    <tr>
+      <td width="205" valign="top" style="padding:16px 0 16px 16px;">
+        $hotPosterHtml
+      </td>
+      <td valign="top" style="padding:16px 20px;">
+        <table width="100%" height="270" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:270px;">
+          <tr>
+            <td valign="top">
+              <img src="$heroIconSrc" width="42" height="42" alt="$(HtmlEncode $heroIconAlt)" style="display:block;width:42px;height:42px;border:0;">
+              <div style="padding-top:8px;font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.3px;">$heroLabel</div>
+              $designDesktopIdentityHtml
+              $hotGenreDesktopHtml
+              <div style="padding-top:${hotMetaDesktopTop}px;font-size:12px;color:#e5a00d;font-weight:700;">$hotMeta</div>
+              <div style="padding-top:10px;font-size:13px;line-height:1.45;color:#969696;">$hotSummaryText</div>
+            </td>
+          </tr>
+          <tr>
+            <td valign="bottom" style="padding-top:12px;font-size:12px;line-height:1.4;color:#e5a00d;">
+              $(HtmlEncode $hotStatus)
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+<tr class="design-hot-mobile" style="display:none;">
+<td class="pad" style="padding:4px 12px 15px;">
+  <table cellspacing="0" cellpadding="0" border="0">
+    <tr>
+      <td valign="middle" style="padding-right:9px;">
+        <img src="$heroIconSrc" width="34" height="34" alt="$(HtmlEncode $heroIconAlt)" style="display:block;width:34px;height:34px;border:0;">
+      </td>
+      <td valign="middle" style="font-size:11px;line-height:34px;color:#e5a00d;font-weight:800;letter-spacing:1.3px;white-space:nowrap;">
+        $heroLabel
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+
+<tr class="design-hot-mobile" style="display:none;">
+<td class="pad" style="padding:0 12px 26px;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid $hotBorderColor;border-radius:10px;border-collapse:separate;overflow:hidden;">
+    <tr>
+      <td style="padding:0;">
+        <div class="design-mobile-banner-wrap" style="position:relative;overflow:hidden;">
+          $designBannerHtml
+          $designMobileLogoOverlayHtml
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:16px 18px 20px;">
+        <div style="font-size:23px;line-height:1.2;color:#ffffff;font-weight:800;text-align:left;">$hotTitle</div>
+        $hotGenreMobileHtml
+        <div style="padding-top:${hotMetaMobileTop}px;font-size:12px;color:#e5a00d;font-weight:700;">$hotMeta</div>
+        <div style="padding-top:14px;font-size:13px;line-height:1.5;color:#969696;">$hotSummaryText</div>
+        <div style="padding-top:22px;font-size:12px;line-height:1.4;color:#e5a00d;">$(HtmlEncode $hotStatus)</div>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+"@
+    }
+
+    # Server-wide Trending appears once:
+    # - normal release weeks: compact poster card below the weekly content
+    # - quiet release weeks: Trending is already the featured hero
+    $trendingBlock = ""
+
+    if (-not $QuietReleaseMode) {
+        $trendingDisplay = ""
+        $trendingDescription = ""
+        $trendingPosterHtml = ""
+
+        if ([string]::IsNullOrWhiteSpace($TrendingTitle)) {
+            $trendingDisplay = "Warp core preparing to engage"
+            $trendingDescription = "Trending picks will appear here once the engines are up to speed."
+        }
+        else {
+            $trendingDisplay = HtmlEncode (Truncate-Text $TrendingTitle 70)
+            $trendingPlays = 0
+
+            if ($null -ne $script:GlobalTrendingStat) {
+                $trendingPlays = Safe-Int $script:GlobalTrendingStat.Plays
+                $trendingRatingKey = [string]$script:GlobalTrendingStat.RatingKey
+                $trendingPosterSrc = Get-ImageSource `
+                    -RatingKey $trendingRatingKey `
+                    -PosterAssets $PosterAssets `
+                    -ImageMode $ImageMode
+
+                if (-not [string]::IsNullOrWhiteSpace($trendingPosterSrc)) {
+                    $trendingPosterHtml = '<img src="' + (HtmlEncode $trendingPosterSrc) + '" width="58" height="86" alt="' + $trendingDisplay + ' poster" style="display:block;width:58px;height:86px;object-fit:cover;border:1px solid #383838;border-radius:6px;">'
+                }
+            }
+
+            $playWord = if ($trendingPlays -eq 1) { "play" } else { "plays" }
+            $trendingDescription = if ($trendingPlays -gt 0) {
+                "Most watched across $footerServerName this week • $trendingPlays $playWord"
+            } else {
+                "Most watched across $footerServerName this week"
+            }
+        }
+
+        $posterCell = if ([string]::IsNullOrWhiteSpace($trendingPosterHtml)) {
+            ""
+        } else {
+            '<td width="70" valign="middle" style="padding:12px 0 12px 12px;">' + $trendingPosterHtml + '</td>'
+        }
+
+        $trendingBlock = @"
+<tr>
+<td class="pad" style="padding:0 20px 26px;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+    <tr>
+      $posterCell
+      <td width="56" valign="middle" style="padding:16px 0 16px 14px;">
+        <img src="$trendingIconSrc" width="42" height="42" alt="Trending this week" style="display:block;width:42px;height:42px;border:0;">
+      </td>
+      <td valign="middle" style="padding:16px 18px 16px 10px;">
+        <div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.3px;">TRENDING THIS WEEK</div>
+        <div style="padding-top:5px;font-size:18px;line-height:1.25;color:#ffffff;font-weight:800;">$trendingDisplay</div>
+        <div style="padding-top:4px;font-size:12px;line-height:1.4;color:#8e8e8e;">$(HtmlEncode $trendingDescription)</div>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+"@
+    }
+
+    # Binge Champion is a server-wide USER award.
+    # It is never the same thing as Trending, which ranks media titles.
+    $bingeWinnerName = "Awaiting the first qualifying stream"
+    $bingeMetricText = "The weekly award will appear here once viewing activity is available."
+    $bingeWinnerId = ""
+    $isBingeWinner = $false
+
+    if ($null -ne $BingeChampion) {
+        $bingeWinnerName = HtmlEncode (Truncate-Text ([string]$BingeChampion.FriendlyName) 44)
+        $bingeWinnerId = [string]$BingeChampion.UserId
+        $bingePlays = Safe-Int $BingeChampion.Plays
+        $bingePlayWord = if ($bingePlays -eq 1) { "qualifying play" } else { "qualifying plays" }
+        $bingeTime = [string]$BingeChampion.TotalTimeText
+        $bingeMetricText = "$bingePlays $bingePlayWord"
+        if (-not [string]::IsNullOrWhiteSpace($bingeTime)) {
+            $bingeMetricText += " • $bingeTime watched"
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($bingeWinnerId) -and
+            [string]$User.UserId -eq $bingeWinnerId) {
+            $isBingeWinner = $true
+        }
+        elseif ([string]::IsNullOrWhiteSpace($bingeWinnerId) -and
+            [string]$User.FriendlyName -ieq [string]$BingeChampion.FriendlyName) {
+            $isBingeWinner = $true
+        }
+    }
+
+    $bingeBorder = if ($isBingeWinner) { "#e5a00d" } else { "#2b2b2b" }
+    $bingeBackground = if ($isBingeWinner) { "#211a0d" } else { "#181818" }
+    $bingeEyebrow = if ($isBingeWinner) { "YOU WON • BINGE CHAMPION" } else { "BINGE CHAMPION AWARD" }
+    $bingeHeadline = if ($isBingeWinner) { "You’re this week’s champion!" } else { $bingeWinnerName }
+    $bingeWinnerLine = if ($isBingeWinner) {
+        '<div style="padding-top:4px;font-size:12px;color:#f3c45a;font-weight:800;">' + $bingeWinnerName + '</div>'
+    } else { "" }
+
+    # Do not assign these collections through an `if` expression.
+    # Windows PowerShell 5.1 can unwrap a one-item result into a scalar, and
+    # strict mode then rejects `.Count`. Initialize and assign the arrays
+    # explicitly so zero, one, and many items all retain collection semantics.
+    $movieItems = @()
+    if ($null -ne $Stats.PSObject.Properties["MovieItems"]) {
+        $movieItems = @($Stats.MovieItems)
+    }
+
+    $episodeItems = @()
+    if ($null -ne $Stats.PSObject.Properties["EpisodeItems"]) {
+        $episodeItems = @($Stats.EpisodeItems)
+    }
+    $movieDetailMode = (
+        (Safe-Int $Stats.MoviesWatched) -ge 1 -and
+        (Safe-Int $Stats.MoviesWatched) -le 3 -and
+        $movieItems.Count -gt 0
+    )
+    $episodeDetailMode = (
+        (Safe-Int $Stats.EpisodesStreamed) -ge 1 -and
+        (Safe-Int $Stats.EpisodesStreamed) -le 3 -and
+        $episodeItems.Count -gt 0
+    )
+
+    $movieRows = if ($movieDetailMode) {
+        Get-StatsMovieRowsHtml `
+            -Items $movieItems `
+            -PosterAssets $PosterAssets `
+            -ImageMode $ImageMode
+    } else { "" }
+
+    $episodeRows = if ($episodeDetailMode) {
+        Get-StatsEpisodeRowsHtml `
+            -Items $episodeItems `
+            -PosterAssets $PosterAssets `
+            -ImageMode $ImageMode `
+            -ImdbIconSrc $imdbIconSrc
+    } else { "" }
+
+    $detailRowCount = 0
+    if ($movieDetailMode) {
+        $detailRowCount = [Math]::Max($detailRowCount, [Math]::Min(3, $movieItems.Count))
+    }
+    if ($episodeDetailMode) {
+        $detailRowCount = [Math]::Max($detailRowCount, [Math]::Min(3, $episodeItems.Count))
+    }
+
+    $statsCardHeight = switch ($detailRowCount) {
+        3 { 286 }
+        2 { 216 }
+        1 { 154 }
+        default { 138 }
+    }
+
+    $movieCardContent = if ($movieDetailMode) {
+        @"
+<table width="100%" cellspacing="0" cellpadding="0" border="0">
+  <tr>
+    <td style="padding-bottom:7px;border-bottom:1px solid #292929;">
+      <table cellspacing="0" cellpadding="0" border="0">
+        <tr>
+          <td valign="middle" style="padding-right:8px;"><img src="$moviesIconSrc" width="30" height="30" alt="Movies watched" style="display:block;width:30px;height:30px;border:0;"></td>
+          <td valign="middle"><div style="font-size:18px;font-weight:800;color:#ffffff;line-height:1;">$moviesWatched</div><div style="padding-top:3px;font-size:10px;color:#8e8e8e;letter-spacing:.6px;">MOVIES WATCHED</div></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  $movieRows
+</table>
+"@
+    } else {
+        @"
+<table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="height:${statsCardHeight}px;">
+  <tr><td valign="middle">
+    <img src="$moviesIconSrc" width="38" height="38" alt="Movies watched" style="display:block;width:38px;height:38px;border:0;">
+    <div style="padding-top:9px;font-size:28px;font-weight:800;color:#ffffff;line-height:1.1;">$moviesWatched</div>
+    <div style="padding-top:5px;font-size:12px;color:#8e8e8e;">movies watched</div>
+  </td></tr>
+</table>
+"@
+    }
+
+    $episodeCardContent = if ($episodeDetailMode) {
+        @"
+<table width="100%" cellspacing="0" cellpadding="0" border="0">
+  <tr>
+    <td style="padding-bottom:7px;border-bottom:1px solid #292929;">
+      <table cellspacing="0" cellpadding="0" border="0">
+        <tr>
+          <td valign="middle" style="padding-right:8px;"><img src="$tvIconSrc" width="30" height="30" alt="Episodes streamed" style="display:block;width:30px;height:30px;border:0;"></td>
+          <td valign="middle"><div style="font-size:18px;font-weight:800;color:#ffffff;line-height:1;">$episodesStreamed</div><div style="padding-top:3px;font-size:10px;color:#8e8e8e;letter-spacing:.6px;">EPISODES STREAMED</div></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  $episodeRows
+</table>
+"@
+    } else {
+        @"
+<table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="height:${statsCardHeight}px;">
+  <tr><td valign="middle">
+    <img src="$tvIconSrc" width="38" height="38" alt="Episodes streamed" style="display:block;width:38px;height:38px;border:0;">
+    <div style="padding-top:9px;font-size:28px;font-weight:800;color:#ffffff;line-height:1.1;">$episodesStreamed</div>
+    <div style="padding-top:5px;font-size:12px;color:#8e8e8e;">episodes streamed</div>
+  </td></tr>
+</table>
+"@
+    }
+
+    $qualifyingPlayCount = if ($null -ne $Stats.PSObject.Properties["QualifyingPlays"]) {
+        Safe-Int $Stats.QualifyingPlays
+    } else {
+        (Safe-Int $Stats.MoviesWatched) + (Safe-Int $Stats.EpisodesStreamed)
+    }
+    $personalPlayWord = if ($qualifyingPlayCount -eq 1) { "qualifying play" } else { "qualifying plays" }
+
+    $statsBlock = ""
+    $bingeStandaloneBlock = ""
+
+    if ([int64]$Stats.TotalSeconds -le 0) {
+        if ($SystemWarmingUp) {
+            $zeroEyebrow = "STATS ARE WARMING UP"
+            $zeroHeadline = "The sensors are online."
+            $zeroDescription = "Your weekly watch recap will begin filling in as you stream. Check back next Friday for the full readout."
+            $zeroAlt = "Stats warming up"
+            $zeroIconSrc = $pendingIconSrc
+        }
+        else {
+            $zeroEyebrow = "QUIET IN THIS SECTOR"
+            $zeroHeadline = "No watch activity this week."
+            $zeroDescription = "Warp Core still engaging. Your recap will be ready when you beam back aboard."
+            $zeroAlt = "No watch activity this week"
+            $zeroIconSrc = $quietIconSrc
+        }
+
+        $statsBlock = @"
+<tr>
+<td class="pad" style="padding:0 20px 16px;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+    <tr>
+      <td width="72" valign="middle" style="padding:20px 0 20px 20px;">
+        <img src="$zeroIconSrc" width="48" height="48" alt="$(HtmlEncode $zeroAlt)" style="display:block;width:48px;height:48px;border:0;">
+      </td>
+      <td valign="middle" style="padding:20px 22px 20px 12px;">
+        <div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.3px;">$(HtmlEncode $zeroEyebrow)</div>
+        <div style="padding-top:6px;font-size:20px;line-height:1.25;color:#ffffff;font-weight:800;">$(HtmlEncode $zeroHeadline)</div>
+        <div style="padding-top:6px;font-size:13px;line-height:1.5;color:#969696;">$(HtmlEncode $zeroDescription)</div>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+"@
+    }
+    else {
+        $statsBlock = @"
+<tr>
+<td class="pad" style="padding:0 20px 24px;">
+<table width="100%" cellspacing="0" cellpadding="0" border="0">
+<tr>
+  <td width="50%" valign="top" style="padding:0 5px 10px 0;">
+    <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+      <tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$movieCardContent</td></tr>
+    </table>
+  </td>
+  <td width="50%" valign="top" style="padding:0 0 10px 5px;">
+    <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+      <tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$episodeCardContent</td></tr>
+    </table>
+  </td>
+</tr>
+<tr>
+  <td width="50%" valign="top" style="padding:0 5px 10px 0;">
+    <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+      <tr>
+        <td height="$statsCardHeight" valign="middle" style="height:${statsCardHeight}px;padding:17px;">
+          <img src="$clockIconSrc" width="42" height="42" alt="Total watched" style="display:block;width:42px;height:42px;border:0;">
+          <div style="padding-top:10px;font-size:27px;font-weight:800;color:#ffffff;line-height:1.1;">$timeText</div>
+          <div style="padding-top:5px;font-size:12px;color:#8e8e8e;">total watched</div>
+          <div style="padding-top:8px;font-size:10px;color:#e5a00d;font-weight:700;">$qualifyingPlayCount $personalPlayWord</div>
+        </td>
+      </tr>
+    </table>
+  </td>
+  <td width="50%" valign="top" style="padding:0 0 10px 5px;">
+    <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:$bingeBackground;border:1px solid $bingeBorder;border-radius:10px;border-collapse:separate;">
+      <tr>
+        <td height="$statsCardHeight" valign="middle" style="height:${statsCardHeight}px;padding:17px;">
+          <div style="font-size:9px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">$(HtmlEncode $bingeEyebrow)</div>
+          <img src="$trophyIconSrc" width="$(if ($isBingeWinner) { 54 } else { 42 })" height="$(if ($isBingeWinner) { 54 } else { 42 })" alt="Binge Champion award" style="display:block;width:$(if ($isBingeWinner) { 54 } else { 42 })px;height:$(if ($isBingeWinner) { 54 } else { 42 })px;border:0;margin-top:9px;">
+          <div style="padding-top:8px;font-size:$(if ($isBingeWinner) { 18 } else { 16 })px;line-height:1.25;font-weight:900;color:#ffffff;">$(HtmlEncode $bingeHeadline)</div>
+          $bingeWinnerLine
+          <div style="padding-top:6px;font-size:10px;line-height:1.4;color:$(if ($isBingeWinner) { '#f3c45a' } else { '#8e8e8e' });font-weight:700;">$(HtmlEncode $bingeMetricText)</div>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+</table>
+</td>
+</tr>
+"@
+    }
+
+    # Award is still globally revealed when the recipient has no personal stats
+    # or a first-Friday onboarding state suppresses the personal recap grid.
+    if (-not $WelcomeOnly -and [int64]$Stats.TotalSeconds -le 0) {
+        $bingeStandaloneBlock = @"
+<tr>
+<td class="pad" style="padding:0 20px 24px;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:$bingeBackground;border:1px solid $bingeBorder;border-radius:10px;border-collapse:separate;">
+    <tr>
+      <td width="84" valign="middle" style="padding:18px 0 18px 20px;">
+        <img src="$trophyIconSrc" width="56" height="56" alt="Binge Champion award" style="display:block;width:56px;height:56px;border:0;">
+      </td>
+      <td valign="middle" style="padding:18px 20px 18px 12px;">
+        <div style="font-size:10px;color:#e5a00d;font-weight:900;letter-spacing:1.2px;">$(HtmlEncode $bingeEyebrow)</div>
+        <div style="padding-top:5px;font-size:20px;line-height:1.25;color:#ffffff;font-weight:900;">$(HtmlEncode $bingeHeadline)</div>
+        $bingeWinnerLine
+        <div style="padding-top:5px;font-size:12px;line-height:1.45;color:$(if ($isBingeWinner) { '#f3c45a' } else { '#929292' });">$(HtmlEncode $bingeMetricText)</div>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+"@
+    }
+
+    # Suppress empty weekly recap only after statsBlock has been built.
+    # One-off welcome: always suppress it.
+    # New user's first Friday: suppress it only when they have zero activity.
+    # Established users: retain normal quiet/warm-up behavior.
+    if ($WelcomeOnly -or ($RecentAccess -and [int64]$Stats.TotalSeconds -le 0)) {
+        $statsBlock = ""
+    }
+
+    $weeklyHeadingBlock = if ($WelcomeOnly -or ($RecentAccess -and [int64]$Stats.TotalSeconds -le 0)) {
+        ""
+    }
+    else {
+        @"
+<tr>
+<td class="pad" style="padding:8px 20px 12px;">
+  <div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">YOUR WEEK ON PLEX</div>
+</td>
+</tr>
+"@
+    }
+
+    $welcomeInfoPanelBlock = if ($WelcomeOnly -or $RecentAccess) {
+        @"
+<tr>
+<td class="pad" style="padding:10px 20px 22px;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+    <tr>
+      <td style="padding:20px 22px;">
+        <div style="font-size:13px;color:#e5a00d;font-weight:800;">
+          <img src="$actionIconSrc" width="18" height="18" alt="Weekly Drops" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
+          <span style="display:inline-block;vertical-align:middle;">$($deliveryDay.ToUpperInvariant()) DROPS</span>
+        </div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Every $deliveryDay morning you’ll get the newest movies and TV additions.</div>
+
+        <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">
+          <img src="$watchedIconSrc" width="18" height="18" alt="Your Private Readout" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
+          <span style="display:inline-block;vertical-align:middle;">YOUR PRIVATE READOUT</span>
+        </div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">As you stream, your weekly email builds a private recap with watch time, movies, episodes, posters, and ratings.</div>
+
+        <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">
+          <img src="$lockInfoIconSrc" width="18" height="18" alt="Just Your Stats" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
+          <span style="display:inline-block;vertical-align:middle;">JUST YOUR STATS</span>
+        </div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The weekly Binge Champion winner and winning aggregate are shared server-wide.</div>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+"@
+    }
+    else {
+        ""
+    }
+
+    $footerBlock = if ($WelcomeOnly -or $RecentAccess) {
+        ""
+    }
+    else {
+        @"
+<tr>
+<td class="pad" align="center" style="padding:12px 20px 26px;color:#5f5f5f;font-size:11px;line-height:1.5;">
+  Your watch recap is generated privately from $(HtmlEncode $footerServerName) server’s history.<br>
+  Other users do not receive your detailed individual viewing stats.<br>
+  The Binge Champion winner and winning aggregate are shared server-wide.
+</td>
+</tr>
+"@
+    }
+
+    return @"
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plex Weekly</title>
+<style>
+/* Email-safe table-first layout; only the featured hero swaps at the mobile breakpoint. */
+.design-hot-mobile { display:none; }
+@media only screen and (max-width: 620px) {
+  .container { width: 100% !important; }
+  .pad { padding-left: 12px !important; padding-right: 12px !important; }
+  .design-hot-desktop { display:none !important; }
+  .design-hot-mobile { display:table-row !important; }
+  .design-mobile-banner { width:100% !important; height:150px !important; object-fit:cover !important; }
+  .design-mobile-logo { max-width:250px !important; max-height:100px !important; width:auto !important; height:auto !important; }
+  .design-mobile-logo-overlay { bottom:10px !important; }
+}
+</style>
+</head>
+<body style="margin:0;padding:0;background:#0f0f0f;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
+<div style="display:none!important;font-size:1px;line-height:1px;max-height:0;max-width:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">$(HtmlEncode $preheader)$preheaderPadding</div>
+<table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#0f0f0f;">
+<tr>
+<td align="center" style="padding:28px 10px;">
+<table class="container" width="640" cellspacing="0" cellpadding="0" border="0" style="width:640px;max-width:640px;">
+<tr>
+<td class="pad" style="padding:0 20px 18px;">
+  <div style="font-size:13px;font-weight:800;letter-spacing:2px;color:#e5a00d;">$(HtmlEncode $serverLabel)</div>
+  <div style="padding-top:8px;font-size:30px;line-height:1.15;font-weight:800;color:#ffffff;">Hey $friendly,</div>
+  <div style="padding-top:8px;font-size:15px;line-height:1.55;color:#a9a9a9;">$headerIntro</div>
+$headerReleaseMetaBlock
+</td>
+</tr>
+
+$welcomeBlock
+
+$welcomeReleaseMetaBlock
+
+$hotBlock
+
+$newReleasesBlock
+
+$weeklyHeadingBlock
+
+$statsBlock
+
+$welcomeInfoPanelBlock
+
+$bingeStandaloneBlock
+
+$trendingBlock
+
+<tr>
+<td class="pad" align="center" style="padding:8px 20px 18px;">
+  <a href="$(HtmlEncode $plexUrl)" style="display:inline-block;background:#e5a00d;color:#111111;text-decoration:none;font-size:14px;font-weight:800;padding:13px 24px;border-radius:7px;">OPEN PLEX</a>
+</td>
+</tr>
+
+$footerBlock
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
+"@
+}
+
+function Build-PlainText {
+    param(
+        [object]$User,
+        [object]$Stats,
+        [object]$ReleaseData,
+        [object]$HotRelease,
+        [string]$TrendingTitle,
+        [bool]$SystemWarmingUp,
+        [bool]$RecentAccess,
+        [bool]$QuietReleaseMode = $false,
+        [object]$BingeChampion = $null,
+        [string]$StartLabel,
+        [string]$EndLabel
+    )
+
+    $serverName = Get-ConfiguredServerName
+    $deliveryDay = Get-ConfiguredDeliveryDay
+    $plexWebUrl = Get-ConfiguredPlexWebUrl
+
+    $movieCount = @($ReleaseData.Movies).Count
+    $tvCount = @($ReleaseData.TV).Count
+
+    $plainPreheader = if ($QuietReleaseMode) {
+        ""
+    }
+    else {
+        Get-DynamicPreheader -ReleaseData $ReleaseData
+    }
+
+    $plainPreheaderBlock = if ([string]::IsNullOrWhiteSpace($plainPreheader)) {
+        ""
+    }
+    else {
+        $plainPreheader + "`r`n`r`n"
+    }
+
+    $releaseMetaText = if ($QuietReleaseMode) {
+        "NO NEW RELEASES THIS WEEK`r`n$StartLabel – $EndLabel"
+    }
+    else {
+        "$movieCount new movies • $tvCount TV titles`r`n$StartLabel – $EndLabel"
+    }
+
+    $heroLine = ""
+    if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) {
+        $heroLabel = if ($QuietReleaseMode) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }
+        $heroLine = "`r`n${heroLabel}: $($HotRelease.Item.Title)"
+    }
+
+    $footerFeature = ""
+
+    if (-not $QuietReleaseMode) {
+        if ([string]::IsNullOrWhiteSpace($TrendingTitle)) {
+            $footerFeature += "`r`nTRENDING THIS WEEK: Warp core preparing to engage."
+        }
+        else {
+            $trendPlays = if ($null -ne $script:GlobalTrendingStat) {
+                Safe-Int $script:GlobalTrendingStat.Plays
+            } else { 0 }
+            $trendPlayWord = if ($trendPlays -eq 1) { "play" } else { "plays" }
+            $footerFeature += if ($trendPlays -gt 0) {
+                "`r`nTRENDING THIS WEEK: $TrendingTitle — $trendPlays $trendPlayWord across the server"
+            } else {
+                "`r`nTRENDING THIS WEEK: $TrendingTitle"
+            }
+        }
+    }
+
+    if ($null -ne $BingeChampion) {
+        $winnerName = [string]$BingeChampion.FriendlyName
+        $winnerPlays = Safe-Int $BingeChampion.Plays
+        $winnerPlayWord = if ($winnerPlays -eq 1) { "qualifying play" } else { "qualifying plays" }
+        $winnerLine = if (
+            -not [string]::IsNullOrWhiteSpace([string]$BingeChampion.UserId) -and
+            [string]$BingeChampion.UserId -eq [string]$User.UserId
+        ) {
+            "YOU WON THE BINGE CHAMPION AWARD"
+        } else {
+            "BINGE CHAMPION AWARD"
+        }
+        $footerFeature += "`r`n${winnerLine}: $winnerName — $winnerPlays $winnerPlayWord, $($BingeChampion.TotalTimeText) watched"
+    }
+    else {
+        $footerFeature += "`r`nBINGE CHAMPION AWARD: Awaiting the first qualifying stream."
+    }
+
+    $statsText = ""
+    if ([int64]$Stats.TotalSeconds -le 0) {
+        if ($RecentAccess) {
+            $statsText = ""
+        }
+        elseif ($SystemWarmingUp) {
+            $statsText = @"
+YOUR WEEK ON PLEX
+
+STATS ARE WARMING UP
+The sensors are online.
+Your weekly watch recap will begin filling in as you stream.
+Check back next $deliveryDay for the full readout.
+"@
+        }
+        else {
+            $statsText = @"
+YOUR WEEK ON PLEX
+
+QUIET IN THIS SECTOR
+No watch activity this week.
+Warp Core still engaging. Your recap will be ready when you beam back aboard.
+"@
+        }
+    }
+    else {
+        $most = if ([string]::IsNullOrWhiteSpace([string]$Stats.MostWatched)) { "Nothing this week" } else { [string]$Stats.MostWatched }
+        $statsText = @"
+YOUR WEEK ON PLEX
+
+$($Stats.MoviesWatched) movies watched
+$($Stats.EpisodesStreamed) episodes streamed
+$($Stats.TotalTimeText) total watched
+$($Stats.QualifyingPlays) qualifying plays
+"@
+    }
+
+    $welcomeText = ""
+    $welcomeInfoText = ""
+    if ($RecentAccess) {
+        $welcomeText = @"
+
+WELCOME ABOARD
+Access granted, $($User.FriendlyName).
+Your access to $serverName is live. This is your first $deliveryDay drop.
+"@
+        $welcomeInfoText = @"
+
+$($deliveryDay.ToUpperInvariant()) DROPS
+Every $deliveryDay morning you'll get the newest movies and TV additions.
+
+YOUR PRIVATE READOUT
+As you stream, your weekly email builds a private recap with watch time, movies,
+episodes, and your most-watched title.
+
+JUST YOUR STATS
+Your individual viewing recap stays in your email. Other users don't receive it.
+"@
+    }
+
+    if ($RecentAccess) {
+        return @"
+${plainPreheaderBlock}Hey $($User.FriendlyName),
+$welcomeText
+$releaseMetaText
+$heroLine
+
+$statsText
+$welcomeInfoText
+$footerFeature
+
+Open Plex: $plexWebUrl
+"@
+    }
+
+    return @"
+${plainPreheaderBlock}Hey $($User.FriendlyName),
+
+Your $deliveryDay Plex drop is here.
+$releaseMetaText
+$heroLine
+
+$statsText
+$footerFeature
+
+Open Plex: $plexWebUrl
+"@
+}
+
+function Build-WelcomeHtml {
+    param([object]$User)
+
+    $friendly = HtmlEncode $User.FriendlyName
+
+    $plexUrl = Get-ConfiguredPlexWebUrl
+    $footerServerName = Get-ConfiguredServerName
+    $deliveryDay = Get-ConfiguredDeliveryDay
+
+    return @"
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Welcome aboard</title>
+</head>
+<body style="margin:0;padding:0;background:#0f0f0f;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">Your access to $(HtmlEncode $footerServerName) is live.</div>
+<table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#0f0f0f;">
+<tr>
+<td align="center" style="padding:34px 12px;">
+<table width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:600px;">
+<tr>
+<td style="padding:0 20px 20px;">
+  <div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.8px;">
+    <span style="display:inline-block;vertical-align:middle;">WELCOME ABOARD</span>
+    <img src="cid:icon_welcome" width="18" height="18" alt="Welcome aboard" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-left:6px;">
+  </div>
+  <div style="padding-top:9px;font-size:34px;line-height:1.1;font-weight:800;color:#ffffff;">Access granted, $friendly.</div>
+  <div style="padding-top:12px;font-size:16px;line-height:1.55;color:#a9a9a9;">Your access to $(HtmlEncode $footerServerName) is live. Grab the remote — you’re cleared for departure.</div>
+</td>
+</tr>
+<tr>
+<td style="padding:0 20px 22px;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+    <tr>
+      <td style="padding:20px 22px;">
+        <div style="font-size:13px;color:#e5a00d;font-weight:800;">🍿 $($deliveryDay.ToUpperInvariant()) DROPS</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Every $deliveryDay morning you’ll get the newest movies and TV additions.</div>
+
+        <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">📡 YOUR PRIVATE READOUT</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">As you stream, your weekly email builds a private recap with watch time, movies, episodes, posters, and ratings.</div>
+
+        <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">🔒 JUST YOUR STATS</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The weekly Binge Champion winner and winning aggregate are shared server-wide.</div>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+<tr>
+<td align="center" style="padding:4px 20px 24px;">
+  <a href="$(HtmlEncode $plexUrl)" style="display:inline-block;background:#e5a00d;color:#111111;text-decoration:none;font-size:14px;font-weight:800;padding:14px 28px;border-radius:7px;">OPEN PLEX</a>
+</td>
+</tr>
+<tr>
+<td align="center" style="padding:5px 20px 24px;color:#5f5f5f;font-size:11px;line-height:1.5;">
+  Welcome to $(HtmlEncode $footerServerName).<br>
+  Reply to this email if anything looks broken.
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
+"@
+}
+
+function Build-WelcomePlainText {
+    param(
+        [object]$User,
+        [object]$ReleaseData
+    )
+
+    $serverName = Get-ConfiguredServerName
+    $deliveryDay = Get-ConfiguredDeliveryDay
+    $plexWebUrl = Get-ConfiguredPlexWebUrl
+
+    $plainPreheader = Get-DynamicPreheader -ReleaseData $ReleaseData
+    $plainPreheaderBlock = if ([string]::IsNullOrWhiteSpace($plainPreheader)) {
+        ""
+    }
+    else {
+        $plainPreheader + "`r`n`r`n"
+    }
+
+    return @"
+${plainPreheaderBlock}Welcome aboard, $($User.FriendlyName).
+
+Your access to $serverName is live. Grab the remote — you're cleared for departure.
+
+Your welcome email also includes the current New Releases from the server.
+
+$($deliveryDay.ToUpperInvariant()) DROPS
+Every $deliveryDay morning you'll get the newest movies and TV additions.
+
+YOUR PRIVATE READOUT
+As you stream, your weekly email builds a private recap with watch time, movies,
+episodes, and your most-watched title.
+
+Your individual viewing stats are not shared with other users.
+
+Open Plex: $plexWebUrl
+"@
+}
+
+function Send-NewsletterMail {
+    param(
+        [string]$To,
+        [string]$Subject,
+        [string]$Html,
+        [string]$PlainText,
+        [object[]]$PosterAssets,
+        [AllowNull()][object]$HeroAssets = $null
+    )
+
+    foreach ($name in @("SmtpHost","SmtpPort","FromEmail","FromName")) {
+        Require-ConfigValue $name
+    }
+
+    $smtpUseAuthentication = $true
+    if ($null -ne $Config.PSObject.Properties["SmtpUseAuthentication"]) {
+        $smtpUseAuthentication = [bool]$Config.SmtpUseAuthentication
+    }
+
+    $smtpPassword = ""
+    if ($null -ne $Config.PSObject.Properties["SmtpPassword"]) {
+        $smtpPassword = [string]$Config.SmtpPassword
+    }
+    elseif ($null -ne $Config.PSObject.Properties["SmtpAppPassword"]) {
+        # Backward compatibility with pre-portable PlexWeekly configs.
+        $smtpPassword = [string]$Config.SmtpAppPassword
+    }
+
+    if ($smtpUseAuthentication) {
+        Require-ConfigValue "SmtpUsername"
+        if ([string]::IsNullOrWhiteSpace($smtpPassword)) {
+            throw "SMTP authentication is enabled but SmtpPassword is blank."
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($To)) {
+        throw "Recipient email is blank."
+    }
+
+    $mail = New-Object System.Net.Mail.MailMessage
+    $htmlView = $null
+    $plainView = $null
+    $smtp = $null
+
+    try {
+        $mail.From = New-Object System.Net.Mail.MailAddress([string]$Config.FromEmail, [string]$Config.FromName)
+        $mail.To.Add($To)
+
+        if ($null -ne $Config.PSObject.Properties["ReplyToEmail"] -and -not [string]::IsNullOrWhiteSpace([string]$Config.ReplyToEmail)) {
+            $mail.ReplyToList.Add([string]$Config.ReplyToEmail)
+        }
+
+        $mail.Subject = $Subject
+        $mail.SubjectEncoding = [Text.Encoding]::UTF8
+        $mail.BodyEncoding = [Text.Encoding]::UTF8
+
+        $plainView = [System.Net.Mail.AlternateView]::CreateAlternateViewFromString($PlainText, $null, "text/plain")
+        $htmlView = [System.Net.Mail.AlternateView]::CreateAlternateViewFromString($Html, $null, "text/html")
+
+        foreach ($asset in $PosterAssets) {
+            if (-not (Test-Path $asset.Path)) { continue }
+
+            $cid = [string]$asset.Cid
+            if ([string]::IsNullOrWhiteSpace($cid)) { continue }
+
+            # Do not package unused resources into the message.
+            if ($Html.IndexOf(("cid:" + $cid), [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+                continue
+            }
+
+            # Use a stream instead of a filename-based constructor so the MIME
+            # image part does not inherit a downloadable filename/name parameter.
+            $stream = [System.IO.File]::OpenRead([string]$asset.Path)
+            try {
+                $linked = New-Object System.Net.Mail.LinkedResource($stream, "image/jpeg")
+                $linked.ContentId = $cid
+                $linked.ContentLink = New-Object System.Uri(("cid:" + $cid))
+                $linked.TransferEncoding = [System.Net.Mime.TransferEncoding]::Base64
+                $htmlView.LinkedResources.Add($linked)
+
+                # Ownership of the stream transfers to LinkedResource.
+                $stream = $null
+            }
+            finally {
+                if ($null -ne $stream) {
+                    $stream.Dispose()
+                }
+            }
+        }
+
+        $uiAssets = @(
+            @{ Path = (Join-Path $AssetsDir "movies.gif"); Cid = "icon_movies"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "tv.gif"); Cid = "icon_tv"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "clock.gif"); Cid = "icon_clock"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "trophy.gif"); Cid = "icon_trophy"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "hot.gif"); Cid = "icon_hot"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "trending.gif"); Cid = "icon_trending"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "pending.gif"); Cid = "icon_pending"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "quiet.gif"); Cid = "icon_quiet"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "welcome.gif"); Cid = "icon_welcome"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "action.gif"); Cid = "icon_action"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "watched.gif"); Cid = "icon_watched"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "lockinfo.gif"); Cid = "icon_lockinfo"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "watchlist.gif"); Cid = "icon_binge"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "popcorn.gif"); Cid = "icon_popcorn"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "rt_ripe.png"); Cid = "rt_ripe"; MediaType = "image/png" },
+            @{ Path = (Join-Path $AssetsDir "rt_rotten.png"); Cid = "rt_rotten"; MediaType = "image/png" },
+            @{ Path = (Join-Path $AssetsDir "rt_upright.png"); Cid = "rt_upright"; MediaType = "image/png" },
+            @{ Path = (Join-Path $AssetsDir "rt_spilled.png"); Cid = "rt_spilled"; MediaType = "image/png" },
+            @{ Path = (Join-Path $AssetsDir "imdb.png"); Cid = "icon_imdb"; MediaType = "image/png" }
+        )
+
+        foreach ($uiAsset in $uiAssets) {
+            if (-not (Test-Path $uiAsset.Path)) { continue }
+
+            $cid = [string]$uiAsset.Cid
+            if ([string]::IsNullOrWhiteSpace($cid)) { continue }
+
+            # Only embed UI art that this specific email actually references.
+            if ($Html.IndexOf(("cid:" + $cid), [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+                continue
+            }
+
+            $stream = [System.IO.File]::OpenRead([string]$uiAsset.Path)
+            try {
+                $linked = New-Object System.Net.Mail.LinkedResource(
+                    $stream,
+                    [string]$uiAsset.MediaType
+                )
+                $linked.ContentId = $cid
+                $linked.ContentLink = New-Object System.Uri(("cid:" + $cid))
+                $linked.TransferEncoding = [System.Net.Mime.TransferEncoding]::Base64
+                $htmlView.LinkedResources.Add($linked)
+
+                # LinkedResource will dispose the stream with the message.
+                $stream = $null
+            }
+            finally {
+                if ($null -ne $stream) {
+                    $stream.Dispose()
+                }
+            }
+        }
+
+
+        # Featured hero art is generated locally from Plex/Tautulli metadata.
+        # Attach only the resources the current HTML references.
+        if ($null -ne $HeroAssets) {
+            $heroLinkedAssets = New-Object System.Collections.Generic.List[object]
+
+            if (-not [string]::IsNullOrWhiteSpace([string]$HeroAssets.BannerSrc)) {
+                $heroLinkedAssets.Add([PSCustomObject]@{
+                    RelativePath = [string]$HeroAssets.BannerSrc
+                    Cid = "hero_banner"
+                    MediaType = "image/jpeg"
+                })
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace([string]$HeroAssets.LogoSrc)) {
+                $logoExt = [IO.Path]::GetExtension([string]$HeroAssets.LogoSrc).ToLowerInvariant()
+                if ($logoExt -eq ".png") {
+                    $heroLinkedAssets.Add([PSCustomObject]@{
+                        RelativePath = [string]$HeroAssets.LogoSrc
+                        Cid = "hero_logo"
+                        MediaType = "image/png"
+                    })
+                }
+            }
+
+            foreach ($heroAsset in $heroLinkedAssets) {
+                if ($Html.IndexOf(("cid:" + $heroAsset.Cid), [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+                    continue
+                }
+
+                $heroPath = Join-Path $OutputDir ([string]$heroAsset.RelativePath)
+                if (-not (Test-Path $heroPath)) {
+                    Write-Log "Hero asset missing: $heroPath" "WARN"
+                    continue
+                }
+
+                $stream = [System.IO.File]::OpenRead($heroPath)
+                try {
+                    $linked = New-Object System.Net.Mail.LinkedResource($stream, [string]$heroAsset.MediaType)
+                    $linked.ContentId = [string]$heroAsset.Cid
+                    $linked.ContentLink = New-Object System.Uri(("cid:" + [string]$heroAsset.Cid))
+                    $linked.TransferEncoding = [System.Net.Mime.TransferEncoding]::Base64
+                    $htmlView.LinkedResources.Add($linked)
+                    $stream = $null
+                }
+                finally {
+                    if ($null -ne $stream) { $stream.Dispose() }
+                }
+            }
+        }
+
+        $mail.AlternateViews.Add($plainView)
+        $mail.AlternateViews.Add($htmlView)
+
+        $smtp = New-Object System.Net.Mail.SmtpClient([string]$Config.SmtpHost, [int]$Config.SmtpPort)
+
+        $smtpEnableSsl = $true
+        if ($null -ne $Config.PSObject.Properties["SmtpEnableSsl"]) {
+            $smtpEnableSsl = [bool]$Config.SmtpEnableSsl
+        }
+        $smtp.EnableSsl = $smtpEnableSsl
+
+        if ($smtpUseAuthentication) {
+            $smtp.UseDefaultCredentials = $false
+
+            # Preserve arbitrary SMTP passwords exactly. Google Workspace users
+            # who paste an app password with visual spaces can opt in to space
+            # stripping with SmtpStripPasswordSpaces=true.
+            if ($null -ne $Config.PSObject.Properties["SmtpStripPasswordSpaces"] -and
+                [bool]$Config.SmtpStripPasswordSpaces) {
+                $smtpPassword = $smtpPassword -replace '\s', ''
+            }
+
+            $smtp.Credentials = New-Object System.Net.NetworkCredential(
+                [string]$Config.SmtpUsername,
+                $smtpPassword
+            )
+        }
+        else {
+            $smtp.UseDefaultCredentials = $false
+        }
+
+        $smtp.Send($mail)
+    }
+    finally {
+        if ($null -ne $smtp) { $smtp.Dispose() }
+        if ($null -ne $mail) { $mail.Dispose() }
+    }
+}
+
+function Get-NewsletterUser {
+    param([string]$Id)
+
+    $u = Get-TautulliUser -Id $Id
+
+    $friendly = [string]$u.friendly_name
+    if ([string]::IsNullOrWhiteSpace($friendly)) {
+        $friendly = [string]$u.username
+    }
+    if ([string]::IsNullOrWhiteSpace($friendly)) {
+        $friendly = "there"
+    }
+
+    return [PSCustomObject]@{
+        UserId       = [string]$u.user_id
+        Username     = [string]$u.username
+        FriendlyName = $friendly
+        Email        = [string]$u.email
+        IsActive     = (Safe-Int $u.is_active)
+        DeletedUser  = (Safe-Int $u.deleted_user)
+        DoNotify     = (Safe-Int $u.do_notify)
+    }
+}
+
+function Should-SkipUser {
+    param([object]$User)
+
+    if ($User.DeletedUser -gt 0) { return $true }
+    if ($User.IsActive -eq 0) { return $true }
+    if ($User.DoNotify -eq 0) { return $true }
+    if ([string]::IsNullOrWhiteSpace([string]$User.Email)) { return $true }
+
+    if ($null -ne $Config.PSObject.Properties["ExcludedUserIds"]) {
+        foreach ($id in @($Config.ExcludedUserIds)) {
+            if ([string]$id -eq [string]$User.UserId) { return $true }
+        }
+    }
+
+    if ($null -ne $Config.PSObject.Properties["ExcludedEmails"]) {
+        foreach ($email in @($Config.ExcludedEmails)) {
+            if ([string]$email -ieq [string]$User.Email) { return $true }
+        }
+    }
+
+    return $false
+}
+
+# ---------------------------------------------------------------------------
+# SUBJECT / PREHEADER HELPERS
+# ---------------------------------------------------------------------------
+function Get-DynamicPreheader {
+    param([object]$ReleaseData)
+
+    $movieCount = @($ReleaseData.Movies).Count
+
+    if ($movieCount -le 0) { return "" }
+    if ($movieCount -eq 1) { return "1 new movie!" }
+    return "$movieCount new movies!"
+}
+
+function Get-OneOffWelcomeSubject {
+    param([object]$User)
+    $serverName = Get-ConfiguredServerName
+    return "$($User.FriendlyName), welcome aboard 🖖 | $serverName is ready 🍿"
+}
+
+function Get-NewsletterSubject {
+    param(
+        [object]$User,
+        [bool]$RecentAccess = $false
+    )
+
+    $serverName = Get-ConfiguredServerName
+    $deliveryDay = Get-ConfiguredDeliveryDay
+
+    if ($RecentAccess) {
+        return "$($User.FriendlyName), welcome aboard 🖖 | $serverName is ready 🍿"
+    }
+
+    return "$($User.FriendlyName), your $deliveryDay Plex drop is here 🍿"
+}
+
+# ---------------------------------------------------------------------------
+# MODE: LIST USERS
+# ---------------------------------------------------------------------------
+if ($Mode -eq "ListUsers") {
+    Write-Log "Loading Tautulli users..."
+    $names = Get-TautulliUserNames
+    $rows = New-Object System.Collections.Generic.List[object]
+
+    foreach ($n in $names) {
+        try {
+            $u = Get-NewsletterUser -Id ([string]$n.user_id)
+            $rows.Add([PSCustomObject]@{
+                UserId       = $u.UserId
+                Username     = $u.Username
+                FriendlyName = $u.FriendlyName
+                Email        = $u.Email
+                Active       = $u.IsActive
+                Notify       = $u.DoNotify
+            })
+        }
+        catch {
+            Write-Log "Could not load user $($n.user_id): $($_.Exception.Message)" "WARN"
+        }
+    }
+
+    $rows | Sort-Object FriendlyName | Format-Table -AutoSize
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
+# MODE: SEND ONE-OFF WELCOME
+# Quiet-release substitution is intentionally excluded from this mode.
+# ---------------------------------------------------------------------------
+if ($Mode -eq "SendWelcome") {
+    if ([string]::IsNullOrWhiteSpace($UserId)) {
+        throw "SendWelcome mode requires a user identifier."
+    }
+    if (-not $ConfirmWelcome) {
+        throw "SendWelcome is intentionally locked. Re-run with -ConfirmWelcome."
+    }
+
+    $resolvedUserId = Resolve-TautulliUserId -Identifier $UserId
+    $user = Get-NewsletterUser -Id $resolvedUserId
+    if ([string]::IsNullOrWhiteSpace([string]$user.Email)) {
+        throw "This user does not have an email address available."
+    }
+
+    $accessState = Sync-AccessRoster
+
+    $daysBack = if ($null -ne $Config.PSObject.Properties["DaysBack"]) { Safe-Int $Config.DaysBack } else { 7 }
+    if ($daysBack -lt 1) { $daysBack = 7 }
+
+    $windowEnd = (Get-Date).Date
+    $windowStart = $windowEnd.AddDays(-($daysBack - 1))
+    $windowEndExclusive = $windowEnd.AddDays(1)
+    $afterDate = $windowStart.ToString("yyyy-MM-dd")
+    $beforeDate = $windowEnd.ToString("yyyy-MM-dd")
+    $startLabel = $windowStart.ToString("MMM d")
+    $endLabel = $windowEnd.ToString("MMM d, yyyy")
+    $startEpoch = [int64]([DateTimeOffset]$windowStart).ToUnixTimeSeconds()
+    $endEpochExclusive = [int64]([DateTimeOffset]$windowEndExclusive).ToUnixTimeSeconds()
+
+    Write-Log "Loading current New Releases for the one-off welcome..."
+    $recentItems = Get-RecentItems -StartEpoch $startEpoch -EndEpochExclusive $endEpochExclusive
+    $releaseData = New-ReleaseData -RecentItems $recentItems
+    Add-DesignRatingMetadata -ReleaseData $releaseData
+    Enrich-TvEpisodeMetadata -ReleaseData $releaseData -ContextLabel "One-off TV" -StartEpoch $startEpoch -EndEpochExclusive $endEpochExclusive -CountRecentEpisodes $true
+
+    Write-Log ("Found {0} new movies and {1} TV titles." -f $releaseData.Movies.Count, $releaseData.TV.Count)
+
+    $globalHistory = Get-History -AfterDate $afterDate -BeforeDate $beforeDate
+    $hotRelease = Get-HotNewRelease -ReleaseData $releaseData -GlobalHistory $globalHistory
+    $script:GlobalTrendingStat = Get-GlobalTrendingStat -GlobalHistory $globalHistory
+    $trendingTitle = if ($null -ne $script:GlobalTrendingStat) { [string]$script:GlobalTrendingStat.Title } else { "" }
+
+    $featuredRatingKey = if ($null -ne $hotRelease -and $null -ne $hotRelease.Item) {
+        [string]$hotRelease.Item.PosterRatingKey
+    } else { "" }
+
+    Write-Log "Preparing release posters and hero assets for welcome email..."
+    $posterAssets = Prepare-PosterAssets -ReleaseData $releaseData -FeaturedRatingKey $featuredRatingKey
+    $designHero = Get-DesignHeroAssets -HotRelease $hotRelease
+
+    $welcomeStats = [PSCustomObject]@{
+        MoviesWatched    = 0
+        EpisodesStreamed = 0
+        TotalSeconds     = 0
+        TotalTimeText    = "0 min"
+        MostWatched      = ""
+        QualifyingPlays  = 0
+        MovieItems       = @()
+        EpisodeItems     = @()
+    }
+
+    $html = Build-NewsletterHtml `
+        -User $user `
+        -Stats $welcomeStats `
+        -ReleaseData $releaseData `
+        -HotRelease $hotRelease `
+        -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false `
+        -RecentAccess $true `
+        -WelcomeOnly $true `
+        -QuietReleaseMode $false `
+        -BingeChampion $null `
+        -PosterAssets $posterAssets `
+        -ImageMode "Email" `
+        -StartLabel $startLabel `
+        -EndLabel $endLabel
+
+    $plain = Build-WelcomePlainText -User $user -ReleaseData $releaseData
+    $subject = Get-OneOffWelcomeSubject -User $user
+
+    Write-Log "Sending ONE-OFF welcome to $($user.FriendlyName) <$($user.Email)>..."
+    Send-NewsletterMail `
+        -To $user.Email `
+        -Subject $subject `
+        -Html $html `
+        -PlainText $plain `
+        -PosterAssets $posterAssets `
+        -HeroAssets $designHero
+
+    Mark-UserWelcomed -State $accessState -UserId $user.UserId
+    Write-Log "Welcome email sent successfully to $($user.FriendlyName)."
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
+# COMMON DATA FOR FRIDAY PREVIEW / TEST / SEND
+# ---------------------------------------------------------------------------
+$plexWeeklyState = Get-PlexWeeklyState
+Write-Log ("PlexWeekly age: {0} day(s); warm-up mode: {1}" -f $plexWeeklyState.AgeDays, $plexWeeklyState.IsWarmingUp)
+
+$accessState = if ($Mode -in @("PreviewAll","SendTestAll")) {
+    # The all-variant test harness must not change first-seen/welcome tracking.
+    Get-AccessState
+}
+else {
+    Sync-AccessRoster
+}
+$daysBack = if ($null -ne $Config.PSObject.Properties["DaysBack"]) { Safe-Int $Config.DaysBack } else { 7 }
+if ($daysBack -lt 1) { $daysBack = 7 }
+
+$windowEnd = (Get-Date).Date
+$windowStart = $windowEnd.AddDays(-($daysBack - 1))
+$windowEndExclusive = $windowEnd.AddDays(1)
+$afterDate = $windowStart.ToString("yyyy-MM-dd")
+$beforeDate = $windowEnd.ToString("yyyy-MM-dd")
+$startLabel = $windowStart.ToString("MMM d")
+$endLabel = $windowEnd.ToString("MMM d, yyyy")
+$startEpoch = [int64]([DateTimeOffset]$windowStart).ToUnixTimeSeconds()
+$endEpochExclusive = [int64]([DateTimeOffset]$windowEndExclusive).ToUnixTimeSeconds()
+
+Write-Log "Newsletter window: $afterDate through $beforeDate"
+Write-Log "Loading global recently-added media..."
+$releaseData = New-ReleaseData -RecentItems (Get-RecentItems -StartEpoch $startEpoch -EndEpochExclusive $endEpochExclusive)
+Add-DesignRatingMetadata -ReleaseData $releaseData
+Enrich-TvEpisodeMetadata -ReleaseData $releaseData -ContextLabel "Weekly TV" -StartEpoch $startEpoch -EndEpochExclusive $endEpochExclusive -CountRecentEpisodes $true
+
+$newReleaseCount = @($releaseData.Movies).Count + @($releaseData.TV).Count
+$isQuietReleaseWeek = ($newReleaseCount -eq 0)
+Write-Log ("Found {0} new movies and {1} TV titles; quiet-release mode: {2}." -f $releaseData.Movies.Count, $releaseData.TV.Count, $isQuietReleaseWeek)
+
+$latestReleaseData = $null
+if ($isQuietReleaseWeek) {
+    Write-Log "No weekly additions. Loading Latest Releases fallback..."
+    $latestReleaseData = Get-LatestReleaseData -MovieLimit 4 -TvLimit 4
+    Add-DesignRatingMetadata -ReleaseData $latestReleaseData
+    Enrich-TvEpisodeMetadata -ReleaseData $latestReleaseData -ContextLabel "Latest TV"
+    Write-Log ("Latest Releases: {0} movies and {1} TV titles." -f $latestReleaseData.Movies.Count, $latestReleaseData.TV.Count)
+}
+
+Write-Log "Loading global history for hero, Trending, and Binge Champion..."
+$globalHistory = Get-History -AfterDate $afterDate -BeforeDate $beforeDate
+$hotRelease = Get-HotNewRelease -ReleaseData $releaseData -GlobalHistory $globalHistory
+$script:GlobalTrendingStat = Get-GlobalTrendingStat -GlobalHistory $globalHistory
+$trendingTitle = if ($null -ne $script:GlobalTrendingStat) { [string]$script:GlobalTrendingStat.Title } else { "" }
+$quietHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory
+$bingeChampion = Get-BingeChampion -GlobalHistory $globalHistory
+
+if ($isQuietReleaseWeek -and $null -ne $quietHero -and $null -ne $quietHero.Item) {
+    $quietHeroData = if ([string]$quietHero.Item.Type -eq "movie") {
+        [PSCustomObject]@{ Movies = @($quietHero.Item); TV = @() }
+    } else {
+        [PSCustomObject]@{ Movies = @(); TV = @($quietHero.Item) }
+    }
+    Add-DesignRatingMetadata -ReleaseData $quietHeroData
+}
+
+$activeReleaseData = if ($isQuietReleaseWeek) { $latestReleaseData } else { $releaseData }
+$activeHero = if ($isQuietReleaseWeek) { $quietHero } else { $hotRelease }
+
+$featuredRatingKey = if ($null -ne $activeHero -and $null -ne $activeHero.Item) {
+    [string]$activeHero.Item.PosterRatingKey
+} else { "" }
+
+$trendingPosterItem = $null
+if ($null -ne $script:GlobalTrendingStat -and
+    -not [string]::IsNullOrWhiteSpace([string]$script:GlobalTrendingStat.RatingKey)) {
+    $trendingPosterItem = [PSCustomObject]@{
+        PosterRatingKey = [string]$script:GlobalTrendingStat.RatingKey
+    }
+}
+
+Write-Log "Preparing release posters..."
+$activePosterAssets = Prepare-PosterAssets `
+    -ReleaseData $activeReleaseData `
+    -FeaturedRatingKey $featuredRatingKey `
+    -AdditionalItems @($trendingPosterItem)
+Write-Log "Preparing featured hero artwork..."
+$activeDesignHero = Get-DesignHeroAssets -HotRelease $activeHero
+$designHero = $activeDesignHero
+
+function Build-ForUser {
+    param(
+        [string]$Id,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode
+    )
+
+    $resolvedUserId = Resolve-TautulliUserId -Identifier $Id
+    $user = Get-NewsletterUser -Id $resolvedUserId
+    $recentAccess = Test-UserNeedsWelcome -State $accessState -UserId $user.UserId
+
+    Write-Log "Loading history for $($user.FriendlyName) ($($user.UserId)); recent access: $recentAccess..."
+    $history = Get-History -AfterDate $afterDate -BeforeDate $beforeDate -ForUserId $user.UserId
+    $stats = Get-UserStats -History $history
+    Add-UserStatsMediaMetadata -Stats $stats
+
+    $statsPosterItems = @()
+    if ($null -ne $stats.PSObject.Properties["MovieItems"]) {
+        $statsPosterItems += @($stats.MovieItems)
+    }
+    if ($null -ne $stats.PSObject.Properties["EpisodeItems"]) {
+        $statsPosterItems += @($stats.EpisodeItems)
+    }
+    $statsPosterItems += @($trendingPosterItem)
+
+    $userPosterAssets = Prepare-PosterAssets `
+        -ReleaseData $activeReleaseData `
+        -FeaturedRatingKey $featuredRatingKey `
+        -AdditionalItems $statsPosterItems
+
+    $html = Build-NewsletterHtml `
+        -User $user `
+        -Stats $stats `
+        -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero `
+        -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $plexWeeklyState.IsWarmingUp `
+        -RecentAccess $recentAccess `
+        -WelcomeOnly $false `
+        -QuietReleaseMode $isQuietReleaseWeek `
+        -BingeChampion $bingeChampion `
+        -PosterAssets $userPosterAssets `
+        -ImageMode $ImageMode `
+        -StartLabel $startLabel `
+        -EndLabel $endLabel
+
+    $plain = Build-PlainText `
+        -User $user `
+        -Stats $stats `
+        -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero `
+        -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $plexWeeklyState.IsWarmingUp `
+        -RecentAccess $recentAccess `
+        -QuietReleaseMode $isQuietReleaseWeek `
+        -BingeChampion $bingeChampion `
+        -StartLabel $startLabel `
+        -EndLabel $endLabel
+
+    return [PSCustomObject]@{
+        User         = $user
+        Stats        = $stats
+        RecentAccess = $recentAccess
+        Html         = $html
+        Plain        = $plain
+        PosterAssets = $userPosterAssets
+    }
+}
+
+
+function New-ZeroPreviewStats {
+    return [PSCustomObject]@{
+        MoviesWatched    = 0
+        EpisodesStreamed = 0
+        TotalSeconds     = [int64]0
+        TotalTimeText    = "0m"
+        MostWatched      = ""
+        QualifyingPlays  = 0
+        MovieItems       = @()
+        EpisodeItems     = @()
+    }
+}
+
+function Get-PopulatedPreviewStats {
+    param([object]$RealStats)
+
+    if ($null -ne $RealStats -and (Safe-Int64 $RealStats.TotalSeconds) -gt 0) {
+        Add-UserStatsMediaMetadata -Stats $RealStats
+        return [PSCustomObject]@{
+            Stats    = $RealStats
+            IsSample = $false
+        }
+    }
+
+    $sampleMovies = New-Object System.Collections.Generic.List[object]
+    foreach ($movie in @($activeReleaseData.Movies | Select-Object -First 2)) {
+        $sampleMovies.Add($movie)
+    }
+
+    while ($sampleMovies.Count -lt 2) {
+        $index = $sampleMovies.Count + 1
+        $sampleMovies.Add([PSCustomObject]@{
+            Type="movie"; RatingKey=""; PosterRatingKey="";
+            Title="Sample Movie $index"; Year="";
+            DesignRtCritic=$(if ($index -eq 1) { "87" } else { "66" });
+            DesignRtAudience=$(if ($index -eq 1) { "74" } else { "81" });
+            DesignRtCriticImage="rottentomatoes://image.rating.ripe";
+            DesignRtAudienceImage="rottentomatoes://image.rating.upright"
+        })
+    }
+
+    $sampleEpisodes = New-Object System.Collections.Generic.List[object]
+    foreach ($show in @($activeReleaseData.TV)) {
+        foreach ($episode in @($show.Episodes)) {
+            $sampleEpisodes.Add([PSCustomObject]@{
+                Type="episode"
+                RatingKey=[string]$episode.RatingKey
+                PosterRatingKey=[string]$show.PosterRatingKey
+                ShowTitle=[string]$show.Title
+                EpisodeTitle=[string]$episode.Title
+                Season=Safe-Int $episode.Season
+                Episode=Safe-Int $episode.Episode
+                ImdbRating=[string]$episode.ImdbRating
+            })
+            if ($sampleEpisodes.Count -ge 3) { break }
+        }
+        if ($sampleEpisodes.Count -ge 3) { break }
+    }
+
+    while ($sampleEpisodes.Count -lt 3) {
+        $index = $sampleEpisodes.Count + 1
+        $sampleEpisodes.Add([PSCustomObject]@{
+            Type="episode"; RatingKey=""; PosterRatingKey="";
+            ShowTitle="Sample Series"; EpisodeTitle="Sample Episode $index";
+            Season=1; Episode=$index; ImdbRating=$(if ($index -eq 1) { "8.5" } elseif ($index -eq 2) { "8.1" } else { "7.9" })
+        })
+    }
+
+    $sampleMost = if ($sampleMovies.Count -gt 0) {
+        [string]$sampleMovies[0].Title
+    } else {
+        "Example title"
+    }
+
+    return [PSCustomObject]@{
+        Stats = [PSCustomObject]@{
+            MoviesWatched    = 2
+            EpisodesStreamed = 3
+            QualifyingPlays  = 5
+            TotalSeconds     = [int64]10980
+            TotalTimeText    = "3h 3m"
+            MostWatched      = $sampleMost
+            MovieItems       = $sampleMovies.ToArray()
+            EpisodeItems     = $sampleEpisodes.ToArray()
+        }
+        IsSample = $true
+    }
+}
+function Build-AllEmailVariants {
+    param(
+        [string]$Id,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode
+    )
+
+    $resolvedUserId = Resolve-TautulliUserId -Identifier $Id
+    $user = Get-NewsletterUser -Id $resolvedUserId
+
+    Write-Log "Loading real history for six-state email regression: $($user.FriendlyName)..."
+    $history = Get-History -AfterDate $afterDate -BeforeDate $beforeDate -ForUserId $user.UserId
+    $realStats = Get-UserStats -History $history
+    Add-UserStatsMediaMetadata -Stats $realStats
+    $zeroStats = New-ZeroPreviewStats
+    $populatedVariant = Get-PopulatedPreviewStats -RealStats $realStats
+    Add-UserStatsMediaMetadata -Stats $populatedVariant.Stats
+
+    $populatedPosterItems = @($trendingPosterItem)
+    if ($null -ne $populatedVariant.Stats.PSObject.Properties["MovieItems"]) {
+        $populatedPosterItems += @($populatedVariant.Stats.MovieItems)
+    }
+    if ($null -ne $populatedVariant.Stats.PSObject.Properties["EpisodeItems"]) {
+        $populatedPosterItems += @($populatedVariant.Stats.EpisodeItems)
+    }
+
+    $populatedPosterAssets = Prepare-PosterAssets `
+        -ReleaseData $activeReleaseData `
+        -FeaturedRatingKey $featuredRatingKey `
+        -AdditionalItems $populatedPosterItems
+
+    # One-off welcome intentionally does NOT use quiet-release substitution.
+    $oneOffFeaturedRatingKey = if ($null -ne $hotRelease -and $null -ne $hotRelease.Item) {
+        [string]$hotRelease.Item.PosterRatingKey
+    } else { "" }
+
+    $oneOffPosterAssets = $activePosterAssets
+    $oneOffDesignHero = $activeDesignHero
+
+    if ($isQuietReleaseWeek) {
+        Write-Log "Preparing one-off welcome assets without quiet-week substitution..."
+        $oneOffPosterAssets = Prepare-PosterAssets `
+            -ReleaseData $releaseData `
+            -FeaturedRatingKey $oneOffFeaturedRatingKey `
+            -AdditionalItems @($trendingPosterItem)
+        $oneOffDesignHero = Get-DesignHeroAssets -HotRelease $hotRelease
+    }
+
+    # Build-NewsletterHtml reads the prepared hero from script scope. Use the
+    # one-off hero for the manual welcome, then restore the scheduled hero.
+    $script:designHero = $oneOffDesignHero
+
+    $oneOffHtml = Build-NewsletterHtml `
+        -User $user `
+        -Stats $zeroStats `
+        -ReleaseData $releaseData `
+        -HotRelease $hotRelease `
+        -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false `
+        -RecentAccess $true `
+        -WelcomeOnly $true `
+        -QuietReleaseMode $false `
+        -BingeChampion $null `
+        -PosterAssets $oneOffPosterAssets `
+        -ImageMode $ImageMode `
+        -StartLabel $startLabel `
+        -EndLabel $endLabel
+
+    $script:designHero = $activeDesignHero
+
+    # 1) New user, first scheduled Friday, no viewing history:
+    # onboarding replaces empty stats and no quiet/warm-up block appears.
+    $newNoHistoryHtml = Build-NewsletterHtml `
+        -User $user `
+        -Stats $zeroStats `
+        -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero `
+        -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false `
+        -RecentAccess $true `
+        -WelcomeOnly $false `
+        -QuietReleaseMode $isQuietReleaseWeek `
+        -BingeChampion $bingeChampion `
+        -PosterAssets $activePosterAssets `
+        -ImageMode $ImageMode `
+        -StartLabel $startLabel `
+        -EndLabel $endLabel
+
+    # 2) New user with activity: personalized stats are visible.
+    $newWithHistoryHtml = Build-NewsletterHtml `
+        -User $user `
+        -Stats $populatedVariant.Stats `
+        -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero `
+        -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false `
+        -RecentAccess $true `
+        -WelcomeOnly $false `
+        -QuietReleaseMode $isQuietReleaseWeek `
+        -BingeChampion $bingeChampion `
+        -PosterAssets $populatedPosterAssets `
+        -ImageMode $ImageMode `
+        -StartLabel $startLabel `
+        -EndLabel $endLabel
+
+    # 3) Established active user: always force a populated, non-warm-up state.
+    # If the selected user has no activity, sample stats exercise the layout.
+    $normalHtml = Build-NewsletterHtml `
+        -User $user `
+        -Stats $populatedVariant.Stats `
+        -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero `
+        -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false `
+        -RecentAccess $false `
+        -WelcomeOnly $false `
+        -QuietReleaseMode $isQuietReleaseWeek `
+        -BingeChampion $bingeChampion `
+        -PosterAssets $populatedPosterAssets `
+        -ImageMode $ImageMode `
+        -StartLabel $startLabel `
+        -EndLabel $endLabel
+
+    # 4) Established user with zero activity after the initial warm-up period.
+    $quietHtml = Build-NewsletterHtml `
+        -User $user `
+        -Stats $zeroStats `
+        -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero `
+        -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false `
+        -RecentAccess $false `
+        -WelcomeOnly $false `
+        -QuietReleaseMode $isQuietReleaseWeek `
+        -BingeChampion $bingeChampion `
+        -PosterAssets $activePosterAssets `
+        -ImageMode $ImageMode `
+        -StartLabel $startLabel `
+        -EndLabel $endLabel
+
+    # 5) Established user with zero activity during PlexWeekly's first 7 days.
+    $warmupHtml = Build-NewsletterHtml `
+        -User $user `
+        -Stats $zeroStats `
+        -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero `
+        -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $true `
+        -RecentAccess $false `
+        -WelcomeOnly $false `
+        -QuietReleaseMode $isQuietReleaseWeek `
+        -BingeChampion $bingeChampion `
+        -PosterAssets $activePosterAssets `
+        -ImageMode $ImageMode `
+        -StartLabel $startLabel `
+        -EndLabel $endLabel
+
+    $oneOffPlain = Build-WelcomePlainText -User $user -ReleaseData $releaseData
+
+    $newNoHistoryPlain = Build-PlainText `
+        -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false -RecentAccess $true `
+        -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
+        -StartLabel $startLabel -EndLabel $endLabel
+
+    $newWithHistoryPlain = Build-PlainText `
+        -User $user -Stats $populatedVariant.Stats -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false -RecentAccess $true `
+        -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
+        -StartLabel $startLabel -EndLabel $endLabel
+
+    $normalPlain = Build-PlainText `
+        -User $user -Stats $populatedVariant.Stats -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false -RecentAccess $false `
+        -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
+        -StartLabel $startLabel -EndLabel $endLabel
+
+    $quietPlain = Build-PlainText `
+        -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false -RecentAccess $false `
+        -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
+        -StartLabel $startLabel -EndLabel $endLabel
+
+    $warmupPlain = Build-PlainText `
+        -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $true -RecentAccess $false `
+        -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
+        -StartLabel $startLabel -EndLabel $endLabel
+
+    $oneOffSubject = Get-OneOffWelcomeSubject -User $user
+    $newSubject = Get-NewsletterSubject -User $user -RecentAccess $true
+    $normalSubject = Get-NewsletterSubject -User $user -RecentAccess $false
+
+    return [PSCustomObject]@{
+        User = $user
+        RealStats = $realStats
+        PopulatedStatsAreSample = [bool]$populatedVariant.IsSample
+        Variants = @(
+            [PSCustomObject]@{
+                Key="manual-welcome"
+                Label="Manual one-off welcome"
+                Subject=$oneOffSubject
+                Html=$oneOffHtml
+                Plain=$oneOffPlain
+                PosterAssets=$oneOffPosterAssets
+                HeroAssets=$oneOffDesignHero
+            },
+            [PSCustomObject]@{
+                Key="new-scheduled-no-history"
+                Label="New user first scheduled newsletter — no history"
+                Subject=$newSubject
+                Html=$newNoHistoryHtml
+                Plain=$newNoHistoryPlain
+                PosterAssets=$activePosterAssets
+                HeroAssets=$activeDesignHero
+            },
+            [PSCustomObject]@{
+                Key="new-scheduled-with-history"
+                Label="New user first scheduled newsletter — with history"
+                Subject=$newSubject
+                Html=$newWithHistoryHtml
+                Plain=$newWithHistoryPlain
+                PosterAssets=$populatedPosterAssets
+                HeroAssets=$activeDesignHero
+            },
+            [PSCustomObject]@{
+                Key="normal-newsletter"
+                Label="Established user — normal newsletter with activity"
+                Subject=$normalSubject
+                Html=$normalHtml
+                Plain=$normalPlain
+                PosterAssets=$populatedPosterAssets
+                HeroAssets=$activeDesignHero
+            },
+            [PSCustomObject]@{
+                Key="established-quiet"
+                Label="Established user — quiet / no watch activity"
+                Subject=$normalSubject
+                Html=$quietHtml
+                Plain=$quietPlain
+                PosterAssets=$activePosterAssets
+                HeroAssets=$activeDesignHero
+            },
+            [PSCustomObject]@{
+                Key="established-warmup"
+                Label="Established user — stats warming up"
+                Subject=$normalSubject
+                Html=$warmupHtml
+                Plain=$warmupPlain
+                PosterAssets=$activePosterAssets
+                HeroAssets=$activeDesignHero
+            }
+        )
+    }
+}
+
+
+# ---------------------------------------------------------------------------
+# MODE: PREVIEW ALL EMAIL TYPES
+# ---------------------------------------------------------------------------
+if ($Mode -eq "PreviewAll") {
+    if ([string]::IsNullOrWhiteSpace($UserId)) {
+        throw "PreviewAll mode requires a user identifier. Run ./plexweekly.sh list-users first."
+    }
+
+    $bundle = Build-AllEmailVariants -Id $UserId -ImageMode "Preview"
+    $previewDir = $OutputDir
+
+    $files = @(
+        "preview-all-01-manual-welcome.html",
+        "preview-all-02-new-user-no-history.html",
+        "preview-all-03-new-user-with-history.html",
+        "preview-all-04-normal-newsletter.html",
+        "preview-all-05-established-quiet.html",
+        "preview-all-06-established-warmup.html"
+    )
+
+    for ($i = 0; $i -lt $bundle.Variants.Count; $i++) {
+        Set-Content -Path (Join-Path $previewDir $files[$i]) -Value $bundle.Variants[$i].Html -Encoding UTF8
+    }
+
+    $serverName = HtmlEncode (Get-ConfiguredServerName)
+    $userName = HtmlEncode $bundle.User.FriendlyName
+    $sampleNote = if ($bundle.PopulatedStatsAreSample) {
+        "The selected user has no activity in this window, so previews 03 and 04 use sample stats only to exercise the populated-stat layouts. Previews 05 and 06 intentionally remain at zero activity."
+    } else {
+        "Previews 03 and 04 use the selected user's real current-window watch statistics. Previews 05 and 06 intentionally force zero activity."
+    }
+
+    $cards = New-Object System.Text.StringBuilder
+    for ($i = 0; $i -lt $bundle.Variants.Count; $i++) {
+        $variant = $bundle.Variants[$i]
+        [void]$cards.AppendLine('<div class="card">')
+        [void]$cards.AppendLine('<div class="title">' + (HtmlEncode $variant.Label) + '</div>')
+        [void]$cards.AppendLine('<div class="subject">Subject: ' + (HtmlEncode $variant.Subject) + '</div>')
+        [void]$cards.AppendLine('<a class="btn" href="' + $files[$i] + '">Open preview</a>')
+        [void]$cards.AppendLine('</div>')
+    }
+
+    $indexHtml = @"
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PlexWeekly — All Email Types</title>
+<style>
+body{margin:0;background:#0f0f0f;color:#fff;font-family:Arial,Helvetica,sans-serif;padding:32px 18px}.wrap{max-width:900px;margin:auto}.eyebrow{color:#e5a00d;font-size:12px;font-weight:800;letter-spacing:1.5px}.card{margin-top:14px;padding:18px 20px;background:#181818;border:1px solid #2b2b2b;border-radius:10px}.title{font-size:18px;font-weight:800}.subject{color:#aaa;margin-top:7px;font-size:13px;line-height:1.45}.btn{display:inline-block;margin-top:13px;background:#e5a00d;color:#111;text-decoration:none;font-weight:800;padding:10px 15px;border-radius:7px}.note{margin-top:20px;color:#999;font-size:12px;line-height:1.55;border-left:3px solid #e5a00d;padding-left:12px}.meta{color:#888;font-size:13px;line-height:1.55;margin-top:8px}
+</style></head><body><div class="wrap">
+<div class="eyebrow">PLEXWEEKLY — ALL EMAIL TYPES</div>
+<h1 style="margin:8px 0 0;font-size:30px;">$serverName · $userName</h1>
+<div class="meta">Window: $(HtmlEncode $startLabel) – $(HtmlEncode $endLabel)<br>Release mode: $(if ($isQuietReleaseWeek) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' })</div>
+$($cards.ToString())
+<div class="note">$(HtmlEncode $sampleNote)</div>
+<div class="note">Local HTML only. No email was sent. No welcome timestamp was written. Resize a preview below 620px to inspect the mobile hero.</div>
+</div></body></html>
+"@
+
+    $indexPath = Join-Path $previewDir "preview-all-00-INDEX.html"
+    Set-Content -Path $indexPath -Value $indexHtml -Encoding UTF8
+
+    Write-Host ""
+    Write-Host "Created all-email-type preview: $indexPath" -ForegroundColor Green
+    Write-Host "No email was sent and access-state.json was not modified by this mode."
+    $publicUrl = Get-PreviewPublicUrl -Path $indexPath
+    if (-not [string]::IsNullOrWhiteSpace($publicUrl)) {
+        Write-Host "Browser URL: $publicUrl" -ForegroundColor Cyan
+    }
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
+# MODE: SEND ALL EMAIL TYPES TO TESTEMAIL ONLY
+# ---------------------------------------------------------------------------
+if ($Mode -eq "SendTestAll") {
+    if ([string]::IsNullOrWhiteSpace($UserId)) {
+        throw "SendTestAll mode requires a user identifier."
+    }
+    Require-ConfigValue "TestEmail"
+
+    $bundle = Build-AllEmailVariants -Id $UserId -ImageMode "Email"
+    $delaySeconds = 2
+    if ($null -ne $Config.PSObject.Properties["TestSendDelaySeconds"]) {
+        $delaySeconds = [Math]::Max(0, (Safe-Int $Config.TestSendDelaySeconds))
+    }
+
+    for ($i = 0; $i -lt $bundle.Variants.Count; $i++) {
+        $variant = $bundle.Variants[$i]
+        $testSubject = "[PlexWeekly TEST $($i + 1)/$($bundle.Variants.Count)] $($variant.Subject)"
+        Write-Log "Sending $($variant.Label) test to $($Config.TestEmail)..."
+        Send-NewsletterMail `
+            -To ([string]$Config.TestEmail) `
+            -Subject $testSubject `
+            -Html $variant.Html `
+            -PlainText $variant.Plain `
+            -PosterAssets $variant.PosterAssets `
+            -HeroAssets $variant.HeroAssets
+
+        if ($delaySeconds -gt 0 -and $i -lt ($bundle.Variants.Count - 1)) {
+            Start-Sleep -Seconds $delaySeconds
+        }
+    }
+
+    Write-Log "All six email-state tests were sent to TestEmail only."
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
+# MODE: PREVIEW
+# ---------------------------------------------------------------------------
+if ($Mode -eq "Preview") {
+    if ([string]::IsNullOrWhiteSpace($UserId)) {
+        throw "Preview mode requires a user identifier. Run ./plexweekly.sh list-users first."
+    }
+
+    $result = Build-ForUser -Id $UserId -ImageMode "Preview"
+    $safeName = Get-SafeFilePart $result.User.FriendlyName
+    $previewPath = Join-Path $OutputDir ("preview_{0}.html" -f $safeName)
+    Set-Content -Path $previewPath -Value $result.Html -Encoding UTF8
+
+    Write-Host ""
+    Write-Host "PLEXWEEKLY PREVIEW"
+    Write-Host "------------------"
+    Write-Host ("User:              {0}" -f $result.User.FriendlyName)
+    Write-Host ("Release mode:      {0}" -f $(if ($isQuietReleaseWeek) { "QUIET" } else { "NORMAL" }))
+    Write-Host ("Movies watched:    {0}" -f $result.Stats.MoviesWatched)
+    Write-Host ("Episodes streamed: {0}" -f $result.Stats.EpisodesStreamed)
+    Write-Host ("Watch time:        {0}" -f $result.Stats.TotalTimeText)
+    Write-Host ("Recent access:     {0}" -f $result.RecentAccess)
+    Write-Host ""
+    Write-Host "Preview created: $previewPath"
+    $publicUrl = Get-PreviewPublicUrl -Path $previewPath
+    if (-not [string]::IsNullOrWhiteSpace($publicUrl)) {
+        Write-Host "Browser URL: $publicUrl" -ForegroundColor Cyan
+    }
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
+# MODE: SEND TEST
+# ---------------------------------------------------------------------------
+if ($Mode -eq "SendTest") {
+    if ([string]::IsNullOrWhiteSpace($UserId)) {
+        throw "SendTest mode requires a user identifier."
+    }
+    Require-ConfigValue "TestEmail"
+
+    $result = Build-ForUser -Id $UserId -ImageMode "Email"
+    $subject = Get-NewsletterSubject -User $result.User -RecentAccess $result.RecentAccess
+
+    Write-Log "Sending TEST version for $($result.User.FriendlyName) to $($Config.TestEmail)..."
+    Send-NewsletterMail `
+        -To ([string]$Config.TestEmail) `
+        -Subject $subject `
+        -Html $result.Html `
+        -PlainText $result.Plain `
+        -PosterAssets $result.PosterAssets `
+        -HeroAssets $activeDesignHero
+
+    Write-Log "Test email sent successfully."
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
+# MODE: SEND ALL
+# ---------------------------------------------------------------------------
+if ($Mode -eq "SendAll") {
+    if (-not $ConfirmSendAll) {
+        throw "SendAll is intentionally locked. Re-run with -ConfirmSendAll after reviewing a test email."
+    }
+
+    $names = Get-TautulliUserNames
+    $sent = 0
+    $skipped = 0
+    $failed = 0
+
+    foreach ($n in $names) {
+        try {
+            $user = Get-NewsletterUser -Id ([string]$n.user_id)
+
+            if (Should-SkipUser -User $user) {
+                Write-Log "Skipping $($user.FriendlyName) ($($user.UserId))."
+                $skipped++
+                continue
+            }
+
+            $result = Build-ForUser -Id $user.UserId -ImageMode "Email"
+            $subject = Get-NewsletterSubject -User $result.User -RecentAccess $result.RecentAccess
+
+            Write-Log "Sending to $($result.User.FriendlyName) <$($result.User.Email)>..."
+            Send-NewsletterMail `
+                -To $result.User.Email `
+                -Subject $subject `
+                -Html $result.Html `
+                -PlainText $result.Plain `
+                -PosterAssets $result.PosterAssets `
+                -HeroAssets $activeDesignHero
+
+            if ($result.RecentAccess) {
+                Mark-UserWelcomed -State $accessState -UserId $result.User.UserId
+            }
+
+            $sent++
+            $sendDelay = 10
+            if ($null -ne $Config.PSObject.Properties["SendDelaySeconds"]) {
+                $sendDelay = [Math]::Max(0, (Safe-Int $Config.SendDelaySeconds))
+            }
+            if ($sendDelay -gt 0) {
+                Write-Log "Pausing $sendDelay seconds before the next recipient..."
+                Start-Sleep -Seconds $sendDelay
+            }
+        }
+        catch {
+            $failed++
+            Write-Log "Send failed for user $($n.user_id): $($_.Exception.Message)" "ERROR"
+        }
+    }
+
+    Write-Host ""
+    Write-Host "Finished."
+    Write-Host ("Sent:    {0}" -f $sent)
+    Write-Host ("Skipped: {0}" -f $skipped)
+    Write-Host ("Failed:  {0}" -f $failed)
+
+    if ($failed -gt 0) { exit 2 }
+    exit 0
+}
+
+throw "Unsupported mode: $Mode"

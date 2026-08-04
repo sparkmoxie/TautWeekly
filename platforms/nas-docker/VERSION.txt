@@ -1,0 +1,3 @@
+PlexWeekly NAS Portable v1.0.7
+Platforms: QNAP, Unraid, Docker Desktop, generic Linux Docker
+Hotfix: preserve array semantics for exactly one adaptive movie or episode

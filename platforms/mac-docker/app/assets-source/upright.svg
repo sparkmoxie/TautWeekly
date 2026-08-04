@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<svg id="svg2" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://www.w3.org/2000/svg" height="140" width="106.25" version="1.1" xmlns:cc="http://creativecommons.org/ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" viewBox="0 0 106.25 140">
+ <metadata id="metadata8">
+  <rdf:RDF>
+   <cc:Work rdf:about="">
+    <dc:format>image/svg+xml</dc:format>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:title/>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <g id="layer2">
+  <path id="path3462" d="m2.7266 39.537c-0.4706-21.981 100.88-25.089 100.88-0.42l-10.697 78.443c-7.6047 26.86-72.064 27.007-79.07 0.20974z" fill="#fa3106"/>
+ </g>
+ <g id="layer3" fill="#fff">
+  <path id="path3505" d="m8.8089 51.911 9.0181 66.639c3.4723 4.5152 8.4981 7.3839 9.6478 8.0224l-6.921-68.576c-3.498-1.41-9.881-4.579-11.745-6.083z"/>
+  <path id="path3551" d="m28.629 59.776 5.4531 68.898c4.9254 2.6518 11.039 3.391 15.73 3.5655l-1.2584-70.366c-3.4138-0.02304-13.82-0.6415-19.925-2.0974z"/>
+  <path id="path3553" d="m97.632 52.121-9.0186 66.643c-3.4723 4.5152-8.4981 7.3839-9.6478 8.0224l6.9213-68.583c3.4983-1.41 9.8807-4.5791 11.745-6.0823z"/>
+  <path id="path3555" d="m77.812 59.986-5.4531 68.898c-4.9254 2.6518-11.039 3.391-15.73 3.5655l1.2584-70.366c3.4138-0.02304 13.82-0.6415 19.925-2.0974z"/>
+ </g>
+ <g id="layer1" fill="#ffd600">
+  <circle id="path3343" cy="31.252" cx="13.213" r="6.8164"/>
+  <circle id="circle3359" cx="22.022" cy="27.687" r="6.6067"/>
+  <circle id="circle3361" cy="19.769" cx="30.359" r="5.925"/>
+  <circle id="circle3363" cx="34.973" cy="15.155" r="6.0299"/>
+  <circle id="circle3365" cy="17.095" cx="45.093" r="4.9288"/>
+  <circle id="circle3367" cx="51.123" cy="9.5972" r="6.2396"/>
+  <circle id="circle3369" cy="9.3875" cx="61.19" r="6.5542"/>
+  <circle id="circle3371" cx="67.954" cy="13.635" r="4.9288"/>
+  <circle id="circle3373" cy="17.672" cx="76.081" r="5.925"/>
+  <circle id="circle3377" cy="22.706" cx="78.913" r="4.352"/>
+  <circle id="circle3379" cy="26.324" cx="83.475" r="5.2434"/>
+  <circle id="circle3381" cy="34.398" cx="88.194" r="5.7677"/>
+  <path id="path3383" d="m87.355 35.447c5.7892 2.7988 1.3522-2.2127 10.696 2.0974-9.574 15.338-74.774 16.892-90.291 0.525l-0.2095-3.985 31.04-17.094 22.862-6.606 15.521 9.962z"/>
+ </g>
+</svg>

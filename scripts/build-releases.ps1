@@ -1,0 +1,111 @@
+[CmdletBinding()]
+param(
+    [string]$Version = '',
+    [string]$Root = ''
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($Root)) { $Root = Split-Path -Parent $PSScriptRoot }
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME -replace '^v','' } else { 'dev' }
+}
+$Root = [IO.Path]::GetFullPath($Root)
+
+if ($Version -notmatch '^[0-9A-Za-z][0-9A-Za-z._-]*$') {
+    throw "Version contains unsupported characters: $Version"
+}
+
+$dist = Join-Path $Root 'dist'
+$staging = Join-Path $Root 'release-staging'
+foreach ($path in @($dist,$staging)) {
+    $full = [IO.Path]::GetFullPath($path)
+    if (-not $full.StartsWith($Root + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to clean a path outside the repository: $full"
+    }
+    if (Test-Path -LiteralPath $full) { Remove-Item -LiteralPath $full -Recurse -Force }
+    New-Item -ItemType Directory -Path $full | Out-Null
+}
+
+function Copy-Platform {
+    param(
+        [string]$SourceName,
+        [string]$FolderName,
+        [string]$GuidePath
+    )
+    $source = Join-Path (Join-Path $Root 'platforms') $SourceName
+    $versionLine = [IO.File]::ReadLines((Join-Path $source 'VERSION.txt')) | Select-Object -First 1
+    if ($versionLine -notmatch '\bv(?<baseline>[0-9]+(?:\.[0-9]+)+)\b') {
+        throw "Unable to derive the $SourceName source baseline from VERSION.txt: $versionLine"
+    }
+    $baseline = $Matches['baseline']
+    $destination = Join-Path $staging $FolderName
+    New-Item -ItemType Directory -Path $destination | Out-Null
+    Get-ChildItem -LiteralPath $source -Force | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force
+    }
+    Copy-Item -LiteralPath (Join-Path $Root $GuidePath) -Destination (Join-Path $destination 'README.md') -Force
+    Copy-Item -LiteralPath (Join-Path $Root 'LICENSE') -Destination $destination -Force
+    Copy-Item -LiteralPath (Join-Path $Root 'THIRD_PARTY_NOTICES.md') -Destination $destination -Force
+    $metadata = @(
+        'PlexWeekly public release'
+        "Repository version: $Version"
+        "Platform source baseline: $Baseline"
+        'Source: https://github.com/sparkmoxie/PlexWeekly'
+        'Credentials and runtime state are intentionally excluded.'
+    ) -join [Environment]::NewLine
+    [IO.File]::WriteAllText((Join-Path $destination 'RELEASE-METADATA.txt'), $metadata + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    return $destination
+}
+
+function New-Zip {
+    param([string]$FolderName, [string]$ArchiveName)
+    $archive = Join-Path $dist $ArchiveName
+    Compress-Archive -LiteralPath (Join-Path $staging $FolderName) -DestinationPath $archive -CompressionLevel Optimal
+    return $archive
+}
+
+function New-TarGz {
+    param([string]$FolderName, [string]$ArchiveName)
+    $archive = Join-Path $dist $ArchiveName
+    & tar -czf $archive -C $staging $FolderName
+    if ($LASTEXITCODE -ne 0) { throw "tar failed while creating $ArchiveName" }
+    return $archive
+}
+
+try {
+    [void](Copy-Platform -SourceName 'windows' -FolderName 'PlexWeekly-windows' -GuidePath 'docs/windows/README.md')
+    [void](Copy-Platform -SourceName 'nas-docker' -FolderName 'PlexWeekly-nas-docker' -GuidePath 'docs/nas-docker/README.md')
+    [void](Copy-Platform -SourceName 'mac-docker' -FolderName 'PlexWeekly-mac-docker' -GuidePath 'docs/mac/README.md')
+
+    $forbidden = Get-ChildItem -LiteralPath $staging -Force -Recurse | Where-Object {
+        ($_.PSIsContainer -and $_.Name -in @('logs','output')) -or
+        (-not $_.PSIsContainer -and $_.Name -in @('config.json','.env','state.json','access-state.json','scheduler-state.json')) -or
+        (-not $_.PSIsContainer -and $_.Extension -eq '.log')
+    }
+    if ($forbidden) {
+        throw "Forbidden runtime material entered release staging: $($forbidden.FullName -join ', ')"
+    }
+
+    $archives = @(
+        (New-Zip -FolderName 'PlexWeekly-windows' -ArchiveName 'PlexWeekly-windows.zip')
+        (New-Zip -FolderName 'PlexWeekly-nas-docker' -ArchiveName 'PlexWeekly-nas-docker.zip')
+        (New-TarGz -FolderName 'PlexWeekly-nas-docker' -ArchiveName 'PlexWeekly-nas-docker.tar.gz')
+        (New-Zip -FolderName 'PlexWeekly-mac-docker' -ArchiveName 'PlexWeekly-mac-docker.zip')
+        (New-TarGz -FolderName 'PlexWeekly-mac-docker' -ArchiveName 'PlexWeekly-mac-docker.tar.gz')
+    )
+
+    $checksumLines = foreach ($archive in ($archives | Sort-Object)) {
+        $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+        "$hash  $([IO.Path]::GetFileName($archive))"
+    }
+    [IO.File]::WriteAllLines((Join-Path $dist 'SHA256SUMS.txt'), $checksumLines, [Text.UTF8Encoding]::new($false))
+
+    Write-Host "Built PlexWeekly $Version release artifacts:"
+    Get-ChildItem -LiteralPath $dist -File | Sort-Object Name | ForEach-Object {
+        Write-Host ("  {0} ({1:N0} bytes)" -f $_.Name,$_.Length)
+    }
+}
+finally {
+    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+}

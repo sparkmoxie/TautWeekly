@@ -1,0 +1,214 @@
+<div align="center">
+
+# PlexWeekly
+
+**A portable, preview-first weekly Plex activity newsletter powered by Tautulli.**
+
+[![CI](https://github.com/sparkmoxie/PlexWeekly/actions/workflows/ci.yml/badge.svg)](https://github.com/sparkmoxie/PlexWeekly/actions/workflows/ci.yml)
+[![Pages](https://github.com/sparkmoxie/PlexWeekly/actions/workflows/pages.yml/badge.svg)](https://sparkmoxie.github.io/PlexWeekly/)
+[![License: MIT](https://img.shields.io/badge/code%20license-MIT-e5a00d.svg)](LICENSE)
+![Windows](https://img.shields.io/badge/Windows-PowerShell%205.1-0078d4?logo=windows)
+![NAS](https://img.shields.io/badge/NAS-Docker%20Compose-2496ed?logo=docker)
+![macOS](https://img.shields.io/badge/macOS-Docker%20Desktop-000000?logo=apple)
+
+Generate polished activity, welcome, quiet-week, and milestone emails; inspect
+them locally; send controlled tests; then schedule production delivery.
+
+<img src="platforms/windows/assets/trending.gif" alt="Animated upward-trend emoji" width="104">
+
+[Live documentation](https://sparkmoxie.github.io/PlexWeekly/) ·
+[Release downloads](#release-downloads) ·
+[Security](SECURITY.md) ·
+[Contributing](CONTRIBUTING.md)
+
+</div>
+
+> [!WARNING]
+> PlexWeekly configuration contains an SMTP credential and Tautulli API key,
+> and may contain a Plex token. Never commit `config.json`, `.env`, state,
+> logs, previews, generated newsletters, or backups. Preview first and use a
+> controlled test recipient before enabling a schedule or `SendAll`.
+
+> [!IMPORTANT]
+> Scheduled weekly emails disclose the Binge Champion winner's Tautulli
+> friendly name, qualifying-play count, and watch time to every newsletter
+> recipient. One-off welcome emails do not include the award. Review the user
+> roster, friendly names, and recipient expectations before production sends.
+
+## Choose a platform
+
+| | Windows portable | NAS / Docker | macOS / Docker Desktop |
+|---|---|---|---|
+| Source baseline | 1.6.11 | 1.0.7 | 1.0.3 |
+| Runtime | Windows PowerShell 5.1+ | PowerShell 7.2+ in Docker | PowerShell 7.2+ in Docker Desktop |
+| Scheduler | Windows Task Scheduler | Built-in container scheduler | Built-in container scheduler |
+| Preview | Local generated HTML | Port 8787, configurable bind | Localhost port 8787 by default |
+| Best fit | Always-on Windows host | QNAP, Unraid, Linux NAS, Docker host | Intel or Apple silicon Mac |
+| Interactive walkthrough | [Open Windows](https://sparkmoxie.github.io/PlexWeekly/windows/) | [Open NAS / Docker](https://sparkmoxie.github.io/PlexWeekly/nas-docker/) | [Open macOS](https://sparkmoxie.github.io/PlexWeekly/mac/) |
+| Install guide | [Windows](docs/windows/README.md) | [NAS / Docker](docs/nas-docker/README.md) | [macOS](docs/mac/README.md) |
+| Source | [`platforms/windows`](platforms/windows) | [`platforms/nas-docker`](platforms/nas-docker) | [`platforms/mac-docker`](platforms/mac-docker) |
+
+All three distributions preserve the supplied working renderer and safety
+gates. Their setup and lifecycle wrappers are platform-specific.
+
+## Current newsletter behavior
+
+- One to three watched movies render as itemized rows with a mini poster,
+  title, formatted genres, and Rotten Tomatoes critic and audience scores.
+- One to three streamed episodes render with show artwork, season/episode
+  labels, episode titles, and IMDb scores. Four or more items use compact
+  numeric cards.
+- Binge Champion ranks qualifying activity by Plex user, breaks play-count
+  ties by watch time, and emphasizes the winner's own newsletter.
+- Trending remains a separate server-wide media-title feature with poster and
+  exact play count; quiet-release hero layouts do not repeat it.
+- The four personal-stat cards share a content-driven equal height, including
+  zero-, one-, and multi-item states.
+
+## Installation at a glance
+
+<details>
+<summary><strong>Windows portable</strong></summary>
+
+1. Download and extract
+   [`PlexWeekly-windows.zip`](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-windows.zip)
+   into a permanent writable folder, or use
+   [`platforms/windows`](platforms/windows) from the current source tree.
+2. Run `00-SETUP-FIRST.bat` and enter your own Tautulli and SMTP values.
+3. Run `01-VERIFY-SETUP.bat`.
+4. Preview with `03-PREVIEW-NEWSLETTER.bat`, then send a controlled test with
+   `04-SEND-TEST.bat`.
+5. Install the schedule only after review.
+
+[Open the rendered Windows walkthrough](https://sparkmoxie.github.io/PlexWeekly/windows/)
+· [Read the Markdown install guide](docs/windows/README.md)
+
+</details>
+
+<details>
+<summary><strong>NAS / Docker Compose</strong></summary>
+
+```bash
+cp .env.example .env
+docker compose build --pull
+docker compose up -d
+./plexweekly.sh setup
+./plexweekly.sh verify
+./plexweekly.sh preview-all
+```
+
+Use a hostname reachable from inside the container for Tautulli. Keep port
+8787 on a trusted network and do not expose it publicly.
+
+[Open the rendered NAS / Docker walkthrough](https://sparkmoxie.github.io/PlexWeekly/nas-docker/)
+· [Open the rendered Compose quick start](https://sparkmoxie.github.io/PlexWeekly/nas-docker/quickstart.html)
+· [Read the Markdown install guide](docs/nas-docker/README.md)
+
+</details>
+
+<details>
+<summary><strong>macOS with Docker Desktop</strong></summary>
+
+```bash
+chmod +x INSTALL-MAC.command mac-install.sh plexweekly.sh
+./mac-install.sh
+./plexweekly.sh verify
+./plexweekly.sh preview-all
+```
+
+The installer detects the host UID/GID and keeps previews on localhost by
+default.
+
+[Open the rendered macOS walkthrough](https://sparkmoxie.github.io/PlexWeekly/mac/)
+· [Read the Markdown install guide](docs/mac/README.md)
+
+</details>
+
+## Architecture
+
+```mermaid
+flowchart LR
+    T["Tautulli API"] --> E["PlexWeekly PowerShell engine"]
+    P["Plex Media Server\noptional metadata"] -.-> E
+    E --> R["HTML + plain-text renderer"]
+    R --> V["Local preview"]
+    R --> M["SMTP test and delivery"]
+    E <--> S["Private config and state"]
+    C["Task Scheduler or\ncontainer scheduler"] --> E
+```
+
+Tautulli supplies users, activity, history, and recently added metadata. Direct
+Plex access is optional and improves selected artwork and metadata fallbacks.
+The renderer produces browser previews and multipart email, while local state
+guards first-run behavior, welcomes, and repeat schedule attempts.
+
+## Release downloads
+
+PlexWeekly `v0.1.0` publishes five installable archives and a checksum manifest.
+The stable links below follow the latest published release.
+
+| Platform | Published artifact | Download |
+|---|---|---|
+| Windows | `PlexWeekly-windows.zip` | [ZIP](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-windows.zip) |
+| NAS / Docker | `PlexWeekly-nas-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-nas-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-nas-docker.zip) |
+| macOS / Docker Desktop | `PlexWeekly-mac-docker.tar.gz` or `.zip` | [TAR.GZ](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.tar.gz) · [ZIP](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/PlexWeekly-mac-docker.zip) |
+| Integrity manifest | `SHA256SUMS.txt` | [SHA-256 checksums](https://github.com/sparkmoxie/PlexWeekly/releases/latest/download/SHA256SUMS.txt) |
+
+[Read the latest release notes](https://github.com/sparkmoxie/PlexWeekly/releases/latest)
+and verify every archive before installation.
+
+Verify a Windows download:
+
+```powershell
+Get-FileHash .\PlexWeekly-windows.zip -Algorithm SHA256
+```
+
+Verify Unix downloads from the release directory:
+
+```bash
+shasum -a 256 -c SHA256SUMS.txt
+```
+
+## Support matrix
+
+| Environment | Support level | Validation |
+|---|---|---|
+| Windows 10/11, Windows PowerShell 5.1+ | Supported source target | PowerShell syntax validation on Windows CI |
+| Docker Engine + Compose v2 on x86-64 or ARM64 Linux | Supported source target | Shell, JSON, and Compose validation; image build remains environment-dependent |
+| QNAP Container Station / Unraid | Documented deployment | Uses the NAS Compose source; hardware-specific UI behavior is not CI-tested |
+| Current Docker Desktop on Intel or Apple silicon macOS | Supported source target | Shell, JSON, and Compose validation; macOS UI flow is not CI-tested |
+| PowerShell versions older than the platform minimum | Unsupported | Runtime guard exits with an explanatory error |
+
+## Documentation
+
+- [Live GitHub Pages documentation](https://sparkmoxie.github.io/PlexWeekly/)
+- [Rendered Windows walkthrough](https://sparkmoxie.github.io/PlexWeekly/windows/)
+- [Rendered NAS / Docker walkthrough](https://sparkmoxie.github.io/PlexWeekly/nas-docker/)
+- [Rendered NAS / Docker Compose quick start](https://sparkmoxie.github.io/PlexWeekly/nas-docker/quickstart.html)
+- [Rendered macOS walkthrough](https://sparkmoxie.github.io/PlexWeekly/mac/)
+- [Documentation source index](docs/README.md)
+- [Windows installation](docs/windows/README.md)
+- [NAS / Docker installation](docs/nas-docker/README.md)
+- [macOS installation](docs/mac/README.md)
+- [Configuration reference](docs/CONFIGURATION.md)
+- [Security and hardening](docs/SECURITY.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Release process](docs/RELEASING.md)
+
+## Project status and safety
+
+The public repository begins from three previously packaged platform baselines.
+Automation validates source hygiene and packaging, but it cannot validate your
+Tautulli dataset, SMTP provider, Plex permissions, mail-client rendering, NAS
+vendor UI, or network/firewall policy. Operate on a preview-and-test basis.
+
+## License and affiliation
+
+PlexWeekly source code, documentation, and bundled custom artwork are licensed
+under the [MIT License](LICENSE). Asset provenance is recorded in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+PlexWeekly is an independent community project. It is not affiliated with,
+endorsed by, or sponsored by Plex, Tautulli, IMDb, Rotten Tomatoes, Docker,
+QNAP, Unraid, Apple, or Microsoft. All product names and marks belong to their
+respective owners.

@@ -1,0 +1,35 @@
+PLEXWEEKLY MAC PORTABLE CHANGELOG
+================================
+
+v1.0.3
+------
+- fixes single-item adaptive collection handling
+- explicitly preserves MovieItems and EpisodeItems as arrays
+- retains genre, ratings, Binge Champion, Trending, Docker, and scheduler behavior
+
+v1.0.2
+------
+- adds globally formatted genre beneath itemized watched-movie titles
+- preserves mini posters and Rotten Tomatoes critic and audience scores
+- applies to all Mac preview, test, and scheduled delivery paths
+
+v1.0.1
+------
+- adds adaptive itemized watched-movie and episode cards
+- keeps all four statistics cards dynamically equal in height
+- adds the server-wide Binge Champion user award with winner emphasis
+- adds counted poster-based Trending without duplication
+- updates recipient privacy language and Mac documentation
+
+v1.0.0
+------
+- split Mac-specific edition from NAS/Docker Portable v1.0.4
+- added mac-install.sh and INSTALL-MAC.command
+- uses macOS UID/GID in generated .env
+- binds previews to localhost by default
+- added host.docker.internal guidance for native Mac Tautulli and Plex
+- added open-preview command
+- removed QNAP, Unraid, and Windows Docker Desktop wrappers
+- retained six-state regression, scheduler, asset fixes, TV overflow counts,
+  movie genres, IMDb enrichment, and current email renderer
+- added rich Mac-only README.html
