@@ -62,6 +62,8 @@ Review the user roster and exclusions before testing:
 ```bash
 sudo tautweekly list-users
 sudo tautweekly exclude-users
+sudo tautweekly list-libraries
+sudo tautweekly manage-libraries
 sudo tautweekly preview-all
 sudo tautweekly send-test-all
 sudo tautweekly schedule-status
@@ -106,6 +108,8 @@ sudo tautweekly setup                 create or replace private configuration
 sudo tautweekly verify                validate files, API, SMTP, and schedule
 sudo tautweekly list-users            inspect Tautulli recipients
 sudo tautweekly exclude-users         revise stable user exclusions
+sudo tautweekly list-libraries         inspect the global movie/TV scope
+sudo tautweekly manage-libraries       replace the global movie/TV scope
 sudo tautweekly preview-all USER      generate all deterministic browser states
 sudo tautweekly send-test-all USER    send only to TestEmail
 sudo tautweekly send-all              guarded production delivery
@@ -118,6 +122,12 @@ The backup command briefly stops an active service for a consistent snapshot
 and restores its previous running state afterward.
 
 Preview and TestEmail commands may use an excluded user as sample data.
+
+Primary setup and `manage-libraries` discover active movie/TV libraries through
+Tautulli and save stable section IDs in `IncludedLibraryIds`. That scope is
+applied before releases, quiet mode, Trending, Binge Champion, and personal
+statistics are calculated. The manager backs up the private config before
+writing; empty/absent IDs retain legacy all-library behavior.
 Exclusions apply to scheduled and confirmed `SendAll` delivery. One-off welcome
 mail is a separate, explicit administrator action.
 

@@ -29,6 +29,7 @@ After installation, open **Docker > TautWeekly for Plex > Console** and run:
 ```bash
 pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
 pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
+pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1
 pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1
 /opt/tautweekly/bin/run-mode.sh ListUsers
 /opt/tautweekly/bin/run-mode.sh PreviewAll
@@ -86,6 +87,7 @@ docker compose pull
 docker compose up -d
 ./tautweekly.sh setup
 ./tautweekly.sh verify
+./tautweekly.sh manage-libraries
 ./tautweekly.sh exclude-users
 ```
 
@@ -97,6 +99,8 @@ runs in the same container, which is not the supported deployment model.
 
 ```bash
 ./tautweekly.sh verify
+./tautweekly.sh list-libraries
+./tautweekly.sh manage-libraries
 ./tautweekly.sh list-users
 ./tautweekly.sh exclude-users
 ./tautweekly.sh preview-all
@@ -140,6 +144,26 @@ The command changes only `ExcludedUserIds`; manually maintained
 scheduler and SendAll. Preview/TestEmail modes and the separately confirmed
 one-off welcome remain explicit administrator tools. Treat the displayed
 names and email addresses as private recipient data.
+
+## Manage newsletter libraries
+
+Primary setup discovers active Tautulli movie/TV libraries and stores the
+chosen stable section IDs in `IncludedLibraryIds`. The scope is global and is
+applied before releases, quiet mode, Trending, Binge Champion, and personal
+statistics are calculated. Empty or absent IDs retain legacy all-library
+behavior.
+
+Run `./tautweekly.sh list-libraries` to inspect the scope and
+`./tautweekly.sh manage-libraries` to replace it. Unraid Apps users can run the
+same manager directly in the container Console:
+
+```bash
+pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1
+```
+
+The manager accepts rows, ranges, `all`, or Enter to keep the selection and
+backs up `/data/config.json` before writing. It does not alter SMTP, recipient,
+or schedule settings.
 
 ## Networking
 

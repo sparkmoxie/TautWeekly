@@ -46,11 +46,33 @@ STARTTLS settings.
 | `WatchedPercent` | 85 | Completion threshold |
 | `MinimumEpisodeSeconds` | 120 | Filters very short playback |
 | `MaxMovies`, `MaxTv` | 8 | Content-card limits |
+| `IncludedLibraryIds` | `[]` | Stable Tautulli section IDs defining the global newsletter scope; empty means all active movie/TV libraries for backward compatibility |
 | `ExcludedUserIds` | `[]` | Users omitted by stable Tautulli ID |
 | `ExcludedEmails` | `[]` | Email addresses omitted from delivery |
 | `RecentAccessDays` | 7 | New/recent access classification |
 | `SendDelaySeconds` | 10 | Pause between real production recipients |
 | `TestSendDelaySeconds` | 2 | Pause between controlled test messages |
+
+### Global library selection
+
+After setup receives the Tautulli URL and API key, it calls `get_libraries`
+and lists active movie and TV libraries. Enter rows or ranges such as `1,3-4`,
+type `all`, or press Enter to keep the displayed scope. At least one active
+movie or TV library is required for a newly saved selection.
+
+`IncludedLibraryIds` is applied to raw Tautulli history and recently-added
+rows before any newsletter calculations. New/latest releases, quiet detection,
+Trending, the hero, Binge Champion, and each user's personal totals therefore
+share the selected scope. Per-user Plex sharing rules are not queried or
+intersected; this is a single administrator-controlled scope.
+
+Run `15-MANAGE-LIBRARIES.bat` on Windows,
+`./tautweekly.sh manage-libraries` on Docker editions, or
+`sudo tautweekly manage-libraries` on Linux and FreeBSD to change only this
+scope. The manager backs up `config.json` first. The corresponding
+`list-libraries` command (or `16-LIST-LIBRARIES.bat`) is read-only. Verification
+warns about stale IDs and fails when no configured ID matches an active video
+library.
 
 ### Interactive user exclusions
 

@@ -31,8 +31,9 @@ Windows machine.
    temporary extraction view.
 4. Run `00-SETUP-FIRST.bat`.
 5. Enter your own Tautulli, branding, SMTP, test-recipient, and schedule values.
-   After the Tautulli URL and API key, select any users to exclude from weekly
-   delivery. The direct Plex URL and token are optional.
+   After the Tautulli URL and API key, choose the active movie/TV libraries to
+   include, then select any users to exclude. The direct Plex URL and token are
+   optional.
 6. Run `01-VERIFY-SETUP.bat` and correct every failure before continuing.
 
 The setup wizard creates `config.json`. That file is deliberately ignored by
@@ -79,6 +80,19 @@ runs. Preview and TestEmail commands remain available for safe layout testing;
 the separately confirmed one-off welcome command remains an explicit
 administrator action. The selector displays names and email addresses, so do
 not publish screenshots or terminal output.
+
+## Manage newsletter libraries
+
+Setup lists active movie and TV libraries from Tautulli and saves the selected
+section IDs in `IncludedLibraryIds`. This one global scope filters releases,
+quiet detection, Trending, Binge Champion, and personal statistics before the
+normal calculations run. Empty or absent values retain the legacy all-library
+scope.
+
+Use `16-LIST-LIBRARIES.bat` to inspect the current scope and
+`15-MANAGE-LIBRARIES.bat` to replace it without changing SMTP, recipients, or
+scheduling. The manager accepts rows, ranges, `all`, or Enter to keep the
+current selection, and creates a timestamped `config.backup.*.json` first.
 
 ## Runtime files
 

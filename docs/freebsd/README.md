@@ -63,6 +63,8 @@ Review the roster and every mail state before enabling automatic sends:
 ```sh
 sudo tautweekly list-users
 sudo tautweekly exclude-users
+sudo tautweekly list-libraries
+sudo tautweekly manage-libraries
 sudo tautweekly preview-all
 sudo tautweekly send-test-all
 sudo tautweekly schedule-status
@@ -99,6 +101,8 @@ sudo tautweekly setup                 create or replace private configuration
 sudo tautweekly verify                validate API, mail, storage, and schedule
 sudo tautweekly list-users            inspect Tautulli recipients
 sudo tautweekly exclude-users         revise stable user exclusions
+sudo tautweekly list-libraries         inspect the global movie/TV scope
+sudo tautweekly manage-libraries       replace the global movie/TV scope
 sudo tautweekly preview-all USER      render all deterministic browser states
 sudo tautweekly send-test-all USER    send only to TestEmail
 sudo tautweekly send-all              guarded production delivery
@@ -112,6 +116,12 @@ sudo tautweekly update                pull the configured image and restart
 The wrapper always requires an explicit confirmation for real welcome or
 production delivery. Excluded users remain available to preview and TestEmail
 modes but are omitted from scheduled and confirmed `SendAll` delivery.
+
+The setup and `manage-libraries` commands query active movie/TV libraries and
+save stable section IDs in `IncludedLibraryIds`. This global scope is applied
+before releases, quiet mode, Trending, Binge Champion, and personal statistics
+are calculated. The manager backs up private configuration before writing;
+empty/absent IDs retain legacy all-library behavior.
 
 ## Update and pinning
 

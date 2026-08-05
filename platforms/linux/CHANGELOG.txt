@@ -1,6 +1,8 @@
 TautWeekly for Plex native Linux platform changelog
 
 Unreleased
+- Adds setup and standalone global movie/TV library selection.
+- Scopes releases, quiet mode, Trending, Binge Champion, and personal statistics upstream.
 - Loads the exclusion roster from the two bulk Tautulli user endpoints.
 - Falls back to the bulk roster when a single-user lookup is rejected.
 

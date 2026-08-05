@@ -70,6 +70,29 @@ setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
 - The four personal-stat cards share a content-driven equal height, including
   zero-, one-, and multi-item states.
 
+## Choose the newsletter libraries
+
+Primary setup queries Tautulli's `get_libraries` endpoint and lists each active
+movie and TV library. Choose one or more numbered rows, ranges such as `1,3-4`,
+or `all`. The stable section IDs are stored in `IncludedLibraryIds` and define
+one global newsletter scope.
+
+The renderer applies that scope before calculating new/latest releases, quiet
+mode, Trending, the hero, Binge Champion, and each recipient's personal stats.
+The existing algorithms and privacy treatment remain unchanged; activity from
+an unselected admin-only library cannot affect those results. An absent or
+empty `IncludedLibraryIds` retains the legacy all-library behavior for upgraded
+configurations.
+
+Revise the scope later without rerunning SMTP or schedule setup:
+
+| Platform | List | Update |
+|---|---|---|
+| Windows | `16-LIST-LIBRARIES.bat` | `15-MANAGE-LIBRARIES.bat` |
+| NAS / Docker and macOS | `./tautweekly.sh list-libraries` | `./tautweekly.sh manage-libraries` |
+| Native Linux | `sudo tautweekly list-libraries` | `sudo tautweekly manage-libraries` |
+| FreeBSD / Podman | `sudo tautweekly list-libraries` | `sudo tautweekly manage-libraries` |
+
 ## Exclude newsletter recipients
 
 Every primary setup wizard now loads the Tautulli user roster immediately
@@ -107,8 +130,8 @@ do not share its output publicly.
    [`TautWeekly-windows.zip`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-windows.zip)
    into a permanent writable folder, or use
    [`platforms/windows`](platforms/windows) from the current source tree.
-2. Run `00-SETUP-FIRST.bat`, enter your own Tautulli and SMTP values, and
-   select any users to exclude from weekly delivery.
+2. Run `00-SETUP-FIRST.bat`, enter your own Tautulli and SMTP values, choose
+   the movie/TV libraries to include, and select any users to exclude.
 3. Run `01-VERIFY-SETUP.bat`.
 4. Preview with `03-PREVIEW-NEWSLETTER.bat`, then send a controlled test with
    `04-SEND-TEST.bat`.

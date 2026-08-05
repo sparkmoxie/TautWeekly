@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 
 <html lang="en">
 <head>
@@ -78,15 +78,17 @@ main{min-width:0}.content{max-width:none;margin:0}
 <span class="m">No Plex user email is sent by this step.</span>
 
 <span class="p">PS C:\TautWeekly&gt;</span> <span class="cursor">|</span></pre></div></div></section>
-<div class="metrics"><div class="metric"><b>15</b><span>guided BAT launchers</span></div><div class="metric"><b>6</b><span>deterministic email states</span></div><div class="metric"><b>10s</b><span>production recipient delay</span></div><div class="metric"><b>0</b><span>credentials shipped</span></div></div>
+<div class="metrics"><div class="metric"><b>17</b><span>guided BAT launchers</span></div><div class="metric"><b>6</b><span>deterministic email states</span></div><div class="metric"><b>10s</b><span>production recipient delay</span></div><div class="metric"><b>0</b><span>credentials shipped</span></div></div>
 <div class="noresults" id="noresults">No guide sections matched that search. Try “SMTP,” “preview,” “schedule,” “Tautulli,” “genres,” or “quiet.”</div>
 <section class="section" data-search="requirements windows powershell scheduledtasks tautulli smtp plex network" id="requirements"><div class="section-head"><div><div class="eyebrow">Preflight</div><h2>What the Windows host needs</h2></div><p>Plex and Tautulli may be local, remote, Linux, NAS-hosted, or containerized. TautWeekly for Plex itself runs on Windows.</p></div><div class="split"><div class="panel"><ul class="check"><li>Windows PowerShell 5.1 or later</li><li>Built-in ScheduledTasks cmdlets for automation</li><li>Network access to Tautulli’s API</li><li>Network access to an SMTP STARTTLS endpoint</li><li>Optional direct Plex access for richer clearLogo metadata</li><li>A permanent writable installation folder</li></ul></div><div class="panel"><h3>Supported execution boundary</h3><p>The included BAT files and scheduler installer are Windows-only. The Plex server and Tautulli do not have to run on the same computer.</p><div class="callout blue"><i></i><div><strong>Remote services are normal.</strong><p>Use a LAN URL such as <code>http://media.example.test:8181</code> when Tautulli runs elsewhere.</p></div></div></div></div></section>
 <section class="section" data-search="quick start launch setup verify list users preview send test install schedule" id="quick-start"><div class="section-head"><div><div class="eyebrow">Launch sequence</div><h2>Brand-new install, step by step</h2></div><p>The safe sequence moves from local validation to TestEmail before any production recipient or scheduler is touched.</p></div><div class="steps">
 <div class="step"><div class="num">1</div><div><h3>Extract to a permanent folder</h3><p>Recommended examples: <code>C:\TautWeekly</code> or <code>D:\Apps\TautWeekly</code>. Do not run from inside the ZIP.</p></div></div>
-<div class="step"><div class="num">2</div><div><h3>Run guided configuration</h3><div class="code"><div class="code-head"><span>Create config.json</span><button class="copy">Copy</button></div><pre>00-SETUP-FIRST.bat</pre></div><p>After entering the Tautulli URL and API key, select any numbered users to exclude from weekly delivery.</p></div></div>
+<div class="step"><div class="num">2</div><div><h3>Run guided configuration</h3><div class="code"><div class="code-head"><span>Create config.json</span><button class="copy">Copy</button></div><pre>00-SETUP-FIRST.bat</pre></div><p>After entering the Tautulli URL and API key, choose the active movie/TV libraries for the global newsletter scope, then select any numbered users to exclude from weekly delivery.</p></div></div>
 <div class="step"><div class="num">3</div><div><h3>Verify the environment</h3><div class="code"><div class="code-head"><span>Read-only verification</span><button class="copy">Copy</button></div><pre>01-VERIFY-SETUP.bat</pre></div></div></div>
-<div class="step"><div class="num">4</div><div><h3>Review or revise recipient exclusions</h3><div class="code"><div class="code-head"><span>No email sent</span><button class="copy">Copy</button></div><pre>02-LIST-USERS.bat
-14-MANAGE-USER-EXCLUSIONS.bat</pre></div><p>The second launcher updates only stable Tautulli IDs; it does not rerun SMTP or schedule setup.</p></div></div>
+<div class="step"><div class="num">4</div><div><h3>Review content scope and recipient exclusions</h3><div class="code"><div class="code-head"><span>No email sent</span><button class="copy">Copy</button></div><pre>16-LIST-LIBRARIES.bat
+15-MANAGE-LIBRARIES.bat
+02-LIST-USERS.bat
+14-MANAGE-USER-EXCLUSIONS.bat</pre></div><p>Library selection filters releases, quiet mode, Trending, Binge Champion, and personal statistics upstream. These launchers do not rerun SMTP or schedule setup.</p></div></div>
 <div class="step"><div class="num">5</div><div><h3>Preview and TestEmail</h3><div class="code"><div class="code-head"><span>Safe acceptance</span><button class="copy">Copy</button></div><pre>03-PREVIEW-NEWSLETTER.bat
 04-SEND-TEST.bat
 05-PREVIEW-ALL-EMAIL-TYPES.bat
@@ -110,6 +112,8 @@ main{min-width:0}.content{max-width:none;margin:0}
 <tr><td><strong>12-VIEW-ACCESS-ROSTER.bat</strong></td><td>Shows first-seen and welcome-state tracking.</td><td><span class="tag safe">No email</span></td></tr>
 <tr><td><strong>13-REPAIR-MOVIE-TV-ASSETS.bat</strong></td><td>Repairs required animated and email-safe local assets.</td><td><span class="tag safe">No email</span></td></tr>
 <tr><td><strong>14-MANAGE-USER-EXCLUSIONS.bat</strong></td><td>Shows the live Tautulli roster and updates only <code>ExcludedUserIds</code>.</td><td><span class="tag safe">Config only</span></td></tr>
+<tr><td><strong>15-MANAGE-LIBRARIES.bat</strong></td><td>Replaces the global movie/TV scope in <code>IncludedLibraryIds</code> and backs up config first.</td><td><span class="tag safe">Config only</span></td></tr>
+<tr><td><strong>16-LIST-LIBRARIES.bat</strong></td><td>Lists active Tautulli libraries and the effective global newsletter scope.</td><td><span class="tag safe">No changes</span></td></tr>
 <tr><td><strong>TEST-FIRST.bat</strong></td><td>Convenience entry point for safe verification/testing guidance.</td><td><span class="tag safe">No production mail</span></td></tr>
 </tbody></table></div></section>
 <section class="section" data-search="remote plex tautulli nas docker api url 127 localhost lan" id="remote"><div class="section-head"><div><div class="eyebrow">Network topology</div><h2>Local or remote Plex and Tautulli</h2></div><p>Only the Windows runner is local. The media stack may live anywhere reachable on your LAN.</p></div><div class="grid3"><div class="card"><div class="icon">PC</div><h3>Same Windows machine</h3><p><code>http://127.0.0.1:8181</code> is correct only when Tautulli runs on the same Windows host.</p></div><div class="card"><div class="icon">LAN</div><h3>Another server or NAS</h3><p>Use the remote host’s LAN address and published Tautulli port.</p></div><div class="card"><div class="icon">PMS</div><h3>Optional direct Plex URL</h3><p>Direct Plex metadata can improve clearLogo support but is not required for newsletter operation.</p></div></div><div class="code"><div class="code-head"><span>Remote Tautulli example</span><button class="copy">Copy</button></div><pre>"TautulliUrl": "http://media.example.test:8181"</pre></div></section>
