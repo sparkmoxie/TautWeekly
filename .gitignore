@@ -10,6 +10,8 @@
 **/state.json
 **/access-state.json
 **/scheduler-state.json
+**/scheduler-heartbeat.json
+**/service-heartbeat.json
 **/logs/
 **/output/
 **/*.log

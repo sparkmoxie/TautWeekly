@@ -28,6 +28,8 @@ jobs:
           node --check docs/assets/site.js
       - name: Validate shell scripts
         run: ./scripts/validate-shell.sh
+      - name: Test container health behavior
+        run: ./scripts/test-container-health.sh
       - name: Validate NAS Compose configuration
         run: |
           docker compose -f platforms/nas-docker/compose.yaml config --quiet

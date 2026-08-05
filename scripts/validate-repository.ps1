@@ -43,6 +43,7 @@ $required = @(
     'docs/index.html', 'docs/windows/README.md', 'docs/nas-docker/README.md',
     'docs/mac/README.md', 'docs/linux/README.md', 'docs/freebsd/README.md',
     'scripts/build-releases.ps1', 'scripts/validate-platforms.ps1',
+    'scripts/test-container-health.sh',
     'scripts/validate-unraid-template.ps1',
     '.github/workflows/ci.yml', '.github/workflows/pages.yml',
     '.github/workflows/release.yml',
@@ -59,7 +60,7 @@ if ($failures.Count -eq 0) { Add-Pass "Required repository structure is present.
 
 $forbiddenNames = @(
     'config.json', '.env', 'state.json', 'access-state.json',
-    'scheduler-state.json'
+    'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json'
 )
 $forbiddenDirectories = @('logs', 'output')
 
