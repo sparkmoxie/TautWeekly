@@ -87,6 +87,10 @@ type `none` to clear it. Run `./tautweekly.sh exclude-users` later to update
 only the stable IDs in `ExcludedUserIds`; existing `ExcludedEmails` values are
 left unchanged.
 
+The selector merges the bulk `get_user_names` and `get_users` responses by
+stable ID. It does not call `get_user` once per row, and users present only in
+the name roster remain available for selection.
+
 Excluded users are skipped by automatic delivery and SendAll. Preview and
 TestEmail modes can still use them for safe rendering checks, and the one-off
 welcome remains a separately confirmed administrator action. Do not share the

@@ -1,5 +1,9 @@
 TautWeekly for Plex native Linux platform changelog
 
+Unreleased
+- Loads the exclusion roster from the two bulk Tautulli user endpoints.
+- Falls back to the bulk roster when a single-user lookup is rejected.
+
 v1.0.0
 - Added native PowerShell 7 operation without Docker.
 - Added a hardened systemd service and protected service account.

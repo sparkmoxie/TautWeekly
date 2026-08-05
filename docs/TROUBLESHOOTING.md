@@ -26,10 +26,13 @@ it preserves exclusions from an existing configuration and prints the
 standalone command to retry. First run the platform verifier, then use
 `14-MANAGE-USER-EXCLUSIONS.bat` on Windows,
 `./tautweekly.sh exclude-users` on Docker, or
-`sudo tautweekly exclude-users` on Linux and FreeBSD. Confirm the Tautulli API key can run
-both `get_user_names` and `get_user`, and that the runtime can reach the exact
-configured URL. No exclusion changes are saved when the standalone lookup
-returns no selectable users.
+`sudo tautweekly exclude-users` on Linux and FreeBSD. Update to v0.5.2 or
+newer if every row reports that its user is unavailable. That release replaces
+the fragile per-user lookup loop with a two-call merge of `get_user_names` and
+`get_users`, keyed by stable user ID. Confirm the Tautulli API key can run both
+bulk commands and that the runtime can reach the exact configured URL. A row
+from `get_user_names` remains selectable if detailed data is unavailable; no
+exclusion changes are saved only when neither endpoint yields selectable users.
 
 ## Preview does not open
 

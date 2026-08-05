@@ -78,6 +78,10 @@ such as `2,4-6` are accepted), press Enter to keep the current selection, or
 type `none` to clear it. The wizard stores stable Tautulli IDs in
 `ExcludedUserIds`; it never copies a live roster into source files.
 
+The selector merges Tautulli's `get_user_names` and `get_users` bulk responses
+by stable user ID. It does not issue one API request per user, and a user from
+the name roster remains selectable if Tautulli omits that user's detailed row.
+
 You can revise exclusions later without rerunning SMTP or schedule setup:
 
 | Platform | Standalone command |

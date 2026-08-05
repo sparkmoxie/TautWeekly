@@ -124,6 +124,10 @@ comma-separated rows or ranges such as `2,4-6`; press Enter to keep the current
 selection or type `none` to clear it. The stable IDs are saved in
 `ExcludedUserIds`.
 
+The selector joins Tautulli's bulk `get_user_names` and `get_users` responses
+by stable ID instead of making one `get_user` request per row. A name-only row
+remains selectable if its detailed bulk record is unavailable.
+
 Run `./tautweekly.sh exclude-users` whenever the recipient policy changes.
 Unraid Apps users can instead run this from the container Console:
 
