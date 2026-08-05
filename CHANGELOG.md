@@ -6,6 +6,16 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-05
+
+### Fixed
+
+- Replaced exclusion setup's per-user `get_user` requests with a two-call merge
+  of Tautulli's `get_user_names` and `get_users` rosters. Stable IDs from the
+  name roster remain selectable when detailed rows are unavailable.
+- Added a bulk-roster fallback for newsletter user resolution when a Tautulli
+  installation rejects an otherwise valid single-user lookup.
+
 ## [0.5.1] - 2026-08-05
 
 ### Added

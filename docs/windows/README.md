@@ -64,6 +64,10 @@ or ranges such as `2,4-6`. Press Enter to keep the displayed selection or type
 `none` to clear it. Selections are stored as stable Tautulli IDs in
 `ExcludedUserIds`.
 
+The roster is assembled from the bulk `get_user_names` and `get_users`
+responses, joined by user ID. Setup does not make a separate `get_user` request
+for every row, and name-only rows remain available for exclusion selection.
+
 To revise the list without rebuilding the rest of `config.json`, run:
 
 ```text

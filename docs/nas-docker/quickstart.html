@@ -547,6 +547,7 @@ docker compose ps</pre></div>
             <div class="code-block"><button class="copy-button">Copy</button><pre>chmod +x tautweekly.sh
 ./tautweekly.sh setup</pre></div>
             <p>After entering the Tautulli URL and API key, select numbered users or ranges to exclude from scheduled and SendAll delivery.</p>
+            <p>The selector merges <code>get_user_names</code> and <code>get_users</code> by stable ID. It does not make a separate lookup for every user, and a name-only row remains selectable if Tautulli omits its detailed record.</p>
             <p>The Plex URL and token are optional. Pressing Enter at the token prompt safely leaves it blank.</p>
           </div>
         </article>
@@ -734,6 +735,10 @@ docker compose up -d
       <details>
         <summary>Tautulli connection fails</summary>
         <div class="details-body">Confirm the URL is reachable from inside the TautWeekly for Plex container. Use <code>NAS_IP:8181</code> for a published port or <code>tautulli:8181</code> on a shared Docker network. Do not use <code>127.0.0.1</code>.</div>
+      </details>
+      <details>
+        <summary>Every Tautulli user says it is unavailable for selection</summary>
+        <div class="details-body">Update to v0.5.2 or newer, then rerun <code>./tautweekly.sh exclude-users</code>. Unraid Apps users should force-update the container and run <code>Manage-User-Exclusions.ps1</code> from the Console. Current releases merge the bulk <code>get_user_names</code> and <code>get_users</code> responses instead of relying on a separate <code>get_user</code> call for every ID.</div>
       </details>
       <details>
         <summary>Permission denied under <code>data/</code></summary>

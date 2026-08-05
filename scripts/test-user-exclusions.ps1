@@ -42,6 +42,57 @@ Assert-Equal -Name 'Ranges and duplicate rows are normalized' -Actual (@($range.
 $invalid = ConvertFrom-TautWeeklyExcludedSelection -Selection '0' -Users $users
 Assert-Equal -Name 'Out-of-range rows are rejected' -Actual ([bool]$invalid.Valid) -Expected $false
 
+$nameRows = @(
+    [PSCustomObject]@{ user_id = '0'; friendly_name = 'Server Owner' },
+    [PSCustomObject]@{ user_id = '145330906'; friendly_name = 'Remote Viewer' }
+)
+$detailRows = @(
+    [PSCustomObject]@{
+        user_id = '0'; username = 'owner'; email = 'owner@example.com'
+        is_active = 1; do_notify = 1
+    }
+)
+$mergedUsers = @(ConvertTo-TautWeeklySelectableUsers -Names $nameRows -DetailedUsers $detailRows)
+Assert-Equal -Name 'Bulk and name rosters are merged by stable ID' -Actual $mergedUsers.Count -Expected 2
+$owner = $mergedUsers | Where-Object UserId -eq '0' | Select-Object -First 1
+$viewer = $mergedUsers | Where-Object UserId -eq '145330906' | Select-Object -First 1
+Assert-Equal -Name 'Name roster supplies missing friendly name' -Actual $owner.FriendlyName -Expected 'Server Owner'
+Assert-Equal -Name 'Detailed bulk row retains delivery eligibility' -Actual ([bool]$owner.Eligible) -Expected $true
+Assert-Equal -Name 'Name-only user remains selectable' -Actual $viewer.FriendlyName -Expected 'Remote Viewer'
+Assert-Equal -Name 'Name-only user is not marked delivery-eligible' -Actual ([bool]$viewer.Eligible) -Expected $false
+Assert-Equal -Name 'Name-only user reports unavailable details' -Actual ([bool]$viewer.DetailsAvailable) -Expected $false
+
+$script:userApiCalls = New-Object System.Collections.Generic.List[string]
+function Invoke-TautWeeklyUserApi {
+    param(
+        [string]$TautulliUrl,
+        [string]$ApiKey,
+        [string]$Command,
+        [hashtable]$Parameters = @{}
+    )
+    $script:userApiCalls.Add($Command)
+    if ($Command -eq 'get_user_names') { return $nameRows }
+    if ($Command -eq 'get_users') { return $detailRows }
+    throw "Unexpected user API command: $Command"
+}
+$apiUsers = @(Get-TautWeeklySelectableUsers -TautulliUrl 'http://tautulli.example.test:8181' -ApiKey 'test-key')
+Assert-Equal -Name 'Roster uses two bulk API calls' -Actual ($script:userApiCalls -join ',') -Expected 'get_user_names,get_users'
+Assert-Equal -Name 'Bulk API roster remains selectable' -Actual $apiUsers.Count -Expected 2
+
+function Invoke-TautWeeklyUserApi {
+    param(
+        [string]$TautulliUrl,
+        [string]$ApiKey,
+        [string]$Command,
+        [hashtable]$Parameters = @{}
+    )
+    if ($Command -eq 'get_user_names') { return $nameRows }
+    throw 'Simulated get_users rejection'
+}
+$fallbackUsers = @(Get-TautWeeklySelectableUsers -TautulliUrl 'http://tautulli.example.test:8181' -ApiKey 'test-key')
+Assert-Equal -Name 'Names remain selectable when details fail' -Actual $fallbackUsers.Count -Expected 2
+Assert-Equal -Name 'Fallback keeps stable user IDs' -Actual (($fallbackUsers.UserId | Sort-Object) -join ',') -Expected '0,145330906'
+
 $libraryPaths = @(
     $windowsLibrary,
     (Join-Path $root 'platforms/nas-docker/app/User-Exclusions.ps1'),

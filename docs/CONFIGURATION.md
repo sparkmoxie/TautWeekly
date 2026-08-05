@@ -61,6 +61,12 @@ already in the configuration are preserved when a new known-user selection is
 saved, which avoids dropping an exclusion merely because a user is temporarily
 absent from the current Tautulli response.
 
+Roster loading makes two bulk requests: `get_user_names` supplies stable IDs
+and display names, while `get_users` supplies delivery details. The results are
+merged by ID. TautWeekly for Plex does not call `get_user` once per roster row;
+if the detailed bulk request fails, name-only rows remain selectable but are
+not marked delivery-eligible in the selector.
+
 Use `14-MANAGE-USER-EXCLUSIONS.bat` on Windows,
 `./tautweekly.sh exclude-users` on either Docker edition, or
 `sudo tautweekly exclude-users` on Linux and FreeBSD to revise

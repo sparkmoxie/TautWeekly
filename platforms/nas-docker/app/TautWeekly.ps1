@@ -483,7 +483,31 @@ function Invoke-TautulliApi {
 
 function Get-TautulliUser {
     param([string]$Id)
-    return Invoke-TautulliApi -Command "get_user" -Parameters @{ user_id = $Id }
+
+    if ([string]::IsNullOrWhiteSpace($Id)) {
+        throw "A Tautulli user ID is required."
+    }
+
+    try {
+        $directUser = Invoke-TautulliApi -Command "get_user" -Parameters @{ user_id = $Id }
+        if ($null -ne $directUser) { return $directUser }
+    }
+    catch {
+        # Some Tautulli installations return a valid bulk roster while
+        # rejecting otherwise valid per-user lookups. Fall back to get_users.
+    }
+
+    $matches = @(
+        Get-TautulliUsers | Where-Object {
+            [string](Get-OptionalStringProperty -InputObject $_ -Name "user_id") -eq $Id
+        }
+    )
+    if ($matches.Count -eq 1) { return $matches[0] }
+    if ($matches.Count -gt 1) {
+        throw "Tautulli returned more than one bulk user for ID '$Id'."
+    }
+
+    throw "Tautulli user ID '$Id' was unavailable through both get_user and get_users."
 }
 
 function Get-TautulliUserNames {
@@ -5722,22 +5746,22 @@ function Get-NewsletterUser {
 
     $u = Get-TautulliUser -Id $Id
 
-    $friendly = [string]$u.friendly_name
+    $friendly = Get-OptionalStringProperty -InputObject $u -Name "friendly_name"
     if ([string]::IsNullOrWhiteSpace($friendly)) {
-        $friendly = [string]$u.username
+        $friendly = Get-OptionalStringProperty -InputObject $u -Name "username"
     }
     if ([string]::IsNullOrWhiteSpace($friendly)) {
         $friendly = "there"
     }
 
     return [PSCustomObject]@{
-        UserId       = [string]$u.user_id
-        Username     = [string]$u.username
+        UserId       = Get-OptionalStringProperty -InputObject $u -Name "user_id"
+        Username     = Get-OptionalStringProperty -InputObject $u -Name "username"
         FriendlyName = $friendly
-        Email        = [string]$u.email
-        IsActive     = (Safe-Int $u.is_active)
-        DeletedUser  = (Safe-Int $u.deleted_user)
-        DoNotify     = (Safe-Int $u.do_notify)
+        Email        = Get-OptionalStringProperty -InputObject $u -Name "email"
+        IsActive     = Safe-Int (Get-OptionalStringProperty -InputObject $u -Name "is_active")
+        DeletedUser  = Safe-Int (Get-OptionalStringProperty -InputObject $u -Name "deleted_user")
+        DoNotify     = Safe-Int (Get-OptionalStringProperty -InputObject $u -Name "do_notify")
     }
 }
 

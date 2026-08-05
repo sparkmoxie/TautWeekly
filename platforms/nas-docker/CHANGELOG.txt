@@ -3,6 +3,8 @@ TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 
 Unreleased
 ----------
+- loads the exclusion roster from get_user_names and get_users in two bulk calls
+- falls back to the bulk roster when Tautulli rejects a single-user lookup
 - adds interactive stable-ID user exclusions to primary setup
 - adds ./tautweekly.sh exclude-users for later recipient-policy updates
 - preserves existing user-ID and email exclusions when setup is intentionally rebuilt

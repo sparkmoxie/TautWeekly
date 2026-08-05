@@ -1,5 +1,9 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
+Unreleased
+- Loads the exclusion roster from the two bulk Tautulli user endpoints.
+- Falls back to the bulk roster when a single-user lookup is rejected.
+
 v1.0.0
 - Added FreeBSD amd64 operation through the maintained Linux OCI image and Podman Linux emulation.
 - Added rc.d lifecycle integration, private host storage, localhost-only preview defaults, and guarded updates.
