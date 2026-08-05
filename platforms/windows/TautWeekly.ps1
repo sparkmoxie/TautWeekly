@@ -345,6 +345,28 @@ if (-not (Test-Path $ConfigPath)) {
 
 $Config = Get-Content -Path $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
+$script:IncludedLibraryIdSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+if ($null -ne $Config.PSObject.Properties["IncludedLibraryIds"]) {
+    foreach ($value in @($Config.IncludedLibraryIds)) {
+        $libraryId = ([string]$value).Trim()
+        if (-not [string]::IsNullOrWhiteSpace($libraryId)) {
+            [void]$script:IncludedLibraryIdSet.Add($libraryId)
+        }
+    }
+}
+$script:LibraryFilterEnabled = ($script:IncludedLibraryIdSet.Count -gt 0)
+if ($script:LibraryFilterEnabled) {
+    Write-Log ("Global library scope enabled for section ID(s): " + (($script:IncludedLibraryIdSet | Sort-Object) -join ", "))
+}
+
+function Test-IncludedLibraryRow {
+    param([object]$Row)
+
+    if (-not $script:LibraryFilterEnabled) { return $true }
+    $sectionId = (Get-OptionalStringProperty -Object $Row -Name "section_id").Trim()
+    return (-not [string]::IsNullOrWhiteSpace($sectionId) -and $script:IncludedLibraryIdSet.Contains($sectionId))
+}
+
 function Require-ConfigValue {
     param([string]$Name)
     $prop = $Config.PSObject.Properties[$Name]
@@ -528,7 +550,9 @@ function Get-History {
         $rows = @($data.data)
 
         foreach ($row in $rows) {
-            $all.Add($row)
+            if (Test-IncludedLibraryRow -Row $row) {
+                $all.Add($row)
+            }
         }
 
         if ($rows.Count -lt $pageSize) { break }
@@ -566,7 +590,7 @@ function Get-RecentItems {
             $added = Safe-Int64 $row.added_at
             if ($added -lt $oldest) { $oldest = $added }
 
-            if ($added -ge $StartEpoch -and $added -lt $EndEpochExclusive) {
+            if ($added -ge $StartEpoch -and $added -lt $EndEpochExclusive -and (Test-IncludedLibraryRow -Row $row)) {
                 $all.Add($row)
             }
         }
@@ -1140,7 +1164,9 @@ function Get-LatestReleaseData {
         if ($rows.Count -eq 0) { break }
 
         foreach ($row in $rows) {
-            $all.Add($row)
+            if (Test-IncludedLibraryRow -Row $row) {
+                $all.Add($row)
+            }
         }
 
         $snapshot = New-ReleaseData -RecentItems $all.ToArray()
