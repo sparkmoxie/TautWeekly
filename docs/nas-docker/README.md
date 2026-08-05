@@ -34,9 +34,12 @@ pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1
 /opt/tautweekly/bin/run-mode.sh PreviewAll
 ```
 
-Open `http://UNRAID_HOST:8787/preview-all/preview-all-00-INDEX.html` and review
-every state before sending a TestEmail or enabling the schedule. Port 8787 is
-a private LAN preview service; never expose it to the public internet.
+Open `http://UNRAID_HOST:8787/` to confirm the preview service and review its
+first-run instructions. After `PreviewAll` completes, open
+`http://UNRAID_HOST:8787/preview-all-00-INDEX.html` and review every state
+before sending a TestEmail or enabling the schedule. Port 8787 is a private,
+read-only preview viewer—not an administration Web UI. Never expose it to the
+public internet.
 
 Community Applications listings are moderated. The template can be audited
 directly from its [raw URL](https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/templates/tautweekly.xml).
@@ -144,6 +147,41 @@ public internet.
 When TautWeekly for Plex and Tautulli share a user-defined Docker network, a service URL
 such as `http://tautulli:8181` is appropriate. Otherwise, use a DNS name the
 container can resolve.
+
+The server root always provides a small status and onboarding page. It does
+not expose configuration, credentials, send controls, or scheduler controls.
+Generated previews appear only after running `preview` or `preview-all`.
+
+## First-run and connection troubleshooting
+
+The only supported persistent configuration location inside the container is
+`/data/config.json`. With the supplied Compose files it maps to
+`./data/config.json` beside `compose.yaml`; with Unraid it maps into the
+configured appdata directory. Editing `/opt/tautweekly/config.json` does not
+configure the scheduler and that container-layer file would be lost on update.
+
+If the browser reports **connection refused**:
+
+```bash
+./tautweekly.sh status
+./tautweekly.sh logs
+docker compose port tautweekly 8080
+docker compose exec tautweekly tail -n 40 /data/logs/preview-server.log
+```
+
+Confirm the container is running and healthy, the published host port is the
+one used in the browser, and a firewall is not blocking that host port. Use a
+real host name or address in the browser—not Docker's `*:8787` port-listing
+notation. The container now exits with a clear error if its preview server
+cannot bind, allowing the restart policy and health status to expose the
+failure.
+
+If logs say they are waiting for `/data/config.json`, run
+`./tautweekly.sh setup` from the extracted Compose directory. In Unraid, use
+the exact `Setup-First.ps1` command shown above from the container Console.
+Running the container alone does not authorize delivery: setup creates the
+configuration, previews are generated on request, and scheduling stays off
+until `schedule-enable` is confirmed.
 
 ## Persistent data
 

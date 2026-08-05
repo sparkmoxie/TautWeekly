@@ -32,6 +32,7 @@ if [[ -L /data/output/assets ]]; then
 fi
 mkdir -p /data/output/assets
 cp -af /data/assets/. /data/output/assets/
+cp -f /opt/tautweekly/preview-home.html /data/output/index.html
 
 if [[ ! -f /data/config.example.json ]]; then
   cp /opt/tautweekly/config.example.json /data/config.example.json

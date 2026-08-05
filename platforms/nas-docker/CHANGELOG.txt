@@ -8,6 +8,10 @@ Unreleased
 - preserves existing user-ID and email exclusions when setup is intentionally rebuilt
 - ranks Binge Champion by qualifying watch time with total plays as the tie-breaker
 - shares anonymous movie/TV play counts and total time; only the winner sees gold
+- treats missing Tautulli episode rating fields as optional during PreviewAll
+- serves first-run setup guidance at the preview root before previews exist
+- verifies and monitors the preview listener so bind/process failures are visible
+- clarifies that port 8787 is a read-only viewer and /data/config.json is required
 
 v1.1.0
 ------

@@ -744,6 +744,14 @@ docker compose up -d
         <div class="details-body">Change <code>PREVIEW_PORT</code> in <code>.env</code>, update <code>PREVIEW_BASE_URL</code> to the same port, and recreate the service.</div>
       </details>
       <details>
+        <summary>Port 8787 says connection refused or Docker shows <code>*:8787</code></summary>
+        <div class="details-body">The port is a read-only preview viewer, not an admin Web UI. Open the Docker host name or address rather than the literal asterisk. Run <code>./tautweekly.sh status</code>, <code>./tautweekly.sh logs</code>, <code>docker compose port tautweekly 8080</code>, and inspect <code>/data/logs/preview-server.log</code>. The server root now provides setup guidance before previews exist and the container exits clearly if the server cannot bind.</div>
+      </details>
+      <details>
+        <summary>Scheduler keeps waiting for <code>/data/config.json</code></summary>
+        <div class="details-body">Run <code>./tautweekly.sh setup</code> from the extracted Compose directory, or run <code>Setup-First.ps1</code> from the Unraid container Console. The only supported in-container path is <code>/data/config.json</code>; files under <code>/opt/tautweekly</code> are not used as live configuration and are replaced on update. Scheduling stays disabled until explicitly enabled.</div>
+      </details>
+      <details>
         <summary>SMTP authentication fails</summary>
         <div class="details-body">Confirm STARTTLS, normally port 587, the SMTP username, and the app password/provider credential. The package does not support implicit SMTPS on port 465 through the current .NET mail client.</div>
       </details>
