@@ -63,6 +63,12 @@ Require-Text 'platforms/nas-docker/app/preview-home.html' @(
     '\/data\/config\.json',
     'preview-all-00-INDEX\.html'
 )
+Require-Text 'platforms/nas-docker/app/User-Exclusions.ps1' @(
+    'get_user_names',
+    'get_users',
+    'ConvertTo-TautWeeklySelectableUsers',
+    'DetailsAvailable'
+)
 Require-Text 'platforms/nas-docker/tautweekly.sh' @(
     '\.\/tautweekly\.sh setup',
     '\.\/tautweekly\.sh start',

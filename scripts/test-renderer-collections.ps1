@@ -19,6 +19,8 @@ $rendererPaths = @(
 
 $requiredFunctions = @(
     'Get-OptionalStringProperty',
+    'Get-TautulliUser',
+    'Get-TautulliUsers',
     'Safe-Int',
     'Safe-Int64',
     'New-ReleaseData',
@@ -70,6 +72,36 @@ foreach ($relativePath in $rendererPaths) {
         WatchedPercent       = 85
         MinimumEpisodeSeconds = 120
     }
+
+    $script:tautulliUserCalls = New-Object System.Collections.Generic.List[string]
+    function Invoke-TautulliApi {
+        param(
+            [string]$Command,
+            [hashtable]$Parameters = @{}
+        )
+
+        $script:tautulliUserCalls.Add($Command)
+        if ($Command -eq 'get_user') {
+            throw 'Simulated per-user lookup rejection'
+        }
+        if ($Command -eq 'get_users') {
+            return @(
+                [PSCustomObject]@{
+                    user_id = '145330906'
+                    username = 'viewer'
+                    email = 'viewer@example.com'
+                    is_active = 1
+                    do_notify = 1
+                }
+            )
+        }
+
+        throw "Unexpected Tautulli command: $Command"
+    }
+
+    $fallbackUser = Get-TautulliUser -Id '145330906'
+    Assert-True ([string]$fallbackUser.user_id -eq '145330906') "$relativePath did not recover the requested user from get_users"
+    Assert-True (($script:tautulliUserCalls -join ',') -eq 'get_user,get_users') "$relativePath did not use the bulk-user fallback after get_user failed"
 
     $movie = [PSCustomObject]@{
         media_type      = 'movie'

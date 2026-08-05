@@ -44,35 +44,48 @@ function Get-TautWeeklyObjectValue {
     return $property.Value
 }
 
-function Get-TautWeeklySelectableUsers {
+function ConvertTo-TautWeeklySelectableUsers {
     param(
-        [Parameter(Mandatory = $true)][string]$TautulliUrl,
-        [Parameter(Mandatory = $true)][string]$ApiKey
+        [AllowNull()][object[]]$Names = @(),
+        [AllowNull()][object[]]$DetailedUsers = @()
     )
 
-    $names = @(Invoke-TautWeeklyUserApi -TautulliUrl $TautulliUrl -ApiKey $ApiKey -Command 'get_user_names')
-    $users = New-Object System.Collections.Generic.List[object]
+    $detailsById = @{}
+    $friendlyById = @{}
+    $ids = New-Object System.Collections.Generic.List[string]
+    $seenIds = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 
-    foreach ($name in $names) {
+    foreach ($user in @($DetailedUsers)) {
+        $userId = [string](Get-TautWeeklyObjectValue -InputObject $user -Name 'user_id' -Default '')
+        if ([string]::IsNullOrWhiteSpace($userId)) { continue }
+        $userId = $userId.Trim()
+        if (-not $detailsById.ContainsKey($userId)) { $detailsById[$userId] = $user }
+        if ($seenIds.Add($userId)) { $ids.Add($userId) }
+    }
+
+    foreach ($name in @($Names)) {
         $userId = [string](Get-TautWeeklyObjectValue -InputObject $name -Name 'user_id' -Default '')
         if ([string]::IsNullOrWhiteSpace($userId)) { continue }
+        $userId = $userId.Trim()
+        $friendly = [string](Get-TautWeeklyObjectValue -InputObject $name -Name 'friendly_name' -Default '')
+        if (-not [string]::IsNullOrWhiteSpace($friendly)) { $friendlyById[$userId] = $friendly }
+        if ($seenIds.Add($userId)) { $ids.Add($userId) }
+    }
 
-        try {
-            $user = Invoke-TautWeeklyUserApi -TautulliUrl $TautulliUrl -ApiKey $ApiKey -Command 'get_user' -Parameters @{ user_id = $userId }
+    $users = New-Object System.Collections.Generic.List[object]
+    foreach ($userId in $ids) {
+        $detail = if ($detailsById.ContainsKey($userId)) { $detailsById[$userId] } else { $null }
+        $username = [string](Get-TautWeeklyObjectValue -InputObject $detail -Name 'username' -Default '')
+        $friendlyName = [string](Get-TautWeeklyObjectValue -InputObject $detail -Name 'friendly_name' -Default '')
+        if ([string]::IsNullOrWhiteSpace($friendlyName) -and $friendlyById.ContainsKey($userId)) {
+            $friendlyName = [string]$friendlyById[$userId]
         }
-        catch {
-            Write-Warning "Could not load Tautulli user ID $userId; that user is not available for selection."
-            continue
-        }
-
-        $username = [string](Get-TautWeeklyObjectValue -InputObject $user -Name 'username' -Default '')
-        $friendlyName = [string](Get-TautWeeklyObjectValue -InputObject $user -Name 'friendly_name' -Default '')
         if ([string]::IsNullOrWhiteSpace($friendlyName)) { $friendlyName = $username }
         if ([string]::IsNullOrWhiteSpace($friendlyName)) { $friendlyName = "User $userId" }
 
-        $email = [string](Get-TautWeeklyObjectValue -InputObject $user -Name 'email' -Default '')
-        $isActive = [int](Get-TautWeeklyObjectValue -InputObject $user -Name 'is_active' -Default 0)
-        $doNotify = [int](Get-TautWeeklyObjectValue -InputObject $user -Name 'do_notify' -Default 0)
+        $email = [string](Get-TautWeeklyObjectValue -InputObject $detail -Name 'email' -Default '')
+        $isActive = [int](Get-TautWeeklyObjectValue -InputObject $detail -Name 'is_active' -Default 0)
+        $doNotify = [int](Get-TautWeeklyObjectValue -InputObject $detail -Name 'do_notify' -Default 0)
         $eligible = $isActive -gt 0 -and $doNotify -gt 0 -and -not [string]::IsNullOrWhiteSpace($email)
 
         $users.Add([PSCustomObject]@{
@@ -81,10 +94,50 @@ function Get-TautWeeklySelectableUsers {
             Username = $username
             Email = $email
             Eligible = $eligible
+            DetailsAvailable = ($null -ne $detail)
         })
     }
 
     return @($users | Sort-Object FriendlyName, Username, UserId)
+}
+
+function Get-TautWeeklySelectableUsers {
+    param(
+        [Parameter(Mandatory = $true)][string]$TautulliUrl,
+        [Parameter(Mandatory = $true)][string]$ApiKey
+    )
+
+    $names = @()
+    $detailedUsers = @()
+    $namesError = ''
+    $detailsError = ''
+
+    try {
+        $names = @(Invoke-TautWeeklyUserApi -TautulliUrl $TautulliUrl -ApiKey $ApiKey -Command 'get_user_names')
+    }
+    catch {
+        $namesError = [string]$_.Exception.Message
+    }
+
+    try {
+        $detailedUsers = @(Invoke-TautWeeklyUserApi -TautulliUrl $TautulliUrl -ApiKey $ApiKey -Command 'get_users')
+    }
+    catch {
+        $detailsError = [string]$_.Exception.Message
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($namesError) -and
+        -not [string]::IsNullOrWhiteSpace($detailsError)) {
+        throw 'Could not load the Tautulli user roster. Check the Tautulli URL, API key, API access, and network connection.'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($namesError)) {
+        Write-Warning 'Tautulli user names were unavailable; using the detailed bulk user list.'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($detailsError)) {
+        Write-Warning 'Detailed Tautulli users were unavailable; users remain selectable by friendly name and stable ID, but delivery eligibility cannot be shown.'
+    }
+
+    return @(ConvertTo-TautWeeklySelectableUsers -Names $names -DetailedUsers $detailedUsers)
 }
 
 function Get-TautWeeklyUniqueIds {
