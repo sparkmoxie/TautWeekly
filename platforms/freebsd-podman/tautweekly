@@ -11,7 +11,7 @@ fi
 : "${TAUTWEEKLY_CONTAINER:=tautweekly}"
 : "${TAUTWEEKLY_DATA_DIR:=/var/db/tautweekly}"
 : "${TAUTWEEKLY_IMAGE:=ghcr.io/sparkmoxie/tautweekly:latest}"
-podman="/usr/local/bin/podman"
+podman="${TAUTWEEKLY_PODMAN_BIN:-/usr/local/bin/podman}"
 
 require_root()
 {

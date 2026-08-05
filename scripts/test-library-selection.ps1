@@ -74,10 +74,178 @@ foreach ($relative in @(
     'platforms/nas-docker/app/TautWeekly.ps1',
     'platforms/mac-docker/app/TautWeekly.ps1'
 )) {
-    $content = [IO.File]::ReadAllText((Join-Path $root $relative))
+    $rendererPath = Join-Path $root $relative
+    $content = [IO.File]::ReadAllText($rendererPath)
     Assert-Equal -Name "$relative reads IncludedLibraryIds" -Actual ($content -match 'IncludedLibraryIds') -Expected $true
     $filterCalls = [regex]::Matches($content, 'Test-IncludedLibraryRow -Row \$row').Count
     Assert-Equal -Name "$relative filters history and both release feeds" -Actual $filterCalls -Expected 3
+
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile(
+        $rendererPath,
+        [ref]$tokens,
+        [ref]$parseErrors
+    )
+    if ($parseErrors.Count -gt 0) {
+        throw "Cannot execute the library predicate with parser errors: $relative"
+    }
+
+    foreach ($functionName in @(
+        'Safe-Int',
+        'Safe-Int64',
+        'Get-OptionalStringProperty',
+        'Test-IncludedLibraryRow',
+        'Get-IncludedLibraryQueryScopes',
+        'Get-History',
+        'Get-RecentItems',
+        'New-ReleaseData',
+        'Get-LatestReleaseData'
+    )) {
+        $definition = $ast.FindAll({
+            param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq $functionName
+        }, $true) | Select-Object -First 1
+        if ($null -eq $definition) {
+            throw "Missing $functionName in $relative"
+        }
+        Invoke-Expression $definition.Extent.Text
+    }
+
+    $script:LibraryFilterEnabled = $true
+    $script:IncludedLibraryIdSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    [void]$script:IncludedLibraryIdSet.Add('10')
+    Assert-Equal -Name "$relative includes a selected-library row at runtime" `
+        -Actual (Test-IncludedLibraryRow -Row ([PSCustomObject]@{ section_id = '10' })) -Expected $true
+    Assert-Equal -Name "$relative excludes an unselected-library row at runtime" `
+        -Actual (Test-IncludedLibraryRow -Row ([PSCustomObject]@{ section_id = '99' })) -Expected $false
+    Assert-Equal -Name "$relative excludes an unscoped row at runtime" `
+        -Actual (Test-IncludedLibraryRow -Row ([PSCustomObject]@{ title = 'No section metadata' })) -Expected $false
+
+    $nowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $selectedMovie = [PSCustomObject]@{
+        section_id = '10'; media_type = 'movie'; rating_key = 'selected-movie'
+        title = 'Selected Movie'; year = '2026'; added_at = $nowEpoch
+        audience_rating = '91'; rating = '8.2'; summary = 'A selected-library release.'
+        play_duration = 7200; watched_status = 1; percent_complete = 100
+    }
+    $selectedEpisode = [PSCustomObject]@{
+        section_id = '20'; media_type = 'episode'; rating_key = 'selected-episode'
+        grandparent_rating_key = 'selected-show'; grandparent_title = 'Selected Show'
+        title = 'Selected Episode'; year = '2026'; added_at = $nowEpoch
+        parent_media_index = 1; media_index = 1; play_duration = 1800
+    }
+    $privateMovie = [PSCustomObject]@{
+        section_id = '99'; media_type = 'movie'; rating_key = 'private-movie'
+        title = 'Private Movie'; year = '2026'; added_at = $nowEpoch + 60
+        audience_rating = '99'; rating = '9.9'; summary = 'Must never influence selected output.'
+        play_duration = 10800; watched_status = 1; percent_complete = 100
+    }
+    [void]$script:IncludedLibraryIdSet.Add('20')
+
+    $script:scopeCalls = New-Object System.Collections.Generic.List[string]
+    $script:simulationPhase = 'normal'
+    function Invoke-TautulliApi {
+        param([string]$Command, [hashtable]$Parameters = @{})
+
+        $scope = if ($Parameters.ContainsKey('section_id')) { [string]$Parameters.section_id } else { '' }
+        $script:scopeCalls.Add("$Command`:$scope")
+
+        if ([string]::IsNullOrWhiteSpace($scope)) {
+            # This emulates a busy private library occupying every globally
+            # paged result. A correctly scoped renderer never consumes it.
+            $privatePage = @()
+            for ($index = 0; $index -lt 100; $index++) { $privatePage += $privateMovie }
+            if ($Command -eq 'get_history') {
+                return [PSCustomObject]@{ data = @($privateMovie); recordsFiltered = 1 }
+            }
+            return [PSCustomObject]@{ recently_added = $privatePage }
+        }
+
+        if ($script:simulationPhase -eq 'latest' -and
+            $Command -eq 'get_recently_added' -and
+            $scope -eq '20') {
+            $start = Safe-Int $Parameters.start
+            if ($start -eq 0) {
+                $firstPage = New-Object System.Collections.Generic.List[object]
+                for ($index = 1; $index -le 99; $index++) {
+                    $firstPage.Add([PSCustomObject]@{
+                        section_id = '20'; media_type = 'episode'; rating_key = "selected-episode-$index"
+                        grandparent_rating_key = 'selected-show'; grandparent_title = 'Selected Show'
+                        title = "Selected Episode $index"; year = '2026'; added_at = $nowEpoch - $index
+                        parent_media_index = 1; media_index = $index; play_duration = 1800
+                    })
+                }
+                $firstPage.Add($privateMovie)
+                return [PSCustomObject]@{ recently_added = $firstPage.ToArray() }
+            }
+            if ($start -eq 100) {
+                $secondPage = @()
+                foreach ($showNumber in 2..4) {
+                    $secondPage += [PSCustomObject]@{
+                        section_id = '20'; media_type = 'episode'; rating_key = "selected-show-$showNumber-episode"
+                        grandparent_rating_key = "selected-show-$showNumber"; grandparent_title = "Selected Show $showNumber"
+                        title = 'Premiere'; year = '2026'; added_at = $nowEpoch - (100 + $showNumber)
+                        parent_media_index = 1; media_index = 1; play_duration = 1800
+                    }
+                }
+                $secondPage += $privateMovie
+                return [PSCustomObject]@{ recently_added = $secondPage }
+            }
+        }
+
+        if ((Safe-Int $Parameters.start) -gt 0) {
+            if ($Command -eq 'get_history') {
+                return [PSCustomObject]@{ data = @(); recordsFiltered = 0 }
+            }
+            return [PSCustomObject]@{ recently_added = @() }
+        }
+
+        $selected = if ($scope -eq '10') { $selectedMovie } else { $selectedEpisode }
+        # Include a leaked private row to prove the client still fails closed
+        # if a Tautulli version ignores or mishandles section_id.
+        if ($Command -eq 'get_history') {
+            return [PSCustomObject]@{ data = @($selected, $privateMovie); recordsFiltered = 2 }
+        }
+        if ($Command -eq 'get_recently_added') {
+            return [PSCustomObject]@{ recently_added = @($selected, $privateMovie) }
+        }
+        throw "Unexpected simulated command: $Command"
+    }
+
+    $history = @(Get-History -AfterDate '2026-08-01' -BeforeDate '2026-08-07')
+    Assert-Equal -Name "$relative scopes history queries and rejects leaked private rows" `
+        -Actual (($history | ForEach-Object rating_key) -join ',') -Expected 'selected-movie,selected-episode'
+
+    $weekly = @(Get-RecentItems -StartEpoch ($nowEpoch - 3600) -EndEpochExclusive ($nowEpoch + 3600))
+    Assert-Equal -Name "$relative prevents private-library crowd-out in weekly releases" `
+        -Actual (($weekly | ForEach-Object rating_key) -join ',') -Expected 'selected-movie,selected-episode'
+
+    $script:simulationPhase = 'latest'
+    $latest = Get-LatestReleaseData -MovieLimit 4 -TvLimit 4
+    Assert-Equal -Name "$relative prevents private-library crowd-out in quiet-week fallback" `
+        -Actual ((@($latest.Movies.Title) + @($latest.TV.Title)) -join ',') `
+        -Expected 'Selected Movie,Selected Show,Selected Show 2,Selected Show 3,Selected Show 4'
+
+    $unscopedCalls = @($script:scopeCalls | Where-Object { $_ -match ':$' })
+    Assert-Equal -Name "$relative sends no global media query when a library scope is configured" `
+        -Actual $unscopedCalls.Count -Expected 0
+
+    $scopes = @(
+        $script:scopeCalls |
+            ForEach-Object { ($_ -split ':', 2)[1] } |
+            Sort-Object -Unique
+    )
+    Assert-Equal -Name "$relative queries every configured library" -Actual ($scopes -join ',') -Expected '10,20'
+
+    $script:LibraryFilterEnabled = $false
+    $script:scopeCalls.Clear()
+    $legacyHistory = @(Get-History -AfterDate '2026-08-01' -BeforeDate '2026-08-07')
+    Assert-Equal -Name "$relative preserves one global query for legacy empty scopes" `
+        -Actual ($script:scopeCalls -join ',') -Expected 'get_history:'
+    Assert-Equal -Name "$relative preserves legacy all-library history" `
+        -Actual (($legacyHistory | ForEach-Object rating_key) -join ',') -Expected 'private-movie'
 }
 
 foreach ($name in @('Library-Selection.ps1', 'Manage-Library-Selection.ps1')) {

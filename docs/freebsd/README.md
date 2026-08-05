@@ -147,6 +147,10 @@ sudo podman build --os=linux -t localhost/tautweekly:local .
 Set `TAUTWEEKLY_IMAGE=localhost/tautweekly:local` and restart only after the
 local image build succeeds.
 
+The package defaults to `/usr/local/bin/podman`. If Podman is installed in a
+different administrator-managed location, set `TAUTWEEKLY_PODMAN_BIN` in the
+same root-owned environment file before restarting the service.
+
 ## Troubleshooting
 
 - `cannot clone: Operation not supported`: confirm FreeBSD 15.1+, run
