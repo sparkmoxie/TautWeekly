@@ -53,6 +53,8 @@ user-defined Docker network, use its service name.
 
 ```bash
 ./tautweekly.sh verify
+./tautweekly.sh list-libraries
+./tautweekly.sh manage-libraries
 ./tautweekly.sh list-users
 ./tautweekly.sh exclude-users
 ./tautweekly.sh preview-all
@@ -95,6 +97,19 @@ Excluded users are skipped by automatic delivery and SendAll. Preview and
 TestEmail modes can still use them for safe rendering checks, and the one-off
 welcome remains a separately confirmed administrator action. Do not share the
 selector's names or email addresses publicly.
+
+## Manage newsletter libraries
+
+Primary setup discovers active movie and TV libraries through Tautulli and
+saves selected section IDs in `IncludedLibraryIds`. This single scope filters
+releases, quiet detection, Trending, Binge Champion, and personal statistics
+before the normal calculations. Empty or absent IDs preserve legacy
+all-library behavior.
+
+Run `./tautweekly.sh list-libraries` to inspect the scope or
+`./tautweekly.sh manage-libraries` to replace it. The manager accepts rows,
+ranges, `all`, or Enter to keep the current choice; it backs up the private
+config before writing and does not change SMTP, recipients, or scheduling.
 
 ## Data and updates
 

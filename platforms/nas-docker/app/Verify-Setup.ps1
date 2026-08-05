@@ -7,6 +7,7 @@ $ErrorActionPreference = "Stop"
 $configPath = Join-Path $DataRoot "config.json"
 $assetsDir = Join-Path $DataRoot "assets"
 $previewAssetsDir = Join-Path (Join-Path $DataRoot "output") "assets"
+. (Join-Path $PSScriptRoot "Library-Selection.ps1")
 
 function OK([string]$Text) { Write-Host "[OK]   $Text" -ForegroundColor Green }
 function WARN([string]$Text) { Write-Host "[WARN] $Text" -ForegroundColor Yellow }
@@ -113,6 +114,25 @@ try {
     $users = Invoke-RestMethod -Uri "$base/api/v2?apikey=$key&cmd=get_user_names" -TimeoutSec 20
     if ([string]$users.response.result -ne "success") { throw $users.response.message }
     OK "Tautulli user lookup works ($(@($users.response.data).Count) users found)"
+
+    $libraries = @(Get-TautWeeklySelectableLibraries -TautulliUrl $base -ApiKey ([string]$config.ApiKey))
+    $selectableLibraries = @($libraries | Where-Object { $_.Selectable })
+    if ($selectableLibraries.Count -eq 0) { throw "Tautulli did not report any active movie or TV libraries." }
+    $configuredLibraryIds = @()
+    if ($null -ne $config.PSObject.Properties["IncludedLibraryIds"]) {
+        $configuredLibraryIds = @(Get-TautWeeklyUniqueLibraryIds -Values @($config.IncludedLibraryIds))
+    }
+    if ($configuredLibraryIds.Count -eq 0) {
+        WARN "IncludedLibraryIds is empty or absent; legacy all-library scope is active ($($selectableLibraries.Count) libraries)."
+    }
+    else {
+        $availableIds = @($selectableLibraries | ForEach-Object { $_.SectionId })
+        $matchedIds = @($configuredLibraryIds | Where-Object { $availableIds -contains $_ })
+        $staleIds = @($configuredLibraryIds | Where-Object { $availableIds -notcontains $_ })
+        if ($matchedIds.Count -eq 0) { throw "None of the configured IncludedLibraryIds match an active movie or TV library. Run ./tautweekly.sh manage-libraries." }
+        OK "Global library scope matches $($matchedIds.Count) active movie/TV libraries"
+        if ($staleIds.Count -gt 0) { WARN ("Configured library IDs no longer available: " + ($staleIds -join ", ")) }
+    }
 }
 catch { FAIL "Tautulli API verification failed: $($_.Exception.Message)"; exit 1 }
 

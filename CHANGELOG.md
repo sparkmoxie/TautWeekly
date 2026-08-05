@@ -6,6 +6,21 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Added global movie/TV library discovery and selection to every primary setup
+  flow, using stable Tautulli section IDs and preserving legacy all-library
+  behavior for configurations without an explicit selection.
+- Added standalone list and management commands for Windows, NAS/Unraid,
+  macOS, native Linux, and FreeBSD, including configuration backup and stale-ID
+  verification.
+
+### Changed
+
+- Filter history and recently-added rows before calculating releases, quiet
+  mode, Trending, hero content, Binge Champion, and personal statistics so
+  unselected libraries cannot influence newsletter output.
+
 ## [0.5.3] - 2026-08-05
 
 ### Fixed

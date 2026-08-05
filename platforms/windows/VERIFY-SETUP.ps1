@@ -4,6 +4,7 @@ $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $configPath = Join-Path $root "config.json"
 $assetsDir = Join-Path $root "assets"
+. (Join-Path $root "Library-Selection.ps1")
 
 function OK([string]$Text) { Write-Host "[OK]   $Text" -ForegroundColor Green }
 function WARN([string]$Text) { Write-Host "[WARN] $Text" -ForegroundColor Yellow }
@@ -143,6 +144,31 @@ try {
     $userCount = @($usersResponse.response.data).Count
     OK "Tautulli user lookup works ($userCount users found)"
 
+    $libraries = @(Get-TautWeeklySelectableLibraries -TautulliUrl $base -ApiKey ([string]$config.ApiKey))
+    $selectableLibraries = @($libraries | Where-Object { $_.Selectable })
+    if ($selectableLibraries.Count -eq 0) {
+        FAIL "Tautulli did not report any active movie or TV libraries."
+        exit 1
+    }
+    $configuredLibraryIds = @()
+    if ($null -ne $config.PSObject.Properties["IncludedLibraryIds"]) {
+        $configuredLibraryIds = @(Get-TautWeeklyUniqueLibraryIds -Values @($config.IncludedLibraryIds))
+    }
+    if ($configuredLibraryIds.Count -eq 0) {
+        WARN "IncludedLibraryIds is empty or absent; legacy all-library scope is active ($($selectableLibraries.Count) libraries)."
+    }
+    else {
+        $availableIds = @($selectableLibraries | ForEach-Object { $_.SectionId })
+        $matchedIds = @($configuredLibraryIds | Where-Object { $availableIds -contains $_ })
+        $staleIds = @($configuredLibraryIds | Where-Object { $availableIds -notcontains $_ })
+        if ($matchedIds.Count -eq 0) {
+            FAIL "None of the configured IncludedLibraryIds match an active movie or TV library. Run 15-MANAGE-LIBRARIES.bat."
+            exit 1
+        }
+        OK "Global library scope matches $($matchedIds.Count) active movie/TV libraries"
+        if ($staleIds.Count -gt 0) { WARN ("Configured library IDs no longer available: " + ($staleIds -join ", ")) }
+    }
+
     # Verify the Tautulli build advertises the core API commands this newsletter
     # relies on. Older/unusual builds can otherwise pass a basic connectivity
     # test and fail only when previewing. The docs endpoint is itself optional,
@@ -152,7 +178,7 @@ try {
         $docsResponse = Invoke-RestMethod -Uri $docsUri -Method Get -TimeoutSec 20
         if ([string]$docsResponse.response.result -eq "success" -and $null -ne $docsResponse.response.data) {
             $requiredCommands = @(
-                "get_users", "get_user", "get_history", "get_recently_added",
+                "get_users", "get_user", "get_history", "get_recently_added", "get_libraries",
                 "get_metadata", "get_children_metadata", "get_user_names", "pms_image_proxy"
             )
             $availableCommands = @($docsResponse.response.data.PSObject.Properties.Name)

@@ -54,6 +54,9 @@ jobs:
       - name: Test Binge Champion privacy and ranking
         shell: powershell
         run: .\scripts\test-binge-champion.ps1
+      - name: Test global library selection and renderer scope
+        shell: powershell
+        run: .\scripts\test-library-selection.ps1
 
   release-archives:
     name: Reproducible release archives

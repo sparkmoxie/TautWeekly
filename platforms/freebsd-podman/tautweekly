@@ -64,6 +64,8 @@ case "$cmd" in
   verify) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1 ;;
   list-users) run_mode ListUsers ;;
   exclude-users|manage-exclusions) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1 ;;
+  list-libraries) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1 -ListOnly ;;
+  libraries|manage-libraries) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1 ;;
   preview) user="$(prompt_user "${1:-}")"; run_mode Preview "$user" ;;
   preview-all) user="$(prompt_user "${1:-}")"; run_mode PreviewAll "$user" ;;
   send-test)
@@ -138,6 +140,8 @@ TautWeekly for Plex FreeBSD Podman commands
   sudo tautweekly verify
   sudo tautweekly list-users
   sudo tautweekly exclude-users
+  sudo tautweekly list-libraries
+  sudo tautweekly manage-libraries
   sudo tautweekly preview [user]
   sudo tautweekly preview-all [user]
   sudo tautweekly send-test [user]

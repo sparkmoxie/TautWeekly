@@ -71,6 +71,8 @@ case "$cmd" in
   verify) run_ps Verify-Setup.ps1 -DataRoot "$data_root" ;;
   list-users) run_mode ListUsers ;;
   exclude-users|manage-exclusions) run_ps Manage-User-Exclusions.ps1 -ConfigPath "$TAUTWEEKLY_CONFIG" ;;
+  list-libraries) run_ps Manage-Library-Selection.ps1 -ConfigPath "$TAUTWEEKLY_CONFIG" -ListOnly ;;
+  libraries|manage-libraries) run_ps Manage-Library-Selection.ps1 -ConfigPath "$TAUTWEEKLY_CONFIG" ;;
   preview)
     user="$(prompt_user "${1:-}")"
     run_mode Preview "$user"
@@ -152,6 +154,8 @@ TautWeekly for Plex native Linux commands
   sudo tautweekly verify
   sudo tautweekly list-users
   sudo tautweekly exclude-users
+  sudo tautweekly list-libraries
+  sudo tautweekly manage-libraries
   sudo tautweekly preview [user]
   sudo tautweekly preview-all [user]
   sudo tautweekly send-test [user]

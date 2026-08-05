@@ -35,6 +35,8 @@ case "$cmd" in
   verify) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1 ;;
   list-users) compose_cmd exec tautweekly /opt/tautweekly/bin/run-mode.sh ListUsers ;;
   exclude-users|manage-exclusions) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1 ;;
+  list-libraries) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1 -ListOnly ;;
+  libraries|manage-libraries) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1 ;;
   preview)
     user="$(prompt_user "${1:-}")"
     compose_cmd exec tautweekly /opt/tautweekly/bin/run-mode.sh Preview "$user"
@@ -94,6 +96,8 @@ TautWeekly for Plex NAS Portable commands
   ./tautweekly.sh verify
   ./tautweekly.sh list-users
   ./tautweekly.sh exclude-users
+  ./tautweekly.sh list-libraries
+  ./tautweekly.sh manage-libraries
   ./tautweekly.sh preview [user]
   ./tautweekly.sh preview-all [user]
   ./tautweekly.sh send-test [user]

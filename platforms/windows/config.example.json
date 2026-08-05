@@ -26,6 +26,7 @@
   "MinimumEpisodeSeconds": 120,
   "MaxMovies": 8,
   "MaxTv": 8,
+  "IncludedLibraryIds": [],
   "ExcludedUserIds": [],
   "ExcludedEmails": [],
   "RecentAccessDays": 7,

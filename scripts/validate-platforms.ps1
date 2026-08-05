@@ -79,9 +79,28 @@ Require-Text 'platforms/nas-docker/app/User-Exclusions.ps1' @(
 )
 Require-Text 'platforms/nas-docker/tautweekly.sh' @(
     '\.\/tautweekly\.sh setup',
+    'list-libraries',
+    'manage-libraries',
     '\.\/tautweekly\.sh start',
     '\.\/tautweekly\.sh stop'
 )
+
+Require-Text 'platforms/linux/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1')
+Require-Text 'platforms/freebsd-podman/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1')
+
+foreach ($relative in @(
+    'platforms/windows/Library-Selection.ps1',
+    'platforms/windows/Manage-Library-Selection.ps1',
+    'platforms/nas-docker/app/Library-Selection.ps1',
+    'platforms/nas-docker/app/Manage-Library-Selection.ps1',
+    'platforms/mac-docker/app/Library-Selection.ps1',
+    'platforms/mac-docker/app/Manage-Library-Selection.ps1'
+)) {
+    if (-not (Test-Path -LiteralPath (Join-Path $Root $relative))) {
+        throw "Required library-selection source is missing: $relative"
+    }
+}
+Write-Host '[PASS] Every directly shipped runtime contains library-selection management source.'
 
 foreach ($relative in @(
     'app/entrypoint.sh',

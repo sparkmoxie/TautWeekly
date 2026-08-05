@@ -12,6 +12,7 @@ $root = $PSScriptRoot
 $configPath = Join-Path $root "config.json"
 $examplePath = Join-Path $root "config.example.json"
 . (Join-Path $root "User-Exclusions.ps1")
+. (Join-Path $root "Library-Selection.ps1")
 
 function Read-Default {
     param([string]$Prompt, [string]$Default = "")
@@ -81,6 +82,7 @@ Write-Host ""
 
 $existingExcludedUserIds = @()
 $existingExcludedEmails = @()
+$existingIncludedLibraryIds = @()
 if (Test-Path $configPath) {
     Write-Host "An existing config.json was found:" -ForegroundColor Yellow
     Write-Host "  $configPath"
@@ -96,9 +98,12 @@ if (Test-Path $configPath) {
         if ($null -ne $existingConfig.PSObject.Properties["ExcludedEmails"]) {
             $existingExcludedEmails = @($existingConfig.ExcludedEmails)
         }
+        if ($null -ne $existingConfig.PSObject.Properties["IncludedLibraryIds"]) {
+            $existingIncludedLibraryIds = @($existingConfig.IncludedLibraryIds)
+        }
     }
     catch {
-        Write-Host "WARNING: Existing exclusions could not be read and will not be carried forward." -ForegroundColor Yellow
+        Write-Host "WARNING: Existing user exclusions and library selection could not be read and will not be carried forward." -ForegroundColor Yellow
     }
     $backup = Join-Path $root ("config.backup.{0}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
     Copy-Item $configPath $backup -Force
@@ -108,6 +113,21 @@ if (Test-Path $configPath) {
 $tautulliUrl = Read-Default "Tautulli URL" "http://127.0.0.1:8181"
 $apiKey = Read-Default "Tautulli API key"
 if ([string]::IsNullOrWhiteSpace($apiKey)) { throw "Tautulli API key is required." }
+
+$includedLibraryIds = @($existingIncludedLibraryIds)
+try {
+    $selectableLibraries = @(Get-TautWeeklySelectableLibraries -TautulliUrl $tautulliUrl -ApiKey $apiKey)
+    $includedLibraryIds = @(Read-TautWeeklyIncludedLibraryIds -Libraries $selectableLibraries -CurrentIncludedLibraryIds $includedLibraryIds)
+}
+catch {
+    if ($existingIncludedLibraryIds.Count -gt 0) {
+        Write-Host "WARNING: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "Existing newsletter library selection will be preserved. Run 15-MANAGE-LIBRARIES.bat after verification." -ForegroundColor Yellow
+    }
+    else {
+        throw "Newsletter libraries could not be selected: $($_.Exception.Message)"
+    }
+}
 
 $excludedUserIds = @($existingExcludedUserIds)
 try {
@@ -207,6 +227,7 @@ $config = [ordered]@{
     MinimumEpisodeSeconds = 120
     MaxMovies = 8
     MaxTv = 8
+    IncludedLibraryIds = @($includedLibraryIds)
     ExcludedUserIds = @($excludedUserIds)
     ExcludedEmails = @($existingExcludedEmails)
     RecentAccessDays = 7

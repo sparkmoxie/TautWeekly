@@ -3,6 +3,8 @@ TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 
 Unreleased
 ----------
+- adds setup and standalone global movie/TV library selection
+- scopes releases, quiet mode, Trending, Binge Champion, and personal statistics upstream
 - keeps container liveness healthy during long scheduled deliveries
 - reports exact preview/supervisor health failures and treats missing artwork as repairable
 - loads the exclusion roster from get_user_names and get_users in two bulk calls
