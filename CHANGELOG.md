@@ -14,12 +14,27 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added standalone list and management commands for Windows, NAS/Unraid,
   macOS, native Linux, and FreeBSD, including configuration backup and stale-ID
   verification.
+- Added deterministic virtual Tautulli/Plex integration scenarios for active
+  and quiet release weeks, cross-platform command-routing tests, packaged
+  runtime contract checks, and checksum verification for every distribution.
 
 ### Changed
 
-- Filter history and recently-added rows before calculating releases, quiet
-  mode, Trending, hero content, Binge Champion, and personal statistics so
-  unselected libraries cannot influence newsletter output.
+- Query each selected Tautulli section independently for history and
+  recently-added media, then fail closed on mismatched rows before calculating
+  releases, quiet mode, Trending, hero content, Binge Champion, and personal
+  statistics. Busy private libraries can no longer crowd selected releases out
+  of paged API results.
+- Allow the FreeBSD Podman binary path to be set with
+  `TAUTWEEKLY_PODMAN_BIN`, while retaining `/usr/local/bin/podman` as the
+  package default.
+
+### Fixed
+
+- Corrected the selected-library row predicate on all renderers. PowerShell
+  previously accepted an unsupported parameter without binding the row,
+  causing every history and release item to be rejected whenever an explicit
+  library scope was enabled.
 
 ## [0.5.3] - 2026-08-05
 

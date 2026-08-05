@@ -30,12 +30,16 @@ jobs:
         run: ./scripts/validate-shell.sh
       - name: Test container health behavior
         run: ./scripts/test-container-health.sh
+      - name: Test cross-platform command routing
+        run: ./scripts/test-platform-command-routing.sh
       - name: Validate NAS Compose configuration
         run: |
           docker compose -f platforms/nas-docker/compose.yaml config --quiet
           docker compose -f platforms/nas-docker/compose.qnap.yaml config --quiet
       - name: Validate macOS Compose configuration
         run: docker compose -f platforms/mac-docker/compose.yaml config --quiet
+      - name: Build and boot-test the macOS Docker image
+        run: ./scripts/test-container-image.sh tautweekly-mac-ci platforms/mac-docker
 
   powershell-syntax:
     name: PowerShell syntax
@@ -57,6 +61,9 @@ jobs:
       - name: Test global library selection and renderer scope
         shell: powershell
         run: .\scripts\test-library-selection.ps1
+      - name: Test full active-week and quiet-week rendering
+        shell: powershell
+        run: .\scripts\test-newsletter-integration.ps1
 
   release-archives:
     name: Reproducible release archives
@@ -67,6 +74,9 @@ jobs:
       - name: Build archives and SHA-256 checksums
         shell: pwsh
         run: ./scripts/build-releases.ps1 -Version ci
+      - name: Test packaged runtime contracts and checksums
+        shell: pwsh
+        run: ./scripts/test-release-artifacts.ps1
       - name: Test ZIP archives
         run: for file in dist/*.zip; do unzip -t "$file"; done
       - name: Test TAR.GZ archives

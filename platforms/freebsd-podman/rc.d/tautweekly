@@ -37,7 +37,8 @@ tautweekly_load_env()
     : "${TAUTWEEKLY_PREVIEW_BIND:=127.0.0.1}"
     : "${TAUTWEEKLY_PREVIEW_PORT:=8787}"
     : "${TAUTWEEKLY_PREVIEW_BASE_URL:=http://127.0.0.1:8787}"
-    PODMAN="/usr/local/bin/podman"
+    : "${TAUTWEEKLY_PODMAN_BIN:=/usr/local/bin/podman}"
+    PODMAN="$TAUTWEEKLY_PODMAN_BIN"
 }
 
 tautweekly_start()

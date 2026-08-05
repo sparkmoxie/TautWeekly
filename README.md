@@ -79,10 +79,12 @@ one global newsletter scope.
 
 The renderer applies that scope before calculating new/latest releases, quiet
 mode, Trending, the hero, Binge Champion, and each recipient's personal stats.
-The existing algorithms and privacy treatment remain unchanged; activity from
-an unselected admin-only library cannot affect those results. An absent or
-empty `IncludedLibraryIds` retains the legacy all-library behavior for upgraded
-configurations.
+Each selected section is queried independently and every returned row is
+checked against its requested section before use. This prevents a busy
+unselected admin-only library from affecting calculations or crowding selected
+releases out of paged API results. The existing algorithms and privacy
+treatment remain unchanged. An absent or empty `IncludedLibraryIds` retains
+the legacy all-library behavior for upgraded configurations.
 
 Revise the scope later without rerunning SMTP or schedule setup:
 

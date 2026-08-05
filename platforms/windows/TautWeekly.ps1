@@ -360,11 +360,25 @@ if ($script:LibraryFilterEnabled) {
 }
 
 function Test-IncludedLibraryRow {
-    param([object]$Row)
+    param(
+        [object]$Row,
+        [string]$ExpectedSectionId = ""
+    )
 
     if (-not $script:LibraryFilterEnabled) { return $true }
-    $sectionId = (Get-OptionalStringProperty -Object $Row -Name "section_id").Trim()
-    return (-not [string]::IsNullOrWhiteSpace($sectionId) -and $script:IncludedLibraryIdSet.Contains($sectionId))
+    $sectionId = (Get-OptionalStringProperty -InputObject $Row -Name "section_id").Trim()
+    if ([string]::IsNullOrWhiteSpace($sectionId) -or -not $script:IncludedLibraryIdSet.Contains($sectionId)) {
+        return $false
+    }
+    return (
+        [string]::IsNullOrWhiteSpace($ExpectedSectionId) -or
+        $sectionId -eq $ExpectedSectionId
+    )
+}
+
+function Get-IncludedLibraryQueryScopes {
+    if (-not $script:LibraryFilterEnabled) { return @('') }
+    return @($script:IncludedLibraryIdSet | Sort-Object)
 }
 
 function Require-ConfigValue {
@@ -531,35 +545,40 @@ function Get-History {
     )
 
     $all = New-Object System.Collections.Generic.List[object]
-    $start = 0
     $pageSize = 1000
 
-    while ($true) {
-        $params = @{
-            grouping = 1
-            after    = $AfterDate
-            before   = $BeforeDate
-            start    = $start
-            length   = $pageSize
-        }
-        if (-not [string]::IsNullOrWhiteSpace($ForUserId)) {
-            $params.user_id = $ForUserId
-        }
-
-        $data = Invoke-TautulliApi -Command "get_history" -Parameters $params
-        $rows = @($data.data)
-
-        foreach ($row in $rows) {
-            if (Test-IncludedLibraryRow -Row $row) {
-                $all.Add($row)
+    foreach ($sectionId in @(Get-IncludedLibraryQueryScopes)) {
+        $start = 0
+        while ($true) {
+            $params = @{
+                grouping = 1
+                after    = $AfterDate
+                before   = $BeforeDate
+                start    = $start
+                length   = $pageSize
             }
+            if (-not [string]::IsNullOrWhiteSpace($ForUserId)) {
+                $params.user_id = $ForUserId
+            }
+            if (-not [string]::IsNullOrWhiteSpace($sectionId)) {
+                $params.section_id = $sectionId
+            }
+
+            $data = Invoke-TautulliApi -Command "get_history" -Parameters $params
+            $rows = @($data.data)
+
+            foreach ($row in $rows) {
+                if (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId) {
+                    $all.Add($row)
+                }
+            }
+
+            if ($rows.Count -lt $pageSize) { break }
+
+            $start += $rows.Count
+            $total = Safe-Int $data.recordsFiltered
+            if ($total -gt 0 -and $start -ge $total) { break }
         }
-
-        if ($rows.Count -lt $pageSize) { break }
-
-        $start += $rows.Count
-        $total = Safe-Int $data.recordsFiltered
-        if ($total -gt 0 -and $start -ge $total) { break }
     }
 
     return $all.ToArray()
@@ -572,33 +591,40 @@ function Get-RecentItems {
     )
 
     $all = New-Object System.Collections.Generic.List[object]
-    $start = 0
     $pageSize = 100
     $maxPages = 20
 
-    for ($page = 0; $page -lt $maxPages; $page++) {
-        $data = Invoke-TautulliApi -Command "get_recently_added" -Parameters @{
-            count = $pageSize
-            start = $start
-        }
-
-        $rows = @($data.recently_added)
-        if ($rows.Count -eq 0) { break }
-
-        $oldest = [int64]::MaxValue
-        foreach ($row in $rows) {
-            $added = Safe-Int64 $row.added_at
-            if ($added -lt $oldest) { $oldest = $added }
-
-            if ($added -ge $StartEpoch -and $added -lt $EndEpochExclusive -and (Test-IncludedLibraryRow -Row $row)) {
-                $all.Add($row)
+    foreach ($sectionId in @(Get-IncludedLibraryQueryScopes)) {
+        $start = 0
+        for ($page = 0; $page -lt $maxPages; $page++) {
+            $params = @{
+                count = $pageSize
+                start = $start
             }
+            if (-not [string]::IsNullOrWhiteSpace($sectionId)) {
+                $params.section_id = $sectionId
+            }
+
+            $data = Invoke-TautulliApi -Command "get_recently_added" -Parameters $params
+            $rows = @($data.recently_added)
+            if ($rows.Count -eq 0) { break }
+
+            $oldest = [int64]::MaxValue
+            foreach ($row in $rows) {
+                $added = Safe-Int64 $row.added_at
+                if ($added -lt $oldest) { $oldest = $added }
+
+                if ($added -ge $StartEpoch -and $added -lt $EndEpochExclusive -and
+                    (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId)) {
+                    $all.Add($row)
+                }
+            }
+
+            if ($oldest -lt $StartEpoch) { break }
+            if ($rows.Count -lt $pageSize) { break }
+
+            $start += $rows.Count
         }
-
-        if ($oldest -lt $StartEpoch) { break }
-        if ($rows.Count -lt $pageSize) { break }
-
-        $start += $rows.Count
     }
 
     return $all.ToArray()
@@ -1150,32 +1176,44 @@ function Get-LatestReleaseData {
     )
 
     $all = New-Object System.Collections.Generic.List[object]
-    $start = 0
     $pageSize = 100
     $maxPages = 10
 
-    for ($page = 0; $page -lt $maxPages; $page++) {
-        $data = Invoke-TautulliApi -Command "get_recently_added" -Parameters @{
-            count = $pageSize
-            start = $start
-        }
-
-        $rows = @($data.recently_added)
-        if ($rows.Count -eq 0) { break }
-
-        foreach ($row in $rows) {
-            if (Test-IncludedLibraryRow -Row $row) {
-                $all.Add($row)
+    foreach ($sectionId in @(Get-IncludedLibraryQueryScopes)) {
+        $start = 0
+        $scopeRows = New-Object System.Collections.Generic.List[object]
+        for ($page = 0; $page -lt $maxPages; $page++) {
+            $params = @{
+                count = $pageSize
+                start = $start
             }
-        }
+            if (-not [string]::IsNullOrWhiteSpace($sectionId)) {
+                $params.section_id = $sectionId
+            }
 
-        $snapshot = New-ReleaseData -RecentItems $all.ToArray()
-        if ($snapshot.Movies.Count -ge $MovieLimit -and $snapshot.TV.Count -ge $TvLimit) {
-            break
-        }
+            $data = Invoke-TautulliApi -Command "get_recently_added" -Parameters $params
+            $rows = @($data.recently_added)
+            if ($rows.Count -eq 0) { break }
 
-        if ($rows.Count -lt $pageSize) { break }
-        $start += $rows.Count
+            foreach ($row in $rows) {
+                if (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId) {
+                    $all.Add($row)
+                    $scopeRows.Add($row)
+                }
+            }
+
+            $scopeSnapshot = New-ReleaseData -RecentItems $scopeRows.ToArray()
+            $enoughForScope = if ($script:LibraryFilterEnabled) {
+                ($scopeSnapshot.Movies.Count -ge $MovieLimit -or $scopeSnapshot.TV.Count -ge $TvLimit)
+            }
+            else {
+                ($scopeSnapshot.Movies.Count -ge $MovieLimit -and $scopeSnapshot.TV.Count -ge $TvLimit)
+            }
+            if ($enoughForScope) { break }
+
+            if ($rows.Count -lt $pageSize) { break }
+            $start += $rows.Count
+        }
     }
 
     $result = New-ReleaseData -RecentItems $all.ToArray()

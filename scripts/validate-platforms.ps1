@@ -39,6 +39,7 @@ Require-Text 'platforms/freebsd-podman/rc.d/tautweekly' @(
     'REQUIRE: NETWORKING linux podman',
     '--os=linux',
     'TAUTWEEKLY_PREVIEW_BIND:=127\.0\.0\.1',
+    'TAUTWEEKLY_PODMAN_BIN:=/usr/local/bin/podman',
     '/var/db/tautweekly'
 )
 Require-Text 'platforms/freebsd-podman/install-freebsd.sh' @(
