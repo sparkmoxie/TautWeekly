@@ -34,6 +34,28 @@ bulk commands and that the runtime can reach the exact configured URL. A row
 from `get_user_names` remains selectable if detailed data is unavailable; no
 exclusion changes are saved only when neither endpoint yields selectable users.
 
+## Container is unhealthy
+
+Update to v0.5.3 or newer before investigating an unhealthy Docker service.
+Earlier releases used scheduler progress as container liveness, so a normal
+scheduled `SendAll` lasting several minutes could age out the heartbeat even
+while delivery and previews continued working. Current releases use a separate
+five-second service-supervisor heartbeat. The supervisor already exits the
+container if either the scheduler or preview process terminates.
+
+Inspect the recorded reason with:
+
+```bash
+docker inspect tautweekly --format '{{range .State.Health.Log}}{{.End}} exit={{.ExitCode}} {{printf "%q" .Output}}{{println}}{{end}}'
+```
+
+An unavailable preview root or a missing, unreadable, or stale
+`service-heartbeat.json` remains a real liveness failure. A missing
+`movies.gif` now prints a repair warning without declaring the service dead;
+run `./tautweekly.sh repair-assets` and `./tautweekly.sh verify`. Scheduler
+progress remains visible through `./tautweekly.sh schedule-status` and
+`scheduler-heartbeat.json`, but it no longer controls Docker health.
+
 ## Preview does not open
 
 Windows writes previews under `output/`. Docker, Linux, and FreeBSD editions

@@ -715,14 +715,14 @@ docker compose up -d
       </div>
     </section>
 
-    <section class="content-section searchable" id="troubleshooting" data-search="troubleshooting unhealthy gif unreadable preview 404 permission denied tautulli smtp port">
+    <section class="content-section searchable" id="troubleshooting" data-search="troubleshooting unhealthy supervisor heartbeat long send gif unreadable preview 404 permission denied tautulli smtp port">
       <div class="section-heading">
         <div><div class="section-eyebrow">Diagnostics</div><h2>Common problems</h2></div>
         <p>Start with status, logs, and verification before changing configuration blindly.</p>
       </div>
       <details>
         <summary>Container is unhealthy</summary>
-        <div class="details-body">Run <code>docker compose ps</code> and <code>./tautweekly.sh logs</code>. The healthcheck requests the preview root and <code>/assets/movies.gif</code>. A failed asset request can make the service unhealthy even when the process is still running.</div>
+        <div class="details-body">Update to v0.5.3 or newer, then run <code>docker compose ps</code> and <code>./tautweekly.sh logs</code>. Container liveness now uses a five-second service-supervisor heartbeat that continues during long scheduled sends. The preview root and supervisor heartbeat are hard requirements. Missing <code>movies.gif</code> emits a repair warning without declaring the service dead; run <code>./tautweekly.sh repair-assets</code>. Docker health output identifies the exact failed probe.</div>
       </details>
       <details>
         <summary>Preview page loads but GIFs or icons are missing</summary>
