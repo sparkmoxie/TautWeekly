@@ -4,6 +4,7 @@ data_root="${TAUTWEEKLY_DATA_DIR:-/data}"
 app_root="${TAUTWEEKLY_APP_DIR:-/opt/tautweekly}"
 preview_bind="${TAUTWEEKLY_PREVIEW_BIND:-0.0.0.0}"
 preview_port="${TAUTWEEKLY_PREVIEW_LISTEN_PORT:-8080}"
+service_heartbeat="$data_root/service-heartbeat.json"
 mkdir -p "$data_root/output" "$data_root/logs"
 WEB_PID=""
 SCHED_PID=""
@@ -12,6 +13,15 @@ if ! [[ "$preview_port" =~ ^[0-9]+$ ]] || (( preview_port < 1 || preview_port > 
   echo "[ERROR] TAUTWEEKLY_PREVIEW_LISTEN_PORT must be an integer from 1 through 65535." >&2
   exit 64
 fi
+
+write_service_heartbeat() {
+  local temp_path="${service_heartbeat}.tmp"
+  local utc_now
+  utc_now="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  printf '{"Utc":"%s","ProcessId":%s,"PreviewProcessId":%s,"SchedulerProcessId":%s}\n' \
+    "$utc_now" "$$" "${WEB_PID:-0}" "${SCHED_PID:-0}" >"$temp_path"
+  mv -f "$temp_path" "$service_heartbeat"
+}
 
 term() {
   [[ -z "$SCHED_PID" ]] || kill -TERM "$SCHED_PID" 2>/dev/null || true
@@ -46,7 +56,9 @@ pwsh -NoLogo -NoProfile -NonInteractive -File "$app_root/Scheduler.ps1" -DataRoo
 SCHED_PID=$!
 
 STATUS=0
+write_service_heartbeat
 while kill -0 "$WEB_PID" 2>/dev/null && kill -0 "$SCHED_PID" 2>/dev/null; do
+  write_service_heartbeat
   sleep 5
 done
 

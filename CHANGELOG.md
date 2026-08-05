@@ -6,6 +6,19 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-08-05
+
+### Fixed
+
+- Replaced Docker health's scheduler-progress dependency with a five-second
+  service-supervisor heartbeat, preventing long scheduled deliveries from
+  making a working container appear unhealthy.
+- Made missing decorative preview artwork a repair warning rather than a
+  liveness failure, while retaining hard failures for an unavailable preview
+  listener and a missing, unreadable, or stale supervisor heartbeat.
+- Added actionable health-probe errors and an eight-scenario functional suite
+  covering failure isolation and automatic recovery.
+
 ## [0.5.2] - 2026-08-05
 
 ### Fixed

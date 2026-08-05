@@ -49,8 +49,16 @@ Require-Text 'platforms/freebsd-podman/install-freebsd.sh' @(
 Require-Text 'platforms/nas-docker/app/run-service.sh' @(
     'Preview server listening',
     'curl --fail --silent --max-time 2',
+    'service-heartbeat\.json',
+    'write_service_heartbeat',
     'Preview server exited unexpectedly',
     'Scheduler exited unexpectedly'
+)
+Require-Text 'platforms/nas-docker/app/healthcheck.sh' @(
+    'service-heartbeat\.json',
+    'TAUTWEEKLY_HEALTH_HEARTBEAT_MAX_SECONDS',
+    'Service supervisor heartbeat is stale',
+    '\[WARN\] Preview asset movies\.gif is unavailable'
 )
 Require-Text 'platforms/nas-docker/app/Scheduler.ps1' @(
     'only reads \$configPath',
@@ -77,6 +85,7 @@ Require-Text 'platforms/nas-docker/tautweekly.sh' @(
 
 foreach ($relative in @(
     'app/entrypoint.sh',
+    'app/healthcheck.sh',
     'app/preview-home.html',
     'app/run-service.sh',
     'app/bin/run-mode.sh',
@@ -90,7 +99,7 @@ foreach ($relative in @(
 }
 Write-Host '[PASS] Shared runtime wrappers remain identical across container editions.'
 
-$forbiddenRuntimeNames = @('config.json', '.env', 'state.json', 'access-state.json', 'scheduler-state.json')
+$forbiddenRuntimeNames = @('config.json', '.env', 'state.json', 'access-state.json', 'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json')
 foreach ($platform in @('linux', 'freebsd-podman')) {
     $path = Join-Path (Join-Path $Root 'platforms') $platform
     $forbidden = @(Get-ChildItem -LiteralPath $path -Recurse -Force | Where-Object {

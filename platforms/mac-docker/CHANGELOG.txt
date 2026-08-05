@@ -3,6 +3,8 @@ TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 
 Unreleased
 ----------
+- keeps container liveness healthy during long scheduled deliveries
+- reports exact preview/supervisor health failures and treats missing artwork as repairable
 - loads the exclusion roster from get_user_names and get_users in two bulk calls
 - falls back to the bulk roster when Tautulli rejects a single-user lookup
 - adds interactive stable-ID user exclusions to primary setup

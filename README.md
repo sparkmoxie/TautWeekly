@@ -191,6 +191,11 @@ commands. Setup writes the required persistent configuration to
 `/data/config.json`; automatic delivery remains disabled until explicitly
 enabled.
 
+Container liveness uses a dedicated service-supervisor heartbeat, so a long
+scheduled delivery does not make a working service appear unhealthy. Missing
+decorative preview artwork emits a repair warning; a stopped preview listener
+or stalled supervisor remains a health failure with an explicit reason.
+
 For QNAP, use Container Station with the supplied
 [`compose.qnap.yaml`](platforms/nas-docker/compose.qnap.yaml), or use the
 guided release installer. QNAP App Center uses native QPKG packages, so the
@@ -227,7 +232,8 @@ chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh
 ```
 
 The installer detects the host UID/GID and keeps previews on localhost by
-default.
+default. Docker health uses the same supervisor-based probe as the NAS edition,
+so long sends do not interrupt liveness reporting.
 
 [Open the rendered macOS walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
 · [Read the Markdown install guide](docs/mac/README.md)

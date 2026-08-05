@@ -103,5 +103,10 @@ Private runtime data lives in `data/`. Back it up with
 `./tautweekly.sh update`. Re-run verification and controlled previews after an
 update.
 
+Docker health uses a service-supervisor heartbeat that continues throughout
+long scheduled sends. A stopped preview listener or stalled supervisor remains
+unhealthy; missing decorative artwork produces a repair warning and can be
+restored with `./tautweekly.sh repair-assets`.
+
 See [configuration](../CONFIGURATION.md), [security](../SECURITY.md), and
 [troubleshooting](../TROUBLESHOOTING.md).

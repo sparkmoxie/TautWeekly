@@ -201,6 +201,18 @@ Create a private backup with:
 The backup contains credentials. Store it as securely as the live
 configuration.
 
+## Container health
+
+Release v0.5.3 and newer reports liveness from the service supervisor every
+five seconds. Scheduled `SendAll` work may take several minutes without making
+the container unhealthy. The preview root and supervisor heartbeat are hard
+health requirements; missing decorative artwork emits a repair warning and is
+handled by `./tautweekly.sh repair-assets`.
+
+Use `docker inspect` to read the exact failed probe, `./tautweekly.sh logs` for
+service output, and `./tautweekly.sh schedule-status` for separate scheduler
+progress. NAS, QNAP, and general Compose deployments share this behavior.
+
 ## Lifecycle commands
 
 ```bash
