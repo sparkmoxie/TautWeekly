@@ -98,6 +98,7 @@ case "$cmd" in
 TautWeekly for Plex Mac Portable commands
 
   ./tautweekly.sh install
+  ./tautweekly.sh setup
   ./tautweekly.sh open-preview
   ./tautweekly.sh verify
   ./tautweekly.sh list-users
@@ -115,6 +116,8 @@ TautWeekly for Plex Mac Portable commands
   ./tautweekly.sh schedule-reset
   ./tautweekly.sh logs
   ./tautweekly.sh status
+  ./tautweekly.sh start
+  ./tautweekly.sh stop
   ./tautweekly.sh restart
   ./tautweekly.sh backup
   ./tautweekly.sh update

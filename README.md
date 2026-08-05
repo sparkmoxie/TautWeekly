@@ -181,6 +181,12 @@ pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
 The published image is available for 64-bit Intel/AMD and ARM hosts at
 `ghcr.io/sparkmoxie/tautweekly:latest`.
 
+Port 8787 is a read-only preview viewer, not an administration Web UI. Its
+landing page confirms the preview service is online and shows the first-run
+commands. Setup writes the required persistent configuration to
+`/data/config.json`; automatic delivery remains disabled until explicitly
+enabled.
+
 For QNAP, use Container Station with the supplied
 [`compose.qnap.yaml`](platforms/nas-docker/compose.qnap.yaml), or use the
 guided release installer. QNAP App Center uses native QPKG packages, so the

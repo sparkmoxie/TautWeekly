@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-05
+
 ### Added
 
 - Added a standalone, responsive eight-state newsletter showcase with real
@@ -19,6 +21,18 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Treat Tautulli episode `rating_image` and `rating` fields as optional when
   building personal statistics, preventing `preview-all` from failing under
   strict PowerShell property handling when either field is omitted.
+- Added a permanent first-run page to the container preview endpoint, verified
+  its listener before starting the scheduler, and made an unexpected preview
+  or scheduler process exit fail the container visibly.
+- Corrected NAS documentation that pointed to a nonexistent `preview-all/`
+  subdirectory; the generated index is `/preview-all-00-INDEX.html`.
+
+### Changed
+
+- Docker and Unraid startup logs now identify the exact persistent
+  `/data/config.json` path and provide the appropriate Compose or Console setup
+  command. Documentation and Community Apps metadata now distinguish the
+  read-only preview viewer from an administration Web UI.
 
 ## [0.5.0] - 2026-08-04
 

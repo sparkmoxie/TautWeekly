@@ -46,8 +46,32 @@ Require-Text 'platforms/freebsd-podman/install-freebsd.sh' @(
     'podman pull --os=linux',
     'Preserved existing /usr/local/etc/tautweekly/tautweekly\.env'
 )
+Require-Text 'platforms/nas-docker/app/run-service.sh' @(
+    'Preview server listening',
+    'curl --fail --silent --max-time 2',
+    'Preview server exited unexpectedly',
+    'Scheduler exited unexpectedly'
+)
+Require-Text 'platforms/nas-docker/app/Scheduler.ps1' @(
+    'only reads \$configPath',
+    'run \.\/tautweekly\.sh setup',
+    'Setup-First\.ps1'
+)
+Require-Text 'platforms/nas-docker/app/preview-home.html' @(
+    'Preview server online',
+    'not an admin Web UI',
+    '\/data\/config\.json',
+    'preview-all-00-INDEX\.html'
+)
+Require-Text 'platforms/nas-docker/tautweekly.sh' @(
+    '\.\/tautweekly\.sh setup',
+    '\.\/tautweekly\.sh start',
+    '\.\/tautweekly\.sh stop'
+)
 
 foreach ($relative in @(
+    'app/entrypoint.sh',
+    'app/preview-home.html',
     'app/run-service.sh',
     'app/bin/run-mode.sh',
     'app/Scheduler.ps1'

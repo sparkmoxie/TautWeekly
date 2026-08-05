@@ -39,6 +39,27 @@ serve previews on the configured bind and port. Use the platform `status` and
 should use. Native Linux and FreeBSD default to localhost; use the documented
 SSH tunnel for remote access.
 
+For Docker Compose, port 8787 is a read-only preview viewer rather than an
+administration Web UI. Open the mapped host name or address, not the `*:8787`
+notation shown by some Docker status tools. The server root displays setup
+guidance even before a newsletter is generated; `preview-all` then creates
+`/preview-all-00-INDEX.html`.
+
+If the browser reports **connection refused**, run:
+
+```bash
+./tautweekly.sh status
+./tautweekly.sh logs
+docker compose port tautweekly 8080
+docker compose exec tautweekly tail -n 40 /data/logs/preview-server.log
+```
+
+The scheduler reads only `/data/config.json`, mapped from the distribution's
+`./data/config.json` or the configured Unraid appdata directory. If logs keep
+waiting for that file, run `./tautweekly.sh setup` or run `Setup-First.ps1`
+from the Unraid container Console. Do not place configuration under
+`/opt/tautweekly`; that is the disposable application layer.
+
 ## Container permission errors
 
 Confirm `PUID` and `PGID` are non-root and can write the project `data/`

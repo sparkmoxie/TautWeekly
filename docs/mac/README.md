@@ -74,6 +74,11 @@ Enable automation only after reviewing browser previews and TestEmail messages:
 The macOS Compose default binds previews to `127.0.0.1`. Keep that default
 unless trusted-LAN access is intentional.
 
+Opening `http://localhost:8787/` shows a read-only preview landing page with
+first-run commands. It is not an administration Web UI and does not expose
+configuration or send controls. After `preview-all` completes, the generated
+index is available at `http://localhost:8787/preview-all-00-INDEX.html`.
+
 ## Manage user exclusions
 
 During primary setup, the wizard queries Tautulli and lets you select numbered

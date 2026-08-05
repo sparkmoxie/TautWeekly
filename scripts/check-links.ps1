@@ -24,6 +24,12 @@ function Test-Target {
         return
     }
 
+    # The container copies preview-home.html into the generated output web
+    # root, where PreviewAll creates this sibling file at runtime.
+    if ($Source.Name -ceq 'preview-home.html' -and $clean -ceq 'preview-all-00-INDEX.html') {
+        return
+    }
+
     $pathPart = ($clean -split '#',2)[0] -split '\?',2 | Select-Object -First 1
     if ([string]::IsNullOrWhiteSpace($pathPart)) { return }
     $pathPart = [Uri]::UnescapeDataString($pathPart)

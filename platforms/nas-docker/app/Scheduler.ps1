@@ -73,7 +73,13 @@ while ($true) {
 
         if (-not (Test-Path $configPath)) {
             if (((Get-Date) - $lastMissingConfigWarning).TotalMinutes -ge 5) {
-                Log "Waiting for $configPath. Run the platform setup command." "WARN"
+                $misplacedConfig = Join-Path $appRoot "config.json"
+                if (Test-Path $misplacedConfig) {
+                    Log "Found a non-persistent config at $misplacedConfig, but the scheduler only reads $configPath. Run ./tautweekly.sh setup from the Compose directory or Setup-First.ps1 from the container Console." "WARN"
+                }
+                else {
+                    Log "Waiting for $configPath. From the Compose directory run ./tautweekly.sh setup; from an Unraid container Console run pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1." "WARN"
+                }
                 $lastMissingConfigWarning = Get-Date
             }
             Start-Sleep -Seconds 30

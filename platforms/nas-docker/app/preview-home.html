@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>TautWeekly for Plex preview server</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #0c1016; color: #f4f7fb; }
+    main { width: min(860px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 72px; }
+    header { text-align: center; margin-bottom: 30px; }
+    .mark { font-size: 64px; line-height: 1; }
+    h1 { margin: 16px 0 8px; font-size: clamp(30px, 7vw, 48px); letter-spacing: -.035em; }
+    .lede { margin: 0 auto; max-width: 650px; color: #aeb9c8; font-size: 18px; line-height: 1.6; }
+    .online { display: inline-flex; gap: 8px; align-items: center; margin-top: 18px; padding: 7px 12px; border: 1px solid #295d43; border-radius: 999px; background: #10291d; color: #8ce1b0; font-weight: 750; }
+    .online::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #42d984; box-shadow: 0 0 16px #42d984; }
+    section { margin-top: 18px; padding: 24px; border: 1px solid #29313e; border-radius: 16px; background: #131922; box-shadow: 0 18px 55px rgba(0,0,0,.22); }
+    h2 { margin: 0 0 12px; font-size: 21px; }
+    p, li { color: #c5ced9; line-height: 1.65; }
+    ol { margin: 12px 0 0; padding-left: 24px; }
+    li + li { margin-top: 10px; }
+    code { padding: 2px 6px; border-radius: 5px; background: #222b37; color: #f7be4c; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    pre { overflow-x: auto; margin: 14px 0 0; padding: 16px; border: 1px solid #323c4b; border-radius: 10px; background: #090d12; color: #e8edf4; line-height: 1.55; }
+    pre code { padding: 0; background: transparent; color: inherit; }
+    .notice { border-left: 4px solid #e5a820; }
+    a { color: #72b7ff; }
+    .preview-link { display: inline-block; margin-top: 10px; padding: 10px 14px; border-radius: 9px; background: #e5a820; color: #171109; font-weight: 800; text-decoration: none; }
+    footer { margin-top: 24px; color: #7f8b9a; text-align: center; font-size: 14px; }
+    @media (max-width: 560px) { main { padding-top: 34px; } section { padding: 20px; } .mark { font-size: 52px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="mark" aria-hidden="true">&#127871;</div>
+      <h1>TautWeekly for Plex</h1>
+      <p class="lede">The private newsletter preview service is running.</p>
+      <div class="online">Preview server online</div>
+    </header>
+
+    <section class="notice">
+      <h2>This is a preview viewer, not an admin Web UI</h2>
+      <p>Configuration and sending remain command-line operations so SMTP credentials and Tautulli access are never exposed through a browser control panel. Keep this port on a trusted network and do not publish it to the internet.</p>
+    </section>
+
+    <section>
+      <h2>First run with Docker Compose</h2>
+      <ol>
+        <li>From the extracted TautWeekly directory, run setup and verification.</li>
+        <li>Generate the complete safe preview set.</li>
+        <li>Return here and open the generated index.</li>
+      </ol>
+      <pre><code>./tautweekly.sh setup
+./tautweekly.sh verify
+./tautweekly.sh preview-all</code></pre>
+    </section>
+
+    <section>
+      <h2>First run from an Unraid container Console</h2>
+      <pre><code>pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
+pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
+/opt/tautweekly/bin/run-mode.sh PreviewAll</code></pre>
+      <p>The required persistent configuration path is <code>/data/config.json</code>. Automatic weekly delivery stays disabled until you explicitly enable it after preview and TestEmail review.</p>
+    </section>
+
+    <section>
+      <h2>Generated previews</h2>
+      <p>If <code>preview-all</code> has completed, use the link below. A not-found response means the previews have not been generated yet.</p>
+      <a class="preview-link" href="preview-all-00-INDEX.html">Open the email preview index</a>
+    </section>
+
+    <footer><a href="https://sparkmoxie.github.io/TautWeekly/nas-docker/">Installation and troubleshooting documentation</a></footer>
+  </main>
+</body>
+</html>

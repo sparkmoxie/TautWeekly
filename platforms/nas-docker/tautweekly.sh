@@ -90,6 +90,7 @@ case "$cmd" in
 TautWeekly for Plex NAS Portable commands
 
   ./tautweekly.sh install
+  ./tautweekly.sh setup
   ./tautweekly.sh verify
   ./tautweekly.sh list-users
   ./tautweekly.sh exclude-users
@@ -106,6 +107,8 @@ TautWeekly for Plex NAS Portable commands
   ./tautweekly.sh schedule-reset
   ./tautweekly.sh logs
   ./tautweekly.sh status
+  ./tautweekly.sh start
+  ./tautweekly.sh stop
   ./tautweekly.sh restart
   ./tautweekly.sh backup
   ./tautweekly.sh update

@@ -69,6 +69,12 @@ $webPort = $configs | Where-Object { [string]$_.Target -ceq '8080' } | Select-Ob
 if ($null -ne $webPort -and ([string]$webPort.Default -cne '8787' -or [string]$webPort.Type -cne 'Port')) {
     Add-Failure 'Unraid WebUI must map host port 8787 to container port 8080.'
 }
+if ($null -ne $webPort -and ([string]$webPort.Name -cne 'Preview Viewer' -or [string]$webPort.Description -notmatch 'not an admin UI')) {
+    Add-Failure 'Unraid port metadata must identify the endpoint as a preview viewer rather than an admin UI.'
+}
+if ([string]$container.Overview -notmatch 'read-only preview viewer' -or [string]$container.Overview -notmatch 'Setup-First\.ps1') {
+    Add-Failure 'Unraid overview must distinguish the preview viewer from Console-based setup.'
+}
 
 $rawMetadata = (Get-Content -LiteralPath $profilePath -Raw) + "`n" + (Get-Content -LiteralPath $templatePath -Raw)
 if ($rawMetadata -match '(?i)YOUR_|example-app|YOUR_PLUGIN_REPO|YOUR_REPO_NAME') {
