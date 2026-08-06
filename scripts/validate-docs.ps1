@@ -130,6 +130,31 @@ if ($unexpectedHtml -or $missingHtml) {
 $rootReadme = [IO.File]::ReadAllText((Join-Path $Root 'README.md'))
 $docsReadme = [IO.File]::ReadAllText((Join-Path $docs 'README.md'))
 $entryMarkdown = $rootReadme + [Environment]::NewLine + $docsReadme
+
+$nasInstall = [IO.File]::ReadAllText((Join-Path $docs 'nas-docker/README.md'))
+if ($nasInstall -match '(?m)^/opt/tautweekly/bin/run-mode\.sh PreviewAll\s*$') {
+    throw 'Unraid Console documentation contains PreviewAll without the required USER_ID.'
+}
+foreach ($pattern in @(
+    '/opt/tautweekly/bin/run-mode\.sh PreviewAll USER_ID',
+    'does not select or save a default user'
+)) {
+    if ($nasInstall -notmatch $pattern) { throw "NAS user-selection guidance is missing: $pattern" }
+}
+
+foreach ($relative in @('nas-docker/index.html', 'mac/index.html', 'linux/index.html', 'freebsd/index.html')) {
+    $html = [IO.File]::ReadAllText((Join-Path $docs $relative))
+    if ($html -notmatch 'USER_ID') { throw "Numeric USER_ID guidance is missing from $relative" }
+}
+
+$configuration = [IO.File]::ReadAllText((Join-Path $docs 'CONFIGURATION.md'))
+$troubleshooting = [IO.File]::ReadAllText((Join-Path $docs 'TROUBLESHOOTING.md'))
+if ($configuration -notmatch 'SmtpAuthenticationMethod' -or $configuration -notmatch 'successful `235` response') {
+    throw 'SMTP authentication transport is not documented in CONFIGURATION.md.'
+}
+if ($troubleshooting -notmatch 'smtp\.protonmail\.ch' -or $troubleshooting -notmatch 'Sender address rejected: not logged in') {
+    throw 'Proton SMTP troubleshooting guidance is missing.'
+}
 foreach ($relative in $pages) {
     $url = $renderedUrls[$relative]
     if (-not $entryMarkdown.Contains($url)) {

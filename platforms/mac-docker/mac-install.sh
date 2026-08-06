@@ -121,8 +121,8 @@ TautWeekly for Plex Mac Portable is installed.
 
 Next safe checks:
   ./tautweekly.sh list-users
-  ./tautweekly.sh preview-all
-  ./tautweekly.sh send-test-all
+  ./tautweekly.sh preview-all USER_ID
+  ./tautweekly.sh send-test-all USER_ID
   ./tautweekly.sh schedule-status
 
 Preview site:

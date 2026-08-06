@@ -100,8 +100,8 @@ Private data: /var/lib/tautweekly
 Next:
   sudo tautweekly setup
   sudo tautweekly verify
-  sudo tautweekly preview-all
-  sudo tautweekly send-test-all
+  sudo tautweekly preview-all USER_ID
+  sudo tautweekly send-test-all USER_ID
 
 The service is enabled but automatic sending remains disabled until you opt in.
 EOF

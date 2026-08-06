@@ -125,14 +125,16 @@ TautWeekly for Plex Docker Desktop / PowerShell commands
   .\tautweekly-docker.ps1 setup
   .\tautweekly-docker.ps1 verify
   .\tautweekly-docker.ps1 list-users
-  .\tautweekly-docker.ps1 preview-all
-  .\tautweekly-docker.ps1 send-test-all
+  .\tautweekly-docker.ps1 preview-all USER_ID
+  .\tautweekly-docker.ps1 send-test-all USER_ID
   .\tautweekly-docker.ps1 schedule-status
   .\tautweekly-docker.ps1 schedule-enable
   .\tautweekly-docker.ps1 logs
   .\tautweekly-docker.ps1 status
 
 The wrapper requires Docker Desktop in Linux-container mode.
+USER_ID is the numeric value shown by list-users. Omit it only in an
+interactive terminal when you want the wrapper to prompt for it.
 "@ | Write-Host
     }
 }

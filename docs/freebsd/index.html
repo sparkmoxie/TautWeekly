@@ -39,7 +39,7 @@
 <span class="muted">$</span> sudo tautweekly verify
 <span class="ok">✓</span> Tautulli · SMTP · storage
 
-<span class="muted">$</span> sudo tautweekly send-test-all
+<span class="muted">$</span> sudo tautweekly send-test-all USER_ID
 <span class="gold">→</span> TestEmail only <span class="cursor">▋</span></pre>
       </div>
     </section>
@@ -72,14 +72,14 @@ sudo tautweekly verify<button data-copy="#install-command">Copy</button></div>
     </section>
 
     <section id="acceptance" class="section searchable" data-search="acceptance workflow libraries scope users exclusions preview test schedule send production">
-      <div class="section-heading"><div><div class="eyebrow">Acceptance gate</div><h2>Observe before delivery</h2></div><p>Excluded users remain usable as sample data for previews and TestEmail, but scheduled and confirmed production delivery omits them.</p></div>
-      <div class="timeline"><div><b>01</b><h3>Configure</h3><p>Write secrets only inside private container data.</p></div><div><b>02</b><h3>Verify</h3><p>Check API, SMTP, files, timezone, and schedule.</p></div><div><b>03</b><h3>Preview</h3><p>Render all deterministic states without mail.</p></div><div><b>04</b><h3>TestEmail</h3><p>Validate MIME in the actual mail client.</p></div><div><b>05</b><h3>Opt in</h3><p>Enable the scheduler after roster review.</p></div></div>
+      <div class="section-heading"><div><div class="eyebrow">Acceptance gate</div><h2>Observe before delivery</h2></div><p>Excluded users remain usable as sample data for previews and TestEmail, but scheduled and confirmed production delivery omits them. Replace <code>USER_ID</code> with a numeric value from <code>list-users</code>; listing users does not save a default.</p></div>
+      <div class="timeline"><div><b>01</b><h3>Configure</h3><p>Write secrets only inside private container data.</p></div><div><b>02</b><h3>Verify</h3><p>Check API and SMTP TCP reachability, files, timezone, and schedule.</p></div><div><b>03</b><h3>Preview</h3><p>Render all deterministic states without mail.</p></div><div><b>04</b><h3>TestEmail</h3><p>Validate SMTP authentication, sender permission, MIME, and the actual mail client.</p></div><div><b>05</b><h3>Opt in</h3><p>Enable the scheduler after roster review.</p></div></div>
       <div class="command-block" id="acceptance-command">sudo tautweekly list-libraries
 sudo tautweekly manage-libraries
 sudo tautweekly list-users
 sudo tautweekly exclude-users
-sudo tautweekly preview-all
-sudo tautweekly send-test-all
+sudo tautweekly preview-all USER_ID
+sudo tautweekly send-test-all USER_ID
 sudo tautweekly schedule-status
 # only after review:
 sudo tautweekly schedule-enable<button data-copy="#acceptance-command">Copy</button></div>
@@ -99,7 +99,7 @@ sudo tautweekly schedule-enable<button data-copy="#acceptance-command">Copy</but
         <article class="guide-card"><h3>Private backup</h3><div class="command-block" id="backup-command">sudo tautweekly backup<button data-copy="#backup-command">Copy</button></div><p>The wrapper stops the container briefly so state and configuration are captured consistently.</p></article>
         <article class="guide-card"><h3>Pull and restart</h3><div class="command-block" id="update-command">sudo tautweekly update
 sudo tautweekly verify
-sudo tautweekly send-test-all<button data-copy="#update-command">Copy</button></div></article>
+sudo tautweekly send-test-all USER_ID<button data-copy="#update-command">Copy</button></div></article>
         <article class="guide-card"><h3>Observe</h3><div class="command-block" id="logs-command">sudo service tautweekly status
 sudo podman logs --tail 200 tautweekly<button data-copy="#logs-command">Copy</button></div></article>
       </div>

@@ -57,11 +57,14 @@ user-defined Docker network, use its service name.
 ./tautweekly.sh manage-libraries
 ./tautweekly.sh list-users
 ./tautweekly.sh exclude-users
-./tautweekly.sh preview-all
+./tautweekly.sh preview-all USER_ID
 ./tautweekly.sh open-preview
-./tautweekly.sh send-test-all
+./tautweekly.sh send-test-all USER_ID
 ./tautweekly.sh schedule-status
 ```
+
+Replace `USER_ID` with a numeric value printed by `list-users`. The roster is
+informational and does not select or save a default user.
 
 During preview review, confirm the adaptive one-item cards, movie genres,
 anonymous Binge Champion movie/TV/time aggregate, gold winner treatment, and

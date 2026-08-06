@@ -42,6 +42,13 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Replaced the legacy SMTP send path with an explicit STARTTLS and
+  `AUTH LOGIN`/`AUTH PLAIN` transport that requires authentication success
+  before `MAIL FROM`, including compatibility with Proton SMTP submission.
+- Corrected Unraid Console examples to pass the required numeric `USER_ID`,
+  clarified that `ListUsers` is display-only across every launcher and guide,
+  and documented that `verify` checks SMTP reachability rather than login or
+  sender authorization.
 - Corrected the selected-library row predicate on all renderers. PowerShell
   previously accepted an unsupported parameter without binding the row,
   causing every history and release item to be rejected whenever an explicit

@@ -32,7 +32,9 @@ them locally; send controlled tests; then schedule production delivery.
 > TautWeekly for Plex configuration contains an SMTP credential and Tautulli API key,
 > and may contain a Plex token. Never commit `config.json`, `.env`, state,
 > logs, previews, generated newsletters, or backups. Preview first and use a
-> controlled test recipient before enabling a schedule or `SendAll`.
+> controlled test recipient before enabling a schedule or `SendAll`. The
+> verifier checks SMTP reachability, not authentication or sender permission;
+> a successful `SendTest` is the mail-delivery acceptance check.
 
 > [!IMPORTANT]
 > Scheduled weekly emails share an anonymous Binge Champion aggregate with
@@ -125,6 +127,10 @@ do not share its output publicly.
 
 ## Installation at a glance
 
+Where a command shows `USER_ID`, replace it with the numeric value from the
+platform's `list-users` command. Listing users is informational; it does not
+select or save a default user.
+
 <details>
 <summary><strong>Windows portable</strong></summary>
 
@@ -155,8 +161,9 @@ sudo ./install-linux.sh
 sudo tautweekly setup
 sudo tautweekly verify
 sudo tautweekly exclude-users
-sudo tautweekly preview-all
-sudo tautweekly send-test-all
+sudo tautweekly list-users
+sudo tautweekly preview-all USER_ID
+sudo tautweekly send-test-all USER_ID
 ```
 
 Application code is root-owned under `/opt/tautweekly`; configuration, state,
@@ -181,8 +188,9 @@ sudo ./install-freebsd.sh
 sudo tautweekly setup
 sudo tautweekly verify
 sudo tautweekly exclude-users
-sudo tautweekly preview-all
-sudo tautweekly send-test-all
+sudo tautweekly list-users
+sudo tautweekly preview-all USER_ID
+sudo tautweekly send-test-all USER_ID
 ```
 
 Private runtime data remains under `/var/db/tautweekly`; the public GHCR image
@@ -234,7 +242,8 @@ docker compose up -d
 ./tautweekly.sh setup
 ./tautweekly.sh verify
 ./tautweekly.sh exclude-users  # optional later revision
-./tautweekly.sh preview-all
+./tautweekly.sh list-users
+./tautweekly.sh preview-all USER_ID
 ```
 
 Use a hostname reachable from inside the container for Tautulli. Keep port
@@ -254,7 +263,8 @@ chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh
 ./mac-install.sh
 ./tautweekly.sh verify
 ./tautweekly.sh exclude-users  # optional later revision
-./tautweekly.sh preview-all
+./tautweekly.sh list-users
+./tautweekly.sh preview-all USER_ID
 ```
 
 The installer detects the host UID/GID and keeps previews on localhost by

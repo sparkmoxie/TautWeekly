@@ -65,11 +65,14 @@ sudo tautweekly list-users
 sudo tautweekly exclude-users
 sudo tautweekly list-libraries
 sudo tautweekly manage-libraries
-sudo tautweekly preview-all
-sudo tautweekly send-test-all
+sudo tautweekly preview-all USER_ID
+sudo tautweekly send-test-all USER_ID
 sudo tautweekly schedule-status
 sudo tautweekly schedule-enable
 ```
+
+Replace `USER_ID` with a numeric value printed by `list-users`. The roster is
+informational and does not select or save a default user.
 
 ## Files and trust boundaries
 
@@ -103,8 +106,8 @@ sudo tautweekly list-users            inspect Tautulli recipients
 sudo tautweekly exclude-users         revise stable user exclusions
 sudo tautweekly list-libraries         inspect the global movie/TV scope
 sudo tautweekly manage-libraries       replace the global movie/TV scope
-sudo tautweekly preview-all USER      render all deterministic browser states
-sudo tautweekly send-test-all USER    send only to TestEmail
+sudo tautweekly preview-all USER_ID   render all deterministic browser states
+sudo tautweekly send-test-all USER_ID send only to TestEmail
 sudo tautweekly send-all              guarded production delivery
 sudo tautweekly schedule-status       inspect scheduler state
 sudo tautweekly status                inspect the rc.d service
@@ -132,7 +135,7 @@ sudo tautweekly backup
 sudo podman image inspect ghcr.io/sparkmoxie/tautweekly:latest --format '{{.Id}}'
 sudo tautweekly update
 sudo tautweekly verify
-sudo tautweekly send-test-all
+sudo tautweekly send-test-all USER_ID
 ```
 
 For deterministic production updates, set `TAUTWEEKLY_IMAGE` in
