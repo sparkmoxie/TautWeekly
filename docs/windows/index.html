@@ -5,7 +5,7 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
 <meta content="dark" name="color-scheme"/>
-<title>TautWeekly for Plex Windows Portable v1.6.11 — Mission Control</title>
+<title>Windows Quickstart | TautWeekly for Plex</title>
 <style>
 :root {
   --bg:#080808; --bg-soft:#101010; --panel:#171717; --panel-2:#1e1e1e; --panel-3:#242424;
@@ -54,14 +54,14 @@ main{min-width:0}.content{max-width:none;margin:0}
 <body>
 <div class="progress"><span id="scrollProgress"></span></div>
 <header class="topbar"><div class="topbar-inner">
-<div class="brand"><div class="mark">›</div><div><strong>TAUTWEEKLY FOR PLEX</strong><span>Windows Portable v1.6.11 · Interactive walkthrough</span></div></div>
+<div class="brand"><div class="mark">›</div><div><strong>TAUTWEEKLY FOR PLEX</strong><span>Windows Quickstart · Portable v1.6.11</span></div></div>
 <div class="searchbox"><svg fill="none" viewbox="0 0 24 24"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8"></circle><path d="m16 16 4 4" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"></path></svg><input id="search" placeholder="Search setup, SMTP, scheduler, previews, card layout…" type="search"/><button id="clear">×</button></div>
-<div class="guide"><b>●</b> Guide <em id="scrollPercent">0%</em></div>
+<div class="guide"><b>●</b> Quickstart <em id="scrollPercent">0%</em></div>
 </div></header>
 <div class="layout">
 <aside class="sidebar"><div class="navbox"><div class="navtitle">Mission navigation</div><nav class="nav" id="nav">
 <a class="active" href="#overview">Mission control</a><a href="#requirements">Requirements</a><a href="#quick-start">Launch path</a><a href="#commands">BAT command center</a><a href="#remote">Remote Plex &amp; Tautulli</a><a href="#configuration">Configuration</a><a href="#regression">Six-state regression</a><a href="#cards">Final card behavior</a><a href="#schedule">Scheduler</a><a href="#data">State &amp; backups</a><a href="#security">Security</a><a href="#troubleshooting">Troubleshooting</a><a href="#reference">Complete reference</a>
-</nav><div class="side-note">Self-contained offline guide. Search works locally; no internet connection or external fonts are required.</div></div></aside>
+</nav><div class="side-note">Self-contained offline Quickstart. Search works locally; no internet connection or external fonts are required.</div></div></aside>
 <main><div class="content">
 <section class="hero section" data-search="overview windows portable mission control newsletter powershell tautulli plex" id="overview">
 <div class="hero-grid"><div><div class="kicker">Windows · PowerShell 5.1+ · Tautulli</div><h1>Mission Control for your <em>Plex newsletter.</em></h1><p>A guided operating manual for installing, verifying, previewing, testing, scheduling, and safely maintaining TautWeekly for Plex Portable v1.6.11 on Windows.</p><div class="actions"><a class="btn primary" href="#quick-start">Start the launch path →</a><a class="btn" href="#regression">Inspect all six email states</a><a class="btn ghost" href="#commands">Open BAT reference</a></div></div>
@@ -256,7 +256,7 @@ Description…</pre></div>
   </div>
 </section>
 
-<footer class="footer"><span>TautWeekly for Plex Windows Portable v1.6.11 · Rich offline walkthrough</span><span>No external assets · Search, scroll status, copy buttons, and animations included</span><span>Reference visual system: TautWeekly for Plex READ FIRST! interactive edition</span></footer>
+<footer class="footer"><span>Windows Quickstart · TautWeekly for Plex Portable v1.6.11</span><span>No external assets · Search, scroll status, copy buttons, and animations included</span><span>Reference visual system: TautWeekly for Plex READ FIRST! interactive edition</span></footer>
 </div></main></div>
 <script>
 (()=>{const secs=[...document.querySelectorAll('.section')],links=[...document.querySelectorAll('#nav a')],q=document.getElementById('search'),c=document.getElementById('clear'),n=document.getElementById('noresults'),m=document.querySelector('.metrics'),progress=document.getElementById('scrollProgress'),scrollPct=document.getElementById('scrollPercent');function updateProgress(){const root=document.documentElement,max=Math.max(1,root.scrollHeight-root.clientHeight),pct=Math.max(0,Math.min(100,(root.scrollTop/max)*100));progress.style.width=pct+'%';scrollPct.textContent=Math.round(pct)+'%'}window.addEventListener('scroll',updateProgress,{passive:true});window.addEventListener('resize',updateProgress);updateProgress();const observer=new IntersectionObserver(entries=>{const v=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];if(v)links.forEach(a=>a.classList.toggle('active',a.hash==='#'+v.target.id))},{rootMargin:'-20% 0px -65% 0px',threshold:[0,.15,.4]});secs.forEach(s=>observer.observe(s));function search(){let x=q.value.trim().toLowerCase(),shown=0;c.style.display=x?'block':'none';secs.forEach(s=>{let ok=!x||x.split(/\s+/).every(t=>(s.dataset.search+' '+s.innerText).toLowerCase().includes(t));s.classList.toggle('filtered',!ok);if(ok)shown++});m.style.display=x?'none':'';n.classList.toggle('show',!shown)}q.addEventListener('input',search);c.onclick=()=>{q.value='';search();q.focus()};document.querySelectorAll('.copy').forEach(b=>b.onclick=async()=>{let old=b.textContent;try{await navigator.clipboard.writeText(b.closest('.code').querySelector('pre').innerText);b.textContent='Copied'}catch{b.textContent='Select text'}setTimeout(()=>b.textContent=old,1200)})})();

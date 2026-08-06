@@ -26,6 +26,14 @@ $renderedUrls = @{
     'freebsd/index.html'          = 'https://sparkmoxie.github.io/TautWeekly/freebsd/'
     'examples/preview-all-00-INDEX.html' = 'https://sparkmoxie.github.io/TautWeekly/examples/preview-all-00-INDEX.html'
 }
+$expectedTitles = @{
+    'index.html'             = 'TautWeekly Quickstart | TautWeekly for Plex'
+    'windows/index.html'     = 'Windows Quickstart | TautWeekly for Plex'
+    'nas-docker/index.html'  = 'NAS/Docker/QNAP/Unraid Quickstart | TautWeekly for Plex'
+    'mac/index.html'         = 'macOS Quickstart | TautWeekly for Plex'
+    'linux/index.html'       = 'Native Linux Quickstart | TautWeekly for Plex'
+    'freebsd/index.html'     = 'FreeBSD Podman Quickstart | TautWeekly for Plex'
+}
 
 foreach ($relative in $pages) {
     $path = Join-Path $docs $relative
@@ -53,6 +61,13 @@ foreach ($relative in $pages) {
     foreach ($pattern in $requiredPatterns) {
         if ($combined -notmatch $pattern) {
             throw "Documentation feature '$pattern' is missing from $relative"
+        }
+    }
+
+    if ($expectedTitles.ContainsKey($relative)) {
+        $escapedTitle = [regex]::Escape($expectedTitles[$relative])
+        if ($html -notmatch "(?i)<title>$escapedTitle</title>") {
+            throw "Canonical Quickstart title is missing from ${relative}: $($expectedTitles[$relative])"
         }
     }
 
@@ -112,13 +127,50 @@ if ($unexpectedHtml -or $missingHtml) {
     throw "Rendered Pages inventory mismatch. Missing: $($missingHtml -join ', '); unexpected: $($unexpectedHtml -join ', ')"
 }
 
-$entryMarkdown = [IO.File]::ReadAllText((Join-Path $Root 'README.md')) +
-    [Environment]::NewLine + [IO.File]::ReadAllText((Join-Path $docs 'README.md'))
+$rootReadme = [IO.File]::ReadAllText((Join-Path $Root 'README.md'))
+$docsReadme = [IO.File]::ReadAllText((Join-Path $docs 'README.md'))
+$entryMarkdown = $rootReadme + [Environment]::NewLine + $docsReadme
 foreach ($relative in $pages) {
     $url = $renderedUrls[$relative]
     if (-not $entryMarkdown.Contains($url)) {
         throw "Rendered Pages URL is not linked from README entry points: $url"
     }
+}
+
+$quickstartLinks = [ordered]@{
+    'TautWeekly Quickstart'              = 'https://sparkmoxie.github.io/TautWeekly/'
+    'Windows Quickstart'                 = 'https://sparkmoxie.github.io/TautWeekly/windows/'
+    'NAS/Docker/QNAP/Unraid Quickstart'  = 'https://sparkmoxie.github.io/TautWeekly/nas-docker/'
+    'macOS Quickstart'                   = 'https://sparkmoxie.github.io/TautWeekly/mac/'
+    'Native Linux Quickstart'            = 'https://sparkmoxie.github.io/TautWeekly/linux/'
+    'FreeBSD Podman Quickstart'          = 'https://sparkmoxie.github.io/TautWeekly/freebsd/'
+}
+foreach ($entryPoint in @{
+    'README.md'      = $rootReadme
+    'docs/README.md' = $docsReadme
+}.GetEnumerator()) {
+    $section = [regex]::Match(
+        $entryPoint.Value,
+        '(?ms)^## Interactive Quickstart Guides\s*(?<content>.*?)(?=^##\s)'
+    )
+    if (-not $section.Success) {
+        throw "Interactive Quickstart Guides section is missing from $($entryPoint.Key)"
+    }
+    foreach ($link in $quickstartLinks.GetEnumerator()) {
+        $expectedLink = "[$($link.Key)]($($link.Value))"
+        if (-not $section.Groups['content'].Value.Contains($expectedLink)) {
+            throw "Canonical Quickstart link is missing from $($entryPoint.Key): $expectedLink"
+        }
+    }
+    if ($section.Groups['content'].Value -match '(?i)Unraid (?:Community )?Apps') {
+        throw "Unraid Apps must not appear as a separate top-level Quickstart in $($entryPoint.Key)"
+    }
+}
+
+$unraidCatalogUrl = 'https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb'
+$nasComparisonRow = @($rootReadme -split "`r?`n" | Where-Object { $_ -match '^\| NAS / Docker .+ baseline ' })
+if ($nasComparisonRow.Count -ne 1 -or -not $nasComparisonRow[0].Contains("[Unraid Apps]($unraidCatalogUrl)")) {
+    throw 'The NAS platform comparison row must retain its direct Unraid Apps catalog link.'
 }
 
 $markdownFiles = Get-ChildItem -LiteralPath $Root -Recurse -File -Filter '*.md' | Where-Object {

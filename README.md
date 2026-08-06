@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/code%20license-MIT-e5a00d.svg)](LICENSE)
 ![Windows](https://img.shields.io/badge/Windows-PowerShell%205.1-0078d4?logo=windows)
 ![NAS](https://img.shields.io/badge/NAS-Docker%20Compose-2496ed?logo=docker)
-[![Unraid Community Apps](https://img.shields.io/badge/Unraid-Community%20Apps-f15a2c?logo=unraid)](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb)
+[![Unraid Community Apps](https://img.shields.io/badge/Unraid-Community%20Apps-f15a2c?logo=unraid)](https://sparkmoxie.github.io/TautWeekly/nas-docker/#unraid)
 ![Container](https://img.shields.io/badge/GHCR-amd64%20%7C%20arm64-2496ed?logo=docker)
 ![macOS](https://img.shields.io/badge/macOS-Docker%20Desktop-000000?logo=apple)
 ![Linux](https://img.shields.io/badge/Linux-native%20systemd-4d8f28?logo=linux)
@@ -20,7 +20,7 @@ them locally; send controlled tests; then schedule production delivery.
 
 <img src="platforms/windows/assets/trending.gif" alt="Animated upward-trend emoji" width="104">
 
-[Live documentation](https://sparkmoxie.github.io/TautWeekly/) ·
+[TautWeekly Quickstart](https://sparkmoxie.github.io/TautWeekly/) ·
 [Email States Preview](https://sparkmoxie.github.io/TautWeekly/examples/preview-all-00-INDEX.html) ·
 [Release downloads](#release-downloads) ·
 [Security](SECURITY.md) ·
@@ -46,11 +46,11 @@ them locally; send controlled tests; then schedule production delivery.
 
 | Platform | Runtime and scheduler | Preview | Best fit | Guides and source |
 |---|---|---|---|---|
-| Windows portable · baseline 1.6.11 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/) · [Install](docs/windows/README.md) · [Source](platforms/windows) |
-| NAS / Docker · baseline 1.1.0 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Install](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
-| macOS · baseline 1.0.3 | PowerShell 7 in Docker Desktop · internal scheduler | Localhost port 8787 by default | Intel or Apple silicon Mac | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/) · [Install](docs/mac/README.md) · [Source](platforms/mac-docker) |
-| Native Linux · baseline 1.0.0 | PowerShell 7.2+ · hardened systemd service | Localhost port 8787 by default | Current Ubuntu, Debian, or RHEL host without Docker | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/linux/) · [Install](docs/linux/README.md) · [Source](platforms/linux) |
-| FreeBSD Podman · baseline 1.0.0 | Maintained Linux OCI image · rc.d | Localhost port 8787 by default | FreeBSD 15.1+ amd64 host · **beta** | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Install](docs/freebsd/README.md) · [Source](platforms/freebsd-podman) |
+| Windows portable · baseline 1.6.11 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/) · [Documentation](docs/windows/README.md) · [Source](platforms/windows) |
+| NAS / Docker · baseline 1.1.0 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
+| macOS · baseline 1.0.3 | PowerShell 7 in Docker Desktop · internal scheduler | Localhost port 8787 by default | Intel or Apple silicon Mac | [Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/) · [Documentation](docs/mac/README.md) · [Source](platforms/mac-docker) |
+| Native Linux · baseline 1.0.0 | PowerShell 7.2+ · hardened systemd service | Localhost port 8787 by default | Current Ubuntu, Debian, or RHEL host without Docker | [Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Source](platforms/linux) |
+| FreeBSD Podman · baseline 1.0.0 | Maintained Linux OCI renderer · rc.d | Localhost port 8787 by default | FreeBSD 15.1+ amd64 host · **beta** | [Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Source](platforms/freebsd-podman) |
 
 All five distributions preserve the working renderer and safety gates. Their
 setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
@@ -139,8 +139,8 @@ do not share its output publicly.
    `04-SEND-TEST.bat`.
 5. Install the schedule only after review.
 
-[Open the rendered Windows walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/)
-· [Read the Markdown install guide](docs/windows/README.md)
+[Open the Windows Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/)
+· [Read the Windows documentation](docs/windows/README.md)
 
 </details>
 
@@ -164,8 +164,8 @@ logs, previews, custom assets, and backups stay in the protected
 `/var/lib/tautweekly` data directory. The preview listener defaults to
 localhost.
 
-[Open the rendered Linux walkthrough](https://sparkmoxie.github.io/TautWeekly/linux/)
-· [Read the Markdown install guide](docs/linux/README.md)
+[Open the Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/)
+· [Read the Native Linux documentation](docs/linux/README.md)
 
 </details>
 
@@ -189,16 +189,16 @@ Private runtime data remains under `/var/db/tautweekly`; the public GHCR image
 contains no live configuration. Keep previews on localhost and complete the
 full acceptance sequence on the FreeBSD host before scheduling.
 
-[Open the rendered FreeBSD walkthrough](https://sparkmoxie.github.io/TautWeekly/freebsd/)
-· [Read the Markdown install guide](docs/freebsd/README.md)
+[Open the FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/)
+· [Read the FreeBSD Podman documentation](docs/freebsd/README.md)
 
 </details>
 
 <details>
 <summary><strong>NAS / Docker</strong></summary>
 
-On Unraid, [install **TautWeekly for Plex** from the published Community
-Applications listing](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb).
+On Unraid, follow the [Unraid Apps section of the NAS/Docker/QNAP/Unraid
+Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/#unraid).
 The template uses `/mnt/user/appdata/tautweekly`, port `8787`, and
 non-root Unraid defaults. After installation, open the container Console and
 run:
@@ -240,9 +240,9 @@ docker compose up -d
 Use a hostname reachable from inside the container for Tautulli. Keep port
 8787 on a trusted network and do not expose it publicly.
 
-[Open the consolidated NAS / Docker guide](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
-· [Install from Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb)
-· [Read the Markdown install guide](docs/nas-docker/README.md)
+[Open the NAS/Docker/QNAP/Unraid Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
+· [Open the Unraid Apps instructions](https://sparkmoxie.github.io/TautWeekly/nas-docker/#unraid)
+· [Read the NAS / Docker documentation](docs/nas-docker/README.md)
 
 </details>
 
@@ -261,8 +261,8 @@ The installer detects the host UID/GID and keeps previews on localhost by
 default. Docker health uses the same supervisor-based probe as the NAS edition,
 so long sends do not interrupt liveness reporting.
 
-[Open the rendered macOS walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
-· [Read the Markdown install guide](docs/mac/README.md)
+[Open the macOS Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/)
+· [Read the macOS documentation](docs/mac/README.md)
 
 </details>
 
@@ -325,32 +325,34 @@ shasum -a 256 -c SHA256SUMS.txt
 |---|---|---|
 | Windows 10/11, Windows PowerShell 5.1+ | Supported source target | PowerShell syntax validation on Windows CI |
 | Docker Engine + Compose v2 on x86-64 or ARM64 Linux | Supported image and source target | Multi-architecture image build, shell, JSON, and Compose validation |
-| Unraid 6.12+ | Published Community Applications listing | Official v2 template plus amd64/arm64 image; [open the Apps listing](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) |
+| Unraid 6.12+ | Published Community Applications listing | Official v2 template plus amd64/arm64 image; follow the [NAS/Docker/QNAP/Unraid Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/#unraid) |
 | QNAP Container Station | Documented Compose deployment | Pull-based Container Station application; QPKG/App Center packaging is not applicable to this Docker distribution |
 | Current Docker Desktop on Intel or Apple silicon macOS | Supported source target | Shell, JSON, and Compose validation; macOS UI flow is not CI-tested |
 | Current PowerShell-supported Ubuntu, Debian, or RHEL with systemd | Supported native source target | PowerShell, shell, data-boundary, systemd-contract, archive, and link validation; distro package-manager UI is not CI-tested |
 | FreeBSD 15.1+ amd64 with Podman Linux containers | Beta source target | POSIX shell, rc.d-contract, archive, and shared OCI validation; a real FreeBSD host is required for acceptance |
 | PowerShell versions older than the platform minimum | Unsupported | Runtime guard exits with an explanatory error |
 
+## Interactive Quickstart Guides
+
+- [TautWeekly Quickstart](https://sparkmoxie.github.io/TautWeekly/)
+- [Windows Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/)
+- [NAS/Docker/QNAP/Unraid Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
+- [macOS Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/)
+- [Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/)
+- [FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/)
+
 ## Documentation
 
-- [Live GitHub Pages documentation](https://sparkmoxie.github.io/TautWeekly/)
-- [Rendered Windows walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/)
-- [Consolidated NAS / Docker walkthrough and quick start](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
-- [Published Unraid Community Apps listing](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb)
-- [Rendered macOS walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
-- [Rendered native Linux walkthrough](https://sparkmoxie.github.io/TautWeekly/linux/)
-- [Rendered FreeBSD Podman walkthrough](https://sparkmoxie.github.io/TautWeekly/freebsd/)
-- [Documentation source index](docs/README.md)
-- [Windows installation](docs/windows/README.md)
-- [NAS / Docker installation](docs/nas-docker/README.md)
-- [macOS installation](docs/mac/README.md)
-- [Native Linux installation](docs/linux/README.md)
-- [FreeBSD Podman installation](docs/freebsd/README.md)
-- [Configuration reference](docs/CONFIGURATION.md)
-- [Security and hardening](docs/SECURITY.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Release process](docs/RELEASING.md)
+- [Documentation source index](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/README.md)
+- [Windows installation](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/windows/README.md)
+- [NAS / Docker installation](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/nas-docker/README.md)
+- [macOS installation](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/mac/README.md)
+- [Native Linux installation](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/linux/README.md)
+- [FreeBSD Podman installation](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/freebsd/README.md)
+- [Configuration reference](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md)
+- [Security and hardening](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/SECURITY.md)
+- [Troubleshooting](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/TROUBLESHOOTING.md)
+- [Release process](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/RELEASING.md)
 
 ## Project status and safety
 

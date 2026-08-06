@@ -1,6 +1,6 @@
 # macOS Docker Desktop installation
 
-[Open the rendered interactive macOS walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
+[Open the macOS Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/)
 
 The macOS distribution runs the PowerShell newsletter engine in Docker Desktop
 and provides Mac-native setup and preview helpers.
