@@ -1,6 +1,6 @@
 # Windows portable installation
 
-[Open the rendered interactive Windows walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/)
+[Open the Windows Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/)
 
 The Windows distribution runs directly in Windows PowerShell and uses Windows
 Task Scheduler for optional automation.

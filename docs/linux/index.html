@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Interactive native Linux installation and operations walkthrough for TautWeekly for Plex.">
-  <title>Native Linux walkthrough | TautWeekly for Plex</title>
+<meta name="description" content="Native Linux installation and operations Quickstart for TautWeekly for Plex.">
+<title>Native Linux Quickstart | TautWeekly for Plex</title>
   <style>
     :root{--bg:#090b0d;--panel:#12161a;--panel2:#191f24;--line:#303941;--text:#f4f7f8;--muted:#9ba8b2;--gold:#e5a00d;--green:#45d483;--blue:#47a9ff;--red:#ff6b6b;--shadow:0 26px 80px rgba(0,0,0,.38)}
     *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:86px}body{margin:0;background:radial-gradient(circle at 80% 0,rgba(71,169,255,.12),transparent 28%),var(--bg);color:var(--text);font:16px/1.65 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}a{color:var(--blue)}code{font-family:"SFMono-Regular",Consolas,monospace}.progress{position:fixed;z-index:100;inset:0 auto auto 0;width:0;height:3px;background:linear-gradient(90deg,var(--gold),var(--blue));box-shadow:0 0 18px rgba(71,169,255,.6)}
@@ -20,8 +20,8 @@
   <div class="progress" id="progress" aria-hidden="true"></div>
   <header>
     <a class="brand" href="../"><span class="mark">LIN</span><span>Taut<em>Weekly</em> for Plex</span></a>
-    <nav aria-label="Walkthrough"><a href="#requirements">Requirements</a><a href="#install">Install</a><a href="#acceptance">Acceptance</a><a href="#security">Security</a><a href="#upgrade">Upgrade</a></nav>
-    <label class="search"><span hidden>Search Linux guide</span><input id="search" type="search" placeholder="Search Linux guide…" autocomplete="off"></label>
+<nav aria-label="Quickstart navigation"><a href="#requirements">Requirements</a><a href="#install">Install</a><a href="#acceptance">Acceptance</a><a href="#security">Security</a><a href="#upgrade">Upgrade</a></nav>
+    <label class="search"><span hidden>Search the Native Linux Quickstart</span><input id="search" type="search" placeholder="Search Linux Quickstart…" autocomplete="off"></label>
   </header>
   <main>
     <section class="hero searchable" data-search="linux native powershell systemd install overview">
@@ -91,7 +91,7 @@ sudo journalctl -u tautweekly -n 200 --no-pager<button class="copy" data-copy="#
     </section>
     <div class="no-results" id="no-results" hidden>No sections matched. Try “PowerShell,” “install,” “preview,” “security,” or “upgrade.”</div>
   </main>
-  <footer><span>TautWeekly for Plex · native Linux walkthrough</span><span>Independent community project · not affiliated with Plex or Tautulli</span><a href="README.md">Markdown guide</a></footer>
+<footer><span>Native Linux Quickstart · TautWeekly for Plex</span><span>Independent community project · not affiliated with Plex or Tautulli</span><a href="README.md">Documentation</a></footer>
   <script>
     (()=>{const progress=document.querySelector('#progress'),search=document.querySelector('#search'),sections=[...document.querySelectorAll('.searchable')],empty=document.querySelector('#no-results');const scroll=()=>{const max=document.documentElement.scrollHeight-innerHeight;progress.style.width=`${max>0?Math.min(100,scrollY/max*100):0}%`};const filter=()=>{const q=search.value.trim().toLowerCase();let n=0;sections.forEach(s=>{const hit=!q||`${s.dataset.search||''} ${s.textContent}`.toLowerCase().includes(q);s.classList.toggle('is-filtered',!hit);if(hit)n++});empty.hidden=n!==0};addEventListener('scroll',scroll,{passive:true});addEventListener('resize',scroll);search.addEventListener('input',filter);addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==search){e.preventDefault();search.focus()}if(e.key==='Escape'){search.value='';search.blur();filter()}});document.querySelectorAll('[data-copy]').forEach(b=>b.addEventListener('click',async()=>{const t=document.querySelector(b.dataset.copy);if(!t)return;const text=[...t.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent).join('').trim();await navigator.clipboard.writeText(text);const old=b.textContent;b.textContent='Copied';setTimeout(()=>b.textContent=old,1200)}));scroll()})();
   </script>

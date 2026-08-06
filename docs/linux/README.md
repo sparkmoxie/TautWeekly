@@ -6,7 +6,7 @@ preview server and guarded scheduler alive, while the `tautweekly` command
 provides the same setup, exclusion, preview, test, and delivery workflow as the
 other editions.
 
-[Open the rendered Linux walkthrough](https://sparkmoxie.github.io/TautWeekly/linux/)
+[Open the Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/)
 
 ## Supported target
 

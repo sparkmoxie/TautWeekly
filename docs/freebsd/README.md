@@ -5,7 +5,7 @@ FreeBSD's Podman Linux-container support. It integrates with the native `rc.d`
 service system and keeps configuration, state, generated output, and backups in
 `/var/db/tautweekly`.
 
-[Open the rendered FreeBSD walkthrough](https://sparkmoxie.github.io/TautWeekly/freebsd/)
+[Open the FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/)
 
 ## Supported target
 
