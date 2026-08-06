@@ -107,11 +107,11 @@ TautWeekly for Plex Mac Portable commands
   ./tautweekly.sh exclude-users
   ./tautweekly.sh list-libraries
   ./tautweekly.sh manage-libraries
-  ./tautweekly.sh preview [user]
-  ./tautweekly.sh preview-all [user]
-  ./tautweekly.sh send-test [user]
-  ./tautweekly.sh send-test-all [user]
-  ./tautweekly.sh welcome [user]
+  ./tautweekly.sh preview USER_ID
+  ./tautweekly.sh preview-all USER_ID
+  ./tautweekly.sh send-test USER_ID
+  ./tautweekly.sh send-test-all USER_ID
+  ./tautweekly.sh welcome USER_ID
   ./tautweekly.sh send-all
   ./tautweekly.sh roster
   ./tautweekly.sh schedule-status
@@ -126,6 +126,9 @@ TautWeekly for Plex Mac Portable commands
   ./tautweekly.sh backup
   ./tautweekly.sh update
   ./tautweekly.sh shell
+
+USER_ID is the numeric value shown by list-users. Omit it only in an
+interactive terminal when you want the wrapper to prompt for it.
 EOF
     ;;
 esac

@@ -33,10 +33,16 @@ and improves selected metadata and artwork paths.
 | `SmtpUseAuthentication` | Whether SMTP credentials are sent |
 | `SmtpUsername`, `SmtpPassword` | Provider credential; the password is stored as plain text |
 | `SmtpStripPasswordSpaces` | Optional normalization for providers that display grouped app passwords |
+| `SmtpAuthenticationMethod` | `Auto` prefers challenge-style `LOGIN`, then `PLAIN`; set an explicit supported method only when required by the provider |
+| `SmtpTimeoutSeconds` | Connection and protocol timeout; defaults to 30 seconds |
 | `TestEmail` | Controlled recipient for all test modes |
 
 Implicit SMTPS on port 465 is not the supported transport. Use a provider's
-STARTTLS settings.
+STARTTLS settings. The SMTP transport completes authentication and requires a
+successful `235` response before it sends `MAIL FROM`. The platform verifier
+checks TCP reachability and configuration shape only; run a controlled
+`SendTest` with a numeric `USER_ID` to validate credentials and sender
+authorization.
 
 ## Content and eligibility
 

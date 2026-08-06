@@ -142,11 +142,11 @@ TautWeekly for Plex FreeBSD Podman commands
   sudo tautweekly exclude-users
   sudo tautweekly list-libraries
   sudo tautweekly manage-libraries
-  sudo tautweekly preview [user]
-  sudo tautweekly preview-all [user]
-  sudo tautweekly send-test [user]
-  sudo tautweekly send-test-all [user]
-  sudo tautweekly welcome [user]
+  sudo tautweekly preview USER_ID
+  sudo tautweekly preview-all USER_ID
+  sudo tautweekly send-test USER_ID
+  sudo tautweekly send-test-all USER_ID
+  sudo tautweekly welcome USER_ID
   sudo tautweekly send-all
   sudo tautweekly roster
   sudo tautweekly schedule-status
@@ -158,6 +158,9 @@ TautWeekly for Plex FreeBSD Podman commands
   sudo tautweekly backup
   sudo tautweekly update
   sudo tautweekly shell
+
+USER_ID is the numeric value shown by list-users. Omit it only in an
+interactive terminal when you want the wrapper to prompt for it.
 EOF
     ;;
 esac

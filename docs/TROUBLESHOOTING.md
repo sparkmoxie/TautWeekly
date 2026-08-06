@@ -18,6 +18,18 @@ Start with the platform verifier and correct the first reported failure.
 - Use an application password when the provider requires one.
 - Preserve password whitespace unless the provider displays grouped characters
   and `SmtpStripPasswordSpaces` is intentionally enabled.
+- `verify` proves that the SMTP host is reachable; it does not authenticate or
+  submit mail. Use a numeric ID from `list-users` with `send-test` for the
+  authoritative delivery check. Listing users does not save a default.
+
+For Proton SMTP submission, use `smtp.protonmail.ch`, port 587, STARTTLS,
+authentication enabled, and `SmtpAuthenticationMethod` set to `Auto` or
+`Login`. The username and `FromEmail` must be the exact address paired with the
+generated SMTP token; the password must be that token, not a Proton account,
+mailbox, or Bridge password. See [Proton's SMTP submission instructions](https://proton.me/support/smtp-submission).
+If Proton reports `Sender address rejected: not logged in`, update to a build
+containing the explicit SMTP authentication transport, then regenerate or
+re-enter the token if the error remains.
 
 ## User exclusions cannot be loaded
 

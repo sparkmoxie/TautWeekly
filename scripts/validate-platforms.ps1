@@ -70,8 +70,34 @@ Require-Text 'platforms/nas-docker/app/preview-home.html' @(
     'Preview server online',
     'not an admin Web UI',
     '\/data\/config\.json',
-    'preview-all-00-INDEX\.html'
+    'preview-all-00-INDEX\.html',
+    'run-mode\.sh PreviewAll USER_ID',
+    'does not select or save a default user'
 )
+Require-Text 'platforms/nas-docker/app/Smtp-Transport.ps1' @(
+    "Command 'AUTH LOGIN'",
+    "Command 'AUTH PLAIN'",
+    "ExpectedCodes 235",
+    'Authentication must complete with 235 before any envelope command',
+    'MAIL FROM'
+)
+Require-Text 'platforms/nas-docker/app/TautWeekly.ps1' @(
+    'Smtp-Transport\.ps1',
+    'Send-TautWeeklySmtpMessage',
+    'ListUsers only displays the roster'
+)
+Require-Text 'platforms/windows/TautWeekly.ps1' @(
+    'Smtp-Transport\.ps1',
+    'Send-TautWeeklySmtpMessage',
+    'ListUsers only displays the roster'
+)
+foreach ($relative in @(
+    'platforms/nas-docker/app/Verify-Setup.ps1',
+    'platforms/mac-docker/app/Verify-Setup.ps1',
+    'platforms/windows/VERIFY-SETUP.ps1'
+)) {
+    Require-Text $relative @('SMTP authentication and sender authorization are not tested by verify')
+}
 Require-Text 'platforms/nas-docker/app/User-Exclusions.ps1' @(
     'get_user_names',
     'get_users',
@@ -83,7 +109,9 @@ Require-Text 'platforms/nas-docker/tautweekly.sh' @(
     'list-libraries',
     'manage-libraries',
     '\.\/tautweekly\.sh start',
-    '\.\/tautweekly\.sh stop'
+    '\.\/tautweekly\.sh stop',
+    'preview-all USER_ID',
+    'numeric value shown by list-users'
 )
 
 Require-Text 'platforms/linux/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1')
@@ -109,7 +137,8 @@ foreach ($relative in @(
     'app/preview-home.html',
     'app/run-service.sh',
     'app/bin/run-mode.sh',
-    'app/Scheduler.ps1'
+    'app/Scheduler.ps1',
+    'app/Smtp-Transport.ps1'
 )) {
     $nas = Read-RepoFile ("platforms/nas-docker/$relative")
     $mac = Read-RepoFile ("platforms/mac-docker/$relative")

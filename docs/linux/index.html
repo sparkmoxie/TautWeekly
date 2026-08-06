@@ -39,7 +39,7 @@
 <span class="prompt">$</span> sudo tautweekly verify
 <span class="ok">✓</span> Tautulli · SMTP · storage
 
-<span class="prompt">$</span> sudo tautweekly send-test-all
+<span class="prompt">$</span> sudo tautweekly send-test-all USER_ID
 <span class="gold">→</span> TestEmail only</pre></div>
     </section>
 
@@ -60,14 +60,14 @@ sudo tautweekly verify<button class="copy" data-copy="#setup">Copy</button></div
     </section>
 
     <section id="acceptance" class="section searchable" data-search="acceptance libraries scope list users exclusions preview test schedule send">
-      <div class="section-head"><div><div class="eyebrow">Acceptance gate</div><h2>Production comes fifth.</h2></div><p>Each step proves a narrower boundary before any real recipient is eligible.</p></div>
-      <div class="sequence"><div><b>01 Configure</b><p>Enter Tautulli, SMTP, branding, and schedule locally.</p></div><div><b>02 Verify</b><p>Test files, API reachability, mail settings, and time zone.</p></div><div><b>03 Preview</b><p>Render six deterministic browser states without email.</p></div><div><b>04 TestEmail</b><p>Validate real MIME and mail-client rendering.</p></div><div><b>05 Schedule</b><p>Enable only after roster and exclusions are reviewed.</p></div></div>
+      <div class="section-head"><div><div class="eyebrow">Acceptance gate</div><h2>Production comes fifth.</h2></div><p>Each step proves a narrower boundary before any real recipient is eligible. Replace <code>USER_ID</code> with a numeric value from <code>list-users</code>; listing users does not save a default.</p></div>
+      <div class="sequence"><div><b>01 Configure</b><p>Enter Tautulli, SMTP, branding, and schedule locally.</p></div><div><b>02 Verify</b><p>Test files, API and SMTP TCP reachability, and time zone.</p></div><div><b>03 Preview</b><p>Render six deterministic browser states without email.</p></div><div><b>04 TestEmail</b><p>Validate SMTP authentication, sender permission, MIME, and mail-client rendering.</p></div><div><b>05 Schedule</b><p>Enable only after roster and exclusions are reviewed.</p></div></div>
       <div class="command" id="accept">sudo tautweekly list-libraries
 sudo tautweekly manage-libraries
 sudo tautweekly list-users
 sudo tautweekly exclude-users
-sudo tautweekly preview-all
-sudo tautweekly send-test-all
+sudo tautweekly preview-all USER_ID
+sudo tautweekly send-test-all USER_ID
 sudo tautweekly schedule-status
 # only after review:
 sudo tautweekly schedule-enable<button class="copy" data-copy="#accept">Copy</button></div>
@@ -85,7 +85,7 @@ sudo tautweekly schedule-enable<button class="copy" data-copy="#accept">Copy</bu
       <div class="section-head"><div><div class="eyebrow">Lifecycle</div><h2>Replace code, preserve state.</h2></div><p>Upgrade mode creates a timestamped program backup, replaces `/opt/tautweekly`, preserves every private data file, and restarts a configured service.</p></div>
       <div class="grid"><article class="card"><h3>Upgrade</h3><div class="command" id="upgrade-cmd">sudo ./install-linux.sh --upgrade
 sudo tautweekly verify
-sudo tautweekly send-test-all<button class="copy" data-copy="#upgrade-cmd">Copy</button></div></article><article class="card"><h3>Observe</h3><div class="command" id="logs">sudo systemctl status tautweekly
+sudo tautweekly send-test-all USER_ID<button class="copy" data-copy="#upgrade-cmd">Copy</button></div></article><article class="card"><h3>Observe</h3><div class="command" id="logs">sudo systemctl status tautweekly
 sudo journalctl -u tautweekly -n 200 --no-pager<button class="copy" data-copy="#logs">Copy</button></div></article><article class="card"><h3>Private backup</h3><div class="command" id="backup">sudo tautweekly backup
 # briefly stops an active service for consistency<button class="copy" data-copy="#backup">Copy</button></div></article></div>
     </section>

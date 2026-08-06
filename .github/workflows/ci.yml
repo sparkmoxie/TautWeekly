@@ -32,6 +32,8 @@ jobs:
         run: ./scripts/test-container-health.sh
       - name: Test cross-platform command routing
         run: ./scripts/test-platform-command-routing.sh
+      - name: Test SMTP authentication protocol on PowerShell 7
+        run: python3 scripts/test-smtp-transport.py --helper platforms/nas-docker/app/Smtp-Transport.ps1
       - name: Validate NAS Compose configuration
         run: |
           docker compose -f platforms/nas-docker/compose.yaml config --quiet
@@ -64,6 +66,8 @@ jobs:
       - name: Test full active-week and quiet-week rendering
         shell: powershell
         run: .\scripts\test-newsletter-integration.ps1
+      - name: Test SMTP authentication protocol on Windows PowerShell
+        run: python scripts/test-smtp-transport.py --helper platforms/windows/Smtp-Transport.ps1
 
   release-archives:
     name: Reproducible release archives

@@ -22,6 +22,7 @@ if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $ScriptRoot = $PSScriptRoot
+. (Join-Path $ScriptRoot "Smtp-Transport.ps1")
 $DataRoot = if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_DATA_DIR)) {
     [string]$env:TAUTWEEKLY_DATA_DIR
 }
@@ -5565,7 +5566,6 @@ function Send-NewsletterMail {
     $mail = New-Object System.Net.Mail.MailMessage
     $htmlView = $null
     $plainView = $null
-    $smtp = $null
 
     try {
         $mail.From = New-Object System.Net.Mail.MailAddress([string]$Config.FromEmail, [string]$Config.FromName)
@@ -5721,38 +5721,9 @@ function Send-NewsletterMail {
         $mail.AlternateViews.Add($plainView)
         $mail.AlternateViews.Add($htmlView)
 
-        $smtp = New-Object System.Net.Mail.SmtpClient([string]$Config.SmtpHost, [int]$Config.SmtpPort)
-
-        $smtpEnableSsl = $true
-        if ($null -ne $Config.PSObject.Properties["SmtpEnableSsl"]) {
-            $smtpEnableSsl = [bool]$Config.SmtpEnableSsl
-        }
-        $smtp.EnableSsl = $smtpEnableSsl
-
-        if ($smtpUseAuthentication) {
-            $smtp.UseDefaultCredentials = $false
-
-            # Preserve arbitrary SMTP passwords exactly. Google Workspace users
-            # who paste an app password with visual spaces can opt in to space
-            # stripping with SmtpStripPasswordSpaces=true.
-            if ($null -ne $Config.PSObject.Properties["SmtpStripPasswordSpaces"] -and
-                [bool]$Config.SmtpStripPasswordSpaces) {
-                $smtpPassword = $smtpPassword -replace '\s', ''
-            }
-
-            $smtp.Credentials = New-Object System.Net.NetworkCredential(
-                [string]$Config.SmtpUsername,
-                $smtpPassword
-            )
-        }
-        else {
-            $smtp.UseDefaultCredentials = $false
-        }
-
-        $smtp.Send($mail)
+        Send-TautWeeklySmtpMessage -MailMessage $mail -Config $Config
     }
     finally {
-        if ($null -ne $smtp) { $smtp.Dispose() }
         if ($null -ne $mail) { $mail.Dispose() }
     }
 }
@@ -5865,6 +5836,9 @@ if ($Mode -eq "ListUsers") {
     }
 
     $rows | Sort-Object FriendlyName | Format-Table -AutoSize
+    Write-Host ""
+    Write-Host "ListUsers only displays the roster; it does not select or save a default user." -ForegroundColor Yellow
+    Write-Host "Pass a numeric UserId from this table to Preview, PreviewAll, SendTest, SendTestAll, or SendWelcome."
     exit 0
 }
 
@@ -5874,7 +5848,7 @@ if ($Mode -eq "ListUsers") {
 # ---------------------------------------------------------------------------
 if ($Mode -eq "SendWelcome") {
     if ([string]::IsNullOrWhiteSpace($UserId)) {
-        throw "SendWelcome mode requires a user identifier."
+        throw "SendWelcome mode requires a user identifier. ListUsers only displays the roster; pass a numeric UserId from that table."
     }
     if (-not $ConfirmWelcome) {
         throw "SendWelcome is intentionally locked. Re-run with -ConfirmWelcome."
@@ -6477,7 +6451,7 @@ function Build-AllEmailVariants {
 # ---------------------------------------------------------------------------
 if ($Mode -eq "PreviewAll") {
     if ([string]::IsNullOrWhiteSpace($UserId)) {
-        throw "PreviewAll mode requires a user identifier. Run ./tautweekly.sh list-users first."
+        throw "PreviewAll mode requires a user identifier. ListUsers only displays the roster; pass a numeric UserId from that table."
     }
 
     $bundle = Build-AllEmailVariants -Id $UserId -ImageMode "Preview"
@@ -6548,7 +6522,7 @@ $($cards.ToString())
 # ---------------------------------------------------------------------------
 if ($Mode -eq "SendTestAll") {
     if ([string]::IsNullOrWhiteSpace($UserId)) {
-        throw "SendTestAll mode requires a user identifier."
+        throw "SendTestAll mode requires a user identifier. ListUsers only displays the roster; pass a numeric UserId from that table."
     }
     Require-ConfigValue "TestEmail"
 
@@ -6584,7 +6558,7 @@ if ($Mode -eq "SendTestAll") {
 # ---------------------------------------------------------------------------
 if ($Mode -eq "Preview") {
     if ([string]::IsNullOrWhiteSpace($UserId)) {
-        throw "Preview mode requires a user identifier. Run ./tautweekly.sh list-users first."
+        throw "Preview mode requires a user identifier. ListUsers only displays the roster; pass a numeric UserId from that table."
     }
 
     $result = Build-ForUser -Id $UserId -ImageMode "Preview"
@@ -6615,7 +6589,7 @@ if ($Mode -eq "Preview") {
 # ---------------------------------------------------------------------------
 if ($Mode -eq "SendTest") {
     if ([string]::IsNullOrWhiteSpace($UserId)) {
-        throw "SendTest mode requires a user identifier."
+        throw "SendTest mode requires a user identifier. ListUsers only displays the roster; pass a numeric UserId from that table."
     }
     Require-ConfigValue "TestEmail"
 

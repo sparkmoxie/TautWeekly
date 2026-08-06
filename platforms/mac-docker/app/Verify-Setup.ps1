@@ -147,6 +147,7 @@ try {
     }
     finally { $client.Dispose() }
     OK "SMTP host is reachable at $($config.SmtpHost):$smtpPort"
+    WARN "SMTP authentication and sender authorization are not tested by verify. Run SendTest with a numeric UserId before enabling the schedule."
 }
 catch { FAIL "SMTP reachability failed: $($_.Exception.Message)"; exit 1 }
 

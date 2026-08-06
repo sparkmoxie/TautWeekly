@@ -34,8 +34,12 @@ pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
 pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1
 pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1
 /opt/tautweekly/bin/run-mode.sh ListUsers
-/opt/tautweekly/bin/run-mode.sh PreviewAll
+/opt/tautweekly/bin/run-mode.sh PreviewAll USER_ID
+/opt/tautweekly/bin/run-mode.sh SendTest USER_ID
 ```
+
+Replace `USER_ID` with a numeric value printed by `ListUsers`. `ListUsers`
+only displays the roster; it does not select or save a default user.
 
 Open `http://UNRAID_HOST:8787/` to confirm the preview service and review its
 first-run instructions. After `PreviewAll` completes, open
@@ -105,10 +109,13 @@ runs in the same container, which is not the supported deployment model.
 ./tautweekly.sh manage-libraries
 ./tautweekly.sh list-users
 ./tautweekly.sh exclude-users
-./tautweekly.sh preview-all
-./tautweekly.sh send-test-all
+./tautweekly.sh preview-all USER_ID
+./tautweekly.sh send-test-all USER_ID
 ./tautweekly.sh schedule-status
 ```
+
+Replace `USER_ID` with a numeric value printed by `list-users`. The wrapper
+can prompt when run interactively, but `list-users` does not persist a default.
 
 During preview review, confirm the adaptive one-item cards, movie genres,
 anonymous Binge Champion movie/TV/time aggregate, gold winner treatment, and

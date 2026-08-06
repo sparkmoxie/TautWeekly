@@ -16,6 +16,8 @@
   "SmtpUsername": "plex@example.com",
   "SmtpPassword": "PASTE_YOUR_SMTP_PASSWORD_HERE",
   "SmtpStripPasswordSpaces": false,
+  "SmtpAuthenticationMethod": "Auto",
+  "SmtpTimeoutSeconds": 30,
   "TestEmail": "you@example.com",
   "TestSendDelaySeconds": 2,
   "ScheduleDay": "Friday",

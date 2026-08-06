@@ -54,14 +54,19 @@
       </ol>
       <pre><code>./tautweekly.sh setup
 ./tautweekly.sh verify
-./tautweekly.sh preview-all</code></pre>
+./tautweekly.sh list-users
+./tautweekly.sh preview-all USER_ID</code></pre>
+      <p>Replace <code>USER_ID</code> with a numeric value printed by <code>list-users</code>. Listing users does not select or save a default user.</p>
     </section>
 
     <section>
       <h2>First run from an Unraid container Console</h2>
       <pre><code>pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
 pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
-/opt/tautweekly/bin/run-mode.sh PreviewAll</code></pre>
+/opt/tautweekly/bin/run-mode.sh ListUsers
+/opt/tautweekly/bin/run-mode.sh PreviewAll USER_ID
+/opt/tautweekly/bin/run-mode.sh SendTest USER_ID</code></pre>
+      <p>Replace <code>USER_ID</code> with a numeric value printed by <code>ListUsers</code>. Listing users does not select or save a default user.</p>
       <p>The required persistent configuration path is <code>/data/config.json</code>. Automatic weekly delivery stays disabled until you explicitly enable it after preview and TestEmail review.</p>
     </section>
 
