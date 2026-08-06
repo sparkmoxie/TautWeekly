@@ -1,11 +1,13 @@
-# NAS / Docker Compose installation
+# NAS / Docker installation
 
-[Open the rendered interactive NAS walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
-· [Open the rendered Compose quick start](https://sparkmoxie.github.io/TautWeekly/nas-docker/quickstart.html)
+[Open the consolidated interactive guide and quick start](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
+· [Install from the published Unraid Apps listing](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb)
 
-This distribution runs TautWeekly for Plex as a dedicated Docker Compose service beside
-Tautulli. It targets QNAP Container Station, Unraid, and general Linux Docker
-hosts on x86-64 or ARM64.
+This is one NAS / Docker distribution. It runs TautWeekly for Plex as a
+dedicated service beside Tautulli and targets QNAP Container Station, Unraid,
+general Linux Docker hosts, and Docker Desktop on x86-64 or ARM64. Docker
+Compose is the deployment mechanism for manual installations, not a separate
+edition or package.
 
 Current source baseline: **1.1.0**.
 

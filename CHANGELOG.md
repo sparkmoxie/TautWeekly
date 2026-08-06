@@ -20,6 +20,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Consolidated the separate Docker Compose quick-start page into the canonical
+  NAS / Docker guide. Compose, QNAP Container Station, Unraid Apps, and Docker
+  Desktop are now presented as deployment paths for one package; the retired
+  `quickstart.html` URL redirects to the consolidated guide.
+- Linked the published TautWeekly for Plex listing in Unraid Community Apps
+  from the README, documentation hub, and NAS installation guides.
 - Query each selected Tautulli section independently for history and
   recently-added media, then fail closed on mismatched rows before calculating
   releases, quiet mode, Trending, hero content, Binge Champion, and personal

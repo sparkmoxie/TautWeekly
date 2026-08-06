@@ -13,7 +13,7 @@ body:
       label: Platform
       options:
         - Windows portable
-        - NAS / Docker Compose
+        - NAS / Docker
         - macOS / Docker Desktop
     validations:
       required: true

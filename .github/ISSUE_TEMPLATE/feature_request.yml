@@ -10,7 +10,7 @@ body:
       options:
         - All platforms
         - Windows portable
-        - NAS / Docker Compose
+        - NAS / Docker
         - macOS / Docker Desktop
         - Documentation or automation
     validations:
