@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/code%20license-MIT-e5a00d.svg)](LICENSE)
 ![Windows](https://img.shields.io/badge/Windows-PowerShell%205.1-0078d4?logo=windows)
 ![NAS](https://img.shields.io/badge/NAS-Docker%20Compose-2496ed?logo=docker)
-![Unraid](https://img.shields.io/badge/Unraid-Community%20Apps-f15a2c?logo=unraid)
+[![Unraid Community Apps](https://img.shields.io/badge/Unraid-Community%20Apps-f15a2c?logo=unraid)](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb)
 ![Container](https://img.shields.io/badge/GHCR-amd64%20%7C%20arm64-2496ed?logo=docker)
 ![macOS](https://img.shields.io/badge/macOS-Docker%20Desktop-000000?logo=apple)
 ![Linux](https://img.shields.io/badge/Linux-native%20systemd-4d8f28?logo=linux)
@@ -47,7 +47,7 @@ them locally; send controlled tests; then schedule production delivery.
 | Platform | Runtime and scheduler | Preview | Best fit | Guides and source |
 |---|---|---|---|---|
 | Windows portable · baseline 1.6.11 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/) · [Install](docs/windows/README.md) · [Source](platforms/windows) |
-| NAS / Docker · baseline 1.1.0 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Install](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
+| NAS / Docker · baseline 1.1.0 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Install](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
 | macOS · baseline 1.0.3 | PowerShell 7 in Docker Desktop · internal scheduler | Localhost port 8787 by default | Intel or Apple silicon Mac | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/) · [Install](docs/mac/README.md) · [Source](platforms/mac-docker) |
 | Native Linux · baseline 1.0.0 | PowerShell 7.2+ · hardened systemd service | Localhost port 8787 by default | Current Ubuntu, Debian, or RHEL host without Docker | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/linux/) · [Install](docs/linux/README.md) · [Source](platforms/linux) |
 | FreeBSD Podman · baseline 1.0.0 | Maintained Linux OCI image · rc.d | Localhost port 8787 by default | FreeBSD 15.1+ amd64 host · **beta** | [Walkthrough](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Install](docs/freebsd/README.md) · [Source](platforms/freebsd-podman) |
@@ -195,10 +195,11 @@ full acceptance sequence on the FreeBSD host before scheduling.
 </details>
 
 <details>
-<summary><strong>NAS / Docker Compose</strong></summary>
+<summary><strong>NAS / Docker</strong></summary>
 
-On Unraid, install **TautWeekly for Plex** from the Community Applications
-Apps tab. The template uses `/mnt/user/appdata/tautweekly`, port `8787`, and
+On Unraid, [install **TautWeekly for Plex** from the published Community
+Applications listing](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb).
+The template uses `/mnt/user/appdata/tautweekly`, port `8787`, and
 non-root Unraid defaults. After installation, open the container Console and
 run:
 
@@ -239,8 +240,8 @@ docker compose up -d
 Use a hostname reachable from inside the container for Tautulli. Keep port
 8787 on a trusted network and do not expose it publicly.
 
-[Open the rendered NAS / Docker walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
-· [Open the rendered Compose quick start](https://sparkmoxie.github.io/TautWeekly/nas-docker/quickstart.html)
+[Open the consolidated NAS / Docker guide](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
+· [Install from Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb)
 · [Read the Markdown install guide](docs/nas-docker/README.md)
 
 </details>
@@ -324,7 +325,7 @@ shasum -a 256 -c SHA256SUMS.txt
 |---|---|---|
 | Windows 10/11, Windows PowerShell 5.1+ | Supported source target | PowerShell syntax validation on Windows CI |
 | Docker Engine + Compose v2 on x86-64 or ARM64 Linux | Supported image and source target | Multi-architecture image build, shell, JSON, and Compose validation |
-| Unraid 6.12+ | Community Applications target | Official v2 template plus amd64/arm64 image; catalog publication is moderated by Unraid |
+| Unraid 6.12+ | Published Community Applications listing | Official v2 template plus amd64/arm64 image; [open the Apps listing](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) |
 | QNAP Container Station | Documented Compose deployment | Pull-based Container Station application; QPKG/App Center packaging is not applicable to this Docker distribution |
 | Current Docker Desktop on Intel or Apple silicon macOS | Supported source target | Shell, JSON, and Compose validation; macOS UI flow is not CI-tested |
 | Current PowerShell-supported Ubuntu, Debian, or RHEL with systemd | Supported native source target | PowerShell, shell, data-boundary, systemd-contract, archive, and link validation; distro package-manager UI is not CI-tested |
@@ -335,8 +336,8 @@ shasum -a 256 -c SHA256SUMS.txt
 
 - [Live GitHub Pages documentation](https://sparkmoxie.github.io/TautWeekly/)
 - [Rendered Windows walkthrough](https://sparkmoxie.github.io/TautWeekly/windows/)
-- [Rendered NAS / Docker walkthrough](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
-- [Rendered NAS / Docker Compose quick start](https://sparkmoxie.github.io/TautWeekly/nas-docker/quickstart.html)
+- [Consolidated NAS / Docker walkthrough and quick start](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
+- [Published Unraid Community Apps listing](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb)
 - [Rendered macOS walkthrough](https://sparkmoxie.github.io/TautWeekly/mac/)
 - [Rendered native Linux walkthrough](https://sparkmoxie.github.io/TautWeekly/linux/)
 - [Rendered FreeBSD Podman walkthrough](https://sparkmoxie.github.io/TautWeekly/freebsd/)

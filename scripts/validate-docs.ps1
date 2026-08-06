@@ -10,18 +10,17 @@ $pages = @(
     'index.html',
     'windows/index.html',
     'nas-docker/index.html',
-    'nas-docker/quickstart.html',
     'mac/index.html',
     'linux/index.html',
     'freebsd/index.html',
     'examples/preview-all-00-INDEX.html'
 )
+$redirectPages = @('nas-docker/quickstart.html')
 $terminalPages = 0
 $renderedUrls = @{
     'index.html'                  = 'https://sparkmoxie.github.io/TautWeekly/'
     'windows/index.html'          = 'https://sparkmoxie.github.io/TautWeekly/windows/'
     'nas-docker/index.html'       = 'https://sparkmoxie.github.io/TautWeekly/nas-docker/'
-    'nas-docker/quickstart.html'  = 'https://sparkmoxie.github.io/TautWeekly/nas-docker/quickstart.html'
     'mac/index.html'              = 'https://sparkmoxie.github.io/TautWeekly/mac/'
     'linux/index.html'            = 'https://sparkmoxie.github.io/TautWeekly/linux/'
     'freebsd/index.html'          = 'https://sparkmoxie.github.io/TautWeekly/freebsd/'
@@ -87,11 +86,28 @@ if ($terminalPages -lt 3) {
 
 Write-Host "[PASS] Terminal demonstrations are present on $terminalPages page(s)."
 
+foreach ($relative in $redirectPages) {
+    $path = Join-Path $docs $relative
+    $html = [IO.File]::ReadAllText($path)
+    foreach ($pattern in @(
+        '(?i)<meta[^>]+http-equiv=["'']refresh["'']',
+        '(?i)<link[^>]+rel=["'']canonical["''][^>]+/TautWeekly/nas-docker/',
+        '(?i)location\.replace\(',
+        '(?i)href=["'']\./["'']'
+    )) {
+        if ($html -notmatch $pattern) {
+            throw "Compatibility redirect feature '$pattern' is missing from $relative"
+        }
+    }
+    Write-Host "[PASS] Compatibility redirect: $relative"
+}
+
 $publishedHtml = @(Get-ChildItem -LiteralPath $docs -Recurse -File -Filter '*.html' | ForEach-Object {
     $_.FullName.Substring($docs.Length).TrimStart('\', '/') -replace '\\', '/'
 })
-$unexpectedHtml = @($publishedHtml | Where-Object { $_ -notin $pages })
-$missingHtml = @($pages | Where-Object { $_ -notin $publishedHtml })
+$expectedHtml = @($pages) + @($redirectPages)
+$unexpectedHtml = @($publishedHtml | Where-Object { $_ -notin $expectedHtml })
+$missingHtml = @($expectedHtml | Where-Object { $_ -notin $publishedHtml })
 if ($unexpectedHtml -or $missingHtml) {
     throw "Rendered Pages inventory mismatch. Missing: $($missingHtml -join ', '); unexpected: $($unexpectedHtml -join ', ')"
 }
@@ -123,4 +139,4 @@ foreach ($markdown in $markdownFiles) {
     }
 }
 
-Write-Host "[PASS] All $($pages.Count) HTML documentation files have rendered Pages links."
+Write-Host "[PASS] All $($pages.Count) canonical HTML documentation files have rendered Pages links; $($redirectPages.Count) retired URL redirects safely."
