@@ -147,6 +147,26 @@ foreach ($relative in @('nas-docker/index.html', 'mac/index.html', 'linux/index.
     if ($html -notmatch 'USER_ID') { throw "Numeric USER_ID guidance is missing from $relative" }
 }
 
+$windowsQuickstart = [IO.File]::ReadAllText((Join-Path $docs 'windows/index.html'))
+$windowsBatFiles = @(Get-ChildItem -LiteralPath (Join-Path $Root 'platforms/windows') -File -Filter '*.bat')
+foreach ($batFile in $windowsBatFiles) {
+    $escapedBatName = [regex]::Escape($batFile.Name)
+    if ($windowsQuickstart -notmatch "(?i)<strong>$escapedBatName</strong>") {
+        throw "Windows BAT command center is missing launcher: $($batFile.Name)"
+    }
+}
+$numberedWindowsBatCount = @($windowsBatFiles | Where-Object Name -match '^\d{2}-').Count
+$escapedWindowsBatMetric = [regex]::Escape("<b>$numberedWindowsBatCount</b><span>numbered BAT launchers</span>")
+if ($windowsQuickstart -notmatch $escapedWindowsBatMetric) {
+    throw "Windows Quickstart launcher metric does not match the $numberedWindowsBatCount numbered BAT files."
+}
+
+$linuxInstall = [IO.File]::ReadAllText((Join-Path $docs 'linux/README.md'))
+$linuxOperations = [regex]::Match($linuxInstall, '(?ms)^## Operations\s*(?<content>.*?)(?=^##\s)')
+if (-not $linuxOperations.Success -or $linuxOperations.Groups['content'].Value -notmatch 'sudo tautweekly check-update') {
+    throw 'Native Linux Operations list is missing the manual stable update check.'
+}
+
 $configuration = [IO.File]::ReadAllText((Join-Path $docs 'CONFIGURATION.md'))
 $troubleshooting = [IO.File]::ReadAllText((Join-Path $docs 'TROUBLESHOOTING.md'))
 if ($configuration -notmatch 'SmtpAuthenticationMethod' -or $configuration -notmatch 'successful `235` response') {

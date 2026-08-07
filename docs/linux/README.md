@@ -124,6 +124,7 @@ sudo tautweekly send-all              guarded production delivery
 sudo tautweekly schedule-status       inspect scheduler state and heartbeat
 sudo tautweekly logs                  follow the systemd journal
 sudo tautweekly backup                create a private data archive
+sudo tautweekly check-update          compare with the latest stable release
 ```
 
 The backup command briefly stops an active service for a consistent snapshot
