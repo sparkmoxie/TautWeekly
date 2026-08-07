@@ -30,6 +30,7 @@ $expected = [ordered]@{
     'TautWeekly-nas-docker.zip' = @(
         'TautWeekly-nas-docker/app/TautWeekly.ps1',
         'TautWeekly-nas-docker/app/Smtp-Transport.ps1',
+        'TautWeekly-nas-docker/app/Schedule-Time.ps1',
         'TautWeekly-nas-docker/app/healthcheck.sh',
         'TautWeekly-nas-docker/tautweekly.sh',
         'TautWeekly-nas-docker/compose.yaml',
@@ -38,6 +39,7 @@ $expected = [ordered]@{
     'TautWeekly-mac-docker.zip' = @(
         'TautWeekly-mac-docker/app/TautWeekly.ps1',
         'TautWeekly-mac-docker/app/Smtp-Transport.ps1',
+        'TautWeekly-mac-docker/app/Schedule-Time.ps1',
         'TautWeekly-mac-docker/tautweekly.sh',
         'TautWeekly-mac-docker/INSTALL-MAC.command',
         'TautWeekly-mac-docker/README.md'
@@ -45,6 +47,7 @@ $expected = [ordered]@{
     'TautWeekly-linux.zip' = @(
         'TautWeekly-linux/app/TautWeekly.ps1',
         'TautWeekly-linux/app/Smtp-Transport.ps1',
+        'TautWeekly-linux/app/Schedule-Time.ps1',
         'TautWeekly-linux/install-linux.sh',
         'TautWeekly-linux/systemd/tautweekly.service',
         'TautWeekly-linux/tautweekly',
@@ -53,6 +56,7 @@ $expected = [ordered]@{
     'TautWeekly-freebsd-podman.zip' = @(
         'TautWeekly-freebsd-podman/app/TautWeekly.ps1',
         'TautWeekly-freebsd-podman/app/Smtp-Transport.ps1',
+        'TautWeekly-freebsd-podman/app/Schedule-Time.ps1',
         'TautWeekly-freebsd-podman/install-freebsd.sh',
         'TautWeekly-freebsd-podman/rc.d/tautweekly',
         'TautWeekly-freebsd-podman/tautweekly',

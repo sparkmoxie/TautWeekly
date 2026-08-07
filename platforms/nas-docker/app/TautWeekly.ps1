@@ -23,6 +23,28 @@ if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
 
 $ScriptRoot = $PSScriptRoot
 . (Join-Path $ScriptRoot "Smtp-Transport.ps1")
+$deliveryTimeZone = $null
+if ($Mode -eq 'SendAll') {
+    . (Join-Path $ScriptRoot "Schedule-Time.ps1")
+    $deliveryTimeZone = Get-TautWeeklyScheduleTimeZone
+}
+
+function Get-TautWeeklyRunNow {
+    if ($null -ne $deliveryTimeZone) {
+        return (Get-TautWeeklyScheduleNow -TimeZone $deliveryTimeZone)
+    }
+    return [DateTimeOffset]::Now
+}
+
+function ConvertTo-TautWeeklyRunUnixTime {
+    param([DateTime]$LocalTime)
+    if ($null -ne $deliveryTimeZone) {
+        $utcTime = ConvertTo-TautWeeklyScheduleUtc -TimeZone $deliveryTimeZone -LocalTime $LocalTime
+        return ([DateTimeOffset]$utcTime).ToUnixTimeSeconds()
+    }
+    return ([DateTimeOffset]$LocalTime).ToUnixTimeSeconds()
+}
+
 $DataRoot = if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_DATA_DIR)) {
     [string]$env:TAUTWEEKLY_DATA_DIR
 }
@@ -65,7 +87,7 @@ function Sync-PreviewAssets {
 
 Sync-PreviewAssets
 
-$LogFile = Join-Path $LogDir ("tautweekly_{0}.log" -f (Get-Date -Format "yyyyMMdd"))
+$LogFile = Join-Path $LogDir ("tautweekly_{0}.log" -f (Get-TautWeeklyRunNow).ToString("yyyyMMdd"))
 
 # Direct-Plex preview caches. These must exist before StrictMode code reads
 # them inside Get-DesignPlexContext / Get-DesignPlexMetadata.
@@ -78,7 +100,7 @@ function Write-Log {
         [ValidateSet("INFO","WARN","ERROR")]
         [string]$Level = "INFO"
     )
-    $line = "{0} [{1}] {2}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Level, $Message
+    $line = "{0} [{1}] {2}" -f (Get-TautWeeklyRunNow).ToString("yyyy-MM-dd HH:mm:ss"), $Level, $Message
     Add-Content -Path $LogFile -Value $line -Encoding UTF8
     Write-Host $line
 }
@@ -5868,15 +5890,15 @@ if ($Mode -eq "SendWelcome") {
     $daysBack = if ($null -ne $Config.PSObject.Properties["DaysBack"]) { Safe-Int $Config.DaysBack } else { 7 }
     if ($daysBack -lt 1) { $daysBack = 7 }
 
-    $windowEnd = (Get-Date).Date
+    $windowEnd = (Get-TautWeeklyRunNow).Date
     $windowStart = $windowEnd.AddDays(-($daysBack - 1))
     $windowEndExclusive = $windowEnd.AddDays(1)
     $afterDate = $windowStart.ToString("yyyy-MM-dd")
     $beforeDate = $windowEnd.ToString("yyyy-MM-dd")
     $startLabel = $windowStart.ToString("MMM d")
     $endLabel = $windowEnd.ToString("MMM d, yyyy")
-    $startEpoch = [int64]([DateTimeOffset]$windowStart).ToUnixTimeSeconds()
-    $endEpochExclusive = [int64]([DateTimeOffset]$windowEndExclusive).ToUnixTimeSeconds()
+    $startEpoch = [int64](ConvertTo-TautWeeklyRunUnixTime -LocalTime $windowStart)
+    $endEpochExclusive = [int64](ConvertTo-TautWeeklyRunUnixTime -LocalTime $windowEndExclusive)
 
     Write-Log "Loading current New Releases for the one-off welcome..."
     $recentItems = Get-RecentItems -StartEpoch $startEpoch -EndEpochExclusive $endEpochExclusive
@@ -5959,15 +5981,15 @@ else {
 $daysBack = if ($null -ne $Config.PSObject.Properties["DaysBack"]) { Safe-Int $Config.DaysBack } else { 7 }
 if ($daysBack -lt 1) { $daysBack = 7 }
 
-$windowEnd = (Get-Date).Date
+$windowEnd = (Get-TautWeeklyRunNow).Date
 $windowStart = $windowEnd.AddDays(-($daysBack - 1))
 $windowEndExclusive = $windowEnd.AddDays(1)
 $afterDate = $windowStart.ToString("yyyy-MM-dd")
 $beforeDate = $windowEnd.ToString("yyyy-MM-dd")
 $startLabel = $windowStart.ToString("MMM d")
 $endLabel = $windowEnd.ToString("MMM d, yyyy")
-$startEpoch = [int64]([DateTimeOffset]$windowStart).ToUnixTimeSeconds()
-$endEpochExclusive = [int64]([DateTimeOffset]$windowEndExclusive).ToUnixTimeSeconds()
+$startEpoch = [int64](ConvertTo-TautWeeklyRunUnixTime -LocalTime $windowStart)
+$endEpochExclusive = [int64](ConvertTo-TautWeeklyRunUnixTime -LocalTime $windowEndExclusive)
 
 Write-Log "Newsletter window: $afterDate through $beforeDate"
 Write-Log "Loading global recently-added media..."

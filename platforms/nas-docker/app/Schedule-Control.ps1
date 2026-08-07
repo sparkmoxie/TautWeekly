@@ -8,6 +8,8 @@ $ErrorActionPreference = "Stop"
 $configPath = Join-Path $DataRoot "config.json"
 $statePath = Join-Path $DataRoot "scheduler-state.json"
 $heartbeatPath = Join-Path $DataRoot "scheduler-heartbeat.json"
+$appRoot = if ($env:TAUTWEEKLY_APP_DIR) { [string]$env:TAUTWEEKLY_APP_DIR } else { $PSScriptRoot }
+. (Join-Path $appRoot "Schedule-Time.ps1")
 
 function Get-Value {
     param([object]$Object, [string]$Name, [object]$Default)
@@ -27,6 +29,35 @@ function Ensure-Property {
 
 if (-not (Test-Path $configPath)) { throw "config.json is missing. Run setup first." }
 $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$configuredTimeZoneId = if ([string]::IsNullOrWhiteSpace([string]$env:TZ)) { 'Etc/UTC' } else { [string]$env:TZ }
+$scheduleTimeZone = $null
+$controlNow = $null
+$timeZoneError = ''
+try {
+    $scheduleTimeZone = Get-TautWeeklyScheduleTimeZone -TimeZoneId $configuredTimeZoneId
+    $controlNow = Get-TautWeeklyScheduleNow -TimeZone $scheduleTimeZone
+}
+catch {
+    $timeZoneError = $_.Exception.Message
+    if ($Action -eq "Enable") { throw $timeZoneError }
+}
+$heartbeat = $null
+if (Test-Path $heartbeatPath) {
+    try { $heartbeat = Get-Content $heartbeatPath -Raw -Encoding UTF8 | ConvertFrom-Json }
+    catch { $heartbeat = $null }
+}
+if ($Action -eq "Enable" -and (Test-Path $heartbeatPath)) {
+    if ($null -eq $heartbeat) {
+        throw "The active scheduler heartbeat is unreadable. Restart or recreate the service before enabling delivery."
+    }
+    $activeTimeZoneId = [string](Get-Value $heartbeat 'TimeZoneId' '')
+    if ([string]::IsNullOrWhiteSpace($activeTimeZoneId)) {
+        throw "The active scheduler has not recorded its resolved time zone. Restart or recreate the service after upgrading before enabling delivery."
+    }
+    if ($activeTimeZoneId -cne $scheduleTimeZone.Id) {
+        throw "The active scheduler is using '$activeTimeZoneId', but the control process resolved '$($scheduleTimeZone.Id)'. Restart or recreate the service before enabling delivery."
+    }
+}
 
 if ($Action -in @("Enable","Disable")) {
     $enabled = ($Action -eq "Enable")
@@ -60,8 +91,14 @@ Write-Host "TAUTWEEKLY FOR PLEX SCHEDULE STATUS" -ForegroundColor Cyan
 Write-Host "Enabled:       $enabledValue"
 Write-Host "Day/time:      $dayValue $timeValue"
 Write-Host "Grace minutes: $graceValue"
-Write-Host "Time zone:     $([string]$env:TZ)"
-Write-Host "Container now: $(Get-Date -Format o)"
+Write-Host "Configured TZ: $configuredTimeZoneId"
+if ($null -ne $scheduleTimeZone) {
+    Write-Host "Control zone:  $($scheduleTimeZone.Id)"
+    Write-Host "Control now:   $($controlNow.ToString('o'))"
+}
+else {
+    Write-Host "Control zone:  INVALID - $timeZoneError" -ForegroundColor Red
+}
 
 if (Test-Path $statePath) {
     try { $state = Get-Content $statePath -Raw -Encoding UTF8 | ConvertFrom-Json }
@@ -73,7 +110,20 @@ if (Test-Path $statePath) {
 } else { Write-Host "Scheduler state: no attempt recorded" }
 
 if (Test-Path $heartbeatPath) {
-    try { $heartbeat = Get-Content $heartbeatPath -Raw -Encoding UTF8 | ConvertFrom-Json }
-    catch { $heartbeat = $null }
     Write-Host "Heartbeat:     $([string](Get-Value $heartbeat 'Utc' 'unreadable')) UTC"
+    $schedulerZoneId = [string](Get-Value $heartbeat 'TimeZoneId' '')
+    $schedulerLocal = [string](Get-Value $heartbeat 'Local' '')
+    $schedulerOffset = [string](Get-Value $heartbeat 'UtcOffset' '')
+    if ([string]::IsNullOrWhiteSpace($schedulerZoneId)) {
+        Write-Host "Scheduler TZ:  not recorded; restart the service after upgrading" -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "Scheduler TZ:  $schedulerZoneId"
+        Write-Host "Scheduler now: $schedulerLocal (UTC offset $schedulerOffset)"
+        if ($null -ne $scheduleTimeZone -and $schedulerZoneId -cne $scheduleTimeZone.Id) {
+            Write-Host "WARNING: The active scheduler is using a different time zone. Restart or recreate the service before enabling delivery." -ForegroundColor Yellow
+        }
+    }
 } else { Write-Host "Heartbeat:     missing" }
+
+if ($Action -eq "Status" -and $null -eq $scheduleTimeZone) { exit 1 }

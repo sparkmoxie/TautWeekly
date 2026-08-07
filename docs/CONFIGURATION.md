@@ -114,8 +114,17 @@ administrator action.
 | `SchedulerPollSeconds` | Container scheduler poll interval |
 | `ScheduledTaskName` | Windows Task Scheduler identity |
 
-Set the platform timezone environment value to the intended IANA timezone so
-schedule evaluation matches the operator's expectation.
+Windows uses Task Scheduler and the host's local Windows time. Every other
+package resolves the platform timezone as an IANA zone and converts UTC through
+that zone for each schedule decision. An invalid zone blocks automatic delivery
+instead of falling back to UTC.
+
+`schedule-status` reports both the zone/time resolved by its short-lived control
+process and the zone/time recorded by the active scheduler heartbeat. After
+changing a timezone environment file, restart the native service. After changing
+Docker or Podman environment configuration, recreate or restart the container as
+the platform requires, then confirm that `Scheduler TZ` matches `Configured TZ`
+before enabling delivery.
 
 ## Docker environment
 

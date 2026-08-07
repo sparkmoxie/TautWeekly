@@ -117,6 +117,11 @@ runs in the same container, which is not the supported deployment model.
 Replace `USER_ID` with a numeric value printed by `list-users`. The wrapper
 can prompt when run interactively, but `list-users` does not persist a default.
 
+Before enabling delivery, confirm `Configured TZ`, `Control zone`, and
+`Scheduler TZ` agree and that `Scheduler now` has the expected local time and
+UTC offset. If the container timezone was changed, recreate or restart the
+container before trusting the status.
+
 During preview review, confirm the adaptive one-item cards, movie genres,
 anonymous Binge Champion movie/TV/time aggregate, gold winner treatment, and
 counted Trending section.

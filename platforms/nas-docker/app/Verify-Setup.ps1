@@ -8,6 +8,7 @@ $configPath = Join-Path $DataRoot "config.json"
 $assetsDir = Join-Path $DataRoot "assets"
 $previewAssetsDir = Join-Path (Join-Path $DataRoot "output") "assets"
 . (Join-Path $PSScriptRoot "Library-Selection.ps1")
+. (Join-Path $PSScriptRoot "Schedule-Time.ps1")
 
 function OK([string]$Text) { Write-Host "[OK]   $Text" -ForegroundColor Green }
 function WARN([string]$Text) { Write-Host "[WARN] $Text" -ForegroundColor Yellow }
@@ -162,7 +163,15 @@ if (-not [DateTime]::TryParseExact($time, "HH:mm", [Globalization.CultureInfo]::
 }
 $enabled = $false
 if ($null -ne $config.PSObject.Properties["ScheduleEnabled"]) { $enabled = [bool]$config.ScheduleEnabled }
-OK "Schedule: enabled=$enabled; $day at $time; container time zone=$([string]$env:TZ)"
+try {
+    $scheduleTimeZone = Get-TautWeeklyScheduleTimeZone
+    $scheduleNow = Get-TautWeeklyScheduleNow -TimeZone $scheduleTimeZone
+    OK "Schedule: enabled=$enabled; $day at $time; time zone=$($scheduleTimeZone.Id); scheduler-local now=$($scheduleNow.ToString('o'))"
+}
+catch {
+    FAIL $_.Exception.Message
+    exit 1
+}
 
 function Get-FrameCount([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) { return 0 }
