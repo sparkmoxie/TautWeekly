@@ -82,9 +82,8 @@ EOF
   ok ".env created with macOS UID $uid_value and GID $gid_value"
 fi
 
-say "Building TautWeekly for Plex Mac Portable"
-compose_cmd build --pull
-compose_cmd up -d
+say "Building the verified TautWeekly for Plex Mac package"
+./mac-update.sh apply
 
 for _ in $(seq 1 60); do
   if compose_cmd exec -T tautweekly true >/dev/null 2>&1; then break; fi

@@ -75,6 +75,10 @@ if ($null -ne $webPort -and ([string]$webPort.Name -cne 'Preview Viewer' -or [st
 if ([string]$container.Overview -notmatch 'read-only preview viewer' -or [string]$container.Overview -notmatch 'Setup-First\.ps1') {
     Add-Failure 'Unraid overview must distinguish the preview viewer from Console-based setup.'
 }
+if ([string]$container.Overview -notmatch 'Unraid checks the configured stable latest image' -or
+    [string]$container.Description -notmatch 'No in-container updater, Docker socket, or edge image is enabled') {
+    Add-Failure 'Unraid update policy must remain host-managed, stable-only, and socket-free.'
+}
 
 $rawMetadata = (Get-Content -LiteralPath $profilePath -Raw) + "`n" + (Get-Content -LiteralPath $templatePath -Raw)
 if ($rawMetadata -match '(?i)YOUR_|example-app|YOUR_PLUGIN_REPO|YOUR_REPO_NAME') {

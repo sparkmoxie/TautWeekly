@@ -1,6 +1,9 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Separates stage-only image checks from rc.d-aware update application.
+- Blocks busy updates, verifies container health/version, and rolls back the prior image.
+- Removes the systemd-only Podman auto-update label from the native rc.d service.
 - Resolves the configured IANA timezone explicitly for every schedule decision.
 - Refuses invalid timezones instead of silently sending on UTC.
 - Reports the active scheduler timezone, local time, and UTC offset from its heartbeat.

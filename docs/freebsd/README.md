@@ -118,6 +118,7 @@ sudo tautweekly schedule-status       inspect scheduler state
 sudo tautweekly status                inspect the rc.d service
 sudo tautweekly logs                  follow container logs
 sudo tautweekly backup                stop briefly and archive private data
+sudo tautweekly check-update          stage/check the configured image only
 sudo tautweekly update                pull the configured image and restart
 ```
 
@@ -133,15 +134,29 @@ empty/absent IDs retain legacy all-library behavior.
 
 ## Update and pinning
 
-Before an image update, create a private backup and record the current image ID:
+The FreeBSD package uses its rc.d-aware TautWeekly wrapper as the update
+authority. Podman's `io.containers.autoupdate=registry` mechanism requires a
+systemd-managed container, so the rc.d service deliberately has no auto-update
+label or timer. No update is applied periodically by default.
+
+`check-update` asks Podman to pull the configured image into local storage and
+compares it with the running container; it does not restart or replace that
+container. Before applying, create a private backup and record the current
+image ID:
 
 ```sh
 sudo tautweekly backup
 sudo podman image inspect ghcr.io/sparkmoxie/tautweekly:latest --format '{{.Id}}'
+sudo tautweekly check-update
 sudo tautweekly update
 sudo tautweekly verify
 sudo tautweekly send-test-all USER_ID
 ```
+
+The apply command refuses a busy TautWeekly operation, recreates the rc.d
+service, verifies the in-container health probe and version label, and retags
+and restarts the prior image automatically if the new container fails. Private
+data under `/var/db/tautweekly` is never replaced.
 
 For deterministic production updates, set `TAUTWEEKLY_IMAGE` in
 `/usr/local/etc/tautweekly/tautweekly.env` to a version tag rather than
@@ -154,6 +169,11 @@ sudo podman build --os=linux -t localhost/tautweekly:local .
 
 Set `TAUTWEEKLY_IMAGE=localhost/tautweekly:local` and restart only after the
 local image build succeeds.
+
+The default is stable `latest`. The `edge` tag follows unreleased `main` and is
+not a packaged default. Administrators who intentionally want unattended
+updates may schedule `tautweekly update` with a FreeBSD host facility, but that
+is an explicit local policy and is not installed by this package.
 
 The package defaults to `/usr/local/bin/podman`. If Podman is installed in a
 different administrator-managed location, set `TAUTWEEKLY_PODMAN_BIN` in the

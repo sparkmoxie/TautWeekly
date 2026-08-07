@@ -3,6 +3,9 @@ TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 
 Unreleased
 ----------
+- adds a manual stable-release check against packaged release metadata
+- applies the verified package on disk instead of only refreshing the Docker base image
+- blocks busy updates, verifies image version/health, and rolls back on failure
 - resolves the configured IANA timezone explicitly for every schedule decision
 - refuses invalid timezones instead of silently sending on UTC
 - reports the active scheduler timezone, local time, and UTC offset from its heartbeat

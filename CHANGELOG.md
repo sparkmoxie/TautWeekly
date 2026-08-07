@@ -6,6 +6,34 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-08-07
+
+### Added
+
+- Added explicit stable-release checks for Windows, macOS, and native Linux,
+  plus stage-only image checks for NAS/QNAP and FreeBSD.
+- Added regression contracts for stable-channel defaults, check/apply
+  separation, operation-lock refusal, health/version verification, and
+  automatic container-image rollback.
+
+### Changed
+
+- Defined one package-by-package update policy across the README, Markdown
+  guides, and rendered Quickstarts. Stable releases remain the default,
+  unattended application is opt-in, and `edge` is documented as unreleased
+  `main` rather than an update channel.
+- Made NAS/QNAP Compose and FreeBSD updates preserve state, reject concurrent
+  TautWeekly operations, verify the replacement container, and restore the
+  prior image automatically after a failed health check.
+
+### Fixed
+
+- Corrected macOS `update`: it now builds the verified release package present
+  on disk, records that repository version in the image, verifies health and
+  version, and rolls back on failure instead of only refreshing the base image.
+- Removed FreeBSD's ineffective Podman registry auto-update label; Podman auto
+  update requires a systemd-managed container, while this package uses rc.d.
+
 ## [0.5.4] - 2026-08-07
 
 ### Added

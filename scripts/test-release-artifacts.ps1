@@ -25,6 +25,9 @@ $expected = [ordered]@{
         'TautWeekly-windows/config.example.json',
         'TautWeekly-windows/15-MANAGE-LIBRARIES.bat',
         'TautWeekly-windows/16-LIST-LIBRARIES.bat',
+        'TautWeekly-windows/17-CHECK-FOR-UPDATE.bat',
+        'TautWeekly-windows/Check-Update.ps1',
+        'TautWeekly-windows/RELEASE-METADATA.txt',
         'TautWeekly-windows/README.md'
     )
     'TautWeekly-nas-docker.zip' = @(
@@ -33,6 +36,7 @@ $expected = [ordered]@{
         'TautWeekly-nas-docker/app/Schedule-Time.ps1',
         'TautWeekly-nas-docker/app/healthcheck.sh',
         'TautWeekly-nas-docker/tautweekly.sh',
+        'TautWeekly-nas-docker/container-update.sh',
         'TautWeekly-nas-docker/compose.yaml',
         'TautWeekly-nas-docker/README.md'
     )
@@ -41,6 +45,8 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/app/Smtp-Transport.ps1',
         'TautWeekly-mac-docker/app/Schedule-Time.ps1',
         'TautWeekly-mac-docker/tautweekly.sh',
+        'TautWeekly-mac-docker/check-release.sh',
+        'TautWeekly-mac-docker/mac-update.sh',
         'TautWeekly-mac-docker/INSTALL-MAC.command',
         'TautWeekly-mac-docker/README.md'
     )
@@ -51,6 +57,8 @@ $expected = [ordered]@{
         'TautWeekly-linux/install-linux.sh',
         'TautWeekly-linux/systemd/tautweekly.service',
         'TautWeekly-linux/tautweekly',
+        'TautWeekly-linux/check-release.sh',
+        'TautWeekly-linux/RELEASE-METADATA.txt',
         'TautWeekly-linux/README.md'
     )
     'TautWeekly-freebsd-podman.zip' = @(

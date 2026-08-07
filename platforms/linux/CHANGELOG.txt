@@ -1,6 +1,8 @@
 TautWeekly for Plex native Linux platform changelog
 
 Unreleased
+- Adds a read-only stable-release check with no periodic or unattended updater.
+- Locks upgrades against concurrent preview/send work and verifies release metadata/service recovery.
 - Resolves the configured IANA timezone explicitly for every schedule decision.
 - Refuses invalid timezones instead of silently sending on UTC.
 - Reports the active scheduler timezone, local time, and UTC offset from its heartbeat.

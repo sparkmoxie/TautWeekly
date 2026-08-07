@@ -83,10 +83,8 @@ case "$cmd" in
     tar -czf "tautweekly-data-backup-$stamp.tar.gz" data
     echo "Created tautweekly-data-backup-$stamp.tar.gz"
     ;;
-  update)
-    compose_cmd pull tautweekly
-    compose_cmd up -d
-    ;;
+  check-update) exec ./container-update.sh check ;;
+  update) exec ./container-update.sh apply ;;
   help|*)
     cat <<'EOF'
 TautWeekly for Plex NAS Portable commands
@@ -115,6 +113,7 @@ TautWeekly for Plex NAS Portable commands
   ./tautweekly.sh stop
   ./tautweekly.sh restart
   ./tautweekly.sh backup
+  ./tautweekly.sh check-update
   ./tautweekly.sh update
   ./tautweekly.sh shell
 

@@ -21,12 +21,16 @@ app_source="$source_root/app"
 if [[ ! -f "$app_source/TautWeekly.ps1" ]]; then
   app_source="$source_root/../nas-docker/app"
 fi
+if [[ ! -f "$source_root/check-release.sh" ]]; then
+  echo "Release checker not found. Use an official Linux release archive or a complete repository checkout." >&2
+  exit 66
+fi
 if [[ ! -f "$app_source/TautWeekly.ps1" ]]; then
   echo "Application payload not found. Use an official Linux release archive or a complete repository checkout." >&2
   exit 66
 fi
 
-for command_name in pwsh python3 systemctl runuser install tar; do
+for command_name in curl flock pwsh python3 systemctl runuser install tar; do
   command -v "$command_name" >/dev/null 2>&1 || {
     echo "Required command not found: $command_name" >&2
     exit 69
@@ -51,10 +55,18 @@ if ! id -u tautweekly >/dev/null 2>&1; then
 fi
 
 install -d -m 0755 -o root -g root /opt/tautweekly /etc/tautweekly
+install -d -m 0755 -o root -g root /usr/local/libexec
 install -d -m 0700 -o tautweekly -g tautweekly /var/lib/tautweekly
 install -d -m 0700 -o tautweekly -g tautweekly /var/lib/tautweekly/backups
 
 was_active=false
+if [[ "$mode" == "--upgrade" ]]; then
+  exec 9>"/var/lib/tautweekly/.tautweekly-operation.lock"
+  if ! flock -n 9; then
+    echo "Another TautWeekly operation is running; the upgrade was not started." >&2
+    exit 75
+  fi
+fi
 if [[ "$mode" == "--upgrade" ]] && systemctl is-active --quiet tautweekly.service; then
   systemctl stop tautweekly.service
   was_active=true
@@ -74,7 +86,15 @@ find /opt/tautweekly -type d -exec chmod 0755 {} +
 find /opt/tautweekly -type f -exec chmod 0644 {} +
 chmod 0755 /opt/tautweekly/*.sh /opt/tautweekly/bin/*.sh
 
+if [[ -f "$source_root/RELEASE-METADATA.txt" ]]; then
+  install -m 0644 -o root -g root "$source_root/RELEASE-METADATA.txt" /opt/tautweekly/RELEASE-METADATA.txt
+else
+  printf '%s\n' 'TautWeekly for Plex development checkout' 'Repository version: dev' > /opt/tautweekly/RELEASE-METADATA.txt
+  chmod 0644 /opt/tautweekly/RELEASE-METADATA.txt
+fi
+
 install -m 0755 -o root -g root "$source_root/tautweekly" /usr/local/bin/tautweekly
+install -m 0755 -o root -g root "$source_root/check-release.sh" /usr/local/libexec/tautweekly-check-release
 install -m 0644 -o root -g root "$source_root/systemd/tautweekly.service" /etc/systemd/system/tautweekly.service
 if [[ ! -f /etc/tautweekly/tautweekly.env ]]; then
   install -m 0600 -o root -g root "$source_root/tautweekly.env.example" /etc/tautweekly/tautweekly.env
@@ -90,11 +110,28 @@ systemctl daemon-reload
 systemctl enable tautweekly.service >/dev/null
 $was_active && systemctl start tautweekly.service
 
+installed_version="$(sed -n 's/^Repository version:[[:space:]]*//p' /opt/tautweekly/RELEASE-METADATA.txt | head -n 1)"
+if [[ -z "$installed_version" ]]; then
+  echo "Installed release metadata could not be verified." >&2
+  exit 70
+fi
+if [[ "$was_active" == true ]]; then
+  for _ in {1..15}; do
+    systemctl is-active --quiet tautweekly.service && break
+    sleep 2
+  done
+  if ! systemctl is-active --quiet tautweekly.service; then
+    echo "The upgraded service did not become active. Restore the program backup shown above before retrying." >&2
+    exit 70
+  fi
+fi
+
 cat <<EOF
 
 TautWeekly for Plex native Linux files are installed.
 PowerShell: $pwsh_version
 Application: /opt/tautweekly
+Repository version: $installed_version
 Private data: /var/lib/tautweekly
 
 Next:

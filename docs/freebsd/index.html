@@ -94,15 +94,17 @@ sudo tautweekly schedule-enable<button data-copy="#acceptance-command">Copy</but
     </section>
 
     <section id="updates" class="section searchable" data-search="update backup pin image tag rollback local build troubleshoot logs">
-      <div class="section-heading"><div><div class="eyebrow">Lifecycle</div><h2>Back up, pin, test</h2></div><p>Keep data independent of the image. Pin a version tag for deterministic production and complete the acceptance gate after every update.</p></div>
+      <div class="section-heading"><div><div class="eyebrow">Lifecycle</div><h2>Stage, apply, verify</h2></div><p>The rc.d wrapper owns FreeBSD updates. It follows stable <code>latest</code> by default, preserves the data directory, and never enables unattended updates automatically.</p></div>
       <div class="guide-grid">
         <article class="guide-card"><h3>Private backup</h3><div class="command-block" id="backup-command">sudo tautweekly backup<button data-copy="#backup-command">Copy</button></div><p>The wrapper stops the container briefly so state and configuration are captured consistently.</p></article>
-        <article class="guide-card"><h3>Pull and restart</h3><div class="command-block" id="update-command">sudo tautweekly update
+        <article class="guide-card"><h3>Stage without restarting</h3><div class="command-block" id="check-update-command">sudo tautweekly check-update<button data-copy="#check-update-command">Copy</button></div><p>The candidate image is pulled and compared with the running image; no service state changes.</p></article>
+        <article class="guide-card"><h3>Apply and validate</h3><div class="command-block" id="update-command">sudo tautweekly update
 sudo tautweekly verify
 sudo tautweekly send-test-all USER_ID<button data-copy="#update-command">Copy</button></div></article>
         <article class="guide-card"><h3>Observe</h3><div class="command-block" id="logs-command">sudo service tautweekly status
 sudo podman logs --tail 200 tautweekly<button data-copy="#logs-command">Copy</button></div></article>
       </div>
+      <div class="callout info"><div class="callout-icon">RC</div><div><h3>Why the wrapper applies updates</h3><p>Podman registry auto-update expects systemd-managed units. FreeBSD uses rc.d, so the package does not add the otherwise inert auto-update label or a hidden timer. The wrapper refuses concurrent sends, checks container health and version, and restores the previous image when the candidate fails.</p></div></div>
       <div class="callout info"><div class="callout-icon">BIN</div><div><h3>Custom Podman location</h3><p>The default is <code>/usr/local/bin/podman</code>. Set <code>TAUTWEEKLY_PODMAN_BIN</code> in the root-owned environment file only when an administrator-managed installation uses another path.</p></div></div>
       <div class="warning"><i>!</i><div><h3>Do not use a public preview bind casually.</h3><p>The preview service has no built-in authentication. Keep <code>127.0.0.1</code> and use SSH, or place an authenticated TLS reverse proxy in front of it.</p></div></div>
     </section>

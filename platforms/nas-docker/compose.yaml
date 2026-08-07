@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/sparkmoxie/tautweekly:latest
+    image: ${TAUTWEEKLY_IMAGE:-ghcr.io/sparkmoxie/tautweekly:latest}
     container_name: tautweekly
     restart: unless-stopped
     environment:

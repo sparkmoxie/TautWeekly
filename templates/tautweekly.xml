@@ -7,8 +7,8 @@
   <Privileged>false</Privileged>
   <Icon>https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/nas-docker/app/assets-default/popcorn.gif</Icon>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
-  <Overview>Generate preview-first weekly Plex activity newsletters using Tautulli. The WebUI link opens a read-only preview viewer, not an admin panel. After installation, open the container Console and run: pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1</Overview>
-  <Description>TautWeekly for Plex generates activity, welcome, quiet-week, and milestone email newsletters. Configuration and generated output stay in appdata. Scheduling is disabled by default. Complete setup from the Console, then review browser previews and TestEmail delivery before enabling production sends.</Description>
+  <Overview>Generate preview-first weekly Plex activity newsletters using Tautulli. The WebUI link opens a read-only preview viewer, not an admin panel. After installation, open the container Console and run: pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1. Unraid checks the configured stable latest image and applies updates from its Docker/Apps controls.</Overview>
+  <Description>TautWeekly for Plex generates activity, welcome, quiet-week, and milestone email newsletters. Configuration and generated output stay in appdata. Scheduling is disabled by default. Complete setup from the Console, then review browser previews and TestEmail delivery before enabling production sends. No in-container updater, Docker socket, or edge image is enabled.</Description>
   <Support>https://github.com/sparkmoxie/TautWeekly/issues</Support>
   <Project>https://github.com/sparkmoxie/TautWeekly</Project>
   <TemplateURL>https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/templates/tautweekly.xml</TemplateURL>
@@ -16,8 +16,8 @@
   <Category>MediaApp:Other Tools:Utilities</Category>
   <ExtraSearchTerms>Tautulli Plex newsletter email activity digest</ExtraSearchTerms>
   <Requires>A reachable Tautulli server, an SMTP STARTTLS account, and a trusted LAN port for browser previews.</Requires>
-  <Changes>2026-08-05: Added a first-run preview landing page, explicit setup guidance, and clearer preview-server failure reporting. 2026-08-04: Initial Community Apps template.</Changes>
-  <Date>2026-08-05</Date>
+  <Changes>2026-08-07: Clarified that Unraid owns stable image checks and update application; no in-container updater or edge channel is enabled. 2026-08-05: Added a first-run preview landing page, explicit setup guidance, and clearer preview-server failure reporting. 2026-08-04: Initial Community Apps template.</Changes>
+  <Date>2026-08-07</Date>
   <MinVer>6.12.0</MinVer>
   <License>MIT</License>
   <Config Name="Preview Viewer" Target="8080" Default="8787" Mode="tcp" Description="Trusted-LAN HTTP port for the read-only landing page and generated previews. This is not an admin UI. Do not expose it publicly." Type="Port" Display="always" Required="true" Mask="false"/>

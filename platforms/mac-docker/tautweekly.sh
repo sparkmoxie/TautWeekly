@@ -24,7 +24,6 @@ confirm() {
 cmd="${1:-help}"; shift || true
 case "$cmd" in
   install) exec ./mac-install.sh ;;
-  build) compose_cmd build --pull ;;
   up|start) compose_cmd up -d ;;
   down|stop) compose_cmd down ;;
   restart) compose_cmd restart tautweekly ;;
@@ -83,10 +82,8 @@ case "$cmd" in
     tar -czf "tautweekly-data-backup-$stamp.tar.gz" data
     echo "Created tautweekly-data-backup-$stamp.tar.gz"
     ;;
-  update)
-    compose_cmd build --pull
-    compose_cmd up -d
-    ;;
+  check-update) exec ./mac-update.sh check ;;
+  update) exec ./mac-update.sh apply ;;
   open-preview)
     base_url="http://localhost:8787"
     if [[ -f .env ]]; then
@@ -124,6 +121,7 @@ TautWeekly for Plex Mac Portable commands
   ./tautweekly.sh stop
   ./tautweekly.sh restart
   ./tautweekly.sh backup
+  ./tautweekly.sh check-update
   ./tautweekly.sh update
   ./tautweekly.sh shell
 
