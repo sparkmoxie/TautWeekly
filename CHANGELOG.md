@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-08-07
+
 ### Added
 
 - Added explicit stable-release checks for Windows, macOS, and native Linux,
