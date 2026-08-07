@@ -32,6 +32,9 @@ jobs:
         run: ./scripts/test-container-health.sh
       - name: Test cross-platform command routing
         run: ./scripts/test-platform-command-routing.sh
+      - name: Test scheduler timezone behavior
+        shell: pwsh
+        run: ./scripts/test-scheduler-timezone.ps1
       - name: Test SMTP authentication protocol on PowerShell 7
         run: python3 scripts/test-smtp-transport.py --helper platforms/nas-docker/app/Smtp-Transport.ps1
       - name: Validate NAS Compose configuration

@@ -3,6 +3,9 @@ TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 
 Unreleased
 ----------
+- resolves the configured IANA timezone explicitly for every schedule decision
+- refuses invalid timezones instead of silently sending on UTC
+- reports the active scheduler timezone, local time, and UTC offset from its heartbeat
 - adds setup and standalone global movie/TV library selection
 - scopes releases, quiet mode, Trending, Binge Champion, and personal statistics upstream
 - keeps container liveness healthy during long scheduled deliveries

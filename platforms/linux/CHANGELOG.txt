@@ -1,6 +1,9 @@
 TautWeekly for Plex native Linux platform changelog
 
 Unreleased
+- Resolves the configured IANA timezone explicitly for every schedule decision.
+- Refuses invalid timezones instead of silently sending on UTC.
+- Reports the active scheduler timezone, local time, and UTC offset from its heartbeat.
 - Adds setup and standalone global movie/TV library selection.
 - Scopes releases, quiet mode, Trending, Binge Champion, and personal statistics upstream.
 - Loads the exclusion roster from the two bulk Tautulli user endpoints.

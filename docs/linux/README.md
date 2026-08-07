@@ -72,6 +72,11 @@ sudo tautweekly schedule-status
 Replace `USER_ID` with a numeric value printed by `list-users`. The roster is
 informational and does not select or save a default user.
 
+Before enabling delivery, confirm `Configured TZ`, `Control zone`, and
+`Scheduler TZ` agree and that `Scheduler now` has the expected local time and
+UTC offset. Restart `tautweekly.service` after changing the timezone in
+`/etc/tautweekly/tautweekly.env`.
+
 Automatic delivery is opt-in. Enable it only after the controlled `TestEmail`
 messages match the intended production output:
 

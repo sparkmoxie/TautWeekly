@@ -24,6 +24,9 @@ jobs:
           ./scripts/validate-powershell.ps1
       - name: Validate shell scripts
         run: ./scripts/validate-shell.sh
+      - name: Test scheduler timezone behavior
+        shell: pwsh
+        run: ./scripts/test-scheduler-timezone.ps1
       - name: Validate Compose files
         run: |
           docker compose -f platforms/nas-docker/compose.yaml config --quiet

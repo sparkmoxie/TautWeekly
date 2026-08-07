@@ -64,7 +64,15 @@ Require-Text 'platforms/nas-docker/app/healthcheck.sh' @(
 Require-Text 'platforms/nas-docker/app/Scheduler.ps1' @(
     'only reads \$configPath',
     'run \.\/tautweekly\.sh setup',
-    'Setup-First\.ps1'
+    'Setup-First\.ps1',
+    'Get-TautWeeklyScheduleNow',
+    'TimeZoneId = \$scheduleTimeZone\.Id'
+)
+Require-Text 'platforms/nas-docker/app/Schedule-Time.ps1' @(
+    'FindSystemTimeZoneById',
+    'ConvertTime',
+    'ConvertTimeToUtc',
+    'refusing to fall back to UTC'
 )
 Require-Text 'platforms/nas-docker/app/preview-home.html' @(
     'Preview server online',
@@ -84,7 +92,9 @@ Require-Text 'platforms/nas-docker/app/Smtp-Transport.ps1' @(
 Require-Text 'platforms/nas-docker/app/TautWeekly.ps1' @(
     'Smtp-Transport\.ps1',
     'Send-TautWeeklySmtpMessage',
-    'ListUsers only displays the roster'
+    'ListUsers only displays the roster',
+    'Get-TautWeeklyScheduleNow -TimeZone \$deliveryTimeZone',
+    'ConvertTo-TautWeeklyScheduleUtc -TimeZone \$deliveryTimeZone'
 )
 Require-Text 'platforms/windows/TautWeekly.ps1' @(
     'Smtp-Transport\.ps1',
@@ -137,6 +147,8 @@ foreach ($relative in @(
     'app/preview-home.html',
     'app/run-service.sh',
     'app/bin/run-mode.sh',
+    'app/Schedule-Time.ps1',
+    'app/Schedule-Control.ps1',
     'app/Scheduler.ps1',
     'app/Smtp-Transport.ps1'
 )) {

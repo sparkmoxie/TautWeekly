@@ -66,6 +66,10 @@ user-defined Docker network, use its service name.
 Replace `USER_ID` with a numeric value printed by `list-users`. The roster is
 informational and does not select or save a default user.
 
+Before enabling delivery, confirm `Configured TZ`, `Control zone`, and
+`Scheduler TZ` agree and that `Scheduler now` has the expected local time and
+UTC offset. Recreate or restart the container after changing `TZ`.
+
 During preview review, confirm the adaptive one-item cards, movie genres,
 anonymous Binge Champion movie/TV/time aggregate, gold winner treatment, and
 counted Trending section.

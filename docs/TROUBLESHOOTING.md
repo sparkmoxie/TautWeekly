@@ -109,10 +109,19 @@ chmod +x tautweekly.sh qnap-install.sh mac-install.sh INSTALL-MAC.command app/*.
 
 Use only the files that exist in your platform distribution.
 
-## Schedule does not send
+## Schedule does not send or sends at the wrong local time
 
 - Confirm scheduling is enabled.
 - Confirm timezone, day, time, grace window, and the same-day attempt guard.
+- On non-Windows packages, `Configured TZ`, `Control zone`, and `Scheduler TZ`
+  must agree. `Scheduler now` must show the expected local wall time and UTC
+  offset. A plausible `Configured TZ` line alone does not prove that the
+  long-running scheduler is using it.
+- If `Control zone` is invalid, correct the IANA zone before re-enabling the
+  schedule. The scheduler deliberately refuses to fall back to UTC.
+- If the control and scheduler zones differ after an environment change,
+  restart the native Linux service or recreate/restart the Docker or Podman
+  container, then run status again.
 - Windows: run `09-VERIFY-SCHEDULE.bat` as administrator.
 - Docker: run `./tautweekly.sh schedule-status` and inspect container logs.
 - Linux and FreeBSD: run `sudo tautweekly schedule-status`, then inspect the

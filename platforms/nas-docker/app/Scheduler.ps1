@@ -6,15 +6,19 @@ $ErrorActionPreference = "Stop"
 
 $configPath = Join-Path $DataRoot "config.json"
 $appRoot = if ($env:TAUTWEEKLY_APP_DIR) { [string]$env:TAUTWEEKLY_APP_DIR } else { $PSScriptRoot }
+. (Join-Path $appRoot "Schedule-Time.ps1")
+$scheduleTimeZone = Get-TautWeeklyScheduleTimeZone
+$initialScheduleNow = Get-TautWeeklyScheduleNow -TimeZone $scheduleTimeZone
 $runModePath = Join-Path (Join-Path $appRoot "bin") "run-mode.sh"
 $statePath = Join-Path $DataRoot "scheduler-state.json"
 $heartbeatPath = Join-Path $DataRoot "scheduler-heartbeat.json"
 $logDir = Join-Path $DataRoot "logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-$logPath = Join-Path $logDir ("scheduler_{0}.log" -f (Get-Date -Format "yyyyMMdd"))
+$logPath = Join-Path $logDir ("scheduler_{0}.log" -f $initialScheduleNow.ToString("yyyyMMdd"))
 
 function Log([string]$Message, [string]$Level = "INFO") {
-    $line = "{0} [{1}] {2}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Level, $Message
+    $localNow = Get-TautWeeklyScheduleNow -TimeZone $scheduleTimeZone
+    $line = "{0} [{1}] {2}" -f $localNow.ToString("yyyy-MM-dd HH:mm:ss zzz"), $Level, $Message
     Add-Content -Path $logPath -Value $line -Encoding UTF8
     Write-Host $line
 }
@@ -60,19 +64,22 @@ function Load-State {
     return (Add-MissingStateProperties ([PSCustomObject]@{}))
 }
 
-Log "TautWeekly for Plex scheduler started. TZ=$([string]$env:TZ); local time=$(Get-Date -Format o)."
-$lastMissingConfigWarning = [DateTime]::MinValue
+Log "TautWeekly for Plex scheduler started. Configured TZ=$([string]$env:TZ); active time zone=$($scheduleTimeZone.Id); local time=$($initialScheduleNow.ToString('o'))."
+$lastMissingConfigWarningUtc = [DateTimeOffset]::MinValue
 
 while ($true) {
     try {
+        $scheduleNow = Get-TautWeeklyScheduleNow -TimeZone $scheduleTimeZone
         Save-Json ([ordered]@{
-            Utc = [DateTime]::UtcNow.ToString("o")
-            Local = (Get-Date).ToString("o")
+            Utc = [DateTimeOffset]::UtcNow.ToString("o")
+            Local = $scheduleNow.ToString("o")
+            TimeZoneId = $scheduleTimeZone.Id
+            UtcOffset = $scheduleNow.Offset.ToString()
             ProcessId = $PID
         }) $heartbeatPath
 
         if (-not (Test-Path $configPath)) {
-            if (((Get-Date) - $lastMissingConfigWarning).TotalMinutes -ge 5) {
+            if (([DateTimeOffset]::UtcNow - $lastMissingConfigWarningUtc).TotalMinutes -ge 5) {
                 $misplacedConfig = Join-Path $appRoot "config.json"
                 if (Test-Path $misplacedConfig) {
                     Log "Found a non-persistent config at $misplacedConfig, but the scheduler only reads $configPath. Run ./tautweekly.sh setup from the Compose directory or Setup-First.ps1 from the container Console." "WARN"
@@ -80,7 +87,7 @@ while ($true) {
                 else {
                     Log "Waiting for $configPath. From the Compose directory run ./tautweekly.sh setup; from an Unraid container Console run pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1." "WARN"
                 }
-                $lastMissingConfigWarning = Get-Date
+                $lastMissingConfigWarningUtc = [DateTimeOffset]::UtcNow
             }
             Start-Sleep -Seconds 30
             continue
@@ -102,7 +109,7 @@ while ($true) {
         $graceMinutes = [int](Get-ConfigValue $config "ScheduleGraceMinutes" 60)
         if ($graceMinutes -lt 1 -or $graceMinutes -gt 720) { $graceMinutes = 60 }
 
-        $now = Get-Date
+        $now = (Get-TautWeeklyScheduleNow -TimeZone $scheduleTimeZone).DateTime
         if ([string]$now.DayOfWeek -ine $day) {
             Start-Sleep -Seconds $pollSeconds
             continue

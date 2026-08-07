@@ -42,6 +42,11 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Made every non-Windows scheduler resolve and convert UTC through the configured
+  IANA `TZ` explicitly instead of trusting process-local `Get-Date`; invalid
+  zones now fail closed instead of silently scheduling in UTC. Schedule status
+  now distinguishes the control process from the active scheduler heartbeat,
+  including the resolved zone, local time, and UTC offset.
 - Replaced the legacy SMTP send path with an explicit STARTTLS and
   `AUTH LOGIN`/`AUTH PLAIN` transport that requires authentication success
   before `MAIL FROM`, including compatibility with Proton SMTP submission.
