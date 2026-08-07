@@ -3,6 +3,8 @@ TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 
 Unreleased
 ----------
+- distinguishes host-side ./tautweekly.sh commands from Unraid Console commands
+- prints valid container-native follow-up commands after setup and verification
 - resolves the configured IANA timezone explicitly for every schedule decision
 - refuses invalid timezones instead of silently sending on UTC
 - reports the active scheduler timezone, local time, and UTC offset from its heartbeat

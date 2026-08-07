@@ -90,7 +90,9 @@ if (Test-Path $configPath) {
     Write-Host "An existing config.json was found:" -ForegroundColor Yellow
     Write-Host "  $configPath"
     if (-not (Read-YesNo "Replace it with a new configuration?" $false)) {
-        Write-Host "Existing config preserved. Run ./tautweekly.sh verify next." -ForegroundColor Green
+        Write-Host "Existing config preserved." -ForegroundColor Green
+        Write-Host "NEXT (Unraid Console): pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1"
+        Write-Host "NEXT (Compose host project directory): ./tautweekly.sh verify"
         exit 0
     }
     try {
@@ -129,7 +131,9 @@ try {
 catch {
     if ($existingIncludedLibraryIds.Count -gt 0) {
         Write-Host "WARNING: $($_.Exception.Message)" -ForegroundColor Yellow
-        Write-Host "Existing newsletter library selection will be preserved. Run ./tautweekly.sh manage-libraries after verification." -ForegroundColor Yellow
+        Write-Host "Existing newsletter library selection will be preserved." -ForegroundColor Yellow
+        Write-Host "Unraid Console: pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1" -ForegroundColor Yellow
+        Write-Host "Compose host project directory: ./tautweekly.sh manage-libraries" -ForegroundColor Yellow
     }
     else {
         throw "Newsletter libraries could not be selected: $($_.Exception.Message)"
@@ -148,7 +152,9 @@ try {
 }
 catch {
     Write-Host "WARNING: $($_.Exception.Message)" -ForegroundColor Yellow
-    Write-Host "Setup will continue. Run ./tautweekly.sh exclude-users after verification." -ForegroundColor Yellow
+    Write-Host "Setup will continue." -ForegroundColor Yellow
+    Write-Host "Unraid Console: pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1" -ForegroundColor Yellow
+    Write-Host "Compose host project directory: ./tautweekly.sh exclude-users" -ForegroundColor Yellow
 }
 
 $serverName = Read-Default "Plex server/newsletter display name" "My Plex"
@@ -253,4 +259,5 @@ Write-Host "Configuration created successfully:" -ForegroundColor Green
 Write-Host "  $configPath"
 Write-Host ""
 Write-Host "IMPORTANT: config.json contains credentials. Never publish or share it."
-Write-Host "NEXT: ./tautweekly.sh verify"
+Write-Host "NEXT (Unraid Console): pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1"
+Write-Host "NEXT (Compose host project directory): ./tautweekly.sh verify"

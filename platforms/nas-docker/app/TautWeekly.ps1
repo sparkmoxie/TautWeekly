@@ -410,7 +410,7 @@ function Mark-UserWelcomed {
 }
 
 if (-not (Test-Path $ConfigPath)) {
-    throw "Config file not found: $ConfigPath`nRun ./tautweekly.sh setup from the NAS project folder first."
+    throw "Config file not found: $ConfigPath`nFrom an Unraid Console run pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1; from the Compose host project directory run ./tautweekly.sh setup."
 }
 
 $Config = Get-Content -Path $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -598,10 +598,10 @@ function Resolve-TautulliUserId {
     }
 
     if ($matches.Count -gt 1) {
-        throw "More than one Tautulli user matched '$Identifier'. Please use the numeric UserId from ./tautweekly.sh list-users."
+        throw "More than one Tautulli user matched '$Identifier'. Use the numeric UserId from ListUsers (Unraid Console: /opt/tautweekly/bin/run-mode.sh ListUsers; Compose host project directory: ./tautweekly.sh list-users)."
     }
 
-    throw "No Tautulli user matched '$Identifier'. Run ./tautweekly.sh list-users and enter the numeric UserId, username, friendly name, or email."
+    throw "No Tautulli user matched '$Identifier'. Run ListUsers (Unraid Console: /opt/tautweekly/bin/run-mode.sh ListUsers; Compose host project directory: ./tautweekly.sh list-users), then enter the numeric UserId, username, friendly name, or email."
 }
 
 function Get-History {

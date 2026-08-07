@@ -39,7 +39,7 @@ foreach ($cmd in @("identify","convert","python3","flock")) {
 OK "ImageMagick, Python preview server, and file locking are available"
 
 if (-not (Test-Path $configPath)) {
-    FAIL "config.json is missing. Run ./tautweekly.sh setup."
+    FAIL "config.json is missing. From an Unraid Console run pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1; from the Compose host project directory run ./tautweekly.sh setup."
     exit 1
 }
 OK "config.json exists"
@@ -130,7 +130,7 @@ try {
         $availableIds = @($selectableLibraries | ForEach-Object { $_.SectionId })
         $matchedIds = @($configuredLibraryIds | Where-Object { $availableIds -contains $_ })
         $staleIds = @($configuredLibraryIds | Where-Object { $availableIds -notcontains $_ })
-        if ($matchedIds.Count -eq 0) { throw "None of the configured IncludedLibraryIds match an active movie or TV library. Run ./tautweekly.sh manage-libraries." }
+        if ($matchedIds.Count -eq 0) { throw "None of the configured IncludedLibraryIds match an active movie or TV library. From an Unraid Console run pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1; from the Compose host project directory run ./tautweekly.sh manage-libraries." }
         OK "Global library scope matches $($matchedIds.Count) active movie/TV libraries"
         if ($staleIds.Count -gt 0) { WARN ("Configured library IDs no longer available: " + ($staleIds -join ", ")) }
     }
@@ -228,7 +228,7 @@ foreach ($name in ($animated + @("rt_ripe.png","rt_rotten.png","rt_upright.png",
     }
 }
 if ($mirrorFailure) {
-    WARN "Run ./tautweekly.sh repair-assets, then verify again."
+    WARN "From an Unraid Console run pwsh -NoLogo -NoProfile -File /opt/tautweekly/Repair-Assets.ps1; from the Compose host project directory run ./tautweekly.sh repair-assets. Then verify again."
     exit 1
 }
 
@@ -241,13 +241,18 @@ try {
 }
 catch {
     FAIL "preview asset web check failed: $($_.Exception.Message)"
-    WARN "Inspect ./tautweekly.sh logs and confirm the container was recreated from v1.0.7."
+    WARN "Inspect the container logs in Unraid or on the Docker host and confirm the container was recreated from v1.0.7."
     exit 1
 }
 
 Write-Host ""
 OK "TautWeekly for Plex NAS Portable is ready for preview and test email."
 Write-Host "SAFE NEXT STEPS:" -ForegroundColor Cyan
+Write-Host "Unraid Console:"
+Write-Host "  /opt/tautweekly/bin/run-mode.sh ListUsers"
+Write-Host "  /opt/tautweekly/bin/run-mode.sh PreviewAll USER_ID"
+Write-Host "  /opt/tautweekly/bin/run-mode.sh SendTestAll USER_ID"
+Write-Host "Compose host project directory:"
 Write-Host "  ./tautweekly.sh list-users"
-Write-Host "  ./tautweekly.sh preview-all"
-Write-Host "  ./tautweekly.sh send-test-all"
+Write-Host "  ./tautweekly.sh preview-all USER_ID"
+Write-Host "  ./tautweekly.sh send-test-all USER_ID"
