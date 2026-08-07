@@ -48,7 +48,7 @@
     <section>
       <h2>First run with Docker Compose</h2>
       <ol>
-        <li>From the extracted TautWeekly directory, run setup and verification.</li>
+        <li>From the extracted TautWeekly directory on the Docker host, run setup and verification.</li>
         <li>Generate the complete safe preview set.</li>
         <li>Return here and open the generated index.</li>
       </ol>
@@ -56,11 +56,13 @@
 ./tautweekly.sh verify
 ./tautweekly.sh list-users
 ./tautweekly.sh preview-all USER_ID</code></pre>
+      <p><code>./tautweekly.sh</code> is the host-side Compose wrapper from the release archive. It is not installed inside the container.</p>
       <p>Replace <code>USER_ID</code> with a numeric value printed by <code>list-users</code>. Listing users does not select or save a default user.</p>
     </section>
 
     <section>
       <h2>First run from an Unraid container Console</h2>
+      <p>Do not use the host-side <code>./tautweekly.sh</code> wrapper here. Run these container-native commands instead:</p>
       <pre><code>pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
 pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
 /opt/tautweekly/bin/run-mode.sh ListUsers

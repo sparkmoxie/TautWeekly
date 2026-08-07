@@ -97,6 +97,10 @@ Revise the scope later without rerunning SMTP or schedule setup:
 | Native Linux | `sudo tautweekly list-libraries` | `sudo tautweekly manage-libraries` |
 | FreeBSD / Podman | `sudo tautweekly list-libraries` | `sudo tautweekly manage-libraries` |
 
+For NAS / Docker, `./tautweekly.sh` is the host-side Compose wrapper from the
+release archive; it is not installed inside the container. Unraid Apps users
+should use the direct Console commands in the [NAS / Docker guide](docs/nas-docker/README.md#install-from-unraid-apps).
+
 ## Exclude newsletter recipients
 
 Every primary setup wizard now loads the Tautulli user roster immediately
@@ -245,6 +249,10 @@ docker compose up -d
 ./tautweekly.sh list-users
 ./tautweekly.sh preview-all USER_ID
 ```
+
+Run this block from the extracted release directory on the Docker host, not
+from a container Console. The Unraid Apps path above uses container-native
+commands because Community Applications does not install the host wrapper.
 
 Use a hostname reachable from inside the container for Tautulli. Keep port
 8787 on a trusted network and do not expose it publicly.

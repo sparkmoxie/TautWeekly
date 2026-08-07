@@ -80,7 +80,29 @@ Require-Text 'platforms/nas-docker/app/preview-home.html' @(
     '\/data\/config\.json',
     'preview-all-00-INDEX\.html',
     'run-mode\.sh PreviewAll USER_ID',
-    'does not select or save a default user'
+    'does not select or save a default user',
+    'host-side Compose wrapper',
+    'not installed inside the container'
+)
+Require-Text 'platforms/nas-docker/app/Setup-First.ps1' @(
+    'NEXT \(Unraid Console\): pwsh .*\/opt\/tautweekly\/Verify-Setup\.ps1',
+    'NEXT \(Compose host project directory\): \.\/tautweekly\.sh verify'
+)
+Require-Text 'platforms/nas-docker/app/Verify-Setup.ps1' @(
+    'Unraid Console:',
+    '\/opt\/tautweekly\/bin\/run-mode\.sh ListUsers',
+    'Compose host project directory:',
+    '\.\/tautweekly\.sh list-users'
+)
+Require-Text 'docs/nas-docker/README.md' @(
+    'host-side Compose wrapper',
+    'does not exist inside the Unraid Apps container',
+    "Unraid's Docker controls"
+)
+Require-Text 'docs/nas-docker/index.html' @(
+    'wrapper does not exist inside the container',
+    'host-side <code>\.\/tautweekly\.sh</code> Compose wrapper is not installed inside the Unraid Apps container',
+    "Unraid's Docker controls"
 )
 Require-Text 'platforms/nas-docker/app/Smtp-Transport.ps1' @(
     "Command 'AUTH LOGIN'",

@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-08-07
+
 ### Added
 
 - Added global movie/TV library discovery and selection to every primary setup
@@ -42,6 +44,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Clarified that `./tautweekly.sh` is a host-side Docker Compose wrapper, not a
+  command inside the Unraid Apps container, and replaced container-generated
+  follow-up guidance with commands that exist in the Unraid Console.
 - Made every non-Windows scheduler resolve and convert UTC through the configured
   IANA `TZ` explicitly instead of trusting process-local `Get-Date`; invalid
   zones now fail closed instead of silently scheduling in UTC. Schedule status

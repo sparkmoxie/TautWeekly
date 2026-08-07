@@ -28,6 +28,11 @@ the port and appdata path, and select **Install**. The maintained template is
 
 After installation, open **Docker > TautWeekly for Plex > Console** and run:
 
+> [!IMPORTANT]
+> `./tautweekly.sh` is a host-side Compose wrapper shipped in the release
+> archive. It does not exist inside the Unraid Apps container. Use the direct
+> container commands below in the Unraid Console.
+
 ```bash
 pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
 pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
@@ -102,6 +107,9 @@ Use a hostname reachable from inside the container, for example
 runs in the same container, which is not the supported deployment model.
 
 ## Safe acceptance sequence
+
+For release-archive and manual Compose installations, run this sequence from
+the extracted project directory on the Docker host, not inside the container:
 
 ```bash
 ./tautweekly.sh verify
@@ -252,6 +260,10 @@ service output, and `./tautweekly.sh schedule-status` for separate scheduler
 progress. NAS, QNAP, and general Compose deployments share this behavior.
 
 ## Lifecycle commands
+
+Run these from the extracted project directory on the Docker host. Unraid Apps
+users should use Unraid's Docker controls for status, logs, restart, and image
+updates; application commands use the direct Console forms shown above.
 
 ```bash
 ./tautweekly.sh status
