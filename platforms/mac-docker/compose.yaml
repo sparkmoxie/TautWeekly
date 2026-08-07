@@ -1,9 +1,6 @@
 services:
   tautweekly:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: tautweekly-mac:1.0.3
+    image: tautweekly-mac:stable
     container_name: tautweekly
     restart: unless-stopped
     environment:

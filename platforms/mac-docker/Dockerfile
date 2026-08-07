@@ -1,7 +1,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim
 
+ARG BUILD_VERSION=dev
+
 LABEL org.opencontainers.image.title="TautWeekly for Plex Mac Portable" \
-      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.version="$BUILD_VERSION" \
       org.opencontainers.image.description="TautWeekly for Plex newsletter service for Docker Desktop on macOS"
 
 ARG DEBIAN_FRONTEND=noninteractive

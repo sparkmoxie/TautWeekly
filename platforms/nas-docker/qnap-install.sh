@@ -92,8 +92,7 @@ else
 fi
 
 printf '\nPulling the current TautWeekly for Plex container image...\n'
-compose_cmd pull tautweekly
-compose_cmd up -d
+./container-update.sh apply
 wait_for_container
 
 printf '\nRunning the configuration wizard...\n'

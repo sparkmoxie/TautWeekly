@@ -53,11 +53,8 @@ else
   echo "Preserved existing /usr/local/etc/tautweekly/tautweekly.env."
 fi
 
-image="$(awk -F= '/^TAUTWEEKLY_IMAGE=/{print substr($0,index($0,"=")+1); exit}' /usr/local/etc/tautweekly/tautweekly.env)"
-if [ -z "$image" ]; then image="ghcr.io/sparkmoxie/tautweekly:latest"; fi
-podman pull --os=linux "$image"
 sysrc tautweekly_enable=YES >/dev/null
-service tautweekly restart >/dev/null 2>&1 || service tautweekly start
+/usr/local/sbin/tautweekly update
 
 cat <<'EOF'
 

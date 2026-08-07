@@ -82,12 +82,15 @@ sudo tautweekly schedule-enable<button class="copy" data-copy="#accept">Copy</bu
     </section>
 
     <section id="upgrade" class="section searchable" data-search="upgrade update backup rollback restore troubleshooting logs systemctl">
-      <div class="section-head"><div><div class="eyebrow">Lifecycle</div><h2>Replace code, preserve state.</h2></div><p>Upgrade mode creates a timestamped program backup, replaces `/opt/tautweekly`, preserves every private data file, and restarts a configured service.</p></div>
-      <div class="grid"><article class="card"><h3>Upgrade</h3><div class="command" id="upgrade-cmd">sudo ./install-linux.sh --upgrade
+      <div class="section-head"><div><div class="eyebrow">Lifecycle</div><h2>Check first; apply verified stable files manually.</h2></div><p>The check command reports the latest stable GitHub release without changing the host. Upgrade mode takes the operation lock, creates a timestamped program backup, replaces `/opt/tautweekly`, preserves private data, records release metadata, and verifies that a previously active service returns.</p></div>
+      <div class="grid"><article class="card"><h3>Check and upgrade</h3><div class="command" id="upgrade-cmd">tautweekly check-update
+# download the stable linux archive and verify SHA256SUMS.txt
+sudo ./install-linux.sh --upgrade
 sudo tautweekly verify
 sudo tautweekly send-test-all USER_ID<button class="copy" data-copy="#upgrade-cmd">Copy</button></div></article><article class="card"><h3>Observe</h3><div class="command" id="logs">sudo systemctl status tautweekly
 sudo journalctl -u tautweekly -n 200 --no-pager<button class="copy" data-copy="#logs">Copy</button></div></article><article class="card"><h3>Private backup</h3><div class="command" id="backup">sudo tautweekly backup
 # briefly stops an active service for consistency<button class="copy" data-copy="#backup">Copy</button></div></article></div>
+      <div class="callout"><div><strong>Unattended upgrades are not enabled.</strong><p>If acceptance fails, reinstall the previous verified archive or restore the timestamped program backup; private state remains under <code>/var/lib/tautweekly</code>.</p></div></div>
     </section>
     <div class="no-results" id="no-results" hidden>No sections matched. Try “PowerShell,” “install,” “preview,” “security,” or “upgrade.”</div>
   </main>

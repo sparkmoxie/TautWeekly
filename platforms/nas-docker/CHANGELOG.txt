@@ -3,6 +3,9 @@ TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 
 Unreleased
 ----------
+- separates stable image checks from apply actions on Compose and QNAP hosts
+- blocks busy updates, verifies health/version, and rolls back the prior image
+- documents Unraid-native notification/application without an in-container updater
 - distinguishes host-side ./tautweekly.sh commands from Unraid Console commands
 - prints valid container-native follow-up commands after setup and verification
 - resolves the configured IANA timezone explicitly for every schedule decision

@@ -118,10 +118,26 @@ only after removing the task, then reinstall the task from the new location.
 
 ## Update
 
-Back up private configuration and state, extract the new release into a separate
-directory, compare the sanitized example configuration, then copy only the live
-runtime files you intend to retain. Verify and preview again before replacing
-the scheduled task.
+Run `17-CHECK-FOR-UPDATE.bat` to compare this package's repository release
+metadata with GitHub's latest stable release. The check is manual, performs no
+write, and never downloads or installs an update. Windows does not create a
+periodic update task and never follows GitHub `main` or the container `edge`
+tag.
+
+To apply an update:
+
+1. Download the newer Windows ZIP and `SHA256SUMS.txt`, then verify the ZIP.
+2. Confirm the newsletter task is not running and disable it temporarily.
+3. Make a private backup of `config.json`, state files, `logs/`, `output/`, and
+   custom assets. Keep a copy of the previous application folder for rollback.
+4. Extract the verified archive over the permanent application folder. Release
+   archives contain no live runtime files, so the private files remain in place.
+5. Run `01-VERIFY-SETUP.bat`, `05-PREVIEW-ALL-EMAIL-TYPES.bat`, and
+   `06-SEND-TEST-ALL-EMAIL-TYPES.bat`. Re-enable and verify the scheduled task
+   only after those checks pass.
+
+If validation fails, keep the task disabled, restore the previous application
+folder plus its private-file backup, then run verification before resuming.
 
 See [configuration](../CONFIGURATION.md), [security](../SECURITY.md), and
 [troubleshooting](../TROUBLESHOOTING.md).

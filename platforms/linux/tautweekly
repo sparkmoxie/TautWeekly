@@ -139,7 +139,11 @@ case "$cmd" in
     $was_active && systemctl start tautweekly.service
     echo "Created private backup: $archive"
     ;;
+  check-update)
+    exec /usr/local/libexec/tautweekly-check-release "$app_root/RELEASE-METADATA.txt"
+    ;;
   update)
+    /usr/local/libexec/tautweekly-check-release "$app_root/RELEASE-METADATA.txt"
     cat <<'EOF'
 Native Linux updates are package based. Download and extract the newer Linux
 release, verify SHA256SUMS.txt, then run: sudo ./install-linux.sh --upgrade
@@ -170,6 +174,7 @@ TautWeekly for Plex native Linux commands
   sudo tautweekly status|start|stop|restart
   sudo tautweekly logs
   sudo tautweekly backup
+  tautweekly check-update
   tautweekly update
 
 USER_ID is the numeric value shown by list-users. Omit it only in an

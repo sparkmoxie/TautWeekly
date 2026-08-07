@@ -54,7 +54,6 @@ tautweekly_start()
         --name "$TAUTWEEKLY_CONTAINER" \
         --os=linux \
         --pull=never \
-        --label io.containers.autoupdate=registry \
         --stop-timeout=30 \
         -e "TZ=$TAUTWEEKLY_TIMEZONE" \
         -e "PUID=$TAUTWEEKLY_PUID" \

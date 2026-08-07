@@ -12,6 +12,7 @@ fi
 : "${TAUTWEEKLY_DATA_DIR:=/var/db/tautweekly}"
 : "${TAUTWEEKLY_IMAGE:=ghcr.io/sparkmoxie/tautweekly:latest}"
 podman="${TAUTWEEKLY_PODMAN_BIN:-/usr/local/bin/podman}"
+lock_container_id=""
 
 require_root()
 {
@@ -55,6 +56,82 @@ confirm()
   printf '%s [y/N]: ' "$1"
   read -r answer
   case "$answer" in y|Y|yes|YES|Yes) return 0 ;; *) return 1 ;; esac
+}
+
+running_image_id()
+{
+  "$podman" inspect --format '{{.Image}}' "$TAUTWEEKLY_CONTAINER" 2>/dev/null || true
+}
+
+configured_image_id()
+{
+  "$podman" image inspect --format '{{.Id}}' "$TAUTWEEKLY_IMAGE" 2>/dev/null || true
+}
+
+container_instance_id()
+{
+  "$podman" inspect --format '{{.Id}}' "$TAUTWEEKLY_CONTAINER" 2>/dev/null || true
+}
+
+image_version()
+{
+  target="$1"
+  if [ -z "$target" ]; then
+    printf '%s' unknown
+    return
+  fi
+  version="$("$podman" image inspect --format '{{ index .Labels "org.opencontainers.image.version" }}' "$target" 2>/dev/null || true)"
+  printf '%s' "${version:-unknown}"
+}
+
+release_operation_lock()
+{
+  current_id="$(container_instance_id)"
+  if [ -n "$lock_container_id" ] && [ "$current_id" = "$lock_container_id" ]; then
+    "$podman" exec -i "$TAUTWEEKLY_CONTAINER" sh -c \
+      'if [ -s /data/.tautweekly-update-holder ]; then kill "$(cat /data/.tautweekly-update-holder)" 2>/dev/null || true; fi; rm -f /data/.tautweekly-update-holder' \
+      >/dev/null 2>&1 || true
+  else
+    "$podman" exec -i "$TAUTWEEKLY_CONTAINER" rm -f /data/.tautweekly-update-holder >/dev/null 2>&1 || true
+  fi
+  lock_container_id=""
+}
+
+acquire_operation_lock()
+{
+  "$podman" container exists "$TAUTWEEKLY_CONTAINER" >/dev/null 2>&1 || return 0
+  lock_container_id="$(container_instance_id)"
+  "$podman" exec -i "$TAUTWEEKLY_CONTAINER" rm -f /data/.tautweekly-update-holder >/dev/null 2>&1 || true
+  "$podman" exec -d -i "$TAUTWEEKLY_CONTAINER" flock -n /data/.tautweekly-operation.lock sh -c \
+    'echo $$ > /data/.tautweekly-update-holder; trap "rm -f /data/.tautweekly-update-holder" EXIT HUP INT TERM; while :; do sleep 60; done'
+  attempt=1
+  while [ "$attempt" -le 20 ]; do
+    if "$podman" exec -i "$TAUTWEEKLY_CONTAINER" test -s /data/.tautweekly-update-holder >/dev/null 2>&1; then
+      trap release_operation_lock 0
+      return 0
+    fi
+    sleep 1
+    attempt=$((attempt + 1))
+  done
+  release_operation_lock
+  echo "Another TautWeekly operation is running; the update was not started." >&2
+  exit 75
+}
+
+wait_for_health()
+{
+  attempt=1
+  while [ "$attempt" -le 60 ]; do
+    running="$("$podman" inspect --format '{{.State.Running}}' "$TAUTWEEKLY_CONTAINER" 2>/dev/null || true)"
+    if [ "$running" = true ] &&
+        "$podman" exec -i "$TAUTWEEKLY_CONTAINER" /opt/tautweekly/healthcheck.sh >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+  "$podman" logs --tail 100 "$TAUTWEEKLY_CONTAINER" >&2 || true
+  return 1
 }
 
 cmd="${1:-help}"
@@ -127,10 +204,62 @@ case "$cmd" in
     $was_running && service tautweekly start
     echo "Created private backup: $archive"
     ;;
+  check-update)
+    require_root
+    before="$(running_image_id)"
+    before_version="$(image_version "$before")"
+    "$podman" pull --os=linux "$TAUTWEEKLY_IMAGE"
+    after="$(configured_image_id)"
+    [ -n "$after" ] || { echo "The configured image could not be inspected after pull: $TAUTWEEKLY_IMAGE" >&2; exit 69; }
+    after_version="$(image_version "$after")"
+    [ "$after_version" != unknown ] || { echo "The staged image has no repository version label; refusing to treat it as a release update." >&2; exit 65; }
+    echo "Running image version: $before_version"
+    echo "Latest configured image version: $after_version"
+    if [ -z "$before" ]; then
+      echo "The stable image is staged, but the TautWeekly container is not running."
+    elif [ "$before" = "$after" ]; then
+      echo "The running container is up to date."
+    else
+      echo "An update is staged. Run sudo tautweekly update to recreate the service."
+    fi
+    ;;
   update)
     require_root
+    acquire_operation_lock
+    before="$(running_image_id)"
+    before_version="$(image_version "$before")"
     "$podman" pull --os=linux "$TAUTWEEKLY_IMAGE"
+    after="$(configured_image_id)"
+    [ -n "$after" ] || { echo "The configured image could not be inspected after pull: $TAUTWEEKLY_IMAGE" >&2; exit 69; }
+    after_version="$(image_version "$after")"
+    [ "$after_version" != unknown ] || { echo "The staged image has no repository version label; refusing to apply it." >&2; exit 65; }
+    if [ -n "$before" ] && [ "$before" = "$after" ]; then
+      wait_for_health
+      echo "The running container is already on image version $after_version."
+      exit 0
+    fi
+    if service tautweekly restart && wait_for_health; then
+      running_after="$(running_image_id)"
+      running_after_version="$(image_version "$running_after")"
+      if [ "$running_after" = "$after" ] && [ "$running_after_version" = "$after_version" ]; then
+        echo "Updated TautWeekly from $before_version to $running_after_version; private data was preserved."
+        exit 0
+      fi
+      echo "The restarted service reports $running_after_version ($running_after), expected $after_version ($after)." >&2
+    fi
+    echo "The updated container failed its health check." >&2
+    if [ -z "$before" ]; then
+      echo "No previous running image was available for automatic rollback." >&2
+      exit 70
+    fi
+    "$podman" tag "$before" "$TAUTWEEKLY_IMAGE"
     service tautweekly restart
+    if wait_for_health && [ "$(running_image_id)" = "$before" ]; then
+      echo "Rollback to image version $before_version succeeded." >&2
+    else
+      echo "Rollback also failed health verification. Previous image ID: $before" >&2
+    fi
+    exit 70
     ;;
   help|*)
     cat <<'EOF'
@@ -156,6 +285,7 @@ TautWeekly for Plex FreeBSD Podman commands
   sudo tautweekly status|start|stop|restart
   sudo tautweekly logs
   sudo tautweekly backup
+  sudo tautweekly check-update
   sudo tautweekly update
   sudo tautweekly shell
 

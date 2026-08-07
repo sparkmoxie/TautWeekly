@@ -41,7 +41,7 @@ The ZIP contains the same payload for administrators who transfer packages
 from Windows. Preserve the executable bits or restore them with:
 
 ```bash
-chmod +x install-linux.sh tautweekly app/*.sh app/bin/*.sh
+chmod +x install-linux.sh tautweekly check-release.sh app/*.sh app/bin/*.sh
 ```
 
 ## Install
@@ -141,6 +141,11 @@ mail is a separate, explicit administrator action.
 
 ## Upgrade and rollback
 
+Run `tautweekly check-update` for a read-only comparison between the installed
+`RELEASE-METADATA.txt` and GitHub's latest stable release. This check never
+downloads or installs code, has no periodic timer, and never follows `main` or
+the container `edge` tag.
+
 Download and verify the newer Linux archive, extract it into a temporary
 directory, then run:
 
@@ -155,7 +160,10 @@ An upgrade stores the previous application payload under
 `/var/lib/tautweekly/backups/program-<timestamp>.tar.gz`, replaces only
 `/opt/tautweekly`, and restarts an already configured service. It does not
 replace `config.json`, state, output, logs, custom assets, or the environment
-file.
+file. The installer holds the same operation lock used by preview and send
+commands, records and verifies the repository release metadata, and confirms a
+previously active service becomes active again. Run the explicit `verify`,
+preview, and TestEmail commands before the next production delivery.
 
 To roll back, stop the service, restore the recorded program archive into
 `/opt`, and start the service:

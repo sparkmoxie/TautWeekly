@@ -35,6 +35,13 @@ reviewed commit on `main`.
    Podman installations. Download the published artifacts, inspect the
    multi-platform image manifest, and verify both independently.
 
+   Stable tags publish the full semantic version, the major/minor tag, and
+   `latest` to one manifest. A push to `main` publishes only `edge`. Confirm no
+   packaged Compose file, Unraid template, environment example, or update guide
+   defaults to `edge`. Exercise each packaged `check-update`/apply path against
+   the release candidate, including busy-operation refusal, health/version
+   verification, and image rollback where the platform owns container updates.
+
 7. Keep the container package public so Unraid Community Apps can pull it
    anonymously. Validate `ca_profile.xml` and `templates/tautweekly.xml` before
    submitting the repository through the Unraid Community Applications portal.

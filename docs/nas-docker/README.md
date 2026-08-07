@@ -86,7 +86,7 @@ then extract one format:
 ```bash
 tar -xzf TautWeekly-nas-docker.tar.gz
 cd TautWeekly-nas-docker
-chmod +x qnap-install.sh tautweekly.sh app/*.sh app/bin/*.sh
+chmod +x qnap-install.sh tautweekly.sh container-update.sh app/*.sh app/bin/*.sh
 ```
 
 For a general Docker host, use the portable Compose workflow:
@@ -259,6 +259,34 @@ Use `docker inspect` to read the exact failed probe, `./tautweekly.sh logs` for
 service output, and `./tautweekly.sh schedule-status` for separate scheduler
 progress. NAS, QNAP, and general Compose deployments share this behavior.
 
+## Updates and recovery
+
+`ghcr.io/sparkmoxie/tautweekly:latest` advances only when a stable repository
+release is tagged. The `edge` tag follows `main`; no packaged Compose or Unraid
+default uses it.
+
+For release-archive Compose and QNAP installations, checking and applying are
+separate host actions:
+
+```bash
+./tautweekly.sh check-update  # pull/stage stable latest; do not restart
+./tautweekly.sh backup        # optional private data backup
+./tautweekly.sh update        # recreate, health/version check, auto-rollback
+```
+
+The update command refuses to start while the application operation lock is
+busy, never deletes `data/`, forces Compose to use the pulled image instead of
+rebuilding bundled source, and restores the prior image automatically when the
+new container fails health verification. Backups contain credentials.
+
+Unraid Apps installations do not receive the host wrapper and do not need an
+in-container updater. Unraid's Apps Action Center reports an available update
+when the configured `latest` digest changes; apply it from Unraid's Docker/Apps
+controls. An optional automatic-update plugin may apply administrator-selected
+updates, but unattended application is opt-in. Leave the template on `latest`,
+not `edge`, unless deliberately testing unreleased code. After any update, run
+the Console verification and controlled preview/TestEmail sequence again.
+
 ## Lifecycle commands
 
 Run these from the extracted project directory on the Docker host. Unraid Apps
@@ -269,6 +297,7 @@ updates; application commands use the direct Console forms shown above.
 ./tautweekly.sh status
 ./tautweekly.sh logs
 ./tautweekly.sh restart
+./tautweekly.sh check-update
 ./tautweekly.sh update
 ./tautweekly.sh schedule-disable
 docker compose down

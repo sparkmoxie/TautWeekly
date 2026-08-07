@@ -267,7 +267,7 @@ Use a hostname reachable from inside the container for Tautulli. Keep port
 <summary><strong>macOS with Docker Desktop</strong></summary>
 
 ```bash
-chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh
+chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh mac-update.sh check-release.sh
 ./mac-install.sh
 ./tautweekly.sh verify
 ./tautweekly.sh exclude-users  # optional later revision
@@ -283,6 +283,27 @@ so long sends do not interrupt liveness reporting.
 · [Read the macOS documentation](docs/mac/README.md)
 
 </details>
+
+## Update policy
+
+Stable releases only by default. TautWeekly never installs unattended updates
+by default. Checking never applies an update. `latest` and semantic
+version tags are stable release channels; `edge` follows GitHub `main` and is
+not used by any packaged default. A check reports or stages a stable candidate,
+while an update/apply action changes the installed runtime.
+
+| Package | Check for a stable update | Apply and recover |
+|---|---|---|
+| Windows portable | Run `17-CHECK-FOR-UPDATE.bat`; it checks GitHub's latest stable release and never installs it. | Verify the new ZIP and checksum, pause the scheduled task, preserve the private runtime files, overlay the verified package, then verify/preview before resuming. Keep the previous folder backup for rollback. |
+| NAS Compose / QNAP | Run `./tautweekly.sh check-update`; Docker pulls the configured stable image into the host cache but leaves the running container unchanged. | Run `./tautweekly.sh update`; it refuses a busy newsletter operation, recreates from the stable image, verifies health/version, preserves `data/`, and automatically restores the prior image if health fails. |
+| Unraid host-managed | Unraid's Apps Action Center reports when the configured `latest` image digest changes. | Apply from Unraid's Docker/Apps controls. Automatic application is an explicit administrator choice through an optional update plugin; TautWeekly adds no Docker socket or in-container updater. |
+| macOS Docker Desktop | Run `./tautweekly.sh check-update`; it compares the package's release metadata with GitHub's latest stable release. | Download and checksum the newer Mac archive, overlay it on the existing project without deleting `.env` or `data/`, then run `./tautweekly.sh update`. The wrapper builds that verified package, checks the operation lock and container health/version, and rolls back the image on failure. |
+| Native Linux | Run `tautweekly check-update`; it is a read-only GitHub stable-release check. | Download and checksum the Linux archive, then run `sudo ./install-linux.sh --upgrade`. The installer locks against sends, backs up `/opt/tautweekly`, preserves `/var/lib/tautweekly`, and verifies the installed release/service; the program archive is the rollback source. |
+| FreeBSD / Podman | Run `sudo tautweekly check-update`; Podman pulls the configured stable image into local storage without restarting the container. | Run `sudo tautweekly update`; the rc.d-aware wrapper checks the operation lock, restarts, verifies health/version, and retags/restarts the prior image on failure. Podman's systemd-only auto-update service is not used on FreeBSD. |
+
+Read the platform guide before updating. Backups contain credentials and must
+remain private. After any successful update, run `verify`, controlled previews,
+and TestEmail delivery before trusting the next production send.
 
 ## Architecture
 

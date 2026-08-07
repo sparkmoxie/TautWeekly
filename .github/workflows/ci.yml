@@ -32,6 +32,10 @@ jobs:
         run: ./scripts/test-container-health.sh
       - name: Test cross-platform command routing
         run: ./scripts/test-platform-command-routing.sh
+      - name: Test update detection and application guards
+        run: |
+          ./scripts/test-update-management.sh
+          pwsh ./scripts/test-update-checks.ps1
       - name: Test scheduler timezone behavior
         shell: pwsh
         run: ./scripts/test-scheduler-timezone.ps1
@@ -91,16 +95,24 @@ jobs:
       - name: Test launcher permissions
         run: |
           test -x platforms/nas-docker/tautweekly.sh
+          test -x platforms/nas-docker/container-update.sh
           test -x platforms/mac-docker/tautweekly.sh
+          test -x platforms/mac-docker/check-release.sh
+          test -x platforms/mac-docker/mac-update.sh
           test -x platforms/linux/install-linux.sh
           test -x platforms/linux/tautweekly
+          test -x platforms/linux/check-release.sh
           test -x platforms/freebsd-podman/install-freebsd.sh
           test -x platforms/freebsd-podman/tautweekly
           test -x platforms/freebsd-podman/rc.d/tautweekly
           tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/tautweekly.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/container-update.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/tautweekly.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/check-release.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/mac-update.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/install-linux.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/tautweekly | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/check-release.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/install-freebsd.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/rc.d/tautweekly | grep -q '^-rwx'
       - name: Upload release candidates

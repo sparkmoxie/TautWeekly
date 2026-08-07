@@ -24,7 +24,7 @@ Current source baseline: **1.0.3**.
 3. Make the launchers executable and start the guided installer:
 
 ```bash
-chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh app/*.sh app/bin/*.sh
+chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh mac-update.sh check-release.sh app/*.sh app/bin/*.sh
 ./mac-install.sh
 ```
 
@@ -121,9 +121,29 @@ config before writing and does not change SMTP, recipients, or scheduling.
 ## Data and updates
 
 Private runtime data lives in `data/`. Back it up with
-`./tautweekly.sh backup`, keep the archive private, and update the image with
-`./tautweekly.sh update`. Re-run verification and controlled previews after an
-update.
+`./tautweekly.sh backup` and keep the archive private.
+
+`./tautweekly.sh check-update` compares `RELEASE-METADATA.txt` with GitHub's
+latest stable release. It never applies an update and never follows `main` or
+the container `edge` tag. macOS does not schedule unattended updates.
+
+To apply a newer release, download the Mac archive and `SHA256SUMS.txt`, verify
+the checksum, and extract the archive over the existing project folder without
+deleting `.env` or `data/`. Then run:
+
+```bash
+./tautweekly.sh update
+./tautweekly.sh verify
+./tautweekly.sh preview-all USER_ID
+./tautweekly.sh send-test-all USER_ID
+```
+
+The update command builds the verified package currently on disk; it no longer
+pretends that refreshing the Docker base image installs a newer TautWeekly
+release. It refuses a busy application operation, preserves `.env` and `data/`,
+checks the running image version and container health, and automatically retags
+and restarts the previous image if validation fails. Keep the prior verified
+archive and private backup for file-level recovery.
 
 Docker health uses a service-supervisor heartbeat that continues throughout
 long scheduled sends. A stopped preview listener or stalled supervisor remains

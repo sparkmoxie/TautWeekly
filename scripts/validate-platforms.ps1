@@ -20,6 +20,16 @@ function Require-Text([string]$Relative, [string[]]$Patterns) {
     Write-Host "[PASS] Platform contract: $Relative"
 }
 
+function Forbid-Text([string]$Relative, [string[]]$Patterns) {
+    $content = Read-RepoFile $Relative
+    foreach ($pattern in $Patterns) {
+        if ($content -match $pattern) {
+            throw "Forbidden platform contract '$pattern' is present in $Relative"
+        }
+    }
+    Write-Host "[PASS] Forbidden platform behavior absent: $Relative"
+}
+
 Require-Text 'platforms/linux/systemd/tautweekly.service' @(
     'User=tautweekly',
     'ProtectSystem=strict',
@@ -33,8 +43,19 @@ Require-Text 'platforms/linux/tautweekly.env.example' @(
 Require-Text 'platforms/linux/install-linux.sh' @(
     'PowerShell 7\.2 or newer',
     'program-\$stamp\.tar\.gz',
-    'Preserved existing /etc/tautweekly/tautweekly\.env'
+    'Preserved existing /etc/tautweekly/tautweekly\.env',
+    '\.tautweekly-operation\.lock',
+    'RELEASE-METADATA\.txt',
+    'tautweekly-check-release',
+    'systemctl is-active --quiet tautweekly\.service'
 )
+Require-Text 'platforms/linux/check-release.sh' @(
+    'releases/latest',
+    'TAUTWEEKLY_LATEST_RELEASE_VERSION',
+    'Latest stable release',
+    'A stable update is available'
+)
+Require-Text 'platforms/linux/tautweekly' @('check-update', 'tautweekly-check-release')
 Require-Text 'platforms/freebsd-podman/rc.d/tautweekly' @(
     'REQUIRE: NETWORKING linux podman',
     '--os=linux',
@@ -44,8 +65,17 @@ Require-Text 'platforms/freebsd-podman/rc.d/tautweekly' @(
 )
 Require-Text 'platforms/freebsd-podman/install-freebsd.sh' @(
     'sysrc linux_enable=YES',
-    'podman pull --os=linux',
+    '/usr/local/sbin/tautweekly update',
     'Preserved existing /usr/local/etc/tautweekly/tautweekly\.env'
+)
+Forbid-Text 'platforms/freebsd-podman/rc.d/tautweekly' @('io\.containers\.autoupdate')
+Require-Text 'platforms/freebsd-podman/tautweekly' @(
+    'check-update',
+    'flock -n /data/\.tautweekly-operation\.lock',
+    '\.tautweekly-update-holder',
+    'pull --os=linux',
+    'Rollback to image version',
+    'health verification'
 )
 Require-Text 'platforms/nas-docker/app/run-service.sh' @(
     'Preview server listening',
@@ -143,8 +173,59 @@ Require-Text 'platforms/nas-docker/tautweekly.sh' @(
     '\.\/tautweekly\.sh start',
     '\.\/tautweekly\.sh stop',
     'preview-all USER_ID',
-    'numeric value shown by list-users'
+    'numeric value shown by list-users',
+    'check-update',
+    'container-update\.sh apply'
 )
+Require-Text 'platforms/nas-docker/container-update.sh' @(
+    'config --images',
+    '\.tautweekly-operation\.lock',
+    '\.tautweekly-update-holder',
+    'compose_cmd pull tautweekly',
+    'up -d --no-build',
+    'wait_for_health',
+    'no repository version label',
+    'Restoring the previous image'
+)
+Forbid-Text 'platforms/nas-docker/compose.yaml' @('image:\s*.*:edge')
+Require-Text 'platforms/nas-docker/compose.yaml' @('ghcr\.io/sparkmoxie/tautweekly:latest')
+Require-Text 'platforms/nas-docker/compose.qnap.yaml' @('ghcr\.io/sparkmoxie/tautweekly:latest')
+
+Require-Text 'platforms/mac-docker/check-release.sh' @(
+    'releases/latest',
+    'TAUTWEEKLY_LATEST_RELEASE_VERSION',
+    'Latest stable release'
+)
+Require-Text 'platforms/mac-docker/mac-update.sh' @(
+    'BUILD_VERSION',
+    '\.tautweekly-operation\.lock',
+    '\.tautweekly-update-holder',
+    'wait_for_health',
+    'verified stable release package',
+    'Rollback to macOS image version'
+)
+Require-Text 'platforms/mac-docker/Dockerfile' @('ARG BUILD_VERSION=dev', 'org\.opencontainers\.image\.version="\$BUILD_VERSION"')
+Require-Text 'platforms/mac-docker/compose.yaml' @('image:\s*tautweekly-mac:stable')
+Forbid-Text 'platforms/mac-docker/compose.yaml' @('(?m)^\s*build:')
+Forbid-Text 'platforms/mac-docker/tautweekly.sh' @('docker compose build --pull', 'docker-compose build --pull')
+
+Require-Text 'platforms/windows/Check-Update.ps1' @(
+    'releases/latest',
+    'Latest stable release',
+    'A stable update is available'
+)
+Require-Text 'platforms/windows/17-CHECK-FOR-UPDATE.bat' @('Check-Update\.ps1')
+
+Require-Text 'README.md' @('Stable releases only by default', 'Checking never applies an update', 'Unraid host-managed')
+foreach ($relative in @(
+    'docs/windows/README.md',
+    'docs/nas-docker/README.md',
+    'docs/mac/README.md',
+    'docs/linux/README.md',
+    'docs/freebsd/README.md'
+)) {
+    Require-Text $relative @('check', 'stable', 'rollback|restore')
+}
 
 Require-Text 'platforms/linux/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1')
 Require-Text 'platforms/freebsd-podman/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1')
