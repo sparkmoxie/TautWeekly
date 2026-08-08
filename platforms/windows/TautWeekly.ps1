@@ -11,7 +11,7 @@
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex Portable v1.6.11 — production newsletter engine.
+# TautWeekly for Plex Portable v1.7.0 — production newsletter engine.
 # Includes validated production renderer changes through v1.5.14 plus portable
 # server, SMTP, schedule, preview, and safety controls.
 Set-StrictMode -Version Latest
@@ -22,6 +22,8 @@ if ($PSVersionTable.PSVersion -lt [Version]"5.1") {
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $ScriptRoot = $PSScriptRoot
+. (Join-Path $ScriptRoot "Operation-Lock.ps1")
+$script:TautWeeklyOperationLock = Enter-TautWeeklyOperationLock -Root $ScriptRoot -Purpose "newsletter $Mode"
 . (Join-Path $ScriptRoot "Smtp-Transport.ps1")
 $OutputDir = Join-Path $ScriptRoot "output"
 $PosterDir = Join-Path $OutputDir "posters"

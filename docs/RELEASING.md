@@ -20,7 +20,10 @@ reviewed commit on `main`.
    live configuration, state, logs, or generated output is present. Confirm the
    Linux archive contains the canonical application payload and systemd unit;
    confirm the FreeBSD archive contains the same payload, Dockerfile, and rc.d
-   integration.
+   integration. Confirm every archive also contains `RELEASE-FILES.txt`, whose
+   per-file hashes define release ownership without claiming private runtime
+   paths. The Windows updater depends on that manifest for verified replacement
+   and deprecated-file cleanup.
 5. Create and push an annotated tag from `main`:
 
    ```bash
@@ -40,7 +43,9 @@ reviewed commit on `main`.
    packaged Compose file, Unraid template, environment example, or update guide
    defaults to `edge`. Exercise each packaged `check-update`/apply path against
    the release candidate, including busy-operation refusal, health/version
-   verification, and image rollback where the platform owns container updates.
+   verification, and rollback where the platform owns updates. On Windows,
+   exercise checksum refusal, the shared operation lock, private-file
+   preservation, Task Scheduler restoration, and automatic folder rollback.
 
 7. Keep the container package public so Unraid Community Apps can pull it
    anonymously. Validate `ca_profile.xml` and `templates/tautweekly.xml` before

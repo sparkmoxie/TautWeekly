@@ -5,7 +5,7 @@
 The Windows distribution runs directly in Windows PowerShell and uses Windows
 Task Scheduler for optional automation.
 
-Current source baseline: **1.6.11**.
+Current source baseline: **1.7.0**.
 
 ## Requirements
 
@@ -15,7 +15,7 @@ Current source baseline: **1.6.11**.
 - A Tautulli API key.
 - A permanent writable installation directory.
 - Administrator approval only when installing, verifying, or removing the
-  scheduled task.
+  scheduled task, or applying a verified stable update.
 
 Plex and Tautulli may run on another host. Use a resolvable hostname such as
 `media.example.test`; `127.0.0.1` is correct only when Tautulli runs on the same
@@ -119,25 +119,37 @@ only after removing the task, then reinstall the task from the new location.
 ## Update
 
 Run `17-CHECK-FOR-UPDATE.bat` to compare this package's repository release
-metadata with GitHub's latest stable release. The check is manual, performs no
-write, and never downloads or installs an update. Windows does not create a
+metadata with GitHub's latest stable release. Windows does not create a
 periodic update task and never follows GitHub `main` or the container `edge`
-tag.
+tag. If an update exists, the launcher offers three explicit choices:
 
-To apply an update:
+- `U` — apply the stable update safely.
+- `O` — open the stable release page without changing the installation.
+- Enter — exit without changing anything.
 
-1. Download the newer Windows ZIP and `SHA256SUMS.txt`, then verify the ZIP.
-2. Confirm the newsletter task is not running and disable it temporarily.
-3. Make a private backup of `config.json`, state files, `logs/`, `output/`, and
-   custom assets. Keep a copy of the previous application folder for rollback.
-4. Extract the verified archive over the permanent application folder. Release
-   archives contain no live runtime files, so the private files remain in place.
-5. Run `01-VERIFY-SETUP.bat`, `05-PREVIEW-ALL-EMAIL-TYPES.bat`, and
-   `06-SEND-TEST-ALL-EMAIL-TYPES.bat`. Re-enable and verify the scheduled task
-   only after those checks pass.
+Choosing `U` downloads the official Windows ZIP and `SHA256SUMS.txt`, verifies
+the archive checksum and the package's per-file release manifest, then requests
+administrator approval for the replacement step. The updater:
 
-If validation fails, keep the task disabled, restore the previous application
-folder plus its private-file backup, then run verification before resuming.
+1. Acquires the same installation lock used by newsletter runs and refuses to
+   overlap another operation.
+2. Refuses a running newsletter task, temporarily disables an enabled task, and
+   preserves a task that was already disabled.
+3. Creates a timestamped private backup beside the installation folder. The
+   backup contains credentials and must not be shared.
+4. Replaces only release-owned files. Unowned `config.json`, state files,
+   `logs/`, `output/`, and custom-named assets remain in place. An unchanged
+   release-owned file removed by the newer package is deleted; a locally
+   modified deprecated file is retained.
+5. Verifies every installed release-file hash, parses the shipped PowerShell
+   files, confirms the repository version, and restores Task Scheduler state.
+
+Any failure after replacement begins triggers automatic file rollback. If
+rollback cannot complete, the scheduled task stays disabled and the updater
+reports the private backup path. After a successful update, run
+`01-VERIFY-SETUP.bat`, `05-PREVIEW-ALL-EMAIL-TYPES.bat`, and
+`06-SEND-TEST-ALL-EMAIL-TYPES.bat` before the next production send. The sibling
+backup is intentionally retained for manual recovery until you are satisfied.
 
 See [configuration](../CONFIGURATION.md), [security](../SECURITY.md), and
 [troubleshooting](../TROUBLESHOOTING.md).

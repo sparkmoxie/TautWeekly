@@ -57,7 +57,22 @@ function Copy-Platform {
         'Credentials and runtime state are intentionally excluded.'
     ) -join [Environment]::NewLine
     [IO.File]::WriteAllText((Join-Path $destination 'RELEASE-METADATA.txt'), $metadata + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+
     return $destination
+}
+
+function Write-ReleaseManifest {
+    param([Parameter(Mandatory = $true)][string]$Destination)
+    $releaseFiles = @(
+        Get-ChildItem -LiteralPath $Destination -Force -Recurse -File | Where-Object {
+            $_.Name -ne 'RELEASE-FILES.txt'
+        } | ForEach-Object {
+            $relative = $_.FullName.Substring($Destination.Length).TrimStart('\','/').Replace('\','/')
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $relative"
+        }
+    ) | Sort-Object
+    [IO.File]::WriteAllLines((Join-Path $Destination 'RELEASE-FILES.txt'), $releaseFiles, [Text.UTF8Encoding]::new($false))
 }
 
 function New-Zip {
@@ -127,6 +142,10 @@ try {
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/app') -Destination (Join-Path $freeBsdDestination 'app') -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/Dockerfile') -Destination $freeBsdDestination -Force
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/.dockerignore') -Destination $freeBsdDestination -Force
+
+    foreach ($destination in (Get-ChildItem -LiteralPath $staging -Directory)) {
+        Write-ReleaseManifest -Destination $destination.FullName
+    }
 
     $forbidden = Get-ChildItem -LiteralPath $staging -Force -Recurse | Where-Object {
         ($_.PSIsContainer -and $_.Name -in @('logs','output')) -or

@@ -27,6 +27,8 @@ $required = @(
     'platforms/windows/TautWeekly.ps1',
     'platforms/windows/Smtp-Transport.ps1',
     'platforms/windows/Check-Update.ps1',
+    'platforms/windows/Windows-Update.ps1',
+    'platforms/windows/Operation-Lock.ps1',
     'platforms/windows/17-CHECK-FOR-UPDATE.bat',
     'platforms/nas-docker/compose.yaml',
     'platforms/nas-docker/compose.qnap.yaml',
