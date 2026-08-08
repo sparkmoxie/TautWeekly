@@ -70,9 +70,11 @@ Before enabling delivery, confirm `Configured TZ`, `Control zone`, and
 `Scheduler TZ` agree and that `Scheduler now` has the expected local time and
 UTC offset. Recreate or restart the container after changing `TZ`.
 
-During preview review, confirm the adaptive one-item cards, movie genres,
-anonymous Binge Champion movie/TV/time aggregate, gold winner treatment, and
-counted Trending section.
+During preview review, confirm the supplied animated movie/TV icons,
+up-to-four most-watched movie and TV-show rows, duration-only Total Watched
+card, anonymous Binge Champion duration plus nonzero movie/TV-show counts, gold winner
+treatment, and Trending hero fallback. The TV stats card is absent when no
+show was watched; TV-only release weeks retain their TV cards below the hero.
 
 Enable automation only after reviewing browser previews and TestEmail messages:
 

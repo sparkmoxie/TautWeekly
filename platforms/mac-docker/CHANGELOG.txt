@@ -3,6 +3,11 @@ TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 
 Unreleased
 ----------
+- limits HOT NEW RELEASE to movies and falls back to Trending when no new movie exists
+- lists up to four most-watched movies and TV shows, omitting an empty TV card
+- replaces the packaged movie/TV stat GIFs while retaining CID asset behavior
+- splits Binge Champion into watch duration plus nonzero unique movie/TV-show counts
+- removes qualifying-play copy from Total Watched
 - adds a manual stable-release check against packaged release metadata
 - applies the verified package on disk instead of only refreshing the Docker base image
 - blocks busy updates, verifies image version/health, and rolls back on failure
@@ -19,7 +24,7 @@ Unreleased
 - adds ./tautweekly.sh exclude-users for later recipient-policy updates
 - preserves existing user-ID and email exclusions when setup is intentionally rebuilt
 - ranks Binge Champion by qualifying watch time with total plays as the tie-breaker
-- shares anonymous movie/TV play counts and total time; only the winner sees gold
+- shares anonymous watch duration and nonzero unique movie/TV-show counts; only the winner sees gold
 - treats missing Tautulli episode rating fields as optional during PreviewAll
 - serves first-run setup guidance at the preview root before previews exist
 - verifies and monitors the preview listener so bind/process failures are visible

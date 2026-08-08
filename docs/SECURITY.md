@@ -36,7 +36,7 @@ storage, and define a retention period.
 ## Recipient privacy
 
 Scheduled weekly messages share only the Binge Champion's anonymous aggregate:
-qualifying movie plays, TV-show plays, and total watch time. The champion's
+total watch time plus nonzero unique movie and TV-show counts. The champion's
 friendly name, username, user ID, and watched titles are not disclosed. Only
 the winning recipient sees the gold **YOU WON** treatment. Detailed personal
 recap rows remain private to each recipient, and one-off welcome messages do not

@@ -22,7 +22,8 @@ $requiredFunctions = @(
     'Format-WatchTime',
     'Get-HistoryRowPlayCount',
     'Get-BingeChampion',
-    'Get-BingeChampionDisplay'
+    'Get-BingeChampionDisplay',
+    'Get-BingeChampionTitleBreakdown'
 )
 
 function Assert-True {
@@ -100,6 +101,9 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($champion.Seconds -eq 21600) "$relativePath returned the wrong aggregate watch time"
     Assert-True ($champion.MoviePlays -eq 2) "$relativePath returned the wrong movie-play count"
     Assert-True ($champion.TvPlays -eq 1) "$relativePath returned the wrong TV-play count"
+    Assert-True ($champion.QualifyingTitles -eq 2) "$relativePath did not count one movie and one TV show as two qualifying titles"
+    Assert-True ($champion.QualifyingMovies -eq 1) "$relativePath returned the wrong unique movie count"
+    Assert-True ($champion.QualifyingTvShows -eq 1) "$relativePath returned the wrong unique TV-show count"
     Assert-True ($champion.TotalTimeText -eq '6h 0m') "$relativePath returned the wrong watch-time label"
 
     $winnerView = Get-BingeChampionDisplay -BingeChampion $champion -User ([PSCustomObject]@{
@@ -113,7 +117,25 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True (-not $otherView.IsWinner) "$relativePath marked a non-winner as the champion"
     Assert-True ($winnerView.MoviePlays -eq 2 -and $otherView.MoviePlays -eq 2) "$relativePath did not share the movie aggregate"
     Assert-True ($winnerView.TvPlays -eq 1 -and $otherView.TvPlays -eq 1) "$relativePath did not share the TV aggregate"
+    Assert-True ($winnerView.QualifyingTitles -eq 2 -and $otherView.QualifyingTitles -eq 2) "$relativePath did not share the qualifying-title aggregate"
+    Assert-True ($winnerView.QualifyingMovies -eq 1 -and $otherView.QualifyingMovies -eq 1) "$relativePath did not share the unique movie aggregate"
+    Assert-True ($winnerView.QualifyingTvShows -eq 1 -and $otherView.QualifyingTvShows -eq 1) "$relativePath did not share the unique TV-show aggregate"
     Assert-True ($winnerView.TotalTimeText -eq '6h 0m' -and $otherView.TotalTimeText -eq '6h 0m') "$relativePath did not share the watch-time aggregate"
+
+    $bullet = [char]0x2022
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 1; QualifyingTvShows = 0 })) -eq '1 movie') "$relativePath lost singular movie copy"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 2; QualifyingTvShows = 0 })) -eq '2 movies') "$relativePath lost plural movie copy"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 0; QualifyingTvShows = 1 })) -eq '1 TV show') "$relativePath lost singular TV-show copy"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 0; QualifyingTvShows = 3 })) -eq '3 TV shows') "$relativePath lost plural TV-show copy"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 5; QualifyingTvShows = 2 })) -eq "5 movies $bullet 2 TV shows") "$relativePath lost the mixed title breakdown"
+    Assert-True ([string]::IsNullOrWhiteSpace((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 0; QualifyingTvShows = 0 })))) "$relativePath rendered zero-count categories"
+
+    $legacyDisplay = Get-BingeChampionDisplay -BingeChampion ([PSCustomObject]@{
+        UserId = '10'; FriendlyName = 'Private Winner'; Seconds = 21600
+        TotalTimeText = '6h 0m'; MoviePlays = 20; TvPlays = 30
+    }) -User ([PSCustomObject]@{ UserId = '20'; FriendlyName = 'Observer' })
+    Assert-True ($legacyDisplay.QualifyingTitles -eq 0) "$relativePath substituted play counts for a missing title count"
+    Assert-True ($legacyDisplay.QualifyingMovies -eq 0 -and $legacyDisplay.QualifyingTvShows -eq 0) "$relativePath substituted play counts for missing media-title counts"
 
     foreach ($privateProperty in @('UserId', 'FriendlyName', 'Title', 'Titles', 'TopTitles')) {
         Assert-True (
@@ -123,6 +145,14 @@ foreach ($relativePath in $rendererPaths) {
 
     $source = Get-Content -LiteralPath $path -Raw
     Assert-True ($source -notmatch 'WinningTitle|TopTitles|YOUR TOP TITLES') "$relativePath retains title-based Binge Champion output"
+    Assert-True ($source -notmatch '\$bingeHeadline|\$bingeTitleCount|\$bingeTitleWord') "$relativePath retains the retired one-line Binge Champion metric"
+    Assert-True ($source -match 'font-size:10px;line-height:1\.35;font-weight:400;color:#b0b0b0') "$relativePath does not render the media breakdown in the compact secondary style"
+    Assert-True ($source.Contains('$footerFeature += "`r`n${winnerLine}`r`n$($bingeDisplay.TotalTimeText) watched"')) "$relativePath does not use the two-line Binge Champion plain-text format"
+    Assert-True ($source -notmatch 'movie/TV play split') "$relativePath retains the retired Binge Champion play-split copy"
+    $winnerEyebrow = 'YOU WON ' + [char]0x2022 + ' BINGE CHAMPION'
+    Assert-True ($source.Contains($winnerEyebrow)) "$relativePath lost the winner presentation"
+    Assert-True ($source -match "THIS WEEK'S BINGE CHAMPION") "$relativePath lost the non-winner presentation"
+    Assert-True ($source -match 'if \(\$isBingeWinner\) \{ 54 \} else \{ 42 \}') "$relativePath does not preserve winner/non-winner trophy sizing"
 
     Write-Host "[PASS] Binge Champion privacy and ranking: $relativePath"
 }

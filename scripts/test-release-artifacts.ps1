@@ -18,6 +18,18 @@ function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 
+function Get-ZipEntrySha256([IO.Compression.ZipArchiveEntry]$Entry) {
+    $stream = $Entry.Open()
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '')
+    }
+    finally {
+        $sha.Dispose()
+        $stream.Dispose()
+    }
+}
+
 $expected = [ordered]@{
     'TautWeekly-windows.zip' = @(
         'TautWeekly-windows/TautWeekly.ps1',
@@ -77,6 +89,18 @@ $expected = [ordered]@{
         'TautWeekly-freebsd-podman/RELEASE-FILES.txt',
         'TautWeekly-freebsd-podman/README.md'
     )
+}
+
+$assetRoots = [ordered]@{
+    'TautWeekly-windows.zip'         = 'TautWeekly-windows/assets'
+    'TautWeekly-nas-docker.zip'      = 'TautWeekly-nas-docker/app/assets-default'
+    'TautWeekly-mac-docker.zip'      = 'TautWeekly-mac-docker/app/assets-default'
+    'TautWeekly-linux.zip'           = 'TautWeekly-linux/app/assets-default'
+    'TautWeekly-freebsd-podman.zip'  = 'TautWeekly-freebsd-podman/app/assets-default'
+}
+$expectedGifHashes = [ordered]@{
+    'movies.gif' = '9BCD489463C963C38469771518700308CCADE3965A32EDA18E12DC718950C971'
+    'tv.gif'     = '35FFCB45F313953AD0EEF2C7EC852B4B68B0E033E5055BC0926B87EB2EDEF117'
 }
 
 $forbiddenNames = @(
@@ -140,6 +164,19 @@ foreach ($archiveName in $expected.Keys) {
         Assert-True ($renderer.Contains('$params.section_id = $sectionId')) "$archiveName lacks server-side selected-library scoping."
         Assert-True ($renderer.Contains('Smtp-Transport.ps1')) "$archiveName does not load the explicit SMTP authentication transport."
         Assert-True ($renderer.Contains('Send-TautWeeklySmtpMessage')) "$archiveName does not route mail through the explicit SMTP transport."
+        Assert-True ($renderer.Contains('function Get-StatsTvShowRowsHtml')) "$archiveName lacks grouped TV-show personal statistics."
+        Assert-True ($renderer.Contains('function Get-BingeChampionTitleBreakdown')) "$archiveName lacks the media-specific Binge Champion title breakdown."
+        Assert-True ($renderer.Contains('$bingeTimeLine = "$([string]$bingeDisplay.TotalTimeText) watched"')) "$archiveName has stale Binge Champion duration copy."
+        Assert-True (-not $renderer.Contains('$bingeHeadline')) "$archiveName retains the retired one-line Binge Champion metric."
+        Assert-True ($renderer.Contains('$heroLabel = if ($trendingHeroMode) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }')) "$archiveName lacks the movie-empty Trending hero fallback."
+
+        foreach ($gifName in $expectedGifHashes.Keys) {
+            $gifEntryName = "$($assetRoots[$archiveName])/$gifName"
+            $gifEntry = @($archive.Entries | Where-Object { $_.FullName.Replace('\', '/') -ceq $gifEntryName })
+            Assert-True ($gifEntry.Count -eq 1) "$archiveName is missing $gifEntryName"
+            $actualGifHash = Get-ZipEntrySha256 -Entry $gifEntry[0]
+            Assert-True ($actualGifHash -ceq $expectedGifHashes[$gifName]) "$archiveName contains stale $gifName bytes."
+        }
 
         Write-Host "[PASS] Release payload contract: $archiveName ($($archive.Entries.Count) entries)"
     }

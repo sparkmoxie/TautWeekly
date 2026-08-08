@@ -95,6 +95,16 @@ foreach ($relative in $pages) {
     Write-Host "[PASS] Documentation features: $relative"
 }
 
+$previewGallery = [IO.File]::ReadAllText((Join-Path $docs 'examples/preview-all-00-INDEX.html'))
+foreach ($previewCopy in @(
+    'The real email layout, across every state.',
+    'Go ahead, shrink my window.'
+)) {
+    if (-not $previewGallery.Contains($previewCopy)) {
+        throw "Email States Preview is missing requested copy: $previewCopy"
+    }
+}
+
 if ($terminalPages -lt 3) {
     throw "Expected terminal demonstrations on at least three documentation pages; found $terminalPages."
 }

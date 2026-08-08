@@ -38,7 +38,7 @@ them locally; send controlled tests; then schedule production delivery.
 
 > [!IMPORTANT]
 > Scheduled weekly emails share an anonymous Binge Champion aggregate with
-> every recipient: qualifying movie plays, TV-show plays, and total watch time.
+> every recipient: total watch time plus nonzero unique movie and TV-show counts.
 > The user with the most qualifying watch time wins; total plays break an exact
 > tie. Only the winner receives the gold **YOU WON** treatment. Friendly names,
 > usernames, IDs, and titles are never disclosed by the award, and one-off
@@ -59,18 +59,23 @@ setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
 
 ## Current newsletter behavior
 
-- One to three watched movies render as itemized rows with a mini poster,
-  title, formatted genres, and Rotten Tomatoes critic and audience scores.
-- One to three streamed episodes render with show artwork, season/episode
-  labels, episode titles, and IMDb scores. Four or more items use compact
-  numeric cards.
+- Personal stats list up to four most-watched movie titles and four
+  most-watched TV shows, ranked by qualifying watch time. Episodes are grouped
+  under their show, and the TV card is omitted when no TV show was watched.
+- The packaged `movies.gif` and `tv.gif` artwork is CID-embedded through the
+  same repair and delivery pipeline as the other animated email icons.
 - Binge Champion ranks Plex users by qualifying watch time, breaks exact-time
-  ties by total plays, and shows every recipient the same anonymous movie-play,
-  TV-play, and watch-time aggregate. Only the winner's card turns gold.
+  ties by total plays, and shows every recipient the same anonymous two-line
+  metric: **4h 18m watched**, followed by **5 movies • 1 TV show**. Zero-count
+  media categories are omitted. Only the winner's card turns gold.
+- Total Watched shows duration only; qualifying-play copy is intentionally
+  omitted from the personal recap.
+- **HOT NEW RELEASE** considers only newly added movies. If no new movie was
+  added, the hero falls back to **TRENDING THIS WEEK** while any new TV titles
+  remain listed in the New Releases section.
 - Trending remains a separate server-wide media-title feature with poster and
-  exact play count; quiet-release hero layouts do not repeat it.
-- The four personal-stat cards share a content-driven equal height, including
-  zero-, one-, and multi-item states.
+  exact play count; layouts that promote Trending into the hero do not repeat
+  the compact Trending card.
 
 ## Choose the newsletter libraries
 

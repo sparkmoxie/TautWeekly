@@ -1,6 +1,11 @@
 TautWeekly for Plex native Linux platform changelog
 
 Unreleased
+- Limits HOT NEW RELEASE to movies and falls back to Trending when no new movie exists.
+- Lists up to four most-watched movies and TV shows, omitting an empty TV card.
+- Inherits the supplied movie/TV stat GIFs through the maintained container payload.
+- Splits Binge Champion into watch duration plus nonzero unique movie/TV-show counts.
+- Removes qualifying-play copy from Total Watched.
 - Adds a read-only stable-release check with no periodic or unattended updater.
 - Locks upgrades against concurrent preview/send work and verifies release metadata/service recovery.
 - Resolves the configured IANA timezone explicitly for every schedule decision.
