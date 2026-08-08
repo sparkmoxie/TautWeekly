@@ -140,6 +140,13 @@ writing; empty/absent IDs retain legacy all-library behavior.
 Exclusions apply to scheduled and confirmed `SendAll` delivery. One-off welcome
 mail is a separate, explicit administrator action.
 
+The inherited newsletter payload lists up to four most-watched movies and four
+most-watched TV shows, omits an empty TV stats card, and shows only duration in
+Total Watched. Binge Champion shares watch time plus nonzero unique movie and
+TV-show counts.
+Only new movies qualify for **HOT NEW RELEASE**; movie-empty weeks promote the
+normal Trending result while retaining new TV releases below the hero.
+
 ## Upgrade and rollback
 
 Run `tautweekly check-update` for a read-only comparison between the installed

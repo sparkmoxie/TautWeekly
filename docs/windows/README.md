@@ -46,9 +46,11 @@ Run the numbered launchers in this order:
 1. `02-LIST-USERS.bat` — review recognized recipients and identifiers.
 2. `05-PREVIEW-ALL-EMAIL-TYPES.bat` — generate six local HTML regression
    previews without sending mail.
-   Confirm the adaptive one-item cards, movie genres, anonymous Binge Champion
-   movie/TV/time aggregate, gold winner treatment, and counted Trending section
-   render as expected.
+   Confirm the supplied animated movie/TV icons, up-to-four most-watched movie
+   and TV-show rows, duration-only Total Watched card, anonymous Binge Champion
+   duration plus nonzero movie/TV-show counts, gold winner treatment, and Trending hero
+   fallback render as expected. The TV stats card is absent when no show was
+   watched; TV-only release weeks retain their TV cards below the Trending hero.
 3. `06-SEND-TEST-ALL-EMAIL-TYPES.bat` — send those six variants only to the
    configured `TestEmail`.
 4. `08-INSTALL-SCHEDULE.bat` — install automation only after the previews and

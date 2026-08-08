@@ -6,6 +6,25 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Limited **HOT NEW RELEASE** hero selection to new movies. Movie-empty weeks
+  now promote the normal **TRENDING THIS WEEK** result while retaining new TV
+  titles in the release shelf.
+- Revised personal stats to list up to four most-watched movie titles and four
+  most-watched TV shows, grouping qualifying episodes by show and omitting an
+  empty TV card.
+- Replaced the movie and TV stat artwork in every packaged renderer with the
+  supplied animated GIFs while retaining the established CID/repair pipeline.
+- Split Binge Champion into a bold watch-duration line and a smaller unique
+  movie/TV-show breakdown for winners and non-winners, omitting zero categories.
+- Removed qualifying-play copy from Total Watched.
+
+### Fixed
+
+- Made inbox preview and body counts describe unique TV titles/shows rather
+  than episode rows when multiple series are added or watched.
+
 ## [0.6.0] - 2026-08-07
 
 ### Added

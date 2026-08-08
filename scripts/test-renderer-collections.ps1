@@ -26,7 +26,13 @@ $requiredFunctions = @(
     'New-ReleaseData',
     'Get-HistoryRowPlayCount',
     'Format-WatchTime',
-    'Get-UserStats'
+    'Get-ConfiguredServerName',
+    'Get-ConfiguredPlexWebUrl',
+    'Get-ConfiguredDeliveryDay',
+    'Get-UserStats',
+    'Get-HotNewRelease',
+    'Get-DynamicPreheader',
+    'Build-PlainText'
 )
 
 function Assert-True {
@@ -71,6 +77,9 @@ foreach ($relativePath in $rendererPaths) {
     $script:Config = [PSCustomObject]@{
         WatchedPercent       = 85
         MinimumEpisodeSeconds = 120
+        FooterServerName     = 'Test Plex'
+        PlexWebUrl           = 'https://app.plex.tv/'
+        ScheduleDay          = 'Friday'
     }
 
     $script:tautulliUserCalls = New-Object System.Collections.Generic.List[string]
@@ -132,12 +141,33 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($oneMovie.MovieItems -is [object[]]) "$relativePath collapsed one movie into a scalar"
     Assert-True ($oneMovie.MovieItems.Count -eq 1) "$relativePath lost the one-movie item"
     Assert-True ($oneMovie.EpisodeItems.Count -eq 0) "$relativePath created an unexpected episode"
+    Assert-True ($oneMovie.TvShowItems.Count -eq 0) "$relativePath created an unexpected TV show"
 
     $oneEpisode = Get-UserStats -History @($episode)
     Assert-True ($oneEpisode.EpisodeItems -is [object[]]) "$relativePath collapsed one episode into a scalar"
     Assert-True ($oneEpisode.EpisodeItems.Count -eq 1) "$relativePath lost the one-episode item"
     Assert-True ($oneEpisode.MovieItems.Count -eq 0) "$relativePath created an unexpected movie"
+    Assert-True ($oneEpisode.TvShowItems.Count -eq 1) "$relativePath did not group the episode into one TV show"
+    Assert-True ($oneEpisode.TvShowItems[0].ShowTitle -eq 'Show One') "$relativePath lost the grouped TV show title"
     Assert-True ($oneEpisode.EpisodeItems[0].ImdbRating -eq '8.5') "$relativePath lost an available episode IMDb rating"
+
+    $secondEpisode = [PSCustomObject]@{
+        media_type             = 'episode'
+        play_duration          = 3600
+        watched_status         = 0
+        percent_complete       = 50
+        rating_key             = 'episode-2'
+        grandparent_rating_key = 'show-1'
+        grandparent_title      = 'Show One'
+        parent_title           = 'Season 1'
+        title                  = 'Second Episode'
+        parent_media_index     = 1
+        media_index            = 2
+    }
+    $sameShow = Get-UserStats -History @($episode, $secondEpisode)
+    Assert-True ($sameShow.EpisodeItems.Count -eq 2) "$relativePath lost qualifying episode detail"
+    Assert-True ($sameShow.TvShowItems.Count -eq 1) "$relativePath counted episodes as separate TV shows"
+    Assert-True ($sameShow.TvShowItems[0].Seconds -eq 5400) "$relativePath did not aggregate watch time by TV show"
 
     $episodeWithoutRatingMetadata = [PSCustomObject]@{
         media_type             = 'episode'
@@ -166,8 +196,10 @@ foreach ($relativePath in $rendererPaths) {
     $empty = Get-UserStats -History @()
     Assert-True ($empty.MovieItems -is [object[]]) "$relativePath lost the empty movie array"
     Assert-True ($empty.EpisodeItems -is [object[]]) "$relativePath lost the empty episode array"
+    Assert-True ($empty.TvShowItems -is [object[]]) "$relativePath lost the empty TV-show array"
     Assert-True ($empty.MovieItems.Count -eq 0) "$relativePath has unexpected empty-state movies"
     Assert-True ($empty.EpisodeItems.Count -eq 0) "$relativePath has unexpected empty-state episodes"
+    Assert-True ($empty.TvShowItems.Count -eq 0) "$relativePath has unexpected empty-state TV shows"
 
     $threeMovies = Get-UserStats -History @(
         $movie,
@@ -182,5 +214,79 @@ foreach ($relativePath in $rendererPaths) {
     )
     Assert-True ($threeMovies.MovieItems.Count -eq 3) "$relativePath failed the three-movie adaptive branch"
 
+    $heroMovie = [PSCustomObject]@{
+        ReleaseKey = 'movie:hero-movie'; RatingKey = 'hero-movie'
+        Title = 'Movie Hero'; Type = 'movie'; AddedAt = 100
+    }
+    $tvRelease = [PSCustomObject]@{
+        ReleaseKey = 'show:tv-release'; RatingKey = 'tv-release'
+        Title = 'TV Release'; Type = 'show'; AddedAt = 200
+    }
+    $releaseFixture = [PSCustomObject]@{ Movies = @($heroMovie); TV = @($tvRelease) }
+    $movieOnlyHero = Get-HotNewRelease -ReleaseData $releaseFixture -GlobalHistory @(
+        [PSCustomObject]@{ media_type = 'episode'; grandparent_rating_key = 'tv-release'; play_duration = 7200 },
+        [PSCustomObject]@{ media_type = 'movie'; rating_key = 'hero-movie'; play_duration = 600 }
+    )
+    Assert-True ($movieOnlyHero.Item.Type -eq 'movie') "$relativePath allowed a TV release to become HOT NEW RELEASE"
+    Assert-True (-not $movieOnlyHero.IsTrending) "$relativePath mislabeled a movie release hero as Trending"
+
+    $tvOnlyHero = Get-HotNewRelease -ReleaseData ([PSCustomObject]@{
+        Movies = @(); TV = @($tvRelease)
+    }) -GlobalHistory @()
+    Assert-True ($null -eq $tvOnlyHero) "$relativePath promoted a TV-only release as HOT NEW RELEASE"
+
+    Assert-True ((Get-DynamicPreheader -ReleaseData ([PSCustomObject]@{
+        Movies = @(); TV = @($tvRelease, $tvRelease)
+    })) -eq '2 new TV titles!') "$relativePath inbox preview counted TV episodes instead of titles"
+    $mixedPreheader = '1 new movie ' + [char]0x2022 + ' 1 new TV title!'
+    Assert-True ((Get-DynamicPreheader -ReleaseData $releaseFixture) -eq $mixedPreheader) "$relativePath inbox preview lost mixed release counts"
+
+    $twoTitleReleaseFixture = [PSCustomObject]@{
+        Movies = @()
+        TV = @([PSCustomObject]@{ Title = 'Show One' }, [PSCustomObject]@{ Title = 'Show Two' })
+    }
+    $plainText = Build-PlainText `
+        -User ([PSCustomObject]@{ FriendlyName = 'Viewer' }) `
+        -Stats ([PSCustomObject]@{ TotalSeconds = 0; TotalTimeText = '0m'; MovieItems = @(); TvShowItems = @() }) `
+        -ReleaseData $twoTitleReleaseFixture `
+        -HotRelease $null `
+        -TrendingTitle '' `
+        -SystemWarmingUp $false `
+        -RecentAccess $false `
+        -StartLabel 'August 1' `
+        -EndLabel 'August 7'
+    Assert-True ($plainText.Contains('2 new TV titles!')) "$relativePath plain-text inbox preview lost TV title semantics"
+    Assert-True ($plainText.Contains('0 new movies') -and $plainText.Contains('2 TV titles')) "$relativePath plain-text body counted TV episodes instead of shows"
+
+    $source = Get-Content -LiteralPath $path -Raw
+    Assert-True ($source -match '\$hotRelease = if \(@\(\$releaseData\.Movies\)\.Count -gt 0\)') "$relativePath does not fall back from a movie-empty release hero"
+    Assert-True ($source -match 'Select-Object -First 4') "$relativePath does not cap personal title lists at four"
+    Assert-True ($source -match 'width="42" height="42" alt="Movies watched"') "$relativePath does not render the movie GIF at the standard stat-icon size"
+    Assert-True ($source -match 'width="42" height="42" alt="TV shows watched"') "$relativePath does not render the TV GIF at the standard stat-icon size"
+    Assert-True ($source -notmatch '\$qualifyingPlayCount qualifying') "$relativePath retains qualifying-play copy in Total Watched"
+    Assert-True ($source.Contains('The real email layout, across every state.')) "$relativePath lost the Preview All headline"
+    Assert-True ($source.Contains('Go ahead, shrink my window.')) "$relativePath lost the responsive Preview All subtitle"
+
     Write-Host "[PASS] Renderer collection edges: $relativePath"
 }
+
+$expectedAssetHashes = @{
+    'movies.gif' = '9BCD489463C963C38469771518700308CCADE3965A32EDA18E12DC718950C971'
+    'tv.gif'     = '35FFCB45F313953AD0EEF2C7EC852B4B68B0E033E5055BC0926B87EB2EDEF117'
+}
+$assetRoots = @(
+    'docs/assets',
+    'platforms/windows/assets',
+    'platforms/nas-docker/app/assets-default',
+    'platforms/mac-docker/app/assets-default'
+)
+foreach ($assetRoot in $assetRoots) {
+    foreach ($assetName in $expectedAssetHashes.Keys) {
+        $assetPath = Join-Path (Join-Path $Root $assetRoot) $assetName
+        Assert-True (Test-Path -LiteralPath $assetPath -PathType Leaf) "Missing packaged asset: $assetRoot/$assetName"
+        $actualHash = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash
+        Assert-True ($actualHash -eq $expectedAssetHashes[$assetName]) "Packaged $assetName diverges in $assetRoot"
+    }
+}
+
+Write-Host '[PASS] Supplied movie/TV GIFs are byte-identical across packages'

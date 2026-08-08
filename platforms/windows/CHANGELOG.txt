@@ -3,6 +3,11 @@ TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 
 Unreleased
 ----------
+- limits HOT NEW RELEASE to movies and falls back to Trending when no new movie exists
+- lists up to four most-watched movies and TV shows, omitting an empty TV card
+- replaces the packaged movie/TV stat GIFs while retaining CID asset behavior
+- splits Binge Champion into watch duration plus nonzero unique movie/TV-show counts
+- removes qualifying-play copy from Total Watched
 
 v1.7.0 Portable
 ---------------

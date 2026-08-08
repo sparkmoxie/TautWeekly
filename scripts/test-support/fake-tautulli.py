@@ -13,7 +13,9 @@ from urllib.parse import parse_qs, urlparse
 
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
-    added = now if scenario == "active" else now - (30 * 86400)
+    old = now - (30 * 86400)
+    movie_added = now if scenario == "active" else old
+    tv_added = now if scenario in ("active", "tv-only") else old
     return {
         "10": [
             {
@@ -23,7 +25,7 @@ def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
                 "title": "Selected Movie",
                 "year": "2026",
                 "summary": "A release from the selected movie library.",
-                "added_at": added,
+                "added_at": movie_added,
                 "rating": "8.1",
                 "rating_image": "rottentomatoes://image.rating.ripe",
                 "audience_rating": "9.2",
@@ -41,7 +43,7 @@ def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
                 "title": "Selected Premiere",
                 "year": "2026",
                 "summary": "A release from the selected television library.",
-                "added_at": added - 60,
+                "added_at": tv_added - 60,
                 "parent_media_index": 1,
                 "media_index": 1,
                 "rating": "8.7",
@@ -273,7 +275,7 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--scenario", choices=("active", "quiet"), required=True)
+    parser.add_argument("--scenario", choices=("active", "quiet", "tv-only"), required=True)
     parser.add_argument("--call-log", type=Path, required=True)
     parser.add_argument("--ready-file", type=Path, required=True)
     args = parser.parse_args()

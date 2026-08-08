@@ -1245,9 +1245,9 @@ function Get-UserStats {
     $qualifyingPlays = 0
     [int64]$totalSeconds = 0
     $titleTotals = @{}
-    $movieSeen = @{}
+    $movieItemTotals = @{}
+    $tvShowTotals = @{}
     $episodeSeen = @{}
-    $movieItems = New-Object System.Collections.Generic.List[object]
     $episodeItems = New-Object System.Collections.Generic.List[object]
 
     foreach ($row in $History) {
@@ -1276,17 +1276,19 @@ function Get-UserStats {
                     "movie:title:" + $title.ToLowerInvariant()
                 }
 
-                if (-not $movieSeen.ContainsKey($dedupeKey)) {
-                    $movieSeen[$dedupeKey] = $true
-                    $movieItems.Add([PSCustomObject]@{
+                if (-not $movieItemTotals.ContainsKey($dedupeKey)) {
+                    $movieItemTotals[$dedupeKey] = [PSCustomObject]@{
                         Type            = "movie"
                         RatingKey       = $ratingKey
                         PosterRatingKey = $ratingKey
                         Title           = $title
                         Year            = [string]$row.year
-                        Plays           = Get-HistoryRowPlayCount -Row $row
-                    })
+                        Plays           = 0
+                        Seconds         = [int64]0
+                    }
                 }
+                $movieItemTotals[$dedupeKey].Plays += (Get-HistoryRowPlayCount -Row $row)
+                $movieItemTotals[$dedupeKey].Seconds += $seconds
             }
 
             $topTitle = [string]$row.title
@@ -1315,6 +1317,26 @@ function Get-UserStats {
                     $showTitle = [string]$row.parent_title
                 }
                 $episodeTitle = [string]$row.title
+
+                $showDedupeKey = if (-not [string]::IsNullOrWhiteSpace($showRatingKey)) {
+                    "show:" + $showRatingKey
+                } else {
+                    "show:title:" + $showTitle.ToLowerInvariant()
+                }
+                if (-not $tvShowTotals.ContainsKey($showDedupeKey)) {
+                    $tvShowTotals[$showDedupeKey] = [PSCustomObject]@{
+                        Type            = "show"
+                        RatingKey       = $showRatingKey
+                        PosterRatingKey = $showRatingKey
+                        Title           = $showTitle
+                        ShowTitle       = $showTitle
+                        Plays           = 0
+                        Seconds         = [int64]0
+                        TotalTimeText   = ""
+                    }
+                }
+                $tvShowTotals[$showDedupeKey].Plays += (Get-HistoryRowPlayCount -Row $row)
+                $tvShowTotals[$showDedupeKey].Seconds += $seconds
                 $dedupeKey = if (-not [string]::IsNullOrWhiteSpace($ratingKey)) {
                     "episode:" + $ratingKey
                 } else {
@@ -1367,6 +1389,12 @@ function Get-UserStats {
         }
     }
 
+    $rankedMovieItems = @($movieItemTotals.Values | Sort-Object Seconds, Plays -Descending)
+    $rankedTvShowItems = @($tvShowTotals.Values | Sort-Object Seconds, Plays -Descending)
+    foreach ($showItem in $rankedTvShowItems) {
+        $showItem.TotalTimeText = Format-WatchTime ([int64]$showItem.Seconds)
+    }
+
     $top = @($titleTotals.Values | Sort-Object Seconds -Descending | Select-Object -First 1)
     $topTitleValue = if ($top.Count -gt 0) { [string]$top[0].Title } else { "" }
 
@@ -1377,8 +1405,9 @@ function Get-UserStats {
         TotalSeconds         = $totalSeconds
         TotalTimeText        = Format-WatchTime $totalSeconds
         MostWatched          = $topTitleValue
-        MovieItems           = $movieItems.ToArray()
+        MovieItems           = $rankedMovieItems
         EpisodeItems         = $episodeItems.ToArray()
+        TvShowItems          = $rankedTvShowItems
     }
 }
 
@@ -1389,55 +1418,14 @@ function Add-UserStatsMediaMetadata {
 
     $movies = @()
     if ($null -ne $Stats.PSObject.Properties["MovieItems"]) {
-        $movies = @($Stats.MovieItems)
+        $movies = @($Stats.MovieItems | Select-Object -First 4)
     }
 
-    if ((Safe-Int $Stats.MoviesWatched) -ge 1 -and
-        (Safe-Int $Stats.MoviesWatched) -le 3 -and
-        $movies.Count -gt 0) {
+    if ($movies.Count -gt 0) {
         Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{
             Movies = $movies
             TV     = @()
         })
-    }
-
-    $episodes = @()
-    if ($null -ne $Stats.PSObject.Properties["EpisodeItems"]) {
-        $episodes = @($Stats.EpisodeItems)
-    }
-
-    if ((Safe-Int $Stats.EpisodesStreamed) -ge 1 -and
-        (Safe-Int $Stats.EpisodesStreamed) -le 3) {
-        foreach ($episode in @($episodes | Select-Object -First 3)) {
-            if (-not [string]::IsNullOrWhiteSpace([string]$episode.ImdbRating)) {
-                continue
-            }
-
-            $meta = $null
-            try {
-                if (-not [string]::IsNullOrWhiteSpace([string]$episode.RatingKey)) {
-                    $meta = Invoke-TautulliApi -Command "get_metadata" -Parameters @{
-                        rating_key = [string]$episode.RatingKey
-                    }
-
-                    $ratingImage = Get-OptionalStringProperty -InputObject $meta -Name "rating_image"
-                    $ratingValue = Get-OptionalStringProperty -InputObject $meta -Name "rating"
-                    if ($ratingImage -match '(?i)^imdb://' -and
-                        -not [string]::IsNullOrWhiteSpace($ratingValue)) {
-                        $episode.ImdbRating = $ratingValue
-                    }
-                }
-
-                if ([string]::IsNullOrWhiteSpace([string]$episode.ImdbRating)) {
-                    $episode.ImdbRating = Get-DesignEpisodeImdbRating `
-                        -RatingKey ([string]$episode.RatingKey) `
-                        -TautulliMetadata $meta
-                }
-            }
-            catch {
-                Write-Log "Could not enrich watched episode '$($episode.EpisodeTitle)' with IMDb: $($_.Exception.Message)" "WARN"
-            }
-        }
     }
 }
 
@@ -1452,14 +1440,6 @@ function Get-HotNewRelease {
     foreach ($m in @($ReleaseData.Movies)) {
         $lookup[$m.ReleaseKey] = [PSCustomObject]@{
             Item    = $m
-            Seconds = [int64]0
-            Plays   = 0
-        }
-    }
-
-    foreach ($t in @($ReleaseData.TV)) {
-        $lookup[$t.ReleaseKey] = [PSCustomObject]@{
-            Item    = $t
             Seconds = [int64]0
             Plays   = 0
         }
@@ -1499,22 +1479,20 @@ function Get-HotNewRelease {
             Seconds   = $winner.Seconds
             Plays     = $winner.Plays
             IsPopular = $true
+            IsTrending = $false
         }
     }
 
     # Fresh-install fallback: feature the newest addition until enough
     # Tautulli history exists to rank new releases by viewing activity.
-    $allNew = @()
-    $allNew += @($ReleaseData.Movies)
-    $allNew += @($ReleaseData.TV)
-
-    $newest = @($allNew | Sort-Object AddedAt -Descending | Select-Object -First 1)
+    $newest = @($ReleaseData.Movies | Sort-Object AddedAt -Descending | Select-Object -First 1)
     if ($newest.Count -gt 0) {
         return [PSCustomObject]@{
             Item      = $newest[0]
             Seconds   = [int64]0
             Plays     = 0
             IsPopular = $false
+            IsTrending = $false
         }
     }
 
@@ -1678,6 +1656,7 @@ function Get-GlobalTrendingHero {
         Seconds   = [int64]$top[0].Seconds
         Plays     = Safe-Int $top[0].Plays
         IsPopular = $true
+        IsTrending = $true
     }
 }
 
@@ -1753,12 +1732,42 @@ function Get-BingeChampion {
                 Seconds      = [int64]0
                 MoviePlays   = 0
                 TvPlays      = 0
+                QualifyingTitleKeys = @{}
+                QualifyingMovieKeys = @{}
+                QualifyingTvShowKeys = @{}
             }
         }
 
         $rowPlays = Get-HistoryRowPlayCount -Row $row
         $totals[$key].Plays += $rowPlays
         $totals[$key].Seconds += $seconds
+
+        $titleKey = if ($type -eq "movie") {
+            $movieRatingKey = [string]$row.rating_key
+            if (-not [string]::IsNullOrWhiteSpace($movieRatingKey)) {
+                "movie:" + $movieRatingKey
+            } else {
+                "movie:title:" + ([string]$row.title).ToLowerInvariant()
+            }
+        } else {
+            $showRatingKey = [string]$row.grandparent_rating_key
+            $showTitle = [string]$row.grandparent_title
+            if ([string]::IsNullOrWhiteSpace($showTitle)) { $showTitle = [string]$row.title }
+            if (-not [string]::IsNullOrWhiteSpace($showRatingKey)) {
+                "show:" + $showRatingKey
+            } else {
+                "show:title:" + $showTitle.ToLowerInvariant()
+            }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($titleKey)) {
+            $totals[$key].QualifyingTitleKeys[$titleKey] = $true
+            if ($type -eq "movie") {
+                $totals[$key].QualifyingMovieKeys[$titleKey] = $true
+            }
+            elseif ($type -eq "episode") {
+                $totals[$key].QualifyingTvShowKeys[$titleKey] = $true
+            }
+        }
 
         if ($type -eq "movie") {
             $totals[$key].MoviePlays += $rowPlays
@@ -1799,6 +1808,9 @@ function Get-BingeChampion {
         Plays         = Safe-Int $winner.Plays
         MoviePlays    = Safe-Int $winner.MoviePlays
         TvPlays       = Safe-Int $winner.TvPlays
+        QualifyingTitles = $winner.QualifyingTitleKeys.Count
+        QualifyingMovies = $winner.QualifyingMovieKeys.Count
+        QualifyingTvShows = $winner.QualifyingTvShowKeys.Count
         Seconds       = [int64]$winner.Seconds
         TotalTimeText = Format-WatchTime ([int64]$winner.Seconds)
     }
@@ -1817,6 +1829,9 @@ function Get-BingeChampionDisplay {
             TotalTimeText = ""
             MoviePlays    = 0
             TvPlays       = 0
+            QualifyingTitles = 0
+            QualifyingMovies = 0
+            QualifyingTvShows = 0
         }
     }
 
@@ -1836,13 +1851,51 @@ function Get-BingeChampionDisplay {
         $totalTimeText = Format-WatchTime ([int64]$BingeChampion.Seconds)
     }
 
+    $qualifyingTitles = if ($null -ne $BingeChampion.PSObject.Properties["QualifyingTitles"]) {
+        Safe-Int $BingeChampion.QualifyingTitles
+    } else {
+        0
+    }
+    $qualifyingMovies = if ($null -ne $BingeChampion.PSObject.Properties["QualifyingMovies"]) {
+        Safe-Int $BingeChampion.QualifyingMovies
+    } else {
+        0
+    }
+    $qualifyingTvShows = if ($null -ne $BingeChampion.PSObject.Properties["QualifyingTvShows"]) {
+        Safe-Int $BingeChampion.QualifyingTvShows
+    } else {
+        0
+    }
+
     return [PSCustomObject]@{
         Available     = $true
         IsWinner      = $isWinner
         TotalTimeText = $totalTimeText
         MoviePlays    = Safe-Int $BingeChampion.MoviePlays
         TvPlays       = Safe-Int $BingeChampion.TvPlays
+        QualifyingTitles = $qualifyingTitles
+        QualifyingMovies = $qualifyingMovies
+        QualifyingTvShows = $qualifyingTvShows
     }
+}
+
+function Get-BingeChampionTitleBreakdown {
+    param([object]$BingeDisplay)
+
+    $parts = New-Object System.Collections.Generic.List[string]
+    $movieCount = Safe-Int $BingeDisplay.QualifyingMovies
+    $tvShowCount = Safe-Int $BingeDisplay.QualifyingTvShows
+
+    if ($movieCount -gt 0) {
+        $movieWord = if ($movieCount -eq 1) { "movie" } else { "movies" }
+        $parts.Add("$movieCount $movieWord")
+    }
+    if ($tvShowCount -gt 0) {
+        $tvShowWord = if ($tvShowCount -eq 1) { "TV show" } else { "TV shows" }
+        $parts.Add("$tvShowCount $tvShowWord")
+    }
+
+    return ($parts -join " • ")
 }
 
 function Get-DesignPlexContext {
@@ -4085,7 +4138,7 @@ function Get-StatsMovieRowsHtml {
 
     $rows = New-Object System.Text.StringBuilder
 
-    foreach ($item in @($Items | Select-Object -First 3)) {
+    foreach ($item in @($Items | Select-Object -First 4)) {
         $title = HtmlEncode (Truncate-Text ([string]$item.Title) 42)
         $posterSrc = Get-ImageSource `
             -RatingKey ([string]$item.PosterRatingKey) `
@@ -4177,6 +4230,49 @@ function Get-StatsEpisodeRowsHtml {
     <div style="font-size:11px;line-height:1.25;color:#ffffff;font-weight:800;">$showTitle</div>
     <div style="padding-top:3px;font-size:10px;line-height:1.3;color:#9b9b9b;">$(HtmlEncode $prefix)$episodeTitle</div>
     <div style="padding-top:4px;font-size:10px;line-height:1.3;color:#e5a00d;font-weight:700;">$imdbHtml</div>
+  </td>
+</tr>
+"@)
+    }
+
+    return $rows.ToString()
+}
+
+function Get-StatsTvShowRowsHtml {
+    param(
+        [object[]]$Items,
+        [object[]]$PosterAssets,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode
+    )
+
+    $rows = New-Object System.Text.StringBuilder
+
+    foreach ($item in @($Items | Select-Object -First 4)) {
+        $showTitle = HtmlEncode (Truncate-Text ([string]$item.ShowTitle) 42)
+        $posterSrc = Get-ImageSource `
+            -RatingKey ([string]$item.PosterRatingKey) `
+            -PosterAssets $PosterAssets `
+            -ImageMode $ImageMode
+
+        $posterHtml = if ([string]::IsNullOrWhiteSpace($posterSrc)) {
+            '<div style="width:42px;height:62px;border-radius:5px;background:#262626;border:1px solid #363636;"></div>'
+        } else {
+            '<img src="' + (HtmlEncode $posterSrc) + '" width="42" height="62" alt="' + $showTitle + ' poster" style="display:block;width:42px;height:62px;object-fit:cover;border:1px solid #363636;border-radius:5px;">'
+        }
+
+        $watchTime = if (-not [string]::IsNullOrWhiteSpace([string]$item.TotalTimeText)) {
+            [string]$item.TotalTimeText
+        } else {
+            Format-WatchTime ([int64]$item.Seconds)
+        }
+
+        [void]$rows.Append(@"
+<tr>
+  <td width="50" valign="middle" style="width:50px;padding:7px 8px 7px 0;border-bottom:1px solid #292929;">$posterHtml</td>
+  <td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929;">
+    <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$showTitle</div>
+    <div style="padding-top:5px;font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700;">$(HtmlEncode $watchTime) watched</div>
   </td>
 </tr>
 "@)
@@ -4449,7 +4545,13 @@ function Build-NewsletterHtml {
     $deliveryDay = Get-ConfiguredDeliveryDay
 
     $featuredReleaseKey = ""
-    if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) {
+    $trendingHeroMode = (
+        $null -ne $HotRelease -and
+        $null -ne $HotRelease.PSObject.Properties["IsTrending"] -and
+        [bool]$HotRelease.IsTrending
+    )
+    if ($null -ne $HotRelease -and $null -ne $HotRelease.Item -and
+        -not ($trendingHeroMode -and -not $QuietReleaseMode)) {
         $featuredReleaseKey = [string]$HotRelease.Item.ReleaseKey
     }
 
@@ -4660,9 +4762,9 @@ $tvCards
         "#2b2b2b"
     }
 
-    $heroLabel = if ($QuietReleaseMode) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }
-    $heroIconSrc = if ($QuietReleaseMode) { $popcornIconSrc } else { $hotIconSrc }
-    $heroIconAlt = if ($QuietReleaseMode) { "Trending this week" } else { "Hot new release" }
+    $heroLabel = if ($trendingHeroMode) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }
+    $heroIconSrc = if ($trendingHeroMode) { $popcornIconSrc } else { $hotIconSrc }
+    $heroIconAlt = if ($trendingHeroMode) { "Trending this week" } else { "Hot new release" }
 
     $hotBlock = ""
     if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) {
@@ -4727,11 +4829,11 @@ $tvCards
         $playCount = Safe-Int $HotRelease.Plays
         $playWord = if ($playCount -eq 1) { "play" } else { "plays" }
 
-        $hotStatus = if ($QuietReleaseMode) {
+        $hotStatus = if ($trendingHeroMode) {
             "Most watched across $footerServerName this week • $playCount $playWord"
         }
         elseif ($HotRelease.IsPopular) {
-            "Most-watched new addition this week • $playCount $playWord"
+            "Most-watched new movie this week • $playCount $playWord"
         }
         else {
             "Freshly added — no viewing activity yet"
@@ -4851,7 +4953,7 @@ $tvCards
     # - quiet release weeks: Trending is already the featured hero
     $trendingBlock = ""
 
-    if (-not $QuietReleaseMode) {
+    if (-not $trendingHeroMode) {
         $trendingDisplay = ""
         $trendingDescription = ""
         $trendingPosterHtml = ""
@@ -4913,54 +5015,47 @@ $tvCards
     }
 
     # Binge Champion ranks users by qualifying watch time. Every recipient sees
-    # the same anonymous movie/TV play split and total watch time. Only the
-    # winner receives the gold YOU WON treatment.
+    # the same anonymous watch time and unique movie/TV-show breakdown. Only
+    # the winner receives the gold YOU WON treatment.
     $bingeDisplay = Get-BingeChampionDisplay -BingeChampion $BingeChampion -User $User
-    $bingeTimeText = ""
-    $bingeMetricText = "The weekly award will appear here once viewing activity is available."
+    $bingeTimeLine = "Awaiting the first qualifying stream"
+    $bingeTitleBreakdown = ""
     $isBingeWinner = [bool]$bingeDisplay.IsWinner
 
     if ($bingeDisplay.Available) {
-        $bingeTimeText = [string]$bingeDisplay.TotalTimeText
-        $bingeMoviePlays = Safe-Int $bingeDisplay.MoviePlays
-        $bingeTvPlays = Safe-Int $bingeDisplay.TvPlays
-        $bingeMovieWord = if ($bingeMoviePlays -eq 1) { "movie" } else { "movies" }
-        $bingeTvWord = if ($bingeTvPlays -eq 1) { "TV show" } else { "TV shows" }
-        $bingeMetricText = "$bingeMoviePlays $bingeMovieWord • $bingeTvPlays $bingeTvWord"
+        $bingeTimeLine = "$([string]$bingeDisplay.TotalTimeText) watched"
+        $bingeTitleBreakdown = Get-BingeChampionTitleBreakdown -BingeDisplay $bingeDisplay
+    }
+
+    $bingeBreakdownHtml = ""
+    if (-not [string]::IsNullOrWhiteSpace($bingeTitleBreakdown)) {
+        $encodedBingeBreakdown = HtmlEncode $bingeTitleBreakdown
+        $bingeBreakdownHtml = "<div style=`"padding-top:3px;font-size:10px;line-height:1.35;font-weight:400;color:#b0b0b0;`">$encodedBingeBreakdown</div>"
     }
 
     $bingeBorder = if ($isBingeWinner) { "#e5a00d" } else { "#2b2b2b" }
     $bingeBackground = if ($isBingeWinner) { "#211a0d" } else { "#181818" }
-    $bingeEyebrow = if ($isBingeWinner) { "YOU WON • BINGE CHAMPION" } else { "BINGE CHAMPION AWARD" }
-    $bingeHeadline = if ($bingeDisplay.Available) {
-        "$bingeTimeText watched"
-    } else {
-        "Awaiting the first qualifying stream"
-    }
+    $bingeEyebrow = if ($isBingeWinner) { "YOU WON • BINGE CHAMPION" } else { "THIS WEEK'S BINGE CHAMPION" }
 
     # Do not assign these collections through an `if` expression.
     # Windows PowerShell 5.1 can unwrap a one-item result into a scalar, and
     # strict mode then rejects `.Count`. Initialize and assign the arrays
     # explicitly so zero, one, and many items all retain collection semantics.
     $movieItems = @()
+    $movieTitleCount = 0
     if ($null -ne $Stats.PSObject.Properties["MovieItems"]) {
-        $movieItems = @($Stats.MovieItems)
+        $movieTitleCount = @($Stats.MovieItems).Count
+        $movieItems = @($Stats.MovieItems | Select-Object -First 4)
     }
 
-    $episodeItems = @()
-    if ($null -ne $Stats.PSObject.Properties["EpisodeItems"]) {
-        $episodeItems = @($Stats.EpisodeItems)
+    $tvShowItems = @()
+    $tvShowTitleCount = 0
+    if ($null -ne $Stats.PSObject.Properties["TvShowItems"]) {
+        $tvShowTitleCount = @($Stats.TvShowItems).Count
+        $tvShowItems = @($Stats.TvShowItems | Select-Object -First 4)
     }
-    $movieDetailMode = (
-        (Safe-Int $Stats.MoviesWatched) -ge 1 -and
-        (Safe-Int $Stats.MoviesWatched) -le 3 -and
-        $movieItems.Count -gt 0
-    )
-    $episodeDetailMode = (
-        (Safe-Int $Stats.EpisodesStreamed) -ge 1 -and
-        (Safe-Int $Stats.EpisodesStreamed) -le 3 -and
-        $episodeItems.Count -gt 0
-    )
+    $movieDetailMode = ($movieItems.Count -gt 0)
+    $tvShowDetailMode = ($tvShowItems.Count -gt 0)
 
     $movieRows = if ($movieDetailMode) {
         Get-StatsMovieRowsHtml `
@@ -4969,23 +5064,23 @@ $tvCards
             -ImageMode $ImageMode
     } else { "" }
 
-    $episodeRows = if ($episodeDetailMode) {
-        Get-StatsEpisodeRowsHtml `
-            -Items $episodeItems `
+    $tvShowRows = if ($tvShowDetailMode) {
+        Get-StatsTvShowRowsHtml `
+            -Items $tvShowItems `
             -PosterAssets $PosterAssets `
-            -ImageMode $ImageMode `
-            -ImdbIconSrc $imdbIconSrc
+            -ImageMode $ImageMode
     } else { "" }
 
     $detailRowCount = 0
     if ($movieDetailMode) {
-        $detailRowCount = [Math]::Max($detailRowCount, [Math]::Min(3, $movieItems.Count))
+        $detailRowCount = [Math]::Max($detailRowCount, [Math]::Min(4, $movieItems.Count))
     }
-    if ($episodeDetailMode) {
-        $detailRowCount = [Math]::Max($detailRowCount, [Math]::Min(3, $episodeItems.Count))
+    if ($tvShowDetailMode) {
+        $detailRowCount = [Math]::Max($detailRowCount, [Math]::Min(4, $tvShowItems.Count))
     }
 
     $statsCardHeight = switch ($detailRowCount) {
+        4 { 356 }
         3 { 286 }
         2 { 216 }
         1 { 154 }
@@ -4999,8 +5094,8 @@ $tvCards
     <td style="padding-bottom:7px;border-bottom:1px solid #292929;">
       <table cellspacing="0" cellpadding="0" border="0">
         <tr>
-          <td valign="middle" style="padding-right:8px;"><img src="$moviesIconSrc" width="30" height="30" alt="Movies watched" style="display:block;width:30px;height:30px;border:0;"></td>
-          <td valign="middle"><div style="font-size:18px;font-weight:800;color:#ffffff;line-height:1;">$moviesWatched</div><div style="padding-top:3px;font-size:10px;color:#8e8e8e;letter-spacing:.6px;">MOVIES WATCHED</div></td>
+          <td valign="middle" style="padding-right:8px;"><img src="$moviesIconSrc" width="42" height="42" alt="Movies watched" style="display:block;width:42px;height:42px;border:0;"></td>
+          <td valign="middle"><div style="font-size:18px;font-weight:800;color:#ffffff;line-height:1;">$movieTitleCount</div><div style="padding-top:3px;font-size:10px;color:#8e8e8e;letter-spacing:.6px;">MOVIES WATCHED</div></td>
         </tr>
       </table>
     </td>
@@ -5012,7 +5107,7 @@ $tvCards
         @"
 <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="height:${statsCardHeight}px;">
   <tr><td valign="middle">
-    <img src="$moviesIconSrc" width="38" height="38" alt="Movies watched" style="display:block;width:38px;height:38px;border:0;">
+    <img src="$moviesIconSrc" width="42" height="42" alt="Movies watched" style="display:block;width:42px;height:42px;border:0;">
     <div style="padding-top:9px;font-size:28px;font-weight:800;color:#ffffff;line-height:1.1;">$moviesWatched</div>
     <div style="padding-top:5px;font-size:12px;color:#8e8e8e;">movies watched</div>
   </td></tr>
@@ -5020,40 +5115,49 @@ $tvCards
 "@
     }
 
-    $episodeCardContent = if ($episodeDetailMode) {
+    $tvShowCardContent = if ($tvShowDetailMode) {
         @"
 <table width="100%" cellspacing="0" cellpadding="0" border="0">
   <tr>
     <td style="padding-bottom:7px;border-bottom:1px solid #292929;">
       <table cellspacing="0" cellpadding="0" border="0">
         <tr>
-          <td valign="middle" style="padding-right:8px;"><img src="$tvIconSrc" width="30" height="30" alt="Episodes streamed" style="display:block;width:30px;height:30px;border:0;"></td>
-          <td valign="middle"><div style="font-size:18px;font-weight:800;color:#ffffff;line-height:1;">$episodesStreamed</div><div style="padding-top:3px;font-size:10px;color:#8e8e8e;letter-spacing:.6px;">EPISODES STREAMED</div></td>
+          <td valign="middle" style="padding-right:8px;"><img src="$tvIconSrc" width="42" height="42" alt="TV shows watched" style="display:block;width:42px;height:42px;border:0;"></td>
+          <td valign="middle"><div style="font-size:18px;font-weight:800;color:#ffffff;line-height:1;">$tvShowTitleCount</div><div style="padding-top:3px;font-size:10px;color:#8e8e8e;letter-spacing:.6px;">TV SHOWS WATCHED</div></td>
         </tr>
       </table>
     </td>
   </tr>
-  $episodeRows
+  $tvShowRows
 </table>
 "@
     } else {
         @"
 <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="height:${statsCardHeight}px;">
   <tr><td valign="middle">
-    <img src="$tvIconSrc" width="38" height="38" alt="Episodes streamed" style="display:block;width:38px;height:38px;border:0;">
+    <img src="$tvIconSrc" width="42" height="42" alt="TV shows watched" style="display:block;width:42px;height:42px;border:0;">
     <div style="padding-top:9px;font-size:28px;font-weight:800;color:#ffffff;line-height:1.1;">$episodesStreamed</div>
-    <div style="padding-top:5px;font-size:12px;color:#8e8e8e;">episodes streamed</div>
+    <div style="padding-top:5px;font-size:12px;color:#8e8e8e;">TV shows watched</div>
   </td></tr>
 </table>
 "@
     }
 
-    $qualifyingPlayCount = if ($null -ne $Stats.PSObject.Properties["QualifyingPlays"]) {
-        Safe-Int $Stats.QualifyingPlays
-    } else {
-        (Safe-Int $Stats.MoviesWatched) + (Safe-Int $Stats.EpisodesStreamed)
+    $mediaStatsRow = ""
+    if ($movieDetailMode -and $tvShowDetailMode) {
+        $mediaStatsRow = @"
+<tr>
+  <td width="50%" valign="top" style="padding:0 5px 10px 0;"><table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$movieCardContent</td></tr></table></td>
+  <td width="50%" valign="top" style="padding:0 0 10px 5px;"><table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$tvShowCardContent</td></tr></table></td>
+</tr>
+"@
     }
-    $personalPlayWord = if ($qualifyingPlayCount -eq 1) { "qualifying play" } else { "qualifying plays" }
+    elseif ($movieDetailMode -or $tvShowDetailMode) {
+        $singleMediaContent = if ($movieDetailMode) { $movieCardContent } else { $tvShowCardContent }
+        $mediaStatsRow = @"
+<tr><td colspan="2" width="100%" valign="top" style="padding:0 0 10px;"><table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$singleMediaContent</td></tr></table></td></tr>
+"@
+    }
 
     $statsBlock = ""
     $bingeStandaloneBlock = ""
@@ -5098,18 +5202,7 @@ $tvCards
 <tr>
 <td class="pad" style="padding:0 20px 24px;">
 <table width="100%" cellspacing="0" cellpadding="0" border="0">
-<tr>
-  <td width="50%" valign="top" style="padding:0 5px 10px 0;">
-    <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
-      <tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$movieCardContent</td></tr>
-    </table>
-  </td>
-  <td width="50%" valign="top" style="padding:0 0 10px 5px;">
-    <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
-      <tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$episodeCardContent</td></tr>
-    </table>
-  </td>
-</tr>
+$mediaStatsRow
 <tr>
   <td width="50%" valign="top" style="padding:0 5px 10px 0;">
     <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
@@ -5118,7 +5211,6 @@ $tvCards
           <img src="$clockIconSrc" width="42" height="42" alt="Total watched" style="display:block;width:42px;height:42px;border:0;">
           <div style="padding-top:10px;font-size:27px;font-weight:800;color:#ffffff;line-height:1.1;">$timeText</div>
           <div style="padding-top:5px;font-size:12px;color:#8e8e8e;">total watched</div>
-          <div style="padding-top:8px;font-size:10px;color:#e5a00d;font-weight:700;">$qualifyingPlayCount $personalPlayWord</div>
         </td>
       </tr>
     </table>
@@ -5129,8 +5221,8 @@ $tvCards
         <td height="$statsCardHeight" valign="middle" style="height:${statsCardHeight}px;padding:17px;">
           <div style="font-size:9px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">$(HtmlEncode $bingeEyebrow)</div>
           <img src="$trophyIconSrc" width="$(if ($isBingeWinner) { 54 } else { 42 })" height="$(if ($isBingeWinner) { 54 } else { 42 })" alt="Binge Champion award" style="display:block;width:$(if ($isBingeWinner) { 54 } else { 42 })px;height:$(if ($isBingeWinner) { 54 } else { 42 })px;border:0;margin-top:9px;">
-          <div style="padding-top:8px;font-size:$(if ($isBingeWinner) { 18 } else { 16 })px;line-height:1.25;font-weight:900;color:#ffffff;">$(HtmlEncode $bingeHeadline)</div>
-          <div style="padding-top:6px;font-size:10px;line-height:1.4;color:$(if ($isBingeWinner) { '#f3c45a' } else { '#8e8e8e' });font-weight:700;">$(HtmlEncode $bingeMetricText)</div>
+          <div style="padding-top:8px;font-size:$(if ($isBingeWinner) { 18 } else { 16 })px;line-height:1.25;font-weight:900;color:#ffffff;">$(HtmlEncode $bingeTimeLine)</div>
+          $bingeBreakdownHtml
         </td>
       </tr>
     </table>
@@ -5151,12 +5243,12 @@ $tvCards
   <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:$bingeBackground;border:1px solid $bingeBorder;border-radius:10px;border-collapse:separate;">
     <tr>
       <td width="84" valign="middle" style="padding:18px 0 18px 20px;">
-        <img src="$trophyIconSrc" width="56" height="56" alt="Binge Champion award" style="display:block;width:56px;height:56px;border:0;">
+        <img src="$trophyIconSrc" width="$(if ($isBingeWinner) { 54 } else { 42 })" height="$(if ($isBingeWinner) { 54 } else { 42 })" alt="Binge Champion award" style="display:block;width:$(if ($isBingeWinner) { 54 } else { 42 })px;height:$(if ($isBingeWinner) { 54 } else { 42 })px;border:0;">
       </td>
       <td valign="middle" style="padding:18px 20px 18px 12px;">
         <div style="font-size:10px;color:#e5a00d;font-weight:900;letter-spacing:1.2px;">$(HtmlEncode $bingeEyebrow)</div>
-        <div style="padding-top:5px;font-size:20px;line-height:1.25;color:#ffffff;font-weight:900;">$(HtmlEncode $bingeHeadline)</div>
-        <div style="padding-top:5px;font-size:12px;line-height:1.45;color:$(if ($isBingeWinner) { '#f3c45a' } else { '#929292' });">$(HtmlEncode $bingeMetricText)</div>
+        <div style="padding-top:5px;font-size:20px;line-height:1.25;color:#ffffff;font-weight:900;">$(HtmlEncode $bingeTimeLine)</div>
+        $bingeBreakdownHtml
       </td>
     </tr>
   </table>
@@ -5203,13 +5295,13 @@ $tvCards
           <img src="$watchedIconSrc" width="18" height="18" alt="Your Private Readout" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
           <span style="display:inline-block;vertical-align:middle;">YOUR PRIVATE READOUT</span>
         </div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">As you stream, your weekly email builds a private recap with watch time, movies, episodes, posters, and ratings.</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">As you stream, your weekly email builds a private recap with watch time, movies, TV shows, posters, and ratings.</div>
 
         <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">
           <img src="$lockInfoIconSrc" width="18" height="18" alt="Just Your Stats" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
           <span style="display:inline-block;vertical-align:middle;">JUST YOUR STATS</span>
         </div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion movie/TV play split and total watch time are shared server-wide; the champion’s identity stays private.</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion watch duration and nonzero unique movie/TV-show counts are shared server-wide; the champion’s identity stays private.</div>
       </td>
     </tr>
   </table>
@@ -5230,7 +5322,7 @@ $tvCards
 <td class="pad" align="center" style="padding:12px 20px 26px;color:#5f5f5f;font-size:11px;line-height:1.5;">
   Your watch recap is generated privately from $(HtmlEncode $footerServerName) server’s history.<br>
   Other users do not receive your detailed individual viewing stats.<br>
-  The Binge Champion movie/TV play split and total watch time are shared server-wide; the champion's identity stays private.
+  The Binge Champion watch duration and nonzero unique movie/TV-show counts are shared server-wide; the champion's identity stays private.
 </td>
 </tr>
 "@
@@ -5346,18 +5438,25 @@ function Build-PlainText {
         "NO NEW RELEASES THIS WEEK`r`n$StartLabel – $EndLabel"
     }
     else {
-        "$movieCount new movies • $tvCount TV titles`r`n$StartLabel – $EndLabel"
+        $plainMovieWord = if ($movieCount -eq 1) { "new movie" } else { "new movies" }
+        $plainTvWord = if ($tvCount -eq 1) { "TV title" } else { "TV titles" }
+        "$movieCount $plainMovieWord • $tvCount $plainTvWord`r`n$StartLabel – $EndLabel"
     }
 
     $heroLine = ""
+    $plainTrendingHero = $false
     if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) {
-        $heroLabel = if ($QuietReleaseMode) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }
+        $plainTrendingHero = (
+            $null -ne $HotRelease.PSObject.Properties["IsTrending"] -and
+            [bool]$HotRelease.IsTrending
+        )
+        $heroLabel = if ($plainTrendingHero) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }
         $heroLine = "`r`n${heroLabel}: $($HotRelease.Item.Title)"
     }
 
     $footerFeature = ""
 
-    if (-not $QuietReleaseMode) {
+    if (-not $plainTrendingHero) {
         if ([string]::IsNullOrWhiteSpace($TrendingTitle)) {
             $footerFeature += "`r`nTRENDING THIS WEEK: Warp core preparing to engage."
         }
@@ -5377,18 +5476,49 @@ function Build-PlainText {
     if ($null -ne $BingeChampion) {
         $bingeDisplay = Get-BingeChampionDisplay -BingeChampion $BingeChampion -User $User
         $winnerLine = if ($bingeDisplay.IsWinner) {
-            "YOU WON THE BINGE CHAMPION AWARD"
+            "YOU WON • BINGE CHAMPION"
         } else {
-            "BINGE CHAMPION AWARD"
+            "THIS WEEK'S BINGE CHAMPION"
         }
-        $moviePlays = Safe-Int $bingeDisplay.MoviePlays
-        $tvPlays = Safe-Int $bingeDisplay.TvPlays
-        $movieWord = if ($moviePlays -eq 1) { "movie" } else { "movies" }
-        $tvWord = if ($tvPlays -eq 1) { "TV show" } else { "TV shows" }
-        $footerFeature += "`r`n${winnerLine}: $moviePlays $movieWord • $tvPlays $tvWord • $($bingeDisplay.TotalTimeText) watched"
+        $footerFeature += "`r`n${winnerLine}`r`n$($bingeDisplay.TotalTimeText) watched"
+        $titleBreakdown = Get-BingeChampionTitleBreakdown -BingeDisplay $bingeDisplay
+        if (-not [string]::IsNullOrWhiteSpace($titleBreakdown)) {
+            $footerFeature += "`r`n$titleBreakdown"
+        }
     }
     else {
-        $footerFeature += "`r`nBINGE CHAMPION AWARD: Awaiting the first qualifying stream."
+        $footerFeature += "`r`nTHIS WEEK'S BINGE CHAMPION: Awaiting the first qualifying stream."
+    }
+
+    $plainMovieItems = @()
+    $plainMovieTitleCount = 0
+    if ($null -ne $Stats.PSObject.Properties["MovieItems"]) {
+        $plainMovieTitleCount = @($Stats.MovieItems).Count
+        $plainMovieItems = @($Stats.MovieItems | Select-Object -First 4)
+    }
+    $plainTvShowItems = @()
+    $plainTvShowTitleCount = 0
+    if ($null -ne $Stats.PSObject.Properties["TvShowItems"]) {
+        $plainTvShowTitleCount = @($Stats.TvShowItems).Count
+        $plainTvShowItems = @($Stats.TvShowItems | Select-Object -First 4)
+    }
+
+    $movieStatsText = ""
+    if ($plainMovieItems.Count -gt 0) {
+        $movieWord = if ($plainMovieTitleCount -eq 1) { "movie" } else { "movies" }
+        $movieLines = @($plainMovieItems | ForEach-Object {
+            "- {0} — {1}" -f ([string]$_.Title), (Format-WatchTime ([int64]$_.Seconds))
+        })
+        $movieStatsText = "{0} {1} watched`r`n{2}" -f $plainMovieTitleCount, $movieWord, ($movieLines -join "`r`n")
+    }
+
+    $tvStatsText = ""
+    if ($plainTvShowItems.Count -gt 0) {
+        $showWord = if ($plainTvShowTitleCount -eq 1) { "TV show" } else { "TV shows" }
+        $showLines = @($plainTvShowItems | ForEach-Object {
+            "- {0} — {1}" -f ([string]$_.ShowTitle), (Format-WatchTime ([int64]$_.Seconds))
+        })
+        $tvStatsText = "{0} {1} watched`r`n{2}" -f $plainTvShowTitleCount, $showWord, ($showLines -join "`r`n")
     }
 
     $statsText = ""
@@ -5417,14 +5547,12 @@ Warp Core still engaging. Your recap will be ready when you beam back aboard.
         }
     }
     else {
-        $most = if ([string]::IsNullOrWhiteSpace([string]$Stats.MostWatched)) { "Nothing this week" } else { [string]$Stats.MostWatched }
         $statsText = @"
 YOUR WEEK ON PLEX
 
-$($Stats.MoviesWatched) movies watched
-$($Stats.EpisodesStreamed) episodes streamed
+$movieStatsText
+$tvStatsText
 $($Stats.TotalTimeText) total watched
-$($Stats.QualifyingPlays) qualifying plays
 "@
     }
 
@@ -5522,10 +5650,10 @@ function Build-WelcomeHtml {
         <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Every $deliveryDay morning you’ll get the newest movies and TV additions.</div>
 
         <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">📡 YOUR PRIVATE READOUT</div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">As you stream, your weekly email builds a private recap with watch time, movies, episodes, posters, and ratings.</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">As you stream, your weekly email builds a private recap with watch time, movies, TV shows, posters, and ratings.</div>
 
         <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">🔒 JUST YOUR STATS</div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion movie/TV play split and total watch time are shared server-wide; the champion’s identity stays private.</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion watch duration and nonzero unique movie/TV-show counts are shared server-wide; the champion’s identity stays private.</div>
       </td>
     </tr>
   </table>
@@ -5847,10 +5975,20 @@ function Get-DynamicPreheader {
     param([object]$ReleaseData)
 
     $movieCount = @($ReleaseData.Movies).Count
+    $tvCount = @($ReleaseData.TV).Count
+    $parts = New-Object System.Collections.Generic.List[string]
 
-    if ($movieCount -le 0) { return "" }
-    if ($movieCount -eq 1) { return "1 new movie!" }
-    return "$movieCount new movies!"
+    if ($movieCount -gt 0) {
+        $movieWord = if ($movieCount -eq 1) { "new movie" } else { "new movies" }
+        $parts.Add("$movieCount $movieWord")
+    }
+    if ($tvCount -gt 0) {
+        $tvWord = if ($tvCount -eq 1) { "new TV title" } else { "new TV titles" }
+        $parts.Add("$tvCount $tvWord")
+    }
+
+    if ($parts.Count -eq 0) { return "" }
+    return ($parts -join " • ") + "!"
 }
 
 function Get-OneOffWelcomeSubject {
@@ -5949,9 +6087,20 @@ if ($Mode -eq "SendWelcome") {
     Write-Log ("Found {0} new movies and {1} TV titles." -f $releaseData.Movies.Count, $releaseData.TV.Count)
 
     $globalHistory = Get-History -AfterDate $afterDate -BeforeDate $beforeDate
-    $hotRelease = Get-HotNewRelease -ReleaseData $releaseData -GlobalHistory $globalHistory
+    $movieHotRelease = Get-HotNewRelease -ReleaseData $releaseData -GlobalHistory $globalHistory
     $script:GlobalTrendingStat = Get-GlobalTrendingStat -GlobalHistory $globalHistory
     $trendingTitle = if ($null -ne $script:GlobalTrendingStat) { [string]$script:GlobalTrendingStat.Title } else { "" }
+    $trendingHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory
+    $hotRelease = if (@($releaseData.Movies).Count -gt 0) { $movieHotRelease } else { $trendingHero }
+
+    if (@($releaseData.Movies).Count -eq 0 -and $null -ne $trendingHero -and $null -ne $trendingHero.Item) {
+        $trendingHeroData = if ([string]$trendingHero.Item.Type -eq "movie") {
+            [PSCustomObject]@{ Movies = @($trendingHero.Item); TV = @() }
+        } else {
+            [PSCustomObject]@{ Movies = @(); TV = @($trendingHero.Item) }
+        }
+        Add-DesignRatingMetadata -ReleaseData $trendingHeroData
+    }
 
     $featuredRatingKey = if ($null -ne $hotRelease -and $null -ne $hotRelease.Item) {
         [string]$hotRelease.Item.PosterRatingKey
@@ -5970,6 +6119,7 @@ if ($Mode -eq "SendWelcome") {
         QualifyingPlays  = 0
         MovieItems       = @()
         EpisodeItems     = @()
+        TvShowItems      = @()
     }
 
     $html = Build-NewsletterHtml `
@@ -6052,13 +6202,14 @@ if ($isQuietReleaseWeek) {
 
 Write-Log "Loading global history for hero, Trending, and Binge Champion..."
 $globalHistory = Get-History -AfterDate $afterDate -BeforeDate $beforeDate
-$hotRelease = Get-HotNewRelease -ReleaseData $releaseData -GlobalHistory $globalHistory
+$movieHotRelease = Get-HotNewRelease -ReleaseData $releaseData -GlobalHistory $globalHistory
 $script:GlobalTrendingStat = Get-GlobalTrendingStat -GlobalHistory $globalHistory
 $trendingTitle = if ($null -ne $script:GlobalTrendingStat) { [string]$script:GlobalTrendingStat.Title } else { "" }
 $quietHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory
+$hotRelease = if (@($releaseData.Movies).Count -gt 0) { $movieHotRelease } else { $quietHero }
 $bingeChampion = Get-BingeChampion -GlobalHistory $globalHistory
 
-if ($isQuietReleaseWeek -and $null -ne $quietHero -and $null -ne $quietHero.Item) {
+if (($isQuietReleaseWeek -or @($releaseData.Movies).Count -eq 0) -and $null -ne $quietHero -and $null -ne $quietHero.Item) {
     $quietHeroData = if ([string]$quietHero.Item.Type -eq "movie") {
         [PSCustomObject]@{ Movies = @($quietHero.Item); TV = @() }
     } else {
@@ -6109,10 +6260,10 @@ function Build-ForUser {
 
     $statsPosterItems = @()
     if ($null -ne $stats.PSObject.Properties["MovieItems"]) {
-        $statsPosterItems += @($stats.MovieItems)
+        $statsPosterItems += @($stats.MovieItems | Select-Object -First 4)
     }
-    if ($null -ne $stats.PSObject.Properties["EpisodeItems"]) {
-        $statsPosterItems += @($stats.EpisodeItems)
+    if ($null -ne $stats.PSObject.Properties["TvShowItems"]) {
+        $statsPosterItems += @($stats.TvShowItems | Select-Object -First 4)
     }
     $statsPosterItems += @($trendingPosterItem)
 
@@ -6171,6 +6322,7 @@ function New-ZeroPreviewStats {
         QualifyingPlays  = 0
         MovieItems       = @()
         EpisodeItems     = @()
+        TvShowItems      = @()
     }
 }
 
@@ -6229,6 +6381,24 @@ function Get-PopulatedPreviewStats {
         })
     }
 
+    $sampleTvShows = New-Object System.Collections.Generic.List[object]
+    foreach ($show in @($activeReleaseData.TV | Select-Object -First 3)) {
+        $sampleTvShows.Add([PSCustomObject]@{
+            Type="show"; RatingKey=[string]$show.RatingKey; PosterRatingKey=[string]$show.PosterRatingKey;
+            Title=[string]$show.Title; ShowTitle=[string]$show.Title;
+            Plays=1; Seconds=[int64]3600; TotalTimeText="1h 0m"
+        })
+    }
+    while ($sampleTvShows.Count -lt 3) {
+        $index = $sampleTvShows.Count + 1
+        $sampleTvShows.Add([PSCustomObject]@{
+            Type="show"; RatingKey=""; PosterRatingKey="";
+            Title="Sample Series $index"; ShowTitle="Sample Series $index";
+            Plays=1; Seconds=[int64](3600 - (($index - 1) * 600));
+            TotalTimeText=$(if ($index -eq 1) { "1h 0m" } elseif ($index -eq 2) { "50m" } else { "40m" })
+        })
+    }
+
     $sampleMost = if ($sampleMovies.Count -gt 0) {
         [string]$sampleMovies[0].Title
     } else {
@@ -6245,6 +6415,7 @@ function Get-PopulatedPreviewStats {
             MostWatched      = $sampleMost
             MovieItems       = $sampleMovies.ToArray()
             EpisodeItems     = $sampleEpisodes.ToArray()
+            TvShowItems      = $sampleTvShows.ToArray()
         }
         IsSample = $true
     }
@@ -6269,10 +6440,10 @@ function Build-AllEmailVariants {
 
     $populatedPosterItems = @($trendingPosterItem)
     if ($null -ne $populatedVariant.Stats.PSObject.Properties["MovieItems"]) {
-        $populatedPosterItems += @($populatedVariant.Stats.MovieItems)
+        $populatedPosterItems += @($populatedVariant.Stats.MovieItems | Select-Object -First 4)
     }
-    if ($null -ne $populatedVariant.Stats.PSObject.Properties["EpisodeItems"]) {
-        $populatedPosterItems += @($populatedVariant.Stats.EpisodeItems)
+    if ($null -ne $populatedVariant.Stats.PSObject.Properties["TvShowItems"]) {
+        $populatedPosterItems += @($populatedVariant.Stats.TvShowItems | Select-Object -First 4)
     }
 
     $populatedPosterAssets = Prepare-PosterAssets `
@@ -6561,8 +6732,8 @@ if ($Mode -eq "PreviewAll") {
 body{margin:0;background:#0f0f0f;color:#fff;font-family:Arial,Helvetica,sans-serif;padding:32px 18px}.wrap{max-width:900px;margin:auto}.eyebrow{color:#e5a00d;font-size:12px;font-weight:800;letter-spacing:1.5px}.card{margin-top:14px;padding:18px 20px;background:#181818;border:1px solid #2b2b2b;border-radius:10px}.title{font-size:18px;font-weight:800}.subject{color:#aaa;margin-top:7px;font-size:13px;line-height:1.45}.btn{display:inline-block;margin-top:13px;background:#e5a00d;color:#111;text-decoration:none;font-weight:800;padding:10px 15px;border-radius:7px}.note{margin-top:20px;color:#999;font-size:12px;line-height:1.55;border-left:3px solid #e5a00d;padding-left:12px}.meta{color:#888;font-size:13px;line-height:1.55;margin-top:8px}
 </style></head><body><div class="wrap">
 <div class="eyebrow">TAUTWEEKLY FOR PLEX — ALL EMAIL TYPES</div>
-<h1 style="margin:8px 0 0;font-size:30px;">$serverName · $userName</h1>
-<div class="meta">Window: $(HtmlEncode $startLabel) – $(HtmlEncode $endLabel)<br>Release mode: $(if ($isQuietReleaseWeek) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' })</div>
+<h1 style="margin:8px 0 0;font-size:30px;">The real email layout, across every state.</h1>
+<div class="meta">Go ahead, shrink my window.<br>Server / sample recipient: $serverName · $userName<br>Window: $(HtmlEncode $startLabel) – $(HtmlEncode $endLabel)<br>Release mode: $(if ($isQuietReleaseWeek) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' })</div>
 $($cards.ToString())
 <div class="note">$(HtmlEncode $sampleNote)</div>
 <div class="note">Local HTML only. No email was sent. No welcome timestamp was written. Resize a preview below 620px to inspect the mobile hero.</div>
