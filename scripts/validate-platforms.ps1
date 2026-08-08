@@ -150,6 +150,8 @@ Require-Text 'platforms/nas-docker/app/TautWeekly.ps1' @(
 )
 Require-Text 'platforms/windows/TautWeekly.ps1' @(
     'Smtp-Transport\.ps1',
+    'Operation-Lock\.ps1',
+    'Enter-TautWeeklyOperationLock',
     'Send-TautWeeklySmtpMessage',
     'ListUsers only displays the roster'
 )
@@ -212,11 +214,30 @@ Forbid-Text 'platforms/mac-docker/tautweekly.sh' @('docker compose build --pull'
 Require-Text 'platforms/windows/Check-Update.ps1' @(
     'releases/latest',
     'Latest stable release',
-    'A stable update is available'
+    'A stable update is available',
+    'SHA-256 checksum verified',
+    'Windows-Update\.ps1',
+    'Apply this stable update safely',
+    'Start-Process.*-Verb RunAs'
 )
-Require-Text 'platforms/windows/17-CHECK-FOR-UPDATE.bat' @('Check-Update\.ps1')
+Require-Text 'platforms/windows/Windows-Update.ps1' @(
+    'Enter-TautWeeklyOperationLock',
+    'RELEASE-FILES\.txt',
+    'Disable-ScheduledTask',
+    'Enable-ScheduledTask',
+    'backup-v',
+    'restored automatically',
+    'Assert-ManifestFiles',
+    'Assert-PowerShellSyntax'
+)
+Require-Text 'platforms/windows/Operation-Lock.ps1' @(
+    '\.tautweekly-operation\.lock',
+    'FileShare\]::None',
+    'Another TautWeekly operation is already running'
+)
+Require-Text 'platforms/windows/17-CHECK-FOR-UPDATE.bat' @('Check-Update\.ps1', '-PromptForUpdate', 'pause')
 
-Require-Text 'README.md' @('Stable releases only by default', 'Checking never applies an update', 'Unraid host-managed')
+Require-Text 'README.md' @('Stable releases only by default', 'explicit\s+confirmation', 'Unraid host-managed')
 foreach ($relative in @(
     'docs/windows/README.md',
     'docs/nas-docker/README.md',

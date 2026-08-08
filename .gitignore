@@ -12,6 +12,7 @@
 **/scheduler-state.json
 **/scheduler-heartbeat.json
 **/service-heartbeat.json
+**/.tautweekly-operation.lock
 **/logs/
 **/output/
 **/*.log

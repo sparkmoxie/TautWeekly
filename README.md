@@ -48,7 +48,7 @@ them locally; send controlled tests; then schedule production delivery.
 
 | Platform | Runtime and scheduler | Preview | Best fit | Guides and source |
 |---|---|---|---|---|
-| Windows portable · baseline 1.6.11 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/) · [Documentation](docs/windows/README.md) · [Source](platforms/windows) |
+| Windows portable · baseline 1.7.0 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/) · [Documentation](docs/windows/README.md) · [Source](platforms/windows) |
 | NAS / Docker · baseline 1.1.0 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
 | macOS · baseline 1.0.3 | PowerShell 7 in Docker Desktop · internal scheduler | Localhost port 8787 by default | Intel or Apple silicon Mac | [Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/) · [Documentation](docs/mac/README.md) · [Source](platforms/mac-docker) |
 | Native Linux · baseline 1.0.0 | PowerShell 7.2+ · hardened systemd service | Localhost port 8787 by default | Current Ubuntu, Debian, or RHEL host without Docker | [Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Source](platforms/linux) |
@@ -287,14 +287,15 @@ so long sends do not interrupt liveness reporting.
 ## Update policy
 
 Stable releases only by default. TautWeekly never installs unattended updates
-by default. Checking never applies an update. `latest` and semantic
-version tags are stable release channels; `edge` follows GitHub `main` and is
-not used by any packaged default. A check reports or stages a stable candidate,
-while an update/apply action changes the installed runtime.
+by default. A check or prompt never applies an update without explicit
+confirmation. `latest` and semantic version tags are stable release channels;
+`edge` follows GitHub `main` and is not used by any packaged default. A check
+reports or stages a stable candidate, while an update/apply action changes the
+installed runtime.
 
 | Package | Check for a stable update | Apply and recover |
 |---|---|---|
-| Windows portable | Run `17-CHECK-FOR-UPDATE.bat`; it checks GitHub's latest stable release and never installs it. | Verify the new ZIP and checksum, pause the scheduled task, preserve the private runtime files, overlay the verified package, then verify/preview before resuming. Keep the previous folder backup for rollback. |
+| Windows portable | Run `17-CHECK-FOR-UPDATE.bat`; it checks GitHub's latest stable release and, when one exists, offers an explicit safe-update choice. No periodic checker or unattended updater is installed. | Choose `U` to download the official Windows ZIP and `SHA256SUMS.txt`, verify the checksum and per-file release manifest, refuse concurrent newsletter work, pause Task Scheduler, create a private sibling backup, replace only release-owned files, remove only unchanged deprecated release files, verify version/syntax, and restore the task. Failure triggers automatic rollback; unowned config, state, logs, output, and custom-named assets stay in place. |
 | NAS Compose / QNAP | Run `./tautweekly.sh check-update`; Docker pulls the configured stable image into the host cache but leaves the running container unchanged. | Run `./tautweekly.sh update`; it refuses a busy newsletter operation, recreates from the stable image, verifies health/version, preserves `data/`, and automatically restores the prior image if health fails. |
 | Unraid host-managed | Unraid's Apps Action Center reports when the configured `latest` image digest changes. | Apply from Unraid's Docker/Apps controls. Automatic application is an explicit administrator choice through an optional update plugin; TautWeekly adds no Docker socket or in-container updater. |
 | macOS Docker Desktop | Run `./tautweekly.sh check-update`; it compares the package's release metadata with GitHub's latest stable release. | Download and checksum the newer Mac archive, overlay it on the existing project without deleting `.env` or `data/`, then run `./tautweekly.sh update`. The wrapper builds that verified package, checks the operation lock and container health/version, and rolls back the image on failure. |

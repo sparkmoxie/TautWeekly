@@ -27,6 +27,9 @@ $expected = [ordered]@{
         'TautWeekly-windows/16-LIST-LIBRARIES.bat',
         'TautWeekly-windows/17-CHECK-FOR-UPDATE.bat',
         'TautWeekly-windows/Check-Update.ps1',
+        'TautWeekly-windows/Windows-Update.ps1',
+        'TautWeekly-windows/Operation-Lock.ps1',
+        'TautWeekly-windows/RELEASE-FILES.txt',
         'TautWeekly-windows/RELEASE-METADATA.txt',
         'TautWeekly-windows/README.md'
     )
@@ -38,6 +41,7 @@ $expected = [ordered]@{
         'TautWeekly-nas-docker/tautweekly.sh',
         'TautWeekly-nas-docker/container-update.sh',
         'TautWeekly-nas-docker/compose.yaml',
+        'TautWeekly-nas-docker/RELEASE-FILES.txt',
         'TautWeekly-nas-docker/README.md'
     )
     'TautWeekly-mac-docker.zip' = @(
@@ -48,6 +52,7 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/check-release.sh',
         'TautWeekly-mac-docker/mac-update.sh',
         'TautWeekly-mac-docker/INSTALL-MAC.command',
+        'TautWeekly-mac-docker/RELEASE-FILES.txt',
         'TautWeekly-mac-docker/README.md'
     )
     'TautWeekly-linux.zip' = @(
@@ -59,6 +64,7 @@ $expected = [ordered]@{
         'TautWeekly-linux/tautweekly',
         'TautWeekly-linux/check-release.sh',
         'TautWeekly-linux/RELEASE-METADATA.txt',
+        'TautWeekly-linux/RELEASE-FILES.txt',
         'TautWeekly-linux/README.md'
     )
     'TautWeekly-freebsd-podman.zip' = @(
@@ -68,6 +74,7 @@ $expected = [ordered]@{
         'TautWeekly-freebsd-podman/install-freebsd.sh',
         'TautWeekly-freebsd-podman/rc.d/tautweekly',
         'TautWeekly-freebsd-podman/tautweekly',
+        'TautWeekly-freebsd-podman/RELEASE-FILES.txt',
         'TautWeekly-freebsd-podman/README.md'
     )
 }
@@ -92,6 +99,37 @@ foreach ($archiveName in $expected.Keys) {
             $name -in $forbiddenNames -or $_ -match '/(logs|output)/'
         })
         Assert-True ($forbidden.Count -eq 0) "$archiveName contains runtime/private paths: $($forbidden -join ', ')"
+
+        $manifestEntry = @($archive.Entries | Where-Object { $_.FullName -match '/RELEASE-FILES\.txt$' })
+        Assert-True ($manifestEntry.Count -eq 1) "$archiveName has no unique release-owned file manifest."
+        $manifestReader = New-Object IO.StreamReader($manifestEntry[0].Open())
+        try { $releaseManifest = $manifestReader.ReadToEnd() }
+        finally { $manifestReader.Dispose() }
+        Assert-True ($releaseManifest -match '(?m)^[0-9a-f]{64}\s{2}RELEASE-METADATA\.txt\r?$') "$archiveName release manifest does not hash release metadata."
+        Assert-True ($releaseManifest -notmatch '(?im)(?:^|/)(?:config\.json|state\.json|access-state\.json|scheduler-state\.json|\.tautweekly-operation\.lock)$') "$archiveName release manifest owns private runtime files."
+        $manifestLines = @($releaseManifest -split '\r?\n' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        Assert-True ($manifestLines.Count -eq ($entryNames.Count - 1)) "$archiveName release manifest does not cover every packaged file except itself."
+        $seenManifestPaths = @{}
+        foreach ($manifestLine in $manifestLines) {
+            Assert-True ($manifestLine -match '^(?<hash>[0-9a-f]{64})\s{2}(?<path>.+)$') "$archiveName has an invalid release manifest line: $manifestLine"
+            $expectedFileHash = $Matches['hash']
+            $relativePath = $Matches['path'].Replace('\', '/')
+            Assert-True (-not $seenManifestPaths.ContainsKey($relativePath.ToLowerInvariant())) "$archiveName release manifest duplicates $relativePath."
+            $seenManifestPaths[$relativePath.ToLowerInvariant()] = $true
+            $packagedPath = ($manifestEntry[0].FullName -replace 'RELEASE-FILES\.txt$', '') + $relativePath
+            $packagedEntry = @($archive.Entries | Where-Object { $_.FullName -ceq $packagedPath })
+            Assert-True ($packagedEntry.Count -eq 1) "$archiveName release manifest references a missing or duplicate file: $relativePath"
+            $sha256 = [Security.Cryptography.SHA256]::Create()
+            $entryStream = $packagedEntry[0].Open()
+            try {
+                $actualHash = ([BitConverter]::ToString($sha256.ComputeHash($entryStream))).Replace('-', '').ToLowerInvariant()
+            }
+            finally {
+                $entryStream.Dispose()
+                $sha256.Dispose()
+            }
+            Assert-True ($actualHash -eq $expectedFileHash) "$archiveName release manifest hash failed for $relativePath."
+        }
 
         $rendererEntry = @($archive.Entries | Where-Object { $_.FullName -match '/(?:app/)?TautWeekly\.ps1$' } | Select-Object -First 1)
         Assert-True ($rendererEntry.Count -eq 1) "$archiveName has no production renderer."

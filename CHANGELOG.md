@@ -6,6 +6,32 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-07
+
+### Added
+
+- Added an explicit Windows `U` action that downloads the official latest
+  stable ZIP and checksum, validates a per-file release manifest, and applies
+  the update only after user confirmation and Windows elevation.
+- Added a shared Windows installation lock so newsletter runs and updates
+  cannot overlap, plus functional regression coverage for checksum refusal,
+  private-file preservation, deprecated-file cleanup, and rollback.
+- Added `RELEASE-FILES.txt` with SHA-256 hashes to every packaged platform so
+  release ownership is deterministic without claiming runtime data.
+
+### Changed
+
+- Advanced the Windows portable source baseline to 1.7.0 and documented the
+  difference between manual update checking, explicit application, and the
+  absence of unattended Windows update tasks.
+
+### Security
+
+- Windows updates now pause and restore Task Scheduler state, keep a private
+  full-folder sibling backup, replace only verified release-owned files, verify
+  the installed version and PowerShell syntax, and automatically restore the
+  previous installation after a failed apply.
+
 ## [0.5.5] - 2026-08-07
 
 ### Added

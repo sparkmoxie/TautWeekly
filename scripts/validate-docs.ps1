@@ -160,6 +160,16 @@ $escapedWindowsBatMetric = [regex]::Escape("<b>$numberedWindowsBatCount</b><span
 if ($windowsQuickstart -notmatch $escapedWindowsBatMetric) {
     throw "Windows Quickstart launcher metric does not match the $numberedWindowsBatCount numbered BAT files."
 }
+foreach ($pattern in @(
+    'Apply this stable update safely',
+    'SHA256SUMS',
+    'automatic rollback',
+    'No periodic update task'
+)) {
+    if ($windowsQuickstart -notmatch $pattern) {
+        throw "Windows Quickstart is missing safe-update guidance: $pattern"
+    }
+}
 
 $linuxInstall = [IO.File]::ReadAllText((Join-Path $docs 'linux/README.md'))
 $linuxOperations = [regex]::Match($linuxInstall, '(?ms)^## Operations\s*(?<content>.*?)(?=^##\s)')
