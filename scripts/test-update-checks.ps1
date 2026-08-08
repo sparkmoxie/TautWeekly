@@ -94,9 +94,15 @@ try {
     [IO.File]::WriteAllLines((Join-Path $installRoot 'RELEASE-FILES.txt'), $oldManifest, [Text.UTF8Encoding]::new($false))
 
     $release056 = New-TestRelease -Version '0.5.6' -Marker 'new engine 0.5.6'
-    $externalOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $release056.Root 'Check-Update.ps1') -LatestVersion '0.5.6' | Out-String)
-    Assert-True ($LASTEXITCODE -eq 0) 'Windows PowerShell -File launcher path failed.'
-    Assert-True ($externalOutput -match 'Installed package: 0\.5\.6' -and $externalOutput -match 'This package is up to date\.') 'Windows PowerShell -File launcher did not resolve release metadata beside the checker.'
+    $windowsPowerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
+    if ($null -ne $windowsPowerShell) {
+        $externalOutput = (& $windowsPowerShell.Source -NoProfile -ExecutionPolicy Bypass -File (Join-Path $release056.Root 'Check-Update.ps1') -LatestVersion '0.5.6' | Out-String)
+        Assert-True ($LASTEXITCODE -eq 0) 'Windows PowerShell -File launcher path failed.'
+        Assert-True ($externalOutput -match 'Installed package: 0\.5\.6' -and $externalOutput -match 'This package is up to date\.') 'Windows PowerShell -File launcher did not resolve release metadata beside the checker.'
+    }
+    else {
+        Write-Warning 'Skipping the Windows PowerShell -File child-process assertion on this non-Windows runner.'
+    }
     & $checker -MetadataPath (Join-Path $installRoot 'RELEASE-METADATA.txt') -InstallRoot $installRoot -LatestVersion '0.5.6' -Apply -ArchivePath $release056.Archive -ChecksumsPath $release056.Checksums -NoElevation | Out-Null
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'RELEASE-METADATA.txt') -Raw) -match 'Repository version: 0\.5\.6') 'Verified update did not install the target version.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'TautWeekly.ps1') -Raw) -match 'new engine 0\.5\.6') 'Verified update did not replace a release-owned file.'

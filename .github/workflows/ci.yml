@@ -70,6 +70,9 @@ jobs:
       - name: Test global library selection and renderer scope
         shell: powershell
         run: .\scripts\test-library-selection.ps1
+      - name: Test Windows stable update process and rollback behavior
+        shell: powershell
+        run: .\scripts\test-update-checks.ps1
       - name: Test full active-week and quiet-week rendering
         shell: powershell
         run: .\scripts\test-newsletter-integration.ps1
