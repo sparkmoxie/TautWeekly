@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-09
+
 ### Changed
 
 - Limited **HOT NEW RELEASE** hero selection to new movies. Movie-empty weeks
