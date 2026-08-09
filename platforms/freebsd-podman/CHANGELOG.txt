@@ -1,6 +1,7 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Accepts selected-library recently-added rows when Plex omits the redundant section ID.
 - Limits HOT NEW RELEASE to movies and falls back to Trending when no new movie exists.
 - Lists up to four most-watched movies and TV shows, omitting an empty TV card.
 - Inherits the supplied movie/TV stat GIFs through the maintained container payload.

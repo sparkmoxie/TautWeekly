@@ -122,6 +122,18 @@ foreach ($relative in @(
         -Actual (Test-IncludedLibraryRow -Row ([PSCustomObject]@{ section_id = '99' })) -Expected $false
     Assert-Equal -Name "$relative excludes an unscoped row at runtime" `
         -Actual (Test-IncludedLibraryRow -Row ([PSCustomObject]@{ title = 'No section metadata' })) -Expected $false
+    Assert-Equal -Name "$relative trusts missing row metadata from a selected scoped query" `
+        -Actual (Test-IncludedLibraryRow `
+            -Row ([PSCustomObject]@{ title = 'Scoped without section metadata' }) `
+            -ExpectedSectionId '10') -Expected $true
+    Assert-Equal -Name "$relative rejects an explicit mismatch from a selected scoped query" `
+        -Actual (Test-IncludedLibraryRow `
+            -Row ([PSCustomObject]@{ section_id = '20' }) `
+            -ExpectedSectionId '10') -Expected $false
+    Assert-Equal -Name "$relative rejects a missing row section for an unselected scoped query" `
+        -Actual (Test-IncludedLibraryRow `
+            -Row ([PSCustomObject]@{ title = 'Unselected scope' }) `
+            -ExpectedSectionId '99') -Expected $false
 
     $nowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $selectedMovie = [PSCustomObject]@{
@@ -171,7 +183,7 @@ foreach ($relative in @(
                 $firstPage = New-Object System.Collections.Generic.List[object]
                 for ($index = 1; $index -le 99; $index++) {
                     $firstPage.Add([PSCustomObject]@{
-                        section_id = '20'; media_type = 'episode'; rating_key = "selected-episode-$index"
+                        media_type = 'episode'; rating_key = "selected-episode-$index"
                         grandparent_rating_key = 'selected-show'; grandparent_title = 'Selected Show'
                         title = "Selected Episode $index"; year = '2026'; added_at = $nowEpoch - $index
                         parent_media_index = 1; media_index = $index; play_duration = 1800
@@ -184,7 +196,7 @@ foreach ($relative in @(
                 $secondPage = @()
                 foreach ($showNumber in 2..4) {
                     $secondPage += [PSCustomObject]@{
-                        section_id = '20'; media_type = 'episode'; rating_key = "selected-show-$showNumber-episode"
+                        media_type = 'episode'; rating_key = "selected-show-$showNumber-episode"
                         grandparent_rating_key = "selected-show-$showNumber"; grandparent_title = "Selected Show $showNumber"
                         title = 'Premiere'; year = '2026'; added_at = $nowEpoch - (100 + $showNumber)
                         parent_media_index = 1; media_index = 1; play_duration = 1800
@@ -203,13 +215,29 @@ foreach ($relative in @(
         }
 
         $selected = if ($scope -eq '10') { $selectedMovie } else { $selectedEpisode }
+        $selectedRecent = if ($scope -eq '10') {
+            [PSCustomObject]@{
+                media_type = 'movie'; rating_key = 'selected-movie'
+                title = 'Selected Movie'; year = '2026'; added_at = $nowEpoch
+                audience_rating = '91'; rating = '8.2'; summary = 'A selected-library release.'
+            }
+        } else {
+            [PSCustomObject]@{
+                media_type = 'episode'; rating_key = 'selected-episode'
+                grandparent_rating_key = 'selected-show'; grandparent_title = 'Selected Show'
+                title = 'Selected Episode'; year = '2026'; added_at = $nowEpoch
+                parent_media_index = 1; media_index = 1
+            }
+        }
         # Include a leaked private row to prove the client still fails closed
         # if a Tautulli version ignores or mishandles section_id.
         if ($Command -eq 'get_history') {
             return [PSCustomObject]@{ data = @($selected, $privateMovie); recordsFiltered = 2 }
         }
         if ($Command -eq 'get_recently_added') {
-            return [PSCustomObject]@{ recently_added = @($selected, $privateMovie) }
+            # Tautulli's section-scoped recentlyAdded response can omit the
+            # redundant librarySectionID/section_id field on valid rows.
+            return [PSCustomObject]@{ recently_added = @($selectedRecent, $privateMovie) }
         }
         throw "Unexpected simulated command: $Command"
     }

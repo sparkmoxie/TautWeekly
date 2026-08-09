@@ -436,9 +436,24 @@ function Test-IncludedLibraryRow {
     )
 
     if (-not $script:LibraryFilterEnabled) { return $true }
+
     $sectionId = (Get-OptionalStringProperty -InputObject $Row -Name "section_id").Trim()
-    if ([string]::IsNullOrWhiteSpace($sectionId) -or -not $script:IncludedLibraryIdSet.Contains($sectionId)) { return $false }
-    return ([string]::IsNullOrWhiteSpace($ExpectedSectionId) -or $sectionId -eq $ExpectedSectionId)
+    $expectedSectionId = ([string]$ExpectedSectionId).Trim()
+
+    if (-not [string]::IsNullOrWhiteSpace($expectedSectionId)) {
+        if (-not $script:IncludedLibraryIdSet.Contains($expectedSectionId)) { return $false }
+
+        # Tautulli uses Plex's library-specific recentlyAdded endpoint when a
+        # section_id is supplied. Plex can omit the redundant librarySectionID
+        # attribute from those already-scoped rows. Trust the selected query
+        # scope only when the row omits the field; explicit mismatches still
+        # fail closed.
+        if ([string]::IsNullOrWhiteSpace($sectionId)) { return $true }
+        return ($sectionId -eq $expectedSectionId)
+    }
+
+    if ([string]::IsNullOrWhiteSpace($sectionId)) { return $false }
+    return $script:IncludedLibraryIdSet.Contains($sectionId)
 }
 
 function Get-IncludedLibraryQueryScopes {

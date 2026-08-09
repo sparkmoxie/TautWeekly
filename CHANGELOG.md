@@ -22,6 +22,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Accepted section-scoped Tautulli recently-added rows when Plex omits the
+  redundant library identifier, while continuing to reject explicit library
+  mismatches and unscoped rows.
 - Made inbox preview and body counts describe unique TV titles/shows rather
   than episode rows when multiple series are added or watched.
 
