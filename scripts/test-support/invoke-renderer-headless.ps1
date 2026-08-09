@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$RendererPath,
     [Parameter(Mandatory = $true)][string]$ConfigPath,
-    [Parameter(Mandatory = $true)][string]$UserId
+    [Parameter(Mandatory = $true)][string]$UserId,
+    [ValidateSet('PreviewAll', 'SendTest')][string]$Mode = 'PreviewAll'
 )
 
 Set-StrictMode -Version Latest
@@ -15,4 +16,4 @@ function global:Start-Process {
     Write-Host "[TEST] Suppressed preview open: $FilePath"
 }
 
-& $RendererPath -Mode PreviewAll -ConfigPath $ConfigPath -UserId $UserId
+& $RendererPath -Mode $Mode -ConfigPath $ConfigPath -UserId $UserId

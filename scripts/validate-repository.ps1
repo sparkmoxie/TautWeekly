@@ -59,6 +59,8 @@ $required = @(
     'scripts/test-container-health.sh',
     'scripts/test-scheduler-timezone.ps1',
     'scripts/test-smtp-transport.py',
+    'scripts/test-support/fake-smtp.py',
+    'scripts/test-support/fake-tautulli.py',
     'scripts/test-update-checks.ps1',
     'scripts/test-update-management.sh',
     'scripts/validate-unraid-template.ps1',

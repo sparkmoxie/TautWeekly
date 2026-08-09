@@ -1620,12 +1620,13 @@ function New-HeroItemFromGlobalStat {
     $addedAt = [int64]0
 
     if ($null -ne $meta) {
-        if (-not [string]::IsNullOrWhiteSpace([string]$meta.title)) { $title = [string]$meta.title }
-        $year = [string]$meta.year
-        $summary = [string]$meta.summary
-        $addedAt = Safe-Int64 $meta.added_at
+        $metadataTitle = Get-OptionalStringProperty -InputObject $meta -Name "title"
+        if (-not [string]::IsNullOrWhiteSpace($metadataTitle)) { $title = $metadataTitle }
+        $year = Get-OptionalStringProperty -InputObject $meta -Name "year"
+        $summary = Get-OptionalStringProperty -InputObject $meta -Name "summary"
+        $addedAt = Safe-Int64 (Get-OptionalStringProperty -InputObject $meta -Name "added_at")
         if ([string]::IsNullOrWhiteSpace($posterRatingKey)) {
-            $posterRatingKey = [string]$meta.rating_key
+            $posterRatingKey = Get-OptionalStringProperty -InputObject $meta -Name "rating_key"
         }
     }
 

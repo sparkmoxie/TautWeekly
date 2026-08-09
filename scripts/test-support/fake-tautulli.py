@@ -14,8 +14,8 @@ from urllib.parse import parse_qs, urlparse
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
     old = now - (30 * 86400)
-    movie_added = now if scenario == "active" else old
-    tv_added = now if scenario in ("active", "tv-only") else old
+    movie_added = now if scenario in ("active", "optional-hero-metadata") else old
+    tv_added = now if scenario in ("active", "tv-only", "optional-hero-metadata") else old
     return {
         "10": [
             {
@@ -172,6 +172,9 @@ class Handler(BaseHTTPRequestHandler):
             handle.write(json.dumps({"path": parsed.path, "query": query}) + "\n")
 
         if parsed.path.startswith("/library/metadata/"):
+            if self.server.scenario == "optional-hero-metadata":  # type: ignore[attr-defined]
+                self.write_json({"error": "sanitized missing Plex metadata"}, status=404)
+                return
             self.write_json({"MediaContainer": {"size": 0, "Metadata": []}})
             return
 
@@ -239,6 +242,12 @@ class Handler(BaseHTTPRequestHandler):
             key = query.get("rating_key", "")
             is_episode = "episode" in key
             is_show = key.startswith("selected-show") and not is_episode
+            if self.server.scenario == "optional-hero-metadata" and is_show:  # type: ignore[attr-defined]
+                # Tautulli may return a successful but sparse metadata object. The
+                # renderer must retain the global-history title and default every
+                # absent optional hero field without violating strict mode.
+                self.api_success({"media_type": "show"})
+                return
             title = "Selected Show" if is_show else ("Selected Episode" if is_episode else "Selected Movie")
             media_type = "show" if is_show else ("episode" if is_episode else "movie")
             self.api_success(
@@ -275,13 +284,18 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--scenario", choices=("active", "quiet", "tv-only"), required=True)
+    parser.add_argument(
+        "--scenario",
+        choices=("active", "quiet", "tv-only", "optional-hero-metadata"),
+        required=True,
+    )
     parser.add_argument("--call-log", type=Path, required=True)
     parser.add_argument("--ready-file", type=Path, required=True)
     args = parser.parse_args()
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     server.rows = media_rows(args.scenario)  # type: ignore[attr-defined]
+    server.scenario = args.scenario  # type: ignore[attr-defined]
     server.call_log = args.call_log  # type: ignore[attr-defined]
     server.base_url = f"http://127.0.0.1:{args.port}"  # type: ignore[attr-defined]
     args.call_log.write_text("", encoding="utf-8")

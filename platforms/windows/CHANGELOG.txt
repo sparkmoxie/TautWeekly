@@ -3,6 +3,7 @@ TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 
 Unreleased
 ----------
+- treats sparse Tautulli hero metadata as optional during previews and test sends
 - accepts selected-library recently-added rows when Plex omits the redundant section ID
 - limits HOT NEW RELEASE to movies and falls back to Trending when no new movie exists
 - lists up to four most-watched movies and TV shows, omitting an empty TV card
