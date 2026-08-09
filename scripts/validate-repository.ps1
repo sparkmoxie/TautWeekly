@@ -21,7 +21,7 @@ function Add-Pass {
 }
 
 $required = @(
-    'README.md', 'LICENSE', 'SECURITY.md', 'CONTRIBUTING.md', 'CHANGELOG.md',
+    'README.md', 'LICENSE', 'SECURITY.md', 'CONTRIBUTING.md', 'CONTRIBUTORS.md', 'CHANGELOG.md',
     'CODE_OF_CONDUCT.md', 'THIRD_PARTY_NOTICES.md', '.gitignore', '.gitattributes',
     'ca_profile.xml', 'templates/tautweekly.xml',
     'platforms/windows/TautWeekly.ps1',
@@ -74,6 +74,38 @@ foreach ($relative in $required) {
     }
 }
 if ($failures.Count -eq 0) { Add-Pass "Required repository structure is present." }
+
+$readme = [IO.File]::ReadAllText((Join-Path $Root 'README.md'))
+$contributing = [IO.File]::ReadAllText((Join-Path $Root 'CONTRIBUTING.md'))
+$contributors = [IO.File]::ReadAllText((Join-Path $Root 'CONTRIBUTORS.md'))
+if (-not $readme.Contains('[Contributors](CONTRIBUTORS.md)')) {
+    Add-Failure 'README.md is missing its prominent contributor-attribution link.'
+}
+if (-not $contributing.Contains('[contributors ledger](CONTRIBUTORS.md)')) {
+    Add-Failure 'CONTRIBUTING.md is missing the contributor-attribution hierarchy.'
+}
+$contributorContract = @(
+    '[All Contributors](https://allcontributors.org/en/reference/)',
+    '| Contributor | Contribution | Evidence | Shipped correction |',
+    '`bug`',
+    '`enhancement`',
+    'https://github.com/Demonmeister',
+    'https://github.com/gianfelicevincenzo',
+    'https://github.com/Joloxx9',
+    'https://github.com/sparkmoxie/TautWeekly/issues/6',
+    'https://github.com/sparkmoxie/TautWeekly/issues/7',
+    'https://github.com/sparkmoxie/TautWeekly/issues/11',
+    'https://github.com/sparkmoxie/TautWeekly/issues/15',
+    'https://github.com/sparkmoxie/TautWeekly/issues/31'
+)
+foreach ($expected in $contributorContract) {
+    if (-not $contributors.Contains($expected)) {
+        Add-Failure "Contributor attribution is missing required structure or evidence: $expected"
+    }
+}
+if (-not ($failures | Where-Object { $_ -like '*contributor*' -or $_ -like '*Contributor*' })) {
+    Add-Pass 'Contributor attribution structure and evidence links are present.'
+}
 
 $forbiddenNames = @(
     'config.json', '.env', 'state.json', 'access-state.json',
