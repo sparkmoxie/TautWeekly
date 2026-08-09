@@ -98,7 +98,9 @@ $contributorContract = @(
     'https://github.com/sparkmoxie/TautWeekly/issues/7',
     'https://github.com/sparkmoxie/TautWeekly/issues/11',
     'https://github.com/sparkmoxie/TautWeekly/issues/15',
-    'https://github.com/sparkmoxie/TautWeekly/issues/31'
+    'https://github.com/sparkmoxie/TautWeekly/issues/31',
+    'https://github.com/sparkmoxie/TautWeekly/pull/36',
+    'https://github.com/sparkmoxie/TautWeekly/releases/tag/v0.6.2'
 )
 foreach ($expected in $contributorContract) {
     if (-not $contributors.Contains($expected)) {
