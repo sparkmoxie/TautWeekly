@@ -24,7 +24,8 @@ them locally; send controlled tests; then schedule production delivery.
 [Email States Preview](https://sparkmoxie.github.io/TautWeekly/examples/preview-all-00-INDEX.html) ·
 [Release downloads](#release-downloads) ·
 [Security](SECURITY.md) ·
-[Contributing](CONTRIBUTING.md)
+[Contributing](CONTRIBUTING.md) ·
+[Contributors](CONTRIBUTORS.md)
 
 </div>
 
