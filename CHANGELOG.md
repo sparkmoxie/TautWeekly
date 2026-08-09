@@ -6,6 +6,14 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-08-09
+
+### Fixed
+
+- Treated sparse Tautulli hero metadata fields as optional so recoverable direct
+  Plex 404 fallbacks cannot be followed by a strict-mode crash in previews or
+  test email delivery.
+
 ## [0.6.1] - 2026-08-09
 
 ### Changed

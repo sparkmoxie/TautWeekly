@@ -164,6 +164,8 @@ foreach ($archiveName in $expected.Keys) {
         Assert-True ($renderer.Contains('$params.section_id = $sectionId')) "$archiveName lacks server-side selected-library scoping."
         Assert-True ($renderer.Contains('$expectedSectionId = ([string]$ExpectedSectionId).Trim()')) "$archiveName lacks scoped recently-added row handling."
         Assert-True ($renderer.Contains('if ([string]::IsNullOrWhiteSpace($sectionId)) { return $true }')) "$archiveName rejects selected-library rows that omit redundant section metadata."
+        Assert-True ($renderer.Contains('Get-OptionalStringProperty -InputObject $meta -Name "title"')) "$archiveName does not treat sparse hero metadata as optional."
+        Assert-True (-not $renderer.Contains('[string]$meta.title')) "$archiveName retains strict direct access to optional hero title metadata."
         Assert-True ($renderer.Contains('Smtp-Transport.ps1')) "$archiveName does not load the explicit SMTP authentication transport."
         Assert-True ($renderer.Contains('Send-TautWeeklySmtpMessage')) "$archiveName does not route mail through the explicit SMTP transport."
         Assert-True ($renderer.Contains('function Get-StatsTvShowRowsHtml')) "$archiveName lacks grouped TV-show personal statistics."

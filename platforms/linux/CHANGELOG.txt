@@ -1,6 +1,7 @@
 TautWeekly for Plex native Linux platform changelog
 
 Unreleased
+- Treats sparse Tautulli hero metadata as optional during previews and test sends.
 - Accepts selected-library recently-added rows when Plex omits the redundant section ID.
 - Limits HOT NEW RELEASE to movies and falls back to Trending when no new movie exists.
 - Lists up to four most-watched movies and TV shows, omitting an empty TV card.
