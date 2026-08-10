@@ -12,6 +12,7 @@ if ([string]::IsNullOrWhiteSpace($Root)) { $Root = Split-Path -Parent $PSScriptR
 $Root = [IO.Path]::GetFullPath($Root)
 $fakeServer = Join-Path $Root 'scripts/test-support/fake-tautulli.py'
 $fakeSmtp = Join-Path $Root 'scripts/test-support/fake-smtp.py'
+$emailThemeAssertion = Join-Path $Root 'scripts/test-support/assert-email-theme.py'
 $headlessRunner = Join-Path $Root 'scripts/test-support/invoke-renderer-headless.ps1'
 $windowsPowerShell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
 $powerShell7 = Get-Command pwsh -ErrorAction SilentlyContinue
@@ -52,6 +53,7 @@ foreach ($engine in $engines) {
         $serverStdout = Join-Path $tempRoot 'server.stdout.txt'
         $serverStderr = Join-Path $tempRoot 'server.stderr.txt'
         $smtpCallLog = Join-Path $tempRoot 'smtp-calls.jsonl'
+        $smtpDataFile = Join-Path $tempRoot 'smtp-message.eml'
         $smtpReadyFile = Join-Path $tempRoot 'smtp-ready.txt'
         $smtpStdout = Join-Path $tempRoot 'smtp.stdout.txt'
         $smtpStderr = Join-Path $tempRoot 'smtp.stderr.txt'
@@ -86,7 +88,8 @@ foreach ($engine in $engines) {
                 $smtpPort = Get-FreeTcpPort
                 $smtpServer = Start-Process -FilePath $PythonPath -ArgumentList @(
                     '-u', $fakeSmtp, '--port', [string]$smtpPort,
-                    '--call-log', $smtpCallLog, '--ready-file', $smtpReadyFile
+                    '--call-log', $smtpCallLog, '--ready-file', $smtpReadyFile,
+                    '--data-file', $smtpDataFile
                 ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $smtpStdout -RedirectStandardError $smtpStderr
                 for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $smtpReadyFile); $attempt++) {
                     if ($smtpServer.HasExited) {
@@ -175,6 +178,27 @@ foreach ($engine in $engines) {
             Assert-True ((Get-ChildItem $outputRoot -Filter 'preview-all-*.html').Count -eq 7) "$($engine.Name)/$scenario did not generate all six states plus the index."
             $indexHtml = Get-Content $indexPath -Raw -Encoding UTF8
             $normalHtml = Get-Content $normalPath -Raw -Encoding UTF8
+            $previewThemeMarkers = @(
+                '<meta name="color-scheme" content="dark">',
+                '<meta name="supported-color-schemes" content="dark">',
+                ':root { color-scheme:dark only; supported-color-schemes:dark; }',
+                '@media (prefers-color-scheme: dark)',
+                'class="email-background"',
+                'bgcolor="#0f0f0f"',
+                'background-color:#0f0f0f'
+            )
+            $previewPaths = @(Get-ChildItem $outputRoot -Filter 'preview-all-*.html' | Where-Object { $_.Name -ne 'preview-all-00-INDEX.html' })
+            foreach ($previewPath in $previewPaths) {
+                $previewHtml = Get-Content $previewPath.FullName -Raw -Encoding UTF8
+                foreach ($marker in $previewThemeMarkers) {
+                    Assert-True ($previewHtml.Contains($marker)) "$($engine.Name)/$scenario $($previewPath.Name) lost dark-theme marker: $marker"
+                }
+                Assert-True (-not $previewHtml.Contains('background:#0f0f0f')) "$($engine.Name)/$scenario $($previewPath.Name) retained the outer background shorthand."
+                Assert-True (-not $previewHtml.Contains('background:#181818')) "$($engine.Name)/$scenario $($previewPath.Name) retained the card background shorthand."
+            }
+            Assert-True ($normalHtml.Contains('class="email-card"')) "$($engine.Name)/$scenario lost explicit dark card classes."
+            Assert-True ($normalHtml.Contains('bgcolor="#181818"')) "$($engine.Name)/$scenario lost the legacy dark card fallback."
+            Assert-True ($normalHtml.Contains('background-color:#181818')) "$($engine.Name)/$scenario lost the longhand dark card fallback."
             $expectedMode = if ($scenario -eq 'quiet' -or $scenario -in $deletedHistoryScenarios) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' }
             Assert-True ($indexHtml.Contains($expectedMode)) "$($engine.Name)/$scenario reported the wrong release mode."
             Assert-True ($normalHtml.Contains('Selected Movie')) "$($engine.Name)/$scenario lost the selected movie."
@@ -362,6 +386,9 @@ foreach ($engine in $engines) {
                 }
                 $smtpCommands = @(Get-Content $smtpCallLog | ForEach-Object { ($_ | ConvertFrom-Json).command })
                 Assert-True ('DATA' -in $smtpCommands) "$($engine.Name)/$scenario SendTest did not submit an SMTP message."
+                Assert-True (Test-Path $smtpDataFile) "$($engine.Name)/$scenario SendTest did not preserve the captured MIME message."
+                & $PythonPath $emailThemeAssertion $smtpDataFile
+                Assert-True ($LASTEXITCODE -eq 0) "$($engine.Name)/$scenario delivered HTML lost the dark email contract."
             }
 
             $executed++

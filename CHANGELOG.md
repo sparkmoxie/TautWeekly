@@ -6,6 +6,20 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-08-10
+
+### Fixed
+
+- Preserved the newsletter's single dark-first palette in Apple Mail by
+  declaring dark-only color-scheme support, and reinforced every maintained
+  renderer with explicit longhand backgrounds and table `bgcolor` fallbacks
+  for clients such as Gmail and Outlook that ignore or override scheme hints.
+  Reported by [@Demonmeister](https://github.com/Demonmeister) in
+  [#44](https://github.com/sparkmoxie/TautWeekly/issues/44).
+- Captured and decoded the integration test's delivered MIME message so the
+  preview variants and SMTP HTML must both retain the dark-mode metadata,
+  outer canvas, card colors, and compatibility fallbacks.
+
 ## [0.8.3] - 2026-08-10
 
 ### Fixed
