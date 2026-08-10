@@ -85,6 +85,12 @@ foreach ($relativePath in $rendererPaths) {
         $script:PosterDir = $posterProbeRoot
         $script:TautulliDefaultPosterHash = ''
         $script:posterProbeOutFile = ''
+        $script:posterProbeWarnings = New-Object System.Collections.Generic.List[string]
+
+        function Write-Log {
+            param([string]$Message, [string]$Level = 'INFO')
+            if ($Level -eq 'WARN') { $script:posterProbeWarnings.Add($Message) }
+        }
 
         function Build-TautulliUri {
             param([string]$Command, [hashtable]$Parameters = @{})
@@ -105,7 +111,8 @@ foreach ($relativePath in $rendererPaths) {
         }
 
         $posterHash = Get-TautulliDefaultPosterHash
-        Assert-True (-not [string]::IsNullOrWhiteSpace($posterHash)) "$relativePath could not fingerprint Tautulli's generic poster on this platform"
+        $probeWarningText = $script:posterProbeWarnings -join '; '
+        Assert-True (-not [string]::IsNullOrWhiteSpace($posterHash)) "$relativePath could not fingerprint Tautulli's generic poster on this platform: $probeWarningText"
         Assert-True (-not (Test-Path -LiteralPath $script:posterProbeOutFile)) "$relativePath did not clean up the generic-poster probe"
     }
     finally {
