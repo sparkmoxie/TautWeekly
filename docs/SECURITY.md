@@ -20,6 +20,13 @@ storage, and define a retention period.
 - If LAN binding is required, restrict inbound access with the host firewall.
 - Use HTTPS for remote Tautulli/Plex endpoints when your environment provides a
   trusted TLS reverse proxy.
+- Deleted-item recovery sends only Tautulli's retained exact media GUID and the
+  configured administrator/server Plex token to
+  `https://metadata.provider.plex.tv`. It sends no recipient identity, email,
+  or watch-history values and does not perform title searches.
+- Hosted artwork returned on a different origin is fetched without the Plex
+  token. The token is attached only to Plex server and Plex metadata-provider
+  requests.
 - Use SMTP STARTTLS and provider-specific application credentials.
 
 ## Delivery safeguards

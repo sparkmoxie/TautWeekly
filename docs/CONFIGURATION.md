@@ -14,10 +14,15 @@ setup is preferred.
 | `ApiKey` | Yes | Tautulli API key; treat as a secret |
 | `PlexWebUrl` | Yes | Destination for “Open Plex” links; defaults to the Plex web app |
 | `PlexServerUrl` | No | Direct Plex base URL for richer metadata and artwork |
-| `PlexToken` | No | Direct Plex token; treat as a secret |
+| `PlexToken` | No | Administrator/server Plex token for direct Plex access and exact-GUID deleted-item recovery; treat as a secret |
 
 TautWeekly for Plex's core activity flow uses Tautulli. Direct Plex access is optional
-and improves selected metadata and artwork paths.
+and improves selected metadata and artwork paths. When Plex has deleted an item
+but Tautulli still retains its history GUID, TautWeekly can use `PlexToken` to
+resolve that exact identifier through `https://metadata.provider.plex.tv` and
+cache available hosted artwork and metadata. It does not search by title or send
+recipient identity or watch-history values. If Plex returns an absolute artwork
+URL on another host, that host receives no Plex token.
 
 ## Branding and mail
 

@@ -19,6 +19,10 @@ $rendererPaths = @(
 
 $requiredFunctions = @(
     'Get-OptionalStringProperty',
+    'Convert-DesignRatingPercent',
+    'ConvertTo-DesignGenreList',
+    'Add-DesignRatingMetadata',
+    'Get-PlexHostedMetadataLookupPath',
     'Get-TautulliUser',
     'Get-TautulliUsers',
     'Safe-Int',
@@ -118,6 +122,7 @@ foreach ($relativePath in $rendererPaths) {
         watched_status  = 1
         percent_complete = 100
         rating_key      = 'movie-1'
+        guid            = 'plex://movie/movie-guid-1'
         title           = 'Movie One'
         year            = '2026'
     }
@@ -127,6 +132,7 @@ foreach ($relativePath in $rendererPaths) {
         watched_status         = 0
         percent_complete       = 50
         rating_key             = 'episode-1'
+        guid                   = 'plex://episode/episode-guid-1'
         grandparent_rating_key = 'show-1'
         grandparent_title      = 'Show One'
         parent_title           = 'Season 1'
@@ -140,6 +146,7 @@ foreach ($relativePath in $rendererPaths) {
     $oneMovie = Get-UserStats -History @($movie)
     Assert-True ($oneMovie.MovieItems -is [object[]]) "$relativePath collapsed one movie into a scalar"
     Assert-True ($oneMovie.MovieItems.Count -eq 1) "$relativePath lost the one-movie item"
+    Assert-True ($oneMovie.MovieItems[0].MetadataGuid -eq 'plex://movie/movie-guid-1') "$relativePath lost the retained movie metadata GUID"
     Assert-True ($oneMovie.EpisodeItems.Count -eq 0) "$relativePath created an unexpected episode"
     Assert-True ($oneMovie.TvShowItems.Count -eq 0) "$relativePath created an unexpected TV show"
 
@@ -148,8 +155,47 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($oneEpisode.EpisodeItems.Count -eq 1) "$relativePath lost the one-episode item"
     Assert-True ($oneEpisode.MovieItems.Count -eq 0) "$relativePath created an unexpected movie"
     Assert-True ($oneEpisode.TvShowItems.Count -eq 1) "$relativePath did not group the episode into one TV show"
+    Assert-True ($oneEpisode.TvShowItems[0].MetadataGuid -eq 'plex://episode/episode-guid-1') "$relativePath lost the representative episode GUID for TV artwork"
     Assert-True ($oneEpisode.TvShowItems[0].ShowTitle -eq 'Show One') "$relativePath lost the grouped TV show title"
     Assert-True ($oneEpisode.EpisodeItems[0].ImdbRating -eq '8.5') "$relativePath lost an available episode IMDb rating"
+
+    Assert-True ((Get-PlexHostedMetadataLookupPath -MetadataGuid 'plex://movie/5d123abc?lang=en' -MediaType 'movie') -eq '/library/metadata/5d123abc') "$relativePath did not normalize a retained Plex GUID"
+    Assert-True ((Get-PlexHostedMetadataLookupPath -MetadataGuid 'com.plexapp.agents.themoviedb://12345?lang=en' -MediaType 'movie') -eq '/library/metadata/matches?guid=tmdb%3A%2F%2F12345&type=1') "$relativePath did not normalize a legacy TMDB movie GUID"
+    Assert-True ([string]::IsNullOrWhiteSpace((Get-PlexHostedMetadataLookupPath -MetadataGuid 'com.plexapp.agents.thetvdb://999/1/2' -MediaType 'show'))) "$relativePath guessed from an unsupported legacy TVDB GUID"
+
+    function Write-Log { param([string]$Message, [string]$Level = 'INFO') }
+    function Get-DesignPlexMetadata { param([string]$RatingKey) return $null }
+    function Get-DesignRichExport {
+        param([string]$RatingKey, [string]$MediaType, [switch]$NeedLogo)
+        return [PSCustomObject]@{ RtCritic = ''; RtAudience = '' }
+    }
+    function Get-PlexHostedMetadata {
+        param([string]$MetadataGuid, [string]$MediaType)
+        Assert-True ($MetadataGuid -eq 'plex://movie/deleted-movie-guid') "$relativePath changed the retained GUID during hosted enrichment"
+        Assert-True ($MediaType -eq 'movie') "$relativePath used the wrong hosted metadata type"
+        return [PSCustomObject]@{
+            type = 'movie'
+            summary = 'Retained exact-GUID summary.'
+            year = '2024'
+            Genre = @([PSCustomObject]@{ tag = 'Mystery' }, [PSCustomObject]@{ tag = 'Drama' })
+            rating = '8.7'
+            ratingImage = 'rottentomatoes://image.rating.ripe'
+            audienceRating = '9.3'
+            audienceRatingImage = 'rottentomatoes://image.rating.upright'
+        }
+    }
+    $deletedMovieItem = [PSCustomObject]@{
+        RatingKey = 'deleted-movie'
+        MetadataGuid = 'plex://movie/deleted-movie-guid'
+        Type = 'movie'
+        Title = 'Deleted Movie'
+    }
+    Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @($deletedMovieItem); TV = @() })
+    Assert-True ($deletedMovieItem.Summary -eq 'Retained exact-GUID summary.') "$relativePath did not restore a deleted movie summary"
+    Assert-True ($deletedMovieItem.Year -eq '2024') "$relativePath did not restore a deleted movie year"
+    Assert-True (($deletedMovieItem.DesignGenres -join ',') -eq 'Mystery,Drama') "$relativePath did not restore deleted movie genres"
+    Assert-True ($deletedMovieItem.DesignRtCritic -eq '87') "$relativePath did not restore the deleted movie critic rating"
+    Assert-True ($deletedMovieItem.DesignRtAudience -eq '93') "$relativePath did not restore the deleted movie audience rating"
 
     $secondEpisode = [PSCustomObject]@{
         media_type             = 'episode'
@@ -264,6 +310,7 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($source -match 'width="42" height="42" alt="Movies watched"') "$relativePath does not render the movie GIF at the standard stat-icon size"
     Assert-True ($source -match 'width="42" height="42" alt="TV shows watched"') "$relativePath does not render the TV GIF at the standard stat-icon size"
     Assert-True ($source -notmatch '\$qualifyingPlayCount qualifying') "$relativePath retains qualifying-play copy in Total Watched"
+    Assert-True ($source -match '\$assetUri\.Scheme -ieq \$providerUri\.Scheme') "$relativePath can forward a Plex token across an artwork scheme change"
     Assert-True ($source.Contains('The real email layout, across every state.')) "$relativePath lost the Preview All headline"
     Assert-True ($source.Contains('Go ahead, shrink my window.')) "$relativePath lost the responsive Preview All subtitle"
 

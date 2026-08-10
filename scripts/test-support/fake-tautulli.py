@@ -16,7 +16,7 @@ def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     old = now - (30 * 86400)
     movie_added = now if scenario in ("active", "optional-hero-metadata") else old
     tv_added = now if scenario in ("active", "tv-only", "optional-hero-metadata") else old
-    return {
+    rows = {
         "10": [
             {
                 "section_id": "10",
@@ -64,6 +64,22 @@ def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
             }
         ],
     }
+    if scenario == "deleted-history-metadata":
+        rows["10"][0]["guid"] = "plex://movie/deletedmovieguid"
+        rows["20"][0]["guid"] = "plex://episode/deletedepisodeguid"
+        for field in (
+            "year",
+            "summary",
+            "rating",
+            "rating_image",
+            "audience_rating",
+            "audience_rating_image",
+            "genres",
+        ):
+            rows["10"][0].pop(field, None)
+        for field in ("year", "summary", "rating", "rating_image"):
+            rows["20"][0].pop(field, None)
+    return rows
 
 
 USERS = {
@@ -88,9 +104,9 @@ USERS = {
 }
 
 
-def history_rows(section_id: str) -> list[dict[str, object]]:
+def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
     if section_id == "10":
-        return [
+        rows = [
             {
                 "section_id": "10",
                 "media_type": "movie",
@@ -108,8 +124,13 @@ def history_rows(section_id: str) -> list[dict[str, object]]:
                 "group_count": 1,
             }
         ]
+        if scenario == "deleted-history-metadata":
+            rows[0]["guid"] = "plex://movie/deletedmovieguid"
+            for field in ("year", "summary", "rating", "audience_rating"):
+                rows[0].pop(field, None)
+        return rows
     if section_id == "20":
-        return [
+        rows = [
             {
                 "section_id": "20",
                 "media_type": "episode",
@@ -132,6 +153,32 @@ def history_rows(section_id: str) -> list[dict[str, object]]:
                 "rating_image": "imdb://image.rating",
             }
         ]
+        if scenario == "deleted-history-metadata":
+            rows[0]["guid"] = "plex://episode/deletedepisodeguid"
+            for field in ("year", "summary", "rating", "rating_image"):
+                rows[0].pop(field, None)
+            rows.append(
+                {
+                    "section_id": "20",
+                    "media_type": "episode",
+                    "rating_key": "viewer-deleted-episode",
+                    "grandparent_rating_key": "selected-show",
+                    "grandparent_title": "Selected Show",
+                    "parent_title": "Season 1",
+                    "title": "Viewer Deleted Episode",
+                    "year": "2026",
+                    "guid": "plex://episode/deletedepisodeguid",
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 1800,
+                    "watched_status": 1,
+                    "percent_complete": 100,
+                    "group_count": 1,
+                    "parent_media_index": 1,
+                    "media_index": 3,
+                }
+            )
+        return rows
     return [
         {
             "section_id": "99",
@@ -169,10 +216,103 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         query = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
         with self.server.call_log.open("a", encoding="utf-8") as handle:  # type: ignore[attr-defined]
-            handle.write(json.dumps({"path": parsed.path, "query": query}) + "\n")
+            handle.write(
+                json.dumps(
+                    {
+                        "path": parsed.path,
+                        "query": query,
+                        "has_plex_token": bool(self.headers.get("X-Plex-Token")),
+                    }
+                )
+                + "\n"
+            )
+
+        if parsed.path.startswith("/hosted/library/metadata/"):
+            metadata_id = parsed.path.rsplit("/", 1)[-1]
+            if not self.headers.get("X-Plex-Token"):
+                self.write_json({"error": "missing virtual Plex token"}, status=401)
+                return
+
+            if metadata_id == "deletedmovieguid":
+                self.write_json(
+                    {
+                        "MediaContainer": {
+                            "Metadata": [
+                                {
+                                    "type": "movie",
+                                    "guid": "plex://movie/deletedmovieguid",
+                                    "title": "Selected Movie",
+                                    "year": "2026",
+                                    "summary": "Hosted history movie summary.",
+                                    "thumb": f"http://localhost:{self.server.server_port}/hosted/deleted-movie.jpg",  # type: ignore[attr-defined]
+                                    "Genre": [
+                                        {"tag": "History Drama"},
+                                        {"tag": "Mystery"},
+                                        {"tag": "Archive"},
+                                    ],
+                                    "rating": "8.7",
+                                    "ratingImage": "rottentomatoes://image.rating.ripe",
+                                    "audienceRating": "9.3",
+                                    "audienceRatingImage": "rottentomatoes://image.rating.upright",
+                                }
+                            ]
+                        }
+                    }
+                )
+                return
+
+            if metadata_id == "deletedepisodeguid":
+                self.write_json(
+                    {
+                        "MediaContainer": {
+                            "Metadata": [
+                                {
+                                    "type": "episode",
+                                    "guid": "plex://episode/deletedepisodeguid",
+                                    "grandparentGuid": "plex://show/deletedshowguid",
+                                    "grandparentThumb": f"{self.server.base_url}/hosted/deleted-show.jpg",  # type: ignore[attr-defined]
+                                }
+                            ]
+                        }
+                    }
+                )
+                return
+
+            if metadata_id == "deletedshowguid":
+                self.write_json(
+                    {
+                        "MediaContainer": {
+                            "Metadata": [
+                                {
+                                    "type": "show",
+                                    "guid": "plex://show/deletedshowguid",
+                                    "title": "Selected Show",
+                                    "year": "2024",
+                                    "summary": "Hosted history show summary.",
+                                    "thumb": f"{self.server.base_url}/hosted/deleted-show.jpg",  # type: ignore[attr-defined]
+                                    "Genre": [{"tag": "Drama"}, {"tag": "Mystery"}],
+                                }
+                            ]
+                        }
+                    }
+                )
+                return
+
+            self.write_json({"MediaContainer": {"Metadata": []}})
+            return
+
+        if parsed.path in ("/hosted/deleted-movie.jpg", "/hosted/deleted-show.jpg"):
+            marker = b"MOVIE" if parsed.path.endswith("deleted-movie.jpg") else b"SHOW"
+            payload = b"\xff\xd8" + (marker * 160) + b"\xff\xd9"
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
 
         if parsed.path.startswith("/library/metadata/"):
-            if self.server.scenario == "optional-hero-metadata":  # type: ignore[attr-defined]
+            if self.server.scenario in ("optional-hero-metadata", "deleted-history-metadata"):  # type: ignore[attr-defined]
                 self.write_json({"error": "sanitized missing Plex metadata"}, status=404)
                 return
             self.write_json({"MediaContainer": {"size": 0, "Metadata": []}})
@@ -184,7 +324,8 @@ class Handler(BaseHTTPRequestHandler):
 
         command = query.get("cmd", "")
         if command == "pms_image_proxy":
-            payload = b"\xff\xd8" + (b"VIRTUAL-POSTER" * 48) + b"\xff\xd9"
+            marker = b"GENERIC-POSTER" if self.server.scenario == "deleted-history-metadata" else b"VIRTUAL-POSTER"  # type: ignore[attr-defined]
+            payload = b"\xff\xd8" + (marker * 48) + b"\xff\xd9"
             self.send_response(200)
             self.send_header("Content-Type", "image/jpeg")
             self.send_header("Content-Length", str(len(payload)))
@@ -220,7 +361,7 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if command == "get_history":
-            rows = history_rows(query.get("section_id", ""))
+            rows = history_rows(query.get("section_id", ""), self.server.scenario)  # type: ignore[attr-defined]
             user_id = query.get("user_id", "")
             if user_id:
                 rows = [row for row in rows if str(row.get("user_id", "")) == user_id]
@@ -240,6 +381,22 @@ class Handler(BaseHTTPRequestHandler):
             return
         if command == "get_metadata":
             key = query.get("rating_key", "")
+            if self.server.scenario == "deleted-history-metadata" and key in (  # type: ignore[attr-defined]
+                "selected-movie",
+                "selected-show",
+                "champion-episode",
+                "viewer-deleted-episode",
+            ):
+                self.write_json(
+                    {
+                        "response": {
+                            "result": "error",
+                            "message": "sanitized deleted Plex metadata",
+                            "data": {},
+                        }
+                    }
+                )
+                return
             is_episode = "episode" in key
             is_show = key.startswith("selected-show") and not is_episode
             if self.server.scenario == "optional-hero-metadata" and is_show:  # type: ignore[attr-defined]
@@ -286,7 +443,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument(
         "--scenario",
-        choices=("active", "quiet", "tv-only", "optional-hero-metadata"),
+        choices=("active", "quiet", "tv-only", "optional-hero-metadata", "deleted-history-metadata"),
         required=True,
     )
     parser.add_argument("--call-log", type=Path, required=True)

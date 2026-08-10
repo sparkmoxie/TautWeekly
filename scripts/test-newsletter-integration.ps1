@@ -40,7 +40,7 @@ foreach ($engine in $engines) {
         continue
     }
 
-    foreach ($scenario in @('active', 'quiet', 'tv-only', 'optional-hero-metadata')) {
+    foreach ($scenario in @('active', 'quiet', 'tv-only', 'optional-hero-metadata', 'deleted-history-metadata')) {
         $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-integration-' + [Guid]::NewGuid().ToString('N'))
         $appRoot = Join-Path $tempRoot 'app'
         $dataRoot = Join-Path $tempRoot 'data'
@@ -81,7 +81,7 @@ foreach ($engine in $engines) {
             $baseUrl = (Get-Content $readyFile -Raw).Trim()
 
             $smtpPort = 0
-            if ($scenario -eq 'optional-hero-metadata') {
+            if ($scenario -in @('optional-hero-metadata', 'deleted-history-metadata')) {
                 $smtpPort = Get-FreeTcpPort
                 $smtpServer = Start-Process -FilePath $PythonPath -ArgumentList @(
                     '-u', $fakeSmtp, '--port', [string]$smtpPort,
@@ -111,7 +111,7 @@ foreach ($engine in $engines) {
                 MaxMovies = 4
                 MaxTv = 4
             }
-            if ($scenario -eq 'optional-hero-metadata') {
+            if ($scenario -in @('optional-hero-metadata', 'deleted-history-metadata')) {
                 $configOverrides['SmtpHost'] = '127.0.0.1'
                 $configOverrides['SmtpPort'] = $smtpPort
                 $configOverrides['SmtpEnableSsl'] = $false
@@ -139,10 +139,14 @@ foreach ($engine in $engines) {
 
             $oldDataRoot = $env:TAUTWEEKLY_DATA_DIR
             $oldConfig = $env:TAUTWEEKLY_CONFIG
+            $oldMetadataProvider = $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL
             try {
                 if ($engine.Container) {
                     $env:TAUTWEEKLY_DATA_DIR = $dataRoot
                     $env:TAUTWEEKLY_CONFIG = $configPath
+                }
+                if ($scenario -eq 'deleted-history-metadata') {
+                    $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $baseUrl + '/hosted'
                 }
                 $process = Start-Process -FilePath $engine.Host -ArgumentList @(
                     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
@@ -153,6 +157,7 @@ foreach ($engine in $engines) {
             finally {
                 $env:TAUTWEEKLY_DATA_DIR = $oldDataRoot
                 $env:TAUTWEEKLY_CONFIG = $oldConfig
+                $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $oldMetadataProvider
             }
 
             if ($process.ExitCode -ne 0) {
@@ -165,7 +170,7 @@ foreach ($engine in $engines) {
             Assert-True ((Get-ChildItem $outputRoot -Filter 'preview-all-*.html').Count -eq 7) "$($engine.Name)/$scenario did not generate all six states plus the index."
             $indexHtml = Get-Content $indexPath -Raw -Encoding UTF8
             $normalHtml = Get-Content $normalPath -Raw -Encoding UTF8
-            $expectedMode = if ($scenario -eq 'quiet') { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' }
+            $expectedMode = if ($scenario -in @('quiet', 'deleted-history-metadata')) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' }
             Assert-True ($indexHtml.Contains($expectedMode)) "$($engine.Name)/$scenario reported the wrong release mode."
             Assert-True ($normalHtml.Contains('Selected Movie')) "$($engine.Name)/$scenario lost the selected movie."
             Assert-True ($normalHtml.Contains('Selected Show')) "$($engine.Name)/$scenario lost the selected TV show."
@@ -175,13 +180,29 @@ foreach ($engine in $engines) {
             Assert-True ($normalHtml.Contains('1 TV show')) "$($engine.Name)/$scenario lost the unique TV-show breakdown."
             Assert-True (-not $normalHtml.Contains('0 movies')) "$($engine.Name)/$scenario rendered an empty Binge Champion movie category."
             Assert-True (-not $normalHtml.Contains('qualifying plays')) "$($engine.Name)/$scenario retained qualifying-play copy in Total Watched."
-            Assert-True (-not $normalHtml.Contains('TV SHOWS WATCHED')) "$($engine.Name)/$scenario rendered an empty TV stats card."
+            if ($scenario -ne 'deleted-history-metadata') {
+                Assert-True (-not $normalHtml.Contains('TV SHOWS WATCHED')) "$($engine.Name)/$scenario rendered an empty TV stats card."
+            }
 
             if ($scenario -eq 'tv-only') {
                 Assert-True ($normalHtml.Contains('0 NEW MOVIES') -and $normalHtml.Contains('1 TV TITLE')) "$($engine.Name)/$scenario reported the wrong release-title counts."
                 Assert-True ($normalHtml.Contains('TRENDING THIS WEEK')) "$($engine.Name)/$scenario did not promote Trending into the hero."
                 Assert-True (-not $normalHtml.Contains('HOT NEW RELEASE')) "$($engine.Name)/$scenario promoted a TV release as HOT NEW RELEASE."
                 Assert-True (([regex]::Matches($normalHtml, 'Selected Show')).Count -ge 2) "$($engine.Name)/$scenario removed the TV release after using Trending as the hero."
+            }
+
+            if ($scenario -eq 'deleted-history-metadata') {
+                Assert-True ($normalHtml.Contains('TV SHOWS WATCHED')) "$($engine.Name)/$scenario did not render the deleted-history TV stats card."
+                Assert-True ($normalHtml.Contains('Hosted history show summary.')) "$($engine.Name)/$scenario did not restore the deleted TV summary."
+                Assert-True ($normalHtml.Contains('History Drama, Mystery, and more')) "$($engine.Name)/$scenario did not restore deleted movie genres."
+                Assert-True ($normalHtml.Contains('87%') -and $normalHtml.Contains('93%')) "$($engine.Name)/$scenario did not restore deleted movie ratings."
+                Assert-True ($normalHtml.Contains('posters/poster_selected-movie.jpg')) "$($engine.Name)/$scenario did not render the recovered movie poster."
+                Assert-True ($normalHtml.Contains('posters/poster_selected-show.jpg')) "$($engine.Name)/$scenario did not render the recovered TV poster."
+
+                $moviePoster = Join-Path (Join-Path $outputRoot 'posters') 'poster_selected-movie.jpg'
+                $showPoster = Join-Path (Join-Path $outputRoot 'posters') 'poster_selected-show.jpg'
+                Assert-True ((Test-Path $moviePoster) -and (Get-Item $moviePoster).Length -gt 512) "$($engine.Name)/$scenario did not persist the recovered movie poster."
+                Assert-True ((Test-Path $showPoster) -and (Get-Item $showPoster).Length -gt 512) "$($engine.Name)/$scenario did not persist the recovered TV poster."
             }
 
             $calls = @(Get-Content $callLog | ForEach-Object { $_ | ConvertFrom-Json })
@@ -195,7 +216,19 @@ foreach ($engine in $engines) {
                 [string]$_.query.section_id -notin @('10', '20')
             }).Count -eq 0) "$($engine.Name)/$scenario issued an unscoped/private media query."
 
-            if ($scenario -eq 'optional-hero-metadata') {
+            if ($scenario -eq 'deleted-history-metadata') {
+                $hostedCalls = @($calls | Where-Object { [string]$_.path -like '/hosted/library/metadata/*' })
+                Assert-True (@($hostedCalls | Where-Object { -not $_.has_plex_token }).Count -eq 0) "$($engine.Name)/$scenario called hosted metadata without the administrator Plex token."
+                Assert-True (@($hostedCalls | Where-Object { [string]$_.path -eq '/hosted/library/metadata/deletedmovieguid' }).Count -gt 0) "$($engine.Name)/$scenario did not resolve the retained movie GUID."
+                Assert-True (@($hostedCalls | Where-Object { [string]$_.path -eq '/hosted/library/metadata/deletedepisodeguid' }).Count -gt 0) "$($engine.Name)/$scenario did not resolve the retained episode GUID."
+                Assert-True (@($hostedCalls | Where-Object { [string]$_.path -eq '/hosted/library/metadata/deletedshowguid' }).Count -gt 0) "$($engine.Name)/$scenario did not promote the retained episode GUID to show metadata."
+                Assert-True (@($calls | Where-Object { [string]$_.path -match 'private' }).Count -eq 0) "$($engine.Name)/$scenario leaked a private-library identifier to hosted metadata."
+                $externalPosterCalls = @($calls | Where-Object { [string]$_.path -eq '/hosted/deleted-movie.jpg' })
+                Assert-True ($externalPosterCalls.Count -gt 0) "$($engine.Name)/$scenario did not fetch the external hosted movie poster."
+                Assert-True (@($externalPosterCalls | Where-Object { $_.has_plex_token }).Count -eq 0) "$($engine.Name)/$scenario forwarded the Plex token to an external poster host."
+            }
+
+            if ($scenario -in @('optional-hero-metadata', 'deleted-history-metadata')) {
                 $previewLog = Get-Content $stdout -Raw
                 Assert-True ($previewLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario did not exercise the recoverable direct Plex 404 fallback."
                 Assert-True ($normalHtml.Contains('Selected Show')) "$($engine.Name)/$scenario lost the global-history title fallback for sparse hero metadata."
@@ -224,10 +257,16 @@ foreach ($engine in $engines) {
 
                 $oldDataRoot = $env:TAUTWEEKLY_DATA_DIR
                 $oldConfig = $env:TAUTWEEKLY_CONFIG
+                $oldMetadataProvider = $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL
                 try {
                     if ($engine.Container) {
                         $env:TAUTWEEKLY_DATA_DIR = $dataRoot
                         $env:TAUTWEEKLY_CONFIG = $configPath
+                    }
+                    if ($scenario -eq 'deleted-history-metadata') {
+                        Remove-Item -LiteralPath (Join-Path $outputRoot 'posters') -Recurse -Force -ErrorAction SilentlyContinue
+                        New-Item -ItemType Directory -Force -Path (Join-Path $outputRoot 'posters') | Out-Null
+                        $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $baseUrl + '/hosted'
                     }
                     $sendProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
                         '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
@@ -238,6 +277,7 @@ foreach ($engine in $engines) {
                 finally {
                     $env:TAUTWEEKLY_DATA_DIR = $oldDataRoot
                     $env:TAUTWEEKLY_CONFIG = $oldConfig
+                    $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $oldMetadataProvider
                 }
                 if ($sendProcess.ExitCode -ne 0) {
                     throw "$($engine.Name)/$scenario SendTest failed ($($sendProcess.ExitCode)).`nSTDOUT:`n$(Get-Content $sendStdout -Raw)`nSTDERR:`n$(Get-Content $sendStderr -Raw)"
@@ -245,6 +285,10 @@ foreach ($engine in $engines) {
                 $sendLog = Get-Content $sendStdout -Raw
                 Assert-True ($sendLog.Contains('Test email sent successfully.')) "$($engine.Name)/$scenario SendTest did not complete delivery."
                 Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
+                if ($scenario -eq 'deleted-history-metadata') {
+                    Assert-True ($sendLog.Contains('Recovered deleted Plex movie history artwork')) "$($engine.Name)/$scenario SendTest did not recover deleted movie artwork."
+                    Assert-True ($sendLog.Contains('Recovered deleted Plex show history artwork')) "$($engine.Name)/$scenario SendTest did not recover deleted TV artwork."
+                }
                 $smtpCommands = @(Get-Content $smtpCallLog | ForEach-Object { ($_ | ConvertFrom-Json).command })
                 Assert-True ('DATA' -in $smtpCommands) "$($engine.Name)/$scenario SendTest did not submit an SMTP message."
             }
