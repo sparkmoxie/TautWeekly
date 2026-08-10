@@ -4276,6 +4276,53 @@ function Get-PlexHostedMetadataLookupPath {
         "&type=" + $providerType
 }
 
+function Get-PlexHostedMetadataMatchPayload {
+    param(
+        [string]$MetadataGuid,
+        [ValidateSet("movie", "show")]
+        [string]$MediaType,
+        [string]$LookupPath
+    )
+
+    if ([string]::IsNullOrWhiteSpace($MetadataGuid) -or [string]::IsNullOrWhiteSpace($LookupPath)) { return $null }
+
+    $exactGuid = ""
+    $providerType = 0
+    if ($LookupPath -match '^/library/metadata/matches\?guid=(?<guid>[^&]+)&type=(?<type>[12])$') {
+        $exactGuid = [Uri]::UnescapeDataString([string]$Matches.guid)
+        $providerType = [int]$Matches.type
+    }
+    elseif ($MetadataGuid.Trim() -match '(?i)^plex://(?<kind>movie|show|season|episode)/(?<id>[a-z0-9][a-z0-9_-]*)(?:\?.*)?$') {
+        $kind = ([string]$Matches.kind).ToLowerInvariant()
+        $exactGuid = "plex://" + $kind + "/" + [string]$Matches.id
+        $providerType = switch ($kind) {
+            "movie" { 1 }
+            "show" { 2 }
+            "season" { 3 }
+            "episode" { 4 }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($exactGuid) -or $providerType -eq 0) { return $null }
+    return [ordered]@{ guid = $exactGuid; type = $providerType }
+}
+
+function Get-PlexHostedMetadataItemFromResponse {
+    param([object]$Response)
+
+    if ($null -eq $Response) { return $null }
+
+    $containerProperty = $Response.PSObject.Properties["MediaContainer"]
+    if ($null -eq $containerProperty -or $null -eq $containerProperty.Value) { return $null }
+
+    $metadataProperty = $containerProperty.Value.PSObject.Properties["Metadata"]
+    if ($null -eq $metadataProperty) { return $null }
+
+    $rows = @($metadataProperty.Value)
+    if ($rows.Count -eq 0) { return $null }
+    return $rows[0]
+}
+
 function Get-PlexHostedMetadata {
     param(
         [string]$MetadataGuid,
@@ -4296,6 +4343,7 @@ function Get-PlexHostedMetadata {
         $script:PlexHostedMetadataCache[$cacheKey] = $null
         return $null
     }
+    $matchPayload = Get-PlexHostedMetadataMatchPayload -MetadataGuid $MetadataGuid -MediaType $MediaType -LookupPath $lookupPath
 
     $ctx = Get-DesignPlexContext
     $token = Get-OptionalStringProperty -InputObject $ctx -Name "Token"
@@ -4315,19 +4363,36 @@ function Get-PlexHostedMetadata {
 
     $metadata = $null
     $requestCompleted = $false
+    $postRetryAttempted = $false
     try {
+        $providerBaseUrl = Get-PlexMetadataProviderBaseUrl
         $raw = Invoke-RestMethod `
-            -Uri ((Get-PlexMetadataProviderBaseUrl) + $lookupPath) `
+            -Uri ($providerBaseUrl + $lookupPath) `
             -Headers $headers `
             -Method Get `
             -TimeoutSec 60
         $requestCompleted = $true
+        $metadata = Get-PlexHostedMetadataItemFromResponse -Response $raw
 
-        if ($null -ne $raw -and $null -ne $raw.PSObject.Properties["MediaContainer"]) {
-            $container = $raw.MediaContainer
-            if ($null -ne $container.PSObject.Properties["Metadata"]) {
-                $rows = @($container.Metadata)
-                if ($rows.Count -gt 0) { $metadata = $rows[0] }
+        # Plex's hosted endpoint historically accepted modern identifiers directly
+        # and external identifiers as GET query parameters. The current provider
+        # contract uses a JSON POST body. Retry only an empty supported exact-ID
+        # result, and carry no title or other search hints across this privacy boundary.
+        if ($null -eq $metadata -and $null -ne $matchPayload) {
+            $matchBody = $matchPayload | ConvertTo-Json -Compress
+            $postRetryAttempted = $true
+            $requestCompleted = $false
+            $raw = Invoke-RestMethod `
+                -Uri ($providerBaseUrl + "/library/metadata/matches") `
+                -Headers $headers `
+                -Method Post `
+                -Body $matchBody `
+                -ContentType "application/json" `
+                -TimeoutSec 60
+            $requestCompleted = $true
+            $metadata = Get-PlexHostedMetadataItemFromResponse -Response $raw
+            if ($null -ne $metadata) {
+                Write-Log "Plex hosted metadata recovered an exact $MediaType match through the provider POST contract."
             }
         }
     }
@@ -4336,7 +4401,8 @@ function Get-PlexHostedMetadata {
     }
 
     if ($requestCompleted -and $null -eq $metadata) {
-        Write-Log "Plex hosted metadata recovery returned no exact match for the retained $MediaType GUID." "WARN"
+        $attemptDescription = if ($postRetryAttempted) { "query and provider POST attempts" } else { "the supported request" }
+        Write-Log "Plex hosted metadata recovery returned no exact match for the retained $MediaType GUID after $attemptDescription." "WARN"
     }
 
     if ($null -ne $metadata -and $MediaType -eq "show") {

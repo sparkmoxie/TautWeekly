@@ -167,6 +167,7 @@ foreach ($engine in $engines) {
             if ($process.ExitCode -ne 0) {
                 throw "$($engine.Name)/$scenario renderer failed ($($process.ExitCode)).`nSTDOUT:`n$(Get-Content $stdout -Raw)`nSTDERR:`n$(Get-Content $stderr -Raw)"
             }
+            $previewLog = Get-Content $stdout -Raw
 
             $indexPath = Join-Path $outputRoot 'preview-all-00-INDEX.html'
             $normalPath = Join-Path $outputRoot 'preview-all-04-normal-newsletter.html'
@@ -196,6 +197,8 @@ foreach ($engine in $engines) {
             }
 
             if ($scenario -in $deletedHistoryScenarios) {
+                Assert-True ($previewLog.Contains('recovered an exact movie match through the provider POST contract')) "$($engine.Name)/$scenario PreviewAll did not report the provider-contract recovery."
+                Assert-True ($previewLog.Contains('recovered an exact show match through the provider POST contract')) "$($engine.Name)/$scenario PreviewAll did not report the TV provider-contract recovery."
                 Assert-True ($normalHtml.Contains('TV SHOWS WATCHED')) "$($engine.Name)/$scenario did not render the deleted-history TV stats card."
                 Assert-True ($normalHtml.Contains('Hosted history show summary.')) "$($engine.Name)/$scenario did not restore the deleted TV summary."
                 Assert-True ($normalHtml.Contains('History Drama, Mystery, and more')) "$($engine.Name)/$scenario did not restore deleted movie genres."
@@ -229,23 +232,48 @@ foreach ($engine in $engines) {
                 $hostedCalls = @($calls | Where-Object { [string]$_.path -like '/hosted/library/metadata/*' })
                 Assert-True (@($hostedCalls | Where-Object { -not $_.has_plex_token }).Count -eq 0) "$($engine.Name)/$scenario called hosted metadata without the administrator Plex token."
                 if ($scenario -eq 'deleted-history-legacy-guid') {
-                    $legacyMovieCalls = @($hostedCalls | Where-Object {
+                    $legacyMovieQueryCalls = @($hostedCalls | Where-Object {
+                        [string]$_.method -eq 'GET' -and
                         [string]$_.path -eq '/hosted/library/metadata/matches' -and
                         [string]$_.query.guid -eq 'tmdb://12345' -and
                         [string]$_.query.type -eq '1'
                     })
-                    $legacyShowCalls = @($hostedCalls | Where-Object {
+                    $legacyShowQueryCalls = @($hostedCalls | Where-Object {
+                        [string]$_.method -eq 'GET' -and
                         [string]$_.path -eq '/hosted/library/metadata/matches' -and
                         [string]$_.query.guid -eq 'tvdb://999' -and
                         [string]$_.query.type -eq '2'
                     })
-                    Assert-True ($legacyMovieCalls.Count -gt 0) "$($engine.Name)/$scenario did not resolve the exact legacy TMDB movie GUID."
-                    Assert-True ($legacyShowCalls.Count -gt 0) "$($engine.Name)/$scenario did not reduce the exact legacy TVDB episode GUID to its show identifier."
+                    $legacyMoviePostCalls = @($hostedCalls | Where-Object {
+                        [string]$_.method -eq 'POST' -and
+                        [string]$_.path -eq '/hosted/library/metadata/matches' -and
+                        [string]$_.body.guid -eq 'tmdb://12345' -and
+                        [int]$_.body.type -eq 1
+                    })
+                    $legacyShowPostCalls = @($hostedCalls | Where-Object {
+                        [string]$_.method -eq 'POST' -and
+                        [string]$_.path -eq '/hosted/library/metadata/matches' -and
+                        [string]$_.body.guid -eq 'tvdb://999' -and
+                        [int]$_.body.type -eq 2
+                    })
+                    Assert-True ($legacyMovieQueryCalls.Count -gt 0) "$($engine.Name)/$scenario did not preserve the compatible exact TMDB query attempt."
+                    Assert-True ($legacyShowQueryCalls.Count -gt 0) "$($engine.Name)/$scenario did not preserve the compatible exact TVDB query attempt."
+                    Assert-True ($legacyMoviePostCalls.Count -gt 0) "$($engine.Name)/$scenario did not recover the exact legacy TMDB movie GUID through the provider POST contract."
+                    Assert-True ($legacyShowPostCalls.Count -gt 0) "$($engine.Name)/$scenario did not recover the exact legacy TVDB show GUID through the provider POST contract."
+                    Assert-True (@(($legacyMoviePostCalls + $legacyShowPostCalls) | Where-Object { @($_.body.PSObject.Properties).Count -ne 2 }).Count -eq 0) "$($engine.Name)/$scenario added title or other search hints to the exact-match POST body."
                 }
                 else {
-                    Assert-True (@($hostedCalls | Where-Object { [string]$_.path -eq '/hosted/library/metadata/deletedmovieguid' }).Count -gt 0) "$($engine.Name)/$scenario did not resolve the retained movie GUID."
-                    Assert-True (@($hostedCalls | Where-Object { [string]$_.path -eq '/hosted/library/metadata/deletedepisodeguid' }).Count -gt 0) "$($engine.Name)/$scenario did not resolve the retained episode GUID."
-                    Assert-True (@($hostedCalls | Where-Object { [string]$_.path -eq '/hosted/library/metadata/deletedshowguid' }).Count -gt 0) "$($engine.Name)/$scenario did not promote the retained episode GUID to show metadata."
+                    Assert-True (@($hostedCalls | Where-Object { [string]$_.method -eq 'GET' -and [string]$_.path -eq '/hosted/library/metadata/deletedmovieguid' }).Count -gt 0) "$($engine.Name)/$scenario did not preserve the direct retained movie GUID attempt."
+                    Assert-True (@($hostedCalls | Where-Object { [string]$_.method -eq 'GET' -and [string]$_.path -eq '/hosted/library/metadata/deletedepisodeguid' }).Count -gt 0) "$($engine.Name)/$scenario did not preserve the direct retained episode GUID attempt."
+                    Assert-True (@($hostedCalls | Where-Object { [string]$_.method -eq 'GET' -and [string]$_.path -eq '/hosted/library/metadata/deletedshowguid' }).Count -gt 0) "$($engine.Name)/$scenario did not preserve the direct retained show GUID attempt."
+                    $modernPostCalls = @($hostedCalls | Where-Object {
+                        [string]$_.method -eq 'POST' -and
+                        [string]$_.path -eq '/hosted/library/metadata/matches'
+                    })
+                    Assert-True (@($modernPostCalls | Where-Object { [string]$_.body.guid -eq 'plex://movie/deletedmovieguid' -and [int]$_.body.type -eq 1 }).Count -gt 0) "$($engine.Name)/$scenario did not recover the modern movie GUID through the provider POST contract."
+                    Assert-True (@($modernPostCalls | Where-Object { [string]$_.body.guid -eq 'plex://episode/deletedepisodeguid' -and [int]$_.body.type -eq 4 }).Count -gt 0) "$($engine.Name)/$scenario did not preserve the modern episode type through the provider POST contract."
+                    Assert-True (@($modernPostCalls | Where-Object { [string]$_.body.guid -eq 'plex://show/deletedshowguid' -and [int]$_.body.type -eq 2 }).Count -gt 0) "$($engine.Name)/$scenario did not promote the modern episode GUID to exact show metadata."
+                    Assert-True (@($modernPostCalls | Where-Object { @($_.body.PSObject.Properties).Count -ne 2 }).Count -eq 0) "$($engine.Name)/$scenario added title or other search hints to a modern exact-match POST body."
                 }
                 Assert-True (@($calls | Where-Object { [string]$_.path -match 'private' }).Count -eq 0) "$($engine.Name)/$scenario leaked a private-library identifier to hosted metadata."
                 $watchCalls = @($calls | Where-Object { [string]$_.path -like '/watch/*' })
@@ -319,6 +347,8 @@ foreach ($engine in $engines) {
                 Assert-True ($sendLog.Contains('Test email sent successfully.')) "$($engine.Name)/$scenario SendTest did not complete delivery."
                 Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
                 if ($scenario -in $deletedHistoryScenarios) {
+                    Assert-True ($sendLog.Contains('recovered an exact movie match through the provider POST contract')) "$($engine.Name)/$scenario SendTest did not report the provider-contract recovery."
+                    Assert-True ($sendLog.Contains('recovered an exact show match through the provider POST contract')) "$($engine.Name)/$scenario SendTest did not report the TV provider-contract recovery."
                     Assert-True ($sendLog.Contains('Recovered deleted Plex movie history artwork')) "$($engine.Name)/$scenario SendTest did not recover deleted movie artwork."
                     Assert-True ($sendLog.Contains('Recovered deleted Plex show history artwork')) "$($engine.Name)/$scenario SendTest did not recover deleted TV artwork."
                 }
