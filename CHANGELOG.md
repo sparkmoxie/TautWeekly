@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-10
+
 ### Fixed
 
 - Recovered posters, summaries, genres, years, movie Rotten Tomatoes ratings,
