@@ -241,6 +241,7 @@ class Handler(BaseHTTPRequestHandler):
                                 {
                                     "type": "movie",
                                     "guid": "plex://movie/deletedmovieguid",
+                                    "slug": "selected-movie",
                                     "title": "Selected Movie",
                                     "year": "2026",
                                     "summary": "Hosted history movie summary.",
@@ -250,10 +251,6 @@ class Handler(BaseHTTPRequestHandler):
                                         {"tag": "Mystery"},
                                         {"tag": "Archive"},
                                     ],
-                                    "rating": "8.7",
-                                    "ratingImage": "rottentomatoes://image.rating.ripe",
-                                    "audienceRating": "9.3",
-                                    "audienceRatingImage": "rottentomatoes://image.rating.upright",
                                 }
                             ]
                         }
@@ -286,13 +283,12 @@ class Handler(BaseHTTPRequestHandler):
                                 {
                                     "type": "show",
                                     "guid": "plex://show/deletedshowguid",
+                                    "slug": "selected-show",
                                     "title": "Selected Show",
                                     "year": "2024",
                                     "summary": "Hosted history show summary.",
                                     "thumb": f"{self.server.base_url}/hosted/deleted-show.jpg",  # type: ignore[attr-defined]
                                     "Genre": [{"tag": "Drama"}, {"tag": "Mystery"}],
-                                    "rating": "8.4",
-                                    "ratingImage": "imdb://image.rating",
                                 }
                             ]
                         }
@@ -301,6 +297,35 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             self.write_json({"MediaContainer": {"Metadata": []}})
+            return
+
+        if parsed.path == "/watch/movie/selected-movie":
+            payload = (
+                '<div data-testid="metadata-ratings">'
+                '<span title="87% critic rating on Rotten Tomatoes">87%</span>'
+                '<span title="93% audience rating on Rotten Tomatoes">93%</span>'
+                '<span title="8.1 audience rating on IMDb">8.1</span>'
+                "</div>"
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+
+        if parsed.path == "/watch/show/selected-show":
+            payload = (
+                '<div data-testid="metadata-ratings">'
+                '<span title="8.4 audience rating on IMDb">8.4</span>'
+                '<span title="99% critic rating on Rotten Tomatoes">99%</span>'
+                "</div>"
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
             return
 
         if parsed.path in ("/hosted/deleted-movie.jpg", "/hosted/deleted-show.jpg"):

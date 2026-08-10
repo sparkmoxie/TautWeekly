@@ -23,6 +23,8 @@ $requiredFunctions = @(
     'ConvertTo-DesignGenreList',
     'Add-DesignRatingMetadata',
     'Get-PlexHostedMetadataLookupPath',
+    'Get-PlexWatchBaseUrl',
+    'Get-PlexWatchRatings',
     'Get-TautulliDefaultPosterHash',
     'Get-TautulliUser',
     'Get-TautulliUsers',
@@ -35,6 +37,7 @@ $requiredFunctions = @(
     'Get-ConfiguredPlexWebUrl',
     'Get-ConfiguredDeliveryDay',
     'Get-UserStats',
+    'Add-UserStatsMediaMetadata',
     'Get-HotNewRelease',
     'Get-DynamicPreheader',
     'Build-PlainText'
@@ -123,6 +126,37 @@ foreach ($relativePath in $rendererPaths) {
     }
     finally {
         Remove-Item -LiteralPath $posterProbeRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    $script:PlexWatchRatingCache = @{}
+    $script:plexWatchRequestCount = 0
+    $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL = 'http://127.0.0.1:32123/watch'
+    function Invoke-WebRequest {
+        param(
+            [switch]$UseBasicParsing,
+            [string]$Uri,
+            [hashtable]$Headers,
+            [int]$TimeoutSec
+        )
+        Assert-True ($Uri -eq 'http://127.0.0.1:32123/watch/movie/deleted-movie') "$relativePath did not use the exact validated Plex slug"
+        Assert-True (-not $Headers.ContainsKey('X-Plex-Token')) "$relativePath forwarded a Plex token to the public rating page"
+        Assert-True ([string]$Headers['Accept-Language'] -eq 'en-US,en;q=0.9') "$relativePath did not request stable English provider labels"
+        $script:plexWatchRequestCount++
+        return [PSCustomObject]@{
+            Content = '<div data-testid="metadata-ratings"><span title="53% critic rating on Rotten Tomatoes">53%</span><span title="40% audience rating on Rotten Tomatoes">40%</span><span title="5.4 audience rating on IMDb">5.4</span></div>'
+        }
+    }
+    try {
+        $watchRatings = Get-PlexWatchRatings -Slug 'deleted-movie' -MediaType 'movie'
+        $cachedWatchRatings = Get-PlexWatchRatings -Slug 'deleted-movie' -MediaType 'movie'
+        Assert-True ($watchRatings.RtCritic -eq '53' -and $watchRatings.RtAudience -eq '40') "$relativePath did not parse provider-labelled RT ratings"
+        Assert-True ($watchRatings.Imdb -eq '5.4') "$relativePath did not parse a provider-labelled IMDb rating"
+        Assert-True ($cachedWatchRatings.RtCritic -eq '53' -and $script:plexWatchRequestCount -eq 1) "$relativePath did not cache public Plex ratings"
+        $unsafeSlugRatings = Get-PlexWatchRatings -Slug '../private-title' -MediaType 'movie'
+        Assert-True ([string]::IsNullOrWhiteSpace($unsafeSlugRatings.RtCritic) -and $script:plexWatchRequestCount -eq 1) "$relativePath accepted an unsafe public-rating slug"
+    }
+    finally {
+        Remove-Item Env:TAUTWEEKLY_TEST_PLEX_WATCH_URL -ErrorAction SilentlyContinue
     }
 
     $script:Config = [PSCustomObject]@{
@@ -267,6 +301,19 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ([string]::IsNullOrWhiteSpace($deletedShowItem.DesignRtCritic)) "$relativePath mislabeled a TV IMDb rating as Rotten Tomatoes"
     Assert-True ([string]::IsNullOrWhiteSpace($deletedShowItem.DesignRtAudience)) "$relativePath invented a TV Rotten Tomatoes audience rating"
 
+    $script:statsMetadataInput = $null
+    function Add-DesignRatingMetadata {
+        param([object]$ReleaseData)
+        $script:statsMetadataInput = $ReleaseData
+    }
+    Add-UserStatsMediaMetadata -Stats ([PSCustomObject]@{
+        MovieItems  = @($deletedMovieItem)
+        TvShowItems = @($deletedShowItem)
+    })
+    Assert-True ($null -ne $script:statsMetadataInput) "$relativePath skipped personal-stat metadata enrichment"
+    Assert-True (@($script:statsMetadataInput.Movies).Count -eq 1) "$relativePath lost watched movies during personal-stat enrichment"
+    Assert-True (@($script:statsMetadataInput.TV).Count -eq 1) "$relativePath omitted watched TV shows from IMDb enrichment"
+
     $secondEpisode = [PSCustomObject]@{
         media_type             = 'episode'
         play_duration          = 3600
@@ -379,6 +426,7 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($source -match 'Select-Object -First 4') "$relativePath does not cap personal title lists at four"
     Assert-True ($source -match 'width="42" height="42" alt="Movies watched"') "$relativePath does not render the movie GIF at the standard stat-icon size"
     Assert-True ($source -match 'width="42" height="42" alt="TV shows watched"') "$relativePath does not render the TV GIF at the standard stat-icon size"
+    Assert-True ($source -match 'Get-OptionalStringProperty -InputObject \$item -Name "DesignImdbRating"') "$relativePath does not render enriched TV IMDb ratings in personal stats"
     Assert-True ($source -notmatch '\$qualifyingPlayCount qualifying') "$relativePath retains qualifying-play copy in Total Watched"
     Assert-True ($source -match '\$assetUri\.Scheme -ieq \$providerUri\.Scheme') "$relativePath can forward a Plex token across an artwork scheme change"
     Assert-True ($source.Contains('The real email layout, across every state.')) "$relativePath lost the Preview All headline"

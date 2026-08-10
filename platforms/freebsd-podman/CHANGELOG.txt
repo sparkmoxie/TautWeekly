@@ -2,6 +2,8 @@ TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
 - Fixes deleted-history poster recovery on Unix by using a portable generic-poster probe.
+- Restores IMDb ratings inside watched-TV personal statistics, including deleted-history shows.
+- Restores missing movie RT and TV IMDb scores from Plex's exact tokenless public rating page.
 - Recovers deleted Plex history posters and metadata from Tautulli's retained exact GUID.
 - Honors PUID/PGID for newsletter commands started from a root Podman exec session.
 - Treats sparse Tautulli hero metadata as optional during previews and test sends.

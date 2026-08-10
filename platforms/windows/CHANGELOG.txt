@@ -4,6 +4,8 @@ TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 Unreleased
 ----------
 - fixes deleted-history poster recovery on Unix-compatible packages by using a portable generic-poster probe
+- restores IMDb ratings inside watched-TV personal statistics, including deleted-history shows
+- restores missing movie RT and TV IMDb scores from Plex's exact tokenless public rating page
 - recovers deleted Plex history posters and metadata from Tautulli's retained exact GUID
 - treats sparse Tautulli hero metadata as optional during previews and test sends
 - accepts selected-library recently-added rows when Plex omits the redundant section ID
