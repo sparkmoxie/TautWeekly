@@ -1,5 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# Docker and Podman exec sessions start as the image's default root user and
+# bypass entrypoint.sh. Drop privileges before creating any persistent files so
+# interactive Preview/Send commands honor the configured PUID/PGID too.
+if [[ "$(id -u)" -eq 0 ]]; then
+  runtime_uid="${PUID:-1000}"
+  runtime_gid="${PGID:-1000}"
+  if ! [[ "$runtime_uid" =~ ^[0-9]+$ && "$runtime_gid" =~ ^[0-9]+$ ]]; then
+    echo "PUID and PGID must be numeric." >&2
+    exit 64
+  fi
+  if [[ "$runtime_uid" == "0" || "$runtime_gid" == "0" ]]; then
+    echo "PUID/PGID 0 is refused. Configure a non-root numeric identity, normally 1000:1000." >&2
+    exit 64
+  fi
+  exec gosu "$runtime_uid:$runtime_gid" "$0" "$@"
+fi
+
 MODE="${1:-}"
 shift || true
 app_root="${TAUTWEEKLY_APP_DIR:-/opt/tautweekly}"
