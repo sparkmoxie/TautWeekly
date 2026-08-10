@@ -260,7 +260,8 @@ foreach ($engine in $engines) {
                     Assert-True ($legacyShowQueryCalls.Count -gt 0) "$($engine.Name)/$scenario did not preserve the compatible exact TVDB query attempt."
                     Assert-True ($legacyMoviePostCalls.Count -gt 0) "$($engine.Name)/$scenario did not recover the exact legacy TMDB movie GUID through the provider POST contract."
                     Assert-True ($legacyShowPostCalls.Count -gt 0) "$($engine.Name)/$scenario did not recover the exact legacy TVDB show GUID through the provider POST contract."
-                    Assert-True (@(($legacyMoviePostCalls + $legacyShowPostCalls) | Where-Object { @($_.body.PSObject.Properties).Count -ne 2 }).Count -eq 0) "$($engine.Name)/$scenario added title or other search hints to the exact-match POST body."
+                    Assert-True (@($legacyMoviePostCalls | Where-Object { [string]$_.body.title -eq 'Selected Movie' }).Count -gt 0) "$($engine.Name)/$scenario omitted the required retained movie title hint."
+                    Assert-True (@($legacyShowPostCalls | Where-Object { [string]$_.body.title -eq 'Selected Show' }).Count -gt 0) "$($engine.Name)/$scenario omitted the required retained show title hint."
                 }
                 else {
                     Assert-True (@($hostedCalls | Where-Object { [string]$_.method -eq 'GET' -and [string]$_.path -eq '/hosted/library/metadata/deletedmovieguid' }).Count -gt 0) "$($engine.Name)/$scenario did not preserve the direct retained movie GUID attempt."
@@ -273,8 +274,15 @@ foreach ($engine in $engines) {
                     Assert-True (@($modernPostCalls | Where-Object { [string]$_.body.guid -eq 'plex://movie/deletedmovieguid' -and [int]$_.body.type -eq 1 }).Count -gt 0) "$($engine.Name)/$scenario did not recover the modern movie GUID through the provider POST contract."
                     Assert-True (@($modernPostCalls | Where-Object { [string]$_.body.guid -eq 'plex://episode/deletedepisodeguid' -and [int]$_.body.type -eq 4 }).Count -gt 0) "$($engine.Name)/$scenario did not preserve the modern episode type through the provider POST contract."
                     Assert-True (@($modernPostCalls | Where-Object { [string]$_.body.guid -eq 'plex://show/deletedshowguid' -and [int]$_.body.type -eq 2 }).Count -gt 0) "$($engine.Name)/$scenario did not promote the modern episode GUID to exact show metadata."
-                    Assert-True (@($modernPostCalls | Where-Object { @($_.body.PSObject.Properties).Count -ne 2 }).Count -eq 0) "$($engine.Name)/$scenario added title or other search hints to a modern exact-match POST body."
+                    Assert-True (@($modernPostCalls | Where-Object { [string]$_.body.guid -eq 'plex://movie/deletedmovieguid' -and [string]$_.body.title -eq 'Selected Movie' }).Count -gt 0) "$($engine.Name)/$scenario omitted the required modern movie title hint."
+                    Assert-True (@($modernPostCalls | Where-Object { [string]$_.body.guid -eq 'plex://episode/deletedepisodeguid' -and [string]$_.body.grandparentTitle -eq 'Selected Show' -and [int]$_.body.parentIndex -eq 1 -and [int]$_.body.index -eq 1 }).Count -gt 0) "$($engine.Name)/$scenario omitted the required modern episode match hints."
+                    Assert-True (@($modernPostCalls | Where-Object { [string]$_.body.guid -eq 'plex://show/deletedshowguid' -and [string]$_.body.title -eq 'Selected Show' }).Count -gt 0) "$($engine.Name)/$scenario omitted the required promoted show title hint."
                 }
+                $hostedPostBodies = @($hostedCalls | Where-Object { [string]$_.method -eq 'POST' } | ForEach-Object { $_.body })
+                Assert-True (@($hostedPostBodies | Where-Object {
+                    $names = @($_.PSObject.Properties.Name)
+                    @($names | Where-Object { $_ -in @('user_id', 'friendly_name', 'email', 'play_duration', 'watched_status', 'percent_complete') }).Count -gt 0
+                }).Count -eq 0) "$($engine.Name)/$scenario sent recipient or viewing-history fields to hosted metadata."
                 Assert-True (@($calls | Where-Object { [string]$_.path -match 'private' }).Count -eq 0) "$($engine.Name)/$scenario leaked a private-library identifier to hosted metadata."
                 $watchCalls = @($calls | Where-Object { [string]$_.path -like '/watch/*' })
                 Assert-True (@($watchCalls | Where-Object { $_.has_plex_token }).Count -eq 0) "$($engine.Name)/$scenario forwarded the Plex token to the public rating fallback."
