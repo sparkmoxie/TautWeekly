@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-08-10
+
 ### Fixed
 
 - Retried empty modern Plex and legacy TMDB/TVDB hosted lookups through Plex's
