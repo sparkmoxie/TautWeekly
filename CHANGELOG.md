@@ -13,6 +13,23 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   v0.7.0. Follow-up reported by
   [@gianfelicevincenzo](https://github.com/gianfelicevincenzo)
   in [#41](https://github.com/sparkmoxie/TautWeekly/issues/41).
+- Routed watched TV-show statistics through the same exact-GUID enrichment as
+  movies and rendered the recovered IMDb score in each personal TV row. The
+  prior regression could match an unrelated global rating and now scopes its
+  assertion to the TV statistics card. Follow-up reported by
+  [@gianfelicevincenzo](https://github.com/gianfelicevincenzo) and corroborated
+  by [@Rocknrolldoggie](https://github.com/Rocknrolldoggie) in
+  [#41](https://github.com/sparkmoxie/TautWeekly/issues/41).
+- Recovered provider-labelled movie Rotten Tomatoes and TV IMDb scores from
+  Plex's public watch page when exact-GUID hosted metadata returns artwork and
+  genres without ratings. The fallback uses only Plex's exact returned slug,
+  performs no title search, and leaves genuinely unavailable scores blank.
+
+### Security
+
+- Kept the public Plex rating fallback tokenless and limited its request to the
+  exact validated movie/show slug returned by Plex's authenticated GUID lookup.
+  Recipient identity and watch-history values are never sent.
 
 ## [0.7.0] - 2026-08-10
 

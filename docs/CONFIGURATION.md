@@ -20,9 +20,12 @@ TautWeekly for Plex's core activity flow uses Tautulli. Direct Plex access is op
 and improves selected metadata and artwork paths. When Plex has deleted an item
 but Tautulli still retains its history GUID, TautWeekly can use `PlexToken` to
 resolve that exact identifier through `https://metadata.provider.plex.tv` and
-cache available hosted artwork and metadata. It does not search by title or send
-recipient identity or watch-history values. If Plex returns an absolute artwork
-URL on another host, that host receives no Plex token.
+cache available hosted artwork and metadata. If that response omits provider
+scores, TautWeekly can use its exact returned slug to read the provider-labelled
+ratings on `https://watch.plex.tv`; that public request receives no Plex token.
+Neither path searches by title or sends recipient identity or watch-history
+values. If Plex returns an absolute artwork URL on another host, that host also
+receives no Plex token.
 
 ## Branding and mail
 

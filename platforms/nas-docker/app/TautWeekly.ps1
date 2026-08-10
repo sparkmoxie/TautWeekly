@@ -94,6 +94,7 @@ $LogFile = Join-Path $LogDir ("tautweekly_{0}.log" -f (Get-TautWeeklyRunNow).ToS
 $script:DesignPlexContext = $null
 $script:DesignPlexMetadataCache = @{}
 $script:PlexHostedMetadataCache = @{}
+$script:PlexWatchRatingCache = @{}
 $script:TautulliDefaultPosterHash = ""
 
 function Write-Log {
@@ -1476,14 +1477,18 @@ function Add-UserStatsMediaMetadata {
     if ($null -eq $Stats) { return }
 
     $movies = @()
+    $tvShows = @()
     if ($null -ne $Stats.PSObject.Properties["MovieItems"]) {
         $movies = @($Stats.MovieItems | Select-Object -First 4)
     }
+    if ($null -ne $Stats.PSObject.Properties["TvShowItems"]) {
+        $tvShows = @($Stats.TvShowItems | Select-Object -First 4)
+    }
 
-    if ($movies.Count -gt 0) {
+    if ($movies.Count -gt 0 -or $tvShows.Count -gt 0) {
         Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{
             Movies = $movies
-            TV     = @()
+            TV     = $tvShows
         })
     }
 }
@@ -3405,6 +3410,7 @@ function Add-DesignRatingMetadata {
         $criticImage = ""
         $audienceImageState = ""
         $genres = @()
+        $watchSlug = ""
         $ratingKey = [string]$item.RatingKey
         $mediaType = if ([string]$item.Type -eq "show") { "show" } else { "movie" }
 
@@ -3546,6 +3552,7 @@ function Add-DesignRatingMetadata {
             try {
                 $hostedMeta = Get-PlexHostedMetadata -MetadataGuid $metadataGuid -MediaType $mediaType
                 if ($null -ne $hostedMeta) {
+                    $watchSlug = Get-OptionalStringProperty -InputObject $hostedMeta -Name "slug"
                     if ($genres.Count -eq 0) {
                         if ($null -ne $hostedMeta.PSObject.Properties["Genre"]) {
                             $genres = @(ConvertTo-DesignGenreList -Value $hostedMeta.Genre)
@@ -3631,6 +3638,32 @@ function Add-DesignRatingMetadata {
             }
             catch {
                 Write-Log "Plex hosted enrichment failed for deleted $mediaType history metadata: $($_.Exception.Message)" "WARN"
+            }
+        }
+
+        # Plex's exact-GUID metadata response can retain artwork and genres but
+        # omit provider ratings. Its public watch page exposes semantic,
+        # provider-labelled scores for the exact slug. Request only that slug,
+        # without a Plex token or title search, and fail closed when a provider
+        # does not publish the expected movie RT or TV IMDb value.
+        $needsWatchRating = if ($mediaType -eq "movie") {
+            [string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)
+        }
+        else {
+            [string]::IsNullOrWhiteSpace($imdb)
+        }
+        if ($needsWatchRating -and -not [string]::IsNullOrWhiteSpace($watchSlug)) {
+            $watchRatings = Get-PlexWatchRatings -Slug $watchSlug -MediaType $mediaType
+            if ($mediaType -eq "movie") {
+                if ([string]::IsNullOrWhiteSpace($critic)) {
+                    $critic = Get-OptionalStringProperty -InputObject $watchRatings -Name "RtCritic"
+                }
+                if ([string]::IsNullOrWhiteSpace($audience)) {
+                    $audience = Get-OptionalStringProperty -InputObject $watchRatings -Name "RtAudience"
+                }
+            }
+            elseif ([string]::IsNullOrWhiteSpace($imdb)) {
+                $imdb = Get-OptionalStringProperty -InputObject $watchRatings -Name "Imdb"
             }
         }
 
@@ -4124,6 +4157,86 @@ function Get-PlexMetadataProviderBaseUrl {
     return $defaultUrl
 }
 
+function Get-PlexWatchBaseUrl {
+    $defaultUrl = "https://watch.plex.tv"
+    $testUrl = [string]$env:TAUTWEEKLY_TEST_PLEX_WATCH_URL
+    if ([string]::IsNullOrWhiteSpace($testUrl)) { return $defaultUrl }
+
+    try {
+        $uri = [Uri]$testUrl
+        if ($uri.IsLoopback -and $uri.Scheme -in @("http", "https")) {
+            return $testUrl.TrimEnd("/")
+        }
+    }
+    catch { }
+
+    return $defaultUrl
+}
+
+function Get-PlexWatchRatings {
+    param(
+        [string]$Slug,
+        [ValidateSet("movie", "show")]
+        [string]$MediaType
+    )
+
+    $result = [PSCustomObject]@{ RtCritic = ""; RtAudience = ""; Imdb = "" }
+    if ([string]::IsNullOrWhiteSpace($Slug)) { return $result }
+
+    $slugValue = $Slug.Trim().ToLowerInvariant()
+    if ($slugValue -notmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$') { return $result }
+
+    $cacheKey = $MediaType + ":" + $slugValue
+    if ($script:PlexWatchRatingCache.ContainsKey($cacheKey)) {
+        return $script:PlexWatchRatingCache[$cacheKey]
+    }
+
+    try {
+        $response = Invoke-WebRequest `
+            -UseBasicParsing `
+            -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
+            -Headers @{
+                "Accept-Language" = "en-US,en;q=0.9"
+                "User-Agent"      = "TautWeekly-for-Plex/0.8.0"
+            } `
+            -TimeoutSec 60
+        $content = [string]$response.Content
+        $ratingsStart = $content.IndexOf('data-testid="metadata-ratings"', [StringComparison]::OrdinalIgnoreCase)
+        if ($ratingsStart -ge 0) {
+            $ratingsHtml = $content.Substring(
+                $ratingsStart,
+                [Math]::Min(12000, $content.Length - $ratingsStart)
+            )
+
+            $criticMatch = [regex]::Match(
+                $ratingsHtml,
+                'title=["''](?<value>[0-9]+(?:\.[0-9]+)?)% critic rating on Rotten Tomatoes["'']',
+                [Text.RegularExpressions.RegexOptions]::IgnoreCase
+            )
+            $audienceMatch = [regex]::Match(
+                $ratingsHtml,
+                'title=["''](?<value>[0-9]+(?:\.[0-9]+)?)% audience rating on Rotten Tomatoes["'']',
+                [Text.RegularExpressions.RegexOptions]::IgnoreCase
+            )
+            $imdbMatch = [regex]::Match(
+                $ratingsHtml,
+                'title=["''](?<value>[0-9]+(?:\.[0-9]+)?) audience rating on IMDb["'']',
+                [Text.RegularExpressions.RegexOptions]::IgnoreCase
+            )
+
+            if ($criticMatch.Success) { $result.RtCritic = [string]$criticMatch.Groups["value"].Value }
+            if ($audienceMatch.Success) { $result.RtAudience = [string]$audienceMatch.Groups["value"].Value }
+            if ($imdbMatch.Success) { $result.Imdb = [string]$imdbMatch.Groups["value"].Value }
+        }
+    }
+    catch {
+        Write-Log "Plex public rating fallback failed for exact $MediaType metadata: $($_.Exception.Message)" "WARN"
+    }
+
+    $script:PlexWatchRatingCache[$cacheKey] = $result
+    return $result
+}
+
 function Get-PlexHostedMetadataLookupPath {
     param(
         [string]$MetadataGuid,
@@ -4183,7 +4296,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.7.0"
+        "X-Plex-Version"           = "0.8.0"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 
@@ -4694,12 +4807,24 @@ function Get-StatsTvShowRowsHtml {
             Format-WatchTime ([int64]$item.Seconds)
         }
 
+        $imdb = Get-OptionalStringProperty -InputObject $item -Name "DesignImdbRating"
+        $imdbHtml = if ([string]::IsNullOrWhiteSpace($imdb)) {
+            '<span style="color:#6f6f6f;">IMDb unavailable</span>'
+        } else {
+            $imdbIconSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
+            '<span style="display:inline-block;white-space:nowrap;">' +
+            '<img src="' + (HtmlEncode $imdbIconSrc) + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
+            (HtmlEncode $imdb) +
+            '</span>'
+        }
+
         [void]$rows.Append(@"
 <tr>
   <td width="50" valign="middle" style="width:50px;padding:7px 8px 7px 0;border-bottom:1px solid #292929;">$posterHtml</td>
   <td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929;">
     <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$showTitle</div>
-    <div style="padding-top:5px;font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700;">$(HtmlEncode $watchTime) watched</div>
+    <div style="padding-top:4px;font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700;">$imdbHtml</div>
+    <div style="padding-top:3px;font-size:10px;line-height:1.35;color:#9b9b9b;font-weight:600;">$(HtmlEncode $watchTime) watched</div>
   </td>
 </tr>
 "@)

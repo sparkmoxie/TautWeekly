@@ -140,6 +140,7 @@ foreach ($engine in $engines) {
             $oldDataRoot = $env:TAUTWEEKLY_DATA_DIR
             $oldConfig = $env:TAUTWEEKLY_CONFIG
             $oldMetadataProvider = $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL
+            $oldPlexWatch = $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL
             try {
                 if ($engine.Container) {
                     $env:TAUTWEEKLY_DATA_DIR = $dataRoot
@@ -147,6 +148,7 @@ foreach ($engine in $engines) {
                 }
                 if ($scenario -eq 'deleted-history-metadata') {
                     $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $baseUrl + '/hosted'
+                    $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL = $baseUrl + '/watch'
                 }
                 $process = Start-Process -FilePath $engine.Host -ArgumentList @(
                     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
@@ -158,6 +160,7 @@ foreach ($engine in $engines) {
                 $env:TAUTWEEKLY_DATA_DIR = $oldDataRoot
                 $env:TAUTWEEKLY_CONFIG = $oldConfig
                 $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $oldMetadataProvider
+                $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL = $oldPlexWatch
             }
 
             if ($process.ExitCode -ne 0) {
@@ -196,7 +199,11 @@ foreach ($engine in $engines) {
                 Assert-True ($normalHtml.Contains('Hosted history show summary.')) "$($engine.Name)/$scenario did not restore the deleted TV summary."
                 Assert-True ($normalHtml.Contains('History Drama, Mystery, and more')) "$($engine.Name)/$scenario did not restore deleted movie genres."
                 Assert-True ($normalHtml.Contains('87%') -and $normalHtml.Contains('93%')) "$($engine.Name)/$scenario did not restore deleted movie ratings."
-                Assert-True ($normalHtml -match 'alt="IMDb"[^>]*>8\.4') "$($engine.Name)/$scenario did not restore the deleted TV IMDb rating."
+                $tvStatsStart = $normalHtml.IndexOf('TV SHOWS WATCHED', [StringComparison]::Ordinal)
+                Assert-True ($tvStatsStart -ge 0) "$($engine.Name)/$scenario could not locate the deleted-history TV stats card."
+                $tvStatsLength = [Math]::Min(3000, $normalHtml.Length - $tvStatsStart)
+                $tvStatsHtml = $normalHtml.Substring($tvStatsStart, $tvStatsLength)
+                Assert-True ($tvStatsHtml -match 'alt="IMDb"[^>]*>8\.4') "$($engine.Name)/$scenario did not render the restored IMDb rating inside the deleted-history TV stats card."
                 Assert-True ($normalHtml.Contains('posters/poster_selected-movie.jpg')) "$($engine.Name)/$scenario did not render the recovered movie poster."
                 Assert-True ($normalHtml.Contains('posters/poster_selected-show.jpg')) "$($engine.Name)/$scenario did not render the recovered TV poster."
 
@@ -224,6 +231,11 @@ foreach ($engine in $engines) {
                 Assert-True (@($hostedCalls | Where-Object { [string]$_.path -eq '/hosted/library/metadata/deletedepisodeguid' }).Count -gt 0) "$($engine.Name)/$scenario did not resolve the retained episode GUID."
                 Assert-True (@($hostedCalls | Where-Object { [string]$_.path -eq '/hosted/library/metadata/deletedshowguid' }).Count -gt 0) "$($engine.Name)/$scenario did not promote the retained episode GUID to show metadata."
                 Assert-True (@($calls | Where-Object { [string]$_.path -match 'private' }).Count -eq 0) "$($engine.Name)/$scenario leaked a private-library identifier to hosted metadata."
+                $watchCalls = @($calls | Where-Object { [string]$_.path -like '/watch/*' })
+                Assert-True (@($watchCalls | Where-Object { $_.has_plex_token }).Count -eq 0) "$($engine.Name)/$scenario forwarded the Plex token to the public rating fallback."
+                Assert-True (@($watchCalls | Where-Object { [string]$_.path -eq '/watch/movie/selected-movie' }).Count -gt 0) "$($engine.Name)/$scenario did not resolve movie ratings from the exact hosted slug."
+                Assert-True (@($watchCalls | Where-Object { [string]$_.path -eq '/watch/show/selected-show' }).Count -gt 0) "$($engine.Name)/$scenario did not resolve TV IMDb from the exact hosted slug."
+                Assert-True (@($watchCalls | Where-Object { @($_.query.PSObject.Properties).Count -gt 0 }).Count -eq 0) "$($engine.Name)/$scenario searched the public rating fallback instead of using an exact slug."
                 $externalPosterCalls = @($calls | Where-Object { [string]$_.path -eq '/hosted/deleted-movie.jpg' })
                 Assert-True ($externalPosterCalls.Count -gt 0) "$($engine.Name)/$scenario did not fetch the external hosted movie poster."
                 Assert-True (@($externalPosterCalls | Where-Object { $_.has_plex_token }).Count -eq 0) "$($engine.Name)/$scenario forwarded the Plex token to an external poster host."
@@ -259,6 +271,7 @@ foreach ($engine in $engines) {
                 $oldDataRoot = $env:TAUTWEEKLY_DATA_DIR
                 $oldConfig = $env:TAUTWEEKLY_CONFIG
                 $oldMetadataProvider = $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL
+                $oldPlexWatch = $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL
                 try {
                     if ($engine.Container) {
                         $env:TAUTWEEKLY_DATA_DIR = $dataRoot
@@ -268,6 +281,7 @@ foreach ($engine in $engines) {
                         Remove-Item -LiteralPath (Join-Path $outputRoot 'posters') -Recurse -Force -ErrorAction SilentlyContinue
                         New-Item -ItemType Directory -Force -Path (Join-Path $outputRoot 'posters') | Out-Null
                         $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $baseUrl + '/hosted'
+                        $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL = $baseUrl + '/watch'
                     }
                     $sendProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
                         '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
@@ -279,6 +293,7 @@ foreach ($engine in $engines) {
                     $env:TAUTWEEKLY_DATA_DIR = $oldDataRoot
                     $env:TAUTWEEKLY_CONFIG = $oldConfig
                     $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $oldMetadataProvider
+                    $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL = $oldPlexWatch
                 }
                 if ($sendProcess.ExitCode -ne 0) {
                     throw "$($engine.Name)/$scenario SendTest failed ($($sendProcess.ExitCode)).`nSTDOUT:`n$(Get-Content $sendStdout -Raw)`nSTDERR:`n$(Get-Content $sendStderr -Raw)"
