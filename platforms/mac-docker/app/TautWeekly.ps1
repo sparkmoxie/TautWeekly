@@ -3400,14 +3400,15 @@ function Add-DesignRatingMetadata {
     foreach ($item in $all) {
         $critic = ""
         $audience = ""
+        $imdb = ""
         $criticImage = ""
         $audienceImageState = ""
         $genres = @()
         $ratingKey = [string]$item.RatingKey
         $mediaType = if ([string]$item.Type -eq "show") { "show" } else { "movie" }
 
-        # Primary source for the newsletter: Tautulli already exposes the
-        # selected Plex critic and audience scores plus their provider IDs.
+        # Primary source for the newsletter: Tautulli already exposes selected
+        # movie RT and TV IMDb scores plus their provider IDs.
         try {
             $meta = Invoke-TautulliApi -Command "get_metadata" -Parameters @{
                 rating_key = $ratingKey
@@ -3431,38 +3432,44 @@ function Add-DesignRatingMetadata {
                 }
             }
 
-            if ([string]$item.Type -eq "movie") {
-                if ($null -ne $meta.PSObject.Properties["genres"]) {
-                    $genres = @(ConvertTo-DesignGenreList -Value $meta.genres)
-                }
-                elseif ($null -ne $meta.PSObject.Properties["genre"]) {
-                    $genres = @(ConvertTo-DesignGenreList -Value $meta.genre)
-                }
+            if ($null -ne $meta.PSObject.Properties["genres"]) {
+                $genres = @(ConvertTo-DesignGenreList -Value $meta.genres)
+            }
+            elseif ($null -ne $meta.PSObject.Properties["genre"]) {
+                $genres = @(ConvertTo-DesignGenreList -Value $meta.genre)
             }
 
-            if ($ratingImage -like 'rottentomatoes://image.rating.*') {
-                $critic = Convert-DesignRatingPercent $ratingValue
-                $criticImage = $ratingImage
+            if ($mediaType -eq "movie") {
+                if ($ratingImage -like 'rottentomatoes://image.rating.*') {
+                    $critic = Convert-DesignRatingPercent $ratingValue
+                    $criticImage = $ratingImage
+                }
+                if ($audienceImage -like 'rottentomatoes://image.rating.*') {
+                    $audience = Convert-DesignRatingPercent $audienceRatingValue
+                    $audienceImageState = $audienceImage
+                }
             }
-
-            if ($audienceImage -like 'rottentomatoes://image.rating.*') {
-                $audience = Convert-DesignRatingPercent $audienceRatingValue
-                $audienceImageState = $audienceImage
+            elseif ($ratingImage -like 'imdb://image.rating*') {
+                $imdb = $ratingValue
             }
         }
         catch {
-            Write-Log "TautWeekly for Plex Tautulli RT lookup failed for $($item.Title): $($_.Exception.Message)" "WARN"
+            Write-Log "TautWeekly for Plex Tautulli rating/metadata lookup failed for $($item.Title): $($_.Exception.Message)" "WARN"
         }
 
         # Optional secondary source: Plex's full Rating[] if direct access
         # happens to be available on this install.
-        if ([string]::IsNullOrWhiteSpace($critic) -or
-            [string]::IsNullOrWhiteSpace($audience)) {
+        $needsDirectRatings = if ($mediaType -eq "movie") {
+            [string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)
+        }
+        else {
+            [string]::IsNullOrWhiteSpace($imdb)
+        }
+        if ($needsDirectRatings) {
             try {
                 $plexMeta = Get-DesignPlexMetadata -RatingKey $ratingKey
 
                 if ($null -ne $plexMeta -and
-                    [string]$item.Type -eq "movie" -and
                     $genres.Count -eq 0 -and
                     $null -ne $plexMeta.PSObject.Properties["Genre"]) {
                     $genres = @(ConvertTo-DesignGenreList -Value $plexMeta.Genre)
@@ -3486,14 +3493,22 @@ function Add-DesignRatingMetadata {
                             $value = $ratingEntry.value
                         }
 
-                        if ([string]::IsNullOrWhiteSpace($critic) -and
+                        if ($mediaType -eq "show" -and
+                            [string]::IsNullOrWhiteSpace($imdb) -and
+                            $image -like "imdb://image.rating*") {
+                            $imdb = [string]$value
+                        }
+
+                        if ($mediaType -eq "movie" -and
+                            [string]::IsNullOrWhiteSpace($critic) -and
                             $image -like "rottentomatoes://image.rating.*" -and
                             $type -eq "critic") {
                             $critic = Convert-DesignRatingPercent $value
                             $criticImage = $image
                         }
 
-                        if ([string]::IsNullOrWhiteSpace($audience) -and
+                        if ($mediaType -eq "movie" -and
+                            [string]::IsNullOrWhiteSpace($audience) -and
                             $image -like "rottentomatoes://image.rating.*" -and
                             $type -eq "audience") {
                             $audience = Convert-DesignRatingPercent $value
@@ -3512,11 +3527,16 @@ function Add-DesignRatingMetadata {
         # administrator-authorized Plex token, resolve only that identifier
         # against Plex's hosted metadata service; never search by title.
         $metadataGuid = Get-OptionalStringProperty -InputObject $item -Name "MetadataGuid"
+        $needsHostedRating = if ($mediaType -eq "movie") {
+            [string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)
+        }
+        else {
+            [string]::IsNullOrWhiteSpace($imdb)
+        }
         $needsHostedMetadata = (
             -not [string]::IsNullOrWhiteSpace($metadataGuid) -and
             ($genres.Count -eq 0 -or
-             [string]::IsNullOrWhiteSpace($critic) -or
-             [string]::IsNullOrWhiteSpace($audience) -or
+             $needsHostedRating -or
              [string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $item -Name "Summary")) -or
              [string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $item -Name "Year")))
         )
@@ -3561,15 +3581,22 @@ function Add-DesignRatingMetadata {
                         $hostedAudience = Get-OptionalStringProperty -InputObject $hostedMeta -Name "audience_rating"
                     }
 
-                    if ([string]::IsNullOrWhiteSpace($critic) -and
+                    if ($mediaType -eq "movie" -and
+                        [string]::IsNullOrWhiteSpace($critic) -and
                         $hostedRatingImage -like 'rottentomatoes://image.rating.*') {
                         $critic = Convert-DesignRatingPercent $hostedRating
                         $criticImage = $hostedRatingImage
                     }
-                    if ([string]::IsNullOrWhiteSpace($audience) -and
+                    if ($mediaType -eq "movie" -and
+                        [string]::IsNullOrWhiteSpace($audience) -and
                         $hostedAudienceImage -like 'rottentomatoes://image.rating.*') {
                         $audience = Convert-DesignRatingPercent $hostedAudience
                         $audienceImageState = $hostedAudienceImage
+                    }
+                    if ($mediaType -eq "show" -and
+                        [string]::IsNullOrWhiteSpace($imdb) -and
+                        $hostedRatingImage -like 'imdb://image.rating*') {
+                        $imdb = $hostedRating
                     }
 
                     if ($null -ne $hostedMeta.PSObject.Properties["Rating"]) {
@@ -3578,13 +3605,20 @@ function Add-DesignRatingMetadata {
                             $type = Get-OptionalStringProperty -InputObject $ratingEntry -Name "type"
                             $value = Get-OptionalStringProperty -InputObject $ratingEntry -Name "value"
 
-                            if ([string]::IsNullOrWhiteSpace($critic) -and
+                            if ($mediaType -eq "show" -and
+                                [string]::IsNullOrWhiteSpace($imdb) -and
+                                $image -like 'imdb://image.rating*') {
+                                $imdb = $value
+                            }
+                            if ($mediaType -eq "movie" -and
+                                [string]::IsNullOrWhiteSpace($critic) -and
                                 $image -like 'rottentomatoes://image.rating.*' -and
                                 $type -eq "critic") {
                                 $critic = Convert-DesignRatingPercent $value
                                 $criticImage = $image
                             }
-                            if ([string]::IsNullOrWhiteSpace($audience) -and
+                            if ($mediaType -eq "movie" -and
+                                [string]::IsNullOrWhiteSpace($audience) -and
                                 $image -like 'rottentomatoes://image.rating.*' -and
                                 $type -eq "audience") {
                                 $audience = Convert-DesignRatingPercent $value
@@ -3599,9 +3633,8 @@ function Add-DesignRatingMetadata {
             }
         }
 
-        # Last resort: rich exporter for movies only. TV cards use episode
-        # IMDb enrichment instead; show/season RT exporter requests are noisy
-        # and are not needed for the approved email design.
+        # Last resort: rich exporter for movies only. TV shows and episodes use
+        # IMDb values directly; show/season RT exporter requests are not needed.
         if ([string]$item.Type -eq "movie" -and
             ([string]::IsNullOrWhiteSpace($critic) -or
              [string]::IsNullOrWhiteSpace($audience))) {
@@ -3619,14 +3652,20 @@ function Add-DesignRatingMetadata {
             }
         }
 
-        Write-Log ("Design ratings: {0} -> RT critic {1}, audience {2}" -f `
-            $item.Title,
-            $(if ($critic) { $critic + "%" } else { "n/a" }),
-            $(if ($audience) { $audience } else { "n/a" })
-        )
+        if ($mediaType -eq "show") {
+            Write-Log ("Design ratings: {0} -> IMDb {1}" -f $item.Title, $(if ($imdb) { $imdb } else { "n/a" }))
+        }
+        else {
+            Write-Log ("Design ratings: {0} -> RT critic {1}, audience {2}" -f `
+                $item.Title,
+                $(if ($critic) { $critic + "%" } else { "n/a" }),
+                $(if ($audience) { $audience } else { "n/a" })
+            )
+        }
 
         $item | Add-Member -NotePropertyName "DesignRtCritic" -NotePropertyValue $critic -Force
         $item | Add-Member -NotePropertyName "DesignRtAudience" -NotePropertyValue $audience -Force
+        $item | Add-Member -NotePropertyName "DesignImdbRating" -NotePropertyValue $imdb -Force
         $item | Add-Member -NotePropertyName "DesignRtCriticImage" -NotePropertyValue $criticImage -Force
         $item | Add-Member -NotePropertyName "DesignRtAudienceImage" -NotePropertyValue $audienceImageState -Force
         $item | Add-Member -NotePropertyName "DesignGenres" -NotePropertyValue @($genres) -Force
@@ -3693,6 +3732,18 @@ function Get-DesignRatingLine {
         $pieces.Add(
             '<span class="design-rating-year">' +
             (HtmlEncode ([string]$Item.Year)) +
+            '</span>'
+        )
+    }
+
+    $imdb = Get-OptionalStringProperty -InputObject $Item -Name "DesignImdbRating"
+    if ([string]$Item.Type -eq "show" -and -not [string]::IsNullOrWhiteSpace($imdb)) {
+        $imdbIcon = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
+        $pieces.Add(
+            '<span class="design-rating-item">' +
+            '<img src="' + (HtmlEncode $imdbIcon) + '" alt="IMDb" ' +
+            'width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
+            (HtmlEncode $imdb) +
             '</span>'
         )
     }

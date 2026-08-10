@@ -291,10 +291,8 @@ class Handler(BaseHTTPRequestHandler):
                                     "summary": "Hosted history show summary.",
                                     "thumb": f"{self.server.base_url}/hosted/deleted-show.jpg",  # type: ignore[attr-defined]
                                     "Genre": [{"tag": "Drama"}, {"tag": "Mystery"}],
-                                    "rating": "7.6",
-                                    "ratingImage": "rottentomatoes://image.rating.ripe",
-                                    "audienceRating": "8.4",
-                                    "audienceRatingImage": "rottentomatoes://image.rating.upright",
+                                    "rating": "8.4",
+                                    "ratingImage": "imdb://image.rating",
                                 }
                             ]
                         }

@@ -8,10 +8,11 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Recovered posters, summaries, genres, years, and available Rotten Tomatoes
-  ratings for deleted Plex items by resolving the exact metadata GUID retained
-  in Tautulli history, and rejected Tautulli's generic poster placeholder as
-  usable artwork. Reported by [@gianfelicevincenzo](https://github.com/gianfelicevincenzo)
+- Recovered posters, summaries, genres, years, movie Rotten Tomatoes ratings,
+  and TV IMDb ratings for deleted Plex items by resolving the exact metadata
+  GUID retained in Tautulli history, and rejected Tautulli's generic poster
+  placeholder as usable artwork. Reported by
+  [@gianfelicevincenzo](https://github.com/gianfelicevincenzo)
   in [#41](https://github.com/sparkmoxie/TautWeekly/issues/41).
 
 ### Security

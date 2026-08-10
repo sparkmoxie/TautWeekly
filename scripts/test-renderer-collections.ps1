@@ -197,6 +197,29 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($deletedMovieItem.DesignRtCritic -eq '87') "$relativePath did not restore the deleted movie critic rating"
     Assert-True ($deletedMovieItem.DesignRtAudience -eq '93') "$relativePath did not restore the deleted movie audience rating"
 
+    function Get-PlexHostedMetadata {
+        param([string]$MetadataGuid, [string]$MediaType)
+        Assert-True ($MetadataGuid -eq 'plex://episode/deleted-episode-guid') "$relativePath changed the retained episode GUID during hosted enrichment"
+        Assert-True ($MediaType -eq 'show') "$relativePath used the wrong hosted TV metadata type"
+        return [PSCustomObject]@{
+            type = 'show'
+            summary = 'Retained TV summary.'
+            year = '2024'
+            rating = '8.4'
+            ratingImage = 'imdb://image.rating'
+        }
+    }
+    $deletedShowItem = [PSCustomObject]@{
+        RatingKey = 'deleted-show'
+        MetadataGuid = 'plex://episode/deleted-episode-guid'
+        Type = 'show'
+        Title = 'Deleted Show'
+    }
+    Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @(); TV = @($deletedShowItem) })
+    Assert-True ($deletedShowItem.DesignImdbRating -eq '8.4') "$relativePath did not restore the deleted TV IMDb rating"
+    Assert-True ([string]::IsNullOrWhiteSpace($deletedShowItem.DesignRtCritic)) "$relativePath mislabeled a TV IMDb rating as Rotten Tomatoes"
+    Assert-True ([string]::IsNullOrWhiteSpace($deletedShowItem.DesignRtAudience)) "$relativePath invented a TV Rotten Tomatoes audience rating"
+
     $secondEpisode = [PSCustomObject]@{
         media_type             = 'episode'
         play_duration          = 3600
