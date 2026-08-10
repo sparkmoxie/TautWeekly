@@ -3,6 +3,7 @@ TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 
 Unreleased
 ----------
+- recovers deleted Plex history through legacy TMDB/TVDB exact identifiers and reports unsupported or empty matches safely
 - fixes deleted-history poster recovery on Unix by using a portable generic-poster probe
 - restores IMDb ratings inside watched-TV personal statistics, including deleted-history shows
 - restores missing movie RT and TV IMDb scores from Plex's exact tokenless public rating page
