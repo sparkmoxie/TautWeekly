@@ -6,6 +6,21 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Retried empty modern Plex and legacy TMDB/TVDB hosted lookups through Plex's
+  current JSON `POST /library/metadata/matches` provider contract while
+  preserving the compatible direct/query-form attempts. Follow-up reported by
+  [@gianfelicevincenzo](https://github.com/gianfelicevincenzo) in
+  [#51](https://github.com/sparkmoxie/TautWeekly/issues/51).
+
+### Security
+
+- Limited the provider-contract retry body to the validated exact
+  GUID and numeric media type. It sends no title, year, recipient identity, or
+  watch-history fields, and keeps the Plex token confined to the hosted Plex
+  request.
+
 ## [0.8.1] - 2026-08-10
 
 ### Fixed

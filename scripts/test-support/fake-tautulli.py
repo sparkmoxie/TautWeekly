@@ -231,20 +231,151 @@ class Handler(BaseHTTPRequestHandler):
     def api_success(self, data: object) -> None:
         self.write_json({"response": {"result": "success", "message": "", "data": data}})
 
-    def do_GET(self) -> None:  # noqa: N802
-        parsed = urlparse(self.path)
-        query = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
+    def record_call(
+        self,
+        method: str,
+        path: str,
+        query: dict[str, str],
+        body: object | None = None,
+    ) -> None:
         with self.server.call_log.open("a", encoding="utf-8") as handle:  # type: ignore[attr-defined]
             handle.write(
                 json.dumps(
                     {
-                        "path": parsed.path,
+                        "method": method,
+                        "path": path,
                         "query": query,
+                        "body": body,
                         "has_plex_token": bool(self.headers.get("X-Plex-Token")),
                     }
                 )
                 + "\n"
             )
+
+    def hosted_match_payload(self, external_guid: str, media_type: str) -> dict[str, object]:
+        if external_guid == "plex://movie/deletedmovieguid" and media_type == "1":
+            return {
+                "MediaContainer": {
+                    "Metadata": [
+                        {
+                            "type": "movie",
+                            "guid": "plex://movie/deletedmovieguid",
+                            "slug": "selected-movie",
+                            "title": "Selected Movie",
+                            "year": "2026",
+                            "summary": "Hosted history movie summary.",
+                            "thumb": f"http://localhost:{self.server.server_port}/hosted/deleted-movie.jpg",  # type: ignore[attr-defined]
+                            "Genre": [
+                                {"tag": "History Drama"},
+                                {"tag": "Mystery"},
+                                {"tag": "Archive"},
+                            ],
+                        }
+                    ]
+                }
+            }
+
+        if external_guid == "plex://episode/deletedepisodeguid" and media_type == "4":
+            return {
+                "MediaContainer": {
+                    "Metadata": [
+                        {
+                            "type": "episode",
+                            "guid": "plex://episode/deletedepisodeguid",
+                            "grandparentGuid": "plex://show/deletedshowguid",
+                            "grandparentThumb": f"{self.server.base_url}/hosted/deleted-show.jpg",  # type: ignore[attr-defined]
+                        }
+                    ]
+                }
+            }
+
+        if external_guid == "plex://show/deletedshowguid" and media_type == "2":
+            return {
+                "MediaContainer": {
+                    "Metadata": [
+                        {
+                            "type": "show",
+                            "guid": "plex://show/deletedshowguid",
+                            "slug": "selected-show",
+                            "title": "Selected Show",
+                            "year": "2024",
+                            "summary": "Hosted history show summary.",
+                            "thumb": f"{self.server.base_url}/hosted/deleted-show.jpg",  # type: ignore[attr-defined]
+                            "Genre": [{"tag": "Drama"}, {"tag": "Mystery"}],
+                        }
+                    ]
+                }
+            }
+
+        if external_guid == "tmdb://12345" and media_type == "1":
+            return {
+                "MediaContainer": {
+                    "Metadata": [
+                        {
+                            "type": "movie",
+                            "guid": "plex://movie/deletedmovieguid",
+                            "slug": "selected-movie",
+                            "title": "Selected Movie",
+                            "year": "2026",
+                            "summary": "Hosted history movie summary.",
+                            "thumb": f"http://localhost:{self.server.server_port}/hosted/deleted-movie.jpg",  # type: ignore[attr-defined]
+                            "Genre": [
+                                {"tag": "History Drama"},
+                                {"tag": "Mystery"},
+                                {"tag": "Archive"},
+                            ],
+                        }
+                    ]
+                }
+            }
+
+        if external_guid == "tvdb://999" and media_type == "2":
+            return {
+                "MediaContainer": {
+                    "Metadata": [
+                        {
+                            "type": "show",
+                            "guid": "plex://show/deletedshowguid",
+                            "slug": "selected-show",
+                            "title": "Selected Show",
+                            "year": "2024",
+                            "summary": "Hosted history show summary.",
+                            "thumb": f"{self.server.base_url}/hosted/deleted-show.jpg",  # type: ignore[attr-defined]
+                            "Genre": [{"tag": "Drama"}, {"tag": "Mystery"}],
+                        }
+                    ]
+                }
+            }
+
+        return {"MediaContainer": {"Metadata": []}}
+
+    def do_POST(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        query = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
+        content_length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            body = json.loads(self.rfile.read(content_length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self.write_json({"error": "invalid JSON body"}, status=400)
+            return
+        self.record_call("POST", parsed.path, query, body)
+
+        if parsed.path != "/hosted/library/metadata/matches":
+            self.write_json({"error": "unsupported virtual POST"}, status=404)
+            return
+        if not self.headers.get("X-Plex-Token"):
+            self.write_json({"error": "missing virtual Plex token"}, status=401)
+            return
+        if not isinstance(body, dict) or set(body) != {"guid", "type"}:
+            self.write_json({"error": "exact guid and type required"}, status=400)
+            return
+
+        self.write_json(self.hosted_match_payload(str(body["guid"]), str(body["type"])))
+
+    def do_GET(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        query = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
+        self.record_call("GET", parsed.path, query)
 
         if parsed.path == "/hosted/library/metadata/matches":
             if not self.headers.get("X-Plex-Token"):
@@ -253,59 +384,28 @@ class Handler(BaseHTTPRequestHandler):
 
             external_guid = query.get("guid", "")
             media_type = query.get("type", "")
-            if external_guid == "tmdb://12345" and media_type == "1":
-                self.write_json(
-                    {
-                        "MediaContainer": {
-                            "Metadata": [
-                                {
-                                    "type": "movie",
-                                    "guid": "plex://movie/deletedmovieguid",
-                                    "slug": "selected-movie",
-                                    "title": "Selected Movie",
-                                    "year": "2026",
-                                    "summary": "Hosted history movie summary.",
-                                    "thumb": f"http://localhost:{self.server.server_port}/hosted/deleted-movie.jpg",  # type: ignore[attr-defined]
-                                    "Genre": [
-                                        {"tag": "History Drama"},
-                                        {"tag": "Mystery"},
-                                        {"tag": "Archive"},
-                                    ],
-                                }
-                            ]
-                        }
-                    }
-                )
+            if self.server.scenario == "deleted-history-legacy-guid":  # type: ignore[attr-defined]
+                # Reproduce the v0.8.1 report: the compatible query form
+                # completes but returns no match, while the provider POST
+                # contract resolves the same exact external identifier.
+                self.write_json({"MediaContainer": {"Metadata": []}})
                 return
 
-            if external_guid == "tvdb://999" and media_type == "2":
-                self.write_json(
-                    {
-                        "MediaContainer": {
-                            "Metadata": [
-                                {
-                                    "type": "show",
-                                    "guid": "plex://show/deletedshowguid",
-                                    "slug": "selected-show",
-                                    "title": "Selected Show",
-                                    "year": "2024",
-                                    "summary": "Hosted history show summary.",
-                                    "thumb": f"{self.server.base_url}/hosted/deleted-show.jpg",  # type: ignore[attr-defined]
-                                    "Genre": [{"tag": "Drama"}, {"tag": "Mystery"}],
-                                }
-                            ]
-                        }
-                    }
-                )
-                return
-
-            self.write_json({"MediaContainer": {"Metadata": []}})
+            self.write_json(self.hosted_match_payload(external_guid, media_type))
             return
 
         if parsed.path.startswith("/hosted/library/metadata/"):
             metadata_id = parsed.path.rsplit("/", 1)[-1]
             if not self.headers.get("X-Plex-Token"):
                 self.write_json({"error": "missing virtual Plex token"}, status=401)
+                return
+
+            if self.server.scenario == "deleted-history-metadata" and metadata_id in {  # type: ignore[attr-defined]
+                "deletedmovieguid",
+                "deletedepisodeguid",
+                "deletedshowguid",
+            }:
+                self.write_json({"MediaContainer": {"Metadata": []}})
                 return
 
             if metadata_id == "deletedmovieguid":
