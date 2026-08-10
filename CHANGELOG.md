@@ -6,6 +6,11 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Made root-started Docker and Podman console newsletter commands drop to the
+  configured PUID/PGID before writing locks, logs, posters, or diagnostics.
+
 ## [0.6.2] - 2026-08-09
 
 ### Fixed

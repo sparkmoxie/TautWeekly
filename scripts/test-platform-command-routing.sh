@@ -137,9 +137,40 @@ if command -v flock >/dev/null 2>&1; then
       bash "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" Preview one two >/dev/null 2>&1; then
     fail 'run-mode accepted two user identifiers'
   fi
+
 else
   printf '[WARN] Shared operation-lock routing skipped because flock is unavailable.\n'
 fi
+
+# Container exec starts as root and bypasses entrypoint.sh. Simulate that
+# boundary and require run-mode to re-exec under the configured PUID/PGID
+# before creating its operation lock or output directories.
+root_stub_bin="$test_root/root-bin"
+root_data="$test_root/root-data"
+mkdir -p "$root_stub_bin" "$root_data"
+cat >"$root_stub_bin/id" <<'STUB'
+#!/usr/bin/env bash
+[[ "${1:-}" == '-u' ]] || exit 64
+printf '0\n'
+STUB
+cat >"$root_stub_bin/gosu" <<'STUB'
+#!/usr/bin/env bash
+printf 'gosu %s\n' "$*" >>"$TAUTWEEKLY_TEST_CALL_LOG"
+STUB
+chmod +x "$root_stub_bin/id" "$root_stub_bin/gosu"
+reset_calls
+for runtime_wrapper in \
+    "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" \
+    "$repo_root/platforms/mac-docker/app/bin/run-mode.sh"; do
+  PUID=1234 PGID=5678 \
+  PATH="$root_stub_bin:$PATH" \
+  TAUTWEEKLY_APP_DIR=/virtual/app \
+  TAUTWEEKLY_DATA_DIR="$root_data" \
+  TAUTWEEKLY_CONFIG="$root_data/config.json" \
+    bash "$runtime_wrapper" Preview 'Viewer With Spaces'
+  assert_call "gosu 1234:5678 $runtime_wrapper Preview Viewer With Spaces"
+done
+[[ ! -e "$root_data/.tautweekly-operation.lock" ]] || fail 'run-mode wrote persistent data before dropping root privileges'
 
 # Installer preflight must fail before any system mutation for invalid targets.
 set +e

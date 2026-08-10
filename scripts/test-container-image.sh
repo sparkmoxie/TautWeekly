@@ -61,6 +61,20 @@ docker exec "$container_name" test -s /data/config.example.json || fail 'Persist
 docker exec "$container_name" test -s /data/output/index.html || fail 'Preview landing page was not initialized.'
 docker exec "$container_name" test -s /data/service-heartbeat.json || fail 'Service supervisor heartbeat was not initialized.'
 
+# A normal docker exec bypasses entrypoint.sh and therefore begins as root.
+# run-mode.sh must still drop to PUID/PGID before it creates any data.
+[[ "$(docker exec "$container_name" id -u)" == "0" ]] || fail 'Ownership regression precondition did not start docker exec as root.'
+ownership_probe='/data/exec-ownership-probe'
+docker exec "$container_name" rm -rf "$ownership_probe"
+docker exec \
+  -e "TAUTWEEKLY_DATA_DIR=$ownership_probe" \
+  -e "TAUTWEEKLY_CONFIG=$ownership_probe/missing-config.json" \
+  "$container_name" /opt/tautweekly/bin/run-mode.sh InvalidOwnershipProbe \
+  >/dev/null 2>&1 || true
+docker exec "$container_name" test -f "$ownership_probe/.tautweekly-operation.lock" || fail 'Root-started run-mode did not create the ownership probe lock.'
+[[ "$(docker exec "$container_name" stat -c '%u:%g' "$ownership_probe")" == "$host_uid:$host_gid" ]] || fail 'Root-started run-mode created its data directory with the wrong owner.'
+[[ "$(docker exec "$container_name" stat -c '%u:%g' "$ownership_probe/.tautweekly-operation.lock")" == "$host_uid:$host_gid" ]] || fail 'Root-started run-mode created its operation lock with the wrong owner.'
+
 set +e
 root_output="$(docker run --rm -e PUID=0 -e PGID="$host_gid" "$image" 2>&1)"
 root_status=$?
