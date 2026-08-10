@@ -22,7 +22,9 @@ $requiredFunctions = @(
     'Convert-DesignRatingPercent',
     'ConvertTo-DesignGenreList',
     'Add-DesignRatingMetadata',
+    'Get-PlexMetadataProviderBaseUrl',
     'Get-PlexHostedMetadataLookupPath',
+    'Get-PlexHostedMetadata',
     'Get-PlexWatchBaseUrl',
     'Get-PlexWatchRatings',
     'Get-TautulliDefaultPosterHash',
@@ -242,7 +244,52 @@ foreach ($relativePath in $rendererPaths) {
 
     Assert-True ((Get-PlexHostedMetadataLookupPath -MetadataGuid 'plex://movie/5d123abc?lang=en' -MediaType 'movie') -eq '/library/metadata/5d123abc') "$relativePath did not normalize a retained Plex GUID"
     Assert-True ((Get-PlexHostedMetadataLookupPath -MetadataGuid 'com.plexapp.agents.themoviedb://12345?lang=en' -MediaType 'movie') -eq '/library/metadata/matches?guid=tmdb%3A%2F%2F12345&type=1') "$relativePath did not normalize a legacy TMDB movie GUID"
-    Assert-True ([string]::IsNullOrWhiteSpace((Get-PlexHostedMetadataLookupPath -MetadataGuid 'com.plexapp.agents.thetvdb://999/1/2' -MediaType 'show'))) "$relativePath guessed from an unsupported legacy TVDB GUID"
+    Assert-True ((Get-PlexHostedMetadataLookupPath -MetadataGuid 'com.plexapp.agents.tmdb://54321?lang=en' -MediaType 'movie') -eq '/library/metadata/matches?guid=tmdb%3A%2F%2F54321&type=1') "$relativePath did not normalize the alternate legacy TMDB movie agent"
+    Assert-True ((Get-PlexHostedMetadataLookupPath -MetadataGuid 'com.plexapp.agents.themoviedb://24680/1/2?lang=en' -MediaType 'show') -eq '/library/metadata/matches?guid=tmdb%3A%2F%2F24680&type=2') "$relativePath did not reduce a legacy TMDB episode GUID to its exact show identifier"
+    Assert-True ((Get-PlexHostedMetadataLookupPath -MetadataGuid 'com.plexapp.agents.thetvdb://999/1/2?lang=en' -MediaType 'show') -eq '/library/metadata/matches?guid=tvdb%3A%2F%2F999&type=2') "$relativePath did not reduce a legacy TVDB episode GUID to its exact show identifier"
+    Assert-True ([string]::IsNullOrWhiteSpace((Get-PlexHostedMetadataLookupPath -MetadataGuid 'tmdb://private-title' -MediaType 'movie'))) "$relativePath accepted a non-numeric external metadata identifier"
+    Assert-True ([string]::IsNullOrWhiteSpace((Get-PlexHostedMetadataLookupPath -MetadataGuid 'local://private-library-item' -MediaType 'movie'))) "$relativePath sent a private local-library GUID to hosted metadata"
+
+    $script:PlexHostedMetadataCache = @{}
+    $script:hostedMetadataRequestCount = 0
+    $script:hostedMetadataWarnings = New-Object System.Collections.Generic.List[string]
+    $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = 'http://127.0.0.1:32123/hosted'
+    function Write-Log {
+        param([string]$Message, [string]$Level = 'INFO')
+        if ($Level -eq 'WARN') { $script:hostedMetadataWarnings.Add($Message) }
+    }
+    function Get-DesignPlexContext {
+        return [PSCustomObject]@{ Token = 'virtual-plex-token' }
+    }
+    function Invoke-RestMethod {
+        param(
+            [string]$Uri,
+            [hashtable]$Headers,
+            [string]$Method,
+            [int]$TimeoutSec
+        )
+        Assert-True ($Uri -eq 'http://127.0.0.1:32123/hosted/library/metadata/noexactmatch') "$relativePath changed the exact retained Plex GUID request"
+        Assert-True ([string]$Headers['X-Plex-Token'] -eq 'virtual-plex-token') "$relativePath omitted the administrator Plex token from hosted metadata"
+        $script:hostedMetadataRequestCount++
+        return [PSCustomObject]@{ MediaContainer = [PSCustomObject]@{ Metadata = @() } }
+    }
+    try {
+        $emptyHostedMetadata = Get-PlexHostedMetadata -MetadataGuid 'plex://movie/noexactmatch' -MediaType 'movie'
+        $cachedEmptyHostedMetadata = Get-PlexHostedMetadata -MetadataGuid 'plex://movie/noexactmatch' -MediaType 'movie'
+        Assert-True ($null -eq $emptyHostedMetadata -and $null -eq $cachedEmptyHostedMetadata) "$relativePath accepted an empty hosted metadata response"
+        Assert-True ($script:hostedMetadataRequestCount -eq 1) "$relativePath did not cache an empty exact-match response"
+        Assert-True (@($script:hostedMetadataWarnings | Where-Object { $_ -like '*returned no exact match*' }).Count -eq 1) "$relativePath did not report an empty exact-match response exactly once"
+
+        $unsupportedHostedMetadata = Get-PlexHostedMetadata -MetadataGuid 'local://private-library-item' -MediaType 'movie'
+        $cachedUnsupportedHostedMetadata = Get-PlexHostedMetadata -MetadataGuid 'local://private-library-item' -MediaType 'movie'
+        Assert-True ($null -eq $unsupportedHostedMetadata -and $null -eq $cachedUnsupportedHostedMetadata) "$relativePath accepted an unsupported private-library GUID"
+        Assert-True ($script:hostedMetadataRequestCount -eq 1) "$relativePath sent an unsupported private-library GUID to hosted metadata"
+        Assert-True (@($script:hostedMetadataWarnings | Where-Object { $_ -like '*provider format is unsupported*' }).Count -eq 1) "$relativePath did not report an unsupported retained GUID exactly once"
+        Assert-True (-not (($script:hostedMetadataWarnings -join '; ').Contains('private-library-item'))) "$relativePath leaked a retained private-library identifier into diagnostics"
+    }
+    finally {
+        Remove-Item Env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL -ErrorAction SilentlyContinue
+    }
 
     function Write-Log { param([string]$Message, [string]$Level = 'INFO') }
     function Get-DesignPlexMetadata { param([string]$RatingKey) return $null }
