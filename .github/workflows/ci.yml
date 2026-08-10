@@ -42,6 +42,9 @@ jobs:
       - name: Test renderer collection and poster-probe behavior on Unix
         shell: pwsh
         run: ./scripts/test-renderer-collections.ps1
+      - name: Test bounded deleted-item cache on PowerShell 7
+        shell: pwsh
+        run: ./scripts/test-deleted-item-cache.ps1
       - name: Test SMTP authentication protocol on PowerShell 7
         run: python3 scripts/test-smtp-transport.py --helper platforms/nas-docker/app/Smtp-Transport.ps1
       - name: Validate NAS Compose configuration
@@ -64,6 +67,9 @@ jobs:
       - name: Test adaptive renderer collection edges
         shell: powershell
         run: .\scripts\test-renderer-collections.ps1
+      - name: Test bounded deleted-item cache on Windows PowerShell
+        shell: powershell
+        run: .\scripts\test-deleted-item-cache.ps1
       - name: Test user-exclusion selection
         shell: powershell
         run: .\scripts\test-user-exclusions.ps1
@@ -94,6 +100,9 @@ jobs:
       - name: Test packaged runtime contracts and checksums
         shell: pwsh
         run: ./scripts/test-release-artifacts.ps1
+      - name: Verify release archive reproducibility
+        shell: pwsh
+        run: ./scripts/test-release-reproducibility.ps1 -Version ci
       - name: Test ZIP archives
         run: for file in dist/*.zip; do unzip -t "$file"; done
       - name: Test TAR.GZ archives

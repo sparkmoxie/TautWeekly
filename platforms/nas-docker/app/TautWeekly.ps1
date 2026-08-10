@@ -11,7 +11,7 @@
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex NAS Portable v1.0.7 — Linux container production newsletter engine.
+# TautWeekly for Plex NAS Portable v1.2.0 — Linux container production newsletter engine.
 # Uses the current six-state portable production renderer with regression
 # previews, latest TV episode backfill, IMDb enrichment, and RT audience %.
 Set-StrictMode -Version Latest
@@ -417,6 +417,10 @@ if (-not (Test-Path $ConfigPath)) {
 }
 
 $Config = Get-Content -Path $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+. (Join-Path $ScriptRoot "DeletedItemCache.ps1")
+Initialize-TautWeeklyDeletedItemCache `
+    -CacheRoot (Join-Path (Join-Path $DataRoot "cache") "deleted-items") `
+    -Configuration $Config
 
 $script:IncludedLibraryIdSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 if ($null -ne $Config.PSObject.Properties["IncludedLibraryIds"]) {
@@ -3437,6 +3441,7 @@ function Add-DesignRatingMetadata {
         $audienceImageState = ""
         $genres = @()
         $watchSlug = ""
+        $liveMetadataAvailable = $false
         $ratingKey = [string]$item.RatingKey
         $mediaType = if ([string]$item.Type -eq "show") { "show" } else { "movie" }
 
@@ -3446,6 +3451,7 @@ function Add-DesignRatingMetadata {
             $meta = Invoke-TautulliApi -Command "get_metadata" -Parameters @{
                 rating_key = $ratingKey
             }
+            $liveMetadataAvailable = $true
 
             $ratingImage = Get-OptionalStringProperty -InputObject $meta -Name "rating_image"
             $audienceImage = Get-OptionalStringProperty -InputObject $meta -Name "audience_rating_image"
@@ -3564,6 +3570,34 @@ function Add-DesignRatingMetadata {
         $matchYear = Get-OptionalStringProperty -InputObject $item -Name "Year"
         $matchParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "MetadataParentIndex")
         $matchIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "MetadataIndex")
+        $cachedEntry = Get-TautWeeklyDeletedItemCacheEntry `
+            -MediaType $mediaType `
+            -MetadataGuid $metadataGuid `
+            -LogHit
+        if ($null -ne $cachedEntry) {
+            if ([string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $item -Name "Summary"))) {
+                $cachedSummary = Get-OptionalStringProperty -InputObject $cachedEntry -Name "Summary"
+                if (-not [string]::IsNullOrWhiteSpace($cachedSummary)) {
+                    $item | Add-Member -NotePropertyName "Summary" -NotePropertyValue $cachedSummary -Force
+                }
+            }
+            if ([string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $item -Name "Year"))) {
+                $cachedYear = Get-OptionalStringProperty -InputObject $cachedEntry -Name "Year"
+                if (-not [string]::IsNullOrWhiteSpace($cachedYear)) {
+                    $item | Add-Member -NotePropertyName "Year" -NotePropertyValue $cachedYear -Force
+                }
+            }
+            if ($genres.Count -eq 0 -and $null -ne $cachedEntry.PSObject.Properties["Genres"]) {
+                $genres = @(ConvertTo-DesignGenreList -Value $cachedEntry.Genres)
+            }
+            if ($null -ne $cachedEntry.PSObject.Properties["Ratings"]) {
+                if ([string]::IsNullOrWhiteSpace($critic)) { $critic = Get-OptionalStringProperty $cachedEntry.Ratings "RtCritic" }
+                if ([string]::IsNullOrWhiteSpace($audience)) { $audience = Get-OptionalStringProperty $cachedEntry.Ratings "RtAudience" }
+                if ([string]::IsNullOrWhiteSpace($imdb)) { $imdb = Get-OptionalStringProperty $cachedEntry.Ratings "Imdb" }
+                if ([string]::IsNullOrWhiteSpace($criticImage)) { $criticImage = Get-OptionalStringProperty $cachedEntry.Ratings "RtCriticImage" }
+                if ([string]::IsNullOrWhiteSpace($audienceImageState)) { $audienceImageState = Get-OptionalStringProperty $cachedEntry.Ratings "RtAudienceImage" }
+            }
+        }
         $needsHostedRating = if ($mediaType -eq "movie") {
             [string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)
         }
@@ -3739,6 +3773,7 @@ function Add-DesignRatingMetadata {
         $item | Add-Member -NotePropertyName "DesignRtCriticImage" -NotePropertyValue $criticImage -Force
         $item | Add-Member -NotePropertyName "DesignRtAudienceImage" -NotePropertyValue $audienceImageState -Force
         $item | Add-Member -NotePropertyName "DesignGenres" -NotePropertyValue @($genres) -Force
+        $item | Add-Member -NotePropertyName "CacheCaptureEligible" -NotePropertyValue $liveMetadataAvailable -Force
     }
 }
 
@@ -4233,7 +4268,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.8.3"
+                "User-Agent"      = "TautWeekly-for-Plex/0.9.0"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -4487,7 +4522,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.8.3"
+        "X-Plex-Version"           = "0.9.0"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 
@@ -4717,24 +4752,19 @@ function Get-PosterPath {
         [string]$MatchTitle = "",
         [string]$MatchYear = "",
         [int]$ParentIndex = 0,
-        [int]$Index = 0
+        [int]$Index = 0,
+        [ref]$LivePlexPoster = $null
     )
 
     if ([string]::IsNullOrWhiteSpace($RatingKey)) { return "" }
+    if ($null -ne $LivePlexPoster) { $LivePlexPoster.Value = $false }
 
     $cid = "poster_" + (Get-SafeFilePart $RatingKey)
     $path = Join-Path $PosterDir ($cid + ".jpg")
 
-    if (Test-Path $path) {
-        if ((Get-Item $path).Length -gt 512) {
-            $isCachedGenericFallback = (
-                -not [string]::IsNullOrWhiteSpace($MetadataGuid) -and
-                (Test-IsTautulliDefaultPoster -Path $path)
-            )
-            if (-not $isCachedGenericFallback) { return $path }
-        }
-        Remove-Item $path -Force -ErrorAction SilentlyContinue
-    }
+    # Never promote a prior generated-output file into persistent state. A
+    # cache capture must be backed by a fresh local Plex/Tautulli response.
+    Remove-Item $path -Force -ErrorAction SilentlyContinue
 
     $uri = Build-TautulliUri -Command "pms_image_proxy" -Parameters @{
         rating_key = $RatingKey
@@ -4747,13 +4777,18 @@ function Get-PosterPath {
     try {
         Invoke-WebRequest -Uri $uri -OutFile $path -TimeoutSec 60 | Out-Null
         if ((Test-Path $path) -and (Get-Item $path).Length -gt 512) {
-            $isGenericFallback = (
-                -not [string]::IsNullOrWhiteSpace($MetadataGuid) -and
-                (Test-IsTautulliDefaultPoster -Path $path)
-            )
-            if (-not $isGenericFallback) { return $path }
+            $isGenericFallback = Test-IsTautulliDefaultPoster -Path $path
+            if (-not $isGenericFallback) {
+                if ($null -ne $LivePlexPoster) { $LivePlexPoster.Value = $true }
+                return $path
+            }
 
-            Write-Log "Tautulli returned its generic poster for deleted Plex $MediaType history; trying the retained metadata GUID."
+            if (-not [string]::IsNullOrWhiteSpace($MetadataGuid)) {
+                Write-Log "Tautulli returned its generic poster for deleted Plex $MediaType history; trying the exact pre-deletion cache and retained metadata GUID."
+            }
+            else {
+                Write-Log "Deleted Plex $MediaType history has no retained stable GUID; the persistent cache will not title-match it." "WARN"
+            }
         }
     }
     catch {
@@ -4761,6 +4796,12 @@ function Get-PosterPath {
     }
 
     Remove-Item $path -Force -ErrorAction SilentlyContinue
+    $cachedPath = Restore-TautWeeklyDeletedItemCachePoster `
+        -MediaType $MediaType `
+        -MetadataGuid $MetadataGuid `
+        -DestinationPath $path
+    if (-not [string]::IsNullOrWhiteSpace($cachedPath)) { return $cachedPath }
+
     $hostedPath = Get-PlexHostedPosterPath `
         -MetadataGuid $MetadataGuid `
         -MediaType $MediaType `
@@ -4770,6 +4811,10 @@ function Get-PosterPath {
         -ParentIndex $ParentIndex `
         -Index $Index
     if (-not [string]::IsNullOrWhiteSpace($hostedPath)) { return $hostedPath }
+
+    if (-not [string]::IsNullOrWhiteSpace($MetadataGuid)) {
+        Write-Log "No stored pre-deletion $MediaType artwork matched the exact retained GUID; Plex hosted recovery also had no usable asset." "WARN"
+    }
 
     return ""
 }
@@ -4832,7 +4877,12 @@ function Prepare-PosterAssets {
         $matchYear = Get-OptionalStringProperty -InputObject $item -Name "Year"
         $matchParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "MetadataParentIndex")
         $matchIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "MetadataIndex")
+        $cacheCaptureEligible = (
+            $null -ne $item.PSObject.Properties["CacheCaptureEligible"] -and
+            [bool]$item.CacheCaptureEligible
+        )
 
+        $livePlexPoster = $false
         $path = Get-PosterPath `
             -RatingKey $rk `
             -MetadataGuid $metadataGuid `
@@ -4840,8 +4890,12 @@ function Prepare-PosterAssets {
             -MatchTitle $matchTitle `
             -MatchYear $matchYear `
             -ParentIndex $matchParentIndex `
-            -Index $matchIndex
+            -Index $matchIndex `
+            -LivePlexPoster ([ref]$livePlexPoster)
         if (-not [string]::IsNullOrWhiteSpace($path)) {
+            if ($cacheCaptureEligible -and $livePlexPoster) {
+                [void](Update-TautWeeklyDeletedItemCache -Item $item -PosterPath $path)
+            }
             $assets.Add([PSCustomObject]@{
                 RatingKey = $rk
                 Cid       = "poster_" + (Get-SafeFilePart $rk)

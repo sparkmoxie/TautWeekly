@@ -238,7 +238,10 @@ until `schedule-enable` is confirmed.
 ## Persistent data
 
 The relative bind mount `./data:/data` contains configuration, state, logs,
-assets, and generated output. It is excluded from git and Docker build context.
+assets, generated output, and the bounded future-deletion cache at
+`data/cache/deleted-items`. It is excluded from git and Docker build context.
+The cache stores presentation metadata/posters only after an item is observed
+live; it cannot recreate assets already discarded before v0.9.0.
 
 Create a private backup with:
 
@@ -248,6 +251,12 @@ Create a private backup with:
 
 The backup contains credentials. Store it as securely as the live
 configuration.
+
+Image updates and recreation preserve `data/` and its cache. To clear cached
+media without changing settings, stop the service and remove only
+`data/cache/deleted-items`, then restart. During uninstall, retain or privately
+back up `data/` unless configuration, state, output, cache entries, and backups
+are all intentionally being removed.
 
 ## Container health
 

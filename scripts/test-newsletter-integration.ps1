@@ -33,7 +33,9 @@ $engines = @(
     [PSCustomObject]@{ Name = 'nas-docker-linux-freebsd'; Source = 'platforms/nas-docker/app'; Renderer = 'TautWeekly.ps1'; Host = $(if ($null -ne $powerShell7) { $powerShell7.Source } else { '' }); Container = $true },
     [PSCustomObject]@{ Name = 'mac-docker'; Source = 'platforms/mac-docker/app'; Renderer = 'TautWeekly.ps1'; Host = $(if ($null -ne $powerShell7) { $powerShell7.Source } else { '' }); Container = $true }
 )
-$deletedHistoryScenarios = @('deleted-history-metadata', 'deleted-history-legacy-guid')
+$providerRecoveryScenarios = @('deleted-history-metadata', 'deleted-history-legacy-guid')
+$cacheScenario = 'cache-deleted'
+$deletedHistoryScenarios = @($providerRecoveryScenarios) + @($cacheScenario)
 
 $executed = 0
 foreach ($engine in $engines) {
@@ -48,8 +50,11 @@ foreach ($engine in $engines) {
         $dataRoot = Join-Path $tempRoot 'data'
         $callLog = Join-Path $tempRoot 'calls.jsonl'
         $readyFile = Join-Path $tempRoot 'ready.txt'
+        $scenarioState = Join-Path $tempRoot 'scenario.txt'
         $stdout = Join-Path $tempRoot 'renderer.stdout.txt'
         $stderr = Join-Path $tempRoot 'renderer.stderr.txt'
+        $primeStdout = Join-Path $tempRoot 'prime.stdout.txt'
+        $primeStderr = Join-Path $tempRoot 'prime.stderr.txt'
         $serverStdout = Join-Path $tempRoot 'server.stdout.txt'
         $serverStderr = Join-Path $tempRoot 'server.stderr.txt'
         $smtpCallLog = Join-Path $tempRoot 'smtp-calls.jsonl'
@@ -59,6 +64,8 @@ foreach ($engine in $engines) {
         $smtpStderr = Join-Path $tempRoot 'smtp.stderr.txt'
         $sendStdout = Join-Path $tempRoot 'send.stdout.txt'
         $sendStderr = Join-Path $tempRoot 'send.stderr.txt'
+        $sendAllStdout = Join-Path $tempRoot 'send-all.stdout.txt'
+        $sendAllStderr = Join-Path $tempRoot 'send-all.stderr.txt'
         $server = $null
         $smtpServer = $null
         $casePassed = $false
@@ -69,9 +76,11 @@ foreach ($engine in $engines) {
 
         try {
             $port = Get-FreeTcpPort
+            $initialScenario = if ($scenario -eq $cacheScenario) { 'cache-prime' } else { $scenario }
+            Set-Content -LiteralPath $scenarioState -Value $initialScenario -Encoding ASCII
             $server = Start-Process -FilePath $PythonPath -ArgumentList @(
-                '-u', $fakeServer, '--port', [string]$port, '--scenario', $scenario,
-                '--call-log', $callLog, '--ready-file', $readyFile
+                '-u', $fakeServer, '--port', [string]$port, '--scenario', $initialScenario,
+                '--state-file', $scenarioState, '--call-log', $callLog, '--ready-file', $readyFile
             ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $serverStdout -RedirectStandardError $serverStderr
 
             for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $readyFile); $attempt++) {
@@ -114,6 +123,7 @@ foreach ($engine in $engines) {
                 DaysBack = 7
                 MaxMovies = 4
                 MaxTv = 4
+                SendDelaySeconds = 0
             }
             if ($scenario -eq 'optional-hero-metadata' -or $scenario -in $deletedHistoryScenarios) {
                 $configOverrides['SmtpHost'] = '127.0.0.1'
@@ -153,6 +163,23 @@ foreach ($engine in $engines) {
                 if ($scenario -in $deletedHistoryScenarios) {
                     $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $baseUrl + '/hosted'
                     $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL = $baseUrl + '/watch'
+                }
+                if ($scenario -eq $cacheScenario) {
+                    $primeProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
+                        '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
+                        '-RendererPath', (Join-Path $appRoot $engine.Renderer), '-ConfigPath', $configPath,
+                        '-UserId', '1', '-Mode', 'PreviewAll'
+                    ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $primeStdout -RedirectStandardError $primeStderr
+                    if ($primeProcess.ExitCode -ne 0) {
+                        throw "$($engine.Name)/cache-prime renderer failed ($($primeProcess.ExitCode)).`nSTDOUT:`n$(Get-Content $primeStdout -Raw)`nSTDERR:`n$(Get-Content $primeStderr -Raw)"
+                    }
+                    $cacheRoot = if ($engine.Container) { Join-Path $dataRoot 'cache/deleted-items' } else { Join-Path $appRoot 'cache/deleted-items' }
+                    Assert-True (Test-Path -LiteralPath (Join-Path $cacheRoot 'index.json')) "$($engine.Name) did not create the persistent cache manifest while items were live."
+                    Assert-True ((Get-ChildItem -LiteralPath (Join-Path $cacheRoot 'artwork') -File -Filter '*.jpg').Count -ge 2) "$($engine.Name) did not cache live movie and TV artwork."
+                    Set-Content -LiteralPath $scenarioState -Value $cacheScenario -Encoding ASCII
+                    Remove-Item -LiteralPath (Join-Path $outputRoot 'posters') -Recurse -Force -ErrorAction SilentlyContinue
+                    Get-ChildItem -LiteralPath $outputRoot -File -Filter 'preview-all-*.html' -ErrorAction SilentlyContinue | Remove-Item -Force
+                    New-Item -ItemType Directory -Force -Path (Join-Path $outputRoot 'posters') | Out-Null
                 }
                 $process = Start-Process -FilePath $engine.Host -ArgumentList @(
                     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
@@ -220,7 +247,7 @@ foreach ($engine in $engines) {
                 Assert-True (([regex]::Matches($normalHtml, 'Selected Show')).Count -ge 2) "$($engine.Name)/$scenario removed the TV release after using Trending as the hero."
             }
 
-            if ($scenario -in $deletedHistoryScenarios) {
+            if ($scenario -in $providerRecoveryScenarios) {
                 Assert-True ($previewLog.Contains('recovered an exact movie match through the provider POST contract')) "$($engine.Name)/$scenario PreviewAll did not report the provider-contract recovery."
                 Assert-True ($previewLog.Contains('recovered an exact show match through the provider POST contract')) "$($engine.Name)/$scenario PreviewAll did not report the TV provider-contract recovery."
                 Assert-True ($normalHtml.Contains('TV SHOWS WATCHED')) "$($engine.Name)/$scenario did not render the deleted-history TV stats card."
@@ -239,6 +266,29 @@ foreach ($engine in $engines) {
                 $showPoster = Join-Path (Join-Path $outputRoot 'posters') 'poster_selected-show.jpg'
                 Assert-True ((Test-Path $moviePoster) -and (Get-Item $moviePoster).Length -gt 512) "$($engine.Name)/$scenario did not persist the recovered movie poster."
                 Assert-True ((Test-Path $showPoster) -and (Get-Item $showPoster).Length -gt 512) "$($engine.Name)/$scenario did not persist the recovered TV poster."
+                $providerCacheRoot = if ($engine.Container) { Join-Path $dataRoot 'cache/deleted-items' } else { Join-Path $appRoot 'cache/deleted-items' }
+                $providerCacheIndex = Join-Path $providerCacheRoot 'index.json'
+                if (Test-Path -LiteralPath $providerCacheIndex) {
+                    $providerEntries = @((Get-Content -LiteralPath $providerCacheIndex -Raw -Encoding UTF8 | ConvertFrom-Json).Entries)
+                    Assert-True ($providerEntries.Count -eq 0) "$($engine.Name)/$scenario persisted best-effort provider recovery as though it were a live local capture."
+                }
+            }
+
+            if ($scenario -eq $cacheScenario) {
+                Assert-True ($previewLog.Contains('Deleted-item cache hit for an exact movie GUID')) "$($engine.Name)/$scenario did not report an exact movie cache hit."
+                Assert-True ($previewLog.Contains('Deleted-item cache hit for an exact show GUID')) "$($engine.Name)/$scenario did not report an exact TV cache hit."
+                Assert-True ($previewLog.Contains('Restored deleted movie history artwork from the bounded pre-deletion cache.')) "$($engine.Name)/$scenario did not restore cached movie artwork."
+                Assert-True ($previewLog.Contains('Restored deleted show history artwork from the bounded pre-deletion cache.')) "$($engine.Name)/$scenario did not restore cached TV artwork."
+                Assert-True (-not $previewLog.Contains('recovered an exact movie match through the provider POST contract')) "$($engine.Name)/$scenario unexpectedly depended on provider recovery."
+                Assert-True ($normalHtml.Contains('A release from the selected movie library.')) "$($engine.Name)/$scenario did not restore cached movie presentation metadata."
+                Assert-True ($normalHtml.Contains('Drama, Mystery')) "$($engine.Name)/$scenario did not restore cached genres."
+                Assert-True ($normalHtml.Contains('posters/poster_selected-movie.jpg')) "$($engine.Name)/$scenario did not render the cached movie poster."
+                Assert-True ($normalHtml.Contains('posters/poster_selected-show.jpg')) "$($engine.Name)/$scenario did not render the cached TV poster."
+                $cacheRoot = if ($engine.Container) { Join-Path $dataRoot 'cache/deleted-items' } else { Join-Path $appRoot 'cache/deleted-items' }
+                $cacheText = Get-Content -LiteralPath (Join-Path $cacheRoot 'index.json') -Raw -Encoding UTF8
+                foreach ($privateMarker in @('virtual-api-key', 'virtual-plex-token', 'viewer@example.com', 'champion@example.com', 'play_duration', 'watched_status', 'percent_complete', 'friendly_name')) {
+                    Assert-True (-not $cacheText.Contains($privateMarker)) "$($engine.Name)/$scenario cache leaked private marker: $privateMarker"
+                }
             }
 
             $calls = @(Get-Content $callLog | ForEach-Object { $_ | ConvertFrom-Json })
@@ -252,7 +302,7 @@ foreach ($engine in $engines) {
                 [string]$_.query.section_id -notin @('10', '20')
             }).Count -eq 0) "$($engine.Name)/$scenario issued an unscoped/private media query."
 
-            if ($scenario -in $deletedHistoryScenarios) {
+            if ($scenario -in $providerRecoveryScenarios) {
                 $hostedCalls = @($calls | Where-Object { [string]$_.path -like '/hosted/library/metadata/*' })
                 Assert-True (@($hostedCalls | Where-Object { -not $_.has_plex_token }).Count -eq 0) "$($engine.Name)/$scenario called hosted metadata without the administrator Plex token."
                 if ($scenario -eq 'deleted-history-legacy-guid') {
@@ -378,17 +428,58 @@ foreach ($engine in $engines) {
                 $sendLog = Get-Content $sendStdout -Raw
                 Assert-True ($sendLog.Contains('Test email sent successfully.')) "$($engine.Name)/$scenario SendTest did not complete delivery."
                 Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
-                if ($scenario -in $deletedHistoryScenarios) {
+                if ($scenario -in $providerRecoveryScenarios) {
                     Assert-True ($sendLog.Contains('recovered an exact movie match through the provider POST contract')) "$($engine.Name)/$scenario SendTest did not report the provider-contract recovery."
                     Assert-True ($sendLog.Contains('recovered an exact show match through the provider POST contract')) "$($engine.Name)/$scenario SendTest did not report the TV provider-contract recovery."
                     Assert-True ($sendLog.Contains('Recovered deleted Plex movie history artwork')) "$($engine.Name)/$scenario SendTest did not recover deleted movie artwork."
                     Assert-True ($sendLog.Contains('Recovered deleted Plex show history artwork')) "$($engine.Name)/$scenario SendTest did not recover deleted TV artwork."
+                }
+                if ($scenario -eq $cacheScenario) {
+                    Assert-True ($sendLog.Contains('Deleted-item cache hit for an exact movie GUID')) "$($engine.Name)/$scenario SendTest did not reuse cached movie metadata."
+                    Assert-True ($sendLog.Contains('Restored deleted movie history artwork from the bounded pre-deletion cache.')) "$($engine.Name)/$scenario SendTest did not reuse cached movie artwork."
                 }
                 $smtpCommands = @(Get-Content $smtpCallLog | ForEach-Object { ($_ | ConvertFrom-Json).command })
                 Assert-True ('DATA' -in $smtpCommands) "$($engine.Name)/$scenario SendTest did not submit an SMTP message."
                 Assert-True (Test-Path $smtpDataFile) "$($engine.Name)/$scenario SendTest did not preserve the captured MIME message."
                 & $PythonPath $emailThemeAssertion $smtpDataFile
                 Assert-True ($LASTEXITCODE -eq 0) "$($engine.Name)/$scenario delivered HTML lost the dark email contract."
+
+                if ($scenario -eq $cacheScenario) {
+                    Remove-Item -LiteralPath (Join-Path $outputRoot 'posters') -Recurse -Force -ErrorAction SilentlyContinue
+                    New-Item -ItemType Directory -Force -Path (Join-Path $outputRoot 'posters') | Out-Null
+                    $oldDataRoot = $env:TAUTWEEKLY_DATA_DIR
+                    $oldConfig = $env:TAUTWEEKLY_CONFIG
+                    $oldMetadataProvider = $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL
+                    $oldPlexWatch = $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL
+                    try {
+                        if ($engine.Container) {
+                            $env:TAUTWEEKLY_DATA_DIR = $dataRoot
+                            $env:TAUTWEEKLY_CONFIG = $configPath
+                        }
+                        $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $baseUrl + '/hosted'
+                        $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL = $baseUrl + '/watch'
+                        $sendAllProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
+                            '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
+                            '-RendererPath', (Join-Path $appRoot $engine.Renderer), '-ConfigPath', $configPath,
+                            '-UserId', '1', '-Mode', 'SendAll'
+                        ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $sendAllStdout -RedirectStandardError $sendAllStderr
+                    }
+                    finally {
+                        $env:TAUTWEEKLY_DATA_DIR = $oldDataRoot
+                        $env:TAUTWEEKLY_CONFIG = $oldConfig
+                        $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $oldMetadataProvider
+                        $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL = $oldPlexWatch
+                    }
+                    if ($sendAllProcess.ExitCode -ne 0) {
+                        throw "$($engine.Name)/$scenario SendAll failed ($($sendAllProcess.ExitCode)).`nSTDOUT:`n$(Get-Content $sendAllStdout -Raw)`nSTDERR:`n$(Get-Content $sendAllStderr -Raw)"
+                    }
+                    $sendAllLog = Get-Content $sendAllStdout -Raw
+                    Assert-True ($sendAllLog.Contains('Deleted-item cache hit for an exact movie GUID')) "$($engine.Name)/$scenario SendAll did not reuse cached movie metadata."
+                    Assert-True ($sendAllLog.Contains('Restored deleted movie history artwork from the bounded pre-deletion cache.')) "$($engine.Name)/$scenario SendAll did not reuse cached movie artwork."
+                    Assert-True ($sendAllLog.Contains('Sent:    2') -and $sendAllLog.Contains('Failed:  0')) "$($engine.Name)/$scenario SendAll did not complete both normal deliveries."
+                    $smtpCommands = @(Get-Content $smtpCallLog | ForEach-Object { ($_ | ConvertFrom-Json).command })
+                    Assert-True (@($smtpCommands | Where-Object { $_ -eq 'DATA' }).Count -ge 3) "$($engine.Name)/$scenario did not submit SendTest plus both SendAll messages."
+                }
             }
 
             $executed++

@@ -16,16 +16,68 @@ setup is preferred.
 | `PlexServerUrl` | No | Direct Plex base URL for richer metadata and artwork |
 | `PlexToken` | No | Administrator/server Plex token for direct Plex access and exact-GUID deleted-item recovery; treat as a secret |
 
-TautWeekly for Plex's core activity flow uses Tautulli. Direct Plex access is optional
-and improves selected metadata and artwork paths. When Plex has deleted an item
-but Tautulli still retains its history GUID, TautWeekly can use `PlexToken` to
-resolve that exact identifier through `https://metadata.provider.plex.tv` and
-cache available hosted artwork and metadata. If that response omits provider
-scores, TautWeekly can use its exact returned slug to read the provider-labelled
-ratings on `https://watch.plex.tv`; that public request receives no Plex token.
-Neither path searches by title or sends recipient identity or watch-history
-values. If Plex returns an absolute artwork URL on another host, that host also
-receives no Plex token.
+TautWeekly for Plex's core activity flow uses Tautulli. Direct Plex access is
+optional and improves selected metadata and artwork paths. When Plex has
+deleted an item but Tautulli still retains its history GUID, TautWeekly can use
+`PlexToken` to ask `https://metadata.provider.plex.tv` for that exact
+identifier. This v0.8.3 compatibility path is best-effort, not durable storage:
+the provider may return no record or asset after Plex has discarded the library
+item. If a response omits provider scores, TautWeekly can use its exact returned
+slug to read provider-labelled ratings on `https://watch.plex.tv`; that public
+request receives no Plex token. Neither path searches by title or sends
+recipient identity or watch-history values. An absolute artwork URL on another
+host is also fetched without the Plex token.
+
+The [Tautulli `get_history` API](https://github.com/Tautulli/Tautulli/wiki/Tautulli-API-Reference#get_history)
+retains descriptive fields such as GUID/rating keys, titles, years, episode
+indexes, and play fields. Artwork fields are references, not durable image
+bytes. Tautulli's [Exporter Guide](https://docs.tautulli.com/using-tautulli/exporter-guide)
+likewise treats exported image resources as a separate explicit export. Once
+Plex and Tautulli no longer have the asset, TautWeekly cannot reliably recover
+it retroactively.
+
+## Persistent deleted-item cache
+
+| Key | Default | Accepted range | Purpose |
+|---|---:|---:|---|
+| `DeletedItemCacheEnabled` | `true` | Boolean | Enables capture and exact-ID fallback reads |
+| `DeletedItemCacheRetentionDays` | `365` | 1-3650 | Expires entries by their last live observation |
+| `DeletedItemCacheMaxItems` | `1000` | 1-10000 | Maximum retained entries before oldest-first eviction |
+| `DeletedItemCacheMaxBytesMB` | `256` | 16-2048 | Total ceiling for artwork plus primary/backup manifests, with bounded overhead for atomic operations |
+
+The schema-versioned cache records only the exact stable GUID and media type,
+title, year, bounded summary, up to eight genres, newsletter rating values,
+one poster with byte count and SHA-256 hash, and creation/last-seen timestamps.
+It does not record playback metrics, recipient identity, generated newsletter
+content, API keys, SMTP settings, or the Plex token. The token is never passed
+to the cache and is never forwarded to an external poster host.
+
+Entries are created only when live local metadata and a non-generic poster are
+available. Later lookups require the same normalized stable GUID and media
+type. Rating keys and titles are not fallback identities, so already-deleted
+history with a missing or ambiguous identifier fails closed.
+
+Cleanup runs at initialization and after writes. Expired entries are removed,
+then the newest entries are retained deterministically until the item and total
+byte limits are satisfied. `index.json` is replaced atomically on the same
+volume and `index.backup.json` holds the previous valid generation. A corrupt
+primary recovers from that backup; if neither generation is valid, one corrupt
+copy is retained when practical and the cache starts empty. Poster hash failures
+remove the damaged entry and rendering continues without it.
+
+Existing configurations migrate safely because missing keys use the defaults
+without rewriting `config.json`; setup preserves explicit values on
+replacement. Windows stores the cache beside the application at
+`cache/deleted-items`. Docker/macOS uses `/data/cache/deleted-items`, native
+Linux uses `/var/lib/tautweekly/cache/deleted-items`, and FreeBSD uses
+`/var/db/tautweekly/cache/deleted-items`.
+
+Set `DeletedItemCacheEnabled` to `false` to stop reads and writes without
+deleting data. To purge, stop TautWeekly and remove only the
+`cache/deleted-items` directory under the applicable private data root. Backups
+that include the cache must remain private. A full uninstall can remove the
+entire private data root only after configuration, state, output, cache entries,
+and backups are no longer needed.
 
 ## Branding and mail
 

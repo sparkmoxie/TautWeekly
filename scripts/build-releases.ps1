@@ -14,6 +14,21 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 }
 $Root = [IO.Path]::GetFullPath($Root)
 
+$sourceDateEpoch = 0L
+if (-not [string]::IsNullOrWhiteSpace([string]$env:SOURCE_DATE_EPOCH)) {
+    [void][int64]::TryParse([string]$env:SOURCE_DATE_EPOCH, [ref]$sourceDateEpoch)
+}
+if ($sourceDateEpoch -le 0) {
+    $gitEpoch = & git -C $Root log -1 --format=%ct 2>$null
+    if ($LASTEXITCODE -eq 0) { [void][int64]::TryParse(([string]$gitEpoch).Trim(), [ref]$sourceDateEpoch) }
+}
+if ($sourceDateEpoch -le 0) { $sourceDateEpoch = 315532800L }
+$sourceTimestamp = [DateTimeOffset]::FromUnixTimeSeconds($sourceDateEpoch).UtcDateTime
+# ZIP timestamps cannot represent dates before 1980.
+if ($sourceTimestamp -lt [DateTime]'1980-01-01T00:00:00Z') {
+    $sourceTimestamp = [DateTime]'1980-01-01T00:00:00Z'
+}
+
 if ($Version -notmatch '^[0-9A-Za-z][0-9A-Za-z._-]*$') {
     throw "Version contains unsupported characters: $Version"
 }
@@ -127,6 +142,17 @@ function New-TarGz {
     $archive = Join-Path $dist $ArchiveName
     & tar -czf $archive -C $staging $FolderName
     if ($LASTEXITCODE -ne 0) { throw "tar failed while creating $ArchiveName" }
+    # gzip bytes 4-7 encode the compressor's wall-clock timestamp. It is not
+    # covered by the compressed payload CRC, so normalize it to the standard
+    # reproducible-build value of zero after tar succeeds.
+    $gzip = [IO.File]::Open($archive, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    try {
+        if ($gzip.Length -lt 10) { throw "Invalid gzip output for $ArchiveName" }
+        [void]$gzip.Seek(4, [IO.SeekOrigin]::Begin)
+        $gzip.Write((New-Object byte[] 4), 0, 4)
+        $gzip.Flush()
+    }
+    finally { $gzip.Dispose() }
     return $archive
 }
 
@@ -147,8 +173,15 @@ try {
         Write-ReleaseManifest -Destination $destination.FullName
     }
 
+    # Source checkout mtimes and generated-manifest mtimes vary across runners.
+    # Normalize the complete staging tree so identical source produces
+    # byte-identical ZIP/TAR.GZ artifacts on repeated builds.
+    foreach ($item in @(Get-ChildItem -LiteralPath $staging -Force -Recurse) + @(Get-ChildItem -LiteralPath $staging -Force -Directory)) {
+        $item.LastWriteTimeUtc = $sourceTimestamp
+    }
+
     $forbidden = Get-ChildItem -LiteralPath $staging -Force -Recurse | Where-Object {
-        ($_.PSIsContainer -and $_.Name -in @('logs','output')) -or
+        ($_.PSIsContainer -and $_.Name -in @('logs','output','cache')) -or
         (-not $_.PSIsContainer -and $_.Name -in @('config.json','.env','state.json','access-state.json','scheduler-state.json')) -or
         (-not $_.PSIsContainer -and $_.Extension -eq '.log')
     }

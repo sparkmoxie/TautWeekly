@@ -83,7 +83,7 @@ UTC offset. Restart the `tautweekly` service after changing
 
 | Path | Purpose |
 |---|---|
-| `/var/db/tautweekly` | Private `config.json`, state, logs, previews, custom assets, and backups |
+| `/var/db/tautweekly` | Private `config.json`, state, logs, previews, custom assets, bounded deleted-item cache, and backups |
 | `/usr/local/etc/tautweekly/tautweekly.env` | Root-owned image, timezone, identity, bind, port, and URL settings |
 | `/usr/local/etc/rc.d/tautweekly` | Native FreeBSD service lifecycle |
 | `/usr/local/sbin/tautweekly` | Administrative command wrapper |
@@ -92,6 +92,13 @@ UTC offset. Restart the `tautweekly` service after changing
 The settings file contains no SMTP or API credential. Those secrets remain in
 `/var/db/tautweekly/config.json`, which must never be committed or shared.
 Backups, logs, and previews are also private.
+
+The cache is `/var/db/tautweekly/cache/deleted-items`. It protects future items
+observed while live and cannot reconstruct assets already discarded before
+v0.9.0. Image updates preserve it with the rest of the data root. To purge,
+stop the rc.d service and remove only that directory. During full uninstall,
+retain the data root unless configuration, state, output, cache entries, and
+backups are all intentionally being removed.
 
 Port 8787 binds to `127.0.0.1` by default. Use an SSH tunnel for remote preview:
 

@@ -1,8 +1,13 @@
 TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 ================================
 
-Unreleased
-----------
+v1.1.0 Portable
+---------------
+- adds a schema-versioned, bounded pre-deletion metadata and poster cache under persistent data
+- reuses cached presentation assets in PreviewAll, SendTest, and normal sends after future deletion
+- defaults to 365 days, 1,000 items, and 256 MiB with atomic manifests and corruption recovery
+- never caches tokens, API keys, recipients, viewing metrics, or generated newsletter output
+- documents that v0.8.3 hosted recovery is best-effort and cannot repair assets already discarded
 - preserves the dark-first email palette with dark-only metadata, explicit longhand backgrounds, and table color fallbacks
 - supplies Plex's required deleted-history title and episode-index match context, validates responses, and keeps missing artwork nonfatal
 - retries empty modern Plex and legacy TMDB/TVDB exact matches through Plex's current provider POST contract

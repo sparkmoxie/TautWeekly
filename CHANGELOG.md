@@ -6,6 +6,40 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-10
+
+### Added
+
+- Added a schema-versioned, persistent pre-deletion cache that records only an
+  exact stable media GUID, bounded newsletter presentation metadata, and one
+  SHA-256-verified poster while the Plex item is still available. PreviewAll,
+  SendTest, and normal delivery can reuse the entry after later deletion on
+  Windows, NAS/Docker, macOS, native Linux, and FreeBSD/Podman.
+- Added default 365-day, 1,000-item, and 256 MiB retention controls, deterministic
+  newest-first cleanup, atomic primary/backup manifests, corruption recovery,
+  and cross-platform creation, deletion, eviction, privacy, and package tests.
+
+### Changed
+
+- Advanced the repository release to the next SemVer minor because this feature
+  creates persistent state. Existing configurations migrate without a rewrite:
+  omitted cache settings receive bounded defaults, while setup preserves later
+  operator changes.
+- Documented that the v0.8.3 Plex hosted-provider path is best-effort. Tautulli
+  history can retain descriptive fields and identifiers, but neither Tautulli
+  history nor a deleted Plex library item guarantees durable artwork bytes.
+  The new cache protects future items observed after upgrade and cannot
+  retroactively repair assets already discarded.
+
+### Security
+
+- The cache accepts a fixed presentation-field allowlist and excludes API keys,
+  Plex and SMTP credentials, recipients, viewing metrics, and generated output.
+  It never persists the Plex administrator token or sends it to third parties.
+- Cache lookup requires the exact stable GUID and media type; malformed paths,
+  missing identifiers, hash failures, and ambiguous title-only history fail
+  closed. The total byte ceiling accounts for artwork and both manifests.
+
 ## [0.8.4] - 2026-08-10
 
 ### Fixed

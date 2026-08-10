@@ -76,12 +76,13 @@ try {
     Assert-True ($newerOutput -match "newer than GitHub's latest stable release; no update is offered") 'Windows stable-release checker offered a downgrade for a newer installed package.'
 
     $installRoot = Join-Path $testRoot 'installed'
-    New-Item -ItemType Directory -Path $installRoot, (Join-Path $installRoot 'logs'), (Join-Path $installRoot 'output'), (Join-Path $installRoot 'assets') | Out-Null
+    New-Item -ItemType Directory -Path $installRoot, (Join-Path $installRoot 'logs'), (Join-Path $installRoot 'output'), (Join-Path $installRoot 'cache/deleted-items/artwork'), (Join-Path $installRoot 'assets') | Out-Null
     $taskName = 'TautWeekly updater test ' + [Guid]::NewGuid().ToString('N')
     [IO.File]::WriteAllText((Join-Path $installRoot 'config.json'), ('{"ScheduledTaskName":"' + $taskName + '","secret":"preserve"}'), [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'state.json'), '{"state":"preserve"}', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'logs/private.log'), 'private log', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'output/private.html'), 'private output', [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $installRoot 'cache/deleted-items/artwork/private.jpg'), 'private cached poster', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'assets/custom.gif'), 'custom asset', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'TautWeekly.ps1'), "# old engine`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'deprecated-owned.txt'), "remove me`n", [Text.UTF8Encoding]::new($false))
@@ -110,6 +111,7 @@ try {
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'config.json') -Raw) -match 'preserve') 'Verified update changed private configuration.'
     Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'logs/private.log')) 'Verified update removed private logs.'
     Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'output/private.html')) 'Verified update removed private output.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'cache/deleted-items/artwork/private.jpg')) 'Verified update removed the private deleted-item cache.'
     Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'assets/custom.gif')) 'Verified update removed a custom-named asset.'
     $backups = @(Get-ChildItem -LiteralPath $testRoot -Directory -Filter 'installed.backup-v0.5.4-*')
     Assert-True ($backups.Count -eq 1) 'Verified update did not create one private sibling backup.'

@@ -35,6 +35,25 @@ function Read-YesNo {
     }
 }
 
+function Get-ExistingBooleanValue {
+    param([object]$Value, [bool]$Default)
+
+    if ($Value -is [bool]) { return [bool]$Value }
+    $parsed = $false
+    if ($null -ne $Value -and [bool]::TryParse(([string]$Value).Trim(), [ref]$parsed)) { return $parsed }
+    return $Default
+}
+
+function Get-ExistingBoundedInteger {
+    param([object]$Value, [int]$Default, [int]$Minimum, [int]$Maximum)
+
+    $parsed = 0
+    if ($null -ne $Value -and [int]::TryParse(([string]$Value).Trim(), [ref]$parsed) -and $parsed -ge $Minimum -and $parsed -le $Maximum) {
+        return $parsed
+    }
+    return $Default
+}
+
 function Read-SecretPlainText {
     param([string]$Prompt, [bool]$AllowBlank = $false)
 
@@ -86,6 +105,10 @@ $defaults = Get-Content -Path $examplePath -Raw -Encoding UTF8 | ConvertFrom-Jso
 $existingExcludedUserIds = @()
 $existingExcludedEmails = @()
 $existingIncludedLibraryIds = @()
+$existingDeletedItemCacheEnabled = $true
+$existingDeletedItemCacheRetentionDays = 365
+$existingDeletedItemCacheMaxItems = 1000
+$existingDeletedItemCacheMaxBytesMB = 256
 if (Test-Path $configPath) {
     Write-Host "An existing config.json was found:" -ForegroundColor Yellow
     Write-Host "  $configPath"
@@ -106,6 +129,10 @@ if (Test-Path $configPath) {
         if ($null -ne $existingConfig.PSObject.Properties["IncludedLibraryIds"]) {
             $existingIncludedLibraryIds = @($existingConfig.IncludedLibraryIds)
         }
+        if ($null -ne $existingConfig.PSObject.Properties["DeletedItemCacheEnabled"]) { $existingDeletedItemCacheEnabled = Get-ExistingBooleanValue $existingConfig.DeletedItemCacheEnabled $existingDeletedItemCacheEnabled }
+        if ($null -ne $existingConfig.PSObject.Properties["DeletedItemCacheRetentionDays"]) { $existingDeletedItemCacheRetentionDays = Get-ExistingBoundedInteger $existingConfig.DeletedItemCacheRetentionDays $existingDeletedItemCacheRetentionDays 1 3650 }
+        if ($null -ne $existingConfig.PSObject.Properties["DeletedItemCacheMaxItems"]) { $existingDeletedItemCacheMaxItems = Get-ExistingBoundedInteger $existingConfig.DeletedItemCacheMaxItems $existingDeletedItemCacheMaxItems 1 10000 }
+        if ($null -ne $existingConfig.PSObject.Properties["DeletedItemCacheMaxBytesMB"]) { $existingDeletedItemCacheMaxBytesMB = Get-ExistingBoundedInteger $existingConfig.DeletedItemCacheMaxBytesMB $existingDeletedItemCacheMaxBytesMB 16 2048 }
     }
     catch {
         Write-Host "WARNING: Existing user exclusions and library selection could not be read and will not be carried forward." -ForegroundColor Yellow
@@ -245,6 +272,10 @@ $config = [ordered]@{
     MinimumEpisodeSeconds = 120
     MaxMovies = 8
     MaxTv = 8
+    DeletedItemCacheEnabled = $existingDeletedItemCacheEnabled
+    DeletedItemCacheRetentionDays = $existingDeletedItemCacheRetentionDays
+    DeletedItemCacheMaxItems = $existingDeletedItemCacheMaxItems
+    DeletedItemCacheMaxBytesMB = $existingDeletedItemCacheMaxBytesMB
     IncludedLibraryIds = @($includedLibraryIds)
     ExcludedUserIds = @($excludedUserIds)
     ExcludedEmails = @($existingExcludedEmails)

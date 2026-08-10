@@ -15,6 +15,7 @@
 **/.tautweekly-operation.lock
 **/logs/
 **/output/
+**/cache/
 **/*.log
 **/*.log.*
 

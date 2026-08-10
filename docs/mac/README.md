@@ -125,6 +125,13 @@ config before writing and does not change SMTP, recipients, or scheduling.
 Private runtime data lives in `data/`. Back it up with
 `./tautweekly.sh backup` and keep the archive private.
 
+The future-deletion cache lives at `data/cache/deleted-items`, defaults to 365
+days/1,000 items/256 MiB, and is preserved with the rest of `data/` during
+updates. It can reuse only items observed live after v0.9.0; it cannot restore
+assets Plex/Tautulli had already discarded. To purge it, stop the container and
+remove only that directory. Delete all of `data/` during uninstall only when
+configuration, state, output, cache entries, and backups are no longer needed.
+
 `./tautweekly.sh check-update` compares `RELEASE-METADATA.txt` with GitHub's
 latest stable release. It never applies an update and never follows `main` or
 the container `edge` tag. macOS does not schedule unattended updates.
