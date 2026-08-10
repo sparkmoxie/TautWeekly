@@ -4959,7 +4959,7 @@ function Get-StatsMovieRowsHtml {
             -ImageMode $ImageMode
 
         $posterHtml = if ([string]::IsNullOrWhiteSpace($posterSrc)) {
-            '<div style="width:42px;height:62px;border-radius:5px;background:#262626;border:1px solid #363636;"></div>'
+            '<div style="width:42px;height:62px;border-radius:5px;background-color:#262626;border:1px solid #363636;"></div>'
         } else {
             '<img src="' + (HtmlEncode $posterSrc) + '" width="42" height="62" alt="' + $title + ' poster" style="display:block;width:42px;height:62px;object-fit:cover;border:1px solid #363636;border-radius:5px;">'
         }
@@ -5021,7 +5021,7 @@ function Get-StatsEpisodeRowsHtml {
             -ImageMode $ImageMode
 
         $posterHtml = if ([string]::IsNullOrWhiteSpace($posterSrc)) {
-            '<div style="width:42px;height:62px;border-radius:5px;background:#262626;border:1px solid #363636;"></div>'
+            '<div style="width:42px;height:62px;border-radius:5px;background-color:#262626;border:1px solid #363636;"></div>'
         } else {
             '<img src="' + (HtmlEncode $posterSrc) + '" width="42" height="62" alt="' + $showTitle + ' poster" style="display:block;width:42px;height:62px;object-fit:cover;border:1px solid #363636;border-radius:5px;">'
         }
@@ -5069,7 +5069,7 @@ function Get-StatsTvShowRowsHtml {
             -ImageMode $ImageMode
 
         $posterHtml = if ([string]::IsNullOrWhiteSpace($posterSrc)) {
-            '<div style="width:42px;height:62px;border-radius:5px;background:#262626;border:1px solid #363636;"></div>'
+            '<div style="width:42px;height:62px;border-radius:5px;background-color:#262626;border:1px solid #363636;"></div>'
         } else {
             '<img src="' + (HtmlEncode $posterSrc) + '" width="42" height="62" alt="' + $showTitle + ' poster" style="display:block;width:42px;height:62px;object-fit:cover;border:1px solid #363636;border-radius:5px;">'
         }
@@ -5232,7 +5232,7 @@ function Get-ReleaseCardsHtml {
                 $posterHtml = '<img src="' + (HtmlEncode $posterSrc) + '" width="100%" alt="' + $title + ' poster" style="display:block;width:100%;height:auto;border:0;border-radius:8px 8px 0 0;">'
             }
             else {
-                $posterHtml = '<div style="height:260px;background:#222;border-radius:8px 8px 0 0;text-align:center;color:#777;font-size:12px;line-height:260px;">Poster unavailable</div>'
+                $posterHtml = '<div style="height:260px;background-color:#222;border-radius:8px 8px 0 0;text-align:center;color:#777;font-size:12px;line-height:260px;">Poster unavailable</div>'
             }
 
             $contentHeight = if ($Kind -eq "Movie") { 170 } else { 184 }
@@ -5320,7 +5320,7 @@ $genreHtml
 
             [void]$html.Append(@"
 <td width="50%" valign="top" style="padding:0 6px 18px;">
-  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;overflow:hidden;">
+  <table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;overflow:hidden;">
     <tr>
       <td valign="top" style="padding:0;">
         $posterHtml
@@ -5560,7 +5560,7 @@ $tvCards
         $welcomeBlock = @"
 <tr>
 <td class="pad" style="padding:4px 20px 26px;">
-  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #e5a00d;border-radius:10px;border-collapse:separate;">
+  <table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="background-color:#181818;border:1px solid #e5a00d;border-radius:10px;border-collapse:separate;">
     <tr>
       <td valign="middle" style="padding:20px 22px;">
         <div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">
@@ -5704,7 +5704,7 @@ $tvCards
         $hotBlock = @"
 <tr class="design-hot-desktop">
 <td class="pad" style="padding:4px 20px 26px;">
-  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid $hotBorderColor;border-radius:10px;border-collapse:separate;">
+  <table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="background-color:#181818;border:1px solid $hotBorderColor;border-radius:10px;border-collapse:separate;">
     <tr>
       <td width="205" valign="top" style="padding:16px 0 16px 16px;">
         $hotPosterHtml
@@ -5749,7 +5749,7 @@ $tvCards
 
 <tr class="design-hot-mobile" style="display:none;">
 <td class="pad" style="padding:0 12px 26px;">
-  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid $hotBorderColor;border-radius:10px;border-collapse:separate;overflow:hidden;">
+  <table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="background-color:#181818;border:1px solid $hotBorderColor;border-radius:10px;border-collapse:separate;overflow:hidden;">
     <tr>
       <td style="padding:0;">
         <div class="design-mobile-banner-wrap" style="position:relative;overflow:hidden;">
@@ -5821,7 +5821,7 @@ $tvCards
         $trendingBlock = @"
 <tr>
 <td class="pad" style="padding:0 20px 26px;">
-  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+  <table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
     <tr>
       $posterCell
       <td width="56" valign="middle" style="padding:16px 0 16px 14px;">
@@ -5972,15 +5972,15 @@ $tvCards
     if ($movieDetailMode -and $tvShowDetailMode) {
         $mediaStatsRow = @"
 <tr>
-  <td width="50%" valign="top" style="padding:0 5px 10px 0;"><table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$movieCardContent</td></tr></table></td>
-  <td width="50%" valign="top" style="padding:0 0 10px 5px;"><table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$tvShowCardContent</td></tr></table></td>
+  <td width="50%" valign="top" style="padding:0 5px 10px 0;"><table class="email-card" width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;height:${statsCardHeight}px;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$movieCardContent</td></tr></table></td>
+  <td width="50%" valign="top" style="padding:0 0 10px 5px;"><table class="email-card" width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;height:${statsCardHeight}px;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$tvShowCardContent</td></tr></table></td>
 </tr>
 "@
     }
     elseif ($movieDetailMode -or $tvShowDetailMode) {
         $singleMediaContent = if ($movieDetailMode) { $movieCardContent } else { $tvShowCardContent }
         $mediaStatsRow = @"
-<tr><td colspan="2" width="100%" valign="top" style="padding:0 0 10px;"><table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$singleMediaContent</td></tr></table></td></tr>
+<tr><td colspan="2" width="100%" valign="top" style="padding:0 0 10px;"><table class="email-card" width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;height:${statsCardHeight}px;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$singleMediaContent</td></tr></table></td></tr>
 "@
     }
 
@@ -6006,7 +6006,7 @@ $tvCards
         $statsBlock = @"
 <tr>
 <td class="pad" style="padding:0 20px 16px;">
-  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+  <table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
     <tr>
       <td width="72" valign="middle" style="padding:20px 0 20px 20px;">
         <img src="$zeroIconSrc" width="48" height="48" alt="$(HtmlEncode $zeroAlt)" style="display:block;width:48px;height:48px;border:0;">
@@ -6030,7 +6030,7 @@ $tvCards
 $mediaStatsRow
 <tr>
   <td width="50%" valign="top" style="padding:0 5px 10px 0;">
-    <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+    <table class="email-card" width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;height:${statsCardHeight}px;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
       <tr>
         <td height="$statsCardHeight" valign="middle" style="height:${statsCardHeight}px;padding:17px;">
           <img src="$clockIconSrc" width="42" height="42" alt="Total watched" style="display:block;width:42px;height:42px;border:0;">
@@ -6041,7 +6041,7 @@ $mediaStatsRow
     </table>
   </td>
   <td width="50%" valign="top" style="padding:0 0 10px 5px;">
-    <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:${statsCardHeight}px;background:$bingeBackground;border:1px solid $bingeBorder;border-radius:10px;border-collapse:separate;">
+    <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="$bingeBackground" style="width:100%;height:${statsCardHeight}px;background-color:$bingeBackground;border:1px solid $bingeBorder;border-radius:10px;border-collapse:separate;">
       <tr>
         <td height="$statsCardHeight" valign="middle" style="height:${statsCardHeight}px;padding:17px;">
           <div style="font-size:9px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">$(HtmlEncode $bingeEyebrow)</div>
@@ -6065,7 +6065,7 @@ $mediaStatsRow
         $bingeStandaloneBlock = @"
 <tr>
 <td class="pad" style="padding:0 20px 24px;">
-  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:$bingeBackground;border:1px solid $bingeBorder;border-radius:10px;border-collapse:separate;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="$bingeBackground" style="background-color:$bingeBackground;border:1px solid $bingeBorder;border-radius:10px;border-collapse:separate;">
     <tr>
       <td width="84" valign="middle" style="padding:18px 0 18px 20px;">
         <img src="$trophyIconSrc" width="$(if ($isBingeWinner) { 54 } else { 42 })" height="$(if ($isBingeWinner) { 54 } else { 42 })" alt="Binge Champion award" style="display:block;width:$(if ($isBingeWinner) { 54 } else { 42 })px;height:$(if ($isBingeWinner) { 54 } else { 42 })px;border:0;">
@@ -6107,7 +6107,7 @@ $mediaStatsRow
         @"
 <tr>
 <td class="pad" style="padding:10px 20px 22px;">
-  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+  <table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
     <tr>
       <td style="padding:20px 22px;">
         <div style="font-size:13px;color:#e5a00d;font-weight:800;">
@@ -6159,10 +6159,19 @@ $mediaStatsRow
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
 <title>TautWeekly for Plex</title>
 <style>
 /* Email-safe table-first layout; only the featured hero swaps at the mobile breakpoint. */
+:root { color-scheme:dark only; supported-color-schemes:dark; }
+.email-background { background-color:#0f0f0f !important; color:#ffffff !important; }
+.email-card { background-color:#181818 !important; }
 .design-hot-mobile { display:none; }
+@media (prefers-color-scheme: dark) {
+  .email-background { background-color:#0f0f0f !important; color:#ffffff !important; }
+  .email-card { background-color:#181818 !important; }
+}
 @media only screen and (max-width: 620px) {
   .container { width: 100% !important; }
   .pad { padding-left: 12px !important; padding-right: 12px !important; }
@@ -6174,12 +6183,12 @@ $mediaStatsRow
 }
 </style>
 </head>
-<body style="margin:0;padding:0;background:#0f0f0f;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
+<body class="email-background" bgcolor="#0f0f0f" style="margin:0;padding:0;background-color:#0f0f0f;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
 <div style="display:none!important;font-size:1px;line-height:1px;max-height:0;max-width:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">$(HtmlEncode $preheader)$preheaderPadding</div>
-<table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#0f0f0f;">
+<table class="email-background" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#0f0f0f" style="background-color:#0f0f0f;">
 <tr>
-<td align="center" style="padding:28px 10px;">
-<table class="container" width="640" cellspacing="0" cellpadding="0" border="0" style="width:640px;max-width:640px;">
+<td class="email-background" align="center" bgcolor="#0f0f0f" style="padding:28px 10px;background-color:#0f0f0f;">
+<table class="container email-background" width="640" cellspacing="0" cellpadding="0" border="0" bgcolor="#0f0f0f" style="width:640px;max-width:640px;background-color:#0f0f0f;">
 <tr>
 <td class="pad" style="padding:0 20px 18px;">
   <div style="font-size:13px;font-weight:800;letter-spacing:2px;color:#e5a00d;">$(HtmlEncode $serverLabel)</div>
@@ -6209,7 +6218,7 @@ $trendingBlock
 
 <tr>
 <td class="pad" align="center" style="padding:8px 20px 18px;">
-  <a href="$(HtmlEncode $plexUrl)" style="display:inline-block;background:#e5a00d;color:#111111;text-decoration:none;font-size:14px;font-weight:800;padding:13px 24px;border-radius:7px;">OPEN PLEX</a>
+  <a href="$(HtmlEncode $plexUrl)" style="display:inline-block;background-color:#e5a00d;color:#111111;text-decoration:none;font-size:14px;font-weight:800;padding:13px 24px;border-radius:7px;">OPEN PLEX</a>
 </td>
 </tr>
 
@@ -6448,14 +6457,25 @@ function Build-WelcomeHtml {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
 <title>Welcome aboard</title>
+<style>
+:root { color-scheme:dark only; supported-color-schemes:dark; }
+.email-background { background-color:#0f0f0f !important; color:#ffffff !important; }
+.email-card { background-color:#181818 !important; }
+@media (prefers-color-scheme: dark) {
+  .email-background { background-color:#0f0f0f !important; color:#ffffff !important; }
+  .email-card { background-color:#181818 !important; }
+}
+</style>
 </head>
-<body style="margin:0;padding:0;background:#0f0f0f;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
+<body class="email-background" bgcolor="#0f0f0f" style="margin:0;padding:0;background-color:#0f0f0f;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">Your access to $(HtmlEncode $footerServerName) is live.</div>
-<table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#0f0f0f;">
+<table class="email-background" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#0f0f0f" style="background-color:#0f0f0f;">
 <tr>
-<td align="center" style="padding:34px 12px;">
-<table width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:600px;">
+<td class="email-background" align="center" bgcolor="#0f0f0f" style="padding:34px 12px;background-color:#0f0f0f;">
+<table class="email-background" width="600" cellspacing="0" cellpadding="0" border="0" bgcolor="#0f0f0f" style="width:600px;max-width:600px;background-color:#0f0f0f;">
 <tr>
 <td style="padding:0 20px 20px;">
   <div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.8px;">
@@ -6468,7 +6488,7 @@ function Build-WelcomeHtml {
 </tr>
 <tr>
 <td style="padding:0 20px 22px;">
-  <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+  <table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
     <tr>
       <td style="padding:20px 22px;">
         <div style="font-size:13px;color:#e5a00d;font-weight:800;">🍿 $($deliveryDay.ToUpperInvariant()) DROPS</div>
@@ -6486,7 +6506,7 @@ function Build-WelcomeHtml {
 </tr>
 <tr>
 <td align="center" style="padding:4px 20px 24px;">
-  <a href="$(HtmlEncode $plexUrl)" style="display:inline-block;background:#e5a00d;color:#111111;text-decoration:none;font-size:14px;font-weight:800;padding:14px 28px;border-radius:7px;">OPEN PLEX</a>
+  <a href="$(HtmlEncode $plexUrl)" style="display:inline-block;background-color:#e5a00d;color:#111111;text-decoration:none;font-size:14px;font-weight:800;padding:14px 28px;border-radius:7px;">OPEN PLEX</a>
 </td>
 </tr>
 <tr>
@@ -7560,7 +7580,7 @@ if ($Mode -eq "PreviewAll") {
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TautWeekly for Plex — All Email Types</title>
 <style>
-body{margin:0;background:#0f0f0f;color:#fff;font-family:Arial,Helvetica,sans-serif;padding:32px 18px}.wrap{max-width:900px;margin:auto}.eyebrow{color:#e5a00d;font-size:12px;font-weight:800;letter-spacing:1.5px}.card{margin-top:14px;padding:18px 20px;background:#181818;border:1px solid #2b2b2b;border-radius:10px}.title{font-size:18px;font-weight:800}.subject{color:#aaa;margin-top:7px;font-size:13px;line-height:1.45}.btn{display:inline-block;margin-top:13px;background:#e5a00d;color:#111;text-decoration:none;font-weight:800;padding:10px 15px;border-radius:7px}.note{margin-top:20px;color:#999;font-size:12px;line-height:1.55;border-left:3px solid #e5a00d;padding-left:12px}.meta{color:#888;font-size:13px;line-height:1.55;margin-top:8px}
+body{margin:0;background-color:#0f0f0f;color:#fff;font-family:Arial,Helvetica,sans-serif;padding:32px 18px}.wrap{max-width:900px;margin:auto}.eyebrow{color:#e5a00d;font-size:12px;font-weight:800;letter-spacing:1.5px}.card{margin-top:14px;padding:18px 20px;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px}.title{font-size:18px;font-weight:800}.subject{color:#aaa;margin-top:7px;font-size:13px;line-height:1.45}.btn{display:inline-block;margin-top:13px;background-color:#e5a00d;color:#111;text-decoration:none;font-weight:800;padding:10px 15px;border-radius:7px}.note{margin-top:20px;color:#999;font-size:12px;line-height:1.55;border-left:3px solid #e5a00d;padding-left:12px}.meta{color:#888;font-size:13px;line-height:1.55;margin-top:8px}
 </style></head><body><div class="wrap">
 <div class="eyebrow">TAUTWEEKLY FOR PLEX — ALL EMAIL TYPES</div>
 <h1 style="margin:8px 0 0;font-size:30px;">The real email layout, across every state.</h1>

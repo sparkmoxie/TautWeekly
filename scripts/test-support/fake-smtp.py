@@ -37,8 +37,17 @@ class Handler(socketserver.StreamRequestHandler):
                 self.send("250 Accepted")
             elif upper == "DATA":
                 self.send("354 End data with <CR><LF>.<CR><LF>")
-                while self.read() != ".":
-                    pass
+                data_lines: list[str] = []
+                while True:
+                    data_line = self.read()
+                    if data_line == ".":
+                        break
+                    if data_line.startswith(".."):
+                        data_line = data_line[1:]
+                    data_lines.append(data_line)
+                data_file: Path | None = self.server.data_file  # type: ignore[attr-defined]
+                if data_file is not None:
+                    data_file.write_bytes(("\r\n".join(data_lines) + "\r\n").encode("utf-8"))
                 self.send("250 Queued")
             elif upper == "QUIT":
                 self.send("221 Bye")
@@ -56,11 +65,13 @@ def main() -> None:
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--call-log", type=Path, required=True)
     parser.add_argument("--ready-file", type=Path, required=True)
+    parser.add_argument("--data-file", type=Path)
     args = parser.parse_args()
 
     args.call_log.write_text("", encoding="utf-8")
     with Server(("127.0.0.1", args.port), Handler) as server:
         server.call_log = args.call_log  # type: ignore[attr-defined]
+        server.data_file = args.data_file  # type: ignore[attr-defined]
         args.ready_file.write_text(str(server.server_address[1]), encoding="utf-8")
         server.serve_forever()
 
