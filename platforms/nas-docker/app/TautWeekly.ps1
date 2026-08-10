@@ -755,6 +755,8 @@ function New-ReleaseData {
                     RatingKey       = $showRatingKey
                     PosterRatingKey = $posterRatingKey
                     MetadataGuid    = Get-OptionalStringProperty -InputObject $item -Name "guid"
+                    MetadataParentIndex = if ($type -eq "episode") { Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "parent_media_index") } else { 0 }
+                    MetadataIndex   = if ($type -in @("episode", "season")) { Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "media_index") } else { 0 }
                     Title           = $showTitle
                     Year            = Get-OptionalStringProperty -InputObject $item -Name "year"
                     Rating          = ""
@@ -770,6 +772,13 @@ function New-ReleaseData {
             $entry = $tvMap[$mapKey]
             if ([string]::IsNullOrWhiteSpace([string]$entry.MetadataGuid)) {
                 $entry.MetadataGuid = Get-OptionalStringProperty -InputObject $item -Name "guid"
+                if ($type -eq "episode") {
+                    $entry.MetadataParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "parent_media_index")
+                    $entry.MetadataIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "media_index")
+                }
+                elseif ($type -eq "season") {
+                    $entry.MetadataIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "media_index")
+                }
             }
             if ((Safe-Int64 $item.added_at) -gt $entry.AddedAt) {
                 $entry.AddedAt = Safe-Int64 $item.added_at
@@ -1382,6 +1391,8 @@ function Get-UserStats {
                         RatingKey       = $showRatingKey
                         PosterRatingKey = $showRatingKey
                         MetadataGuid    = Get-OptionalStringProperty -InputObject $row -Name "guid"
+                        MetadataParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $row -Name "parent_media_index")
+                        MetadataIndex   = Safe-Int (Get-OptionalStringProperty -InputObject $row -Name "media_index")
                         Title           = $showTitle
                         ShowTitle       = $showTitle
                         Summary         = ""
@@ -1393,6 +1404,8 @@ function Get-UserStats {
                 }
                 if ([string]::IsNullOrWhiteSpace([string]$tvShowTotals[$showDedupeKey].MetadataGuid)) {
                     $tvShowTotals[$showDedupeKey].MetadataGuid = Get-OptionalStringProperty -InputObject $row -Name "guid"
+                    $tvShowTotals[$showDedupeKey].MetadataParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $row -Name "parent_media_index")
+                    $tvShowTotals[$showDedupeKey].MetadataIndex = Safe-Int (Get-OptionalStringProperty -InputObject $row -Name "media_index")
                 }
                 $tvShowTotals[$showDedupeKey].Plays += (Get-HistoryRowPlayCount -Row $row)
                 $tvShowTotals[$showDedupeKey].Seconds += $seconds
@@ -1589,6 +1602,9 @@ function Get-GlobalTitleTotals {
         $ratingKey = ""
         $titleType = ""
         $metadataGuid = Get-OptionalStringProperty -InputObject $row -Name "guid"
+        $metadataYear = Get-OptionalStringProperty -InputObject $row -Name "year"
+        $metadataParentIndex = 0
+        $metadataIndex = 0
 
         if ($type -eq "movie") {
             $title = [string]$row.title
@@ -1604,6 +1620,8 @@ function Get-GlobalTitleTotals {
             $ratingKey = [string]$row.grandparent_rating_key
             $key = if ([string]::IsNullOrWhiteSpace($ratingKey)) { "show:title:" + $title } else { "show:" + $ratingKey }
             $titleType = "show"
+            $metadataParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $row -Name "parent_media_index")
+            $metadataIndex = Safe-Int (Get-OptionalStringProperty -InputObject $row -Name "media_index")
         }
         else {
             continue
@@ -1618,6 +1636,9 @@ function Get-GlobalTitleTotals {
                 Type      = $titleType
                 RatingKey = $ratingKey
                 MetadataGuid = $metadataGuid
+                MetadataParentIndex = $metadataParentIndex
+                MetadataIndex = $metadataIndex
+                Year      = $metadataYear
                 Seconds   = [int64]0
                 Plays     = 0
             }
@@ -1626,6 +1647,9 @@ function Get-GlobalTitleTotals {
         if ([string]::IsNullOrWhiteSpace([string]$totals[$key].MetadataGuid) -and
             -not [string]::IsNullOrWhiteSpace($metadataGuid)) {
             $totals[$key].MetadataGuid = $metadataGuid
+            $totals[$key].MetadataParentIndex = $metadataParentIndex
+            $totals[$key].MetadataIndex = $metadataIndex
+            $totals[$key].Year = $metadataYear
         }
 
         $totals[$key].Seconds += $seconds
@@ -1675,7 +1699,7 @@ function New-HeroItemFromGlobalStat {
     }
 
     $title = [string]$Stat.Title
-    $year = ""
+    $year = Get-OptionalStringProperty -InputObject $Stat -Name "Year"
     $summary = ""
     $posterRatingKey = [string]$Stat.RatingKey
     $addedAt = [int64]0
@@ -1697,6 +1721,8 @@ function New-HeroItemFromGlobalStat {
         RatingKey       = [string]$Stat.RatingKey
         PosterRatingKey = $posterRatingKey
         MetadataGuid    = Get-OptionalStringProperty -InputObject $Stat -Name "MetadataGuid"
+        MetadataParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $Stat -Name "MetadataParentIndex")
+        MetadataIndex   = Safe-Int (Get-OptionalStringProperty -InputObject $Stat -Name "MetadataIndex")
         Title           = $title
         Year            = $year
         Rating          = ""
@@ -3530,10 +3556,14 @@ function Add-DesignRatingMetadata {
         }
 
         # A deleted library item can no longer be expanded by the local PMS,
-        # but Tautulli history retains its exact Plex metadata GUID. With the
-        # administrator-authorized Plex token, resolve only that identifier
-        # against Plex's hosted metadata service; never search by title.
+        # but Tautulli history retains its Plex metadata GUID and limited match
+        # context. Plex requires that context for its provider POST contract;
+        # accept the result only when it agrees with that retained context.
         $metadataGuid = Get-OptionalStringProperty -InputObject $item -Name "MetadataGuid"
+        $matchTitle = Get-OptionalStringProperty -InputObject $item -Name "Title"
+        $matchYear = Get-OptionalStringProperty -InputObject $item -Name "Year"
+        $matchParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "MetadataParentIndex")
+        $matchIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "MetadataIndex")
         $needsHostedRating = if ($mediaType -eq "movie") {
             [string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)
         }
@@ -3550,7 +3580,13 @@ function Add-DesignRatingMetadata {
 
         if ($needsHostedMetadata) {
             try {
-                $hostedMeta = Get-PlexHostedMetadata -MetadataGuid $metadataGuid -MediaType $mediaType
+                $hostedMeta = Get-PlexHostedMetadata `
+                    -MetadataGuid $metadataGuid `
+                    -MediaType $mediaType `
+                    -MatchTitle $matchTitle `
+                    -MatchYear $matchYear `
+                    -ParentIndex $matchParentIndex `
+                    -Index $matchIndex
                 if ($null -ne $hostedMeta) {
                     $watchSlug = Get-OptionalStringProperty -InputObject $hostedMeta -Name "slug"
                     if ($genres.Count -eq 0) {
@@ -4282,7 +4318,11 @@ function Get-PlexHostedMetadataMatchPayload {
         [string]$MetadataGuid,
         [ValidateSet("movie", "show")]
         [string]$MediaType,
-        [string]$LookupPath
+        [string]$LookupPath,
+        [string]$MatchTitle = "",
+        [string]$MatchYear = "",
+        [int]$ParentIndex = 0,
+        [int]$Index = 0
     )
 
     if ([string]::IsNullOrWhiteSpace($MetadataGuid) -or [string]::IsNullOrWhiteSpace($LookupPath)) { return $null }
@@ -4305,7 +4345,30 @@ function Get-PlexHostedMetadataMatchPayload {
     }
 
     if ([string]::IsNullOrWhiteSpace($exactGuid) -or $providerType -eq 0) { return $null }
-    return [ordered]@{ guid = $exactGuid; type = $providerType }
+
+    $payload = [ordered]@{ guid = $exactGuid; type = $providerType }
+    $title = $MatchTitle.Trim()
+    if ($providerType -in @(1, 2)) {
+        if ([string]::IsNullOrWhiteSpace($title)) { return $null }
+        $payload.title = $title
+        if ($providerType -eq 1) {
+            $year = Safe-Int $MatchYear
+            if ($year -gt 0) { $payload.year = $year }
+        }
+    }
+    elseif ($providerType -eq 3) {
+        if ([string]::IsNullOrWhiteSpace($title) -or $Index -le 0) { return $null }
+        $payload.parentTitle = $title
+        $payload.index = $Index
+    }
+    elseif ($providerType -eq 4) {
+        if ([string]::IsNullOrWhiteSpace($title) -or $ParentIndex -le 0 -or $Index -le 0) { return $null }
+        $payload.grandparentTitle = $title
+        $payload.parentIndex = $ParentIndex
+        $payload.index = $Index
+    }
+
+    return $payload
 }
 
 function Get-PlexHostedMetadataItemFromResponse {
@@ -4324,16 +4387,75 @@ function Get-PlexHostedMetadataItemFromResponse {
     return $rows[0]
 }
 
+function Test-PlexHostedMetadataExactMatch {
+    param(
+        [object]$Metadata,
+        [object]$MatchPayload
+    )
+
+    if ($null -eq $Metadata -or $null -eq $MatchPayload) { return $false }
+    $expectedGuid = if ($MatchPayload -is [System.Collections.IDictionary] -and $MatchPayload.Contains("guid")) {
+        [string]$MatchPayload["guid"]
+    }
+    else {
+        Get-OptionalStringProperty -InputObject $MatchPayload -Name "guid"
+    }
+    if ([string]::IsNullOrWhiteSpace($expectedGuid)) { return $false }
+
+    if ($expectedGuid -match '(?i)^plex://') {
+        $resolvedGuid = Get-OptionalStringProperty -InputObject $Metadata -Name "guid"
+        return (-not [string]::IsNullOrWhiteSpace($resolvedGuid) -and $resolvedGuid -ieq $expectedGuid)
+    }
+
+    $externalGuidProperty = @(
+        $Metadata.PSObject.Properties |
+            Where-Object { $_.Name -ceq "Guid" } |
+            Select-Object -First 1
+    )
+    if ($externalGuidProperty.Count -gt 0) {
+        foreach ($guidEntry in @($externalGuidProperty[0].Value)) {
+            $candidate = Get-OptionalStringProperty -InputObject $guidEntry -Name "id"
+            if (-not [string]::IsNullOrWhiteSpace($candidate) -and $candidate -ieq $expectedGuid) {
+                return $true
+            }
+        }
+        return $false
+    }
+
+    # Some Plex JSON responses omit the external Guid[] array. The request is
+    # still anchored to a validated TMDB/TVDB/IMDb identifier; require its
+    # retained title and media type to agree before accepting that response.
+    $expectedTitle = if ($MatchPayload -is [System.Collections.IDictionary] -and $MatchPayload.Contains("title")) {
+        [string]$MatchPayload["title"]
+    }
+    else { "" }
+    $expectedType = if ($MatchPayload -is [System.Collections.IDictionary] -and $MatchPayload.Contains("type")) {
+        switch ([int]$MatchPayload["type"]) { 1 { "movie" }; 2 { "show" }; default { "" } }
+    }
+    else { "" }
+    $resolvedTitle = Get-OptionalStringProperty -InputObject $Metadata -Name "title"
+    $resolvedType = Get-OptionalStringProperty -InputObject $Metadata -Name "type"
+    return (
+        -not [string]::IsNullOrWhiteSpace($expectedTitle) -and
+        $resolvedTitle.Trim() -ieq $expectedTitle.Trim() -and
+        $resolvedType -ieq $expectedType
+    )
+}
+
 function Get-PlexHostedMetadata {
     param(
         [string]$MetadataGuid,
         [ValidateSet("movie", "show")]
-        [string]$MediaType
+        [string]$MediaType,
+        [string]$MatchTitle = "",
+        [string]$MatchYear = "",
+        [int]$ParentIndex = 0,
+        [int]$Index = 0
     )
 
     if ([string]::IsNullOrWhiteSpace($MetadataGuid)) { return $null }
 
-    $cacheKey = $MediaType + ":" + $MetadataGuid.Trim()
+    $cacheKey = @($MediaType, $MetadataGuid.Trim(), $MatchTitle.Trim(), $MatchYear.Trim(), $ParentIndex, $Index) -join "|"
     if ($script:PlexHostedMetadataCache.ContainsKey($cacheKey)) {
         return $script:PlexHostedMetadataCache[$cacheKey]
     }
@@ -4344,7 +4466,14 @@ function Get-PlexHostedMetadata {
         $script:PlexHostedMetadataCache[$cacheKey] = $null
         return $null
     }
-    $matchPayload = Get-PlexHostedMetadataMatchPayload -MetadataGuid $MetadataGuid -MediaType $MediaType -LookupPath $lookupPath
+    $matchPayload = Get-PlexHostedMetadataMatchPayload `
+        -MetadataGuid $MetadataGuid `
+        -MediaType $MediaType `
+        -LookupPath $lookupPath `
+        -MatchTitle $MatchTitle `
+        -MatchYear $MatchYear `
+        -ParentIndex $ParentIndex `
+        -Index $Index
 
     $ctx = Get-DesignPlexContext
     $token = Get-OptionalStringProperty -InputObject $ctx -Name "Token"
@@ -4374,12 +4503,33 @@ function Get-PlexHostedMetadata {
             -TimeoutSec 60
         $requestCompleted = $true
         $metadata = Get-PlexHostedMetadataItemFromResponse -Response $raw
+        if ($null -ne $metadata) {
+            $isExactResponse = if ($null -ne $matchPayload) {
+                Test-PlexHostedMetadataExactMatch -Metadata $metadata -MatchPayload $matchPayload
+            }
+            elseif ($MetadataGuid.Trim() -match '(?i)^plex://(?<kind>movie|show|season|episode)/(?<id>[a-z0-9][a-z0-9_-]*)(?:\?.*)?$') {
+                (Get-OptionalStringProperty -InputObject $metadata -Name "guid") -ieq
+                    ("plex://" + ([string]$Matches.kind).ToLowerInvariant() + "/" + [string]$Matches.id)
+            }
+            else {
+                (Get-OptionalStringProperty -InputObject $metadata -Name "type") -ieq $MediaType
+            }
+            if (-not $isExactResponse) {
+                Write-Log "Plex hosted metadata rejected a non-exact $MediaType response for the retained identifier." "WARN"
+                $metadata = $null
+            }
+        }
+    }
+    catch {
+        Write-Log "Plex hosted direct identifier lookup failed for deleted $MediaType history metadata: $($_.Exception.Message)" "WARN"
+    }
 
-        # Plex's hosted endpoint historically accepted modern identifiers directly
-        # and external identifiers as GET query parameters. The current provider
-        # contract uses a JSON POST body. Retry only an empty supported exact-ID
-        # result, and carry no title or other search hints across this privacy boundary.
-        if ($null -eq $metadata -and $null -ne $matchPayload) {
+    # Plex's current provider contract requires retained title context for
+    # movies/shows and show-title plus season/episode indexes for episodes.
+    # These are matching hints only: require an exact modern GUID, or require
+    # external-ID responses to agree with returned IDs or retained type/title.
+    if ($null -eq $metadata -and $null -ne $matchPayload) {
+        try {
             $matchBody = $matchPayload | ConvertTo-Json -Compress
             $postRetryAttempted = $true
             $requestCompleted = $false
@@ -4392,13 +4542,17 @@ function Get-PlexHostedMetadata {
                 -TimeoutSec 60
             $requestCompleted = $true
             $metadata = Get-PlexHostedMetadataItemFromResponse -Response $raw
-            if ($null -ne $metadata) {
+            if ($null -ne $metadata -and -not (Test-PlexHostedMetadataExactMatch -Metadata $metadata -MatchPayload $matchPayload)) {
+                Write-Log "Plex hosted metadata rejected a non-exact $MediaType response for the retained identifier." "WARN"
+                $metadata = $null
+            }
+            elseif ($null -ne $metadata) {
                 Write-Log "Plex hosted metadata recovered an exact $MediaType match through the provider POST contract."
             }
         }
-    }
-    catch {
-        Write-Log "Plex hosted metadata fallback failed for deleted $MediaType history metadata: $($_.Exception.Message)" "WARN"
+        catch {
+            Write-Log "Plex hosted metadata fallback failed for deleted $MediaType history metadata: $($_.Exception.Message)" "WARN"
+        }
     }
 
     if ($requestCompleted -and $null -eq $metadata) {
@@ -4424,7 +4578,10 @@ function Get-PlexHostedMetadata {
                 }
             }
             if (-not [string]::IsNullOrWhiteSpace($showGuid) -and $showGuid -ne $MetadataGuid) {
-                $showMetadata = Get-PlexHostedMetadata -MetadataGuid $showGuid -MediaType "show"
+                $showMetadata = Get-PlexHostedMetadata `
+                    -MetadataGuid $showGuid `
+                    -MediaType "show" `
+                    -MatchTitle $MatchTitle
                 if ($null -ne $showMetadata) { $metadata = $showMetadata }
             }
         }
@@ -4439,7 +4596,11 @@ function Get-PlexHostedPosterPath {
         [string]$MetadataGuid,
         [ValidateSet("movie", "show")]
         [string]$MediaType,
-        [string]$DestinationPath
+        [string]$DestinationPath,
+        [string]$MatchTitle = "",
+        [string]$MatchYear = "",
+        [int]$ParentIndex = 0,
+        [int]$Index = 0
     )
 
     if ([string]::IsNullOrWhiteSpace($MetadataGuid) -or
@@ -4447,7 +4608,13 @@ function Get-PlexHostedPosterPath {
         return ""
     }
 
-    $metadata = Get-PlexHostedMetadata -MetadataGuid $MetadataGuid -MediaType $MediaType
+    $metadata = Get-PlexHostedMetadata `
+        -MetadataGuid $MetadataGuid `
+        -MediaType $MediaType `
+        -MatchTitle $MatchTitle `
+        -MatchYear $MatchYear `
+        -ParentIndex $ParentIndex `
+        -Index $Index
     if ($null -eq $metadata) { return "" }
 
     $fieldNames = if ($MediaType -eq "show") {
@@ -4546,7 +4713,11 @@ function Get-PosterPath {
         [string]$RatingKey,
         [string]$MetadataGuid = "",
         [ValidateSet("movie", "show")]
-        [string]$MediaType = "movie"
+        [string]$MediaType = "movie",
+        [string]$MatchTitle = "",
+        [string]$MatchYear = "",
+        [int]$ParentIndex = 0,
+        [int]$Index = 0
     )
 
     if ([string]::IsNullOrWhiteSpace($RatingKey)) { return "" }
@@ -4593,7 +4764,11 @@ function Get-PosterPath {
     $hostedPath = Get-PlexHostedPosterPath `
         -MetadataGuid $MetadataGuid `
         -MediaType $MediaType `
-        -DestinationPath $path
+        -DestinationPath $path `
+        -MatchTitle $MatchTitle `
+        -MatchYear $MatchYear `
+        -ParentIndex $ParentIndex `
+        -Index $Index
     if (-not [string]::IsNullOrWhiteSpace($hostedPath)) { return $hostedPath }
 
     return ""
@@ -4653,11 +4828,19 @@ function Prepare-PosterAssets {
         $metadataGuid = Get-OptionalStringProperty -InputObject $item -Name "MetadataGuid"
         $mediaType = Get-OptionalStringProperty -InputObject $item -Name "Type"
         if ($mediaType -ne "show") { $mediaType = "movie" }
+        $matchTitle = Get-OptionalStringProperty -InputObject $item -Name "Title"
+        $matchYear = Get-OptionalStringProperty -InputObject $item -Name "Year"
+        $matchParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "MetadataParentIndex")
+        $matchIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "MetadataIndex")
 
         $path = Get-PosterPath `
             -RatingKey $rk `
             -MetadataGuid $metadataGuid `
-            -MediaType $mediaType
+            -MediaType $mediaType `
+            -MatchTitle $matchTitle `
+            -MatchYear $matchYear `
+            -ParentIndex $matchParentIndex `
+            -Index $matchIndex
         if (-not [string]::IsNullOrWhiteSpace($path)) {
             $assets.Add([PSCustomObject]@{
                 RatingKey = $rk
@@ -4681,7 +4864,11 @@ function Get-ImageSource {
 
     if ([string]::IsNullOrWhiteSpace($RatingKey)) { return "" }
 
-    $asset = @($PosterAssets | Where-Object { $_.RatingKey -eq $RatingKey } | Select-Object -First 1)
+    $asset = @(
+        $PosterAssets |
+            Where-Object { (Get-OptionalStringProperty -InputObject $_ -Name "RatingKey") -eq $RatingKey } |
+            Select-Object -First 1
+    )
     if ($asset.Count -eq 0) { return "" }
 
     if ($ImageMode -eq "Email") {
@@ -6869,7 +7056,11 @@ if ($null -ne $script:GlobalTrendingStat -and
     $trendingPosterItem = [PSCustomObject]@{
         PosterRatingKey = [string]$script:GlobalTrendingStat.RatingKey
         MetadataGuid    = Get-OptionalStringProperty -InputObject $script:GlobalTrendingStat -Name "MetadataGuid"
+        MetadataParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $script:GlobalTrendingStat -Name "MetadataParentIndex")
+        MetadataIndex   = Safe-Int (Get-OptionalStringProperty -InputObject $script:GlobalTrendingStat -Name "MetadataIndex")
         Type            = [string]$script:GlobalTrendingStat.Type
+        Title           = [string]$script:GlobalTrendingStat.Title
+        Year            = Get-OptionalStringProperty -InputObject $script:GlobalTrendingStat -Name "Year"
     }
 }
 

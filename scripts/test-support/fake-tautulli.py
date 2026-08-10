@@ -162,7 +162,7 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                 "percent_complete": 100,
                 "group_count": 1,
                 "parent_media_index": 1,
-                "media_index": 2,
+                "media_index": 1,
                 "rating": "8.9",
                 "rating_image": "imdb://image.rating",
             }
@@ -194,7 +194,7 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                     "percent_complete": 100,
                     "group_count": 1,
                     "parent_media_index": 1,
-                    "media_index": 3,
+                    "media_index": 1,
                 }
             )
         return rows
@@ -366,11 +366,30 @@ class Handler(BaseHTTPRequestHandler):
         if not self.headers.get("X-Plex-Token"):
             self.write_json({"error": "missing virtual Plex token"}, status=401)
             return
-        if not isinstance(body, dict) or set(body) != {"guid", "type"}:
-            self.write_json({"error": "exact guid and type required"}, status=400)
+        if not isinstance(body, dict):
+            self.write_json({"error": "match body required"}, status=400)
             return
 
-        self.write_json(self.hosted_match_payload(str(body["guid"]), str(body["type"])))
+        external_guid = str(body.get("guid", ""))
+        media_type = str(body.get("type", ""))
+        if media_type in {"1", "2"}:
+            expected_title = "Selected Movie" if media_type == "1" else "Selected Show"
+            if body.get("title") != expected_title:
+                self.write_json({"error": "title is required for movie/show matching"}, status=400)
+                return
+        elif media_type == "4":
+            if (
+                body.get("grandparentTitle") != "Selected Show"
+                or body.get("parentIndex") != 1
+                or body.get("index") != 1
+            ):
+                self.write_json({"error": "show title and episode indexes are required"}, status=400)
+                return
+        else:
+            self.write_json({"error": "unsupported metadata type"}, status=400)
+            return
+
+        self.write_json(self.hosted_match_payload(external_guid, media_type))
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)

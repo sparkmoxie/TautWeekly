@@ -318,7 +318,7 @@ and TestEmail delivery before trusting the next production send.
 flowchart LR
     T["Tautulli API"] --> E["TautWeekly for Plex PowerShell engine"]
     P["Plex Media Server\noptional metadata"] -.-> E
-    H["Plex hosted metadata\nexact-GUID deleted-item fallback"] -.-> E
+    H["Plex hosted metadata\nexact-identifier deleted-item fallback"] -.-> E
     E --> R["HTML + plain-text renderer"]
     R --> V["Local preview"]
     R --> M["SMTP test and delivery"]
@@ -330,8 +330,13 @@ Tautulli supplies users, activity, history, and recently added metadata. Direct
 Plex access is optional and improves selected artwork and metadata fallbacks.
 If a Plex item has been deleted but Tautulli retains its exact media GUID, the
 configured administrator Plex token can resolve that identifier through Plex's
-hosted metadata service. TautWeekly does not search by title or send recipient
-or watch-history data, and it never forwards the token to external artwork hosts.
+hosted metadata service. Plex's matching contract also receives only the retained
+movie/show title, optional movie year, or TV season/episode indexes needed to
+resolve that GUID; TautWeekly rejects any response whose returned canonical or
+external identifier conflicts with the retained identifier. When Plex omits an
+external-ID array from an exact TMDB/TVDB/IMDb lookup response, the retained
+title and media type must also agree. TautWeekly sends no recipient identity or
+viewing metrics, and it never forwards the token to external artwork hosts.
 The renderer produces browser previews and multipart email, while local state
 guards first-run behavior, welcomes, and repeat schedule attempts.
 

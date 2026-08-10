@@ -6,6 +6,23 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Supplied Plex's required retained movie/show title and episode index context
+  when its hosted provider retries deleted-history GUIDs, and preserved the
+  representative episode indexes alongside aggregated TV history. This fixes
+  the production `400 Bad Request` and empty-match behavior left in v0.8.2.
+- Kept missing deleted-history artwork nonfatal under PowerShell strict mode when
+  no hosted match is available.
+
+### Security
+
+- Validated title-hinted hosted responses against the retained canonical Plex
+  GUID or returned external TMDB/TVDB/IMDb identifier. When Plex omits its
+  external-ID array, the response must still agree with the retained title and
+  media type from that exact external-ID request. Recipient identity and viewing
+  metrics remain outside the Plex request.
+
 ## [0.8.2] - 2026-08-10
 
 ### Fixed
