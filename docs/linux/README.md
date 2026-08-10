@@ -89,7 +89,7 @@ sudo tautweekly schedule-enable
 | Path | Purpose | Ownership |
 |---|---|---|
 | `/opt/tautweekly` | Replaceable application code and bundled default assets | `root:root`, read-only to the service |
-| `/var/lib/tautweekly` | Configuration, state, logs, previews, custom assets, and private backups | `tautweekly:tautweekly`, mode `0700` |
+| `/var/lib/tautweekly` | Configuration, state, logs, previews, custom assets, bounded deleted-item cache, and private backups | `tautweekly:tautweekly`, mode `0700` |
 | `/etc/tautweekly/tautweekly.env` | Non-secret service paths, timezone, and preview listener | `root:root`, mode `0600` |
 | `/etc/systemd/system/tautweekly.service` | Hardened service definition | `root:root` |
 | `/usr/local/bin/tautweekly` | Administrative command wrapper | `root:root` |
@@ -97,6 +97,13 @@ sudo tautweekly schedule-enable
 `config.json` contains the Tautulli API key and SMTP credential and may contain a
 Plex token. Backups contain the same secrets. Never attach the data directory,
 logs, or generated previews to a public issue.
+
+The cache is `/var/lib/tautweekly/cache/deleted-items`. It captures only future
+items observed live and cannot recover assets discarded before v0.9.0. It is
+included in a private data backup and preserved on upgrade. To purge it, stop
+the service and remove only that directory. A full uninstall should retain the
+data root until configuration, state, output, cache entries, and backups are no
+longer required.
 
 The preview listener defaults to `127.0.0.1:8787`. For remote administration,
 keep that bind and use an SSH tunnel:
@@ -167,7 +174,7 @@ sudo tautweekly send-test-all USER_ID
 An upgrade stores the previous application payload under
 `/var/lib/tautweekly/backups/program-<timestamp>.tar.gz`, replaces only
 `/opt/tautweekly`, and restarts an already configured service. It does not
-replace `config.json`, state, output, logs, custom assets, or the environment
+replace `config.json`, state, output, logs, the deleted-item cache, custom assets, or the environment
 file. The installer holds the same operation lock used by preview and send
 commands, records and verifies the repository release metadata, and confirms a
 previously active service becomes active again. Run the explicit `verify`,

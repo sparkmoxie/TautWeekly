@@ -77,7 +77,7 @@ function Assert-PackageOwnedPath {
         'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json',
         '.tautweekly-operation.lock'
     )
-    if ($leaf -in $privateNames -or $segments -contains 'logs' -or $segments -contains 'output') {
+    if ($leaf -in $privateNames -or $segments -contains 'logs' -or $segments -contains 'output' -or $segments -contains 'cache') {
         throw "Release manifest attempts to own private runtime material: $RelativePath"
     }
 }

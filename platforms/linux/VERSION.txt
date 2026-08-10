@@ -1,2 +1,2 @@
-TautWeekly for Plex native Linux platform source v1.0.0
+TautWeekly for Plex native Linux platform source v1.1.0
 Repository releases use the repository-level semantic version and preserve this platform baseline in release metadata.

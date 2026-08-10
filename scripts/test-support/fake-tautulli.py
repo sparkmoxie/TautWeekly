@@ -14,14 +14,15 @@ from urllib.parse import parse_qs, urlparse
 DELETED_HISTORY_SCENARIOS = (
     "deleted-history-metadata",
     "deleted-history-legacy-guid",
+    "cache-deleted",
 )
 
 
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
     old = now - (30 * 86400)
-    movie_added = now if scenario in ("active", "optional-hero-metadata") else old
-    tv_added = now if scenario in ("active", "tv-only", "optional-hero-metadata") else old
+    movie_added = now if scenario in ("active", "optional-hero-metadata", "cache-prime") else old
+    tv_added = now if scenario in ("active", "tv-only", "optional-hero-metadata", "cache-prime") else old
     rows = {
         "10": [
             {
@@ -70,13 +71,14 @@ def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
             }
         ],
     }
-    if scenario in DELETED_HISTORY_SCENARIOS:
+    if scenario in DELETED_HISTORY_SCENARIOS or scenario == "cache-prime":
         if scenario == "deleted-history-legacy-guid":
             rows["10"][0]["guid"] = "com.plexapp.agents.tmdb://12345?lang=en"
             rows["20"][0]["guid"] = "com.plexapp.agents.thetvdb://999/1/2?lang=en"
         else:
             rows["10"][0]["guid"] = "plex://movie/deletedmovieguid"
             rows["20"][0]["guid"] = "plex://episode/deletedepisodeguid"
+    if scenario in DELETED_HISTORY_SCENARIOS:
         for field in (
             "year",
             "summary",
@@ -97,7 +99,7 @@ USERS = {
         "user_id": "1",
         "username": "viewer",
         "friendly_name": "Virtual Viewer",
-        "email": "viewer@example.test",
+        "email": "viewer@example.com",
         "is_active": 1,
         "deleted_user": 0,
         "do_notify": 1,
@@ -106,7 +108,7 @@ USERS = {
         "user_id": "2",
         "username": "champion",
         "friendly_name": "Simulated Champion",
-        "email": "champion@example.test",
+        "email": "champion@example.com",
         "is_active": 1,
         "deleted_user": 0,
         "do_notify": 1,
@@ -231,6 +233,14 @@ class Handler(BaseHTTPRequestHandler):
     def api_success(self, data: object) -> None:
         self.write_json({"response": {"result": "success", "message": "", "data": data}})
 
+    def current_scenario(self) -> str:
+        state_file: Path | None = self.server.state_file  # type: ignore[attr-defined]
+        if state_file is not None and state_file.exists():
+            value = state_file.read_text(encoding="utf-8").strip()
+            if value:
+                return value
+        return self.server.scenario  # type: ignore[attr-defined]
+
     def record_call(
         self,
         method: str,
@@ -253,6 +263,8 @@ class Handler(BaseHTTPRequestHandler):
             )
 
     def hosted_match_payload(self, external_guid: str, media_type: str) -> dict[str, object]:
+        if self.current_scenario() == "cache-deleted":
+            return {"MediaContainer": {"Metadata": []}}
         if external_guid == "plex://movie/deletedmovieguid" and media_type == "1":
             return {
                 "MediaContainer": {
@@ -403,7 +415,7 @@ class Handler(BaseHTTPRequestHandler):
 
             external_guid = query.get("guid", "")
             media_type = query.get("type", "")
-            if self.server.scenario == "deleted-history-legacy-guid":  # type: ignore[attr-defined]
+            if self.current_scenario() == "deleted-history-legacy-guid":
                 # Reproduce the v0.8.1 report: the compatible query form
                 # completes but returns no match, while the provider POST
                 # contract resolves the same exact external identifier.
@@ -419,7 +431,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.write_json({"error": "missing virtual Plex token"}, status=401)
                 return
 
-            if self.server.scenario == "deleted-history-metadata" and metadata_id in {  # type: ignore[attr-defined]
+            if self.current_scenario() in {"deleted-history-metadata", "cache-deleted"} and metadata_id in {
                 "deletedmovieguid",
                 "deletedepisodeguid",
                 "deletedshowguid",
@@ -533,7 +545,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if parsed.path.startswith("/library/metadata/"):
-            if self.server.scenario == "optional-hero-metadata" or self.server.scenario in DELETED_HISTORY_SCENARIOS:  # type: ignore[attr-defined]
+            scenario = self.current_scenario()
+            if scenario == "optional-hero-metadata" or scenario in DELETED_HISTORY_SCENARIOS:
                 self.write_json({"error": "sanitized missing Plex metadata"}, status=404)
                 return
             self.write_json({"MediaContainer": {"size": 0, "Metadata": []}})
@@ -545,7 +558,13 @@ class Handler(BaseHTTPRequestHandler):
 
         command = query.get("cmd", "")
         if command == "pms_image_proxy":
-            marker = b"GENERIC-POSTER" if self.server.scenario in DELETED_HISTORY_SCENARIOS else b"VIRTUAL-POSTER"  # type: ignore[attr-defined]
+            rating_key = query.get("rating_key", "")
+            is_generic_probe = not rating_key or rating_key.startswith("tautulli-default-poster-")
+            marker = (
+                b"GENERIC-POSTER"
+                if self.current_scenario() in DELETED_HISTORY_SCENARIOS or is_generic_probe
+                else b"VIRTUAL-POSTER"
+            )
             payload = b"\xff\xd8" + (marker * 48) + b"\xff\xd9"
             self.send_response(200)
             self.send_header("Content-Type", "image/jpeg")
@@ -582,7 +601,7 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if command == "get_history":
-            rows = history_rows(query.get("section_id", ""), self.server.scenario)  # type: ignore[attr-defined]
+            rows = history_rows(query.get("section_id", ""), self.current_scenario())
             user_id = query.get("user_id", "")
             if user_id:
                 rows = [row for row in rows if str(row.get("user_id", "")) == user_id]
@@ -591,18 +610,20 @@ class Handler(BaseHTTPRequestHandler):
             self.api_success({"data": rows[start : start + length], "recordsFiltered": len(rows)})
             return
         if command == "get_recently_added":
-            rows = self.server.rows.get(query.get("section_id", ""), self.server.rows["99"])  # type: ignore[attr-defined]
+            current_rows = media_rows(self.current_scenario())
+            rows = current_rows.get(query.get("section_id", ""), current_rows["99"])
             start = int(query.get("start", "0"))
             count = int(query.get("count", "100"))
             self.api_success({"recently_added": rows[start : start + count]})
             return
         if command == "get_children_metadata":
-            episode = dict(self.server.rows["20"][0])  # type: ignore[attr-defined]
+            episode = dict(media_rows(self.current_scenario())["20"][0])
             self.api_success({"children_type": "episode", "children_list": [episode]})
             return
         if command == "get_metadata":
             key = query.get("rating_key", "")
-            if self.server.scenario in DELETED_HISTORY_SCENARIOS and key in (  # type: ignore[attr-defined]
+            scenario = self.current_scenario()
+            if scenario in DELETED_HISTORY_SCENARIOS and key in (
                 "selected-movie",
                 "selected-show",
                 "champion-episode",
@@ -620,7 +641,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             is_episode = "episode" in key
             is_show = key.startswith("selected-show") and not is_episode
-            if self.server.scenario == "optional-hero-metadata" and is_show:  # type: ignore[attr-defined]
+            if scenario == "optional-hero-metadata" and is_show:
                 # Tautulli may return a successful but sparse metadata object. The
                 # renderer must retain the global-history title and default every
                 # absent optional hero field without violating strict mode.
@@ -671,9 +692,12 @@ def main() -> None:
             "optional-hero-metadata",
             "deleted-history-metadata",
             "deleted-history-legacy-guid",
+            "cache-prime",
+            "cache-deleted",
         ),
         required=True,
     )
+    parser.add_argument("--state-file", type=Path)
     parser.add_argument("--call-log", type=Path, required=True)
     parser.add_argument("--ready-file", type=Path, required=True)
     args = parser.parse_args()
@@ -681,6 +705,7 @@ def main() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     server.rows = media_rows(args.scenario)  # type: ignore[attr-defined]
     server.scenario = args.scenario  # type: ignore[attr-defined]
+    server.state_file = args.state_file  # type: ignore[attr-defined]
     server.call_log = args.call_log  # type: ignore[attr-defined]
     server.base_url = f"http://127.0.0.1:{args.port}"  # type: ignore[attr-defined]
     args.call_log.write_text("", encoding="utf-8")

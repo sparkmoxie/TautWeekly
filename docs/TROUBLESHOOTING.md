@@ -149,6 +149,27 @@ Browser preview is a structural check; the controlled TestEmail is authoritative
 for MIME, linked images, and the actual client. Retest after changing branding,
 assets, SMTP providers, or email clients.
 
+## Deleted item still has no poster or metadata
+
+v0.8.3's Plex hosted-provider recovery is best-effort. Tautulli history may
+retain GUID/rating keys, titles, years, indexes, and viewing fields, but those
+rows do not preserve durable image bytes. If Plex/Tautulli discarded the asset
+before v0.9.0 observed it live, TautWeekly cannot recover it reliably and will
+not guess by title. This is expected for already-deleted items and is not fixed
+by changing the cache settings.
+
+For future items, look for an exact-GUID cache-hit message. A miss means the
+item was never captured live, has no supported stable GUID, expired, or was
+evicted by a configured item/byte limit. A SHA-256 warning means damaged poster
+bytes were removed. A manifest warning reports backup recovery or a clean
+empty-cache reset; rendering continues without cached data.
+
+Confirm that the runtime account can write `cache/deleted-items` under the
+platform's private data root and that the cache is enabled. Do not post the
+manifest or artwork publicly. If a clean rebuild is appropriate, stop
+TautWeekly, move or remove only that directory, restart, and run PreviewAll
+while current library items are still available so new entries can be created.
+
 When requesting help, share the platform, source/release version, failing
 command, and sanitized error text. Never attach configuration, state, logs, or
 generated mail without removing credentials and personal data.

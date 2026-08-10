@@ -87,6 +87,13 @@ foreach ($relativePath in $rendererPaths) {
         Invoke-Expression $definition.Extent.Text
     }
 
+    # Provider-only collection tests isolate the legacy best-effort path. The
+    # persistent cache has its own exact-ID, privacy, and lifecycle suite.
+    function Get-TautWeeklyDeletedItemCacheEntry {
+        param([string]$MediaType, [string]$MetadataGuid, [switch]$LogHit)
+        return $null
+    }
+
     $posterProbeRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-poster-probe-' + [Guid]::NewGuid().ToString('N'))
     try {
         New-Item -ItemType Directory -Force -Path $posterProbeRoot | Out-Null

@@ -22,6 +22,7 @@ jobs:
           ./scripts/check-links.ps1
           ./scripts/validate-docs.ps1
           ./scripts/validate-powershell.ps1
+          ./scripts/test-deleted-item-cache.ps1
       - name: Validate shell scripts
         run: ./scripts/validate-shell.sh
       - name: Test scheduler timezone behavior
@@ -39,6 +40,12 @@ jobs:
       - name: Build release archives and checksums
         shell: pwsh
         run: ./scripts/build-releases.ps1
+      - name: Test packaged runtime contracts and checksums
+        shell: pwsh
+        run: ./scripts/test-release-artifacts.ps1
+      - name: Verify release archive reproducibility
+        shell: pwsh
+        run: ./scripts/test-release-reproducibility.ps1 -Version ($env:GITHUB_REF_NAME -replace '^v','')
       - name: Test launcher permissions
         run: |
           tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/tautweekly.sh | grep -q '^-rwx'
@@ -54,4 +61,10 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "TautWeekly for Plex $GITHUB_REF_NAME"
+        run: |
+          notes_file="docs/releases/${GITHUB_REF_NAME}.md"
+          if test -f "$notes_file"; then
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --notes-file "$notes_file" --title "TautWeekly for Plex $GITHUB_REF_NAME"
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "TautWeekly for Plex $GITHUB_REF_NAME"
+          fi

@@ -156,6 +156,48 @@ Require-Text 'platforms/windows/TautWeekly.ps1' @(
     'ListUsers only displays the roster'
 )
 foreach ($relative in @(
+    'platforms/windows/DeletedItemCache.ps1',
+    'platforms/nas-docker/app/DeletedItemCache.ps1',
+    'platforms/mac-docker/app/DeletedItemCache.ps1'
+)) {
+    Require-Text $relative @(
+        'TwDeletedCacheSchemaVersion = 1',
+        'DeletedItemCacheRetentionDays',
+        'DeletedItemCacheMaxItems',
+        'DeletedItemCacheMaxBytesMB',
+        'Get-TwDeletedCacheId',
+        'File\]::Replace',
+        'index\.backup\.json',
+        'Get-FileHash -LiteralPath \$source -Algorithm SHA256',
+        '\$fileName -eq \(\$id \+ "\.jpg"\)'
+    )
+}
+$cacheModuleReference = (Read-RepoFile 'platforms/windows/DeletedItemCache.ps1') -replace "`r`n", "`n"
+foreach ($relative in @(
+    'platforms/nas-docker/app/DeletedItemCache.ps1',
+    'platforms/mac-docker/app/DeletedItemCache.ps1'
+)) {
+    $candidate = (Read-RepoFile $relative) -replace "`r`n", "`n"
+    if ($candidate.TrimEnd() -cne $cacheModuleReference.TrimEnd()) {
+        throw "Deleted-item cache implementation drifted across renderers: $relative"
+    }
+}
+Write-Host '[PASS] Deleted-item cache schema and implementation remain identical across renderers.'
+foreach ($relative in @(
+    'platforms/windows/SETUP-FIRST.ps1',
+    'platforms/nas-docker/app/Setup-First.ps1',
+    'platforms/mac-docker/app/Setup-First.ps1'
+)) {
+    Require-Text $relative @(
+        'Get-ExistingBooleanValue',
+        'Get-ExistingBoundedInteger',
+        'DeletedItemCacheEnabled',
+        'DeletedItemCacheRetentionDays.*1 3650',
+        'DeletedItemCacheMaxItems.*1 10000',
+        'DeletedItemCacheMaxBytesMB.*16 2048'
+    )
+}
+foreach ($relative in @(
     'platforms/nas-docker/app/Verify-Setup.ps1',
     'platforms/mac-docker/app/Verify-Setup.ps1',
     'platforms/windows/VERIFY-SETUP.ps1'

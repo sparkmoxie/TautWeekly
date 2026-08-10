@@ -48,8 +48,8 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('function Test-PlexHostedMetadataExactMatch')) "$PackageName lacks fail-closed hosted match validation."
     Assert-True ($Renderer.Contains('-Method Post')) "$PackageName lacks the provider-contract POST retry for empty exact-ID matches."
     Assert-True ($Renderer.Contains('matching hints only: require an exact modern GUID')) "$PackageName does not document the exact-identifier hosted POST boundary."
-    Assert-True ($Renderer.Contains('"User-Agent"      = "TautWeekly-for-Plex/0.8.3"')) "$PackageName does not identify the tokenless public Plex rating fallback."
-    Assert-True ($Renderer.Contains('"X-Plex-Version"           = "0.8.3"')) "$PackageName does not identify the authenticated hosted metadata fallback."
+    Assert-True ($Renderer.Contains('"User-Agent"      = "TautWeekly-for-Plex/0.9.0"')) "$PackageName does not identify the tokenless public Plex rating fallback."
+    Assert-True ($Renderer.Contains('"X-Plex-Version"           = "0.9.0"')) "$PackageName does not identify the authenticated hosted metadata fallback."
     Assert-True ($Renderer.Contains('"Accept-Language" = "en-US,en;q=0.9"')) "$PackageName does not request stable provider-labelled rating text."
     Assert-True ($Renderer.Contains('function Get-BingeChampionTitleBreakdown')) "$PackageName lacks the media-specific Binge Champion title breakdown."
     Assert-True ($Renderer.Contains('$bingeTimeLine = "$([string]$bingeDisplay.TotalTimeText) watched"')) "$PackageName has stale Binge Champion duration copy."
@@ -57,11 +57,32 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('$heroLabel = if ($trendingHeroMode) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }')) "$PackageName lacks the movie-empty Trending hero fallback."
     Assert-True ($Renderer.Contains('"tautulli-default-poster-" + [Guid]::NewGuid().ToString("N") + ".png"')) "$PackageName lacks the portable generic-poster probe."
     Assert-True ($Renderer.Contains('Get-FileHash -LiteralPath $probePath -Algorithm SHA256')) "$PackageName lacks literal-path poster fingerprinting."
+    Assert-True ($Renderer.Contains('DeletedItemCache.ps1')) "$PackageName does not load the persistent deleted-item cache."
+    Assert-True ($Renderer.Contains('Restore-TautWeeklyDeletedItemCachePoster')) "$PackageName does not reuse exact cached artwork."
+    Assert-True ($Renderer.Contains('Update-TautWeeklyDeletedItemCache')) "$PackageName does not capture live presentation assets."
+}
+
+function Assert-DeletedItemCacheContract([string]$PackageName, [string]$CacheModule) {
+    foreach ($required in @(
+        '$script:TwDeletedCacheSchemaVersion = 1',
+        'DeletedItemCacheRetentionDays',
+        'DeletedItemCacheMaxItems',
+        'DeletedItemCacheMaxBytesMB',
+        'Move-TwDeletedCacheCorruptManifest',
+        'Restore-TautWeeklyDeletedItemCachePoster',
+        'Update-TautWeeklyDeletedItemCache'
+    )) {
+        Assert-True ($CacheModule.Contains($required)) "$PackageName cache module is missing: $required"
+    }
+    foreach ($forbidden in @('PlexToken', 'ApiKey', 'SmtpPassword', 'RecipientEmail', 'play_duration', 'watched_status')) {
+        Assert-True (-not $CacheModule.Contains($forbidden)) "$PackageName cache module accepts a forbidden private field: $forbidden"
+    }
 }
 
 $expected = [ordered]@{
     'TautWeekly-windows.zip' = @(
         'TautWeekly-windows/TautWeekly.ps1',
+        'TautWeekly-windows/DeletedItemCache.ps1',
         'TautWeekly-windows/Smtp-Transport.ps1',
         'TautWeekly-windows/config.example.json',
         'TautWeekly-windows/15-MANAGE-LIBRARIES.bat',
@@ -76,6 +97,7 @@ $expected = [ordered]@{
     )
     'TautWeekly-nas-docker.zip' = @(
         'TautWeekly-nas-docker/app/TautWeekly.ps1',
+        'TautWeekly-nas-docker/app/DeletedItemCache.ps1',
         'TautWeekly-nas-docker/app/Smtp-Transport.ps1',
         'TautWeekly-nas-docker/app/Schedule-Time.ps1',
         'TautWeekly-nas-docker/app/healthcheck.sh',
@@ -87,6 +109,7 @@ $expected = [ordered]@{
     )
     'TautWeekly-mac-docker.zip' = @(
         'TautWeekly-mac-docker/app/TautWeekly.ps1',
+        'TautWeekly-mac-docker/app/DeletedItemCache.ps1',
         'TautWeekly-mac-docker/app/Smtp-Transport.ps1',
         'TautWeekly-mac-docker/app/Schedule-Time.ps1',
         'TautWeekly-mac-docker/tautweekly.sh',
@@ -98,6 +121,7 @@ $expected = [ordered]@{
     )
     'TautWeekly-linux.zip' = @(
         'TautWeekly-linux/app/TautWeekly.ps1',
+        'TautWeekly-linux/app/DeletedItemCache.ps1',
         'TautWeekly-linux/app/Smtp-Transport.ps1',
         'TautWeekly-linux/app/Schedule-Time.ps1',
         'TautWeekly-linux/install-linux.sh',
@@ -110,6 +134,7 @@ $expected = [ordered]@{
     )
     'TautWeekly-freebsd-podman.zip' = @(
         'TautWeekly-freebsd-podman/app/TautWeekly.ps1',
+        'TautWeekly-freebsd-podman/app/DeletedItemCache.ps1',
         'TautWeekly-freebsd-podman/app/Smtp-Transport.ps1',
         'TautWeekly-freebsd-podman/app/Schedule-Time.ps1',
         'TautWeekly-freebsd-podman/install-freebsd.sh',
@@ -158,7 +183,7 @@ foreach ($archiveName in $expected.Keys) {
 
         $forbidden = @($entryNames | Where-Object {
             $name = ($_ -split '/')[-1]
-            $name -in $forbiddenNames -or $_ -match '/(logs|output)/'
+            $name -in $forbiddenNames -or $_ -match '/(logs|output|cache)/'
         })
         Assert-True ($forbidden.Count -eq 0) "$archiveName contains runtime/private paths: $($forbidden -join ', ')"
 
@@ -209,6 +234,13 @@ foreach ($archiveName in $expected.Keys) {
         try { $renderer = $reader.ReadToEnd() }
         finally { $reader.Dispose() }
         Assert-RendererContract -PackageName $archiveName -Renderer $renderer
+
+        $cacheEntry = @($archive.Entries | Where-Object { $_.FullName -match '/(?:app/)?DeletedItemCache\.ps1$' } | Select-Object -First 1)
+        Assert-True ($cacheEntry.Count -eq 1) "$archiveName has no persistent cache module."
+        $cacheReader = New-Object IO.StreamReader($cacheEntry[0].Open())
+        try { $cacheModule = $cacheReader.ReadToEnd() }
+        finally { $cacheReader.Dispose() }
+        Assert-DeletedItemCacheContract -PackageName $archiveName -CacheModule $cacheModule
 
         foreach ($gifName in $expectedGifHashes.Keys) {
             $gifEntryName = "$($assetRoots[$archiveName])/$gifName"
@@ -264,7 +296,7 @@ foreach ($tarArchive in $tarArchives) {
         })
         $forbidden = @($relativeFiles | Where-Object {
             $name = ($_ -split '/')[-1]
-            $name -in $forbiddenNames -or $_ -match '(^|/)(logs|output)/'
+            $name -in $forbiddenNames -or $_ -match '(^|/)(logs|output|cache)/'
         })
         Assert-True ($forbidden.Count -eq 0) "$($tarArchive.Name) contains runtime/private paths: $($forbidden -join ', ')"
 
@@ -301,6 +333,10 @@ foreach ($tarArchive in $tarArchives) {
         Assert-True ($rendererFiles.Count -eq 1) "$($tarArchive.Name) has no unique production renderer."
         $renderer = Get-Content -LiteralPath $rendererFiles[0].FullName -Raw
         Assert-RendererContract -PackageName $tarArchive.Name -Renderer $renderer
+
+        $cacheFiles = @($files | Where-Object { $_.Name -ceq 'DeletedItemCache.ps1' })
+        Assert-True ($cacheFiles.Count -eq 1) "$($tarArchive.Name) has no unique persistent cache module."
+        Assert-DeletedItemCacheContract -PackageName $tarArchive.Name -CacheModule (Get-Content -LiteralPath $cacheFiles[0].FullName -Raw)
 
         foreach ($gifName in $expectedGifHashes.Keys) {
             $assetRoot = $assetRoots[$zipName].Substring($packageName.Length + 1)

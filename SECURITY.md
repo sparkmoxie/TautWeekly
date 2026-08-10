@@ -22,7 +22,8 @@ requires host acceptance testing before scheduled use.
 
 ## Operator responsibilities
 
-- Keep `config.json`, `.env`, state files, logs, previews, and backups private.
+- Keep `config.json`, `.env`, state files, the deleted-item cache, logs,
+  previews, and backups private.
 - Use provider-specific application passwords where available.
 - Bind the preview service to localhost unless LAN access is intentional and
   protected by host firewall rules.

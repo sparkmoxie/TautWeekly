@@ -103,11 +103,21 @@ TautWeekly for Plex creates these files and directories beside the application:
 - `config.json` — credentials and settings.
 - `state.json` — first-run state.
 - `access-state.json` — access and welcome state.
+- `cache/deleted-items/` — bounded exact-GUID presentation metadata and posters
+  captured while Plex items are live.
 - `logs/` — local execution logs.
 - `output/` — previews, posters, and generated content.
 
 None belongs in source control or a public support bundle. Remove secrets and
 recipient data before sharing diagnostic excerpts.
+
+The cache defaults to 365 days, 1,000 items, and 256 MiB total. It protects
+future deletions only; already-deleted assets that Plex/Tautulli discarded
+cannot be repaired reliably. Updates preserve this unowned runtime directory.
+To purge it, stop newsletter runs and remove only `cache/deleted-items`. For a
+full uninstall, remove the schedule first; delete the application folder only
+after deciding that configuration, state, cache, output, and backups are no
+longer needed.
 
 ## Schedule management
 
@@ -140,7 +150,7 @@ administrator approval for the replacement step. The updater:
 3. Creates a timestamped private backup beside the installation folder. The
    backup contains credentials and must not be shared.
 4. Replaces only release-owned files. Unowned `config.json`, state files,
-   `logs/`, `output/`, and custom-named assets remain in place. An unchanged
+   `logs/`, `output/`, `cache/`, and custom-named assets remain in place. An unchanged
    release-owned file removed by the newer package is deleted; a locally
    modified deprecated file is retained.
 5. Verifies every installed release-file hash, parses the shipped PowerShell

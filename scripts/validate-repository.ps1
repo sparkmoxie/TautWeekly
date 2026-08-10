@@ -25,6 +25,7 @@ $required = @(
     'CODE_OF_CONDUCT.md', 'THIRD_PARTY_NOTICES.md', '.gitignore', '.gitattributes',
     'ca_profile.xml', 'templates/tautweekly.xml',
     'platforms/windows/TautWeekly.ps1',
+    'platforms/windows/DeletedItemCache.ps1',
     'platforms/windows/Smtp-Transport.ps1',
     'platforms/windows/Check-Update.ps1',
     'platforms/windows/Windows-Update.ps1',
@@ -37,6 +38,7 @@ $required = @(
     'platforms/nas-docker/app/preview-home.html',
     'platforms/nas-docker/app/Schedule-Time.ps1',
     'platforms/nas-docker/app/TautWeekly.ps1',
+    'platforms/nas-docker/app/DeletedItemCache.ps1',
     'platforms/nas-docker/app/Smtp-Transport.ps1',
     'platforms/mac-docker/compose.yaml',
     'platforms/mac-docker/tautweekly.sh',
@@ -45,6 +47,7 @@ $required = @(
     'platforms/mac-docker/app/preview-home.html',
     'platforms/mac-docker/app/Schedule-Time.ps1',
     'platforms/mac-docker/app/TautWeekly.ps1',
+    'platforms/mac-docker/app/DeletedItemCache.ps1',
     'platforms/mac-docker/app/Smtp-Transport.ps1',
     'platforms/linux/install-linux.sh',
     'platforms/linux/tautweekly',
@@ -57,6 +60,8 @@ $required = @(
     'docs/mac/README.md', 'docs/linux/README.md', 'docs/freebsd/README.md',
     'scripts/build-releases.ps1', 'scripts/validate-platforms.ps1',
     'scripts/test-container-health.sh',
+    'scripts/test-deleted-item-cache.ps1',
+    'scripts/test-release-reproducibility.ps1',
     'scripts/test-scheduler-timezone.ps1',
     'scripts/test-smtp-transport.py',
     'scripts/test-support/fake-smtp.py',
@@ -103,20 +108,7 @@ $contributorContract = @(
     'https://github.com/sparkmoxie/TautWeekly/releases/tag/v0.6.2',
     'https://github.com/sparkmoxie/TautWeekly/issues/38',
     'https://github.com/sparkmoxie/TautWeekly/pull/39',
-    'https://github.com/sparkmoxie/TautWeekly/releases/tag/v0.6.3',
-    'https://github.com/sparkmoxie/TautWeekly/issues/41',
-    'https://github.com/sparkmoxie/TautWeekly/pull/42',
-    'https://github.com/sparkmoxie/TautWeekly/releases/tag/v0.7.0',
-    'https://github.com/sparkmoxie/TautWeekly/pull/45',
-    'https://github.com/sparkmoxie/TautWeekly/pull/47',
-    'https://github.com/Rocknrolldoggie',
-    'https://github.com/sparkmoxie/TautWeekly/issues/41#issuecomment-5241479418',
-    'https://github.com/sparkmoxie/TautWeekly/releases/tag/v0.8.0',
-    'https://github.com/sparkmoxie/TautWeekly/pull/49',
-    'https://github.com/sparkmoxie/TautWeekly/releases/tag/v0.8.1',
-    'https://github.com/sparkmoxie/TautWeekly/issues/51',
-    'https://github.com/sparkmoxie/TautWeekly/pull/52',
-    'https://github.com/sparkmoxie/TautWeekly/releases/tag/v0.8.2'
+    'https://github.com/sparkmoxie/TautWeekly/releases/tag/v0.6.3'
 )
 foreach ($expected in $contributorContract) {
     if (-not $contributors.Contains($expected)) {
@@ -131,7 +123,7 @@ $forbiddenNames = @(
     'config.json', '.env', 'state.json', 'access-state.json',
     'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json'
 )
-$forbiddenDirectories = @('logs', 'output')
+$forbiddenDirectories = @('logs', 'output', 'cache', '__pycache__')
 
 $items = Get-ChildItem -LiteralPath $Root -Force -Recurse |
     Where-Object { $_.FullName -notmatch '[\\/]\.git(?:[\\/]|$)' }

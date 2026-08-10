@@ -37,6 +37,17 @@ them locally; send controlled tests; then schedule production delivery.
 > verifier checks SMTP reachability, not authentication or sender permission;
 > a successful `SendTest` is the mail-delivery acceptance check.
 
+> [!CAUTION]
+> Deleted-item recovery added through v0.8.3 is best-effort. Tautulli history
+> may retain GUIDs, rating keys, titles, years, and episode indexes, but its
+> normal history rows do not preserve durable poster bytes, and deleting the
+> Plex item can invalidate the referenced asset. TautWeekly cannot reliably
+> reconstruct metadata or artwork that Plex and Tautulli already discarded.
+> v0.9.0 therefore caches a small bounded presentation record while an item is
+> still live. It protects future deletions after the cache has been populated;
+> it does not retroactively repair already-deleted items and never title-matches
+> a missing or ambiguous identifier.
+
 > [!IMPORTANT]
 > Scheduled weekly emails share an anonymous Binge Champion aggregate with
 > every recipient: total watch time plus nonzero unique movie and TV-show counts.
@@ -49,16 +60,25 @@ them locally; send controlled tests; then schedule production delivery.
 
 | Platform | Runtime and scheduler | Preview | Best fit | Guides and source |
 |---|---|---|---|---|
-| Windows portable · baseline 1.7.0 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/) · [Documentation](docs/windows/README.md) · [Source](platforms/windows) |
-| NAS / Docker · baseline 1.1.0 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
-| macOS · baseline 1.0.3 | PowerShell 7 in Docker Desktop · internal scheduler | Localhost port 8787 by default | Intel or Apple silicon Mac | [Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/) · [Documentation](docs/mac/README.md) · [Source](platforms/mac-docker) |
-| Native Linux · baseline 1.0.0 | PowerShell 7.2+ · hardened systemd service | Localhost port 8787 by default | Current Ubuntu, Debian, or RHEL host without Docker | [Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Source](platforms/linux) |
-| FreeBSD Podman · baseline 1.0.0 | Maintained Linux OCI renderer · rc.d | Localhost port 8787 by default | FreeBSD 15.1+ amd64 host · **beta** | [Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Source](platforms/freebsd-podman) |
+| Windows portable · baseline 1.8.0 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/) · [Documentation](docs/windows/README.md) · [Source](platforms/windows) |
+| NAS / Docker · baseline 1.2.0 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
+| macOS · baseline 1.1.0 | PowerShell 7 in Docker Desktop · internal scheduler | Localhost port 8787 by default | Intel or Apple silicon Mac | [Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/) · [Documentation](docs/mac/README.md) · [Source](platforms/mac-docker) |
+| Native Linux · baseline 1.1.0 | PowerShell 7.2+ · hardened systemd service | Localhost port 8787 by default | Current Ubuntu, Debian, or RHEL host without Docker | [Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Source](platforms/linux) |
+| FreeBSD Podman · baseline 1.1.0 | Maintained Linux OCI renderer · rc.d | Localhost port 8787 by default | FreeBSD 15.1+ amd64 host · **beta** | [Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Source](platforms/freebsd-podman) |
 
 All five distributions preserve the working renderer and safety gates. Their
 setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
 
 ## Current newsletter behavior
+
+- A private pre-deletion cache stores only the minimum reusable presentation
+  record for a live item: exact stable GUID and media type, title/year/summary,
+  up to eight genres, displayed ratings, one poster, hashes, and timestamps.
+  It excludes watch history, recipient data, credentials, and generated mail.
+- Cache cleanup runs deterministically on initialization and update. Defaults
+  are 365 days, 1,000 items, and 256 MiB total; the oldest entries are removed
+  first when any limit is reached. The cache is exact-ID only and does not
+  silently match an already-deleted item by title.
 
 - Personal stats list up to four most-watched movie titles and four
   most-watched TV shows, ranked by qualifying watch time. Episodes are grouped
@@ -77,6 +97,24 @@ setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
 - Trending remains a separate server-wide media-title feature with poster and
   exact play count; layouts that promote Trending into the hero do not repeat
   the compact Trending card.
+
+### Persistent deleted-item cache
+
+The cache lives at `cache/deleted-items` beside the Windows application and
+under the private data root on every other platform (`/data`,
+`/var/lib/tautweekly`, or `/var/db/tautweekly`). Existing v0.8.x configurations
+need no manual migration: missing settings use the bounded defaults. Setup and
+upgrade paths preserve the directory and any explicit controls.
+
+The cache is private runtime data. Include it in private backups if future
+deleted-item rendering matters, but never commit or attach it to a public
+support request. Disabling `DeletedItemCacheEnabled` stops reads and writes
+without deleting existing entries. To purge it, stop TautWeekly, remove only
+the platform's `cache/deleted-items` directory, and restart; the directory is
+recreated empty. Full uninstall may remove the entire private data root only
+after configuration, state, output, and backups are no longer needed. See the
+[configuration reference](docs/CONFIGURATION.md#persistent-deleted-item-cache)
+for limits and the [security guide](docs/SECURITY.md#deleted-item-cache).
 
 ## Choose the newsletter libraries
 
