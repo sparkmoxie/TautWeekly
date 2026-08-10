@@ -85,6 +85,7 @@ foreach ($relativePath in $rendererPaths) {
         $script:PosterDir = $posterProbeRoot
         $script:TautulliDefaultPosterHash = ''
         $script:posterProbeOutFile = ''
+        $script:posterProbeRequestCount = 0
         $script:posterProbeWarnings = New-Object System.Collections.Generic.List[string]
 
         function Write-Log {
@@ -107,12 +108,17 @@ foreach ($relativePath in $rendererPaths) {
             )
 
             $script:posterProbeOutFile = $OutFile
+            $script:posterProbeRequestCount++
             [IO.File]::WriteAllBytes($OutFile, [Text.Encoding]::UTF8.GetBytes(('GENERIC-POSTER' * 64)))
         }
 
         $posterHash = Get-TautulliDefaultPosterHash
+        $cachedPosterHash = Get-TautulliDefaultPosterHash
         $probeWarningText = $script:posterProbeWarnings -join '; '
         Assert-True (-not [string]::IsNullOrWhiteSpace($posterHash)) "$relativePath could not fingerprint Tautulli's generic poster on this platform: $probeWarningText"
+        Assert-True ($cachedPosterHash -eq $posterHash -and $script:posterProbeRequestCount -eq 1) "$relativePath did not cache Tautulli's generic-poster fingerprint"
+        Assert-True ($script:posterProbeWarnings.Count -eq 0) "$relativePath logged an unexpected generic-poster probe warning: $probeWarningText"
+        Assert-True (-not ([IO.Path]::GetFileName($script:posterProbeOutFile)).StartsWith('.')) "$relativePath used a Unix-hidden generic-poster probe"
         Assert-True (-not (Test-Path -LiteralPath $script:posterProbeOutFile)) "$relativePath did not clean up the generic-poster probe"
     }
     finally {

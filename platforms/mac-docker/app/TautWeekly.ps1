@@ -4310,21 +4310,21 @@ function Get-TautulliDefaultPosterHash {
         return $script:TautulliDefaultPosterHash
     }
 
-    $probePath = Join-Path $PosterDir (".tautulli-default-poster-" + [Guid]::NewGuid().ToString("N"))
+    $probePath = Join-Path $PosterDir ("tautulli-default-poster-" + [Guid]::NewGuid().ToString("N") + ".png")
     try {
         $uri = Build-TautulliUri -Command "pms_image_proxy" -Parameters @{
             fallback = "poster"
         }
         Invoke-WebRequest -Uri $uri -OutFile $probePath -TimeoutSec 60 | Out-Null
-        if ((Test-Path $probePath) -and (Get-Item $probePath).Length -gt 0) {
-            $script:TautulliDefaultPosterHash = (Get-FileHash -Path $probePath -Algorithm SHA256).Hash
+        if ((Test-Path -LiteralPath $probePath) -and (Get-Item -LiteralPath $probePath).Length -gt 0) {
+            $script:TautulliDefaultPosterHash = (Get-FileHash -LiteralPath $probePath -Algorithm SHA256).Hash
         }
     }
     catch {
         Write-Log "Could not fingerprint Tautulli's generic poster fallback: $($_.Exception.Message)" "WARN"
     }
     finally {
-        Remove-Item $probePath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $probePath -Force -ErrorAction SilentlyContinue
     }
 
     return $script:TautulliDefaultPosterHash
