@@ -1,6 +1,7 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Supplies Plex's required deleted-history title and episode-index match context, validates responses, and keeps missing artwork nonfatal.
 - Retries empty modern Plex and legacy TMDB/TVDB exact matches through Plex's current provider POST contract.
 - Recovers deleted Plex history through legacy TMDB/TVDB exact identifiers and reports unsupported or empty matches safely.
 - Fixes deleted-history poster recovery on Unix by using a portable generic-poster probe.
