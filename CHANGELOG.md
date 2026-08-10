@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-08-09
+
 ### Fixed
 
 - Made root-started Docker and Podman console newsletter commands drop to the
