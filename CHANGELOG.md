@@ -6,6 +6,22 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Recovered posters, summaries, genres, years, movie Rotten Tomatoes ratings,
+  and TV IMDb ratings for deleted Plex items by resolving the exact metadata
+  GUID retained in Tautulli history, and rejected Tautulli's generic poster
+  placeholder as usable artwork. Reported by
+  [@gianfelicevincenzo](https://github.com/gianfelicevincenzo)
+  in [#41](https://github.com/sparkmoxie/TautWeekly/issues/41).
+
+### Security
+
+- Limited deleted-item recovery to Plex's hosted metadata service using the
+  existing administrator Plex token and exact retained GUID. No title search,
+  recipient identity, or watch-history payload is sent, and the token is not
+  forwarded to external artwork hosts returned by Plex.
+
 ## [0.6.3] - 2026-08-09
 
 ### Fixed

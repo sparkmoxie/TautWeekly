@@ -93,6 +93,8 @@ $LogFile = Join-Path $LogDir ("tautweekly_{0}.log" -f (Get-TautWeeklyRunNow).ToS
 # them inside Get-DesignPlexContext / Get-DesignPlexMetadata.
 $script:DesignPlexContext = $null
 $script:DesignPlexMetadataCache = @{}
+$script:PlexHostedMetadataCache = @{}
+$script:TautulliDefaultPosterHash = ""
 
 function Write-Log {
     param(
@@ -689,18 +691,24 @@ function New-ReleaseData {
     $tvMap = @{}
 
     foreach ($item in $RecentItems) {
-        $type = ([string]$item.media_type).ToLowerInvariant()
+        $type = (Get-OptionalStringProperty -InputObject $item -Name "media_type").ToLowerInvariant()
 
         if ($type -eq "movie") {
+            $ratingKey = Get-OptionalStringProperty -InputObject $item -Name "rating_key"
+            $rating = Get-OptionalStringProperty -InputObject $item -Name "audience_rating"
+            if ([string]::IsNullOrWhiteSpace($rating)) {
+                $rating = Get-OptionalStringProperty -InputObject $item -Name "rating"
+            }
             $movieList.Add([PSCustomObject]@{
                 Type            = "movie"
-                ReleaseKey      = "movie:" + [string]$item.rating_key
-                RatingKey       = [string]$item.rating_key
-                PosterRatingKey = [string]$item.rating_key
-                Title           = [string]$item.title
-                Year            = [string]$item.year
-                Rating          = if ([string]$item.audience_rating) { [string]$item.audience_rating } else { [string]$item.rating }
-                Summary         = [string]$item.summary
+                ReleaseKey      = "movie:" + $ratingKey
+                RatingKey       = $ratingKey
+                PosterRatingKey = $ratingKey
+                MetadataGuid    = Get-OptionalStringProperty -InputObject $item -Name "guid"
+                Title           = Get-OptionalStringProperty -InputObject $item -Name "title"
+                Year            = Get-OptionalStringProperty -InputObject $item -Name "year"
+                Rating          = $rating
+                Summary         = Get-OptionalStringProperty -InputObject $item -Name "summary"
                 AddedAt         = Safe-Int64 $item.added_at
                 EpisodeCount    = 0
                 SeasonCount     = 0
@@ -716,20 +724,20 @@ function New-ReleaseData {
             $posterRatingKey = ""
 
             if ($type -eq "show") {
-                $showRatingKey = [string]$item.rating_key
-                $showTitle = [string]$item.title
-                $posterRatingKey = [string]$item.rating_key
+                $showRatingKey = Get-OptionalStringProperty -InputObject $item -Name "rating_key"
+                $showTitle = Get-OptionalStringProperty -InputObject $item -Name "title"
+                $posterRatingKey = $showRatingKey
             }
             else {
-                $showRatingKey = [string]$item.grandparent_rating_key
-                $showTitle = [string]$item.grandparent_title
-                $posterRatingKey = [string]$item.grandparent_rating_key
+                $showRatingKey = Get-OptionalStringProperty -InputObject $item -Name "grandparent_rating_key"
+                $showTitle = Get-OptionalStringProperty -InputObject $item -Name "grandparent_title"
+                $posterRatingKey = $showRatingKey
                 if ([string]::IsNullOrWhiteSpace($showTitle)) {
-                    $showTitle = [string]$item.title
+                    $showTitle = Get-OptionalStringProperty -InputObject $item -Name "title"
                 }
                 if ([string]::IsNullOrWhiteSpace($showRatingKey)) {
-                    $showRatingKey = [string]$item.rating_key
-                    $posterRatingKey = [string]$item.rating_key
+                    $showRatingKey = Get-OptionalStringProperty -InputObject $item -Name "rating_key"
+                    $posterRatingKey = $showRatingKey
                 }
             }
 
@@ -745,8 +753,9 @@ function New-ReleaseData {
                     ReleaseKey      = $mapKey
                     RatingKey       = $showRatingKey
                     PosterRatingKey = $posterRatingKey
+                    MetadataGuid    = Get-OptionalStringProperty -InputObject $item -Name "guid"
                     Title           = $showTitle
-                    Year            = [string]$item.year
+                    Year            = Get-OptionalStringProperty -InputObject $item -Name "year"
                     Rating          = ""
                     Summary         = ""
                     AddedAt         = Safe-Int64 $item.added_at
@@ -758,6 +767,9 @@ function New-ReleaseData {
             }
 
             $entry = $tvMap[$mapKey]
+            if ([string]::IsNullOrWhiteSpace([string]$entry.MetadataGuid)) {
+                $entry.MetadataGuid = Get-OptionalStringProperty -InputObject $item -Name "guid"
+            }
             if ((Safe-Int64 $item.added_at) -gt $entry.AddedAt) {
                 $entry.AddedAt = Safe-Int64 $item.added_at
             }
@@ -1316,11 +1328,16 @@ function Get-UserStats {
                         Type            = "movie"
                         RatingKey       = $ratingKey
                         PosterRatingKey = $ratingKey
+                        MetadataGuid    = Get-OptionalStringProperty -InputObject $row -Name "guid"
                         Title           = $title
-                        Year            = [string]$row.year
+                        Summary         = ""
+                        Year            = Get-OptionalStringProperty -InputObject $row -Name "year"
                         Plays           = 0
                         Seconds         = [int64]0
                     }
+                }
+                if ([string]::IsNullOrWhiteSpace([string]$movieItemTotals[$dedupeKey].MetadataGuid)) {
+                    $movieItemTotals[$dedupeKey].MetadataGuid = Get-OptionalStringProperty -InputObject $row -Name "guid"
                 }
                 $movieItemTotals[$dedupeKey].Plays += (Get-HistoryRowPlayCount -Row $row)
                 $movieItemTotals[$dedupeKey].Seconds += $seconds
@@ -1363,12 +1380,18 @@ function Get-UserStats {
                         Type            = "show"
                         RatingKey       = $showRatingKey
                         PosterRatingKey = $showRatingKey
+                        MetadataGuid    = Get-OptionalStringProperty -InputObject $row -Name "guid"
                         Title           = $showTitle
                         ShowTitle       = $showTitle
+                        Summary         = ""
+                        Year            = Get-OptionalStringProperty -InputObject $row -Name "year"
                         Plays           = 0
                         Seconds         = [int64]0
                         TotalTimeText   = ""
                     }
+                }
+                if ([string]::IsNullOrWhiteSpace([string]$tvShowTotals[$showDedupeKey].MetadataGuid)) {
+                    $tvShowTotals[$showDedupeKey].MetadataGuid = Get-OptionalStringProperty -InputObject $row -Name "guid"
                 }
                 $tvShowTotals[$showDedupeKey].Plays += (Get-HistoryRowPlayCount -Row $row)
                 $tvShowTotals[$showDedupeKey].Seconds += $seconds
@@ -1396,6 +1419,7 @@ function Get-UserStats {
                         Type            = "episode"
                         RatingKey       = $ratingKey
                         PosterRatingKey = $showRatingKey
+                        MetadataGuid    = Get-OptionalStringProperty -InputObject $row -Name "guid"
                         ShowTitle       = $showTitle
                         EpisodeTitle    = $episodeTitle
                         Season          = Safe-Int $row.parent_media_index
@@ -1559,6 +1583,7 @@ function Get-GlobalTitleTotals {
         $key = ""
         $ratingKey = ""
         $titleType = ""
+        $metadataGuid = Get-OptionalStringProperty -InputObject $row -Name "guid"
 
         if ($type -eq "movie") {
             $title = [string]$row.title
@@ -1587,9 +1612,15 @@ function Get-GlobalTitleTotals {
                 Title     = $title
                 Type      = $titleType
                 RatingKey = $ratingKey
+                MetadataGuid = $metadataGuid
                 Seconds   = [int64]0
                 Plays     = 0
             }
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$totals[$key].MetadataGuid) -and
+            -not [string]::IsNullOrWhiteSpace($metadataGuid)) {
+            $totals[$key].MetadataGuid = $metadataGuid
         }
 
         $totals[$key].Seconds += $seconds
@@ -1660,6 +1691,7 @@ function New-HeroItemFromGlobalStat {
         ReleaseKey      = [string]$Stat.Key
         RatingKey       = [string]$Stat.RatingKey
         PosterRatingKey = $posterRatingKey
+        MetadataGuid    = Get-OptionalStringProperty -InputObject $Stat -Name "MetadataGuid"
         Title           = $title
         Year            = $year
         Rating          = ""
@@ -3369,13 +3401,15 @@ function Add-DesignRatingMetadata {
     foreach ($item in $all) {
         $critic = ""
         $audience = ""
+        $imdb = ""
         $criticImage = ""
         $audienceImageState = ""
         $genres = @()
         $ratingKey = [string]$item.RatingKey
+        $mediaType = if ([string]$item.Type -eq "show") { "show" } else { "movie" }
 
-        # Primary source for the newsletter: Tautulli already exposes the
-        # selected Plex critic and audience scores plus their provider IDs.
+        # Primary source for the newsletter: Tautulli already exposes selected
+        # movie RT and TV IMDb scores plus their provider IDs.
         try {
             $meta = Invoke-TautulliApi -Command "get_metadata" -Parameters @{
                 rating_key = $ratingKey
@@ -3386,38 +3420,57 @@ function Add-DesignRatingMetadata {
             $ratingValue = Get-OptionalStringProperty -InputObject $meta -Name "rating"
             $audienceRatingValue = Get-OptionalStringProperty -InputObject $meta -Name "audience_rating"
 
-            if ([string]$item.Type -eq "movie") {
-                if ($null -ne $meta.PSObject.Properties["genres"]) {
-                    $genres = @(ConvertTo-DesignGenreList -Value $meta.genres)
+            if ([string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $item -Name "Summary"))) {
+                $summary = Get-OptionalStringProperty -InputObject $meta -Name "summary"
+                if (-not [string]::IsNullOrWhiteSpace($summary)) {
+                    $item | Add-Member -NotePropertyName "Summary" -NotePropertyValue $summary -Force
                 }
-                elseif ($null -ne $meta.PSObject.Properties["genre"]) {
-                    $genres = @(ConvertTo-DesignGenreList -Value $meta.genre)
+            }
+            if ([string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $item -Name "Year"))) {
+                $year = Get-OptionalStringProperty -InputObject $meta -Name "year"
+                if (-not [string]::IsNullOrWhiteSpace($year)) {
+                    $item | Add-Member -NotePropertyName "Year" -NotePropertyValue $year -Force
                 }
             }
 
-            if ($ratingImage -like 'rottentomatoes://image.rating.*') {
-                $critic = Convert-DesignRatingPercent $ratingValue
-                $criticImage = $ratingImage
+            if ($null -ne $meta.PSObject.Properties["genres"]) {
+                $genres = @(ConvertTo-DesignGenreList -Value $meta.genres)
+            }
+            elseif ($null -ne $meta.PSObject.Properties["genre"]) {
+                $genres = @(ConvertTo-DesignGenreList -Value $meta.genre)
             }
 
-            if ($audienceImage -like 'rottentomatoes://image.rating.*') {
-                $audience = Convert-DesignRatingPercent $audienceRatingValue
-                $audienceImageState = $audienceImage
+            if ($mediaType -eq "movie") {
+                if ($ratingImage -like 'rottentomatoes://image.rating.*') {
+                    $critic = Convert-DesignRatingPercent $ratingValue
+                    $criticImage = $ratingImage
+                }
+                if ($audienceImage -like 'rottentomatoes://image.rating.*') {
+                    $audience = Convert-DesignRatingPercent $audienceRatingValue
+                    $audienceImageState = $audienceImage
+                }
+            }
+            elseif ($ratingImage -like 'imdb://image.rating*') {
+                $imdb = $ratingValue
             }
         }
         catch {
-            Write-Log "TautWeekly for Plex Tautulli RT lookup failed for $($item.Title): $($_.Exception.Message)" "WARN"
+            Write-Log "TautWeekly for Plex Tautulli rating/metadata lookup failed for $($item.Title): $($_.Exception.Message)" "WARN"
         }
 
         # Optional secondary source: Plex's full Rating[] if direct access
         # happens to be available on this install.
-        if ([string]::IsNullOrWhiteSpace($critic) -or
-            [string]::IsNullOrWhiteSpace($audience)) {
+        $needsDirectRatings = if ($mediaType -eq "movie") {
+            [string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)
+        }
+        else {
+            [string]::IsNullOrWhiteSpace($imdb)
+        }
+        if ($needsDirectRatings) {
             try {
                 $plexMeta = Get-DesignPlexMetadata -RatingKey $ratingKey
 
                 if ($null -ne $plexMeta -and
-                    [string]$item.Type -eq "movie" -and
                     $genres.Count -eq 0 -and
                     $null -ne $plexMeta.PSObject.Properties["Genre"]) {
                     $genres = @(ConvertTo-DesignGenreList -Value $plexMeta.Genre)
@@ -3441,14 +3494,22 @@ function Add-DesignRatingMetadata {
                             $value = $ratingEntry.value
                         }
 
-                        if ([string]::IsNullOrWhiteSpace($critic) -and
+                        if ($mediaType -eq "show" -and
+                            [string]::IsNullOrWhiteSpace($imdb) -and
+                            $image -like "imdb://image.rating*") {
+                            $imdb = [string]$value
+                        }
+
+                        if ($mediaType -eq "movie" -and
+                            [string]::IsNullOrWhiteSpace($critic) -and
                             $image -like "rottentomatoes://image.rating.*" -and
                             $type -eq "critic") {
                             $critic = Convert-DesignRatingPercent $value
                             $criticImage = $image
                         }
 
-                        if ([string]::IsNullOrWhiteSpace($audience) -and
+                        if ($mediaType -eq "movie" -and
+                            [string]::IsNullOrWhiteSpace($audience) -and
                             $image -like "rottentomatoes://image.rating.*" -and
                             $type -eq "audience") {
                             $audience = Convert-DesignRatingPercent $value
@@ -3462,9 +3523,119 @@ function Add-DesignRatingMetadata {
             }
         }
 
-        # Last resort: rich exporter for movies only. TV cards use episode
-        # IMDb enrichment instead; show/season RT exporter requests are noisy
-        # and are not needed for the approved email design.
+        # A deleted library item can no longer be expanded by the local PMS,
+        # but Tautulli history retains its exact Plex metadata GUID. With the
+        # administrator-authorized Plex token, resolve only that identifier
+        # against Plex's hosted metadata service; never search by title.
+        $metadataGuid = Get-OptionalStringProperty -InputObject $item -Name "MetadataGuid"
+        $needsHostedRating = if ($mediaType -eq "movie") {
+            [string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)
+        }
+        else {
+            [string]::IsNullOrWhiteSpace($imdb)
+        }
+        $needsHostedMetadata = (
+            -not [string]::IsNullOrWhiteSpace($metadataGuid) -and
+            ($genres.Count -eq 0 -or
+             $needsHostedRating -or
+             [string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $item -Name "Summary")) -or
+             [string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $item -Name "Year")))
+        )
+
+        if ($needsHostedMetadata) {
+            try {
+                $hostedMeta = Get-PlexHostedMetadata -MetadataGuid $metadataGuid -MediaType $mediaType
+                if ($null -ne $hostedMeta) {
+                    if ($genres.Count -eq 0) {
+                        if ($null -ne $hostedMeta.PSObject.Properties["Genre"]) {
+                            $genres = @(ConvertTo-DesignGenreList -Value $hostedMeta.Genre)
+                        }
+                        elseif ($null -ne $hostedMeta.PSObject.Properties["genres"]) {
+                            $genres = @(ConvertTo-DesignGenreList -Value $hostedMeta.genres)
+                        }
+                    }
+
+                    if ([string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $item -Name "Summary"))) {
+                        $summary = Get-OptionalStringProperty -InputObject $hostedMeta -Name "summary"
+                        if (-not [string]::IsNullOrWhiteSpace($summary)) {
+                            $item | Add-Member -NotePropertyName "Summary" -NotePropertyValue $summary -Force
+                        }
+                    }
+                    if ([string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $item -Name "Year"))) {
+                        $year = Get-OptionalStringProperty -InputObject $hostedMeta -Name "year"
+                        if (-not [string]::IsNullOrWhiteSpace($year)) {
+                            $item | Add-Member -NotePropertyName "Year" -NotePropertyValue $year -Force
+                        }
+                    }
+
+                    $hostedRatingImage = Get-OptionalStringProperty -InputObject $hostedMeta -Name "ratingImage"
+                    if ([string]::IsNullOrWhiteSpace($hostedRatingImage)) {
+                        $hostedRatingImage = Get-OptionalStringProperty -InputObject $hostedMeta -Name "rating_image"
+                    }
+                    $hostedAudienceImage = Get-OptionalStringProperty -InputObject $hostedMeta -Name "audienceRatingImage"
+                    if ([string]::IsNullOrWhiteSpace($hostedAudienceImage)) {
+                        $hostedAudienceImage = Get-OptionalStringProperty -InputObject $hostedMeta -Name "audience_rating_image"
+                    }
+                    $hostedRating = Get-OptionalStringProperty -InputObject $hostedMeta -Name "rating"
+                    $hostedAudience = Get-OptionalStringProperty -InputObject $hostedMeta -Name "audienceRating"
+                    if ([string]::IsNullOrWhiteSpace($hostedAudience)) {
+                        $hostedAudience = Get-OptionalStringProperty -InputObject $hostedMeta -Name "audience_rating"
+                    }
+
+                    if ($mediaType -eq "movie" -and
+                        [string]::IsNullOrWhiteSpace($critic) -and
+                        $hostedRatingImage -like 'rottentomatoes://image.rating.*') {
+                        $critic = Convert-DesignRatingPercent $hostedRating
+                        $criticImage = $hostedRatingImage
+                    }
+                    if ($mediaType -eq "movie" -and
+                        [string]::IsNullOrWhiteSpace($audience) -and
+                        $hostedAudienceImage -like 'rottentomatoes://image.rating.*') {
+                        $audience = Convert-DesignRatingPercent $hostedAudience
+                        $audienceImageState = $hostedAudienceImage
+                    }
+                    if ($mediaType -eq "show" -and
+                        [string]::IsNullOrWhiteSpace($imdb) -and
+                        $hostedRatingImage -like 'imdb://image.rating*') {
+                        $imdb = $hostedRating
+                    }
+
+                    if ($null -ne $hostedMeta.PSObject.Properties["Rating"]) {
+                        foreach ($ratingEntry in @($hostedMeta.Rating)) {
+                            $image = Get-OptionalStringProperty -InputObject $ratingEntry -Name "image"
+                            $type = Get-OptionalStringProperty -InputObject $ratingEntry -Name "type"
+                            $value = Get-OptionalStringProperty -InputObject $ratingEntry -Name "value"
+
+                            if ($mediaType -eq "show" -and
+                                [string]::IsNullOrWhiteSpace($imdb) -and
+                                $image -like 'imdb://image.rating*') {
+                                $imdb = $value
+                            }
+                            if ($mediaType -eq "movie" -and
+                                [string]::IsNullOrWhiteSpace($critic) -and
+                                $image -like 'rottentomatoes://image.rating.*' -and
+                                $type -eq "critic") {
+                                $critic = Convert-DesignRatingPercent $value
+                                $criticImage = $image
+                            }
+                            if ($mediaType -eq "movie" -and
+                                [string]::IsNullOrWhiteSpace($audience) -and
+                                $image -like 'rottentomatoes://image.rating.*' -and
+                                $type -eq "audience") {
+                                $audience = Convert-DesignRatingPercent $value
+                                $audienceImageState = $image
+                            }
+                        }
+                    }
+                }
+            }
+            catch {
+                Write-Log "Plex hosted enrichment failed for deleted $mediaType history metadata: $($_.Exception.Message)" "WARN"
+            }
+        }
+
+        # Last resort: rich exporter for movies only. TV shows and episodes use
+        # IMDb values directly; show/season RT exporter requests are not needed.
         if ([string]$item.Type -eq "movie" -and
             ([string]::IsNullOrWhiteSpace($critic) -or
              [string]::IsNullOrWhiteSpace($audience))) {
@@ -3482,14 +3653,20 @@ function Add-DesignRatingMetadata {
             }
         }
 
-        Write-Log ("Design ratings: {0} -> RT critic {1}, audience {2}" -f `
-            $item.Title,
-            $(if ($critic) { $critic + "%" } else { "n/a" }),
-            $(if ($audience) { $audience } else { "n/a" })
-        )
+        if ($mediaType -eq "show") {
+            Write-Log ("Design ratings: {0} -> IMDb {1}" -f $item.Title, $(if ($imdb) { $imdb } else { "n/a" }))
+        }
+        else {
+            Write-Log ("Design ratings: {0} -> RT critic {1}, audience {2}" -f `
+                $item.Title,
+                $(if ($critic) { $critic + "%" } else { "n/a" }),
+                $(if ($audience) { $audience } else { "n/a" })
+            )
+        }
 
         $item | Add-Member -NotePropertyName "DesignRtCritic" -NotePropertyValue $critic -Force
         $item | Add-Member -NotePropertyName "DesignRtAudience" -NotePropertyValue $audience -Force
+        $item | Add-Member -NotePropertyName "DesignImdbRating" -NotePropertyValue $imdb -Force
         $item | Add-Member -NotePropertyName "DesignRtCriticImage" -NotePropertyValue $criticImage -Force
         $item | Add-Member -NotePropertyName "DesignRtAudienceImage" -NotePropertyValue $audienceImageState -Force
         $item | Add-Member -NotePropertyName "DesignGenres" -NotePropertyValue @($genres) -Force
@@ -3556,6 +3733,18 @@ function Get-DesignRatingLine {
         $pieces.Add(
             '<span class="design-rating-year">' +
             (HtmlEncode ([string]$Item.Year)) +
+            '</span>'
+        )
+    }
+
+    $imdb = Get-OptionalStringProperty -InputObject $Item -Name "DesignImdbRating"
+    if ([string]$Item.Type -eq "show" -and -not [string]::IsNullOrWhiteSpace($imdb)) {
+        $imdbIcon = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
+        $pieces.Add(
+            '<span class="design-rating-item">' +
+            '<img src="' + (HtmlEncode $imdbIcon) + '" alt="IMDb" ' +
+            'width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
+            (HtmlEncode $imdb) +
             '</span>'
         )
     }
@@ -3919,8 +4108,247 @@ function Get-DesignHeroAssets {
     return $result
 }
 
+function Get-PlexMetadataProviderBaseUrl {
+    $defaultUrl = "https://metadata.provider.plex.tv"
+    $testUrl = [string]$env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL
+    if ([string]::IsNullOrWhiteSpace($testUrl)) { return $defaultUrl }
+
+    try {
+        $uri = [Uri]$testUrl
+        if ($uri.IsLoopback -and $uri.Scheme -in @("http", "https")) {
+            return $testUrl.TrimEnd("/")
+        }
+    }
+    catch { }
+
+    return $defaultUrl
+}
+
+function Get-PlexHostedMetadataLookupPath {
+    param(
+        [string]$MetadataGuid,
+        [ValidateSet("movie", "show")]
+        [string]$MediaType
+    )
+
+    if ([string]::IsNullOrWhiteSpace($MetadataGuid)) { return "" }
+
+    $guid = $MetadataGuid.Trim()
+    if ($guid -match '(?i)^plex://(?:movie|show|season|episode)/(?<id>[a-z0-9]+)(?:\?.*)?$') {
+        return "/library/metadata/" + [Uri]::EscapeDataString([string]$Matches.id)
+    }
+
+    $externalGuid = ""
+    if ($guid -match '(?i)^(?:tmdb|imdb)://[^/?]+(?:\?.*)?$') {
+        $externalGuid = $guid -replace '\?.*$', ''
+    }
+    elseif ($guid -match '(?i)^com\.plexapp\.agents\.themoviedb://(?<id>[0-9]+)(?:\?.*)?$') {
+        $externalGuid = "tmdb://" + [string]$Matches.id
+    }
+    elseif ($guid -match '(?i)^com\.plexapp\.agents\.imdb://(?<id>tt[0-9]+)(?:\?.*)?$') {
+        $externalGuid = "imdb://" + [string]$Matches.id
+    }
+
+    if ([string]::IsNullOrWhiteSpace($externalGuid)) { return "" }
+
+    $providerType = if ($MediaType -eq "movie") { 1 } else { 2 }
+    return "/library/metadata/matches?guid=" +
+        [Uri]::EscapeDataString($externalGuid) +
+        "&type=" + $providerType
+}
+
+function Get-PlexHostedMetadata {
+    param(
+        [string]$MetadataGuid,
+        [ValidateSet("movie", "show")]
+        [string]$MediaType
+    )
+
+    $lookupPath = Get-PlexHostedMetadataLookupPath -MetadataGuid $MetadataGuid -MediaType $MediaType
+    if ([string]::IsNullOrWhiteSpace($lookupPath)) { return $null }
+
+    $cacheKey = $MediaType + ":" + $MetadataGuid
+    if ($script:PlexHostedMetadataCache.ContainsKey($cacheKey)) {
+        return $script:PlexHostedMetadataCache[$cacheKey]
+    }
+
+    $ctx = Get-DesignPlexContext
+    $token = Get-OptionalStringProperty -InputObject $ctx -Name "Token"
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        $script:PlexHostedMetadataCache[$cacheKey] = $null
+        return $null
+    }
+
+    $headers = @{
+        "Accept"                   = "application/json"
+        "X-Plex-Token"             = $token
+        "X-Plex-Product"           = "TautWeekly for Plex"
+        "X-Plex-Version"           = "0.7.0"
+        "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
+    }
+
+    $metadata = $null
+    try {
+        $raw = Invoke-RestMethod `
+            -Uri ((Get-PlexMetadataProviderBaseUrl) + $lookupPath) `
+            -Headers $headers `
+            -Method Get `
+            -TimeoutSec 60
+
+        if ($null -ne $raw -and $null -ne $raw.PSObject.Properties["MediaContainer"]) {
+            $container = $raw.MediaContainer
+            if ($null -ne $container.PSObject.Properties["Metadata"]) {
+                $rows = @($container.Metadata)
+                if ($rows.Count -gt 0) { $metadata = $rows[0] }
+            }
+        }
+    }
+    catch {
+        Write-Log "Plex hosted metadata fallback failed for deleted $MediaType history metadata: $($_.Exception.Message)" "WARN"
+    }
+
+    if ($null -ne $metadata -and $MediaType -eq "show") {
+        $resolvedType = Get-OptionalStringProperty -InputObject $metadata -Name "type"
+        if ($resolvedType -ne "show") {
+            $showGuid = if ($resolvedType -eq "season") {
+                Get-OptionalStringProperty -InputObject $metadata -Name "parentGuid"
+            }
+            else {
+                Get-OptionalStringProperty -InputObject $metadata -Name "grandparentGuid"
+            }
+            if ([string]::IsNullOrWhiteSpace($showGuid)) {
+                $showGuid = if ($resolvedType -eq "season") {
+                    Get-OptionalStringProperty -InputObject $metadata -Name "parent_guid"
+                }
+                else {
+                    Get-OptionalStringProperty -InputObject $metadata -Name "grandparent_guid"
+                }
+            }
+            if (-not [string]::IsNullOrWhiteSpace($showGuid) -and $showGuid -ne $MetadataGuid) {
+                $showMetadata = Get-PlexHostedMetadata -MetadataGuid $showGuid -MediaType "show"
+                if ($null -ne $showMetadata) { $metadata = $showMetadata }
+            }
+        }
+    }
+
+    $script:PlexHostedMetadataCache[$cacheKey] = $metadata
+    return $metadata
+}
+
+function Get-PlexHostedPosterPath {
+    param(
+        [string]$MetadataGuid,
+        [ValidateSet("movie", "show")]
+        [string]$MediaType,
+        [string]$DestinationPath
+    )
+
+    if ([string]::IsNullOrWhiteSpace($MetadataGuid) -or
+        [string]::IsNullOrWhiteSpace($DestinationPath)) {
+        return ""
+    }
+
+    $metadata = Get-PlexHostedMetadata -MetadataGuid $MetadataGuid -MediaType $MediaType
+    if ($null -eq $metadata) { return "" }
+
+    $fieldNames = if ($MediaType -eq "show") {
+        @("thumb", "grandparentThumb", "grandparent_thumb", "parentThumb", "parent_thumb")
+    }
+    else {
+        @("thumb")
+    }
+
+    $posterUrl = ""
+    foreach ($fieldName in $fieldNames) {
+        $posterUrl = Get-OptionalStringProperty -InputObject $metadata -Name $fieldName
+        if (-not [string]::IsNullOrWhiteSpace($posterUrl)) { break }
+    }
+    if ([string]::IsNullOrWhiteSpace($posterUrl)) { return "" }
+
+    $providerBaseUrl = Get-PlexMetadataProviderBaseUrl
+    $assetUrl = $posterUrl
+    $headers = @{}
+
+    try {
+        if ($posterUrl.StartsWith("/")) {
+            $assetUrl = $providerBaseUrl + $posterUrl
+            $headers["X-Plex-Token"] = [string](Get-DesignPlexContext).Token
+        }
+        else {
+            $assetUri = [Uri]$posterUrl
+            if ($assetUri.Scheme -notin @("http", "https")) { return "" }
+
+            $providerUri = [Uri]$providerBaseUrl
+            if ($assetUri.Scheme -ieq $providerUri.Scheme -and
+                $assetUri.Host -ieq $providerUri.Host -and
+                $assetUri.Port -eq $providerUri.Port) {
+                $headers["X-Plex-Token"] = [string](Get-DesignPlexContext).Token
+            }
+        }
+
+        if ($headers.Count -gt 0) {
+            Invoke-WebRequest -Uri $assetUrl -Headers $headers -OutFile $DestinationPath -TimeoutSec 60 | Out-Null
+        }
+        else {
+            Invoke-WebRequest -Uri $assetUrl -OutFile $DestinationPath -TimeoutSec 60 | Out-Null
+        }
+
+        if ((Test-Path $DestinationPath) -and (Get-Item $DestinationPath).Length -gt 512) {
+            Write-Log "Recovered deleted Plex $MediaType history artwork from its retained metadata GUID."
+            return $DestinationPath
+        }
+    }
+    catch {
+        Write-Log "Plex hosted poster download failed for deleted $MediaType history artwork: $($_.Exception.Message)" "WARN"
+    }
+
+    Remove-Item $DestinationPath -Force -ErrorAction SilentlyContinue
+    return ""
+}
+
+function Get-TautulliDefaultPosterHash {
+    if (-not [string]::IsNullOrWhiteSpace($script:TautulliDefaultPosterHash)) {
+        return $script:TautulliDefaultPosterHash
+    }
+
+    $probePath = Join-Path $PosterDir (".tautulli-default-poster-" + [Guid]::NewGuid().ToString("N"))
+    try {
+        $uri = Build-TautulliUri -Command "pms_image_proxy" -Parameters @{
+            fallback = "poster"
+        }
+        Invoke-WebRequest -Uri $uri -OutFile $probePath -TimeoutSec 60 | Out-Null
+        if ((Test-Path $probePath) -and (Get-Item $probePath).Length -gt 0) {
+            $script:TautulliDefaultPosterHash = (Get-FileHash -Path $probePath -Algorithm SHA256).Hash
+        }
+    }
+    catch {
+        Write-Log "Could not fingerprint Tautulli's generic poster fallback: $($_.Exception.Message)" "WARN"
+    }
+    finally {
+        Remove-Item $probePath -Force -ErrorAction SilentlyContinue
+    }
+
+    return $script:TautulliDefaultPosterHash
+}
+
+function Test-IsTautulliDefaultPoster {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path $Path)) { return $false }
+
+    $defaultHash = Get-TautulliDefaultPosterHash
+    if ([string]::IsNullOrWhiteSpace($defaultHash)) { return $false }
+
+    return ((Get-FileHash -Path $Path -Algorithm SHA256).Hash -eq $defaultHash)
+}
+
 function Get-PosterPath {
-    param([string]$RatingKey)
+    param(
+        [string]$RatingKey,
+        [string]$MetadataGuid = "",
+        [ValidateSet("movie", "show")]
+        [string]$MediaType = "movie"
+    )
 
     if ([string]::IsNullOrWhiteSpace($RatingKey)) { return "" }
 
@@ -3928,7 +4356,13 @@ function Get-PosterPath {
     $path = Join-Path $PosterDir ($cid + ".jpg")
 
     if (Test-Path $path) {
-        if ((Get-Item $path).Length -gt 512) { return $path }
+        if ((Get-Item $path).Length -gt 512) {
+            $isCachedGenericFallback = (
+                -not [string]::IsNullOrWhiteSpace($MetadataGuid) -and
+                (Test-IsTautulliDefaultPoster -Path $path)
+            )
+            if (-not $isCachedGenericFallback) { return $path }
+        }
         Remove-Item $path -Force -ErrorAction SilentlyContinue
     }
 
@@ -3943,7 +4377,13 @@ function Get-PosterPath {
     try {
         Invoke-WebRequest -Uri $uri -OutFile $path -TimeoutSec 60 | Out-Null
         if ((Test-Path $path) -and (Get-Item $path).Length -gt 512) {
-            return $path
+            $isGenericFallback = (
+                -not [string]::IsNullOrWhiteSpace($MetadataGuid) -and
+                (Test-IsTautulliDefaultPoster -Path $path)
+            )
+            if (-not $isGenericFallback) { return $path }
+
+            Write-Log "Tautulli returned its generic poster for deleted Plex $MediaType history; trying the retained metadata GUID."
         }
     }
     catch {
@@ -3951,6 +4391,12 @@ function Get-PosterPath {
     }
 
     Remove-Item $path -Force -ErrorAction SilentlyContinue
+    $hostedPath = Get-PlexHostedPosterPath `
+        -MetadataGuid $MetadataGuid `
+        -MediaType $MediaType `
+        -DestinationPath $path
+    if (-not [string]::IsNullOrWhiteSpace($hostedPath)) { return $hostedPath }
+
     return ""
 }
 
@@ -3968,7 +4414,7 @@ function Prepare-PosterAssets {
 
     if (-not [string]::IsNullOrWhiteSpace($FeaturedRatingKey)) {
         $featured = @(
-            @($ReleaseData.Movies) + @($ReleaseData.TV) |
+            @($ReleaseData.Movies) + @($ReleaseData.TV) + @($AdditionalItems) |
             Where-Object { [string]$_.PosterRatingKey -eq $FeaturedRatingKey } |
             Select-Object -First 1
         )
@@ -4005,7 +4451,14 @@ function Prepare-PosterAssets {
         if ([string]::IsNullOrWhiteSpace($rk) -or $seen.ContainsKey($rk)) { continue }
 
         $seen[$rk] = $true
-        $path = Get-PosterPath -RatingKey $rk
+        $metadataGuid = Get-OptionalStringProperty -InputObject $item -Name "MetadataGuid"
+        $mediaType = Get-OptionalStringProperty -InputObject $item -Name "Type"
+        if ($mediaType -ne "show") { $mediaType = "movie" }
+
+        $path = Get-PosterPath `
+            -RatingKey $rk `
+            -MetadataGuid $metadataGuid `
+            -MediaType $mediaType
         if (-not [string]::IsNullOrWhiteSpace($path)) {
             $assets.Add([PSCustomObject]@{
                 RatingKey = $rk
@@ -6204,6 +6657,8 @@ if ($null -ne $script:GlobalTrendingStat -and
     -not [string]::IsNullOrWhiteSpace([string]$script:GlobalTrendingStat.RatingKey)) {
     $trendingPosterItem = [PSCustomObject]@{
         PosterRatingKey = [string]$script:GlobalTrendingStat.RatingKey
+        MetadataGuid    = Get-OptionalStringProperty -InputObject $script:GlobalTrendingStat -Name "MetadataGuid"
+        Type            = [string]$script:GlobalTrendingStat.Type
     }
 }
 
