@@ -6,6 +6,20 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Extended exact-GUID recovery for deleted Plex history to legacy TMDB agent
+  aliases and legacy TVDB episode/show identifiers, and made unsupported or
+  empty exact matches visible through privacy-safe warnings. Follow-up reported
+  by [@gianfelicevincenzo](https://github.com/gianfelicevincenzo) in
+  [#41](https://github.com/sparkmoxie/TautWeekly/issues/41).
+
+### Security
+
+- Kept legacy deleted-history recovery limited to validated numeric provider
+  identifiers. It performs no title search and never writes the retained
+  identifier or Plex token to diagnostics.
+
 ## [0.8.0] - 2026-08-10
 
 ### Fixed

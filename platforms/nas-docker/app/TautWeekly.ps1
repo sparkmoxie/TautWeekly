@@ -4247,19 +4247,26 @@ function Get-PlexHostedMetadataLookupPath {
     if ([string]::IsNullOrWhiteSpace($MetadataGuid)) { return "" }
 
     $guid = $MetadataGuid.Trim()
-    if ($guid -match '(?i)^plex://(?:movie|show|season|episode)/(?<id>[a-z0-9]+)(?:\?.*)?$') {
+    if ($guid -match '(?i)^plex://(?:movie|show|season|episode)/(?<id>[a-z0-9][a-z0-9_-]*)(?:\?.*)?$') {
         return "/library/metadata/" + [Uri]::EscapeDataString([string]$Matches.id)
     }
 
     $externalGuid = ""
-    if ($guid -match '(?i)^(?:tmdb|imdb)://[^/?]+(?:\?.*)?$') {
-        $externalGuid = $guid -replace '\?.*$', ''
+    if ($guid -match '(?i)^tmdb://(?<id>[0-9]+)(?:/[^?]*)?(?:\?.*)?$') {
+        $externalGuid = "tmdb://" + [string]$Matches.id
     }
-    elseif ($guid -match '(?i)^com\.plexapp\.agents\.themoviedb://(?<id>[0-9]+)(?:\?.*)?$') {
+    elseif ($guid -match '(?i)^imdb://(?<id>tt[0-9]+)(?:\?.*)?$') {
+        $externalGuid = "imdb://" + [string]$Matches.id
+    }
+    elseif ($guid -match '(?i)^com\.plexapp\.agents\.(?:themoviedb|tmdb)://(?<id>[0-9]+)(?:/[^?]*)?(?:\?.*)?$') {
         $externalGuid = "tmdb://" + [string]$Matches.id
     }
     elseif ($guid -match '(?i)^com\.plexapp\.agents\.imdb://(?<id>tt[0-9]+)(?:\?.*)?$') {
         $externalGuid = "imdb://" + [string]$Matches.id
+    }
+    elseif ($MediaType -eq "show" -and
+        $guid -match '(?i)^(?:tvdb|com\.plexapp\.agents\.thetvdb)://(?<id>[0-9]+)(?:/[^?]*)?(?:\?.*)?$') {
+        $externalGuid = "tvdb://" + [string]$Matches.id
     }
 
     if ([string]::IsNullOrWhiteSpace($externalGuid)) { return "" }
@@ -4277,17 +4284,24 @@ function Get-PlexHostedMetadata {
         [string]$MediaType
     )
 
-    $lookupPath = Get-PlexHostedMetadataLookupPath -MetadataGuid $MetadataGuid -MediaType $MediaType
-    if ([string]::IsNullOrWhiteSpace($lookupPath)) { return $null }
+    if ([string]::IsNullOrWhiteSpace($MetadataGuid)) { return $null }
 
-    $cacheKey = $MediaType + ":" + $MetadataGuid
+    $cacheKey = $MediaType + ":" + $MetadataGuid.Trim()
     if ($script:PlexHostedMetadataCache.ContainsKey($cacheKey)) {
         return $script:PlexHostedMetadataCache[$cacheKey]
+    }
+
+    $lookupPath = Get-PlexHostedMetadataLookupPath -MetadataGuid $MetadataGuid -MediaType $MediaType
+    if ([string]::IsNullOrWhiteSpace($lookupPath)) {
+        Write-Log "Plex hosted metadata recovery skipped a retained $MediaType GUID because its exact provider format is unsupported." "WARN"
+        $script:PlexHostedMetadataCache[$cacheKey] = $null
+        return $null
     }
 
     $ctx = Get-DesignPlexContext
     $token = Get-OptionalStringProperty -InputObject $ctx -Name "Token"
     if ([string]::IsNullOrWhiteSpace($token)) {
+        Write-Log "Plex hosted metadata recovery requires the configured administrator Plex token." "WARN"
         $script:PlexHostedMetadataCache[$cacheKey] = $null
         return $null
     }
@@ -4301,12 +4315,14 @@ function Get-PlexHostedMetadata {
     }
 
     $metadata = $null
+    $requestCompleted = $false
     try {
         $raw = Invoke-RestMethod `
             -Uri ((Get-PlexMetadataProviderBaseUrl) + $lookupPath) `
             -Headers $headers `
             -Method Get `
             -TimeoutSec 60
+        $requestCompleted = $true
 
         if ($null -ne $raw -and $null -ne $raw.PSObject.Properties["MediaContainer"]) {
             $container = $raw.MediaContainer
@@ -4318,6 +4334,10 @@ function Get-PlexHostedMetadata {
     }
     catch {
         Write-Log "Plex hosted metadata fallback failed for deleted $MediaType history metadata: $($_.Exception.Message)" "WARN"
+    }
+
+    if ($requestCompleted -and $null -eq $metadata) {
+        Write-Log "Plex hosted metadata recovery returned no exact match for the retained $MediaType GUID." "WARN"
     }
 
     if ($null -ne $metadata -and $MediaType -eq "show") {

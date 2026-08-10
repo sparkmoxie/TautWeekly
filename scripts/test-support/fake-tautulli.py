@@ -11,6 +11,12 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
+DELETED_HISTORY_SCENARIOS = (
+    "deleted-history-metadata",
+    "deleted-history-legacy-guid",
+)
+
+
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
     old = now - (30 * 86400)
@@ -64,9 +70,13 @@ def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
             }
         ],
     }
-    if scenario == "deleted-history-metadata":
-        rows["10"][0]["guid"] = "plex://movie/deletedmovieguid"
-        rows["20"][0]["guid"] = "plex://episode/deletedepisodeguid"
+    if scenario in DELETED_HISTORY_SCENARIOS:
+        if scenario == "deleted-history-legacy-guid":
+            rows["10"][0]["guid"] = "com.plexapp.agents.tmdb://12345?lang=en"
+            rows["20"][0]["guid"] = "com.plexapp.agents.thetvdb://999/1/2?lang=en"
+        else:
+            rows["10"][0]["guid"] = "plex://movie/deletedmovieguid"
+            rows["20"][0]["guid"] = "plex://episode/deletedepisodeguid"
         for field in (
             "year",
             "summary",
@@ -124,8 +134,12 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                 "group_count": 1,
             }
         ]
-        if scenario == "deleted-history-metadata":
-            rows[0]["guid"] = "plex://movie/deletedmovieguid"
+        if scenario in DELETED_HISTORY_SCENARIOS:
+            rows[0]["guid"] = (
+                "com.plexapp.agents.tmdb://12345?lang=en"
+                if scenario == "deleted-history-legacy-guid"
+                else "plex://movie/deletedmovieguid"
+            )
             for field in ("year", "summary", "rating", "audience_rating"):
                 rows[0].pop(field, None)
         return rows
@@ -153,8 +167,13 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                 "rating_image": "imdb://image.rating",
             }
         ]
-        if scenario == "deleted-history-metadata":
-            rows[0]["guid"] = "plex://episode/deletedepisodeguid"
+        if scenario in DELETED_HISTORY_SCENARIOS:
+            deleted_episode_guid = (
+                "com.plexapp.agents.thetvdb://999/1/2?lang=en"
+                if scenario == "deleted-history-legacy-guid"
+                else "plex://episode/deletedepisodeguid"
+            )
+            rows[0]["guid"] = deleted_episode_guid
             for field in ("year", "summary", "rating", "rating_image"):
                 rows[0].pop(field, None)
             rows.append(
@@ -167,7 +186,7 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                     "parent_title": "Season 1",
                     "title": "Viewer Deleted Episode",
                     "year": "2026",
-                    "guid": "plex://episode/deletedepisodeguid",
+                    "guid": deleted_episode_guid,
                     "user_id": "1",
                     "friendly_name": "Virtual Viewer",
                     "play_duration": 1800,
@@ -226,6 +245,62 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 + "\n"
             )
+
+        if parsed.path == "/hosted/library/metadata/matches":
+            if not self.headers.get("X-Plex-Token"):
+                self.write_json({"error": "missing virtual Plex token"}, status=401)
+                return
+
+            external_guid = query.get("guid", "")
+            media_type = query.get("type", "")
+            if external_guid == "tmdb://12345" and media_type == "1":
+                self.write_json(
+                    {
+                        "MediaContainer": {
+                            "Metadata": [
+                                {
+                                    "type": "movie",
+                                    "guid": "plex://movie/deletedmovieguid",
+                                    "slug": "selected-movie",
+                                    "title": "Selected Movie",
+                                    "year": "2026",
+                                    "summary": "Hosted history movie summary.",
+                                    "thumb": f"http://localhost:{self.server.server_port}/hosted/deleted-movie.jpg",  # type: ignore[attr-defined]
+                                    "Genre": [
+                                        {"tag": "History Drama"},
+                                        {"tag": "Mystery"},
+                                        {"tag": "Archive"},
+                                    ],
+                                }
+                            ]
+                        }
+                    }
+                )
+                return
+
+            if external_guid == "tvdb://999" and media_type == "2":
+                self.write_json(
+                    {
+                        "MediaContainer": {
+                            "Metadata": [
+                                {
+                                    "type": "show",
+                                    "guid": "plex://show/deletedshowguid",
+                                    "slug": "selected-show",
+                                    "title": "Selected Show",
+                                    "year": "2024",
+                                    "summary": "Hosted history show summary.",
+                                    "thumb": f"{self.server.base_url}/hosted/deleted-show.jpg",  # type: ignore[attr-defined]
+                                    "Genre": [{"tag": "Drama"}, {"tag": "Mystery"}],
+                                }
+                            ]
+                        }
+                    }
+                )
+                return
+
+            self.write_json({"MediaContainer": {"Metadata": []}})
+            return
 
         if parsed.path.startswith("/hosted/library/metadata/"):
             metadata_id = parsed.path.rsplit("/", 1)[-1]
@@ -339,7 +414,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if parsed.path.startswith("/library/metadata/"):
-            if self.server.scenario in ("optional-hero-metadata", "deleted-history-metadata"):  # type: ignore[attr-defined]
+            if self.server.scenario == "optional-hero-metadata" or self.server.scenario in DELETED_HISTORY_SCENARIOS:  # type: ignore[attr-defined]
                 self.write_json({"error": "sanitized missing Plex metadata"}, status=404)
                 return
             self.write_json({"MediaContainer": {"size": 0, "Metadata": []}})
@@ -351,7 +426,7 @@ class Handler(BaseHTTPRequestHandler):
 
         command = query.get("cmd", "")
         if command == "pms_image_proxy":
-            marker = b"GENERIC-POSTER" if self.server.scenario == "deleted-history-metadata" else b"VIRTUAL-POSTER"  # type: ignore[attr-defined]
+            marker = b"GENERIC-POSTER" if self.server.scenario in DELETED_HISTORY_SCENARIOS else b"VIRTUAL-POSTER"  # type: ignore[attr-defined]
             payload = b"\xff\xd8" + (marker * 48) + b"\xff\xd9"
             self.send_response(200)
             self.send_header("Content-Type", "image/jpeg")
@@ -408,7 +483,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if command == "get_metadata":
             key = query.get("rating_key", "")
-            if self.server.scenario == "deleted-history-metadata" and key in (  # type: ignore[attr-defined]
+            if self.server.scenario in DELETED_HISTORY_SCENARIOS and key in (  # type: ignore[attr-defined]
                 "selected-movie",
                 "selected-show",
                 "champion-episode",
@@ -470,7 +545,14 @@ def main() -> None:
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument(
         "--scenario",
-        choices=("active", "quiet", "tv-only", "optional-hero-metadata", "deleted-history-metadata"),
+        choices=(
+            "active",
+            "quiet",
+            "tv-only",
+            "optional-hero-metadata",
+            "deleted-history-metadata",
+            "deleted-history-legacy-guid",
+        ),
         required=True,
     )
     parser.add_argument("--call-log", type=Path, required=True)
