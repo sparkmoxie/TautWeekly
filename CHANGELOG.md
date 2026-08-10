@@ -6,6 +6,14 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Made the generic-poster fingerprint probe portable to Unix so deleted Plex
+  history artwork can proceed to the exact-GUID hosted recovery added in
+  v0.7.0. Follow-up reported by
+  [@gianfelicevincenzo](https://github.com/gianfelicevincenzo)
+  in [#41](https://github.com/sparkmoxie/TautWeekly/issues/41).
+
 ## [0.7.0] - 2026-08-10
 
 ### Fixed

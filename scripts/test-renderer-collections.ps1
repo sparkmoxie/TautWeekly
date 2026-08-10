@@ -23,6 +23,7 @@ $requiredFunctions = @(
     'ConvertTo-DesignGenreList',
     'Add-DesignRatingMetadata',
     'Get-PlexHostedMetadataLookupPath',
+    'Get-TautulliDefaultPosterHash',
     'Get-TautulliUser',
     'Get-TautulliUsers',
     'Safe-Int',
@@ -76,6 +77,52 @@ foreach ($relativePath in $rendererPaths) {
         }
 
         Invoke-Expression $definition.Extent.Text
+    }
+
+    $posterProbeRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-poster-probe-' + [Guid]::NewGuid().ToString('N'))
+    try {
+        New-Item -ItemType Directory -Force -Path $posterProbeRoot | Out-Null
+        $script:PosterDir = $posterProbeRoot
+        $script:TautulliDefaultPosterHash = ''
+        $script:posterProbeOutFile = ''
+        $script:posterProbeRequestCount = 0
+        $script:posterProbeWarnings = New-Object System.Collections.Generic.List[string]
+
+        function Write-Log {
+            param([string]$Message, [string]$Level = 'INFO')
+            if ($Level -eq 'WARN') { $script:posterProbeWarnings.Add($Message) }
+        }
+
+        function Build-TautulliUri {
+            param([string]$Command, [hashtable]$Parameters = @{})
+            Assert-True ($Command -eq 'pms_image_proxy') "$relativePath used the wrong command for the generic-poster probe"
+            Assert-True ([string]$Parameters.fallback -eq 'poster') "$relativePath did not request Tautulli's poster fallback"
+            return 'https://tautulli.invalid/api/v2'
+        }
+
+        function Invoke-WebRequest {
+            param(
+                [string]$Uri,
+                [string]$OutFile,
+                [int]$TimeoutSec
+            )
+
+            $script:posterProbeOutFile = $OutFile
+            $script:posterProbeRequestCount++
+            [IO.File]::WriteAllBytes($OutFile, [Text.Encoding]::UTF8.GetBytes(('GENERIC-POSTER' * 64)))
+        }
+
+        $posterHash = Get-TautulliDefaultPosterHash
+        $cachedPosterHash = Get-TautulliDefaultPosterHash
+        $probeWarningText = $script:posterProbeWarnings -join '; '
+        Assert-True (-not [string]::IsNullOrWhiteSpace($posterHash)) "$relativePath could not fingerprint Tautulli's generic poster on this platform: $probeWarningText"
+        Assert-True ($cachedPosterHash -eq $posterHash -and $script:posterProbeRequestCount -eq 1) "$relativePath did not cache Tautulli's generic-poster fingerprint"
+        Assert-True ($script:posterProbeWarnings.Count -eq 0) "$relativePath logged an unexpected generic-poster probe warning: $probeWarningText"
+        Assert-True (-not ([IO.Path]::GetFileName($script:posterProbeOutFile)).StartsWith('.')) "$relativePath used a Unix-hidden generic-poster probe"
+        Assert-True (-not (Test-Path -LiteralPath $script:posterProbeOutFile)) "$relativePath did not clean up the generic-poster probe"
+    }
+    finally {
+        Remove-Item -LiteralPath $posterProbeRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     $script:Config = [PSCustomObject]@{
