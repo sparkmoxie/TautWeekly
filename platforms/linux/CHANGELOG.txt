@@ -1,6 +1,7 @@
 TautWeekly for Plex native Linux platform changelog
 
 Unreleased
+- Recovers deleted Plex history through legacy TMDB/TVDB exact identifiers and reports unsupported or empty matches safely.
 - Fixes deleted-history poster recovery on Unix by using a portable generic-poster probe.
 - Restores IMDb ratings inside watched-TV personal statistics, including deleted-history shows.
 - Restores missing movie RT and TV IMDb scores from Plex's exact tokenless public rating page.
