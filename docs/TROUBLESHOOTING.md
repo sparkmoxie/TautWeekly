@@ -171,6 +171,14 @@ the four provider-labelled rating fields. It applies the item-export fallback
 to movie RT and show IMDb, and validates controlled SendTest delivery
 separately from browser preview.
 
+Update to v0.9.4 or newer if v0.9.2 completes the rich exports but still logs
+all ratings as unavailable. Tautulli's documented TV/episode metadata can
+leave `rating_image` empty while placing the selected TMDB score in
+`audience_rating` with `audience_rating_image=themoviedb://image.rating`.
+v0.9.2's test fixture incorrectly assumed a show export could identify IMDb
+through `ratingImage`; v0.9.4 accepts the maintained rating and audience field
+pairs and renders recognized IMDb, TMDB, or TVDB selected scores.
+
 If the log also says every direct Plex request failed, verify
 `PlexServerUrl` from the TautWeekly runtime. In a separate Docker container,
 `localhost` and `127.0.0.1` refer to TautWeekly itself, not the Plex
@@ -179,11 +187,12 @@ trusted LAN URL reachable from inside the container, normally on port 32400,
 and keep `PlexToken` private. Re-run the platform verifier, PreviewAll, and a
 controlled SendTest after correcting the private configuration.
 
-TautWeekly omits a rating rather than guessing its provider. TV/episode IMDb
-scores therefore still require an IMDb-labelled source, and a logo is omitted
-when Plex/Tautulli has no selected logo resource. Do not post `config.json`,
-diagnostic JSON, generated previews, or full logs; share only sanitized warning
-text if further help is required.
+TautWeekly omits a rating rather than guessing its provider. A dedicated IMDb
+or Rotten Tomatoes badge still requires that provider label, while selected
+TMDB/TVDB values use a text badge. Unknown labels and unlabeled numbers remain
+hidden, and a logo is omitted when Plex/Tautulli has no selected logo resource.
+Do not post `config.json`, diagnostic JSON, generated previews, or full logs;
+share only sanitized warning text if further help is required.
 
 ## Deleted item still has no poster or metadata
 

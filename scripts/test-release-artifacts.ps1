@@ -48,8 +48,8 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('function Test-PlexHostedMetadataExactMatch')) "$PackageName lacks fail-closed hosted match validation."
     Assert-True ($Renderer.Contains('-Method Post')) "$PackageName lacks the provider-contract POST retry for empty exact-ID matches."
     Assert-True ($Renderer.Contains('matching hints only: require an exact modern GUID')) "$PackageName does not document the exact-identifier hosted POST boundary."
-    Assert-True ($Renderer.Contains('"User-Agent"      = "TautWeekly-for-Plex/0.9.3"')) "$PackageName does not identify the tokenless public Plex rating fallback."
-    Assert-True ($Renderer.Contains('"X-Plex-Version"           = "0.9.3"')) "$PackageName does not identify the authenticated hosted metadata fallback."
+    Assert-True ($Renderer.Contains('"User-Agent"      = "TautWeekly-for-Plex/0.9.4"')) "$PackageName does not identify the tokenless public Plex rating fallback."
+    Assert-True ($Renderer.Contains('"X-Plex-Version"           = "0.9.4"')) "$PackageName does not identify the authenticated hosted metadata fallback."
     Assert-True ($Renderer.Contains('<meta name="color-scheme" content="light dark">')) "$PackageName does not advertise Apple-compatible email color schemes."
     Assert-True ($Renderer.Contains(':root { color-scheme:light dark; supported-color-schemes:light dark; }')) "$PackageName lacks the Apple-compatible email scheme declaration."
     Assert-True (-not $Renderer.Contains('color-scheme:dark only')) "$PackageName retains the incompatible dark-only email declaration."
@@ -57,6 +57,8 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('metadata_level   = 1')) "$PackageName requests more Tautulli metadata than the rating fallback requires."
     Assert-True ($Renderer.Contains('sub_media_type = $MediaType')) "$PackageName omits Tautulli's compatible exporter-field subtype."
     Assert-True ($Renderer.Contains('@("rating", "ratingImage", "audienceRating", "audienceRatingImage")')) "$PackageName does not request provider-labelled rating fields explicitly."
+    Assert-True ($Renderer.Contains('function Get-DesignProviderRating')) "$PackageName cannot recognize selected Tautulli rating providers."
+    Assert-True ($Renderer.Contains('DesignRatingProvider')) "$PackageName does not retain selected provider-labelled ratings."
     Assert-True ($Renderer.Contains('"Accept-Language" = "en-US,en;q=0.9"')) "$PackageName does not request stable provider-labelled rating text."
     Assert-True ($Renderer.Contains('function Get-BingeChampionTitleBreakdown')) "$PackageName lacks the media-specific Binge Champion title breakdown."
     Assert-True ($Renderer.Contains('$bingeTimeLine = "$([string]$bingeDisplay.TotalTimeText) watched"')) "$PackageName has stale Binge Champion duration copy."
@@ -81,6 +83,7 @@ function Assert-DeletedItemCacheContract([string]$PackageName, [string]$CacheMod
     )) {
         Assert-True ($CacheModule.Contains($required)) "$PackageName cache module is missing: $required"
     }
+    Assert-True ($CacheModule.Contains('ProviderValue')) "$PackageName cache module does not retain the bounded selected rating value."
     foreach ($forbidden in @('PlexToken', 'ApiKey', 'SmtpPassword', 'RecipientEmail', 'play_duration', 'watched_status')) {
         Assert-True (-not $CacheModule.Contains($forbidden)) "$PackageName cache module accepts a forbidden private field: $forbidden"
     }

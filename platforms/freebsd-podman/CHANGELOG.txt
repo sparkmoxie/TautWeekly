@@ -1,6 +1,7 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Renders recognized selected IMDb, TMDB, and TVDB ratings from either Tautulli rating field pair.
 - Makes Tautulli field discovery compatible and explicitly requests provider-labelled rating fields.
 - Accepts valid minimal rating-only JSON exports instead of rejecting responses under 64 bytes.
 - Displays recovered show IMDb ratings on TV release cards.

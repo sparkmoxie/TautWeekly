@@ -95,6 +95,7 @@ foreach ($relative in @(
         'Safe-Int',
         'Safe-Int64',
         'Get-OptionalStringProperty',
+        'Get-DesignProviderRating',
         'Test-IncludedLibraryRow',
         'Get-IncludedLibraryQueryScopes',
         'Get-History',

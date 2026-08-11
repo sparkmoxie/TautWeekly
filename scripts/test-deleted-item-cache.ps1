@@ -66,6 +66,8 @@ function New-TestItem {
         DesignRtCritic        = '91'
         DesignRtAudience      = '87'
         DesignImdbRating      = '7.8'
+        DesignRatingProvider  = 'TMDB'
+        DesignRatingValue     = '7.4'
         DesignRtCriticImage   = 'certified_fresh'
         DesignRtAudienceImage = 'upright'
         PlexToken             = $Secret
@@ -113,6 +115,8 @@ try {
     Assert-True ($null -ne $entry) 'Exact cache lookup failed.'
     Assert-Equal $entry.Title 'Future Deleted Movie' 'Cached title was not retained.'
     Assert-Equal $entry.Summary 'A short presentation summary.' 'Cached summary was not retained.'
+    Assert-Equal $entry.Ratings.Provider 'TMDB' 'Selected rating provider was not retained.'
+    Assert-Equal $entry.Ratings.ProviderValue '7.4' 'Selected rating value was not retained.'
     Assert-True ($null -eq $entry.PSObject.Properties['PlexToken']) 'Unexpected private field reached cache entry.'
 
     $rawIndex = Get-Content -LiteralPath (Join-Path $cacheRoot 'index.json') -Raw

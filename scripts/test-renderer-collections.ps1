@@ -19,6 +19,7 @@ $rendererPaths = @(
 
 $requiredFunctions = @(
     'Get-OptionalStringProperty',
+    'Get-DesignProviderRating',
     'Convert-DesignRatingPercent',
     'Find-DesignProviderRatingsRecursive',
     'ConvertTo-DesignGenreList',
@@ -91,6 +92,8 @@ foreach ($relativePath in $rendererPaths) {
     $flatCritic = ''
     $flatAudience = ''
     $flatImdb = ''
+    $flatProvider = ''
+    $flatProviderValue = ''
     Find-DesignProviderRatingsRecursive `
         -Node ([PSCustomObject]@{
             rating = '5.3'
@@ -100,25 +103,34 @@ foreach ($relativePath in $rendererPaths) {
         }) `
         -Critic ([ref]$flatCritic) `
         -Audience ([ref]$flatAudience) `
-        -Imdb ([ref]$flatImdb)
-    Assert-True ($flatCritic -eq '53' -and $flatAudience -eq '40' -and [string]::IsNullOrWhiteSpace($flatImdb)) "$relativePath did not parse Tautulli's flattened low-score RT export"
+        -Imdb ([ref]$flatImdb) `
+        -Provider ([ref]$flatProvider) `
+        -ProviderValue ([ref]$flatProviderValue)
+    Assert-True ($flatCritic -eq '53' -and $flatAudience -eq '40' -and [string]::IsNullOrWhiteSpace($flatImdb) -and [string]::IsNullOrWhiteSpace($flatProvider)) "$relativePath did not parse Tautulli's flattened low-score RT export"
 
     $flatShowCritic = ''
     $flatShowAudience = ''
     $flatShowImdb = ''
+    $flatShowProvider = ''
+    $flatShowProviderValue = ''
     Find-DesignProviderRatingsRecursive `
         -Node ([PSCustomObject]@{
-            rating = '7.4'
-            ratingImage = 'imdb://image.rating'
+            rating = ''
+            audienceRating = '7.4'
+            audienceRatingImage = 'themoviedb://image.rating'
         }) `
         -Critic ([ref]$flatShowCritic) `
         -Audience ([ref]$flatShowAudience) `
-        -Imdb ([ref]$flatShowImdb)
-    Assert-True ($flatShowImdb -eq '7.4' -and [string]::IsNullOrWhiteSpace($flatShowCritic) -and [string]::IsNullOrWhiteSpace($flatShowAudience)) "$relativePath did not parse Tautulli's flattened IMDb export"
+        -Imdb ([ref]$flatShowImdb) `
+        -Provider ([ref]$flatShowProvider) `
+        -ProviderValue ([ref]$flatShowProviderValue)
+    Assert-True ($flatShowProvider -eq 'TMDB' -and $flatShowProviderValue -eq '7.4' -and [string]::IsNullOrWhiteSpace($flatShowImdb) -and [string]::IsNullOrWhiteSpace($flatShowCritic) -and [string]::IsNullOrWhiteSpace($flatShowAudience)) "$relativePath did not parse Tautulli's official TV selected-provider export shape"
 
     $nestedCritic = ''
     $nestedAudience = ''
     $nestedImdb = ''
+    $nestedProvider = ''
+    $nestedProviderValue = ''
     Find-DesignProviderRatingsRecursive `
         -Node ([PSCustomObject]@{
             Rating = @(
@@ -141,22 +153,37 @@ foreach ($relativePath in $rendererPaths) {
         }) `
         -Critic ([ref]$nestedCritic) `
         -Audience ([ref]$nestedAudience) `
-        -Imdb ([ref]$nestedImdb)
-    Assert-True ($nestedCritic -eq '53' -and $nestedAudience -eq '40' -and $nestedImdb -eq '7.4') "$relativePath did not parse nested provider-labelled entries"
+        -Imdb ([ref]$nestedImdb) `
+        -Provider ([ref]$nestedProvider) `
+        -ProviderValue ([ref]$nestedProviderValue)
+    Assert-True ($nestedCritic -eq '53' -and $nestedAudience -eq '40' -and $nestedImdb -eq '7.4' -and [string]::IsNullOrWhiteSpace($nestedProvider)) "$relativePath did not parse nested provider-labelled entries"
 
     $unlabelledCritic = ''
     $unlabelledAudience = ''
     $unlabelledImdb = ''
+    $unlabelledProvider = ''
+    $unlabelledProviderValue = ''
     Find-DesignProviderRatingsRecursive `
         -Node ([PSCustomObject]@{ rating = '9.9'; audienceRating = '9.8' }) `
         -Critic ([ref]$unlabelledCritic) `
         -Audience ([ref]$unlabelledAudience) `
-        -Imdb ([ref]$unlabelledImdb)
+        -Imdb ([ref]$unlabelledImdb) `
+        -Provider ([ref]$unlabelledProvider) `
+        -ProviderValue ([ref]$unlabelledProviderValue)
     Assert-True (
         [string]::IsNullOrWhiteSpace($unlabelledCritic) -and
         [string]::IsNullOrWhiteSpace($unlabelledAudience) -and
-        [string]::IsNullOrWhiteSpace($unlabelledImdb)
+        [string]::IsNullOrWhiteSpace($unlabelledImdb) -and
+        [string]::IsNullOrWhiteSpace($unlabelledProvider) -and
+        [string]::IsNullOrWhiteSpace($unlabelledProviderValue)
     ) "$relativePath mislabeled provider-free numeric ratings"
+
+    $tvdb = Get-DesignProviderRating -RatingImage 'thetvdb://image.rating' -RatingValue '8.2'
+    Assert-True ($tvdb.Provider -eq 'TVDB' -and $tvdb.Value -eq '8.2') "$relativePath did not recognize a provider-labelled TVDB rating"
+    $unknown = Get-DesignProviderRating -RatingImage 'unknown://image.rating' -RatingValue '9.9'
+    Assert-True ([string]::IsNullOrWhiteSpace($unknown.Provider)) "$relativePath accepted an unknown rating provider"
+    $invalid = Get-DesignProviderRating -RatingImage 'themoviedb://image.rating' -RatingValue '12.4'
+    Assert-True ([string]::IsNullOrWhiteSpace($invalid.Provider)) "$relativePath accepted an out-of-range provider rating"
 
     # Provider-only collection tests isolate the legacy best-effort path. The
     # persistent cache has its own exact-ID, privacy, and lifecycle suite.
@@ -427,10 +454,54 @@ foreach ($relativePath in $rendererPaths) {
     }
 
     function Write-Log { param([string]$Message, [string]$Level = 'INFO') }
+    $script:providerDirectCalls = 0
+    $script:providerExportCalls = 0
+    function Invoke-TautulliApi {
+        param([string]$Command, [hashtable]$Parameters = @{})
+        Assert-True ($Command -eq 'get_metadata') "$relativePath used an unexpected Tautulli request for selected-provider metadata"
+        if ([string]$Parameters.rating_key -eq 'selected-provider-movie') {
+            return [PSCustomObject]@{
+                rating = '8.1'
+                rating_image = 'imdb://image.rating'
+                audience_rating = ''
+                audience_rating_image = ''
+            }
+        }
+        Assert-True ([string]$Parameters.rating_key -eq 'selected-provider-show') "$relativePath requested an unexpected selected-provider rating key"
+        return [PSCustomObject]@{
+            rating = ''
+            rating_image = ''
+            audience_rating = '7.4'
+            audience_rating_image = 'themoviedb://image.rating'
+        }
+    }
+    function Get-DesignPlexMetadata { param([string]$RatingKey) $script:providerDirectCalls++; return $null }
+    function Get-DesignRichExport {
+        param([string]$RatingKey, [string]$MediaType, [switch]$NeedLogo)
+        $script:providerExportCalls++
+        return [PSCustomObject]@{ RtCritic = ''; RtAudience = ''; Imdb = ''; Provider = ''; ProviderValue = '' }
+    }
+    $selectedProviderShow = [PSCustomObject]@{
+        RatingKey = 'selected-provider-show'
+        Type = 'show'
+        Title = 'Selected Provider Show'
+    }
+    $selectedProviderMovie = [PSCustomObject]@{
+        RatingKey = 'selected-provider-movie'
+        Type = 'movie'
+        Title = 'Selected Provider Movie'
+    }
+    Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @($selectedProviderMovie); TV = @($selectedProviderShow) })
+    Assert-True ($selectedProviderShow.DesignRatingProvider -eq 'TMDB' -and $selectedProviderShow.DesignRatingValue -eq '7.4') "$relativePath ignored Tautulli's selected TV audience-rating provider"
+    Assert-True ([string]::IsNullOrWhiteSpace($selectedProviderShow.DesignImdbRating)) "$relativePath mislabeled a selected TMDB score as IMDb"
+    Assert-True ($selectedProviderMovie.DesignImdbRating -eq '8.1') "$relativePath did not preserve a selected movie IMDb rating for its dedicated icon"
+    Assert-True ($script:providerDirectCalls -eq 0 -and $script:providerExportCalls -eq 0) "$relativePath performed unnecessary rating fallbacks after Tautulli returned a selected provider"
+
+    function Invoke-TautulliApi { param([string]$Command, [hashtable]$Parameters = @{}) throw 'Simulated deleted metadata' }
     function Get-DesignPlexMetadata { param([string]$RatingKey) return $null }
     function Get-DesignRichExport {
         param([string]$RatingKey, [string]$MediaType, [switch]$NeedLogo)
-        return [PSCustomObject]@{ RtCritic = ''; RtAudience = '' }
+        return [PSCustomObject]@{ RtCritic = ''; RtAudience = ''; Imdb = ''; Provider = ''; ProviderValue = '' }
     }
     function Get-PlexHostedMetadata {
         param([string]$MetadataGuid, [string]$MediaType, [string]$MatchTitle, [string]$MatchYear, [int]$ParentIndex, [int]$Index)
