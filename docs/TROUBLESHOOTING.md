@@ -171,19 +171,24 @@ the four provider-labelled rating fields. It applies the item-export fallback
 to movie RT and show IMDb, and validates controlled SendTest delivery
 separately from browser preview.
 
-Update to v0.9.4 or newer if v0.9.2 completes the rich exports but still logs
-all ratings as unavailable. Tautulli's documented TV/episode metadata can
-leave `rating_image` empty while placing the selected TMDB score in
-`audience_rating` with `audience_rating_image=themoviedb://image.rating`.
-v0.9.2's test fixture incorrectly assumed a show export could identify IMDb
-through `ratingImage`; v0.9.4 accepts the maintained rating and audience field
-pairs and renders recognized IMDb, TMDB, or TVDB selected scores.
+Update to v0.9.5 or newer if movies show IMDb even though another supported
+Plex/Tautulli path contains Rotten Tomatoes values. v0.9.4 treated any
+recognized selected provider as complete, so a flattened IMDb movie score
+could prevent the later rating-only Tautulli export from supplying RT. v0.9.5
+exhausts the supported RT sources first and uses labelled IMDb only when no RT
+critic or audience value exists.
+
+For TV release rows, v0.9.5 likewise ignores selected TMDB/TVDB as a display
+substitute and continues to the exact episode's Plex IMDb entry. If that exact
+episode IMDb value is unavailable, the row remains unrated rather than showing
+a series-level or different-provider score.
 
 If ratings work on Windows but not in Docker, that can mean Windows reached
 Plex directly while the container fell through to Tautulli; it does not imply
-that the packages maintain different rating renderers. v0.9.4 corrects that
-shared fallback, but the container's direct Plex warnings should still be
-investigated separately for backgrounds, selected logos, and richer metadata.
+that the packages maintain different rating renderers. v0.9.5 corrects the
+shared provider-priority path, but the container's direct Plex warnings should
+still be investigated separately for backgrounds, selected logos, and richer
+metadata.
 
 If the log also says every direct Plex request failed, verify
 `PlexServerUrl` from the TautWeekly runtime. In a separate Docker container,
@@ -194,9 +199,10 @@ and keep `PlexToken` private. Re-run the platform verifier, PreviewAll, and a
 controlled SendTest after correcting the private configuration.
 
 TautWeekly omits a rating rather than guessing its provider. A dedicated IMDb
-or Rotten Tomatoes badge still requires that provider label, while selected
-TMDB/TVDB values use a text badge. Unknown labels and unlabeled numbers remain
-hidden, and a logo is omitted when Plex/Tautulli has no selected logo resource.
+or Rotten Tomatoes badge still requires that provider label. TMDB/TVDB values
+are not substituted for movie RT or exact-episode IMDb. Unknown labels and
+unlabeled numbers remain hidden, and a logo is omitted when Plex/Tautulli has
+no selected logo resource.
 Do not post `config.json`, diagnostic JSON, generated previews, or full logs;
 share only sanitized warning text if further help is required.
 

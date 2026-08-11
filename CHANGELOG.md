@@ -6,6 +6,28 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-08-11
+
+### Fixed
+
+- Continued through the bounded Plex and Tautulli rating fallbacks when a
+  movie's flattened selected provider is IMDb, so available Rotten Tomatoes
+  critic/audience values take precedence. A clearly labelled IMDb score is
+  rendered only when no RT value is available.
+- Restored exact-episode semantics for TV release rows: a selected TMDB or TVDB
+  score no longer blocks the native Plex `Rating[]` / legacy XML IMDb lookup,
+  and generic or show-level scores are not substituted beside episode titles.
+- Added a sanitized regression where direct Plex returns 404, normal Tautulli
+  movie metadata selects IMDb, and the rating-only item export supplies RT.
+  Preview and decoded SendTest output must prefer RT and retain the individual
+  episode IMDb score across every maintained renderer.
+
+### Security
+
+- Preserved the existing four-field, metadata-level-1 Tautulli export boundary.
+  No external ratings search, media information, file paths, viewing history,
+  recipient data, credentials, or generated output is added or persisted.
+
 ## [0.9.4] - 2026-08-11
 
 ### Fixed
