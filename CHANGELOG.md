@@ -13,7 +13,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Corrected the Tautulli fallback for movie Rotten Tomatoes ratings: item
   exports no longer request the library-only `individual_files` option, and
   rating-only downloads are parsed as JSON instead of being rejected for not
-  being ZIP archives.
+  being ZIP archives. Reported by
+  [@Rocknrolldoggie](https://github.com/Rocknrolldoggie) in
+  [#58](https://github.com/sparkmoxie/TautWeekly/issues/58).
 - Accepted Tautulli's flattened rating fields and Plex's nested rating entries,
   including the Rotten/spilled low-score icon states. A sanitized integration
   scenario now keeps direct Plex unavailable and requires the item-export
