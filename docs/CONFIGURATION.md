@@ -13,11 +13,14 @@ setup is preferred.
 | `TautulliUrl` | Yes | Base URL reachable from the TautWeekly for Plex runtime, such as `http://media.example.test:8181` |
 | `ApiKey` | Yes | Tautulli API key; treat as a secret |
 | `PlexWebUrl` | Yes | Destination for “Open Plex” links; defaults to the Plex web app |
-| `PlexServerUrl` | No | Direct Plex base URL reachable from the TautWeekly runtime for richer metadata and artwork; a separate container must not use its own localhost |
-| `PlexToken` | No | Administrator/server Plex token for direct Plex access and exact-GUID deleted-item recovery; treat as a secret |
+| `PlexServerUrl` | No; recommended | Direct Plex base URL reachable from the TautWeekly runtime for the complete alternate rating set, exact-episode metadata, backgrounds, and selected logos; a separate container must not use its own localhost |
+| `PlexToken` | No; recommended | Administrator/server Plex token for direct Plex access and exact-GUID deleted-item recovery; treat as a secret |
 
 TautWeekly for Plex's core activity flow uses Tautulli. Direct Plex access is
-optional and improves selected metadata and artwork paths. When Plex has
+optional for that core flow but recommended for full newsletter fidelity.
+Tautulli may expose only its currently selected/flattened rating, while direct
+Plex lets TautWeekly inspect alternate movie RT critic/audience ratings, the
+exact episode's IMDb rating, backgrounds, and selected logos. When Plex has
 deleted an item but Tautulli still retains its history GUID, TautWeekly can use
 `PlexToken` to ask `https://metadata.provider.plex.tv` for that exact
 identifier. This v0.8.3 compatibility path is best-effort, not durable storage:
@@ -27,6 +30,15 @@ slug to read provider-labelled ratings on `https://watch.plex.tv`; that public
 request receives no Plex token. Neither path searches by title or sends
 recipient identity or watch-history values. An absolute artwork URL on another
 host is also fetched without the Plex token.
+
+Setup stores the private URL/token in `config.json`; container networking is a
+separate runtime boundary. The URL must work from the TautWeekly process, not
+merely from a desktop browser or the Tautulli container. Platform verification
+uses the same discovery path as newsletter generation, sends the token only in
+the `X-Plex-Token` header, and tests `/identity` plus authenticated
+`/library/sections`. A resolved but unreachable or unauthorized connection is
+a verification failure. If no URL/token pair can be resolved, verification
+warns and preserves the supported Tautulli-only fallback.
 
 Posters and hero art can still succeed through Tautulli's image proxy when the
 direct Plex URL is unreachable. That does not prove that direct rating,

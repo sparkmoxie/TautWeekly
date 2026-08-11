@@ -137,6 +137,24 @@ try {
 }
 catch { FAIL "Tautulli API verification failed: $($_.Exception.Message)"; exit 1 }
 
+# Exercise the same direct-Plex discovery and request path used by preview and
+# delivery. The child process receives only the private config path; the token
+# stays in config/headers and is never placed on the command line or printed.
+$plexVerifier = Join-Path $PSScriptRoot "TautWeekly.ps1"
+$plexHost = (Get-Command pwsh -ErrorAction Stop).Source
+& $plexHost -NoLogo -NoProfile -File $plexVerifier -Mode VerifyPlex -ConfigPath $configPath
+$directPlexExit = $LASTEXITCODE
+if ($directPlexExit -eq 3) {
+    WARN "Direct Plex is not configured or discoverable. Core Tautulli operation remains available, but complete movie RT critic/audience ratings, exact-episode IMDb ratings, backgrounds, and selected logos may be unavailable."
+}
+elseif ($directPlexExit -ne 0) {
+    FAIL "Direct Plex verification failed. Correct the private Plex URL/token or Docker Desktop routing, DNS, TLS, and firewall access before Preview or SendTest."
+    exit 1
+}
+else {
+    OK "Direct Plex identity and authenticated library requests succeeded"
+}
+
 try {
     $smtpPort = [int]$config.SmtpPort
     if ($smtpPort -eq 465) { throw "Implicit SMTPS port 465 is not supported; use STARTTLS, commonly port 587." }

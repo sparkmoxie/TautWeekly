@@ -408,6 +408,13 @@ class Handler(BaseHTTPRequestHandler):
         query = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
         self.record_call("GET", parsed.path, query)
 
+        if parsed.path in {"/identity", "/library/sections"}:
+            if self.headers.get("X-Plex-Token") != "virtual-plex-token":
+                self.write_json({"error": "invalid virtual Plex token"}, status=401)
+                return
+            self.write_json({"MediaContainer": {"size": 1}})
+            return
+
         if parsed.path == "/hosted/library/metadata/matches":
             if not self.headers.get("X-Plex-Token"):
                 self.write_json({"error": "missing virtual Plex token"}, status=401)

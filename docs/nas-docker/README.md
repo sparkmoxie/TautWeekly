@@ -16,6 +16,9 @@ Current source baseline: **1.1.0**.
 - Docker Engine and Docker Compose v2, or a compatible vendor Compose UI.
 - A non-root UID and GID that can write the project `data/` directory.
 - Network access from the container to Tautulli and an SMTP STARTTLS endpoint.
+- Network access from the container to Plex Media Server is recommended for
+  complete movie RT critic/audience ratings, exact-episode IMDb ratings,
+  backgrounds, and selected logos.
 - A Tautulli API key.
 - A trusted host port for the local preview service; default 8787.
 
@@ -105,6 +108,16 @@ docker compose up -d
 Use a hostname reachable from inside the container, for example
 `http://media.example.test:8181`. Do not use `127.0.0.1` for Tautulli unless it
 runs in the same container, which is not the supported deployment model.
+
+During setup, also enter a direct `PlexServerUrl` (normally port 32400) and an
+administrator `PlexToken` for full newsletter fidelity. These are TautWeekly
+settings stored privately in `/data/config.json`, but the URL is governed by
+container networking: it must resolve and connect from inside TautWeekly.
+`localhost`/`127.0.0.1` point to the TautWeekly container, not a separate Plex
+container or NAS service. `verify` checks Plex `/identity` and authenticated
+`/library/sections` without printing or placing the token in the URL. A
+resolved but unusable connection fails verification; an unresolved pair emits
+a Tautulli-only fallback warning.
 
 ## Safe acceptance sequence
 

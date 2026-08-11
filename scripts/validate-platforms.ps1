@@ -194,7 +194,9 @@ foreach ($relative in @(
         'DeletedItemCacheEnabled',
         'DeletedItemCacheRetentionDays.*1 3650',
         'DeletedItemCacheMaxItems.*1 10000',
-        'DeletedItemCacheMaxBytesMB.*16 2048'
+        'DeletedItemCacheMaxBytesMB.*16 2048',
+        'complete alternate rating set',
+        'Verification tests the resolved connection without printing the token'
     )
 }
 foreach ($relative in @(
@@ -202,7 +204,26 @@ foreach ($relative in @(
     'platforms/mac-docker/app/Verify-Setup.ps1',
     'platforms/windows/VERIFY-SETUP.ps1'
 )) {
-    Require-Text $relative @('SMTP authentication and sender authorization are not tested by verify')
+    Require-Text $relative @(
+        'SMTP authentication and sender authorization are not tested by verify',
+        '-Mode VerifyPlex',
+        'Direct Plex identity and authenticated library requests succeeded',
+        'complete movie RT critic/audience ratings'
+    )
+}
+foreach ($relative in @(
+    'platforms/nas-docker/app/TautWeekly.ps1',
+    'platforms/mac-docker/app/TautWeekly.ps1',
+    'platforms/windows/TautWeekly.ps1'
+)) {
+    Require-Text $relative @(
+        '"VerifyPlex"',
+        'function Test-TautWeeklyDirectPlexConnection',
+        '"/identity"',
+        '"/library/sections"',
+        'X-Plex-Token',
+        'Direct Plex verification passed'
+    )
 }
 Require-Text 'platforms/nas-docker/app/User-Exclusions.ps1' @(
     'get_user_names',

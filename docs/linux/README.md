@@ -14,7 +14,8 @@ other editions.
 - PowerShell 7.2 or newer (`pwsh`), with a current LTS release recommended.
 - systemd, Python 3, `tar`, and util-linux (`runuser` and `flock`).
 - Network access to Tautulli, the configured SMTP STARTTLS endpoint, GitHub
-  Releases for updates, and optional Plex metadata endpoints.
+  Releases for updates, and recommended direct Plex metadata endpoints for
+  complete ratings, backgrounds, and selected logos.
 
 Microsoft publishes the current distro and PowerShell support table in its
 [PowerShell on Linux overview](https://learn.microsoft.com/powershell/scripting/install/linux-overview).
@@ -56,6 +57,14 @@ The installer validates dependencies, creates the locked `tautweekly` service
 account, installs application files, enables the service, and preserves any
 existing environment and private data. Setup writes the live configuration only
 under `/var/lib/tautweekly`.
+
+Setup asks for a direct Plex URL and administrator token. They remain optional
+for the core Tautulli activity flow, but are recommended for complete movie RT
+critic/audience ratings, exact-episode IMDb ratings, backgrounds, and selected
+logos. `sudo tautweekly verify` uses the same resolved connection as newsletter
+generation and checks Plex `/identity` plus authenticated `/library/sections`
+without printing the token. A resolved but unusable connection fails
+verification; an unresolved pair emits a Tautulli-only fallback warning.
 
 Review the user roster and exclusions before testing:
 

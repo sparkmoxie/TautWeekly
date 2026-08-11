@@ -184,8 +184,13 @@ $serverLabel = Read-Default "Small header label" "PLEX"
 $plexWebUrl = Read-Default "Open Plex button URL" "https://app.plex.tv/desktop/"
 
 Write-Host ""
-Write-Host "Optional direct Plex connection" -ForegroundColor Cyan
-Write-Host "Supplying these improves clearLogo and direct metadata support."
+Write-Host "Recommended direct Plex connection" -ForegroundColor Cyan
+Write-Host "Tautulli supplies core activity and fallback metadata. Direct Plex provides the"
+Write-Host "complete alternate rating set used for movie RT critic/audience scores, exact-episode"
+Write-Host "IMDb ratings, backgrounds, and selected logos. For Plex on this Mac, use"
+Write-Host "http://host.docker.internal:32400; container localhost points to TautWeekly itself."
+Write-Host "Leaving either value unresolved uses flattened Tautulli fallbacks and may omit richer"
+Write-Host "metadata. Verification tests the resolved connection without printing the token."
 $plexServerUrl = Read-Default "Direct Plex URL, e.g. http://host.docker.internal:32400"
 $plexToken = Read-SecretPlainText "Plex token (optional; press Enter to use Tautulli fallbacks)" $true
 

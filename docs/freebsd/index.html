@@ -68,12 +68,13 @@ cd TautWeekly-freebsd-podman
 sudo ./install-freebsd.sh
 sudo tautweekly setup
 sudo tautweekly verify<button data-copy="#install-command">Copy</button></div>
+        <div class="callout info"><div class="callout-icon">PMS</div><div><h3>Direct Plex is recommended for full newsletter fidelity</h3><p>Tautulli supplies core activity and selected/flattened rating fallbacks. Enter a Plex URL and administrator token reachable from the Podman container for complete movie RT critic/audience ratings, exact-episode IMDb ratings, backgrounds, and selected logos. Verification checks Plex identity and authenticated library access without printing the token; a resolved but unusable connection fails before preview or TestEmail.</p></div></div>
       </article>
     </section>
 
     <section id="acceptance" class="section searchable" data-search="acceptance workflow libraries scope users exclusions preview test schedule send production">
       <div class="section-heading"><div><div class="eyebrow">Acceptance gate</div><h2>Observe before delivery</h2></div><p>Excluded users remain usable as sample data for previews and TestEmail, but scheduled and confirmed production delivery omits them. Replace <code>USER_ID</code> with a numeric value from <code>list-users</code>; listing users does not save a default.</p></div>
-      <div class="timeline"><div><b>01</b><h3>Configure</h3><p>Write secrets only inside private container data.</p></div><div><b>02</b><h3>Verify</h3><p>Check API and SMTP TCP reachability, files, timezone, and schedule.</p></div><div><b>03</b><h3>Preview</h3><p>Render all deterministic states without mail.</p></div><div><b>04</b><h3>TestEmail</h3><p>Validate SMTP authentication, sender permission, MIME, and the actual mail client.</p></div><div><b>05</b><h3>Opt in</h3><p>Enable the scheduler after roster review.</p></div></div>
+      <div class="timeline"><div><b>01</b><h3>Configure</h3><p>Write Tautulli, recommended direct Plex, and mail secrets only inside private container data.</p></div><div><b>02</b><h3>Verify</h3><p>Check Tautulli, direct Plex identity/authenticated library access, SMTP TCP reachability, files, timezone, and schedule.</p></div><div><b>03</b><h3>Preview</h3><p>Render all deterministic states without mail.</p></div><div><b>04</b><h3>TestEmail</h3><p>Validate SMTP authentication, sender permission, MIME, and the actual mail client.</p></div><div><b>05</b><h3>Opt in</h3><p>Enable the scheduler after roster review.</p></div></div>
       <div class="command-block" id="acceptance-command">sudo tautweekly list-libraries
 sudo tautweekly manage-libraries
 sudo tautweekly list-users

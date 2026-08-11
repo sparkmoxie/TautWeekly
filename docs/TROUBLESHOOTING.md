@@ -195,8 +195,21 @@ If the log also says every direct Plex request failed, verify
 `localhost` and `127.0.0.1` refer to TautWeekly itself, not the Plex
 container or NAS host. Use a shared-network Plex service name or another
 trusted LAN URL reachable from inside the container, normally on port 32400,
-and keep `PlexToken` private. Re-run the platform verifier, PreviewAll, and a
-controlled SendTest after correcting the private configuration.
+and keep `PlexToken` private. The platform verifier now exercises the same
+resolved direct-Plex path used by newsletter generation: it requests
+`/identity` and authenticated `/library/sections`, sends the token only in an
+HTTP header, and never prints it. An unreachable or unauthorized resolved
+connection fails verification instead of surfacing for the first time during
+Preview or SendTest. If no URL/token pair can be resolved, verification warns
+that only Tautulli's selected/flattened rating and other fallbacks are
+available. Re-run the verifier, PreviewAll, and a controlled SendTest after
+correcting the private configuration or container networking.
+
+A passing Tautulli check does not prove direct Plex works. Tautulli and
+TautWeekly can run in different containers, networks, DNS contexts, and trust
+stores. Likewise, a poster loaded through Tautulli's image proxy does not prove
+TautWeekly can query Plex's full alternate `Rating[]`, exact episodes,
+backgrounds, or selected logos directly.
 
 TautWeekly omits a rating rather than guessing its provider. A dedicated IMDb
 or Rotten Tomatoes badge still requires that provider label. TMDB/TVDB values
