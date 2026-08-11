@@ -6,6 +6,18 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-08-11
+
+### Fixed
+
+- Replaced the standards-valid but insufficiently supported `dark only` email
+  declaration with Apple Mail's documented `light dark` opt-in. The base styles,
+  dark-mode override, inline colors, and table fallbacks still render the same
+  single dark-first design without adding a recipient-facing theme selector.
+- Extended PreviewAll and decoded SendTest MIME assertions across every
+  maintained renderer so delivered HTML must contain the compatible scheme
+  metadata and must not retain the prior dark-only declaration.
+
 ## [0.9.2] - 2026-08-11
 
 ### Fixed
