@@ -558,8 +558,10 @@ class Handler(BaseHTTPRequestHandler):
 
         command = query.get("cmd", "")
         if command == "download_export" and self.current_scenario() == "rating-export-fallback":
-            payload = json.dumps(
-                [
+            if query.get("export_id") == "59":
+                export_data = [{"rating": "7.4", "ratingImage": "imdb://image.rating"}]
+            else:
+                export_data = [
                     {
                         "rating": "5.3",
                         "ratingImage": "rottentomatoes://image.rating.rotten",
@@ -567,7 +569,7 @@ class Handler(BaseHTTPRequestHandler):
                         "audienceRatingImage": "rottentomatoes://image.rating.spilled",
                     }
                 ]
-            ).encode("utf-8")
+            payload = json.dumps(export_data).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(payload)))
@@ -700,6 +702,32 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
             return
+        if command == "get_export_fields" and self.current_scenario() == "rating-export-fallback":
+            media_type = query.get("media_type")
+            if media_type not in ("movie", "show") or query.get("sub_media_type") != media_type:
+                self.write_json(
+                    {
+                        "response": {
+                            "result": "error",
+                            "message": "sanitized exporter field discovery requires a compatible subtype",
+                            "data": {},
+                        }
+                    }
+                )
+                return
+            self.api_success(
+                {
+                    "metadata_fields": [
+                        {"field": "rating", "level": 1},
+                        {"field": "ratingImage", "level": 1},
+                        {"field": "audienceRating", "level": 1},
+                        {"field": "audienceRatingImage", "level": 1},
+                        {"field": "contentRating", "level": 1},
+                    ],
+                    "media_info_fields": [],
+                }
+            )
+            return
         if command == "export_metadata":
             if self.current_scenario() == "rating-export-fallback":
                 if query.get("individual_files", "").lower() != "false":
@@ -714,12 +742,43 @@ class Handler(BaseHTTPRequestHandler):
                         status=400,
                     )
                     return
-                self.api_success({"export_id": 58})
+                requested_fields = {
+                    field.strip()
+                    for field in query.get("custom_fields", "").split(",")
+                    if field.strip()
+                }
+                required_fields = {
+                    "rating",
+                    "ratingImage",
+                    "audienceRating",
+                    "audienceRatingImage",
+                }
+                if not required_fields.issubset(requested_fields):
+                    self.write_json(
+                        {
+                            "response": {
+                                "result": "error",
+                                "message": "sanitized item export omitted provider-labelled rating fields",
+                                "data": {},
+                            }
+                        },
+                        status=400,
+                    )
+                    return
+                export_id = 59 if query.get("rating_key") == "selected-show" else 58
+                self.api_success({"export_id": export_id})
                 return
             self.api_success({"export_id": 0})
             return
         if command == "get_exports_table" and self.current_scenario() == "rating-export-fallback":
-            self.api_success({"data": [{"export_id": 58, "complete": 1}]})
+            self.api_success(
+                {
+                    "data": [
+                        {"export_id": 58, "complete": 1},
+                        {"export_id": 59, "complete": 1},
+                    ]
+                }
+            )
             return
         if command == "delete_export":
             self.api_success({})

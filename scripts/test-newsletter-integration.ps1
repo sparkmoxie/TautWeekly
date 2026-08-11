@@ -248,9 +248,11 @@ foreach ($engine in $engines) {
             }
 
             if ($scenario -eq 'rating-export-fallback') {
-                Assert-True ($normalHtml.Contains('53%') -and $normalHtml.Contains('40%')) "$($engine.Name)/$scenario did not render flattened RT ratings from Tautulli's item export."
+                Assert-True ($normalHtml.Contains('53%') -and $normalHtml.Contains('40%') -and $normalHtml.Contains('7.4')) "$($engine.Name)/$scenario did not render provider-labelled movie and show ratings from Tautulli's item exports."
                 Assert-True ($previewLog.Contains('Design rich export result: RT critic=53%, audience=40')) "$($engine.Name)/$scenario did not report the successful JSON rating fallback."
+                Assert-True ($previewLog.Contains('Design rich export result: RT critic=n/a, audience=n/a, IMDb=7.4')) "$($engine.Name)/$scenario did not report the successful show IMDb fallback."
                 Assert-True (-not $previewLog.Contains('selected-logo level 9')) "$($engine.Name)/$scenario mislabeled a rating-only item export as a logo export."
+                Assert-True (-not $previewLog.Contains('could not enumerate additional exporter fields')) "$($engine.Name)/$scenario did not use a compatible Tautulli field-discovery request."
             }
 
             if ($scenario -in $providerRecoveryScenarios) {
@@ -299,16 +301,39 @@ foreach ($engine in $engines) {
 
             $calls = @(Get-Content $callLog | ForEach-Object { $_ | ConvertFrom-Json })
             if ($scenario -eq 'rating-export-fallback') {
+                $ratingFieldCalls = @($calls | Where-Object {
+                    $null -ne $_.query -and
+                    $null -ne $_.query.PSObject.Properties['cmd'] -and
+                    [string]$_.query.cmd -eq 'get_export_fields'
+                })
+                Assert-True ($ratingFieldCalls.Count -ge 1) "$($engine.Name)/$scenario did not issue an exporter field-discovery request."
+                foreach ($ratingFieldCall in $ratingFieldCalls) {
+                    $fieldMediaType = [string]$ratingFieldCall.query.media_type
+                    Assert-True ($fieldMediaType -in @('movie', 'show')) "$($engine.Name)/$scenario requested fields for the wrong media type."
+                    Assert-True ([string]$ratingFieldCall.query.sub_media_type -eq $fieldMediaType) "$($engine.Name)/$scenario omitted Tautulli's required compatibility subtype."
+                }
+                Assert-True ('movie' -in @($ratingFieldCalls | ForEach-Object { [string]$_.query.media_type })) "$($engine.Name)/$scenario did not discover movie rating fields."
+                Assert-True ('show' -in @($ratingFieldCalls | ForEach-Object { [string]$_.query.media_type })) "$($engine.Name)/$scenario did not discover show rating fields."
+
                 $ratingExportCalls = @($calls | Where-Object {
                     $null -ne $_.query -and
                     $null -ne $_.query.PSObject.Properties['cmd'] -and
                     [string]$_.query.cmd -eq 'export_metadata' -and
                     [string]$_.query.logo_level -eq '0'
                 })
-                Assert-True ($ratingExportCalls.Count -eq 1) "$($engine.Name)/$scenario issued an unexpected number of item exports."
-                Assert-True ([string]$ratingExportCalls[0].query.individual_files -eq 'false') "$($engine.Name)/$scenario requested invalid individual files for a rating-key export."
-                Assert-True ([string]$ratingExportCalls[0].query.metadata_level -eq '1') "$($engine.Name)/$scenario requested more Tautulli metadata than the rating fallback needs."
-                Assert-True ([string]$ratingExportCalls[0].query.media_info_level -eq '0') "$($engine.Name)/$scenario requested private media information."
+                Assert-True ($ratingExportCalls.Count -eq 2) "$($engine.Name)/$scenario did not issue exactly one movie and one show item export."
+                Assert-True (@($ratingExportCalls | Where-Object { [string]$_.query.rating_key -eq 'selected-movie' }).Count -eq 1) "$($engine.Name)/$scenario omitted the movie item export."
+                Assert-True (@($ratingExportCalls | Where-Object { [string]$_.query.rating_key -eq 'selected-show' }).Count -eq 1) "$($engine.Name)/$scenario omitted the show item export."
+                foreach ($ratingExportCall in $ratingExportCalls) {
+                    Assert-True ([string]$ratingExportCall.query.individual_files -eq 'false') "$($engine.Name)/$scenario requested invalid individual files for a rating-key export."
+                    Assert-True ([string]$ratingExportCall.query.metadata_level -eq '1') "$($engine.Name)/$scenario requested more Tautulli metadata than the rating fallback needs."
+                    Assert-True ([string]$ratingExportCall.query.media_info_level -eq '0') "$($engine.Name)/$scenario requested private media information."
+                    $requestedRatingFields = @(([string]$ratingExportCall.query.custom_fields).Split(',') | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                    Assert-True ($requestedRatingFields.Count -eq 4) "$($engine.Name)/$scenario requested fields beyond the four provider-labelled rating fields."
+                    foreach ($requiredRatingField in @('rating', 'ratingImage', 'audienceRating', 'audienceRatingImage')) {
+                        Assert-True ($requiredRatingField -in $requestedRatingFields) "$($engine.Name)/$scenario omitted explicit exporter field '$requiredRatingField'."
+                    }
+                }
             }
             $mediaCalls = @($calls | Where-Object {
                 $null -ne $_.query.PSObject.Properties['cmd'] -and
@@ -446,6 +471,11 @@ foreach ($engine in $engines) {
                 $sendLog = Get-Content $sendStdout -Raw
                 Assert-True ($sendLog.Contains('Test email sent successfully.')) "$($engine.Name)/$scenario SendTest did not complete delivery."
                 Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
+                if ($scenario -eq 'rating-export-fallback') {
+                    Assert-True ($sendLog.Contains('Design rich export result: RT critic=53%, audience=40')) "$($engine.Name)/$scenario SendTest did not recover both ratings through the explicit item export."
+                    Assert-True ($sendLog.Contains('Design rich export result: RT critic=n/a, audience=n/a, IMDb=7.4')) "$($engine.Name)/$scenario SendTest did not recover show IMDb through the explicit item export."
+                    Assert-True (-not $sendLog.Contains('could not enumerate additional exporter fields')) "$($engine.Name)/$scenario SendTest did not use the compatible field-discovery request."
+                }
                 if ($scenario -in $providerRecoveryScenarios) {
                     Assert-True ($sendLog.Contains('recovered an exact movie match through the provider POST contract')) "$($engine.Name)/$scenario SendTest did not report the provider-contract recovery."
                     Assert-True ($sendLog.Contains('recovered an exact show match through the provider POST contract')) "$($engine.Name)/$scenario SendTest did not report the TV provider-contract recovery."
@@ -459,7 +489,18 @@ foreach ($engine in $engines) {
                 $smtpCommands = @(Get-Content $smtpCallLog | ForEach-Object { ($_ | ConvertFrom-Json).command })
                 Assert-True ('DATA' -in $smtpCommands) "$($engine.Name)/$scenario SendTest did not submit an SMTP message."
                 Assert-True (Test-Path $smtpDataFile) "$($engine.Name)/$scenario SendTest did not preserve the captured MIME message."
-                & $PythonPath $emailThemeAssertion $smtpDataFile
+                $emailThemeArgs = @($smtpDataFile)
+                if ($scenario -eq 'rating-export-fallback') {
+                    $emailThemeArgs += @(
+                        '--require-html', 'alt="Rotten Tomatoes critic"',
+                        '--require-html', 'alt="Rotten Tomatoes audience"',
+                        '--require-html', 'alt="IMDb"',
+                        '--require-html', '53%</span>',
+                        '--require-html', '40%</span>',
+                        '--require-html', '7.4</span>'
+                    )
+                }
+                & $PythonPath $emailThemeAssertion @emailThemeArgs
                 Assert-True ($LASTEXITCODE -eq 0) "$($engine.Name)/$scenario delivered HTML lost the dark email contract."
 
                 if ($scenario -eq $cacheScenario) {

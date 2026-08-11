@@ -2805,11 +2805,12 @@ function Get-DesignPlexAsset {
 
 $script:DesignRichExportCache = @{}
 
-function Find-DesignRtRatingsRecursive {
+function Find-DesignProviderRatingsRecursive {
     param(
         [AllowNull()][object]$Node,
         [ref]$Critic,
-        [ref]$Audience
+        [ref]$Audience,
+        [ref]$Imdb
     )
 
     if ($null -eq $Node) { return }
@@ -2821,10 +2822,11 @@ function Find-DesignRtRatingsRecursive {
 
     if ($Node -is [System.Collections.IEnumerable]) {
         foreach ($child in $Node) {
-            Find-DesignRtRatingsRecursive `
+            Find-DesignProviderRatingsRecursive `
                 -Node $child `
                 -Critic $Critic `
-                -Audience $Audience
+                -Audience $Audience `
+                -Imdb $Imdb
         }
         return
     }
@@ -2836,13 +2838,17 @@ function Find-DesignRtRatingsRecursive {
             # Tautulli's item exporter serializes the selected Plex ratings as
             # flat fields. Accept both its camelCase names and the snake_case
             # shape returned by get_metadata without treating an unlabeled
-            # numeric rating as Rotten Tomatoes data.
+            # numeric rating as provider-labelled data.
             $ratingImage = Get-OptionalStringProperty -InputObject $Node -Name "ratingImage"
             if ([string]::IsNullOrWhiteSpace($ratingImage)) {
                 $ratingImage = Get-OptionalStringProperty -InputObject $Node -Name "rating_image"
             }
             $ratingValue = Get-OptionalStringProperty -InputObject $Node -Name "rating"
-            if ([string]::IsNullOrWhiteSpace($Critic.Value) -and
+            if ([string]::IsNullOrWhiteSpace($Imdb.Value) -and
+                $ratingImage -like "imdb://image.rating*") {
+                $Imdb.Value = $ratingValue
+            }
+            elseif ([string]::IsNullOrWhiteSpace($Critic.Value) -and
                 $ratingImage -like "rottentomatoes://image.rating.*") {
                 $Critic.Value = Convert-DesignRatingPercent $ratingValue
             }
@@ -2868,7 +2874,11 @@ function Find-DesignRtRatingsRecursive {
                 $value = $valueProp.Value
                 $type = Get-OptionalStringProperty -InputObject $Node -Name "type"
 
-                if ($image -like "rottentomatoes://image.rating.*") {
+                if ($image -like "imdb://image.rating*" -and
+                    [string]::IsNullOrWhiteSpace($Imdb.Value)) {
+                    $Imdb.Value = [string]$value
+                }
+                elseif ($image -like "rottentomatoes://image.rating.*") {
                     $percent = Convert-DesignRatingPercent $value
                     if ($type -eq "critic" -or $image -match '(?i)\.(ripe|rotten)$') {
                         if ([string]::IsNullOrWhiteSpace($Critic.Value)) {
@@ -2884,10 +2894,11 @@ function Find-DesignRtRatingsRecursive {
             }
 
             foreach ($p in $props) {
-                Find-DesignRtRatingsRecursive `
+                Find-DesignProviderRatingsRecursive `
                     -Node $p.Value `
                     -Critic $Critic `
-                    -Audience $Audience
+                    -Audience $Audience `
+                    -Imdb $Imdb
             }
             return
         }
@@ -2938,6 +2949,7 @@ function Get-DesignLogoExportSimple {
         try {
             $fieldInfo = Invoke-TautulliApi -Command "get_export_fields" -Parameters @{
                 media_type = $MediaType
+                sub_media_type = $MediaType
             }
 
             foreach ($field in @($fieldInfo.metadata_fields)) {
@@ -3135,6 +3147,7 @@ function Get-DesignRichExport {
         return [PSCustomObject]@{
             RtCritic = ""
             RtAudience = ""
+            Imdb = ""
             LogoSrc = ""
             DiagnosticFile = ""
         }
@@ -3154,22 +3167,30 @@ function Get-DesignRichExport {
     $result = [PSCustomObject]@{
         RtCritic = ""
         RtAudience = ""
+        Imdb = ""
         LogoSrc = ""
         DiagnosticFile = ""
     }
 
     try {
-        # Ask Tautulli which rating-related fields are available so we do not
-        # rely on hard-coded exporter field names.
+        # Always request Plex's stable provider-labelled rating fields. Some
+        # Tautulli versions place them outside metadata level 1, and current
+        # get_export_fields implementations require a non-null subtype even
+        # though their API documentation calls it optional.
         $customFields = New-Object System.Collections.Generic.List[string]
+        $providerRatingFields = @("rating", "ratingImage", "audienceRating", "audienceRatingImage")
+        foreach ($name in $providerRatingFields) {
+            $customFields.Add($name)
+        }
         try {
             $fieldInfo = Invoke-TautulliApi -Command "get_export_fields" -Parameters @{
                 media_type = $MediaType
+                sub_media_type = $MediaType
             }
 
             foreach ($field in @($fieldInfo.metadata_fields)) {
                 $name = [string]$field.field
-                if ($name -match '(?i)rating' -or ($NeedLogo -and $name -match '(?i)logo')) {
+                if ($name -in $providerRatingFields -or ($NeedLogo -and $name -match '(?i)logo')) {
                     if (-not $customFields.Contains($name)) {
                         $customFields.Add($name)
                     }
@@ -3177,7 +3198,7 @@ function Get-DesignRichExport {
             }
         }
         catch {
-            Write-Log "TautWeekly for Plex: could not enumerate exporter fields; using the standard rating fields." "WARN"
+            Write-Log "TautWeekly for Plex: could not enumerate additional exporter fields; requesting the standard provider-labelled rating fields." "WARN"
         }
 
         $params = @{
@@ -3249,12 +3270,13 @@ function Get-DesignRichExport {
             -OutFile $downloadPath `
             -TimeoutSec 120 | Out-Null
 
-        if (-not (Test-Path $downloadPath) -or (Get-Item $downloadPath).Length -lt 64) {
+        if (-not (Test-Path $downloadPath) -or (Get-Item $downloadPath).Length -eq 0) {
             throw "Downloaded export was empty."
         }
 
         $critic = ""
         $audience = ""
+        $imdb = ""
         $jsonFiles = @()
         $exportedFiles = @()
         $bytes = [IO.File]::ReadAllBytes($downloadPath)
@@ -3273,10 +3295,11 @@ function Get-DesignRichExport {
             foreach ($jsonFile in $jsonFiles) {
                 try {
                     $parsed = Get-Content -Path $jsonFile.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
-                    Find-DesignRtRatingsRecursive `
+                    Find-DesignProviderRatingsRecursive `
                         -Node $parsed `
                         -Critic ([ref]$critic) `
-                        -Audience ([ref]$audience)
+                        -Audience ([ref]$audience) `
+                        -Imdb ([ref]$imdb)
 
                     if (-not [string]::IsNullOrWhiteSpace($critic) -and
                         -not [string]::IsNullOrWhiteSpace($audience)) {
@@ -3289,10 +3312,11 @@ function Get-DesignRichExport {
         else {
             try {
                 $parsed = Get-Content -Path $downloadPath -Raw -Encoding UTF8 | ConvertFrom-Json
-                Find-DesignRtRatingsRecursive `
+                Find-DesignProviderRatingsRecursive `
                     -Node $parsed `
                     -Critic ([ref]$critic) `
-                    -Audience ([ref]$audience)
+                    -Audience ([ref]$audience) `
+                    -Imdb ([ref]$imdb)
             }
             catch {
                 throw "Downloaded item export was neither a ZIP archive nor valid JSON."
@@ -3301,6 +3325,7 @@ function Get-DesignRichExport {
 
         $result.RtCritic = $critic
         $result.RtAudience = $audience
+        $result.Imdb = $imdb
 
         if ($NeedLogo) {
             if (-not $isZip) {
@@ -3347,6 +3372,7 @@ function Get-DesignRichExport {
             CustomFieldsRequested = @($customFields)
             RtCritic = $result.RtCritic
             RtAudience = $result.RtAudience
+            Imdb = $result.Imdb
             LogoExportLevel = $(if ($NeedLogo) { 9 } else { 0 })
             LogoFound = -not [string]::IsNullOrWhiteSpace($result.LogoSrc)
             JsonFiles = @($jsonFiles | ForEach-Object { $_.Name })
@@ -3357,9 +3383,10 @@ function Get-DesignRichExport {
         $diag | ConvertTo-Json -Depth 8 | Set-Content -Path $diagPath -Encoding UTF8
         $result.DiagnosticFile = "media/" + $diagPath.Split([IO.Path]::DirectorySeparatorChar)[-1]
 
-        Write-Log ("Design rich export result: RT critic={0}, audience={1}, logo={2}" -f `
+        Write-Log ("Design rich export result: RT critic={0}, audience={1}, IMDb={2}, logo={3}" -f `
             $(if ($result.RtCritic) { $result.RtCritic + "%" } else { "n/a" }),
             $(if ($result.RtAudience) { $result.RtAudience } else { "n/a" }),
+            $(if ($result.Imdb) { $result.Imdb } else { "n/a" }),
             $(if ($result.LogoSrc) { "yes" } else { "no" })
         )
     }
@@ -3794,22 +3821,32 @@ function Add-DesignRatingMetadata {
             }
         }
 
-        # Last resort: rich exporter for movies only. TV shows and episodes use
-        # IMDb values directly; show/season RT exporter requests are not needed.
-        if ([string]$item.Type -eq "movie" -and
-            ([string]::IsNullOrWhiteSpace($critic) -or
-             [string]::IsNullOrWhiteSpace($audience))) {
+        # Last resort: Tautulli's provider-labelled item export can still reach
+        # Plex through Tautulli when this runtime cannot connect directly.
+        $needsRichExport = if ([string]$item.Type -eq "movie") {
+            [string]::IsNullOrWhiteSpace($critic) -or
+                [string]::IsNullOrWhiteSpace($audience)
+        }
+        else {
+            [string]::IsNullOrWhiteSpace($imdb)
+        }
+        if ($needsRichExport) {
 
             $rich = Get-DesignRichExport `
                 -RatingKey $ratingKey `
-                -MediaType "movie" `
+                -MediaType $mediaType `
                 -NeedLogo:$false
 
-            if ([string]::IsNullOrWhiteSpace($critic)) {
-                $critic = [string]$rich.RtCritic
+            if ([string]$item.Type -eq "movie") {
+                if ([string]::IsNullOrWhiteSpace($critic)) {
+                    $critic = [string]$rich.RtCritic
+                }
+                if ([string]::IsNullOrWhiteSpace($audience)) {
+                    $audience = [string]$rich.RtAudience
+                }
             }
-            if ([string]::IsNullOrWhiteSpace($audience)) {
-                $audience = [string]$rich.RtAudience
+            elseif ([string]::IsNullOrWhiteSpace($imdb)) {
+                $imdb = [string]$rich.Imdb
             }
         }
 
@@ -4325,7 +4362,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.9.1"
+                "User-Agent"      = "TautWeekly-for-Plex/0.9.2"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -4579,7 +4616,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.9.1"
+        "X-Plex-Version"           = "0.9.2"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 
@@ -5382,6 +5419,17 @@ $genreHtml
 "@
             }
             else {
+                $showImdb = Get-OptionalStringProperty -InputObject $item -Name "DesignImdbRating"
+                $showRatingHtml = if ([string]::IsNullOrWhiteSpace($showImdb)) {
+                    ""
+                }
+                else {
+                    $imdbSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
+                    '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:11px;font-weight:700;white-space:nowrap;">' +
+                    '<img src="' + $imdbSrc + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
+                    (HtmlEncode $showImdb) +
+                    '</span>'
+                }
                 $episodeLines = Get-TvEpisodeLinesHtml -Item $item -ImageMode $ImageMode
                 $tvDetails = ""
 
@@ -5421,7 +5469,7 @@ $genreHtml
 <table width="100%" height="166" cellspacing="0" cellpadding="0" border="0" style="width:100%;height:166px;">
   <tr>
     <td height="34" valign="top" style="height:34px;color:#ffffff;font-size:16px;font-weight:700;line-height:1.25;">
-      $title
+      $title$showRatingHtml
     </td>
   </tr>
   $tvDetails

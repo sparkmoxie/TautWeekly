@@ -20,7 +20,7 @@ $rendererPaths = @(
 $requiredFunctions = @(
     'Get-OptionalStringProperty',
     'Convert-DesignRatingPercent',
-    'Find-DesignRtRatingsRecursive',
+    'Find-DesignProviderRatingsRecursive',
     'ConvertTo-DesignGenreList',
     'Add-DesignRatingMetadata',
     'Get-PlexMetadataProviderBaseUrl',
@@ -90,7 +90,8 @@ foreach ($relativePath in $rendererPaths) {
 
     $flatCritic = ''
     $flatAudience = ''
-    Find-DesignRtRatingsRecursive `
+    $flatImdb = ''
+    Find-DesignProviderRatingsRecursive `
         -Node ([PSCustomObject]@{
             rating = '5.3'
             ratingImage = 'rottentomatoes://image.rating.rotten'
@@ -98,12 +99,27 @@ foreach ($relativePath in $rendererPaths) {
             audienceRatingImage = 'rottentomatoes://image.rating.spilled'
         }) `
         -Critic ([ref]$flatCritic) `
-        -Audience ([ref]$flatAudience)
-    Assert-True ($flatCritic -eq '53' -and $flatAudience -eq '40') "$relativePath did not parse Tautulli's flattened low-score RT export"
+        -Audience ([ref]$flatAudience) `
+        -Imdb ([ref]$flatImdb)
+    Assert-True ($flatCritic -eq '53' -and $flatAudience -eq '40' -and [string]::IsNullOrWhiteSpace($flatImdb)) "$relativePath did not parse Tautulli's flattened low-score RT export"
+
+    $flatShowCritic = ''
+    $flatShowAudience = ''
+    $flatShowImdb = ''
+    Find-DesignProviderRatingsRecursive `
+        -Node ([PSCustomObject]@{
+            rating = '7.4'
+            ratingImage = 'imdb://image.rating'
+        }) `
+        -Critic ([ref]$flatShowCritic) `
+        -Audience ([ref]$flatShowAudience) `
+        -Imdb ([ref]$flatShowImdb)
+    Assert-True ($flatShowImdb -eq '7.4' -and [string]::IsNullOrWhiteSpace($flatShowCritic) -and [string]::IsNullOrWhiteSpace($flatShowAudience)) "$relativePath did not parse Tautulli's flattened IMDb export"
 
     $nestedCritic = ''
     $nestedAudience = ''
-    Find-DesignRtRatingsRecursive `
+    $nestedImdb = ''
+    Find-DesignProviderRatingsRecursive `
         -Node ([PSCustomObject]@{
             Rating = @(
                 [PSCustomObject]@{
@@ -115,23 +131,32 @@ foreach ($relativePath in $rendererPaths) {
                     image = 'rottentomatoes://image.rating.spilled'
                     type = 'audience'
                     value = '4.0'
+                },
+                [PSCustomObject]@{
+                    image = 'imdb://image.rating'
+                    type = 'critic'
+                    value = '7.4'
                 }
             )
         }) `
         -Critic ([ref]$nestedCritic) `
-        -Audience ([ref]$nestedAudience)
-    Assert-True ($nestedCritic -eq '53' -and $nestedAudience -eq '40') "$relativePath did not parse nested low-score RT entries"
+        -Audience ([ref]$nestedAudience) `
+        -Imdb ([ref]$nestedImdb)
+    Assert-True ($nestedCritic -eq '53' -and $nestedAudience -eq '40' -and $nestedImdb -eq '7.4') "$relativePath did not parse nested provider-labelled entries"
 
     $unlabelledCritic = ''
     $unlabelledAudience = ''
-    Find-DesignRtRatingsRecursive `
+    $unlabelledImdb = ''
+    Find-DesignProviderRatingsRecursive `
         -Node ([PSCustomObject]@{ rating = '9.9'; audienceRating = '9.8' }) `
         -Critic ([ref]$unlabelledCritic) `
-        -Audience ([ref]$unlabelledAudience)
+        -Audience ([ref]$unlabelledAudience) `
+        -Imdb ([ref]$unlabelledImdb)
     Assert-True (
         [string]::IsNullOrWhiteSpace($unlabelledCritic) -and
-        [string]::IsNullOrWhiteSpace($unlabelledAudience)
-    ) "$relativePath mislabeled provider-free numeric ratings as Rotten Tomatoes"
+        [string]::IsNullOrWhiteSpace($unlabelledAudience) -and
+        [string]::IsNullOrWhiteSpace($unlabelledImdb)
+    ) "$relativePath mislabeled provider-free numeric ratings"
 
     # Provider-only collection tests isolate the legacy best-effort path. The
     # persistent cache has its own exact-ID, privacy, and lifecycle suite.
