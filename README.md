@@ -71,6 +71,10 @@ setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
 
 ## Current newsletter behavior
 
+- Movie Rotten Tomatoes and TV IMDb retain their dedicated icon treatments.
+  If Plex selects another rating source, TautWeekly also accepts a numeric
+  IMDb, TMDB, or TVDB score only when Tautulli supplies the matching provider
+  identifier; unlabeled and unknown-provider values remain omitted.
 - A private pre-deletion cache stores only the minimum reusable presentation
   record for a live item: exact stable GUID and media type, title/year/summary,
   up to eight genres, displayed ratings, one poster, hashes, and timestamps.

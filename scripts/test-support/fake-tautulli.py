@@ -559,7 +559,15 @@ class Handler(BaseHTTPRequestHandler):
         command = query.get("cmd", "")
         if command == "download_export" and self.current_scenario() == "rating-export-fallback":
             if query.get("export_id") == "59":
-                export_data = [{"rating": "7.4", "ratingImage": "imdb://image.rating"}]
+                # Current Tautulli show exports do not expose ratingImage, but
+                # they do expose the selected audience provider fields.
+                export_data = [
+                    {
+                        "rating": "",
+                        "audienceRating": "7.4",
+                        "audienceRatingImage": "themoviedb://image.rating",
+                    }
+                ]
             else:
                 export_data = [
                     {
@@ -715,15 +723,17 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 )
                 return
+            metadata_fields = [
+                {"field": "rating", "level": 1},
+                {"field": "audienceRating", "level": 1},
+                {"field": "audienceRatingImage", "level": 1},
+                {"field": "contentRating", "level": 1},
+            ]
+            if media_type == "movie":
+                metadata_fields.insert(1, {"field": "ratingImage", "level": 1})
             self.api_success(
                 {
-                    "metadata_fields": [
-                        {"field": "rating", "level": 1},
-                        {"field": "ratingImage", "level": 1},
-                        {"field": "audienceRating", "level": 1},
-                        {"field": "audienceRatingImage", "level": 1},
-                        {"field": "contentRating", "level": 1},
-                    ],
+                    "metadata_fields": metadata_fields,
                     "media_info_fields": [],
                 }
             )
@@ -747,12 +757,9 @@ class Handler(BaseHTTPRequestHandler):
                     for field in query.get("custom_fields", "").split(",")
                     if field.strip()
                 }
-                required_fields = {
-                    "rating",
-                    "ratingImage",
-                    "audienceRating",
-                    "audienceRatingImage",
-                }
+                required_fields = {"rating", "audienceRating", "audienceRatingImage"}
+                if query.get("rating_key") != "selected-show":
+                    required_fields.add("ratingImage")
                 if not required_fields.issubset(requested_fields):
                     self.write_json(
                         {

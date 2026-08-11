@@ -249,9 +249,9 @@ foreach ($engine in $engines) {
             }
 
             if ($scenario -eq 'rating-export-fallback') {
-                Assert-True ($normalHtml.Contains('53%') -and $normalHtml.Contains('40%') -and $normalHtml.Contains('7.4')) "$($engine.Name)/$scenario did not render provider-labelled movie and show ratings from Tautulli's item exports."
+                Assert-True ($normalHtml.Contains('53%') -and $normalHtml.Contains('40%') -and $normalHtml.Contains('TMDB') -and $normalHtml.Contains('7.4')) "$($engine.Name)/$scenario did not render provider-labelled movie and show ratings from Tautulli's item exports."
                 Assert-True ($previewLog.Contains('Design rich export result: RT critic=53%, audience=40')) "$($engine.Name)/$scenario did not report the successful JSON rating fallback."
-                Assert-True ($previewLog.Contains('Design rich export result: RT critic=n/a, audience=n/a, IMDb=7.4')) "$($engine.Name)/$scenario did not report the successful show IMDb fallback."
+                Assert-True ($previewLog.Contains('Design rich export result: RT critic=n/a, audience=n/a, IMDb=n/a, selected=TMDB 7.4')) "$($engine.Name)/$scenario did not report the successful show selected-provider fallback."
                 Assert-True (-not $previewLog.Contains('selected-logo level 9')) "$($engine.Name)/$scenario mislabeled a rating-only item export as a logo export."
                 Assert-True (-not $previewLog.Contains('could not enumerate additional exporter fields')) "$($engine.Name)/$scenario did not use a compatible Tautulli field-discovery request."
             }
@@ -474,7 +474,7 @@ foreach ($engine in $engines) {
                 Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
                 if ($scenario -eq 'rating-export-fallback') {
                     Assert-True ($sendLog.Contains('Design rich export result: RT critic=53%, audience=40')) "$($engine.Name)/$scenario SendTest did not recover both ratings through the explicit item export."
-                    Assert-True ($sendLog.Contains('Design rich export result: RT critic=n/a, audience=n/a, IMDb=7.4')) "$($engine.Name)/$scenario SendTest did not recover show IMDb through the explicit item export."
+                    Assert-True ($sendLog.Contains('Design rich export result: RT critic=n/a, audience=n/a, IMDb=n/a, selected=TMDB 7.4')) "$($engine.Name)/$scenario SendTest did not recover the show selected-provider rating through the explicit item export."
                     Assert-True (-not $sendLog.Contains('could not enumerate additional exporter fields')) "$($engine.Name)/$scenario SendTest did not use the compatible field-discovery request."
                 }
                 if ($scenario -in $providerRecoveryScenarios) {
@@ -495,7 +495,7 @@ foreach ($engine in $engines) {
                     $emailThemeArgs += @(
                         '--require-html', 'alt="Rotten Tomatoes critic"',
                         '--require-html', 'alt="Rotten Tomatoes audience"',
-                        '--require-html', 'alt="IMDb"',
+                        '--require-html', 'TMDB</span>',
                         '--require-html', '53%</span>',
                         '--require-html', '40%</span>',
                         '--require-html', '7.4</span>'

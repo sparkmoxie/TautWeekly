@@ -3,6 +3,7 @@ TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 
 v1.2.0 Portable
 ---------------
+- renders recognized selected IMDb, TMDB, and TVDB ratings from either Tautulli rating field pair
 - makes Tautulli field discovery compatible and explicitly requests provider-labelled rating fields
 - accepts valid minimal rating-only JSON exports instead of rejecting responses under 64 bytes
 - displays recovered show IMDb ratings on TV release cards

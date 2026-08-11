@@ -475,6 +475,8 @@ function Update-TautWeeklyDeletedItemCache {
                 RtCritic       = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRtCritic") 8
                 RtAudience     = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRtAudience") 8
                 Imdb           = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignImdbRating") 8
+                Provider       = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRatingProvider") 12
+                ProviderValue  = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRatingValue") 8
                 RtCriticImage  = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRtCriticImage") 100
                 RtAudienceImage = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRtAudienceImage") 100
             }

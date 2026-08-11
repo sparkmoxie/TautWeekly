@@ -6,6 +6,31 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-08-11
+
+### Fixed
+
+- Accepted recognized provider-labelled IMDb, TMDB, and TVDB values from both
+  Tautulli rating field pairs while preserving the dedicated Rotten Tomatoes
+  movie and IMDb TV presentation. Current Tautulli TV metadata can place its
+  selected TMDB score in `audience_rating` / `audience_rating_image` while
+  leaving `rating_image` empty; v0.9.2 ignored that valid shape.
+- Rendered the selected-provider fallback on movie, TV, episode, and personal
+  statistics rows across Windows, NAS/Docker, and macOS, and retained the two
+  bounded presentation fields in the exact-GUID deleted-item cache.
+- Replaced the prior synthetic show-export fixture with Tautulli's maintained
+  TV field contract, then exercised PreviewAll and decoded SendTest delivery
+  with direct Plex deliberately unavailable. Follow-up evidence was provided
+  by [@Rocknrolldoggie](https://github.com/Rocknrolldoggie) in
+  [#58](https://github.com/sparkmoxie/TautWeekly/issues/58).
+
+### Security
+
+- Kept rating export requests at metadata level 1 with media information and
+  file locations disabled. Only known provider identifiers with a numeric
+  score from 0 through 10 are accepted; unknown or unlabeled values remain
+  omitted.
+
 ## [0.9.3] - 2026-08-11
 
 ### Fixed
