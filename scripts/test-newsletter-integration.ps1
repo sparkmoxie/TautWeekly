@@ -36,6 +36,7 @@ $engines = @(
 $providerRecoveryScenarios = @('deleted-history-metadata', 'deleted-history-legacy-guid')
 $cacheScenario = 'cache-deleted'
 $deletedHistoryScenarios = @($providerRecoveryScenarios) + @($cacheScenario)
+$sendTestScenarios = @('optional-hero-metadata', 'rating-export-fallback') + @($deletedHistoryScenarios)
 
 $executed = 0
 foreach ($engine in $engines) {
@@ -93,7 +94,7 @@ foreach ($engine in $engines) {
             $baseUrl = (Get-Content $readyFile -Raw).Trim()
 
             $smtpPort = 0
-            if ($scenario -eq 'optional-hero-metadata' -or $scenario -in $deletedHistoryScenarios) {
+            if ($scenario -in $sendTestScenarios) {
                 $smtpPort = Get-FreeTcpPort
                 $smtpServer = Start-Process -FilePath $PythonPath -ArgumentList @(
                     '-u', $fakeSmtp, '--port', [string]$smtpPort,
@@ -125,7 +126,7 @@ foreach ($engine in $engines) {
                 MaxTv = 4
                 SendDelaySeconds = 0
             }
-            if ($scenario -eq 'optional-hero-metadata' -or $scenario -in $deletedHistoryScenarios) {
+            if ($scenario -in $sendTestScenarios) {
                 $configOverrides['SmtpHost'] = '127.0.0.1'
                 $configOverrides['SmtpPort'] = $smtpPort
                 $configOverrides['SmtpEnableSsl'] = $false
@@ -414,7 +415,7 @@ foreach ($engine in $engines) {
                 Assert-True (@($externalPosterCalls | Where-Object { $_.has_plex_token }).Count -eq 0) "$($engine.Name)/$scenario forwarded the Plex token to an external poster host."
             }
 
-            if ($scenario -eq 'optional-hero-metadata' -or $scenario -in $deletedHistoryScenarios) {
+            if ($scenario -in $sendTestScenarios) {
                 $previewLog = Get-Content $stdout -Raw
                 Assert-True ($previewLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario did not exercise the recoverable direct Plex 404 fallback."
                 Assert-True ($normalHtml.Contains('Selected Show')) "$($engine.Name)/$scenario lost the global-history title fallback for sparse hero metadata."
@@ -495,9 +496,14 @@ foreach ($engine in $engines) {
                 $emailThemeArgs = @($smtpDataFile)
                 if ($scenario -eq 'rating-export-fallback') {
                     $emailThemeArgs += @(
-                        '--require-html', 'alt="Rotten Tomatoes critic"',
-                        '--require-html', 'alt="Rotten Tomatoes audience"',
-                        '--require-html', 'alt="IMDb"',
+                        # Windows PowerShell 5.1 strips embedded quote
+                        # characters when forwarding native-process
+                        # arguments. Use the provider labels themselves so
+                        # the decoded-MIME assertions work identically under
+                        # Windows PowerShell and PowerShell 7.
+                        '--require-html', 'Rotten Tomatoes critic',
+                        '--require-html', 'Rotten Tomatoes audience',
+                        '--require-html', 'IMDb',
                         '--require-html', '53%</span>',
                         '--require-html', '40%</span>',
                         '--require-html', '8.7</span>',
