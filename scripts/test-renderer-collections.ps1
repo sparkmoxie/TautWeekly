@@ -20,10 +20,19 @@ $rendererPaths = @(
 $requiredFunctions = @(
     'Get-OptionalStringProperty',
     'Get-DesignProviderRating',
+    'Get-DesignProviderRatingHtml',
     'Convert-DesignRatingPercent',
     'Find-DesignProviderRatingsRecursive',
     'ConvertTo-DesignGenreList',
     'Add-DesignRatingMetadata',
+    'Get-DesignEpisodeImdbRating',
+    'Enrich-TvEpisodeMetadata',
+    'Get-DesignRatingLine',
+    'Get-StatsMovieRatingHtml',
+    'Get-TvEpisodeLinesHtml',
+    'Get-DesignRtIconUrl',
+    'HtmlEncode',
+    'Truncate-Text',
     'Get-PlexMetadataProviderBaseUrl',
     'Get-PlexHostedMetadataLookupPath',
     'Get-PlexHostedMetadataMatchPayload',
@@ -459,9 +468,17 @@ foreach ($relativePath in $rendererPaths) {
     function Invoke-TautulliApi {
         param([string]$Command, [hashtable]$Parameters = @{})
         Assert-True ($Command -eq 'get_metadata') "$relativePath used an unexpected Tautulli request for selected-provider metadata"
-        if ([string]$Parameters.rating_key -eq 'selected-provider-movie') {
+        if ([string]$Parameters.rating_key -eq 'preferred-provider-movie') {
             return [PSCustomObject]@{
                 rating = '8.1'
+                rating_image = 'imdb://image.rating'
+                audience_rating = ''
+                audience_rating_image = ''
+            }
+        }
+        if ([string]$Parameters.rating_key -eq 'fallback-provider-movie') {
+            return [PSCustomObject]@{
+                rating = '6.6'
                 rating_image = 'imdb://image.rating'
                 audience_rating = ''
                 audience_rating_image = ''
@@ -475,7 +492,26 @@ foreach ($relativePath in $rendererPaths) {
             audience_rating_image = 'themoviedb://image.rating'
         }
     }
-    function Get-DesignPlexMetadata { param([string]$RatingKey) $script:providerDirectCalls++; return $null }
+    function Get-DesignPlexMetadata {
+        param([string]$RatingKey)
+        $script:providerDirectCalls++
+        if ($RatingKey -eq 'preferred-provider-movie') {
+            return [PSCustomObject]@{
+                Rating = @(
+                    [PSCustomObject]@{ image = 'rottentomatoes://image.rating.rotten'; type = 'critic'; value = '5.3' },
+                    [PSCustomObject]@{ image = 'rottentomatoes://image.rating.spilled'; type = 'audience'; value = '4.0' }
+                )
+            }
+        }
+        if ($RatingKey -eq 'selected-provider-show') {
+            return [PSCustomObject]@{
+                Rating = @(
+                    [PSCustomObject]@{ image = 'imdb://image.rating'; type = 'audience'; value = '8.4' }
+                )
+            }
+        }
+        return $null
+    }
     function Get-DesignRichExport {
         param([string]$RatingKey, [string]$MediaType, [switch]$NeedLogo)
         $script:providerExportCalls++
@@ -487,15 +523,70 @@ foreach ($relativePath in $rendererPaths) {
         Title = 'Selected Provider Show'
     }
     $selectedProviderMovie = [PSCustomObject]@{
-        RatingKey = 'selected-provider-movie'
+        RatingKey = 'preferred-provider-movie'
         Type = 'movie'
-        Title = 'Selected Provider Movie'
+        Title = 'Preferred Provider Movie'
+        Year = '2026'
     }
-    Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @($selectedProviderMovie); TV = @($selectedProviderShow) })
+    $fallbackProviderMovie = [PSCustomObject]@{
+        RatingKey = 'fallback-provider-movie'
+        Type = 'movie'
+        Title = 'Fallback Provider Movie'
+        Year = '2026'
+    }
+    Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @($selectedProviderMovie, $fallbackProviderMovie); TV = @($selectedProviderShow) })
     Assert-True ($selectedProviderShow.DesignRatingProvider -eq 'TMDB' -and $selectedProviderShow.DesignRatingValue -eq '7.4') "$relativePath ignored Tautulli's selected TV audience-rating provider"
-    Assert-True ([string]::IsNullOrWhiteSpace($selectedProviderShow.DesignImdbRating)) "$relativePath mislabeled a selected TMDB score as IMDb"
-    Assert-True ($selectedProviderMovie.DesignImdbRating -eq '8.1') "$relativePath did not preserve a selected movie IMDb rating for its dedicated icon"
-    Assert-True ($script:providerDirectCalls -eq 0 -and $script:providerExportCalls -eq 0) "$relativePath performed unnecessary rating fallbacks after Tautulli returned a selected provider"
+    Assert-True ($selectedProviderShow.DesignImdbRating -eq '8.4') "$relativePath let a selected TMDB score prevent an available show IMDb fallback"
+    Assert-True ($selectedProviderMovie.DesignRtCritic -eq '53' -and $selectedProviderMovie.DesignRtAudience -eq '40') "$relativePath let a selected movie IMDb score prevent available Rotten Tomatoes ratings"
+    Assert-True ($fallbackProviderMovie.DesignImdbRating -eq '6.6') "$relativePath did not retain labelled IMDb as the final movie fallback"
+    Assert-True ($script:providerDirectCalls -eq 3 -and $script:providerExportCalls -eq 1) "$relativePath did not exhaust preferred rating sources before accepting selected-provider fallbacks"
+
+    $preferredMovieLine = Get-DesignRatingLine -Item $selectedProviderMovie -ImageMode Preview
+    Assert-True ($preferredMovieLine.Contains('53%') -and $preferredMovieLine.Contains('40%') -and -not $preferredMovieLine.Contains('8.1')) "$relativePath did not render RT exclusively when a movie also retained an IMDb fallback"
+    $preferredMovieStats = Get-StatsMovieRatingHtml -Item $selectedProviderMovie -ImageMode Preview
+    Assert-True ($preferredMovieStats.Contains('53%') -and $preferredMovieStats.Contains('40%') -and -not $preferredMovieStats.Contains('8.1')) "$relativePath personal stats did not prefer RT over a movie IMDb fallback"
+    $fallbackMovieLine = Get-DesignRatingLine -Item $fallbackProviderMovie -ImageMode Preview
+    Assert-True ($fallbackMovieLine.Contains('IMDb') -and $fallbackMovieLine.Contains('6.6')) "$relativePath did not render labelled IMDb when no movie RT rating exists"
+
+    function Invoke-TautulliApi {
+        param([string]$Command, [hashtable]$Parameters = @{})
+        Assert-True ($Command -eq 'get_metadata' -and [string]$Parameters.rating_key -eq 'selected-provider-episode') "$relativePath requested unexpected episode metadata"
+        return [PSCustomObject]@{
+            media_index = 2
+            parent_media_index = 1
+            rating = ''
+            rating_image = ''
+            audience_rating = '7.4'
+            audience_rating_image = 'themoviedb://image.rating'
+        }
+    }
+    function Get-DesignPlexMetadata {
+        param([string]$RatingKey)
+        Assert-True ($RatingKey -eq 'selected-provider-episode') "$relativePath requested IMDb for the wrong episode"
+        return [PSCustomObject]@{
+            Rating = @(
+                [PSCustomObject]@{ image = 'themoviedb://image.rating'; type = 'audience'; value = '7.4' },
+                [PSCustomObject]@{ image = 'imdb://image.rating'; type = 'audience'; value = '8.6' }
+            )
+        }
+    }
+    function Invoke-DesignPlexLegacyXml { param([string]$Path) throw "$relativePath unnecessarily used legacy XML after finding episode IMDb" }
+    $selectedProviderEpisode = [PSCustomObject]@{
+        RatingKey = 'selected-provider-episode'
+        Title = 'Sanitized Episode'
+        Season = 1
+        Episode = 2
+        ImdbRating = ''
+        RatingImage = ''
+    }
+    $episodeShow = [PSCustomObject]@{
+        Title = 'Sanitized Show'
+        Episodes = @($selectedProviderEpisode)
+    }
+    Enrich-TvEpisodeMetadata -ReleaseData ([PSCustomObject]@{ TV = @($episodeShow) })
+    Assert-True ($selectedProviderEpisode.ImdbRating -eq '8.6') "$relativePath let a selected TMDB score prevent exact-episode IMDb recovery"
+    $episodeHtml = Get-TvEpisodeLinesHtml -Item $episodeShow -ImageMode Preview
+    Assert-True ($episodeHtml.Contains('IMDb') -and $episodeHtml.Contains('8.6') -and -not $episodeHtml.Contains('TMDB') -and -not $episodeHtml.Contains('7.4')) "$relativePath rendered a non-IMDb provider on an episode row"
 
     function Invoke-TautulliApi { param([string]$Command, [hashtable]$Parameters = @{}) throw 'Simulated deleted metadata' }
     function Get-DesignPlexMetadata { param([string]$RatingKey) return $null }

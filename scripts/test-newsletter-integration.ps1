@@ -249,7 +249,9 @@ foreach ($engine in $engines) {
             }
 
             if ($scenario -eq 'rating-export-fallback') {
-                Assert-True ($normalHtml.Contains('53%') -and $normalHtml.Contains('40%') -and $normalHtml.Contains('TMDB') -and $normalHtml.Contains('7.4')) "$($engine.Name)/$scenario did not render provider-labelled movie and show ratings from Tautulli's item exports."
+                Assert-True ($normalHtml.Contains('53%') -and $normalHtml.Contains('40%')) "$($engine.Name)/$scenario did not render preferred movie RT ratings from Tautulli's item export."
+                Assert-True ($normalHtml.Contains('alt="IMDb"') -and $normalHtml.Contains('8.7')) "$($engine.Name)/$scenario did not render the exact episode IMDb rating."
+                Assert-True (-not $normalHtml.Contains('6.6') -and -not $normalHtml.Contains('TMDB') -and -not $normalHtml.Contains('7.4')) "$($engine.Name)/$scenario rendered a lower-priority movie or episode provider."
                 Assert-True ($previewLog.Contains('Design rich export result: RT critic=53%, audience=40')) "$($engine.Name)/$scenario did not report the successful JSON rating fallback."
                 Assert-True ($previewLog.Contains('Design rich export result: RT critic=n/a, audience=n/a, IMDb=n/a, selected=TMDB 7.4')) "$($engine.Name)/$scenario did not report the successful show selected-provider fallback."
                 Assert-True (-not $previewLog.Contains('selected-logo level 9')) "$($engine.Name)/$scenario mislabeled a rating-only item export as a logo export."
@@ -495,10 +497,13 @@ foreach ($engine in $engines) {
                     $emailThemeArgs += @(
                         '--require-html', 'alt="Rotten Tomatoes critic"',
                         '--require-html', 'alt="Rotten Tomatoes audience"',
-                        '--require-html', 'TMDB</span>',
+                        '--require-html', 'alt="IMDb"',
                         '--require-html', '53%</span>',
                         '--require-html', '40%</span>',
-                        '--require-html', '7.4</span>'
+                        '--require-html', '8.7</span>',
+                        '--forbid-html', '6.6</span>',
+                        '--forbid-html', 'TMDB</span>',
+                        '--forbid-html', '7.4</span>'
                     )
                 }
                 & $PythonPath $emailThemeAssertion @emailThemeArgs

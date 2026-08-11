@@ -27,6 +27,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("message", type=Path)
     parser.add_argument("--require-html", action="append", default=[])
+    parser.add_argument("--forbid-html", action="append", default=[])
     args = parser.parse_args()
 
     message = BytesParser(policy=policy.default).parsebytes(args.message.read_bytes())
@@ -41,6 +42,9 @@ def main() -> int:
     for marker in (*REQUIRED_HTML, *args.require_html):
         if marker not in html:
             raise AssertionError(f"delivered HTML lost dark-theme marker: {marker}")
+    for marker in args.forbid_html:
+        if marker in html:
+            raise AssertionError(f"delivered HTML retained forbidden marker: {marker}")
     for shorthand in ("background:#0f0f0f", "background:#181818"):
         if shorthand in html:
             raise AssertionError(f"delivered HTML retained unsupported color shorthand: {shorthand}")

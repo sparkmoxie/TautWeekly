@@ -1253,8 +1253,7 @@ function Enrich-TvEpisodeMetadata {
             # Plex UI can show IMDb alongside other providers even when
             # Tautulli's flattened rating_image does not select IMDb.
             # Fall back to Plex's native Rating[] / legacy XML metadata.
-            if ([string]::IsNullOrWhiteSpace([string]$episode.ImdbRating) -and
-                [string]::IsNullOrWhiteSpace([string]$selectedRating.Provider)) {
+            if ([string]::IsNullOrWhiteSpace([string]$episode.ImdbRating)) {
                 $episode.ImdbRating = Get-DesignEpisodeImdbRating `
                     -RatingKey $ratingKey `
                     -TautulliMetadata $meta
@@ -3748,11 +3747,10 @@ function Add-DesignRatingMetadata {
         # Optional secondary source: Plex's full Rating[] if direct access
         # happens to be available on this install.
         $needsDirectRatings = if ($mediaType -eq "movie") {
-            ([string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)) -and
-                [string]::IsNullOrWhiteSpace($provider)
+            [string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)
         }
         else {
-            [string]::IsNullOrWhiteSpace($imdb) -and [string]::IsNullOrWhiteSpace($provider)
+            [string]::IsNullOrWhiteSpace($imdb)
         }
         if ($needsDirectRatings) {
             try {
@@ -3857,11 +3855,10 @@ function Add-DesignRatingMetadata {
             }
         }
         $needsHostedRating = if ($mediaType -eq "movie") {
-            ([string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)) -and
-                [string]::IsNullOrWhiteSpace($provider)
+            [string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)
         }
         else {
-            [string]::IsNullOrWhiteSpace($imdb) -and [string]::IsNullOrWhiteSpace($provider)
+            [string]::IsNullOrWhiteSpace($imdb)
         }
         $needsHostedMetadata = (
             -not [string]::IsNullOrWhiteSpace($metadataGuid) -and
@@ -3990,11 +3987,10 @@ function Add-DesignRatingMetadata {
         # without a Plex token or title search, and fail closed when a provider
         # does not publish the expected movie RT or TV IMDb value.
         $needsWatchRating = if ($mediaType -eq "movie") {
-            ([string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)) -and
-                [string]::IsNullOrWhiteSpace($provider)
+            [string]::IsNullOrWhiteSpace($critic) -or [string]::IsNullOrWhiteSpace($audience)
         }
         else {
-            [string]::IsNullOrWhiteSpace($imdb) -and [string]::IsNullOrWhiteSpace($provider)
+            [string]::IsNullOrWhiteSpace($imdb)
         }
         if ($needsWatchRating -and -not [string]::IsNullOrWhiteSpace($watchSlug)) {
             $watchRatings = Get-PlexWatchRatings -Slug $watchSlug -MediaType $mediaType
@@ -4015,11 +4011,10 @@ function Add-DesignRatingMetadata {
         # Plex through Tautulli when this runtime cannot connect directly.
         $needsRichExport = if ([string]$item.Type -eq "movie") {
             ([string]::IsNullOrWhiteSpace($critic) -or
-                [string]::IsNullOrWhiteSpace($audience)) -and
-                [string]::IsNullOrWhiteSpace($provider)
+                [string]::IsNullOrWhiteSpace($audience))
         }
         else {
-            [string]::IsNullOrWhiteSpace($imdb) -and [string]::IsNullOrWhiteSpace($provider)
+            [string]::IsNullOrWhiteSpace($imdb)
         }
         if ($needsRichExport) {
 
@@ -4162,28 +4157,6 @@ function Get-DesignRatingLine {
         )
     }
 
-    $imdb = Get-OptionalStringProperty -InputObject $Item -Name "DesignImdbRating"
-    if (-not [string]::IsNullOrWhiteSpace($imdb)) {
-        $imdbIcon = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
-        $pieces.Add(
-            '<span class="design-rating-item">' +
-            '<img src="' + (HtmlEncode $imdbIcon) + '" alt="IMDb" ' +
-            'width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
-            (HtmlEncode $imdb) +
-            '</span>'
-        )
-    }
-
-    $provider = Get-OptionalStringProperty -InputObject $Item -Name "DesignRatingProvider"
-    $providerValue = Get-OptionalStringProperty -InputObject $Item -Name "DesignRatingValue"
-    if (-not [string]::IsNullOrWhiteSpace($provider) -and
-        -not ($provider -eq "IMDb" -and -not [string]::IsNullOrWhiteSpace($imdb))) {
-        $providerHtml = Get-DesignProviderRatingHtml -Provider $provider -Value $providerValue
-        if (-not [string]::IsNullOrWhiteSpace($providerHtml)) {
-            $pieces.Add('<span class="design-rating-item">' + $providerHtml + '</span>')
-        }
-    }
-
     $critic = ""
     $audience = ""
     $criticImage = ""
@@ -4238,6 +4211,27 @@ function Get-DesignRatingLine {
             '<img src="' + (HtmlEncode $audienceIcon) + '" alt="Rotten Tomatoes audience" ' +
             'width="18" height="18" style="display:inline-block;width:18px;height:18px;object-fit:contain;border:0;vertical-align:-4px;margin-right:4px;">' +
             (HtmlEncode ($audience + "%")) +
+            '</span>'
+        )
+    }
+
+    # Movies show RT whenever either RT score exists. A provider-labelled IMDb
+    # value is retained only as the final fallback when RT is wholly absent.
+    # Shows keep their dedicated IMDb treatment; generic provider scores are
+    # never substituted for either media-specific presentation.
+    $hasRt = (
+        -not [string]::IsNullOrWhiteSpace($critic) -or
+        -not [string]::IsNullOrWhiteSpace($audience)
+    )
+    $imdb = Get-OptionalStringProperty -InputObject $Item -Name "DesignImdbRating"
+    if (([string]$Item.Type -eq "show" -or -not $hasRt) -and
+        -not [string]::IsNullOrWhiteSpace($imdb)) {
+        $imdbIcon = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
+        $pieces.Add(
+            '<span class="design-rating-item">' +
+            '<img src="' + (HtmlEncode $imdbIcon) + '" alt="IMDb" ' +
+            'width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
+            (HtmlEncode $imdb) +
             '</span>'
         )
     }
@@ -4599,7 +4593,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.9.4"
+                "User-Agent"      = "TautWeekly-for-Plex/0.9.5"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -4853,7 +4847,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.9.4"
+        "X-Plex-Version"           = "0.9.5"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 
@@ -5319,8 +5313,12 @@ function Get-StatsMovieRatingHtml {
         )
     }
 
+    $hasRt = (
+        -not [string]::IsNullOrWhiteSpace($critic) -or
+        -not [string]::IsNullOrWhiteSpace($audience)
+    )
     $imdb = Get-OptionalStringProperty -InputObject $Item -Name "DesignImdbRating"
-    if (-not [string]::IsNullOrWhiteSpace($imdb)) {
+    if (-not $hasRt -and -not [string]::IsNullOrWhiteSpace($imdb)) {
         $imdbIcon = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
         $pieces.Add(
             '<span style="display:inline-block;white-space:nowrap;">' +
@@ -5328,18 +5326,6 @@ function Get-StatsMovieRatingHtml {
             (HtmlEncode $imdb) +
             '</span>'
         )
-    }
-
-    $provider = Get-OptionalStringProperty -InputObject $Item -Name "DesignRatingProvider"
-    $providerValue = Get-OptionalStringProperty -InputObject $Item -Name "DesignRatingValue"
-    $providerHtml = if ($provider -eq "IMDb" -and -not [string]::IsNullOrWhiteSpace($imdb)) {
-        ""
-    }
-    else {
-        Get-DesignProviderRatingHtml -Provider $provider -Value $providerValue
-    }
-    if (-not [string]::IsNullOrWhiteSpace($providerHtml)) {
-        $pieces.Add($providerHtml)
     }
 
     if ($pieces.Count -eq 0) {
@@ -5435,16 +5421,8 @@ function Get-StatsEpisodeRowsHtml {
         }
 
         $imdb = [string]$item.ImdbRating
-        $provider = Get-OptionalStringProperty -InputObject $item -Name "DesignRatingProvider"
-        $providerValue = Get-OptionalStringProperty -InputObject $item -Name "DesignRatingValue"
         $imdbHtml = if ([string]::IsNullOrWhiteSpace($imdb)) {
-            $providerHtml = Get-DesignProviderRatingHtml -Provider $provider -Value $providerValue
-            if ([string]::IsNullOrWhiteSpace($providerHtml)) {
-                '<span style="color:#6f6f6f;">Rating unavailable</span>'
-            }
-            else {
-                $providerHtml
-            }
+            '<span style="color:#6f6f6f;">IMDb unavailable</span>'
         } else {
             '<span style="display:inline-block;white-space:nowrap;">' +
             '<img src="' + (HtmlEncode $ImdbIconSrc) + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
@@ -5498,15 +5476,7 @@ function Get-StatsTvShowRowsHtml {
 
         $imdb = Get-OptionalStringProperty -InputObject $item -Name "DesignImdbRating"
         $imdbHtml = if ([string]::IsNullOrWhiteSpace($imdb)) {
-            $provider = Get-OptionalStringProperty -InputObject $item -Name "DesignRatingProvider"
-            $providerValue = Get-OptionalStringProperty -InputObject $item -Name "DesignRatingValue"
-            $providerHtml = Get-DesignProviderRatingHtml -Provider $provider -Value $providerValue
-            if ([string]::IsNullOrWhiteSpace($providerHtml)) {
-                '<span style="color:#6f6f6f;">Rating unavailable</span>'
-            }
-            else {
-                $providerHtml
-            }
+            '<span style="color:#6f6f6f;">IMDb unavailable</span>'
         } else {
             $imdbIconSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
             '<span style="display:inline-block;white-space:nowrap;">' +
@@ -5571,14 +5541,8 @@ function Get-TvEpisodeLinesHtml {
             $imdb = [string]$episode.ImdbRating
         }
 
-        $provider = Get-OptionalStringProperty -InputObject $episode -Name "DesignRatingProvider"
-        $providerValue = Get-OptionalStringProperty -InputObject $episode -Name "DesignRatingValue"
-
         $ratingHtml = if ([string]::IsNullOrWhiteSpace($imdb)) {
-            Get-DesignProviderRatingHtml `
-                -Provider $provider `
-                -Value $providerValue `
-                -MarginLeft 8
+            ""
         }
         else {
             $imdbSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
@@ -5701,23 +5665,18 @@ $genreHtml
 "@
             }
             else {
-                $showImdb = Get-OptionalStringProperty -InputObject $item -Name "DesignImdbRating"
-                $showProvider = Get-OptionalStringProperty -InputObject $item -Name "DesignRatingProvider"
-                $showProviderValue = Get-OptionalStringProperty -InputObject $item -Name "DesignRatingValue"
-                $showRatingHtml = if ([string]::IsNullOrWhiteSpace($showImdb)) {
-                    Get-DesignProviderRatingHtml `
-                        -Provider $showProvider `
-                        -Value $showProviderValue `
-                        -MarginLeft 8
-                }
-                else {
-                    $imdbSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
-                    '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:11px;font-weight:700;white-space:nowrap;">' +
-                    '<img src="' + $imdbSrc + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
-                    (HtmlEncode $showImdb) +
-                    '</span>'
-                }
                 $episodeLines = Get-TvEpisodeLinesHtml -Item $item -ImageMode $ImageMode
+                $showRatingHtml = ""
+                if ([string]::IsNullOrWhiteSpace($episodeLines)) {
+                    $showImdb = Get-OptionalStringProperty -InputObject $item -Name "DesignImdbRating"
+                    if (-not [string]::IsNullOrWhiteSpace($showImdb)) {
+                        $imdbSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
+                        $showRatingHtml = '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:11px;font-weight:700;white-space:nowrap;">' +
+                            '<img src="' + $imdbSrc + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
+                            (HtmlEncode $showImdb) +
+                            '</span>'
+                    }
+                }
                 $tvDetails = ""
 
                 if (-not [string]::IsNullOrWhiteSpace($episodeLines)) {

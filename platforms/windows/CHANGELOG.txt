@@ -3,7 +3,9 @@ TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 
 v1.8.0 Portable
 ---------------
-- renders recognized selected IMDb, TMDB, and TVDB ratings from either Tautulli rating field pair
+- prefers movie RT across every supported fallback and uses labelled IMDb only when RT is wholly unavailable
+- limits TV release-row ratings to IMDb tied to each exact episode; TMDB/TVDB and show scores are not substituted
+- parses recognized selected IMDb, TMDB, and TVDB values from either Tautulli rating field pair without treating them as preferred media ratings
 - makes Tautulli field discovery compatible and explicitly requests provider-labelled rating fields
 - accepts valid minimal rating-only JSON exports instead of rejecting responses under 64 bytes
 - displays recovered show IMDb ratings on TV release cards

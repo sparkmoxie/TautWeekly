@@ -682,7 +682,11 @@ class Handler(BaseHTTPRequestHandler):
                         "media_type": "movie",
                         "title": "Selected Movie",
                         "year": "2026",
-                        "summary": "Virtual metadata without selected provider ratings.",
+                        "summary": "Virtual metadata with an IMDb fallback selected before RT enrichment.",
+                        "rating": "6.6",
+                        "rating_image": "imdb://image.rating",
+                        "audience_rating": "",
+                        "audience_rating_image": "",
                         "genres": ["Drama", "Mystery"],
                     }
                 )

@@ -30,17 +30,17 @@ host is also fetched without the Plex token.
 
 Posters and hero art can still succeed through Tautulli's image proxy when the
 direct Plex URL is unreachable. That does not prove that direct rating,
-background, or selected-logo metadata is available. v0.9.4 uses Tautulli's
+background, or selected-logo metadata is available. v0.9.5 uses Tautulli's
 normal metadata and single-item JSON exporter for provider-labelled ratings;
 it requests only metadata level 1, disables media information, and does not
-request library/user individual files. Movie Rotten Tomatoes and TV IMDb keep
-their dedicated presentation, while recognized selected IMDb, TMDB, or TVDB
-values can come from either the rating or audience field pair. This matters
-because Tautulli's documented TV/episode example leaves `rating_image` empty
-and returns a TMDB score through `audience_rating` and
-`audience_rating_image`. Provider-free numbers, unknown provider identifiers,
-out-of-range scores, and unavailable logo resources remain omitted rather than
-guessed.
+request library/user individual files. Movie Rotten Tomatoes remains preferred
+even when flattened metadata selects IMDb; a labelled movie IMDb score is the
+final fallback only when no RT value exists. TV release rows accept only IMDb
+for the exact episode and do not substitute a selected show, TMDB, or TVDB
+score. Both rating field pairs are still parsed because Tautulli can place its
+selected provider in either pair. Provider-free numbers, unknown provider
+identifiers, out-of-range scores, and unavailable logo resources remain
+omitted rather than guessed.
 
 The [Tautulli `get_history` API](https://github.com/Tautulli/Tautulli/wiki/Tautulli-API-Reference#get_history)
 retains descriptive fields such as GUID/rating keys, titles, years, episode
