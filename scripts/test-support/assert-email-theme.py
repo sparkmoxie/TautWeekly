@@ -10,9 +10,9 @@ from pathlib import Path
 
 
 REQUIRED_HTML = (
-    '<meta name="color-scheme" content="dark">',
-    '<meta name="supported-color-schemes" content="dark">',
-    ':root { color-scheme:dark only; supported-color-schemes:dark; }',
+    '<meta name="color-scheme" content="light dark">',
+    '<meta name="supported-color-schemes" content="light dark">',
+    ':root { color-scheme:light dark; supported-color-schemes:light dark; }',
     '@media (prefers-color-scheme: dark)',
     'class="email-background"',
     'bgcolor="#0f0f0f"',
@@ -44,8 +44,17 @@ def main() -> int:
     for shorthand in ("background:#0f0f0f", "background:#181818"):
         if shorthand in html:
             raise AssertionError(f"delivered HTML retained unsupported color shorthand: {shorthand}")
+    for stale_scheme in (
+        '<meta name="color-scheme" content="dark">',
+        '<meta name="supported-color-schemes" content="dark">',
+        "color-scheme:dark only",
+    ):
+        if stale_scheme in html:
+            raise AssertionError(
+                f"delivered HTML retained the incompatible dark-only declaration: {stale_scheme}"
+            )
 
-    print("[PASS] Captured SMTP HTML preserves dark-only metadata and explicit background fallbacks.")
+    print("[PASS] Captured SMTP HTML advertises Apple-compatible schemes and preserves explicit dark fallbacks.")
     return 0
 
 

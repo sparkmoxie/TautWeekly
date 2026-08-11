@@ -4363,7 +4363,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.9.2"
+                "User-Agent"      = "TautWeekly-for-Plex/0.9.3"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -4617,7 +4617,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.9.2"
+        "X-Plex-Version"           = "0.9.3"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 
@@ -6319,12 +6319,12 @@ $mediaStatsRow
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <title>TautWeekly for Plex</title>
 <style>
 /* Email-safe table-first layout; only the featured hero swaps at the mobile breakpoint. */
-:root { color-scheme:dark only; supported-color-schemes:dark; }
+:root { color-scheme:light dark; supported-color-schemes:light dark; }
 .email-background { background-color:#0f0f0f !important; color:#ffffff !important; }
 .email-card { background-color:#181818 !important; }
 .design-hot-mobile { display:none; }
@@ -6617,11 +6617,11 @@ function Build-WelcomeHtml {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <title>Welcome aboard</title>
 <style>
-:root { color-scheme:dark only; supported-color-schemes:dark; }
+:root { color-scheme:light dark; supported-color-schemes:light dark; }
 .email-background { background-color:#0f0f0f !important; color:#ffffff !important; }
 .email-card { background-color:#181818 !important; }
 @media (prefers-color-scheme: dark) {

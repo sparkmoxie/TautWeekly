@@ -206,9 +206,9 @@ foreach ($engine in $engines) {
             $indexHtml = Get-Content $indexPath -Raw -Encoding UTF8
             $normalHtml = Get-Content $normalPath -Raw -Encoding UTF8
             $previewThemeMarkers = @(
-                '<meta name="color-scheme" content="dark">',
-                '<meta name="supported-color-schemes" content="dark">',
-                ':root { color-scheme:dark only; supported-color-schemes:dark; }',
+                '<meta name="color-scheme" content="light dark">',
+                '<meta name="supported-color-schemes" content="light dark">',
+                ':root { color-scheme:light dark; supported-color-schemes:light dark; }',
                 '@media (prefers-color-scheme: dark)',
                 'class="email-background"',
                 'bgcolor="#0f0f0f"',
@@ -222,6 +222,7 @@ foreach ($engine in $engines) {
                 }
                 Assert-True (-not $previewHtml.Contains('background:#0f0f0f')) "$($engine.Name)/$scenario $($previewPath.Name) retained the outer background shorthand."
                 Assert-True (-not $previewHtml.Contains('background:#181818')) "$($engine.Name)/$scenario $($previewPath.Name) retained the card background shorthand."
+                Assert-True (-not $previewHtml.Contains('color-scheme:dark only')) "$($engine.Name)/$scenario $($previewPath.Name) retained the incompatible dark-only declaration."
             }
             Assert-True ($normalHtml.Contains('class="email-card"')) "$($engine.Name)/$scenario lost explicit dark card classes."
             Assert-True ($normalHtml.Contains('bgcolor="#181818"')) "$($engine.Name)/$scenario lost the legacy dark card fallback."
