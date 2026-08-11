@@ -13,7 +13,7 @@ setup is preferred.
 | `TautulliUrl` | Yes | Base URL reachable from the TautWeekly for Plex runtime, such as `http://media.example.test:8181` |
 | `ApiKey` | Yes | Tautulli API key; treat as a secret |
 | `PlexWebUrl` | Yes | Destination for “Open Plex” links; defaults to the Plex web app |
-| `PlexServerUrl` | No | Direct Plex base URL for richer metadata and artwork |
+| `PlexServerUrl` | No | Direct Plex base URL reachable from the TautWeekly runtime for richer metadata and artwork; a separate container must not use its own localhost |
 | `PlexToken` | No | Administrator/server Plex token for direct Plex access and exact-GUID deleted-item recovery; treat as a secret |
 
 TautWeekly for Plex's core activity flow uses Tautulli. Direct Plex access is
@@ -27,6 +27,14 @@ slug to read provider-labelled ratings on `https://watch.plex.tv`; that public
 request receives no Plex token. Neither path searches by title or sends
 recipient identity or watch-history values. An absolute artwork URL on another
 host is also fetched without the Plex token.
+
+Posters and hero art can still succeed through Tautulli's image proxy when the
+direct Plex URL is unreachable. That does not prove that direct rating,
+background, or selected-logo metadata is available. v0.9.1 also uses
+Tautulli's single-item JSON exporter as a movie RT fallback; it requests only
+metadata level 1, disables media information, and does not request library/user
+individual files. Provider-free numbers and unavailable logo resources remain
+omitted rather than guessed.
 
 The [Tautulli `get_history` API](https://github.com/Tautulli/Tautulli/wiki/Tautulli-API-Reference#get_history)
 retains descriptive fields such as GUID/rating keys, titles, years, episode

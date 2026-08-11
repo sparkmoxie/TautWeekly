@@ -149,6 +149,34 @@ Browser preview is a structural check; the controlled TestEmail is authoritative
 for MIME, linked images, and the actual client. Retest after changing branding,
 assets, SMTP providers, or email clients.
 
+## Posters render but ratings, backgrounds, or logos do not
+
+These resources do not all use the same path. Posters and hero art can load
+through Tautulli's `pms_image_proxy` even when TautWeekly cannot connect to
+Plex Media Server directly. Provider-labelled ratings and selected clear logos
+may instead require direct Plex metadata or a compatible Tautulli item export.
+
+Update to v0.9.1 or newer if the log says that a rich export failed with HTTP
+400. Earlier builds incorrectly requested Tautulli's library/user-only
+`individual_files` option for a single `rating_key` export, then expected a
+ZIP where Tautulli correctly returns a rating-only JSON file. v0.9.1 follows
+the item-export contract and requests metadata level 1 with media information
+disabled.
+
+If the log also says every direct Plex request failed, verify
+`PlexServerUrl` from the TautWeekly runtime. In a separate Docker container,
+`localhost` and `127.0.0.1` refer to TautWeekly itself, not the Plex
+container or NAS host. Use a shared-network Plex service name or another
+trusted LAN URL reachable from inside the container, normally on port 32400,
+and keep `PlexToken` private. Re-run the platform verifier, PreviewAll, and a
+controlled SendTest after correcting the private configuration.
+
+TautWeekly omits a rating rather than guessing its provider. TV/episode IMDb
+scores therefore still require an IMDb-labelled source, and a logo is omitted
+when Plex/Tautulli has no selected logo resource. Do not post `config.json`,
+diagnostic JSON, generated previews, or full logs; share only sanitized warning
+text if further help is required.
+
 ## Deleted item still has no poster or metadata
 
 v0.8.3's Plex hosted-provider recovery is best-effort. Tautulli history may

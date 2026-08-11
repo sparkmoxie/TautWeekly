@@ -3,6 +3,8 @@ TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 
 v1.1.0 Portable
 ---------------
+- fixes Tautulli single-item RT fallback requests and parses rating-only JSON exports
+- limits that fallback to metadata level 1 with media information disabled
 - adds a schema-versioned, bounded pre-deletion metadata and poster cache under persistent data
 - reuses cached presentation assets in PreviewAll, SendTest, and normal sends after future deletion
 - defaults to 365 days, 1,000 items, and 256 MiB with atomic manifests and corruption recovery

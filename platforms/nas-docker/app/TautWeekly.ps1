@@ -2820,22 +2820,67 @@ function Find-DesignRtRatingsRecursive {
         return
     }
 
+    if ($Node -is [System.Collections.IEnumerable]) {
+        foreach ($child in $Node) {
+            Find-DesignRtRatingsRecursive `
+                -Node $child `
+                -Critic $Critic `
+                -Audience $Audience
+        }
+        return
+    }
+
     # Look for an object that itself represents a Plex Rating entry.
     try {
         $props = $Node.PSObject.Properties
         if ($null -ne $props) {
+            # Tautulli's item exporter serializes the selected Plex ratings as
+            # flat fields. Accept both its camelCase names and the snake_case
+            # shape returned by get_metadata without treating an unlabeled
+            # numeric rating as Rotten Tomatoes data.
+            $ratingImage = Get-OptionalStringProperty -InputObject $Node -Name "ratingImage"
+            if ([string]::IsNullOrWhiteSpace($ratingImage)) {
+                $ratingImage = Get-OptionalStringProperty -InputObject $Node -Name "rating_image"
+            }
+            $ratingValue = Get-OptionalStringProperty -InputObject $Node -Name "rating"
+            if ([string]::IsNullOrWhiteSpace($Critic.Value) -and
+                $ratingImage -like "rottentomatoes://image.rating.*") {
+                $Critic.Value = Convert-DesignRatingPercent $ratingValue
+            }
+
+            $audienceImage = Get-OptionalStringProperty -InputObject $Node -Name "audienceRatingImage"
+            if ([string]::IsNullOrWhiteSpace($audienceImage)) {
+                $audienceImage = Get-OptionalStringProperty -InputObject $Node -Name "audience_rating_image"
+            }
+            $audienceValue = Get-OptionalStringProperty -InputObject $Node -Name "audienceRating"
+            if ([string]::IsNullOrWhiteSpace($audienceValue)) {
+                $audienceValue = Get-OptionalStringProperty -InputObject $Node -Name "audience_rating"
+            }
+            if ([string]::IsNullOrWhiteSpace($Audience.Value) -and
+                $audienceImage -like "rottentomatoes://image.rating.*") {
+                $Audience.Value = Convert-DesignRatingPercent $audienceValue
+            }
+
             $imageProp = $props["image"]
             $valueProp = $props["value"]
 
             if ($null -ne $imageProp -and $null -ne $valueProp) {
                 $image = [string]$imageProp.Value
                 $value = $valueProp.Value
+                $type = Get-OptionalStringProperty -InputObject $Node -Name "type"
 
-                if ($image -like "rottentomatoes://image.rating.ripe*") {
-                    $Critic.Value = Convert-DesignRatingPercent $value
-                }
-                elseif ($image -like "rottentomatoes://image.rating.upright*") {
-                    $Audience.Value = Convert-DesignRatingPercent $value
+                if ($image -like "rottentomatoes://image.rating.*") {
+                    $percent = Convert-DesignRatingPercent $value
+                    if ($type -eq "critic" -or $image -match '(?i)\.(ripe|rotten)$') {
+                        if ([string]::IsNullOrWhiteSpace($Critic.Value)) {
+                            $Critic.Value = $percent
+                        }
+                    }
+                    elseif ($type -eq "audience" -or $image -match '(?i)\.(upright|spilled)$') {
+                        if ([string]::IsNullOrWhiteSpace($Audience.Value)) {
+                            $Audience.Value = $percent
+                        }
+                    }
                 }
             }
 
@@ -2850,14 +2895,6 @@ function Find-DesignRtRatingsRecursive {
     }
     catch { }
 
-    if ($Node -is [System.Collections.IEnumerable]) {
-        foreach ($child in $Node) {
-            Find-DesignRtRatingsRecursive `
-                -Node $child `
-                -Critic $Critic `
-                -Audience $Audience
-        }
-    }
 }
 
 function Get-DesignLogoExportSimple {
@@ -3133,7 +3170,7 @@ function Get-DesignRichExport {
 
             foreach ($field in @($fieldInfo.metadata_fields)) {
                 $name = [string]$field.field
-                if ($name -match '(?i)rating|logo') {
+                if ($name -match '(?i)rating' -or ($NeedLogo -and $name -match '(?i)logo')) {
                     if (-not $customFields.Contains($name)) {
                         $customFields.Add($name)
                     }
@@ -3141,29 +3178,35 @@ function Get-DesignRichExport {
             }
         }
         catch {
-            Write-Log "TautWeekly for Plex: could not enumerate exporter fields; using full metadata level only." "WARN"
+            Write-Log "TautWeekly for Plex: could not enumerate exporter fields; using the standard rating fields." "WARN"
         }
 
         $params = @{
             rating_key       = $RatingKey
             file_format      = "json"
-            metadata_level   = 9
+            # Tautulli metadata level 1 contains movie rating, ratingImage,
+            # audienceRating, and audienceRatingImage. Higher levels can add
+            # private media paths that this presentation fallback never needs.
+            metadata_level   = 1
             media_info_level = 0
             thumb_level      = 0
             art_level        = 0
             logo_level       = $(if ($NeedLogo) { 9 } else { 0 })
             squareArt_level  = 0
             theme_level      = 0
-            individual_files = "true"
+            # Tautulli rejects individual_files for a rating_key item export.
+            # Resource-bearing item exports are zipped automatically; a
+            # rating-only item export is returned as a single JSON file.
+            individual_files = "false"
         }
 
         if ($customFields.Count -gt 0) {
             $params.custom_fields = ($customFields -join ",")
         }
 
-        Write-Log ("TautWeekly for Plex: rich Tautulli export for {0} (RT ratings{1}; selected-logo level 9)..." -f `
+        Write-Log ("TautWeekly for Plex: Tautulli item export for {0} (RT rating fields{1})..." -f `
             $RatingKey,
-            $(if ($NeedLogo) { " + logo" } else { "" })
+            $(if ($NeedLogo) { " + selected logo level 9" } else { "" })
         )
 
         $request = Invoke-TautulliApi -Command "export_metadata" -Parameters $params
@@ -3211,44 +3254,61 @@ function Get-DesignRichExport {
             throw "Downloaded export was empty."
         }
 
-        $bytes = [IO.File]::ReadAllBytes($downloadPath)
-        if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x50 -or $bytes[1] -ne 0x4B) {
-            throw "Downloaded export was not a zip archive."
-        }
-
-        Remove-Item $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
-        New-Item -ItemType Directory -Force -Path $tmpRoot | Out-Null
-        Expand-Archive -Path $downloadPath -DestinationPath $tmpRoot -Force
-
         $critic = ""
         $audience = ""
+        $jsonFiles = @()
+        $exportedFiles = @()
+        $bytes = [IO.File]::ReadAllBytes($downloadPath)
+        $isZip = ($bytes.Length -ge 2 -and $bytes[0] -eq 0x50 -and $bytes[1] -eq 0x4B)
 
-        $jsonFiles = @(
-            Get-ChildItem -Path $tmpRoot -Recurse -File -Filter "*.json" -ErrorAction SilentlyContinue
-        )
+        if ($isZip) {
+            Remove-Item $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path $tmpRoot | Out-Null
+            Expand-Archive -Path $downloadPath -DestinationPath $tmpRoot -Force
 
-        foreach ($jsonFile in $jsonFiles) {
+            $exportedFiles = @(
+                Get-ChildItem -Path $tmpRoot -Recurse -File -ErrorAction SilentlyContinue
+            )
+            $jsonFiles = @($exportedFiles | Where-Object { $_.Extension -ieq ".json" })
+
+            foreach ($jsonFile in $jsonFiles) {
+                try {
+                    $parsed = Get-Content -Path $jsonFile.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+                    Find-DesignRtRatingsRecursive `
+                        -Node $parsed `
+                        -Critic ([ref]$critic) `
+                        -Audience ([ref]$audience)
+
+                    if (-not [string]::IsNullOrWhiteSpace($critic) -and
+                        -not [string]::IsNullOrWhiteSpace($audience)) {
+                        break
+                    }
+                }
+                catch { }
+            }
+        }
+        else {
             try {
-                $parsed = Get-Content -Path $jsonFile.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+                $parsed = Get-Content -Path $downloadPath -Raw -Encoding UTF8 | ConvertFrom-Json
                 Find-DesignRtRatingsRecursive `
                     -Node $parsed `
                     -Critic ([ref]$critic) `
                     -Audience ([ref]$audience)
-
-                if (-not [string]::IsNullOrWhiteSpace($critic) -and
-                    -not [string]::IsNullOrWhiteSpace($audience)) {
-                    break
-                }
             }
-            catch { }
+            catch {
+                throw "Downloaded item export was neither a ZIP archive nor valid JSON."
+            }
         }
 
         $result.RtCritic = $critic
         $result.RtAudience = $audience
 
         if ($NeedLogo) {
+            if (-not $isZip) {
+                throw "Tautulli returned rating JSON without the requested logo resource."
+            }
             $imageFiles = @(
-                Get-ChildItem -Path $tmpRoot -Recurse -File -ErrorAction SilentlyContinue |
+                $exportedFiles |
                 Where-Object {
                     $_.Extension -match '^\.(png|jpg|jpeg|webp|svg)$'
                 }
@@ -3291,10 +3351,8 @@ function Get-DesignRichExport {
             LogoExportLevel = $(if ($NeedLogo) { 9 } else { 0 })
             LogoFound = -not [string]::IsNullOrWhiteSpace($result.LogoSrc)
             JsonFiles = @($jsonFiles | ForEach-Object { $_.Name })
-            ExportedFiles = @(
-                Get-ChildItem -Path $tmpRoot -Recurse -File -ErrorAction SilentlyContinue |
-                ForEach-Object { $_.Name }
-            )
+            DownloadFormat = $(if ($isZip) { "zip" } else { "json" })
+            ExportedFiles = @($exportedFiles | ForEach-Object { $_.Name })
         }
 
         $diag | ConvertTo-Json -Depth 8 | Set-Content -Path $diagPath -Encoding UTF8
@@ -4268,7 +4326,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.9.0"
+                "User-Agent"      = "TautWeekly-for-Plex/0.9.1"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -4522,7 +4580,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.9.0"
+        "X-Plex-Version"           = "0.9.1"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 

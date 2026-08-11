@@ -6,6 +6,31 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-08-10
+
+### Fixed
+
+- Corrected the Tautulli fallback for movie Rotten Tomatoes ratings: item
+  exports no longer request the library-only `individual_files` option, and
+  rating-only downloads are parsed as JSON instead of being rejected for not
+  being ZIP archives.
+- Accepted Tautulli's flattened rating fields and Plex's nested rating entries,
+  including the Rotten/spilled low-score icon states. A sanitized integration
+  scenario now keeps direct Plex unavailable and requires the item-export
+  fallback to restore both critic and audience scores on every renderer.
+- Documented why posters can remain available through Tautulli's image proxy
+  while direct Plex ratings, backgrounds, or selected logos are unavailable,
+  and how Docker operators must provide a Plex URL reachable from inside the
+  TautWeekly container.
+
+### Security
+
+- Reduced the fallback from metadata level 9 to level 1 with media information
+  disabled. The temporary export requests only presentation rating fields and
+  cannot include library file locations or media-stream details.
+- Kept provider-free numeric values fail-closed: TautWeekly does not label an
+  unidentifiable rating as Rotten Tomatoes or IMDb.
+
 ## [0.9.0] - 2026-08-10
 
 ### Added
