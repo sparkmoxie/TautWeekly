@@ -23,7 +23,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   serialized response is shorter than 64 bytes.
 - Extended the sanitized direct-Plex-failure regression through SendTest and
   now decode the captured MIME message to require movie RT, show IMDb, and
-  their icons in the delivered HTML.
+  their icons in the delivered HTML. This follow-up correction was reported by
+  [@Rocknrolldoggie](https://github.com/Rocknrolldoggie) in
+  [#58](https://github.com/sparkmoxie/TautWeekly/issues/58).
 
 ### Security
 
