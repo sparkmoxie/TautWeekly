@@ -179,6 +179,12 @@ v0.9.2's test fixture incorrectly assumed a show export could identify IMDb
 through `ratingImage`; v0.9.4 accepts the maintained rating and audience field
 pairs and renders recognized IMDb, TMDB, or TVDB selected scores.
 
+If ratings work on Windows but not in Docker, that can mean Windows reached
+Plex directly while the container fell through to Tautulli; it does not imply
+that the packages maintain different rating renderers. v0.9.4 corrects that
+shared fallback, but the container's direct Plex warnings should still be
+investigated separately for backgrounds, selected logos, and richer metadata.
+
 If the log also says every direct Plex request failed, verify
 `PlexServerUrl` from the TautWeekly runtime. In a separate Docker container,
 `localhost` and `127.0.0.1` refer to TautWeekly itself, not the Plex
