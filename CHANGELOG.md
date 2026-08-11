@@ -6,6 +6,31 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-08-11
+
+### Fixed
+
+- Made Tautulli exporter-field discovery compatible with implementations that
+  require a non-null `sub_media_type` even though the API documents it as
+  optional.
+- Explicitly requested the provider-labelled `rating`, `ratingImage`,
+  `audienceRating`, and `audienceRatingImage` fields instead of relying on a
+  Tautulli version's metadata-level mapping when field discovery is unavailable.
+- Added the same item-export fallback for show IMDb ratings when Tautulli's
+  normal metadata response and direct/hosted Plex lookups do not provide one,
+  and display the recovered rating on the TV release card.
+- Stopped rejecting valid rating-only JSON exports merely because their
+  serialized response is shorter than 64 bytes.
+- Extended the sanitized direct-Plex-failure regression through SendTest and
+  now decode the captured MIME message to require movie RT, show IMDb, and
+  their icons in the delivered HTML.
+
+### Security
+
+- Kept the exporter fallback limited to rating presentation fields at metadata
+  level 1 with media information and file locations disabled. Unlabelled
+  numeric values still fail closed.
+
 ## [0.9.1] - 2026-08-10
 
 ### Fixed

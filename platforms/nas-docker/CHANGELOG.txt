@@ -3,6 +3,10 @@ TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 
 v1.2.0 Portable
 ---------------
+- makes Tautulli field discovery compatible and explicitly requests provider-labelled rating fields
+- accepts valid minimal rating-only JSON exports instead of rejecting responses under 64 bytes
+- displays recovered show IMDb ratings on TV release cards
+- verifies that SendTest delivers recovered RT and IMDb scores in the decoded MIME message
 - fixes Tautulli single-item RT fallback requests and parses rating-only JSON exports
 - limits that fallback to metadata level 1 with media information disabled
 - adds a schema-versioned, bounded pre-deletion metadata and poster cache under persistent data

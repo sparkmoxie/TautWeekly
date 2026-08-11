@@ -26,6 +26,7 @@ REQUIRED_HTML = (
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("message", type=Path)
+    parser.add_argument("--require-html", action="append", default=[])
     args = parser.parse_args()
 
     message = BytesParser(policy=policy.default).parsebytes(args.message.read_bytes())
@@ -37,7 +38,7 @@ def main() -> int:
         raise AssertionError(f"expected one plain-text MIME part, found {len(plain_parts)}")
 
     html = html_parts[0].get_content()
-    for marker in REQUIRED_HTML:
+    for marker in (*REQUIRED_HTML, *args.require_html):
         if marker not in html:
             raise AssertionError(f"delivered HTML lost dark-theme marker: {marker}")
     for shorthand in ("background:#0f0f0f", "background:#181818"):

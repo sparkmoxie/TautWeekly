@@ -163,6 +163,14 @@ ZIP where Tautulli correctly returns a rating-only JSON file. v0.9.1 follows
 the item-export contract and requests metadata level 1 with media information
 disabled.
 
+Update to v0.9.2 or newer if the log says TautWeekly could not enumerate
+exporter fields or v0.9.1 still produces no movie ratings. Some Tautulli
+implementations require a non-null `sub_media_type` despite documenting it as
+optional. v0.9.2 sends that compatibility value and explicitly requests only
+the four provider-labelled rating fields. It applies the item-export fallback
+to movie RT and show IMDb, and validates controlled SendTest delivery
+separately from browser preview.
+
 If the log also says every direct Plex request failed, verify
 `PlexServerUrl` from the TautWeekly runtime. In a separate Docker container,
 `localhost` and `127.0.0.1` refer to TautWeekly itself, not the Plex

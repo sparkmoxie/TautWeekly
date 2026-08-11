@@ -1,6 +1,10 @@
 TautWeekly for Plex native Linux platform changelog
 
 Unreleased
+- Makes Tautulli field discovery compatible and explicitly requests provider-labelled rating fields.
+- Accepts valid minimal rating-only JSON exports instead of rejecting responses under 64 bytes.
+- Displays recovered show IMDb ratings on TV release cards.
+- Verifies that SendTest delivers recovered RT and IMDb scores in the decoded MIME message.
 - Fixes Tautulli single-item RT fallback requests and parses rating-only JSON exports.
 - Limits that fallback to metadata level 1 with media information disabled.
 - Preserves the dark-first email palette with dark-only metadata, explicit longhand backgrounds, and table color fallbacks.
