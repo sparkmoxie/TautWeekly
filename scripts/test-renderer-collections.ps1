@@ -20,6 +20,7 @@ $rendererPaths = @(
 $requiredFunctions = @(
     'Get-OptionalStringProperty',
     'Convert-DesignRatingPercent',
+    'Find-DesignRtRatingsRecursive',
     'ConvertTo-DesignGenreList',
     'Add-DesignRatingMetadata',
     'Get-PlexMetadataProviderBaseUrl',
@@ -86,6 +87,51 @@ foreach ($relativePath in $rendererPaths) {
 
         Invoke-Expression $definition.Extent.Text
     }
+
+    $flatCritic = ''
+    $flatAudience = ''
+    Find-DesignRtRatingsRecursive `
+        -Node ([PSCustomObject]@{
+            rating = '5.3'
+            ratingImage = 'rottentomatoes://image.rating.rotten'
+            audienceRating = '4.0'
+            audienceRatingImage = 'rottentomatoes://image.rating.spilled'
+        }) `
+        -Critic ([ref]$flatCritic) `
+        -Audience ([ref]$flatAudience)
+    Assert-True ($flatCritic -eq '53' -and $flatAudience -eq '40') "$relativePath did not parse Tautulli's flattened low-score RT export"
+
+    $nestedCritic = ''
+    $nestedAudience = ''
+    Find-DesignRtRatingsRecursive `
+        -Node ([PSCustomObject]@{
+            Rating = @(
+                [PSCustomObject]@{
+                    image = 'rottentomatoes://image.rating.rotten'
+                    type = 'critic'
+                    value = '5.3'
+                },
+                [PSCustomObject]@{
+                    image = 'rottentomatoes://image.rating.spilled'
+                    type = 'audience'
+                    value = '4.0'
+                }
+            )
+        }) `
+        -Critic ([ref]$nestedCritic) `
+        -Audience ([ref]$nestedAudience)
+    Assert-True ($nestedCritic -eq '53' -and $nestedAudience -eq '40') "$relativePath did not parse nested low-score RT entries"
+
+    $unlabelledCritic = ''
+    $unlabelledAudience = ''
+    Find-DesignRtRatingsRecursive `
+        -Node ([PSCustomObject]@{ rating = '9.9'; audienceRating = '9.8' }) `
+        -Critic ([ref]$unlabelledCritic) `
+        -Audience ([ref]$unlabelledAudience)
+    Assert-True (
+        [string]::IsNullOrWhiteSpace($unlabelledCritic) -and
+        [string]::IsNullOrWhiteSpace($unlabelledAudience)
+    ) "$relativePath mislabeled provider-free numeric ratings as Rotten Tomatoes"
 
     # Provider-only collection tests isolate the legacy best-effort path. The
     # persistent cache has its own exact-ID, privacy, and lifecycle suite.

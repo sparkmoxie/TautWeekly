@@ -1,6 +1,8 @@
 TautWeekly for Plex native Linux platform changelog
 
 Unreleased
+- Fixes Tautulli single-item RT fallback requests and parses rating-only JSON exports.
+- Limits that fallback to metadata level 1 with media information disabled.
 - Preserves the dark-first email palette with dark-only metadata, explicit longhand backgrounds, and table color fallbacks.
 - Supplies Plex's required deleted-history title and episode-index match context, validates responses, and keeps missing artwork nonfatal.
 - Retries empty modern Plex and legacy TMDB/TVDB exact matches through Plex's current provider POST contract.

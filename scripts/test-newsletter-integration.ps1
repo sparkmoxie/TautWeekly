@@ -44,7 +44,7 @@ foreach ($engine in $engines) {
         continue
     }
 
-    foreach ($scenario in @('active', 'quiet', 'tv-only', 'optional-hero-metadata') + $deletedHistoryScenarios) {
+    foreach ($scenario in @('active', 'quiet', 'tv-only', 'optional-hero-metadata', 'rating-export-fallback') + $deletedHistoryScenarios) {
         $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-integration-' + [Guid]::NewGuid().ToString('N'))
         $appRoot = Join-Path $tempRoot 'app'
         $dataRoot = Join-Path $tempRoot 'data'
@@ -247,6 +247,12 @@ foreach ($engine in $engines) {
                 Assert-True (([regex]::Matches($normalHtml, 'Selected Show')).Count -ge 2) "$($engine.Name)/$scenario removed the TV release after using Trending as the hero."
             }
 
+            if ($scenario -eq 'rating-export-fallback') {
+                Assert-True ($normalHtml.Contains('53%') -and $normalHtml.Contains('40%')) "$($engine.Name)/$scenario did not render flattened RT ratings from Tautulli's item export."
+                Assert-True ($previewLog.Contains('Design rich export result: RT critic=53%, audience=40')) "$($engine.Name)/$scenario did not report the successful JSON rating fallback."
+                Assert-True (-not $previewLog.Contains('selected-logo level 9')) "$($engine.Name)/$scenario mislabeled a rating-only item export as a logo export."
+            }
+
             if ($scenario -in $providerRecoveryScenarios) {
                 Assert-True ($previewLog.Contains('recovered an exact movie match through the provider POST contract')) "$($engine.Name)/$scenario PreviewAll did not report the provider-contract recovery."
                 Assert-True ($previewLog.Contains('recovered an exact show match through the provider POST contract')) "$($engine.Name)/$scenario PreviewAll did not report the TV provider-contract recovery."
@@ -292,6 +298,18 @@ foreach ($engine in $engines) {
             }
 
             $calls = @(Get-Content $callLog | ForEach-Object { $_ | ConvertFrom-Json })
+            if ($scenario -eq 'rating-export-fallback') {
+                $ratingExportCalls = @($calls | Where-Object {
+                    $null -ne $_.query -and
+                    $null -ne $_.query.PSObject.Properties['cmd'] -and
+                    [string]$_.query.cmd -eq 'export_metadata' -and
+                    [string]$_.query.logo_level -eq '0'
+                })
+                Assert-True ($ratingExportCalls.Count -eq 1) "$($engine.Name)/$scenario issued an unexpected number of item exports."
+                Assert-True ([string]$ratingExportCalls[0].query.individual_files -eq 'false') "$($engine.Name)/$scenario requested invalid individual files for a rating-key export."
+                Assert-True ([string]$ratingExportCalls[0].query.metadata_level -eq '1') "$($engine.Name)/$scenario requested more Tautulli metadata than the rating fallback needs."
+                Assert-True ([string]$ratingExportCalls[0].query.media_info_level -eq '0') "$($engine.Name)/$scenario requested private media information."
+            }
             $mediaCalls = @($calls | Where-Object {
                 $null -ne $_.query.PSObject.Properties['cmd'] -and
                 [string]$_.query.cmd -in @('get_history', 'get_recently_added')

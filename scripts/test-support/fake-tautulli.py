@@ -21,8 +21,8 @@ DELETED_HISTORY_SCENARIOS = (
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
     old = now - (30 * 86400)
-    movie_added = now if scenario in ("active", "optional-hero-metadata", "cache-prime") else old
-    tv_added = now if scenario in ("active", "tv-only", "optional-hero-metadata", "cache-prime") else old
+    movie_added = now if scenario in ("active", "optional-hero-metadata", "rating-export-fallback", "cache-prime") else old
+    tv_added = now if scenario in ("active", "tv-only", "optional-hero-metadata", "rating-export-fallback", "cache-prime") else old
     rows = {
         "10": [
             {
@@ -546,7 +546,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if parsed.path.startswith("/library/metadata/"):
             scenario = self.current_scenario()
-            if scenario == "optional-hero-metadata" or scenario in DELETED_HISTORY_SCENARIOS:
+            if scenario in ("optional-hero-metadata", "rating-export-fallback") or scenario in DELETED_HISTORY_SCENARIOS:
                 self.write_json({"error": "sanitized missing Plex metadata"}, status=404)
                 return
             self.write_json({"MediaContainer": {"size": 0, "Metadata": []}})
@@ -557,6 +557,24 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         command = query.get("cmd", "")
+        if command == "download_export" and self.current_scenario() == "rating-export-fallback":
+            payload = json.dumps(
+                [
+                    {
+                        "rating": "5.3",
+                        "ratingImage": "rottentomatoes://image.rating.rotten",
+                        "audienceRating": "4.0",
+                        "audienceRatingImage": "rottentomatoes://image.rating.spilled",
+                    }
+                ]
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+
         if command == "pms_image_proxy":
             rating_key = query.get("rating_key", "")
             is_generic_probe = not rating_key or rating_key.startswith("tautulli-default-poster-")
@@ -647,6 +665,18 @@ class Handler(BaseHTTPRequestHandler):
                 # absent optional hero field without violating strict mode.
                 self.api_success({"media_type": "show"})
                 return
+            if scenario == "rating-export-fallback" and not is_episode and not is_show:
+                self.api_success(
+                    {
+                        "rating_key": key,
+                        "media_type": "movie",
+                        "title": "Selected Movie",
+                        "year": "2026",
+                        "summary": "Virtual metadata without selected provider ratings.",
+                        "genres": ["Drama", "Mystery"],
+                    }
+                )
+                return
             title = "Selected Show" if is_show else ("Selected Episode" if is_episode else "Selected Movie")
             media_type = "show" if is_show else ("episode" if is_episode else "movie")
             self.api_success(
@@ -671,7 +701,25 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if command == "export_metadata":
+            if self.current_scenario() == "rating-export-fallback":
+                if query.get("individual_files", "").lower() != "false":
+                    self.write_json(
+                        {
+                            "response": {
+                                "result": "error",
+                                "message": "Individual file export is only allowed for library or user export.",
+                                "data": {},
+                            }
+                        },
+                        status=400,
+                    )
+                    return
+                self.api_success({"export_id": 58})
+                return
             self.api_success({"export_id": 0})
+            return
+        if command == "get_exports_table" and self.current_scenario() == "rating-export-fallback":
+            self.api_success({"data": [{"export_id": 58, "complete": 1}]})
             return
         if command == "delete_export":
             self.api_success({})
@@ -690,6 +738,7 @@ def main() -> None:
             "quiet",
             "tv-only",
             "optional-hero-metadata",
+            "rating-export-fallback",
             "deleted-history-metadata",
             "deleted-history-legacy-guid",
             "cache-prime",
