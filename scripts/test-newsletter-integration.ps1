@@ -54,6 +54,10 @@ foreach ($engine in $engines) {
         $scenarioState = Join-Path $tempRoot 'scenario.txt'
         $stdout = Join-Path $tempRoot 'renderer.stdout.txt'
         $stderr = Join-Path $tempRoot 'renderer.stderr.txt'
+        $plexVerifyStdout = Join-Path $tempRoot 'plex-verify.stdout.txt'
+        $plexVerifyStderr = Join-Path $tempRoot 'plex-verify.stderr.txt'
+        $plexRejectStdout = Join-Path $tempRoot 'plex-reject.stdout.txt'
+        $plexRejectStderr = Join-Path $tempRoot 'plex-reject.stderr.txt'
         $primeStdout = Join-Path $tempRoot 'prime.stdout.txt'
         $primeStderr = Join-Path $tempRoot 'prime.stderr.txt'
         $serverStdout = Join-Path $tempRoot 'server.stdout.txt'
@@ -151,6 +155,13 @@ foreach ($engine in $engines) {
                 $outputRoot = Join-Path $appRoot 'output'
             }
             $config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $configPath -Encoding UTF8
+            $invalidPlexToken = 'virtual-invalid-token-do-not-print'
+            $invalidPlexConfigPath = Join-Path $tempRoot 'invalid-plex-config.json'
+            if ($scenario -eq 'active') {
+                $invalidPlexConfig = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                $invalidPlexConfig.PlexToken = $invalidPlexToken
+                $invalidPlexConfig | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $invalidPlexConfigPath -Encoding UTF8
+            }
 
             $oldDataRoot = $env:TAUTWEEKLY_DATA_DIR
             $oldConfig = $env:TAUTWEEKLY_CONFIG
@@ -164,6 +175,28 @@ foreach ($engine in $engines) {
                 if ($scenario -in $deletedHistoryScenarios) {
                     $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = $baseUrl + '/hosted'
                     $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL = $baseUrl + '/watch'
+                }
+                $plexVerifyProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
+                    '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
+                    '-RendererPath', (Join-Path $appRoot $engine.Renderer), '-ConfigPath', $configPath,
+                    '-UserId', '1', '-Mode', 'VerifyPlex'
+                ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $plexVerifyStdout -RedirectStandardError $plexVerifyStderr
+                if ($plexVerifyProcess.ExitCode -ne 0) {
+                    throw "$($engine.Name)/$scenario direct Plex verification failed ($($plexVerifyProcess.ExitCode)).`nSTDOUT:`n$(Get-Content $plexVerifyStdout -Raw)`nSTDERR:`n$(Get-Content $plexVerifyStderr -Raw)"
+                }
+                $plexVerifyLog = Get-Content $plexVerifyStdout -Raw
+                Assert-True ($plexVerifyLog.Contains('Direct Plex verification passed: identity HTTP 200; authenticated library HTTP 200.')) "$($engine.Name)/$scenario did not verify direct Plex identity and authenticated library access."
+                if ($scenario -eq 'active') {
+                    $plexRejectProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
+                        '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
+                        '-RendererPath', (Join-Path $appRoot $engine.Renderer), '-ConfigPath', $invalidPlexConfigPath,
+                        '-UserId', '1', '-Mode', 'VerifyPlex'
+                    ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $plexRejectStdout -RedirectStandardError $plexRejectStderr
+                    Assert-True ($plexRejectProcess.ExitCode -eq 2) "$($engine.Name) accepted a rejected direct Plex token or returned the wrong failure code ($($plexRejectProcess.ExitCode))."
+                    $plexRejectLog = (Get-Content $plexRejectStdout -Raw) + (Get-Content $plexRejectStderr -Raw)
+                    Assert-True ($plexRejectLog.Contains('Direct Plex verification failed (HTTP 401).')) "$($engine.Name) did not report the sanitized direct Plex rejection status."
+                    Assert-True (-not $plexRejectLog.Contains($invalidPlexToken)) "$($engine.Name) exposed the rejected Plex token in verification output."
+                    Assert-True (-not $plexRejectLog.Contains($baseUrl)) "$($engine.Name) exposed the private Plex URL in verification output."
                 }
                 if ($scenario -eq $cacheScenario) {
                     $primeProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
@@ -304,6 +337,8 @@ foreach ($engine in $engines) {
             }
 
             $calls = @(Get-Content $callLog | ForEach-Object { $_ | ConvertFrom-Json })
+            Assert-True (@($calls | Where-Object { [string]$_.path -eq '/identity' -and $_.has_plex_token }).Count -gt 0) "$($engine.Name)/$scenario did not authenticate the direct Plex identity verification request."
+            Assert-True (@($calls | Where-Object { [string]$_.path -eq '/library/sections' -and $_.has_plex_token }).Count -gt 0) "$($engine.Name)/$scenario did not authenticate the direct Plex library verification request."
             if ($scenario -eq 'rating-export-fallback') {
                 $ratingFieldCalls = @($calls | Where-Object {
                     $null -ne $_.query -and

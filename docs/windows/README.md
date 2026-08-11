@@ -32,12 +32,21 @@ Windows machine.
 4. Run `00-SETUP-FIRST.bat`.
 5. Enter your own Tautulli, branding, SMTP, test-recipient, and schedule values.
    After the Tautulli URL and API key, choose the active movie/TV libraries to
-   include, then select any users to exclude. The direct Plex URL and token are
-   optional.
+   include, then select any users to exclude. Direct Plex remains optional for
+   the core Tautulli activity flow, but supplying its URL and administrator
+   token is recommended for complete movie RT critic/audience ratings,
+   exact-episode IMDb ratings, backgrounds, and selected logos.
 6. Run `01-VERIFY-SETUP.bat` and correct every failure before continuing.
 
 The setup wizard creates `config.json`. That file is deliberately ignored by
 git and must remain private.
+
+Verification exercises the same resolved direct-Plex connection used by the
+newsletter. It sends the token only as a request header and checks Plex
+identity plus authenticated library access. An explicitly configured or
+auto-discovered connection that cannot be reached or authenticated fails
+verification. If Windows cannot resolve a URL/token pair, verification warns
+that TautWeekly will use Tautulli's selected/flattened rating fallbacks.
 
 ## Safe acceptance sequence
 

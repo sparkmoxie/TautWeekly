@@ -176,9 +176,13 @@ $serverLabel = Read-Default "Small header label" "PLEX"
 $plexWebUrl = Read-Default "Open Plex button URL" "https://app.plex.tv/desktop/"
 
 Write-Host ""
-Write-Host "Optional direct Plex settings" -ForegroundColor Cyan
-Write-Host "These improve clearLogo/metadata support, especially when Plex is remote or"
-Write-Host "the scheduled task runs as SYSTEM. Leave blank to let TautWeekly for Plex auto-discover."
+Write-Host "Recommended direct Plex settings" -ForegroundColor Cyan
+Write-Host "Tautulli supplies core activity and fallback metadata. Direct Plex provides the"
+Write-Host "complete alternate rating set used for movie RT critic/audience scores, exact-episode"
+Write-Host "IMDb ratings, backgrounds, and selected logos. Enter both values for predictable results,"
+Write-Host "especially when Plex is remote or the scheduled task runs as SYSTEM. Leaving them blank"
+Write-Host "uses best-effort Windows/Tautulli discovery and may limit the newsletter to flattened"
+Write-Host "Tautulli ratings. Verification tests the resolved connection without printing the token."
 $plexServerUrl = Read-Default "Direct Plex server URL, e.g. http://plex.example.test:32400"
 $plexToken = Read-SecretPlainText "Plex token (optional; press Enter for auto-discovery)" $true
 

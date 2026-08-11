@@ -1,5 +1,5 @@
 ﻿param(
-    [ValidateSet("ListUsers","Preview","PreviewAll","SendTest","SendTestAll","SendWelcome","SendAll")]
+    [ValidateSet("ListUsers","VerifyPlex","Preview","PreviewAll","SendTest","SendTestAll","SendWelcome","SendAll")]
     [string]$Mode = "ListUsers",
 
     [string]$UserId = "",
@@ -2209,6 +2209,68 @@ function Invoke-DesignPlexJson {
             Write-Log "TautWeekly for Plex direct Plex request failed for $Path`: $($_.Exception.Message)" "WARN"
             return $null
         }
+    }
+}
+
+function Test-TautWeeklyDirectPlexConnection {
+    $ctx = Get-DesignPlexContext
+    if (-not $ctx.Available) {
+        Write-Log "Direct Plex verification skipped because no URL/token pair could be resolved. Tautulli-only fallback remains available, but complete movie RT critic/audience ratings, exact-episode IMDb ratings, backgrounds, and selected logos may be unavailable." "WARN"
+        return 3
+    }
+
+    try {
+        $serverUri = $null
+        if (-not [Uri]::TryCreate([string]$ctx.ServerUrl, [UriKind]::Absolute, [ref]$serverUri) -or
+            $serverUri.Scheme -notin @("http", "https")) {
+            throw "PlexServerUrl must be an absolute HTTP or HTTPS URL."
+        }
+        if (-not [string]::IsNullOrWhiteSpace($serverUri.UserInfo) -or
+            -not [string]::IsNullOrWhiteSpace($serverUri.Query) -or
+            -not [string]::IsNullOrWhiteSpace($serverUri.Fragment)) {
+            throw "PlexServerUrl must not contain credentials, a query string, or a fragment."
+        }
+        if ($serverUri.IsLoopback) {
+            Write-Log "PlexServerUrl resolves to this container's loopback. Use a shared-network Plex service name or another trusted LAN URL when Plex runs outside TautWeekly." "WARN"
+        }
+
+        $headers = @{
+            "Accept"       = "application/json"
+            "X-Plex-Token" = [string]$ctx.Token
+        }
+        $identity = Invoke-WebRequest `
+            -Uri ($ctx.ServerUrl + "/identity") `
+            -Headers $headers `
+            -Method Get `
+            -TimeoutSec 15 `
+            -UseBasicParsing
+        $libraries = Invoke-WebRequest `
+            -Uri ($ctx.ServerUrl + "/library/sections") `
+            -Headers $headers `
+            -Method Get `
+            -TimeoutSec 15 `
+            -UseBasicParsing
+
+        if ([int]$identity.StatusCode -ne 200 -or [int]$libraries.StatusCode -ne 200 -or
+            [string]$identity.Content -notmatch '(?i)"MediaContainer"|<MediaContainer' -or
+            [string]$libraries.Content -notmatch '(?i)"MediaContainer"|<MediaContainer') {
+            throw "Direct Plex verification received an unexpected response."
+        }
+
+        Write-Log ("Direct Plex verification passed: identity HTTP {0}; authenticated library HTTP {1}." -f `
+            [int]$identity.StatusCode, [int]$libraries.StatusCode)
+        return 0
+    }
+    catch {
+        $safeFailure = "request or response validation failed"
+        try {
+            if ($null -ne $_.Exception.Response -and $null -ne $_.Exception.Response.StatusCode) {
+                $safeFailure = "HTTP " + [int]$_.Exception.Response.StatusCode
+            }
+        }
+        catch { }
+        Write-Log ("Direct Plex verification failed ({0}). Confirm the private PlexServerUrl and PlexToken are valid and reachable from inside this runtime." -f $safeFailure) "ERROR"
+        return 2
     }
 }
 
@@ -4556,7 +4618,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.9.5"
+                "User-Agent"      = "TautWeekly-for-Plex/0.9.6"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -4810,7 +4872,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.9.5"
+        "X-Plex-Version"           = "0.9.6"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 
@@ -7224,6 +7286,13 @@ function Get-NewsletterSubject {
     }
 
     return "$($User.FriendlyName), your $deliveryDay Plex drop is here 🍿"
+}
+
+# ---------------------------------------------------------------------------
+# MODE: VERIFY DIRECT PLEX
+# ---------------------------------------------------------------------------
+if ($Mode -eq "VerifyPlex") {
+    exit (Test-TautWeeklyDirectPlexConnection)
 }
 
 # ---------------------------------------------------------------------------

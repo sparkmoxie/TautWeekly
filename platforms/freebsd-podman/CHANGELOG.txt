@@ -1,6 +1,9 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Recommends direct Plex during setup for full rating and artwork fidelity while preserving Tautulli-only fallback operation.
+- Documents that verification tests the renderer's resolved direct Plex URL/token through identity and authenticated library requests.
+- Explains the container-network boundary and keeps the Plex token out of URLs, process arguments, and verification output.
 - Renders recognized selected IMDb, TMDB, and TVDB ratings from either Tautulli rating field pair.
 - Makes Tautulli field discovery compatible and explicitly requests provider-labelled rating fields.
 - Accepts valid minimal rating-only JSON exports instead of rejecting responses under 64 bytes.

@@ -3,6 +3,9 @@ TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 
 v1.1.0 Portable
 ---------------
+- recommends direct Plex during setup for full rating and artwork fidelity while preserving Tautulli-only fallback operation
+- verifies the renderer's resolved direct Plex URL/token through identity and authenticated library requests before Preview or SendTest
+- explains the container-network boundary and keeps the Plex token out of URLs, child-process command lines, and verification output
 - prefers movie RT across every supported fallback and uses labelled IMDb only when RT is wholly unavailable
 - limits TV release-row ratings to IMDb tied to each exact episode; TMDB/TVDB and show scores are not substituted
 - parses recognized selected IMDb, TMDB, and TVDB values from either Tautulli rating field pair without treating them as preferred media ratings

@@ -12,6 +12,9 @@ Current source baseline: **1.0.3**.
 - An Intel or Apple silicon Mac.
 - Docker Desktop with Docker Compose available in Terminal.
 - Network access from Docker to Tautulli and an SMTP STARTTLS endpoint.
+- Network access from Docker to Plex is recommended for complete movie RT
+  critic/audience ratings, exact-episode IMDb ratings, backgrounds, and
+  selected logos.
 - A Tautulli API key.
 - A permanent project directory writable by the current macOS user.
 
@@ -42,12 +45,20 @@ For software running directly on the Mac, Docker Desktop exposes the host as
 
 ```text
 http://host.docker.internal:8181   # Tautulli
-http://host.docker.internal:32400  # optional direct Plex URL
+http://host.docker.internal:32400  # recommended direct Plex URL
 ```
 
 For another server, use a resolvable hostname such as
 `http://media.example.test:8181`. For a Tautulli container on the same
 user-defined Docker network, use its service name.
+
+Direct Plex is optional only for the core Tautulli activity flow. Enter its URL
+and administrator token during setup for full newsletter fidelity. The URL must
+work from Docker, not only from macOS. `verify` checks Plex `/identity` and
+authenticated `/library/sections` with the token kept in a request header. A
+resolved but unusable connection fails verification; if no URL/token pair can
+be resolved, verification warns that selected/flattened Tautulli ratings and
+other fallbacks will be used.
 
 ## Safe acceptance sequence
 

@@ -6,6 +6,28 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-08-11
+
+### Fixed
+
+- Made direct Plex a clearly recommended setup step for full rating and artwork
+  fidelity across Windows, NAS/Docker, macOS, native Linux, and
+  FreeBSD/Podman. The guides now distinguish Tautulli-only fallback operation
+  from the direct Plex path used for alternate RT values, exact-episode IMDb,
+  backgrounds, and selected logos.
+- Extended setup verification beyond Tautulli: it now tests the same resolved
+  direct Plex URL and token that the renderer will use, including both the
+  public identity endpoint and an authenticated library request. Unreachable,
+  unauthorized, or invalid configured connections fail before Preview or
+  SendTest; an entirely absent optional connection produces a reduced-fidelity
+  warning.
+
+### Security
+
+- Kept the Plex token in the request header only. Verification does not place
+  it in a URL, child-process command line, or status output, and does not write
+  Plex responses or private server details to disk.
+
 ## [0.9.5] - 2026-08-11
 
 ### Fixed

@@ -76,6 +76,12 @@ setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
   RT value is available. TV release episode rows display only IMDb scores tied
   to the exact episode; show, TMDB, and TVDB scores are not substituted.
   Unlabeled and unknown-provider values remain omitted.
+- Tautulli remains the required activity source, but direct Plex is recommended
+  for the complete alternate rating set, exact-episode metadata, backgrounds,
+  and selected logos. Every setup wizard explains this boundary. The platform
+  verifier tests the resolved Plex URL/token with token-safe identity and
+  authenticated-library requests; an unreachable configured connection fails
+  verification before Preview or SendTest.
 - A private pre-deletion cache stores only the minimum reusable presentation
   record for a live item: exact stable GUID and media type, title/year/summary,
   up to eight genres, displayed ratings, one poster, hashes, and timestamps.

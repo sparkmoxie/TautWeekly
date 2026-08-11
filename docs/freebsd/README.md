@@ -13,6 +13,8 @@ service system and keeps configuration, state, generated output, and backups in
 - Root access through `sudo`, `doas`, or a root shell.
 - The configured FreeBSD package repository and internet access to GHCR.
 - FreeBSD Linux emulation and Podman; the installer enables both.
+- Network access from the Podman container to Plex is recommended for complete
+  ratings, backgrounds, and selected logos.
 
 FreeBSD documents the Podman services, automatic container startup, and Linux
 container execution in the
@@ -57,6 +59,15 @@ needed, enables and starts FreeBSD Linux emulation and the Podman service,
 creates an unprivileged numeric data owner, installs the `rc.d` integration,
 pulls the public GHCR image, and starts the container. It preserves an existing
 settings file and private data directory.
+
+Setup asks for a direct Plex URL and administrator token. They remain optional
+for the core Tautulli activity flow, but are recommended for complete movie RT
+critic/audience ratings, exact-episode IMDb ratings, backgrounds, and selected
+logos. The URL must work from the Podman Linux container; its localhost is not
+the FreeBSD host or a separate Plex service. `sudo tautweekly verify` checks
+Plex `/identity` plus authenticated `/library/sections` without printing the
+token. A resolved but unusable connection fails verification; an unresolved
+pair emits a Tautulli-only fallback warning.
 
 Review the roster and every mail state before enabling automatic sends:
 
