@@ -1,6 +1,13 @@
 TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 ================================
 
+v1.1.2 Portable
+---------------
+- explicitly requests Plex's optional Rating element when Tautulli exposes only the selected IMDb/TMDB score
+- restores available movie RT critic/audience values and exact-episode IMDb without changing provider-priority or icon behavior
+- adds a sanitized cross-platform regression for default-versus-optional Plex metadata responses
+- identifies Plex Movie library Ratings Source > Rotten Tomatoes and refreshed metadata as prerequisites for intended RT output
+
 v1.1.1 Portable
 ---------------
 - runs every Docker exec helper through the configured non-root PUID/PGID

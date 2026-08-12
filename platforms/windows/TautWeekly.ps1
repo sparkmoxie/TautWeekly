@@ -11,7 +11,7 @@
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex Portable v1.8.0 — production newsletter engine.
+# TautWeekly for Plex Portable v1.8.1 — production newsletter engine.
 # Includes validated production renderer changes through v1.5.14 plus portable
 # server, SMTP, schedule, preview, and safety controls.
 Set-StrictMode -Version Latest
@@ -2364,7 +2364,15 @@ function Get-DesignPlexMetadata {
         return $script:DesignPlexMetadataCache[$RatingKey]
     }
 
-    $raw = Invoke-DesignPlexJson -Path ("/library/metadata/" + [Uri]::EscapeDataString($RatingKey))
+    # Rating[] is optional, and its name collides case-insensitively with the
+    # scalar rating field in PowerShell's JSON object model. Request the array
+    # and omit that redundant scalar; Tautulli already retains the selected
+    # provider fallback separately.
+    $raw = Invoke-DesignPlexJson -Path (
+        "/library/metadata/" +
+        [Uri]::EscapeDataString($RatingKey) +
+        "?includeOptionalElements=Rating&excludeFields=rating"
+    )
     $meta = $null
 
     if ($null -ne $raw -and $null -ne $raw.PSObject.Properties["MediaContainer"]) {
@@ -2442,7 +2450,9 @@ function Get-DesignEpisodeImdbRating {
     if ([string]::IsNullOrWhiteSpace($result)) {
         try {
             $xml = Invoke-DesignPlexLegacyXml -Path (
-                "/library/metadata/" + [Uri]::EscapeDataString($RatingKey)
+                "/library/metadata/" +
+                [Uri]::EscapeDataString($RatingKey) +
+                "?includeOptionalElements=Rating"
             )
 
             if ($null -ne $xml) {
@@ -4652,7 +4662,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.9.6"
+                "User-Agent"      = "TautWeekly-for-Plex/0.9.8"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -4906,7 +4916,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.9.6"
+        "X-Plex-Version"           = "0.9.8"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 

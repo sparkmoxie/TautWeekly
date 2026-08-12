@@ -1,3 +1,3 @@
-TautWeekly for Plex Portable v1.8.0
+TautWeekly for Plex Portable v1.8.1
 Platform: Windows PowerShell 5.1+
-Feature: bounded pre-deletion presentation metadata and artwork cache
+Feature: explicit optional Plex Rating metadata recovery

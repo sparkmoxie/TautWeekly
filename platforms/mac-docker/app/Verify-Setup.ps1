@@ -153,6 +153,7 @@ elseif ($directPlexExit -ne 0) {
 }
 else {
     OK "Direct Plex identity and authenticated library requests succeeded"
+    Write-Host "[INFO] Reachability does not select a movie rating provider. For RT output, each Plex Movie library must use Advanced > Ratings Source > Rotten Tomatoes and have refreshed metadata."
 }
 
 try {
@@ -259,7 +260,7 @@ try {
 }
 catch {
     FAIL "preview asset web check failed: $($_.Exception.Message)"
-    WARN "Inspect ./tautweekly.sh logs and confirm the container was recreated from v1.1.1."
+    WARN "Inspect ./tautweekly.sh logs and confirm the container was recreated from v1.1.2."
     exit 1
 }
 

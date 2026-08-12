@@ -21,8 +21,8 @@ DELETED_HISTORY_SCENARIOS = (
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
     old = now - (30 * 86400)
-    movie_added = now if scenario in ("active", "optional-hero-metadata", "rating-export-fallback", "cache-prime") else old
-    tv_added = now if scenario in ("active", "tv-only", "optional-hero-metadata", "rating-export-fallback", "cache-prime") else old
+    movie_added = now if scenario in ("active", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "cache-prime") else old
+    tv_added = now if scenario in ("active", "tv-only", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "cache-prime") else old
     rows = {
         "10": [
             {
@@ -553,6 +553,39 @@ class Handler(BaseHTTPRequestHandler):
 
         if parsed.path.startswith("/library/metadata/"):
             scenario = self.current_scenario()
+            if scenario == "direct-rating-optional":
+                if self.headers.get("X-Plex-Token") != "virtual-plex-token":
+                    self.write_json({"error": "invalid virtual Plex token"}, status=401)
+                    return
+
+                metadata_id = parsed.path.rsplit("/", 1)[-1]
+                is_episode = "episode" in metadata_id
+                is_show = metadata_id.startswith("selected-show") and not is_episode
+                metadata: dict[str, object] = {
+                    "ratingKey": metadata_id,
+                    "type": "episode" if is_episode else ("show" if is_show else "movie"),
+                    "ratingImage": "themoviedb://image.rating" if (is_episode or is_show) else "imdb://image.rating",
+                    "Genre": [{"tag": "Drama"}, {"tag": "Mystery"}],
+                }
+                if query.get("excludeFields") != "rating":
+                    metadata["rating"] = "7.4" if (is_episode or is_show) else "6.6"
+                if query.get("includeOptionalElements") == "Rating":
+                    if is_episode:
+                        metadata["Rating"] = [
+                            {"image": "imdb://image.rating", "type": "audience", "value": "8.6"}
+                        ]
+                    elif is_show:
+                        metadata["Rating"] = [
+                            {"image": "imdb://image.rating", "type": "audience", "value": "8.4"}
+                        ]
+                    else:
+                        metadata["Rating"] = [
+                            {"image": "rottentomatoes://image.rating.ripe", "type": "critic", "value": "8.7"},
+                            {"image": "rottentomatoes://image.rating.upright", "type": "audience", "value": "8.3"},
+                        ]
+
+                self.write_json({"MediaContainer": {"size": 1, "Metadata": [metadata]}})
+                return
             if scenario in ("optional-hero-metadata", "rating-export-fallback") or scenario in DELETED_HISTORY_SCENARIOS:
                 self.write_json({"error": "sanitized missing Plex metadata"}, status=404)
                 return
@@ -698,6 +731,26 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 )
                 return
+            if scenario == "direct-rating-optional":
+                title = "Selected Show" if is_show else ("Selected Episode" if is_episode else "Selected Movie")
+                media_type = "show" if is_show else ("episode" if is_episode else "movie")
+                self.api_success(
+                    {
+                        "rating_key": key,
+                        "media_type": media_type,
+                        "title": title,
+                        "year": "2026",
+                        "summary": "Virtual metadata with only the selected provider flattened.",
+                        "rating": "",
+                        "rating_image": "",
+                        "audience_rating": "7.4" if (is_episode or is_show) else "6.6",
+                        "audience_rating_image": "themoviedb://image.rating" if (is_episode or is_show) else "imdb://image.rating",
+                        "genres": ["Drama", "Mystery"],
+                        "parent_media_index": 1,
+                        "media_index": 1,
+                    }
+                )
+                return
             title = "Selected Show" if is_show else ("Selected Episode" if is_episode else "Selected Movie")
             media_type = "show" if is_show else ("episode" if is_episode else "movie")
             self.api_success(
@@ -816,6 +869,7 @@ def main() -> None:
             "tv-only",
             "optional-hero-metadata",
             "rating-export-fallback",
+            "direct-rating-optional",
             "deleted-history-metadata",
             "deleted-history-legacy-guid",
             "cache-prime",

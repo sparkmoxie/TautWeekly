@@ -197,7 +197,8 @@ foreach ($relative in @(
         'DeletedItemCacheRetentionDays.*1 3650',
         'DeletedItemCacheMaxItems.*1 10000',
         'DeletedItemCacheMaxBytesMB.*16 2048',
-        'complete alternate rating set',
+        'Ratings Source to',
+        'Rotten Tomatoes, then refresh affected metadata',
         'Verification tests the resolved connection without printing the token'
     )
 }
@@ -210,7 +211,9 @@ foreach ($relative in @(
         'SMTP authentication and sender authorization are not tested by verify',
         '-Mode VerifyPlex',
         'Direct Plex identity and authenticated library requests succeeded',
-        'complete movie RT critic/audience ratings'
+        'complete movie RT critic/audience ratings',
+        'Reachability does not select a movie rating provider',
+        'Ratings Source > Rotten Tomatoes'
     )
 }
 foreach ($relative in @(

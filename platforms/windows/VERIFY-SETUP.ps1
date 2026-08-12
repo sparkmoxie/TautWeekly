@@ -230,6 +230,7 @@ elseif ($directPlexExit -ne 0) {
 }
 else {
     OK "Direct Plex identity and authenticated library requests succeeded"
+    Write-Host "[INFO] Reachability does not select a movie rating provider. For RT output, each Plex Movie library must use Advanced > Ratings Source > Rotten Tomatoes and have refreshed metadata."
 }
 
 # SMTP network reachability only. Authentication is tested by 04-SEND-TEST.bat.

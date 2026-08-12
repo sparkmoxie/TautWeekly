@@ -1,6 +1,8 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Explicitly requests Plex's optional Rating element so available movie RT and exact-episode IMDb values are not hidden by a flattened selected IMDb/TMDB score.
+- Identifies Plex Movie library Ratings Source > Rotten Tomatoes and refreshed metadata as prerequisites for intended RT output.
 - Routes every Podman exec helper through the configured non-root PUID/PGID and repairs legacy root-owned entries only within /data.
 - Recommends direct Plex during setup for full rating and artwork fidelity while preserving Tautulli-only fallback operation.
 - Documents that verification tests the renderer's resolved direct Plex URL/token through identity and authenticated library requests.

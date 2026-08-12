@@ -6,6 +6,30 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.8] - 2026-08-13
+
+### Fixed
+
+- Explicitly requested Plex's optional `Rating` metadata element for direct
+  item JSON and exact-episode XML fallback requests, while excluding the
+  case-colliding scalar JSON `rating` field. This restores alternate Rotten
+  Tomatoes critic/audience values and exact-episode IMDb values when Tautulli
+  exposes only Plex's flattened selected IMDb or TMDB score.
+- Added a sanitized cross-platform regression that models the reported split:
+  the default metadata response contains only selected IMDb, while the
+  opt-in response contains the provider-labelled RT pair.
+- Setup, verification, quickstarts, and troubleshooting now identify Plex's
+  library-wide **Ratings Source → Rotten Tomatoes** setting and metadata refresh
+  as prerequisites for intentional RT movie output. A passing direct-Plex check
+  proves reachability, not provider choice.
+
+### Security
+
+- Kept the existing private direct-Plex boundary. The administrator token
+  remains in an HTTP header, the request targets only the configured server
+  and exact rating key, and no metadata response, viewing history, recipient
+  data, generated newsletter, or private configuration is committed.
+
 ## [0.9.7] - 2026-08-13
 
 ### Fixed

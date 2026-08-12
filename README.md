@@ -75,6 +75,15 @@ setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
   Plex and Tautulli source. A provider-labelled IMDb score is used only when no
   RT value is available. TV release episode rows display only IMDb scores tied
   to the exact episode; show, TMDB, and TVDB scores are not substituted.
+- Direct item metadata explicitly requests Plex's optional `Rating` element.
+  This matters when Tautulli returns only the selected/flattened IMDb or TMDB
+  value: an available alternate RT pair or exact-episode IMDb value can still
+  be recovered from the configured Plex server.
+- To intentionally publish movie RT scores, each Plex Movie library must use
+  **Edit → Advanced → Ratings Source → Rotten Tomatoes** and have refreshed
+  metadata; Plex documents that choice as library-wide.
+  If IMDb or TMDB is deliberately selected, TautWeekly preserves that labelled
+  movie score as the fallback rather than inventing an RT value.
   Unlabeled and unknown-provider values remain omitted.
 - Tautulli remains the required activity source, but direct Plex is recommended
   for the complete alternate rating set, exact-episode metadata, backgrounds,
