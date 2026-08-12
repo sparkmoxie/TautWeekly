@@ -1,6 +1,7 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Routes every Podman exec helper through the configured non-root PUID/PGID and repairs legacy root-owned entries only within /data.
 - Recommends direct Plex during setup for full rating and artwork fidelity while preserving Tautulli-only fallback operation.
 - Documents that verification tests the renderer's resolved direct Plex URL/token through identity and authenticated library requests.
 - Explains the container-network boundary and keeps the Plex token out of URLs, process arguments, and verification output.

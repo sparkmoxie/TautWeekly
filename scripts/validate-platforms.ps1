@@ -75,7 +75,9 @@ Require-Text 'platforms/freebsd-podman/tautweekly' @(
     '\.tautweekly-update-holder',
     'pull --os=linux',
     'Rollback to image version',
-    'health verification'
+    'health verification',
+    'run-script\.sh',
+    'run-as-user\.sh /bin/bash'
 )
 Require-Text 'platforms/nas-docker/app/run-service.sh' @(
     'Preview server listening',
@@ -115,7 +117,7 @@ Require-Text 'platforms/nas-docker/app/preview-home.html' @(
     'not installed inside the container'
 )
 Require-Text 'platforms/nas-docker/app/Setup-First.ps1' @(
-    'NEXT \(Unraid Console\): pwsh .*\/opt\/tautweekly\/Verify-Setup\.ps1',
+    'NEXT \(Unraid Console\): \/opt\/tautweekly\/bin\/run-script\.sh Verify-Setup\.ps1',
     'NEXT \(Compose host project directory\): \.\/tautweekly\.sh verify'
 )
 Require-Text 'platforms/nas-docker/app/Verify-Setup.ps1' @(
@@ -240,7 +242,21 @@ Require-Text 'platforms/nas-docker/tautweekly.sh' @(
     'preview-all USER_ID',
     'numeric value shown by list-users',
     'check-update',
-    'container-update\.sh apply'
+    'container-update\.sh apply',
+    'run-script\.sh Verify-Setup\.ps1',
+    'run-as-user\.sh bash'
+)
+Require-Text 'platforms/nas-docker/app/bin/run-as-user.sh' @(
+    'PUID/PGID 0 is refused',
+    'find "\$data_root" -xdev',
+    '-exec chown -h',
+    'exec gosu'
+)
+Require-Text 'platforms/nas-docker/app/bin/run-script.sh' @(
+    'Verify-Setup\.ps1',
+    'Schedule-Control\.ps1',
+    'Unsupported TautWeekly helper script',
+    'run-as-user\.sh'
 )
 Require-Text 'platforms/nas-docker/container-update.sh' @(
     'config --images',
@@ -273,6 +289,10 @@ Require-Text 'platforms/mac-docker/Dockerfile' @('ARG BUILD_VERSION=dev', 'org\.
 Require-Text 'platforms/mac-docker/compose.yaml' @('image:\s*tautweekly-mac:stable')
 Forbid-Text 'platforms/mac-docker/compose.yaml' @('(?m)^\s*build:')
 Forbid-Text 'platforms/mac-docker/tautweekly.sh' @('docker compose build --pull', 'docker-compose build --pull')
+Require-Text 'platforms/mac-docker/tautweekly.sh' @(
+    'run-script\.sh Verify-Setup\.ps1',
+    'run-as-user\.sh bash'
+)
 
 Require-Text 'platforms/windows/Check-Update.ps1' @(
     'releases/latest',
@@ -333,6 +353,8 @@ foreach ($relative in @(
     'app/healthcheck.sh',
     'app/preview-home.html',
     'app/run-service.sh',
+    'app/bin/run-as-user.sh',
+    'app/bin/run-script.sh',
     'app/bin/run-mode.sh',
     'app/Schedule-Time.ps1',
     'app/Schedule-Control.ps1',

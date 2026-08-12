@@ -218,9 +218,9 @@ switch ($Command) {
     "restart" { Invoke-Compose @("restart","tautweekly") }
     "status" { Invoke-Compose @("ps") }
     "logs" { Invoke-Compose @("logs","-f","--tail=200","tautweekly") }
-    "shell" { Invoke-Compose @("exec","tautweekly","bash") }
-    "setup" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Setup-First.ps1") }
-    "verify" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Verify-Setup.ps1") }
+    "shell" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-as-user.sh","bash") }
+    "setup" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","Setup-First.ps1") }
+    "verify" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","Verify-Setup.ps1") }
     "list-users" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","ListUsers") }
     "preview" {
         $id = Resolve-User $User
@@ -253,19 +253,19 @@ switch ($Command) {
             Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","SendAll","--confirm-send-all")
         }
     }
-    "roster" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/View-Access-Roster.ps1") }
-    "repair-assets" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Repair-Assets.ps1") }
-    "schedule-status" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Schedule-Control.ps1","-Action","Status") }
+    "roster" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","View-Access-Roster.ps1") }
+    "repair-assets" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","Repair-Assets.ps1") }
+    "schedule-status" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","Schedule-Control.ps1","-Action","Status") }
     "schedule-enable" {
         if (Confirm-Action "Enable the configured automatic weekly send?") {
-            Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Schedule-Control.ps1","-Action","Enable")
+            Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","Schedule-Control.ps1","-Action","Enable")
         }
     }
-    "schedule-disable" { Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Schedule-Control.ps1","-Action","Disable") }
+    "schedule-disable" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","Schedule-Control.ps1","-Action","Disable") }
     "schedule-reset" {
         Write-Warning "This clears today's automatic-attempt guard and can permit another real send today."
         if (Confirm-Action "Clear the guard?") {
-            Invoke-Compose @("exec","tautweekly","pwsh","-NoLogo","-NoProfile","-File","/opt/tautweekly/Schedule-Control.ps1","-Action","ResetToday")
+            Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","Schedule-Control.ps1","-Action","ResetToday")
         }
     }
     "check-update" { Invoke-ContainerUpdate }

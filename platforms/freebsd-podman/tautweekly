@@ -37,6 +37,11 @@ run_mode()
   container_exec /opt/tautweekly/bin/run-mode.sh "$@"
 }
 
+run_script()
+{
+  container_exec /opt/tautweekly/bin/run-script.sh "$@"
+}
+
 prompt_user()
 {
   value="${1:-}"
@@ -137,12 +142,12 @@ wait_for_health()
 cmd="${1:-help}"
 shift || true
 case "$cmd" in
-  setup) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1 ;;
-  verify) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1 ;;
+  setup) run_script Setup-First.ps1 ;;
+  verify) run_script Verify-Setup.ps1 ;;
   list-users) run_mode ListUsers ;;
-  exclude-users|manage-exclusions) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1 ;;
-  list-libraries) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1 -ListOnly ;;
-  libraries|manage-libraries) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1 ;;
+  exclude-users|manage-exclusions) run_script Manage-User-Exclusions.ps1 ;;
+  list-libraries) run_script Manage-Library-Selection.ps1 -ListOnly ;;
+  libraries|manage-libraries) run_script Manage-Library-Selection.ps1 ;;
   preview) user="$(prompt_user "${1:-}")"; run_mode Preview "$user" ;;
   preview-all) user="$(prompt_user "${1:-}")"; run_mode PreviewAll "$user" ;;
   send-test)
@@ -165,18 +170,18 @@ case "$cmd" in
     confirm "Have you reviewed a current TestEmail and do you want to continue?" || exit 0
     run_mode SendAll --confirm-send-all
     ;;
-  roster) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/View-Access-Roster.ps1 ;;
-  repair-assets) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Repair-Assets.ps1 ;;
-  schedule-status) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action Status ;;
+  roster) run_script View-Access-Roster.ps1 ;;
+  repair-assets) run_script Repair-Assets.ps1 ;;
+  schedule-status) run_script Schedule-Control.ps1 -Action Status ;;
   schedule-enable)
     confirm "Enable the configured automatic weekly send?" || exit 0
-    container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action Enable
+    run_script Schedule-Control.ps1 -Action Enable
     ;;
-  schedule-disable) container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action Disable ;;
+  schedule-disable) run_script Schedule-Control.ps1 -Action Disable ;;
   schedule-reset)
     echo "This clears today's automatic-attempt guard. A later scheduler poll may send again today."
     confirm "Clear the guard?" || exit 0
-    container_exec pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action ResetToday
+    run_script Schedule-Control.ps1 -Action ResetToday
     ;;
   start|stop|restart|status)
     require_root
@@ -186,7 +191,7 @@ case "$cmd" in
     require_root
     "$podman" logs --tail 200 -f "$TAUTWEEKLY_CONTAINER"
     ;;
-  shell) container_exec /bin/bash ;;
+  shell) container_exec /opt/tautweekly/bin/run-as-user.sh /bin/bash ;;
   backup)
     require_root
     stamp="$(date +%Y%m%d-%H%M%S)"

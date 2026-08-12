@@ -11,7 +11,7 @@
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex NAS Portable v1.2.0 — Linux container production newsletter engine.
+# TautWeekly for Plex NAS Portable v1.2.1 — Linux container production newsletter engine.
 # Uses the current six-state portable production renderer with regression
 # previews, latest TV episode backfill, IMDb enrichment, and RT audience %.
 Set-StrictMode -Version Latest
@@ -460,7 +460,7 @@ function Mark-UserWelcomed {
 }
 
 if (-not (Test-Path $ConfigPath)) {
-    throw "Config file not found: $ConfigPath`nFrom an Unraid Console run pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1; from the Compose host project directory run ./tautweekly.sh setup."
+    throw "Config file not found: $ConfigPath`nFrom an Unraid Console run /opt/tautweekly/bin/run-script.sh Setup-First.ps1; from the Compose host project directory run ./tautweekly.sh setup."
 }
 
 $Config = Get-Content -Path $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json

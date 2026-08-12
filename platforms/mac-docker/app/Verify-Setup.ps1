@@ -259,7 +259,7 @@ try {
 }
 catch {
     FAIL "preview asset web check failed: $($_.Exception.Message)"
-    WARN "Inspect ./tautweekly.sh logs and confirm the container was recreated from v1.1.0."
+    WARN "Inspect ./tautweekly.sh logs and confirm the container was recreated from v1.1.1."
     exit 1
 }
 

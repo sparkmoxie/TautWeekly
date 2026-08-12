@@ -2,6 +2,26 @@
 
 Start with the platform verifier and correct the first reported failure.
 
+## Container command reports `/data` access denied
+
+Docker and Podman Console/exec sessions start as the image's root user. Use
+the packaged `./tautweekly.sh` host wrapper, or use
+`/opt/tautweekly/bin/run-script.sh SCRIPT.ps1` and
+`/opt/tautweekly/bin/run-mode.sh MODE` inside an Unraid container Console.
+Those launchers run commands as the configured PUID/PGID and repair only
+legacy root-owned entries within the dedicated `/data` filesystem.
+
+If an older release already created root-owned logs, update the container and
+run any supported launcher command once. For example:
+
+```bash
+/opt/tautweekly/bin/run-mode.sh ListUsers
+```
+
+Do not work around the error with world-writable permissions or by running the
+service as root. The launcher does not follow symlinks or cross another mount,
+and it does not display or copy private configuration, logs, or output.
+
 ## Tautulli cannot be reached
 
 - Confirm the URL opens from the TautWeekly for Plex runtime, not only from your laptop.

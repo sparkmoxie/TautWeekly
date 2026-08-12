@@ -5,7 +5,7 @@
 The macOS distribution runs the PowerShell newsletter engine in Docker Desktop
 and provides Mac-native setup and preview helpers.
 
-Current source baseline: **1.0.3**.
+Current source baseline: **1.1.1**.
 
 ## Requirements
 
