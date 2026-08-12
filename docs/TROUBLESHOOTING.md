@@ -205,10 +205,13 @@ a series-level or different-provider score.
 
 If ratings work on Windows but not in Docker, that can mean Windows reached
 Plex directly while the container fell through to Tautulli; it does not imply
-that the packages maintain different rating renderers. v0.9.5 corrects the
-shared provider-priority path, but the container's direct Plex warnings should
-still be investigated separately for backgrounds, selected logos, and richer
-metadata.
+that the packages maintain different rating renderers. Comparative logs can
+also show Windows receiving RT directly from Tautulli while Docker receives
+only a flattened selected IMDb/TMDB value. Versions through v0.9.7 did not
+explicitly request Plex's optional `Rating` element in that direct fallback;
+v0.9.8 requests it and excludes the case-colliding scalar JSON `rating` field
+that can mask the provider array in PowerShell. Update first, then rerun
+PreviewAll or SendTest.
 
 If the log also says every direct Plex request failed, verify
 `PlexServerUrl` from the TautWeekly runtime. In a separate Docker container,
@@ -224,6 +227,16 @@ Preview or SendTest. If no URL/token pair can be resolved, verification warns
 that only Tautulli's selected/flattened rating and other fallbacks are
 available. Re-run the verifier, PreviewAll, and a controlled SendTest after
 correcting the private configuration or container networking.
+
+A passing verifier proves authenticated reachability, not that a particular
+Plex item publishes each provider score. On v0.9.8 or newer, inspect only the
+sanitized `Design ratings:` lines after PreviewAll. If they still show RT or
+IMDb as unavailable, open Plex Web → Settings → Manage → Libraries → the Movie
+library → Edit → Advanced. To intentionally publish RT, choose **Ratings Source
+→ Rotten Tomatoes**, save, and refresh one affected movie's
+metadata before considering a library-wide refresh. If IMDb/TMDB is selected
+deliberately, labelled IMDb is the expected movie fallback. Do not share the
+configuration, token, generated preview, recipient information, or full log.
 
 A passing Tautulli check does not prove direct Plex works. Tautulli and
 TautWeekly can run in different containers, networks, DNS contexts, and trust

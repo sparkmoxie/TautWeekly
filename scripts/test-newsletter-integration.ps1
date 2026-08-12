@@ -35,8 +35,9 @@ $engines = @(
 )
 $providerRecoveryScenarios = @('deleted-history-metadata', 'deleted-history-legacy-guid')
 $cacheScenario = 'cache-deleted'
+$directOptionalRatingScenario = 'direct-rating-optional'
 $deletedHistoryScenarios = @($providerRecoveryScenarios) + @($cacheScenario)
-$sendTestScenarios = @('optional-hero-metadata', 'rating-export-fallback') + @($deletedHistoryScenarios)
+$sendTestScenarios = @('optional-hero-metadata', 'rating-export-fallback', $directOptionalRatingScenario) + @($deletedHistoryScenarios)
 
 $executed = 0
 foreach ($engine in $engines) {
@@ -45,7 +46,7 @@ foreach ($engine in $engines) {
         continue
     }
 
-    foreach ($scenario in @('active', 'quiet', 'tv-only', 'optional-hero-metadata', 'rating-export-fallback') + $deletedHistoryScenarios) {
+    foreach ($scenario in @('active', 'quiet', 'tv-only', 'optional-hero-metadata', 'rating-export-fallback', $directOptionalRatingScenario) + $deletedHistoryScenarios) {
         $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-integration-' + [Guid]::NewGuid().ToString('N'))
         $appRoot = Join-Path $tempRoot 'app'
         $dataRoot = Join-Path $tempRoot 'data'
@@ -292,6 +293,13 @@ foreach ($engine in $engines) {
                 Assert-True (-not $previewLog.Contains('could not enumerate additional exporter fields')) "$($engine.Name)/$scenario did not use a compatible Tautulli field-discovery request."
             }
 
+            if ($scenario -eq $directOptionalRatingScenario) {
+                Assert-True ($normalHtml.Contains('87%') -and $normalHtml.Contains('83%')) "$($engine.Name)/$scenario did not render movie RT from Plex's optional Rating element."
+                Assert-True ($normalHtml.Contains('alt="IMDb"') -and $normalHtml.Contains('8.6')) "$($engine.Name)/$scenario did not render exact-episode IMDb from Plex's optional Rating element."
+                Assert-True (-not $normalHtml.Contains('6.6') -and -not $normalHtml.Contains('TMDB') -and -not $normalHtml.Contains('7.4')) "$($engine.Name)/$scenario rendered the flattened selected provider instead of the optional ratings."
+                Assert-True (-not $previewLog.Contains('Design rich export result:')) "$($engine.Name)/$scenario unnecessarily used Tautulli's item export after direct optional ratings succeeded."
+            }
+
             if ($scenario -in $providerRecoveryScenarios) {
                 Assert-True ($previewLog.Contains('recovered an exact movie match through the provider POST contract')) "$($engine.Name)/$scenario PreviewAll did not report the provider-contract recovery."
                 Assert-True ($previewLog.Contains('recovered an exact show match through the provider POST contract')) "$($engine.Name)/$scenario PreviewAll did not report the TV provider-contract recovery."
@@ -339,6 +347,21 @@ foreach ($engine in $engines) {
             $calls = @(Get-Content $callLog | ForEach-Object { $_ | ConvertFrom-Json })
             Assert-True (@($calls | Where-Object { [string]$_.path -eq '/identity' -and $_.has_plex_token }).Count -gt 0) "$($engine.Name)/$scenario did not authenticate the direct Plex identity verification request."
             Assert-True (@($calls | Where-Object { [string]$_.path -eq '/library/sections' -and $_.has_plex_token }).Count -gt 0) "$($engine.Name)/$scenario did not authenticate the direct Plex library verification request."
+            if ($scenario -eq $directOptionalRatingScenario) {
+                $directItemCalls = @($calls | Where-Object {
+                    [string]$_.path -match '^/library/metadata/[^/]+$'
+                })
+                $directRatingCalls = @($directItemCalls | Where-Object {
+                    $null -ne $_.query.PSObject.Properties['includeOptionalElements'] -and
+                    $null -ne $_.query.PSObject.Properties['excludeFields'] -and
+                    [string]$_.query.includeOptionalElements -eq 'Rating' -and
+                    [string]$_.query.excludeFields -eq 'rating'
+                })
+                Assert-True (@($directRatingCalls | Where-Object { [string]$_.path -eq '/library/metadata/selected-movie' -and $_.has_plex_token }).Count -gt 0) "$($engine.Name)/$scenario did not request the movie optional Rating element privately."
+                Assert-True (@($directRatingCalls | Where-Object { [string]$_.path -eq '/library/metadata/selected-show' -and $_.has_plex_token }).Count -gt 0) "$($engine.Name)/$scenario did not request the show optional Rating element privately."
+                Assert-True (@($directRatingCalls | Where-Object { [string]$_.path -eq '/library/metadata/selected-episode' -and $_.has_plex_token }).Count -gt 0) "$($engine.Name)/$scenario did not request the exact episode optional Rating element privately."
+                Assert-True ($directRatingCalls.Count -eq $directItemCalls.Count) "$($engine.Name)/$scenario issued direct item metadata without requesting optional Rating or suppressing the colliding scalar."
+            }
             if ($scenario -eq 'rating-export-fallback') {
                 $ratingFieldCalls = @($calls | Where-Object {
                     $null -ne $_.query -and
@@ -452,7 +475,9 @@ foreach ($engine in $engines) {
 
             if ($scenario -in $sendTestScenarios) {
                 $previewLog = Get-Content $stdout -Raw
-                Assert-True ($previewLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario did not exercise the recoverable direct Plex 404 fallback."
+                if ($scenario -ne $directOptionalRatingScenario) {
+                    Assert-True ($previewLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario did not exercise the recoverable direct Plex 404 fallback."
+                }
                 Assert-True ($normalHtml.Contains('Selected Show')) "$($engine.Name)/$scenario lost the global-history title fallback for sparse hero metadata."
 
                 $accessStatePath = if ($engine.Container) {
@@ -509,7 +534,9 @@ foreach ($engine in $engines) {
                 }
                 $sendLog = Get-Content $sendStdout -Raw
                 Assert-True ($sendLog.Contains('Test email sent successfully.')) "$($engine.Name)/$scenario SendTest did not complete delivery."
-                Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
+                if ($scenario -ne $directOptionalRatingScenario) {
+                    Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
+                }
                 if ($scenario -eq 'rating-export-fallback') {
                     Assert-True ($sendLog.Contains('Design rich export result: RT critic=53%, audience=40')) "$($engine.Name)/$scenario SendTest did not recover both ratings through the explicit item export."
                     Assert-True ($sendLog.Contains('Design rich export result: RT critic=n/a, audience=n/a, IMDb=n/a, selected=TMDB 7.4')) "$($engine.Name)/$scenario SendTest did not recover the show selected-provider rating through the explicit item export."
@@ -542,6 +569,19 @@ foreach ($engine in $engines) {
                         '--require-html', '53%</span>',
                         '--require-html', '40%</span>',
                         '--require-html', '8.7</span>',
+                        '--forbid-html', '6.6</span>',
+                        '--forbid-html', 'TMDB</span>',
+                        '--forbid-html', '7.4</span>'
+                    )
+                }
+                elseif ($scenario -eq $directOptionalRatingScenario) {
+                    $emailThemeArgs += @(
+                        '--require-html', 'Rotten Tomatoes critic',
+                        '--require-html', 'Rotten Tomatoes audience',
+                        '--require-html', 'IMDb',
+                        '--require-html', '87%</span>',
+                        '--require-html', '83%</span>',
+                        '--require-html', '8.6</span>',
                         '--forbid-html', '6.6</span>',
                         '--forbid-html', 'TMDB</span>',
                         '--forbid-html', '7.4</span>'

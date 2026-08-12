@@ -24,6 +24,8 @@ $requiredFunctions = @(
     'Convert-DesignRatingPercent',
     'Find-DesignProviderRatingsRecursive',
     'ConvertTo-DesignGenreList',
+    'Invoke-DesignPlexJson',
+    'Get-DesignPlexMetadata',
     'Add-DesignRatingMetadata',
     'Get-DesignEpisodeImdbRating',
     'Enrich-TvEpisodeMetadata',
@@ -97,6 +99,61 @@ foreach ($relativePath in $rendererPaths) {
 
         Invoke-Expression $definition.Extent.Text
     }
+
+    # Plex's published metadata contract treats Rating[] as optional. Model a
+    # server that returns only the selected IMDb fields by default, but returns
+    # the full RT pair when the optional Rating element is explicitly requested.
+    $script:DesignPlexMetadataCache = @{}
+    $script:optionalRatingRequests = 0
+    function Write-Log { param([string]$Message, [string]$Level = 'INFO') }
+    function Get-DesignPlexContext {
+        return [PSCustomObject]@{
+            Available = $true
+            ServerUrl = 'https://127.0.0.1:32400'
+            Token = 'virtual-token'
+        }
+    }
+    function Invoke-RestMethod {
+        param([string]$Uri, [hashtable]$Headers, [string]$Method, [int]$TimeoutSec)
+        $script:optionalRatingRequests++
+        Assert-True ($Method -eq 'Get' -and $TimeoutSec -eq 60) "$relativePath changed the direct metadata request contract"
+        Assert-True ([string]$Headers['X-Plex-Token'] -eq 'virtual-token') "$relativePath omitted the Plex token from direct metadata"
+        Assert-True ([string]$Headers['X-Plex-Pms-Api-Version'] -eq '1.2.2') "$relativePath omitted the published Plex API version"
+
+        $metadata = [ordered]@{ ratingImage = 'imdb://image.rating' }
+        if ($Uri -notmatch '[?&]excludeFields=rating(?:&|$)') {
+            $metadata.rating = '6.6'
+        }
+        if ($Uri -match '\?includeOptionalElements=Rating&excludeFields=rating$') {
+            $metadata.Rating = @(
+                [PSCustomObject]@{ image = 'rottentomatoes://image.rating.ripe'; type = 'critic'; value = '8.7' },
+                [PSCustomObject]@{ image = 'rottentomatoes://image.rating.upright'; type = 'audience'; value = '8.3' }
+            )
+        }
+
+        return [PSCustomObject]@{
+            MediaContainer = [PSCustomObject]@{
+                Metadata = @([PSCustomObject]$metadata)
+            }
+        }
+    }
+    $optionalRatingMetadata = Get-DesignPlexMetadata -RatingKey 'virtual-movie'
+    $cachedOptionalRatingMetadata = Get-DesignPlexMetadata -RatingKey 'virtual-movie'
+    Assert-True ($script:optionalRatingRequests -eq 1) "$relativePath did not cache the optional direct Plex rating response"
+    Assert-True ($cachedOptionalRatingMetadata -eq $optionalRatingMetadata) "$relativePath changed the cached optional direct Plex rating response"
+    Assert-True (
+        $null -ne $optionalRatingMetadata.PSObject.Properties['Rating'] -and
+        @($optionalRatingMetadata.Rating).Count -eq 2
+    ) "$relativePath did not request Plex's optional Rating element without the colliding scalar rating field"
+
+    function Get-DesignPlexMetadata { param([string]$RatingKey) return [PSCustomObject]@{} }
+    function Invoke-DesignPlexLegacyXml {
+        param([string]$Path)
+        Assert-True ($Path -eq '/library/metadata/virtual-episode?includeOptionalElements=Rating') "$relativePath did not request optional Rating elements from the XML episode fallback"
+        return [xml]'<MediaContainer><Video><Rating image="imdb://image.rating" type="audience" value="8.6" /></Video></MediaContainer>'
+    }
+    $optionalEpisodeImdb = Get-DesignEpisodeImdbRating -RatingKey 'virtual-episode'
+    Assert-True ($optionalEpisodeImdb -eq '8.6') "$relativePath did not recover exact-episode IMDb from the optional XML Rating element"
 
     $flatCritic = ''
     $flatAudience = ''

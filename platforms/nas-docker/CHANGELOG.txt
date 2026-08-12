@@ -1,6 +1,13 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.2.2 Portable
+---------------
+- explicitly requests Plex's optional Rating element when Tautulli exposes only the selected IMDb/TMDB score
+- restores available movie RT critic/audience values and exact-episode IMDb without changing provider-priority or icon behavior
+- applies the same renderer correction to NAS, Unraid, QNAP, Docker, native Linux, and FreeBSD packages
+- identifies Plex Movie library Ratings Source > Rotten Tomatoes and refreshed metadata as prerequisites for intended RT output
+
 v1.2.1 Portable
 ---------------
 - runs every Console/exec helper through the configured non-root PUID/PGID

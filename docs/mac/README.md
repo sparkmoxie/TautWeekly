@@ -59,6 +59,14 @@ authenticated `/library/sections` with the token kept in a request header. A
 resolved but unusable connection fails verification; if no URL/token pair can
 be resolved, verification warns that selected/flattened Tautulli ratings and
 other fallbacks will be used.
+Verification proves reachability and authentication, not that every item has
+every provider score. The renderer explicitly requests Plex's optional
+`Rating` element so available RT pairs and exact-episode IMDb values are not
+hidden by a selected IMDb/TMDB fallback.
+For intended movie RT output, also set every applicable Plex Movie library's
+**Edit → Advanced → Ratings Source** to **Rotten Tomatoes**,
+save, and refresh affected metadata. This is a library-wide Plex choice, not a
+TautWeekly setting; leave IMDb/TMDB selected if that fallback is intentional.
 
 ## Safe acceptance sequence
 
