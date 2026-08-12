@@ -94,20 +94,20 @@ ok "TautWeekly for Plex container is running"
 
 if [[ -f data/config.json ]]; then
   if confirm "A TautWeekly for Plex config already exists. Run setup again?" n; then
-    compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
+    compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Setup-First.ps1
   else
     ok "Existing data/config.json preserved"
   fi
 else
   say "Interactive TautWeekly for Plex setup"
-  compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
+  compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Setup-First.ps1
 fi
 
 compose_cmd restart tautweekly >/dev/null
 sleep 5
 
 say "Verification"
-if ! compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1; then
+if ! compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1; then
   fail "Verification failed. Correct the reported issue, then run ./tautweekly.sh verify."
 fi
 

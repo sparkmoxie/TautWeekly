@@ -6,6 +6,24 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.7] - 2026-08-13
+
+### Fixed
+
+- Routed container shells, setup, verification, library/user management,
+  roster, asset-repair, and schedule controls through the configured non-root
+  PUID/PGID. This prevents Docker, Unraid, QNAP, macOS Docker, and
+  FreeBSD/Podman Console or exec commands from creating root-owned
+  configuration and logs that later newsletter operations cannot update.
+- Added bounded migration recovery for root-owned entries left by prior
+  container commands under the dedicated `/data` filesystem.
+
+### Security
+
+- Restricted ownership recovery to root-owned entries on the `/data`
+  filesystem without following symlinks or crossing mount points. The
+  launchers continue to reject UID/GID 0 and do not expose private data.
+
 ## [0.9.6] - 2026-08-11
 
 ### Fixed

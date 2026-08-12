@@ -114,7 +114,7 @@ if (Test-Path $configPath) {
     Write-Host "  $configPath"
     if (-not (Read-YesNo "Replace it with a new configuration?" $false)) {
         Write-Host "Existing config preserved." -ForegroundColor Green
-        Write-Host "NEXT (Unraid Console): pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1"
+        Write-Host "NEXT (Unraid Console): /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1"
         Write-Host "NEXT (Compose host project directory): ./tautweekly.sh verify"
         exit 0
     }
@@ -159,7 +159,7 @@ catch {
     if ($existingIncludedLibraryIds.Count -gt 0) {
         Write-Host "WARNING: $($_.Exception.Message)" -ForegroundColor Yellow
         Write-Host "Existing newsletter library selection will be preserved." -ForegroundColor Yellow
-        Write-Host "Unraid Console: pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1" -ForegroundColor Yellow
+        Write-Host "Unraid Console: /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1" -ForegroundColor Yellow
         Write-Host "Compose host project directory: ./tautweekly.sh manage-libraries" -ForegroundColor Yellow
     }
     else {
@@ -180,7 +180,7 @@ try {
 catch {
     Write-Host "WARNING: $($_.Exception.Message)" -ForegroundColor Yellow
     Write-Host "Setup will continue." -ForegroundColor Yellow
-    Write-Host "Unraid Console: pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1" -ForegroundColor Yellow
+    Write-Host "Unraid Console: /opt/tautweekly/bin/run-script.sh Manage-User-Exclusions.ps1" -ForegroundColor Yellow
     Write-Host "Compose host project directory: ./tautweekly.sh exclude-users" -ForegroundColor Yellow
 }
 
@@ -295,5 +295,5 @@ Write-Host "Configuration created successfully:" -ForegroundColor Green
 Write-Host "  $configPath"
 Write-Host ""
 Write-Host "IMPORTANT: config.json contains credentials. Never publish or share it."
-Write-Host "NEXT (Unraid Console): pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1"
+Write-Host "NEXT (Unraid Console): /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1"
 Write-Host "NEXT (Compose host project directory): ./tautweekly.sh verify"

@@ -96,12 +96,12 @@ printf '\nPulling the current TautWeekly for Plex container image...\n'
 wait_for_container
 
 printf '\nRunning the configuration wizard...\n'
-compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
+compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Setup-First.ps1
 compose_cmd restart tautweekly
 wait_for_container
 
 printf '\nRunning verification...\n'
-if ! compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1; then
+if ! compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1; then
   echo "Verification failed. Review the messages above and run ./tautweekly.sh verify after correcting them." >&2
   exit 1
 fi

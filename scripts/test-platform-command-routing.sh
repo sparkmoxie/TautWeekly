@@ -49,15 +49,19 @@ export PATH="$stub_bin:$PATH"
 # the same in-container paths while preserving a user identifier as one arg.
 bash "$repo_root/platforms/nas-docker/tautweekly.sh" list-libraries
 assert_call 'docker compose version'
-assert_call 'docker compose exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1 -ListOnly'
+assert_call 'docker compose exec tautweekly /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1 -ListOnly'
 
 reset_calls
 bash "$repo_root/platforms/nas-docker/tautweekly.sh" preview 'Viewer With Spaces'
 assert_call 'docker compose exec tautweekly /opt/tautweekly/bin/run-mode.sh Preview Viewer With Spaces'
 
 reset_calls
+bash "$repo_root/platforms/nas-docker/tautweekly.sh" shell
+assert_call 'docker compose exec tautweekly /opt/tautweekly/bin/run-as-user.sh bash'
+
+reset_calls
 bash "$repo_root/platforms/mac-docker/tautweekly.sh" manage-libraries
-assert_call 'docker compose exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1'
+assert_call 'docker compose exec tautweekly /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1'
 
 reset_calls
 bash "$repo_root/platforms/mac-docker/tautweekly.sh" open-preview
@@ -105,7 +109,7 @@ if run_privileged \
     "TAUTWEEKLY_ENV_FILE=$freebsd_env" \
     "TAUTWEEKLY_PODMAN_BIN=$stub_bin/podman" \
     sh "$repo_root/platforms/freebsd-podman/tautweekly" list-libraries; then
-  assert_call 'podman exec -i virtual-tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1 -ListOnly'
+  assert_call 'podman exec -i virtual-tautweekly /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1 -ListOnly'
 else
   status=$?
   [[ "$status" -eq 77 ]] || fail "FreeBSD routing exited $status"
@@ -143,8 +147,8 @@ else
 fi
 
 # Container exec starts as root and bypasses entrypoint.sh. Simulate that
-# boundary and require run-mode to re-exec under the configured PUID/PGID
-# before creating its operation lock or output directories.
+# boundary and require both launchers to re-exec under the configured PUID/PGID
+# before a PowerShell helper can create persistent files.
 root_stub_bin="$test_root/root-bin"
 root_data="$test_root/root-data"
 mkdir -p "$root_stub_bin" "$root_data"
@@ -171,6 +175,24 @@ for runtime_wrapper in \
   assert_call "gosu 1234:5678 $runtime_wrapper Preview Viewer With Spaces"
 done
 [[ ! -e "$root_data/.tautweekly-operation.lock" ]] || fail 'run-mode wrote persistent data before dropping root privileges'
+
+for runtime_script in \
+    "$repo_root/platforms/nas-docker/app/bin/run-script.sh" \
+    "$repo_root/platforms/mac-docker/app/bin/run-script.sh"; do
+  PUID=1234 PGID=5678 \
+  PATH="$root_stub_bin:$PATH" \
+  TAUTWEEKLY_APP_DIR=/virtual/app \
+  TAUTWEEKLY_DATA_DIR="$root_data" \
+    bash "$runtime_script" Verify-Setup.ps1
+  assert_call "gosu 1234:5678 $runtime_script Verify-Setup.ps1"
+
+  set +e
+  PUID=1234 PGID=5678 PATH="$root_stub_bin:$PATH" \
+    bash "$runtime_script" ../TautWeekly.ps1 >/dev/null 2>&1
+  unsupported_status=$?
+  set -e
+  [[ "$unsupported_status" -eq 64 ]] || fail "run-script unsupported-helper preflight exited $unsupported_status instead of 64"
+done
 
 # Installer preflight must fail before any system mutation for invalid targets.
 set +e

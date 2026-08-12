@@ -11,7 +11,7 @@
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex Mac Portable v1.1.0 — Docker Desktop production newsletter engine.
+# TautWeekly for Plex Mac Portable v1.1.1 — Docker Desktop production newsletter engine.
 # Uses the current six-state portable production renderer with regression
 # previews, latest TV episode backfill, IMDb enrichment, and RT audience %.
 Set-StrictMode -Version Latest

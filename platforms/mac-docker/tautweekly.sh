@@ -29,13 +29,13 @@ case "$cmd" in
   restart) compose_cmd restart tautweekly ;;
   status) compose_cmd ps ;;
   logs) compose_cmd logs -f --tail=200 tautweekly ;;
-  shell) compose_cmd exec tautweekly bash ;;
-  setup) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1 ;;
-  verify) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1 ;;
+  shell) compose_cmd exec tautweekly /opt/tautweekly/bin/run-as-user.sh bash ;;
+  setup) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Setup-First.ps1 ;;
+  verify) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1 ;;
   list-users) compose_cmd exec tautweekly /opt/tautweekly/bin/run-mode.sh ListUsers ;;
-  exclude-users|manage-exclusions) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1 ;;
-  list-libraries) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1 -ListOnly ;;
-  libraries|manage-libraries) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1 ;;
+  exclude-users|manage-exclusions) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Manage-User-Exclusions.ps1 ;;
+  list-libraries) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1 -ListOnly ;;
+  libraries|manage-libraries) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1 ;;
   preview)
     user="$(prompt_user "${1:-}")"
     compose_cmd exec tautweekly /opt/tautweekly/bin/run-mode.sh Preview "$user"
@@ -64,18 +64,18 @@ case "$cmd" in
     confirm "Have you reviewed a current TestEmail and do you want to continue?" || exit 0
     compose_cmd exec tautweekly /opt/tautweekly/bin/run-mode.sh SendAll --confirm-send-all
     ;;
-  roster) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/View-Access-Roster.ps1 ;;
-  repair-assets) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Repair-Assets.ps1 ;;
-  schedule-status) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action Status ;;
+  roster) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh View-Access-Roster.ps1 ;;
+  repair-assets) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Repair-Assets.ps1 ;;
+  schedule-status) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Schedule-Control.ps1 -Action Status ;;
   schedule-enable)
     confirm "Enable the configured automatic weekly send?" || exit 0
-    compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action Enable
+    compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Schedule-Control.ps1 -Action Enable
     ;;
-  schedule-disable) compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action Disable ;;
+  schedule-disable) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Schedule-Control.ps1 -Action Disable ;;
   schedule-reset)
     echo "This clears today's automatic-attempt guard. A later scheduler poll may send again today."
     confirm "Clear the guard?" || exit 0
-    compose_cmd exec tautweekly pwsh -NoLogo -NoProfile -File /opt/tautweekly/Schedule-Control.ps1 -Action ResetToday
+    compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Schedule-Control.ps1 -Action ResetToday
     ;;
   backup)
     stamp="$(date +%Y%m%d-%H%M%S)"

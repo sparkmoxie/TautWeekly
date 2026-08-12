@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.2.1 Portable
+---------------
+- runs every Console/exec helper through the configured non-root PUID/PGID
+- repairs legacy root-owned entries only within the dedicated /data filesystem before dropping privileges
+- prevents setup, verify, management, repair, and schedule commands from blocking later newsletter log/config writes
+
 v1.2.0 Portable
 ---------------
 - recommends direct Plex during setup for full rating and artwork fidelity while preserving Tautulli-only fallback operation

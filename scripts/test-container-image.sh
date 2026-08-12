@@ -64,6 +64,16 @@ docker exec "$container_name" test -s /data/service-heartbeat.json || fail 'Serv
 # A normal docker exec bypasses entrypoint.sh and therefore begins as root.
 # run-mode.sh must still drop to PUID/PGID before it creates any data.
 [[ "$(docker exec "$container_name" id -u)" == "0" ]] || fail 'Ownership regression precondition did not start docker exec as root.'
+
+# Older direct helper invocations could leave root-owned configuration or logs
+# in /data. The shared privilege launcher must repair those entries without
+# following a symlink outside the dedicated data filesystem.
+docker exec "$container_name" sh -c 'mkdir -p /data/logs /tmp/tautweekly-ownership-target && touch /data/logs/legacy-root.log /tmp/tautweekly-ownership-target/private && ln -sfn /tmp/tautweekly-ownership-target/private /data/legacy-root-link'
+[[ "$(docker exec "$container_name" stat -c '%u:%g' /data/logs/legacy-root.log)" == '0:0' ]] || fail 'Legacy ownership regression precondition was not root-owned.'
+[[ "$(docker exec "$container_name" /opt/tautweekly/bin/run-as-user.sh id -u)" == "$host_uid" ]] || fail 'Shared exec launcher did not drop to the configured UID.'
+[[ "$(docker exec "$container_name" stat -c '%u:%g' /data/logs/legacy-root.log)" == "$host_uid:$host_gid" ]] || fail 'Shared exec launcher did not repair a legacy root-owned log.'
+[[ "$(docker exec "$container_name" stat -c '%u:%g' /tmp/tautweekly-ownership-target/private)" == '0:0' ]] || fail 'Shared exec launcher followed a symlink outside /data.'
+
 ownership_probe='/data/exec-ownership-probe'
 docker exec "$container_name" rm -rf "$ownership_probe"
 docker exec \

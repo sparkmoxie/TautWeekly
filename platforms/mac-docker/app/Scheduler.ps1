@@ -85,7 +85,7 @@ while ($true) {
                     Log "Found a non-persistent config at $misplacedConfig, but the scheduler only reads $configPath. Run ./tautweekly.sh setup from the Compose directory or Setup-First.ps1 from the container Console." "WARN"
                 }
                 else {
-                    Log "Waiting for $configPath. From the Compose directory run ./tautweekly.sh setup; from an Unraid container Console run pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1." "WARN"
+                    Log "Waiting for $configPath. From the Compose directory run ./tautweekly.sh setup; from an Unraid container Console run /opt/tautweekly/bin/run-script.sh Setup-First.ps1." "WARN"
                 }
                 $lastMissingConfigWarningUtc = [DateTimeOffset]::UtcNow
             }

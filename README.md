@@ -271,9 +271,13 @@ non-root Unraid defaults. After installation, open the container Console and
 run:
 
 ```bash
-pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
-pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
+/opt/tautweekly/bin/run-script.sh Setup-First.ps1
+/opt/tautweekly/bin/run-script.sh Verify-Setup.ps1
 ```
+
+Use the supplied launcher for all Console commands. Docker exec sessions begin
+as root; the launcher repairs legacy root-owned entries under `/data`, then
+runs TautWeekly as the configured non-root PUID/PGID.
 
 The published image is available for 64-bit Intel/AMD and ARM hosts at
 `ghcr.io/sparkmoxie/tautweekly:latest`.

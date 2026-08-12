@@ -49,15 +49,23 @@ jobs:
       - name: Test launcher permissions
         run: |
           tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/tautweekly.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/app/bin/run-as-user.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/app/bin/run-script.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/container-update.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/tautweekly.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/app/bin/run-as-user.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/app/bin/run-script.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/check-release.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/mac-update.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/install-linux.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/tautweekly | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/check-release.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/app/bin/run-as-user.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/app/bin/run-script.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/install-freebsd.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/rc.d/tautweekly | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/app/bin/run-as-user.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/app/bin/run-script.sh | grep -q '^-rwx'
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

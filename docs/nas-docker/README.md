@@ -9,7 +9,7 @@ general Linux Docker hosts, and Docker Desktop on x86-64 or ARM64. Docker
 Compose is the deployment mechanism for manual installations, not a separate
 edition or package.
 
-Current source baseline: **1.1.0**.
+Current source baseline: **1.2.1**.
 
 ## Requirements
 
@@ -34,13 +34,16 @@ After installation, open **Docker > TautWeekly for Plex > Console** and run:
 > [!IMPORTANT]
 > `./tautweekly.sh` is a host-side Compose wrapper shipped in the release
 > archive. It does not exist inside the Unraid Apps container. Use the direct
-> container commands below in the Unraid Console.
+> container launchers below in the Unraid Console. Do not invoke the
+> PowerShell files directly: Docker Console/exec sessions begin as root, while
+> the launcher repairs legacy root-owned `/data` entries and then uses the
+> configured non-root PUID/PGID.
 
 ```bash
-pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
-pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
-pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1
-pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1
+/opt/tautweekly/bin/run-script.sh Setup-First.ps1
+/opt/tautweekly/bin/run-script.sh Verify-Setup.ps1
+/opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1
+/opt/tautweekly/bin/run-script.sh Manage-User-Exclusions.ps1
 /opt/tautweekly/bin/run-mode.sh ListUsers
 /opt/tautweekly/bin/run-mode.sh PreviewAll USER_ID
 /opt/tautweekly/bin/run-mode.sh SendTest USER_ID
@@ -173,7 +176,7 @@ Run `./tautweekly.sh exclude-users` whenever the recipient policy changes.
 Unraid Apps users can instead run this from the container Console:
 
 ```bash
-pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-User-Exclusions.ps1
+/opt/tautweekly/bin/run-script.sh Manage-User-Exclusions.ps1
 ```
 
 The command changes only `ExcludedUserIds`; manually maintained
@@ -195,7 +198,7 @@ Run `./tautweekly.sh list-libraries` to inspect the scope and
 same manager directly in the container Console:
 
 ```bash
-pwsh -NoLogo -NoProfile -File /opt/tautweekly/Manage-Library-Selection.ps1
+/opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1
 ```
 
 The manager accepts rows, ranges, `all`, or Enter to keep the selection and

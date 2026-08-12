@@ -63,8 +63,8 @@
     <section>
       <h2>First run from an Unraid container Console</h2>
       <p>Do not use the host-side <code>./tautweekly.sh</code> wrapper here. Run these container-native commands instead:</p>
-      <pre><code>pwsh -NoLogo -NoProfile -File /opt/tautweekly/Setup-First.ps1
-pwsh -NoLogo -NoProfile -File /opt/tautweekly/Verify-Setup.ps1
+      <pre><code>/opt/tautweekly/bin/run-script.sh Setup-First.ps1
+/opt/tautweekly/bin/run-script.sh Verify-Setup.ps1
 /opt/tautweekly/bin/run-mode.sh ListUsers
 /opt/tautweekly/bin/run-mode.sh PreviewAll USER_ID
 /opt/tautweekly/bin/run-mode.sh SendTest USER_ID</code></pre>
