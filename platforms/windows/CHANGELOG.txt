@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
+v1.8.3 Portable
+---------------
+- recovers provider-labelled movie RT and exact-episode IMDb from authenticated native Plex XML when JSON omits those target provider entries
+- preserves the JSON fast path, movie RT priority, score-dependent icons, and exact-episode IMDb boundary
+- reports an empty optional hosted exact-match fallback as informational instead of a ratings warning
+
 v1.8.2 Portable
 ---------------
 - packages the exact approved multi-resolution TautWeekly.ico for approved Windows Setup, shortcut, executable, and uninstaller consumers

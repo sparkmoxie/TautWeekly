@@ -5,7 +5,7 @@
 The macOS distribution runs the PowerShell newsletter engine in Docker Desktop
 and provides Mac-native setup and preview helpers.
 
-Current source baseline: **1.1.1**.
+Current source baseline: **1.2.1**.
 
 ## Requirements
 
@@ -62,7 +62,9 @@ other fallbacks will be used.
 Verification proves reachability and authentication, not that every item has
 every provider score. The renderer explicitly requests Plex's optional
 `Rating` element so available RT pairs and exact-episode IMDb values are not
-hidden by a selected IMDb/TMDB fallback.
+hidden by a selected IMDb/TMDB fallback. If JSON lacks movie RT or
+exact-episode IMDb entries, the renderer retries the same authenticated local
+item as XML and reads only provider-labelled `Rating` elements.
 For intended movie RT output, also set every applicable Plex Movie library's
 **Edit → Advanced → Ratings Source** to **Rotten Tomatoes**,
 save, and refresh affected metadata. This is a library-wide Plex choice, not a

@@ -1,6 +1,8 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Recovers provider-labelled movie RT and exact-episode IMDb from authenticated native Plex XML when JSON omits those target provider entries.
+- Reports an empty optional hosted exact-match fallback as informational instead of a ratings warning.
 - Ships the exact approved TautWeekly product mark and favicon on the private preview landing page while retaining FreeBSD and Podman platform identity.
 - Leaves generated newsletters and their existing mail-state artwork unchanged.
 - Explicitly requests Plex's optional Rating element so available movie RT and exact-episode IMDb values are not hidden by a flattened selected IMDb/TMDB score.

@@ -5,7 +5,7 @@
 The Windows distribution runs directly in Windows PowerShell and uses Windows
 Task Scheduler for optional automation.
 
-Current source baseline: **1.7.0**.
+Current source baseline: **1.8.3**.
 
 ## Requirements
 
@@ -50,7 +50,9 @@ that TautWeekly will use Tautulli's selected/flattened rating fallbacks.
 Verification proves reachability and authentication, not that every item has
 every provider score. The renderer explicitly requests Plex's optional
 `Rating` element so available RT pairs and exact-episode IMDb values are not
-hidden by a selected IMDb/TMDB fallback.
+hidden by a selected IMDb/TMDB fallback. If JSON lacks movie RT or
+exact-episode IMDb entries, the renderer retries the same authenticated local
+item as XML and reads only provider-labelled `Rating` elements.
 For intended movie RT output, also set every applicable Plex Movie library's
 **Edit → Advanced → Ratings Source** to **Rotten Tomatoes**,
 save, and refresh affected metadata. This is a library-wide Plex choice, not a
