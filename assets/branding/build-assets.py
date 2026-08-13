@@ -8,18 +8,15 @@ from PIL import Image, ImageChops, ImageDraw
 
 ROOT = Path(__file__).resolve().parent
 SOURCE = ROOT / "tautweekly-logo-source.png"
+TRANSPARENT_SOURCE = ROOT / "tautweekly-logo-transparent-source.png"
 MASTER = ROOT / "tautweekly-logo-master.png"
 APP_MASTER = ROOT / "tautweekly-app-icon-1024.png"
 MARK_SIZES = (128, 256, 512, 1024)
 APP_SIZES = (16, 32, 48, 64, 128, 180, 192, 256, 512, 1024)
 
 
-def subject_bbox(image: Image.Image, threshold: int = 10) -> tuple[int, int, int, int]:
-    rgb = image.convert("RGB")
-    background = Image.new("RGB", rgb.size, (1, 1, 1))
-    difference = ImageChops.difference(rgb, background).convert("L")
-    mask = difference.point(lambda value: 255 if value > threshold else 0)
-    bbox = mask.getbbox()
+def subject_bbox(image: Image.Image) -> tuple[int, int, int, int]:
+    bbox = image.getchannel("A").getbbox()
     if bbox is None:
         raise ValueError("Source contains no visible logo subject")
     return bbox
@@ -55,25 +52,21 @@ def write_embedded_svg(png_path: Path, svg_path: Path, title: str, description: 
 
 
 def main() -> None:
-    with Image.open(SOURCE) as opened:
+    with Image.open(TRANSPARENT_SOURCE) as opened:
         source = opened.convert("RGBA")
 
     bbox = subject_bbox(source)
     cropped = source.crop(bbox)
 
-    # Preserve every interior pixel and only normalize the surrounding near-black field.
-    master = contain(cropped, 1024, (1, 1, 1, 255), margin=58)
+    # All production masters and derivatives use the exact approved artwork on
+    # a transparent field. SOURCE retains the untouched supplied raster only as
+    # provenance and is not a production asset.
+    master = contain(cropped, 1024, (0, 0, 0, 0), margin=58)
     save_png(master, MASTER)
 
-    # The app tile uses the exact detailed mark on a rounded, near-black container.
-    tile = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
-    tile_mask = Image.new("L", tile.size, 0)
-    ImageDraw.Draw(tile_mask).rounded_rectangle((12, 12, 1011, 1011), radius=208, fill=255)
-    # Match the supplied image's sampled edge color so no inner square is visible.
-    tile_fill = Image.new("RGBA", tile.size, (1, 1, 1, 255))
-    tile.alpha_composite(Image.composite(tile_fill, Image.new("RGBA", tile.size), tile_mask))
-    tile_mark = contain(cropped, 1024, (0, 0, 0, 0), margin=74)
-    tile.alpha_composite(tile_mark)
+    # Application, shortcut, favicon, and manifest assets also remain fully
+    # transparent; the consuming surface supplies its own background.
+    tile = contain(cropped, 1024, (0, 0, 0, 0), margin=74)
     save_png(tile, APP_MASTER)
 
     for size in MARK_SIZES:

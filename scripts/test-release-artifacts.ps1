@@ -185,23 +185,23 @@ $expectedGifHashes = [ordered]@{
 }
 $expectedBrandFiles = [ordered]@{
     'TautWeekly-windows.zip' = [ordered]@{
-        'TautWeekly-windows/TautWeekly.ico' = '22EBB62553593C12350F800769E6342165D9D1FC38A7F7CF25C14B5A2DA7199E'
+        'TautWeekly-windows/TautWeekly.ico' = 'A77AA803DFE9D026DB37744FF646A6197C0C3C402CA03DA8EEA76962212B892C'
     }
     'TautWeekly-nas-docker.zip' = [ordered]@{
-        'TautWeekly-nas-docker/app/product-branding/favicon.ico' = '8B7488E80EA2A27D02012F6D280ED154DE253AC6661AA66841AE418E54ADD495'
-        'TautWeekly-nas-docker/app/product-branding/tautweekly-app-icon-128.png' = '896AC8A1C33B8AEC75C1F2635C87E41142613E9D4311D3B140F1B86B665FFC52'
+        'TautWeekly-nas-docker/app/product-branding/favicon.ico' = 'A55139823F3DA079E270049EF232B7919979E94605734A7C0DC0864AF4C0E83A'
+        'TautWeekly-nas-docker/app/product-branding/tautweekly-app-icon-128.png' = '7938FAA3711FCF51BF53A6ED530B4D1D7DCA73B6A8EF7F5CA9D1E674B461251E'
     }
     'TautWeekly-mac-docker.zip' = [ordered]@{
-        'TautWeekly-mac-docker/app/product-branding/favicon.ico' = '8B7488E80EA2A27D02012F6D280ED154DE253AC6661AA66841AE418E54ADD495'
-        'TautWeekly-mac-docker/app/product-branding/tautweekly-app-icon-128.png' = '896AC8A1C33B8AEC75C1F2635C87E41142613E9D4311D3B140F1B86B665FFC52'
+        'TautWeekly-mac-docker/app/product-branding/favicon.ico' = 'A55139823F3DA079E270049EF232B7919979E94605734A7C0DC0864AF4C0E83A'
+        'TautWeekly-mac-docker/app/product-branding/tautweekly-app-icon-128.png' = '7938FAA3711FCF51BF53A6ED530B4D1D7DCA73B6A8EF7F5CA9D1E674B461251E'
     }
     'TautWeekly-linux.zip' = [ordered]@{
-        'TautWeekly-linux/app/product-branding/favicon.ico' = '8B7488E80EA2A27D02012F6D280ED154DE253AC6661AA66841AE418E54ADD495'
-        'TautWeekly-linux/app/product-branding/tautweekly-app-icon-128.png' = '896AC8A1C33B8AEC75C1F2635C87E41142613E9D4311D3B140F1B86B665FFC52'
+        'TautWeekly-linux/app/product-branding/favicon.ico' = 'A55139823F3DA079E270049EF232B7919979E94605734A7C0DC0864AF4C0E83A'
+        'TautWeekly-linux/app/product-branding/tautweekly-app-icon-128.png' = '7938FAA3711FCF51BF53A6ED530B4D1D7DCA73B6A8EF7F5CA9D1E674B461251E'
     }
     'TautWeekly-freebsd-podman.zip' = [ordered]@{
-        'TautWeekly-freebsd-podman/app/product-branding/favicon.ico' = '8B7488E80EA2A27D02012F6D280ED154DE253AC6661AA66841AE418E54ADD495'
-        'TautWeekly-freebsd-podman/app/product-branding/tautweekly-app-icon-128.png' = '896AC8A1C33B8AEC75C1F2635C87E41142613E9D4311D3B140F1B86B665FFC52'
+        'TautWeekly-freebsd-podman/app/product-branding/favicon.ico' = 'A55139823F3DA079E270049EF232B7919979E94605734A7C0DC0864AF4C0E83A'
+        'TautWeekly-freebsd-podman/app/product-branding/tautweekly-app-icon-128.png' = '7938FAA3711FCF51BF53A6ED530B4D1D7DCA73B6A8EF7F5CA9D1E674B461251E'
     }
 }
 $zipReleaseManifests = @{}
