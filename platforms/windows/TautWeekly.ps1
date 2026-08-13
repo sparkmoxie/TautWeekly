@@ -11,7 +11,7 @@
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex Portable v1.8.4 — production newsletter engine.
+# TautWeekly for Plex Portable v1.8.5 — production newsletter engine.
 # Includes validated production renderer changes through v1.5.14 plus portable
 # server, SMTP, schedule, preview, and safety controls.
 Set-StrictMode -Version Latest
@@ -4830,7 +4830,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.10.2"
+                "User-Agent"      = "TautWeekly-for-Plex/0.10.3"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -5084,7 +5084,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.10.2"
+        "X-Plex-Version"           = "0.10.3"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 

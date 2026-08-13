@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
+v1.8.5 Portable
+---------------
+- prints the ordered Plex and Tautulli metadata-readiness checklist after first setup and relevant updates
+- distinguishes direct-Plex connectivity verification from upstream metadata freshness before PreviewAll or TestEmail
+- documents per-library scope, potentially long Plex refreshes, and the safe routine-update exception
+
 v1.8.4 Portable
 ---------------
 - prefers exact-episode IMDb on TV release rows and falls back to that episode's RT critic or audience score only when IMDb is absent

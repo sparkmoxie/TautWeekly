@@ -239,14 +239,28 @@ available. Re-run the verifier, PreviewAll, and a controlled SendTest after
 correcting the private configuration or container networking.
 
 A passing verifier proves authenticated reachability, not that a particular
-Plex item publishes each provider score. On v0.9.8 or newer, inspect only the
-sanitized `Design ratings:` lines after PreviewAll. If they still show RT or
-IMDb as unavailable, open Plex Web → Settings → Manage → Libraries → the Movie
-library → Edit → Advanced. To intentionally publish RT, choose **Ratings Source
-→ Rotten Tomatoes**, save, and refresh one affected movie's
-metadata before considering a library-wide refresh. If IMDb/TMDB is selected
-deliberately, labelled IMDb is the expected movie fallback. Do not share the
-configuration, token, generated preview, recipient information, or full log.
+Plex item publishes each provider score or that Plex/Tautulli metadata is
+current. After first install—or when a metadata-recovery update still shows
+stale results—prepare every included movie/TV library before acceptance:
+
+1. In Plex Web, confirm the intended **Edit → Advanced → Ratings Source** for
+   each included Plex Movie library.
+2. Run **Manage Library → Refresh All Metadata** for each included movie/TV
+   library and wait for every refresh to finish. A full refresh can be slow and
+   can update metadata or artwork; do not refresh unrelated libraries.
+3. In Tautulli, open each same **Library → Media Info** tab and choose
+   **Refresh media info**. The current control is per library, so repeat it for
+   every included section and wait for completion.
+4. Re-run the verifier, PreviewAll, and a controlled TestEmail. On v0.9.8 or
+   newer, inspect only the sanitized `Design ratings:` lines.
+
+Tautulli's media-info-table refresh does not choose a ratings provider and does
+not replace Plex's refresh. If IMDb/TMDB is selected deliberately in Plex,
+labelled IMDb is the expected movie fallback. Do not share the configuration,
+token, generated preview, recipient information, or full log.
+
+Routine TautWeekly updates do not require this full sequence when current
+output already renders correctly.
 
 A passing Tautulli check does not prove direct Plex works. Tautulli and
 TautWeekly can run in different containers, networks, DNS contexts, and trust

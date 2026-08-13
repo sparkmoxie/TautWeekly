@@ -134,8 +134,17 @@ Application: /opt/tautweekly
 Repository version: $installed_version
 Private data: /var/lib/tautweekly
 
+Metadata readiness before Verify, Preview, or TestEmail:
+  1. Confirm each included Plex Movie library's Advanced > Ratings Source.
+  2. Run Plex Refresh All Metadata for every included movie/TV library and wait.
+  3. In Tautulli, open each same Library > Media Info > Refresh media info and wait.
+Repeat this after first install, a Plex agent/source change, or a ratings/artwork
+recovery update when metadata may be stale. A routine update does not require a
+full refresh when current metadata already renders correctly.
+
 Next:
   sudo tautweekly setup
+  Complete the metadata-readiness sequence above after setup, then:
   sudo tautweekly verify
   sudo tautweekly preview-all USER_ID
   sudo tautweekly send-test-all USER_ID

@@ -9,7 +9,7 @@ general Linux Docker hosts, and Docker Desktop on x86-64 or ARM64. Docker
 Compose is the deployment mechanism for manual installations, not a separate
 edition or package.
 
-Current source baseline: **1.3.2**.
+Current source baseline: **1.3.3**.
 
 ## Requirements
 
@@ -41,6 +41,7 @@ After installation, open **Docker > TautWeekly for Plex > Console** and run:
 
 ```bash
 /opt/tautweekly/bin/run-script.sh Setup-First.ps1
+# Complete metadata readiness for the included libraries, then:
 /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1
 /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1
 /opt/tautweekly/bin/run-script.sh Manage-User-Exclusions.ps1
@@ -103,6 +104,7 @@ cp .env.example .env
 docker compose pull
 docker compose up -d
 ./tautweekly.sh setup
+# Complete metadata readiness for the included libraries, then:
 ./tautweekly.sh verify
 ./tautweekly.sh manage-libraries
 ./tautweekly.sh exclude-users
@@ -127,10 +129,33 @@ every provider score. The renderer explicitly requests Plex's optional
 hidden by a selected IMDb/TMDB fallback. If JSON lacks movie RT or
 exact-episode provider entries, the renderer retries the same authenticated local
 item as XML and reads only provider-labelled `Rating` elements.
-For intended movie RT output, also set every applicable Plex Movie library's
-**Edit → Advanced → Ratings Source** to **Rotten Tomatoes**,
-save, and refresh affected metadata. This is a library-wide Plex choice, not a
-TautWeekly setting; leave IMDb/TMDB selected if that fallback is intentional.
+For intended movie RT output, set every applicable Plex Movie library's
+**Edit → Advanced → Ratings Source** to **Rotten Tomatoes**. This is a
+library-wide Plex choice, not a TautWeekly setting; leave IMDb/TMDB selected if
+that fallback is intentional.
+
+## Metadata readiness before acceptance
+
+After first setup, after changing a Plex metadata agent or Ratings Source, and
+after a ratings/artwork recovery update when upstream data may be stale:
+
+1. Confirm **Edit → Advanced → Ratings Source** in every included Plex Movie
+   library.
+2. Run Plex **Manage Library → Refresh All Metadata** for every included movie
+   and TV library, then wait for all refreshes to finish.
+3. In Tautulli, open each same **Library → Media Info** tab, select
+   **Refresh media info**, and wait. The current control is per library, so
+   repeat it for every included section.
+4. Run `verify`, PreviewAll, and TestEmail only after both refresh stages
+   complete.
+
+[Plex documents](https://support.plex.tv/articles/200289306-scanning-vs-refreshing-a-library/)
+that a full refresh can take significant time and can update existing metadata
+and artwork. Do not refresh unrelated music/photo libraries for TautWeekly.
+Tautulli's [section-specific media-info refresh](https://github.com/Tautulli/Tautulli/wiki/Tautulli-API-Reference#get_library_media_info)
+updates its table after Plex; it does not replace Plex's refresh or choose a
+ratings provider. Routine TautWeekly updates do not require a full refresh when
+current output already renders correctly.
 
 ## Safe acceptance sequence
 
@@ -322,7 +347,9 @@ when the configured `latest` digest changes; apply it from Unraid's Docker/Apps
 controls. An optional automatic-update plugin may apply administrator-selected
 updates, but unattended application is opt-in. Leave the template on `latest`,
 not `edge`, unless deliberately testing unreleased code. After any update, run
-the Console verification and controlled preview/TestEmail sequence again.
+the Console verification and controlled preview/TestEmail sequence again. If
+the update addresses missing ratings/artwork or output remains stale, complete
+metadata readiness before those checks.
 
 ## Lifecycle commands
 

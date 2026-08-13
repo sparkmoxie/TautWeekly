@@ -141,6 +141,39 @@ $rootReadme = [IO.File]::ReadAllText((Join-Path $Root 'README.md'))
 $docsReadme = [IO.File]::ReadAllText((Join-Path $docs 'README.md'))
 $entryMarkdown = $rootReadme + [Environment]::NewLine + $docsReadme
 
+$metadataReadinessDocs = @(
+    'README.md',
+    'docs/CONFIGURATION.md',
+    'docs/TROUBLESHOOTING.md',
+    'docs/windows/README.md',
+    'docs/nas-docker/README.md',
+    'docs/mac/README.md',
+    'docs/linux/README.md',
+    'docs/freebsd/README.md',
+    'docs/index.html',
+    'docs/windows/index.html',
+    'docs/nas-docker/index.html',
+    'docs/mac/index.html',
+    'docs/linux/index.html',
+    'docs/freebsd/index.html'
+)
+foreach ($relative in $metadataReadinessDocs) {
+    $content = [IO.File]::ReadAllText((Join-Path $Root $relative))
+    foreach ($pattern in @(
+        'Ratings Source',
+        'Refresh All Metadata',
+        'Media Info',
+        'Refresh media info',
+        '(?i)per[- ]library',
+        '(?i)routine TautWeekly updates do not require'
+    )) {
+        if ($content -notmatch $pattern) {
+            throw "Metadata-readiness guidance '$pattern' is missing from $relative"
+        }
+    }
+    Write-Host "[PASS] Metadata readiness: $relative"
+}
+
 $nasInstall = [IO.File]::ReadAllText((Join-Path $docs 'nas-docker/README.md'))
 if ($nasInstall -match '(?m)^/opt/tautweekly/bin/run-mode\.sh PreviewAll\s*$') {
     throw 'Unraid Console documentation contains PreviewAll without the required USER_ID.'

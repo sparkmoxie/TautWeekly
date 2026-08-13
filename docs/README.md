@@ -38,6 +38,12 @@ formatting. No Plex token or private server data is embedded.
 - [Troubleshooting](TROUBLESHOOTING.md)
 - [Release process](RELEASING.md)
 
+Before first-run acceptance—or after a metadata-recovery update when ratings or
+artwork may still be stale—follow the repository's
+[Plex/Tautulli metadata-readiness sequence](../README.md#prepare-metadata-before-acceptance)
+before verification, PreviewAll, or TestEmail. It is scoped to the movie/TV
+libraries included in TautWeekly, not unrelated Plex libraries.
+
 The `.html` files in the platform directories are self-contained Pages
 Quickstarts. The Pages workflow deploys from the repository's default `main`
 branch. The Markdown files are the canonical source-oriented guides for reading

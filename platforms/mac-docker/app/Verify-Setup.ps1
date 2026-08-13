@@ -153,7 +153,8 @@ elseif ($directPlexExit -ne 0) {
 }
 else {
     OK "Direct Plex identity and authenticated library requests succeeded"
-    Write-Host "[INFO] Reachability does not select a movie rating provider. For RT output, each Plex Movie library must use Advanced > Ratings Source > Rotten Tomatoes and have refreshed metadata."
+    Write-Host "[INFO] Reachability does not select a movie rating provider or prove metadata freshness."
+    Write-Host "[INFO] Before ratings/artwork acceptance, confirm each included Plex Movie library's Advanced > Ratings Source (use Ratings Source > Rotten Tomatoes when RT output is intended), run Plex Refresh All Metadata for every included movie/TV library, then use Tautulli Library > Media Info > Refresh media info for each same library."
 }
 
 try {
@@ -260,7 +261,7 @@ try {
 }
 catch {
     FAIL "preview asset web check failed: $($_.Exception.Message)"
-    WARN "Inspect ./tautweekly.sh logs and confirm the container was recreated from v1.2.2."
+    WARN "Inspect ./tautweekly.sh logs and confirm the container was recreated from v1.2.3."
     exit 1
 }
 

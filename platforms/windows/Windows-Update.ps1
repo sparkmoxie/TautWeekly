@@ -347,6 +347,7 @@ try {
     Write-UpdateResult
     Write-Host "TautWeekly updated safely to $TargetVersion." -ForegroundColor Green
     Write-Host "Private rollback backup: $backupRoot"
+    Write-Host 'If this update addresses missing ratings/artwork or results still appear stale, complete metadata readiness before testing: confirm the Plex Movie Ratings Source; run Plex Refresh All Metadata for each included movie/TV library; then run Tautulli Library > Media Info > Refresh media info for each same library.'
     Write-Host 'Run 01-VERIFY-SETUP.bat and a controlled preview/TestEmail check before the next production send.'
 }
 catch {

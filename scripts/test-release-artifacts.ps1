@@ -48,8 +48,8 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('function Test-PlexHostedMetadataExactMatch')) "$PackageName lacks fail-closed hosted match validation."
     Assert-True ($Renderer.Contains('-Method Post')) "$PackageName lacks the provider-contract POST retry for empty exact-ID matches."
     Assert-True ($Renderer.Contains('matching hints only: require an exact modern GUID')) "$PackageName does not document the exact-identifier hosted POST boundary."
-    Assert-True ($Renderer.Contains('"User-Agent"      = "TautWeekly-for-Plex/0.10.2"')) "$PackageName does not identify the tokenless public Plex rating fallback."
-    Assert-True ($Renderer.Contains('"X-Plex-Version"           = "0.10.2"')) "$PackageName does not identify the authenticated hosted metadata fallback."
+    Assert-True ($Renderer.Contains('"User-Agent"      = "TautWeekly-for-Plex/0.10.3"')) "$PackageName does not identify the tokenless public Plex rating fallback."
+    Assert-True ($Renderer.Contains('"X-Plex-Version"           = "0.10.3"')) "$PackageName does not identify the authenticated hosted metadata fallback."
     Assert-True ($Renderer.Contains('native XML rating fallback failed')) "$PackageName lacks the native Plex XML rating fallback."
     Assert-True ($Renderer.Contains('function Get-DesignEpisodeRtRating')) "$PackageName lacks exact-episode Rotten Tomatoes fallback resolution."
     Assert-True ($Renderer.Contains('TV RT fallback:')) "$PackageName lacks sanitized exact-episode Rotten Tomatoes diagnostics."
@@ -92,6 +92,18 @@ function Assert-DeletedItemCacheContract([string]$PackageName, [string]$CacheMod
     foreach ($forbidden in @('PlexToken', 'ApiKey', 'SmtpPassword', 'RecipientEmail', 'play_duration', 'watched_status')) {
         Assert-True (-not $CacheModule.Contains($forbidden)) "$PackageName cache module accepts a forbidden private field: $forbidden"
     }
+}
+
+function Assert-MetadataReadinessContract([string]$PackageName, [string]$Content) {
+    foreach ($required in @(
+        'Ratings Source',
+        'Refresh All Metadata',
+        'Media Info',
+        'Refresh media info'
+    )) {
+        Assert-True ($Content.Contains($required)) "$PackageName omits metadata-readiness instruction: $required"
+    }
+    Assert-True ($Content -match '(?i)per[- ]library') "$PackageName does not identify Tautulli's per-library refresh scope."
 }
 
 $expected = [ordered]@{
@@ -295,6 +307,18 @@ foreach ($archiveName in $expected.Keys) {
         finally { $cacheReader.Dispose() }
         Assert-DeletedItemCacheContract -PackageName $archiveName -CacheModule $cacheModule
 
+        $readinessEntries = @($archive.Entries | Where-Object {
+            $_.FullName -match '/(?:app/)?(?:Setup-First|Verify-Setup)\.ps1$'
+        })
+        Assert-True ($readinessEntries.Count -eq 2) "$archiveName does not contain one setup and one verification readiness surface."
+        $readinessText = New-Object Text.StringBuilder
+        foreach ($readinessEntry in $readinessEntries) {
+            $readinessReader = New-Object IO.StreamReader($readinessEntry.Open())
+            try { [void]$readinessText.AppendLine($readinessReader.ReadToEnd()) }
+            finally { $readinessReader.Dispose() }
+        }
+        Assert-MetadataReadinessContract -PackageName $archiveName -Content $readinessText.ToString()
+
         foreach ($gifName in $expectedGifHashes.Keys) {
             $gifEntryName = "$($assetRoots[$archiveName])/$gifName"
             $gifEntry = @($archive.Entries | Where-Object { $_.FullName.Replace('\', '/') -ceq $gifEntryName })
@@ -395,6 +419,11 @@ foreach ($tarArchive in $tarArchives) {
         $cacheFiles = @($files | Where-Object { $_.Name -ceq 'DeletedItemCache.ps1' })
         Assert-True ($cacheFiles.Count -eq 1) "$($tarArchive.Name) has no unique persistent cache module."
         Assert-DeletedItemCacheContract -PackageName $tarArchive.Name -CacheModule (Get-Content -LiteralPath $cacheFiles[0].FullName -Raw)
+
+        $readinessFiles = @($files | Where-Object { $_.Name -in @('Setup-First.ps1', 'Verify-Setup.ps1') })
+        Assert-True ($readinessFiles.Count -eq 2) "$($tarArchive.Name) does not contain one setup and one verification readiness surface."
+        $readinessText = ($readinessFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
+        Assert-MetadataReadinessContract -PackageName $tarArchive.Name -Content $readinessText
 
         foreach ($gifName in $expectedGifHashes.Keys) {
             $assetRoot = $assetRoots[$zipName].Substring($packageName.Length + 1)

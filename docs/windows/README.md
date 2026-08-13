@@ -5,7 +5,7 @@
 The Windows distribution runs directly in Windows PowerShell and uses Windows
 Task Scheduler for optional automation.
 
-Current source baseline: **1.8.4**.
+Current source baseline: **1.8.5**.
 
 ## Requirements
 
@@ -36,7 +36,9 @@ Windows machine.
    the core Tautulli activity flow, but supplying its URL and administrator
    token is recommended for complete movie RT critic/audience ratings,
    exact-episode IMDb/RT ratings, backgrounds, and selected logos.
-6. Run `01-VERIFY-SETUP.bat` and correct every failure before continuing.
+6. Complete the metadata-readiness checklist below for every included
+   movie/TV library and wait for both applications to finish.
+7. Run `01-VERIFY-SETUP.bat` and correct every failure before continuing.
 
 The setup wizard creates `config.json`. That file is deliberately ignored by
 git and must remain private.
@@ -53,10 +55,33 @@ every provider score. The renderer explicitly requests Plex's optional
 hidden by a selected IMDb/TMDB fallback. If JSON lacks movie RT or
 exact-episode provider entries, the renderer retries the same authenticated local
 item as XML and reads only provider-labelled `Rating` elements.
-For intended movie RT output, also set every applicable Plex Movie library's
-**Edit → Advanced → Ratings Source** to **Rotten Tomatoes**,
-save, and refresh affected metadata. This is a library-wide Plex choice, not a
-TautWeekly setting; leave IMDb/TMDB selected if that fallback is intentional.
+For intended movie RT output, set every applicable Plex Movie library's
+**Edit → Advanced → Ratings Source** to **Rotten Tomatoes**. This is a
+library-wide Plex choice, not a TautWeekly setting; leave IMDb/TMDB selected if
+that fallback is intentional.
+
+## Metadata readiness before acceptance
+
+After first setup, after changing a Plex metadata agent or Ratings Source, and
+after a ratings/artwork recovery update when upstream data may be stale:
+
+1. Confirm **Edit → Advanced → Ratings Source** in every included Plex Movie
+   library.
+2. Run Plex **Manage Library → Refresh All Metadata** for every included movie
+   and TV library, then wait for all refreshes to finish.
+3. In Tautulli, open each same **Library → Media Info** tab, select
+   **Refresh media info**, and wait. The current control is per library, so
+   repeat it for every included section.
+4. Run verification, Preview All, and TestEmail only after both refresh stages
+   complete.
+
+[Plex documents](https://support.plex.tv/articles/200289306-scanning-vs-refreshing-a-library/)
+that a full refresh can take significant time and can update existing metadata
+and artwork. Do not refresh unrelated music/photo libraries for TautWeekly.
+Tautulli's [section-specific media-info refresh](https://github.com/Tautulli/Tautulli/wiki/Tautulli-API-Reference#get_library_media_info)
+updates its table after Plex; it does not replace Plex's refresh or choose a
+ratings provider. Routine TautWeekly updates do not require a full refresh when
+current output already renders correctly.
 
 ## Safe acceptance sequence
 
@@ -181,6 +206,8 @@ reports the private backup path. After a successful update, run
 `01-VERIFY-SETUP.bat`, `05-PREVIEW-ALL-EMAIL-TYPES.bat`, and
 `06-SEND-TEST-ALL-EMAIL-TYPES.bat` before the next production send. The sibling
 backup is intentionally retained for manual recovery until you are satisfied.
+If the update addresses missing ratings/artwork or output remains stale,
+complete metadata readiness before those checks.
 
 See [configuration](../CONFIGURATION.md), [security](../SECURITY.md), and
 [troubleshooting](../TROUBLESHOOTING.md).
