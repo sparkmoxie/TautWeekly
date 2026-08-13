@@ -142,7 +142,6 @@ $docsReadme = [IO.File]::ReadAllText((Join-Path $docs 'README.md'))
 $entryMarkdown = $rootReadme + [Environment]::NewLine + $docsReadme
 
 $metadataReadinessDocs = @(
-    'README.md',
     'docs/CONFIGURATION.md',
     'docs/TROUBLESHOOTING.md',
     'docs/windows/README.md',
@@ -247,26 +246,30 @@ foreach ($entryPoint in @{
     'README.md'      = $rootReadme
     'docs/README.md' = $docsReadme
 }.GetEnumerator()) {
-    $section = [regex]::Match(
-        $entryPoint.Value,
-        '(?ms)^## Interactive Quickstart Guides\s*(?<content>.*?)(?=^##\s)'
-    )
-    if (-not $section.Success) {
-        throw "Interactive Quickstart Guides section is missing from $($entryPoint.Key)"
+    $linkContent = $entryPoint.Value
+    if ($entryPoint.Key -eq 'docs/README.md') {
+        $section = [regex]::Match(
+            $entryPoint.Value,
+            '(?ms)^## Interactive Quickstart Guides\s*(?<content>.*?)(?=^##\s)'
+        )
+        if (-not $section.Success) {
+            throw "Interactive Quickstart Guides section is missing from $($entryPoint.Key)"
+        }
+        $linkContent = $section.Groups['content'].Value
     }
     foreach ($link in $quickstartLinks.GetEnumerator()) {
         $expectedLink = "[$($link.Key)]($($link.Value))"
-        if (-not $section.Groups['content'].Value.Contains($expectedLink)) {
+        if (-not $linkContent.Contains($expectedLink)) {
             throw "Canonical Quickstart link is missing from $($entryPoint.Key): $expectedLink"
         }
     }
-    if ($section.Groups['content'].Value -match '(?i)Unraid (?:Community )?Apps') {
+    if ($entryPoint.Key -eq 'docs/README.md' -and $linkContent -match '(?i)Unraid (?:Community )?Apps') {
         throw "Unraid Apps must not appear as a separate top-level Quickstart in $($entryPoint.Key)"
     }
 }
 
 $unraidCatalogUrl = 'https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb'
-$nasComparisonRow = @($rootReadme -split "`r?`n" | Where-Object { $_ -match '^\| NAS / Docker .+ baseline ' })
+$nasComparisonRow = @($rootReadme -split "`r?`n" | Where-Object { $_ -match '^\| NAS / Docker \|' })
 if ($nasComparisonRow.Count -ne 1 -or -not $nasComparisonRow[0].Contains("[Unraid Apps]($unraidCatalogUrl)")) {
     throw 'The NAS platform comparison row must retain its direct Unraid Apps catalog link.'
 }

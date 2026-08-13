@@ -40,7 +40,7 @@ formatting. No Plex token or private server data is embedded.
 
 Before first-run acceptance—or after a metadata-recovery update when ratings or
 artwork may still be stale—follow the repository's
-[Plex/Tautulli metadata-readiness sequence](../README.md#prepare-metadata-before-acceptance)
+[Plex/Tautulli metadata-readiness sequence](CONFIGURATION.md#metadata-readiness-before-acceptance)
 before verification, PreviewAll, or TestEmail. It is scoped to the movie/TV
 libraries included in TautWeekly, not unrelated Plex libraries.
 
