@@ -74,12 +74,19 @@ sha256 -r TautWeekly-freebsd-podman.tar.gz<button data-copy="#verify-command">Co
 cd TautWeekly-freebsd-podman
 sudo ./install-freebsd.sh
 sudo tautweekly setup
+# complete metadata readiness below, then:
 sudo tautweekly verify<button data-copy="#install-command">Copy</button></div>
         <div class="callout info"><div class="callout-icon">PMS</div><div><h3>Direct Plex is recommended for full newsletter fidelity</h3><p>Tautulli supplies core activity and selected/flattened rating fallbacks. Enter a Plex URL and administrator token reachable from the Podman container for complete movie RT critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and selected logos. Verification checks Plex identity and authenticated library access without printing the token; a resolved but unusable connection fails before preview or TestEmail.</p></div></div>
       </article>
     </section>
 
-    <section id="acceptance" class="section searchable" data-search="acceptance workflow libraries scope users exclusions preview test schedule send production">
+    <section id="metadata-readiness" class="section searchable" data-search="metadata readiness plex ratings source refresh all metadata tautulli media info first install update stale ratings artwork">
+      <div class="section-heading"><div><div class="eyebrow">Before acceptance</div><h2>Refresh Plex, then Tautulli</h2></div><p>Use this after first setup, after a Plex agent/source change, or after a ratings/artwork recovery update when data may be stale.</p></div>
+      <div class="timeline"><div><b>01</b><h3>Confirm the movie source</h3><p>Confirm <strong>Edit → Advanced → Ratings Source</strong> for each included Plex Movie library.</p></div><div><b>02</b><h3>Refresh Plex</h3><p>Run <strong>Manage Library → Refresh All Metadata</strong> for every included movie/TV library and wait.</p></div><div><b>03</b><h3>Refresh Tautulli</h3><p>Open each same <strong>Library → Media Info</strong> tab, select <strong>Refresh media info</strong>, and wait. Repeat per library.</p></div></div>
+      <div class="warning"><i>!</i><div><h3>Full refreshes can be slow and can update metadata or artwork.</h3><p>Do not refresh unrelated libraries. Tautulli's table refresh does not replace Plex's refresh. Routine TautWeekly updates do not require this when current output is correct.</p></div></div>
+    </section>
+
+    <section id="acceptance" class="section searchable" data-search="acceptance workflow libraries scope users exclusions preview test schedule send production metadata refresh">
       <div class="section-heading"><div><div class="eyebrow">Acceptance gate</div><h2>Observe before delivery</h2></div><p>Excluded users remain usable as sample data for previews and TestEmail, but scheduled and confirmed production delivery omits them. Replace <code>USER_ID</code> with a numeric value from <code>list-users</code>; listing users does not save a default.</p></div>
       <div class="timeline"><div><b>01</b><h3>Configure</h3><p>Write Tautulli, recommended direct Plex, and mail secrets only inside private container data.</p></div><div><b>02</b><h3>Verify</h3><p>Check Tautulli, direct Plex identity/authenticated library access, SMTP TCP reachability, files, timezone, and schedule.</p></div><div><b>03</b><h3>Preview</h3><p>Render all deterministic states without mail.</p></div><div><b>04</b><h3>TestEmail</h3><p>Validate SMTP authentication, sender permission, MIME, and the actual mail client.</p></div><div><b>05</b><h3>Opt in</h3><p>Enable the scheduler after roster review.</p></div></div>
       <div class="command-block" id="acceptance-command">sudo tautweekly list-libraries

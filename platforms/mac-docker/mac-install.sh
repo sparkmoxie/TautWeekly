@@ -106,6 +106,18 @@ fi
 compose_cmd restart tautweekly >/dev/null
 sleep 5
 
+say "Prepare Plex and Tautulli metadata before acceptance"
+cat <<'EOF'
+1. In Plex Web, confirm Edit > Advanced > Ratings Source for each included Plex
+   Movie library.
+2. Run Manage Library > Refresh All Metadata for every included movie/TV
+   library and wait. A full refresh can take a long time and can update
+   metadata or artwork.
+3. In Tautulli, open each same Library > Media Info tab, select Refresh media
+   info, and wait. The current control is per library.
+EOF
+read -r -p "Complete those steps, then press Enter to run verification: "
+
 say "Verification"
 if ! compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1; then
   fail "Verification failed. Correct the reported issue, then run ./tautweekly.sh verify."

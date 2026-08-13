@@ -1,3 +1,3 @@
-TautWeekly for Plex Portable v1.8.4
+TautWeekly for Plex Portable v1.8.5
 Platform: Windows PowerShell 5.1+
-Feature: Exact-episode IMDb with Rotten Tomatoes fallback
+Feature: Metadata readiness before acceptance

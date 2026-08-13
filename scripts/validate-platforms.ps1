@@ -118,14 +118,81 @@ Require-Text 'platforms/nas-docker/app/preview-home.html' @(
 )
 Require-Text 'platforms/nas-docker/app/Setup-First.ps1' @(
     'NEXT \(Unraid Console\): \/opt\/tautweekly\/bin\/run-script\.sh Verify-Setup\.ps1',
-    'NEXT \(Compose host project directory\): \.\/tautweekly\.sh verify'
+    'NEXT \(Compose host project directory\): \.\/tautweekly\.sh verify',
+    'Metadata readiness before Verify, Preview, or TestEmail',
+    'Refresh All Metadata',
+    'Library > Media Info > Refresh media info',
+    'current Tautulli control is per library',
+    'Routine TautWeekly updates do'
 )
 Require-Text 'platforms/nas-docker/app/Verify-Setup.ps1' @(
     'Unraid Console:',
     '\/opt\/tautweekly\/bin\/run-mode\.sh ListUsers',
     'Compose host project directory:',
-    '\.\/tautweekly\.sh list-users'
+    '\.\/tautweekly\.sh list-users',
+    'prove metadata freshness',
+    'Refresh All Metadata',
+    'Library > Media Info > Refresh media info'
 )
+Require-Text 'platforms/windows/SETUP-FIRST.ps1' @(
+    'Metadata readiness before Verify, Preview, or TestEmail',
+    'Refresh All Metadata',
+    'Library > Media Info > Refresh media info',
+    'current Tautulli control is per library',
+    'Routine TautWeekly updates do'
+)
+Require-Text 'platforms/windows/VERIFY-SETUP.ps1' @(
+    'prove metadata freshness',
+    'Refresh All Metadata',
+    'Library > Media Info > Refresh media info'
+)
+Require-Text 'platforms/mac-docker/app/Setup-First.ps1' @(
+    'Metadata readiness before Verify, Preview, or TestEmail',
+    'Refresh All Metadata',
+    'Library > Media Info > Refresh media info',
+    'current Tautulli control is per library',
+    'Routine TautWeekly updates do'
+)
+Require-Text 'platforms/mac-docker/app/Verify-Setup.ps1' @(
+    'prove metadata freshness',
+    'Refresh All Metadata',
+    'Library > Media Info > Refresh media info'
+)
+foreach ($relative in @(
+    'platforms/windows/Windows-Update.ps1',
+    'platforms/nas-docker/container-update.sh',
+    'platforms/mac-docker/mac-update.sh',
+    'platforms/linux/install-linux.sh',
+    'platforms/freebsd-podman/tautweekly'
+)) {
+    Require-Text $relative @(
+        'missing ratings/artwork|ratings/artwork\s+recovery update',
+        'Refresh All Metadata',
+        'Library > Media Info > Refresh media info'
+    )
+}
+foreach ($relative in @(
+    'platforms/nas-docker/app/preview-home.html',
+    'platforms/mac-docker/app/preview-home.html'
+)) {
+    Require-Text $relative @(
+        'Prepare Plex and Tautulli metadata before testing',
+        'Refresh All Metadata',
+        'Refresh media\s+info',
+        'current control is per library'
+    )
+}
+foreach ($relative in @(
+    'platforms/nas-docker/qnap-install.sh',
+    'platforms/mac-docker/mac-install.sh'
+)) {
+    Require-Text $relative @(
+        'Prepare Plex and Tautulli metadata before acceptance',
+        'Refresh All Metadata',
+        'Refresh media\s+info',
+        'press Enter to run verification'
+    )
+}
 Require-Text 'docs/nas-docker/README.md' @(
     'host-side Compose wrapper',
     'does not exist inside the Unraid Apps container',

@@ -40,6 +40,29 @@ the `X-Plex-Token` header, and tests `/identity` plus authenticated
 a verification failure. If no URL/token pair can be resolved, verification
 warns and preserves the supported Tautulli-only fallback.
 
+### Metadata readiness before acceptance
+
+Connection verification cannot prove that Plex or Tautulli holds current item
+metadata. After first setup, after changing a Plex metadata agent or movie
+Ratings Source, and after a ratings/artwork recovery update when upstream data
+may be stale, complete these steps before PreviewAll or TestEmail:
+
+1. Confirm **Edit → Advanced → Ratings Source** for every included Plex Movie
+   library.
+2. Run Plex **Manage Library → Refresh All Metadata** for every included movie
+   and TV library, and wait for all refreshes to finish.
+3. In Tautulli, open each same **Library → Media Info** tab, choose
+   **Refresh media info**, and wait. The control is per library; repeat it for
+   every included section.
+4. Run the TautWeekly verifier, PreviewAll, and a controlled TestEmail.
+
+Plex documents that a full refresh can take significant time and can update
+existing metadata and artwork. Scope it to TautWeekly's included movie/TV
+libraries. Tautulli's media-info refresh updates its library table after Plex;
+it neither changes the Plex Ratings Source nor replaces Plex's metadata
+refresh. Routine TautWeekly updates do not require this full sequence when
+current output is already correct.
+
 Posters and hero art can still succeed through Tautulli's image proxy when the
 direct Plex URL is unreachable. That does not prove that direct rating,
 background, or selected-logo metadata is available. v0.9.5 uses Tautulli's

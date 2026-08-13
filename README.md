@@ -62,11 +62,11 @@ them locally; send controlled tests; then schedule production delivery.
 
 | Platform | Runtime and scheduler | Preview | Best fit | Guides and source |
 |---|---|---|---|---|
-| Windows portable · baseline 1.8.4 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/) · [Documentation](docs/windows/README.md) · [Source](platforms/windows) |
-| NAS / Docker · baseline 1.3.2 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
-| macOS · baseline 1.2.2 | PowerShell 7 in Docker Desktop · internal scheduler | Localhost port 8787 by default | Intel or Apple silicon Mac | [Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/) · [Documentation](docs/mac/README.md) · [Source](platforms/mac-docker) |
-| Native Linux · baseline 1.1.3 | PowerShell 7.2+ · hardened systemd service | Localhost port 8787 by default | Current Ubuntu, Debian, or RHEL host without Docker | [Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Source](platforms/linux) |
-| FreeBSD Podman · baseline 1.1.4 | Maintained Linux OCI renderer · rc.d | Localhost port 8787 by default | FreeBSD 15.1+ amd64 host · **beta** | [Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Source](platforms/freebsd-podman) |
+| Windows portable · baseline 1.8.5 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/) · [Documentation](docs/windows/README.md) · [Source](platforms/windows) |
+| NAS / Docker · baseline 1.3.3 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
+| macOS · baseline 1.2.3 | PowerShell 7 in Docker Desktop · internal scheduler | Localhost port 8787 by default | Intel or Apple silicon Mac | [Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/) · [Documentation](docs/mac/README.md) · [Source](platforms/mac-docker) |
+| Native Linux · baseline 1.1.4 | PowerShell 7.2+ · hardened systemd service | Localhost port 8787 by default | Current Ubuntu, Debian, or RHEL host without Docker | [Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Source](platforms/linux) |
+| FreeBSD Podman · baseline 1.1.5 | Maintained Linux OCI renderer · rc.d | Localhost port 8787 by default | FreeBSD 15.1+ amd64 host · **beta** | [Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Source](platforms/freebsd-podman) |
 
 All five distributions preserve the working renderer and safety gates. Their
 setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
@@ -98,6 +98,12 @@ setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
   verifier tests the resolved Plex URL/token with token-safe identity and
   authenticated-library requests; an unreachable configured connection fails
   verification before Preview or SendTest.
+- First-run and metadata-recovery acceptance now begins with an upstream
+  readiness sequence: refresh all metadata in every included Plex movie/TV
+  library, wait for Plex to finish, then use Tautulli's per-library
+  **Library → Media Info → Refresh media info** control and wait again. This
+  reduces the chance that an old Plex/Tautulli installation is tested against stale
+  tables. It does not make Tautulli a ratings provider or replace direct Plex.
 - A private pre-deletion cache stores only the minimum reusable presentation
   record for a live item: exact stable GUID and media type, title/year/summary,
   up to eight genres, displayed ratings, one poster, hashes, and timestamps.
@@ -200,6 +206,38 @@ administrator can still deliberately invoke the separately confirmed one-off
 welcome command. The selector displays recipient names and email addresses;
 do not share its output publicly.
 
+## Prepare metadata before acceptance
+
+Complete this sequence after first installation, after changing a Plex
+metadata agent or movie Ratings Source, and after an update intended to repair
+missing ratings/artwork when upstream metadata may still be stale:
+
+1. In Plex Web, confirm **Edit → Advanced → Ratings Source** for every included
+   Plex Movie library. Select **Rotten Tomatoes** only when RT critic/audience
+   output is intended; IMDb or TMDB remains a valid deliberate fallback.
+2. In Plex Web, run **Manage Library → Refresh All Metadata** for every movie
+   and TV library included in TautWeekly, then wait for every refresh to finish.
+   Plex warns that a full-library refresh can take significant time; it can
+   also update metadata and selected artwork. Do not refresh unrelated music
+   or photo libraries merely for TautWeekly.
+3. In Tautulli, open each same **Library → Media Info** tab, choose
+   **Refresh media info**, and wait for completion. The current control and API
+   are section-specific, so repeat this step for each included library.
+4. Only then run the platform verifier, `PreviewAll`, and a controlled
+   TestEmail check.
+
+Plex's [refresh documentation](https://support.plex.tv/articles/200289306-scanning-vs-refreshing-a-library/)
+defines **Refresh All Metadata** as a full-library refresh. Tautulli's current
+[`get_library_media_info` API](https://github.com/Tautulli/Tautulli/wiki/Tautulli-API-Reference#get_library_media_info)
+likewise requires a library section for its media-info refresh. Tautulli's step
+refreshes its table after Plex; it does not make Plex download provider data and
+does not replace the Plex step.
+
+Routine TautWeekly updates do not require a costly full-library refresh when
+current ratings and artwork already render correctly. Repeat the sequence when
+the update addresses metadata recovery, the Plex source/agent changed, or
+acceptance output still appears stale.
+
 ## Installation at a glance
 
 Where a command shows `USER_ID`, replace it with the numeric value from the
@@ -215,10 +253,12 @@ select or save a default user.
    [`platforms/windows`](platforms/windows) from the current source tree.
 2. Run `00-SETUP-FIRST.bat`, enter your own Tautulli and SMTP values, choose
    the movie/TV libraries to include, and select any users to exclude.
-3. Run `01-VERIFY-SETUP.bat`.
-4. Preview with `03-PREVIEW-NEWSLETTER.bat`, then send a controlled test with
+3. Complete [metadata readiness](#prepare-metadata-before-acceptance) for the
+   included libraries.
+4. Run `01-VERIFY-SETUP.bat`.
+5. Preview with `03-PREVIEW-NEWSLETTER.bat`, then send a controlled test with
    `04-SEND-TEST.bat`.
-5. Install the schedule only after review.
+6. Install the schedule only after review.
 
 [Open the Windows Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/)
 · [Read the Windows documentation](docs/windows/README.md)
@@ -234,6 +274,7 @@ distribution, download and verify the Linux release, then run:
 ```bash
 sudo ./install-linux.sh
 sudo tautweekly setup
+# Complete metadata readiness for the included libraries, then:
 sudo tautweekly verify
 sudo tautweekly exclude-users
 sudo tautweekly list-users
@@ -261,6 +302,7 @@ native PowerShell build:
 ```sh
 sudo ./install-freebsd.sh
 sudo tautweekly setup
+# Complete metadata readiness for the included libraries, then:
 sudo tautweekly verify
 sudo tautweekly exclude-users
 sudo tautweekly list-users
@@ -288,6 +330,7 @@ run:
 
 ```bash
 /opt/tautweekly/bin/run-script.sh Setup-First.ps1
+# Complete metadata readiness for the included libraries, then:
 /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1
 ```
 
@@ -319,6 +362,7 @@ cp .env.example .env
 docker compose pull
 docker compose up -d
 ./tautweekly.sh setup
+# Complete metadata readiness for the included libraries, then:
 ./tautweekly.sh verify
 ./tautweekly.sh exclude-users  # optional later revision
 ./tautweekly.sh list-users
@@ -379,7 +423,9 @@ installed runtime.
 
 Read the platform guide before updating. Backups contain credentials and must
 remain private. After any successful update, run `verify`, controlled previews,
-and TestEmail delivery before trusting the next production send.
+and TestEmail delivery before trusting the next production send. If the update
+addresses missing ratings/artwork or the output still appears stale, complete
+the metadata-readiness sequence above before those tests.
 
 ## Architecture
 

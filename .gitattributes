@@ -24,5 +24,6 @@
 # Canonical and vendor-supplied artwork is validated byte-for-byte. Keep SVG
 # source bytes unchanged across Windows and Unix checkouts.
 /assets/branding/*.svg binary
+/assets/branding/build-assets.py binary
 /assets/platforms/*.svg binary
 /docs/assets/platforms/*.svg binary

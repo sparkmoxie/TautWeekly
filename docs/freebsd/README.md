@@ -51,6 +51,7 @@ chmod +x install-freebsd.sh tautweekly rc.d/tautweekly app/*.sh app/bin/*.sh
 ```sh
 sudo ./install-freebsd.sh
 sudo tautweekly setup
+# Complete the metadata-readiness checklist below, then:
 sudo tautweekly verify
 ```
 
@@ -74,10 +75,33 @@ every provider score. The renderer explicitly requests Plex's optional
 hidden by a selected IMDb/TMDB fallback. If JSON lacks movie RT or
 exact-episode provider entries, the renderer retries the same authenticated local
 item as XML and reads only provider-labelled `Rating` elements.
-For intended movie RT output, also set every applicable Plex Movie library's
-**Edit → Advanced → Ratings Source** to **Rotten Tomatoes**,
-save, and refresh affected metadata. This is a library-wide Plex choice, not a
-TautWeekly setting; leave IMDb/TMDB selected if that fallback is intentional.
+For intended movie RT output, set every applicable Plex Movie library's
+**Edit → Advanced → Ratings Source** to **Rotten Tomatoes**. This is a
+library-wide Plex choice, not a TautWeekly setting; leave IMDb/TMDB selected if
+that fallback is intentional.
+
+## Metadata readiness before acceptance
+
+After first setup, after changing a Plex metadata agent or Ratings Source, and
+after a ratings/artwork recovery update when upstream data may be stale:
+
+1. Confirm **Edit → Advanced → Ratings Source** in every included Plex Movie
+   library.
+2. Run Plex **Manage Library → Refresh All Metadata** for every included movie
+   and TV library, then wait for all refreshes to finish.
+3. In Tautulli, open each same **Library → Media Info** tab, select
+   **Refresh media info**, and wait. The current control is per library, so
+   repeat it for every included section.
+4. Run `sudo tautweekly verify`, PreviewAll, and TestEmail only after both
+   refresh stages complete.
+
+[Plex documents](https://support.plex.tv/articles/200289306-scanning-vs-refreshing-a-library/)
+that a full refresh can take significant time and can update existing metadata
+and artwork. Do not refresh unrelated music/photo libraries for TautWeekly.
+Tautulli's [section-specific media-info refresh](https://github.com/Tautulli/Tautulli/wiki/Tautulli-API-Reference#get_library_media_info)
+updates its table after Plex; it does not replace Plex's refresh or choose a
+ratings provider. Routine TautWeekly updates do not require a full refresh when
+current output already renders correctly.
 
 Review the roster and every mail state before enabling automatic sends:
 
@@ -192,6 +216,9 @@ The apply command refuses a busy TautWeekly operation, recreates the rc.d
 service, verifies the in-container health probe and version label, and retags
 and restarts the prior image automatically if the new container fails. Private
 data under `/var/db/tautweekly` is never replaced.
+
+If the update addresses missing ratings/artwork or output remains stale,
+complete metadata readiness before the listed verify/TestEmail checks.
 
 For deterministic production updates, set `TAUTWEEKLY_IMAGE` in
 `/usr/local/etc/tautweekly/tautweekly.env` to a version tag rather than

@@ -6,6 +6,34 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-08-13
+
+### Changed
+
+- Added a consistent metadata-readiness sequence to every maintained setup
+  wizard, verifier, Quickstart, platform guide, update/install completion path,
+  and private container preview landing page. Before first acceptance, users
+  confirm each included Plex Movie library's Ratings Source, run Plex **Refresh
+  All Metadata** for every included movie/TV library, then use Tautulli's
+  per-library **Library > Media Info > Refresh media info** control before
+  Verify, PreviewAll, or TestEmail.
+- The guided macOS and QNAP installers now pause before their automatic
+  verifier so the administrator can finish those upstream refreshes. Other
+  platforms print the same ordered checklist before their test commands.
+- Clarified that Plex full-library refreshes can be slow and can update
+  metadata or artwork, Tautulli's table refresh does not replace Plex's
+  refresh, and routine TautWeekly updates do not require the full sequence
+  when current output already renders correctly.
+- Pinned the canonical branding build script to byte-preserving Git handling
+  so its approved SHA-256 remains stable in Windows and Unix checkouts.
+
+### Security
+
+- Kept metadata refreshes manual and scoped to the administrator-selected
+  Plex libraries. TautWeekly does not invoke either upstream refresh API and
+  does not expose configuration, tokens, history, recipients, private
+  infrastructure, responses, logs, or generated newsletters.
+
 ## [0.10.2] - 2026-08-13
 
 ### Fixed

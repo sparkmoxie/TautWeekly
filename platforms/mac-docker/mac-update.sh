@@ -6,6 +6,15 @@ image_ref="tautweekly-mac:stable"
 lock_marker="/data/.tautweekly-update-holder"
 lock_container_id=""
 
+print_metadata_readiness_note() {
+  cat <<'EOF'
+If this update addresses missing ratings/artwork or results still appear stale,
+complete metadata readiness before testing: confirm the Plex Movie Ratings
+Source; run Plex Refresh All Metadata for each included movie/TV library; then
+run Tautulli Library > Media Info > Refresh media info for each same library.
+EOF
+}
+
 compose_cmd() {
   if docker compose version >/dev/null 2>&1; then docker compose "$@"; return; fi
   if command -v docker-compose >/dev/null 2>&1; then docker-compose "$@"; return; fi
@@ -110,6 +119,7 @@ apply_package() {
     after_version="$(image_version "$running_after")"
     if [[ "$running_after" == "$candidate_id" && "$after_version" == "$version" ]]; then
       echo "Applied macOS package version $version; .env and data were preserved."
+      print_metadata_readiness_note
       return
     fi
     echo "The running image reports $after_version ($running_after), expected $version ($candidate_id)." >&2

@@ -48,6 +48,16 @@
     </section>
 
     <section>
+      <h2>Prepare Plex and Tautulli metadata before testing</h2>
+      <ol>
+        <li>In Plex Web, confirm <strong>Edit &gt; Advanced &gt; Ratings Source</strong> for each included Plex Movie library.</li>
+        <li>Run <strong>Manage Library &gt; Refresh All Metadata</strong> for every included movie/TV library and wait for it to finish. A full refresh can take a long time and can update metadata or artwork.</li>
+        <li>In Tautulli, open each same <strong>Library &gt; Media Info</strong> tab, select <strong>Refresh media info</strong>, and wait. The current control is per library.</li>
+      </ol>
+      <p>Complete this sequence after first install, after changing a Plex metadata agent or Ratings Source, or after a ratings/artwork recovery update when results may be stale. Routine TautWeekly updates do not require a full library refresh when current metadata already renders correctly.</p>
+    </section>
+
+    <section>
       <h2>First run with Docker Compose</h2>
       <ol>
         <li>From the extracted TautWeekly directory on the Docker host, run setup and verification.</li>

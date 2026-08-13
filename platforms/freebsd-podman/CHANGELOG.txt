@@ -1,6 +1,9 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Prints the ordered Plex and Tautulli metadata-readiness checklist after first setup and relevant package updates.
+- Distinguishes direct-Plex connectivity verification from upstream metadata freshness before PreviewAll or TestEmail.
+- Documents per-library scope, potentially long Plex refreshes, and the safe routine-update exception.
 - Prefers exact-episode IMDb on TV release rows and falls back to that episode's RT critic or audience score only when IMDb is absent.
 - Rejects show-level, movie, TMDB, TVDB, unknown, and unlabelled episode substitutes while preserving score-dependent RT icons.
 - Recovers provider-labelled movie RT and exact-episode IMDb from authenticated native Plex XML when JSON omits those target provider entries.

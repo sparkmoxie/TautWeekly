@@ -6,6 +6,15 @@ image_ref="${TAUTWEEKLY_IMAGE:-ghcr.io/sparkmoxie/tautweekly:latest}"
 lock_marker="/data/.tautweekly-update-holder"
 lock_container_id=""
 
+print_metadata_readiness_note() {
+  cat <<'EOF'
+If this update addresses missing ratings/artwork or results still appear stale,
+complete metadata readiness before testing: confirm the Plex Movie Ratings
+Source; run Plex Refresh All Metadata for each included movie/TV library; then
+run Tautulli Library > Media Info > Refresh media info for each same library.
+EOF
+}
+
 compose_cmd() {
   if docker compose version >/dev/null 2>&1; then docker compose "$@"; return; fi
   if command -v docker-compose >/dev/null 2>&1; then docker-compose "$@"; return; fi
@@ -128,6 +137,7 @@ apply_update() {
   if [[ -n "$before" && "$before" == "$after" ]]; then
     wait_for_health
     echo "The running container is already on stable image version $after_version."
+    print_metadata_readiness_note
     return
   fi
 
@@ -136,6 +146,7 @@ apply_update() {
     running_after_version="$(image_version "$running_after")"
     if [[ "$running_after" == "$after" && "$running_after_version" == "$after_version" ]]; then
       echo "Updated TautWeekly from $before_version to $running_after_version; persistent data was not replaced."
+      print_metadata_readiness_note
       return
     fi
     echo "The recreated service reports image $running_after_version ($running_after), expected $after_version ($after)." >&2

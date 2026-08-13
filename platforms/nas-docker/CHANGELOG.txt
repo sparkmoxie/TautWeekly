@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.3.3 Portable
+---------------
+- prints the ordered Plex and Tautulli metadata-readiness checklist after first setup and relevant container updates
+- pauses the guided QNAP installer before verification so the administrator can complete both upstream refreshes
+- adds the same per-library acceptance guidance to Unraid, Docker, and the private preview landing page
+
 v1.3.2 Portable
 ---------------
 - prefers exact-episode IMDb on TV release rows and falls back to that episode's RT critic or audience score only when IMDb is absent

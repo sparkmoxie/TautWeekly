@@ -90,6 +90,19 @@ function Read-SecretPlainText {
     }
 }
 
+function Write-MetadataReadinessChecklist {
+    Write-Host ""
+    Write-Host "Metadata readiness before Verify, Preview, or TestEmail" -ForegroundColor Cyan
+    Write-Host "1. Plex Web: for each included Plex Movie library, confirm Edit > Advanced > Ratings Source."
+    Write-Host "2. Plex Web: run Manage Library > Refresh All Metadata for every included movie/TV"
+    Write-Host "   library and wait for completion. This can take a long time and can update metadata/artwork."
+    Write-Host "3. Tautulli: open each same library > Media Info > Refresh media info and wait."
+    Write-Host "   The current Tautulli control is per library, so repeat it for every included library."
+    Write-Host "Use this sequence after first install, after changing a Plex agent/Ratings Source, or after"
+    Write-Host "a ratings/artwork recovery update when metadata may be stale. Routine TautWeekly updates do"
+    Write-Host "not require a full library refresh when current metadata already renders correctly."
+}
+
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor DarkYellow
 Write-Host "TAUTWEEKLY FOR PLEX PORTABLE SETUP" -ForegroundColor Yellow
@@ -110,7 +123,10 @@ if (Test-Path $configPath) {
     Write-Host "An existing config.json was found:" -ForegroundColor Yellow
     Write-Host "  $configPath"
     if (-not (Read-YesNo "Replace it with a new configuration?" $false)) {
-        Write-Host "Existing config preserved. Run 01-VERIFY-SETUP.bat next." -ForegroundColor Green
+        Write-Host "Existing config preserved." -ForegroundColor Green
+        Write-MetadataReadinessChecklist
+        Write-Host ""
+        Write-Host "NEXT: run 01-VERIFY-SETUP.bat"
         exit 0
     }
     try {
@@ -309,5 +325,6 @@ Write-Host "  $configPath"
 Write-Host ""
 Write-Host "IMPORTANT: config.json contains your SMTP credential and possibly Plex token."
 Write-Host "Do not publish or share config.json."
+Write-MetadataReadinessChecklist
 Write-Host ""
 Write-Host "NEXT: run 01-VERIFY-SETUP.bat"

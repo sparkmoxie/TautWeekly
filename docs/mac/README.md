@@ -5,7 +5,7 @@
 The macOS distribution runs the PowerShell newsletter engine in Docker Desktop
 and provides Mac-native setup and preview helpers.
 
-Current source baseline: **1.2.2**.
+Current source baseline: **1.2.3**.
 
 ## Requirements
 
@@ -35,8 +35,9 @@ Alternatively, double-click `INSTALL-MAC.command` after granting it execute
 permission.
 
 The installer detects the current UID/GID, creates a private `.env`, builds the
-container, runs interactive setup, and verifies the result. Existing `.env` and
-`data/config.json` files are preserved unless you explicitly replace them.
+container, and runs interactive setup. It then pauses for the metadata-readiness
+checklist below before verification. Existing `.env` and `data/config.json`
+files are preserved unless you explicitly replace them.
 
 ## Service connectivity
 
@@ -65,10 +66,33 @@ every provider score. The renderer explicitly requests Plex's optional
 hidden by a selected IMDb/TMDB fallback. If JSON lacks movie RT or
 exact-episode provider entries, the renderer retries the same authenticated local
 item as XML and reads only provider-labelled `Rating` elements.
-For intended movie RT output, also set every applicable Plex Movie library's
-**Edit → Advanced → Ratings Source** to **Rotten Tomatoes**,
-save, and refresh affected metadata. This is a library-wide Plex choice, not a
-TautWeekly setting; leave IMDb/TMDB selected if that fallback is intentional.
+For intended movie RT output, set every applicable Plex Movie library's
+**Edit → Advanced → Ratings Source** to **Rotten Tomatoes**. This is a
+library-wide Plex choice, not a TautWeekly setting; leave IMDb/TMDB selected if
+that fallback is intentional.
+
+## Metadata readiness before acceptance
+
+After first setup, after changing a Plex metadata agent or Ratings Source, and
+after a ratings/artwork recovery update when upstream data may be stale:
+
+1. Confirm **Edit → Advanced → Ratings Source** in every included Plex Movie
+   library.
+2. Run Plex **Manage Library → Refresh All Metadata** for every included movie
+   and TV library, then wait for all refreshes to finish.
+3. In Tautulli, open each same **Library → Media Info** tab, select
+   **Refresh media info**, and wait. The current control is per library, so
+   repeat it for every included section.
+4. Run `verify`, PreviewAll, and TestEmail only after both refresh stages
+   complete.
+
+[Plex documents](https://support.plex.tv/articles/200289306-scanning-vs-refreshing-a-library/)
+that a full refresh can take significant time and can update existing metadata
+and artwork. Do not refresh unrelated music/photo libraries for TautWeekly.
+Tautulli's [section-specific media-info refresh](https://github.com/Tautulli/Tautulli/wiki/Tautulli-API-Reference#get_library_media_info)
+updates its table after Plex; it does not replace Plex's refresh or choose a
+ratings provider. Routine TautWeekly updates do not require a full refresh when
+current output already renders correctly.
 
 ## Safe acceptance sequence
 
@@ -174,6 +198,9 @@ release. It refuses a busy application operation, preserves `.env` and `data/`,
 checks the running image version and container health, and automatically retags
 and restarts the previous image if validation fails. Keep the prior verified
 archive and private backup for file-level recovery.
+
+If the update addresses missing ratings/artwork or output remains stale,
+complete metadata readiness before the listed verify/preview/TestEmail checks.
 
 Docker health uses a service-supervisor heartbeat that continues throughout
 long scheduled sends. A stopped preview listener or stalled supervisor remains
