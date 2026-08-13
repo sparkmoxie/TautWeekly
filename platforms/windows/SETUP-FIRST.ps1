@@ -178,7 +178,7 @@ $plexWebUrl = Read-Default "Open Plex button URL" "https://app.plex.tv/desktop/"
 Write-Host ""
 Write-Host "Recommended direct Plex settings" -ForegroundColor Cyan
 Write-Host "Tautulli supplies core activity and fallback metadata. Direct Plex can expose provider-"
-Write-Host "labelled movie ratings retained by Plex, exact-episode IMDb, backgrounds, and selected"
+Write-Host "labelled movie ratings retained by Plex, exact-episode IMDb/RT, backgrounds, and selected"
 Write-Host "logos. For movie RT output, set each Plex Movie library's Advanced > Ratings Source to"
 Write-Host "Rotten Tomatoes, then refresh affected metadata. This is library-wide."
 Write-Host "Enter both direct values for predictable results,"

@@ -6,6 +6,27 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-08-13
+
+### Fixed
+
+- Added an exact-episode Rotten Tomatoes fallback for TV release rows. An
+  available IMDb score for that exact episode still has priority; otherwise
+  the renderer uses the exact episode's RT critic score, then its RT audience
+  score. Show-level, movie, TMDB, TVDB, unknown, and unlabelled values remain
+  ineligible.
+- Extended sanitized PreviewAll, SendTest, and renderer regressions across the
+  maintained Windows, NAS/Docker/Linux/FreeBSD, and macOS sources. The tests
+  prove IMDb wins when both providers exist and that an RT-only exact episode
+  receives the score-dependent tomato or popcorn presentation.
+
+### Security
+
+- Reused the authenticated, exact-rating-key Plex and bounded Tautulli
+  metadata paths introduced for rating recovery. The fallback adds no external
+  rating search and does not persist or expose configuration, tokens, history,
+  recipients, responses, or generated newsletter output.
+
 ## [0.10.1] - 2026-08-13
 
 ### Fixed

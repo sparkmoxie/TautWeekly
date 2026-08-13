@@ -5,7 +5,7 @@
 The macOS distribution runs the PowerShell newsletter engine in Docker Desktop
 and provides Mac-native setup and preview helpers.
 
-Current source baseline: **1.2.1**.
+Current source baseline: **1.2.2**.
 
 ## Requirements
 
@@ -13,7 +13,7 @@ Current source baseline: **1.2.1**.
 - Docker Desktop with Docker Compose available in Terminal.
 - Network access from Docker to Tautulli and an SMTP STARTTLS endpoint.
 - Network access from Docker to Plex is recommended for complete movie RT
-  critic/audience ratings, exact-episode IMDb ratings, backgrounds, and
+  critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and
   selected logos.
 - A Tautulli API key.
 - A permanent project directory writable by the current macOS user.
@@ -61,9 +61,9 @@ be resolved, verification warns that selected/flattened Tautulli ratings and
 other fallbacks will be used.
 Verification proves reachability and authentication, not that every item has
 every provider score. The renderer explicitly requests Plex's optional
-`Rating` element so available RT pairs and exact-episode IMDb values are not
+`Rating` element so available movie RT pairs and exact-episode IMDb/RT values are not
 hidden by a selected IMDb/TMDB fallback. If JSON lacks movie RT or
-exact-episode IMDb entries, the renderer retries the same authenticated local
+exact-episode provider entries, the renderer retries the same authenticated local
 item as XML and reads only provider-labelled `Rating` elements.
 For intended movie RT output, also set every applicable Plex Movie library's
 **Edit → Advanced → Ratings Source** to **Rotten Tomatoes**,

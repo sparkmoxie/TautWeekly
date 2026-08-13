@@ -9,7 +9,7 @@ general Linux Docker hosts, and Docker Desktop on x86-64 or ARM64. Docker
 Compose is the deployment mechanism for manual installations, not a separate
 edition or package.
 
-Current source baseline: **1.3.1**.
+Current source baseline: **1.3.2**.
 
 ## Requirements
 
@@ -17,7 +17,7 @@ Current source baseline: **1.3.1**.
 - A non-root UID and GID that can write the project `data/` directory.
 - Network access from the container to Tautulli and an SMTP STARTTLS endpoint.
 - Network access from the container to Plex Media Server is recommended for
-  complete movie RT critic/audience ratings, exact-episode IMDb ratings,
+  complete movie RT critic/audience ratings, exact-episode IMDb/RT ratings,
   backgrounds, and selected logos.
 - A Tautulli API key.
 - A trusted host port for the local preview service; default 8787.
@@ -123,9 +123,9 @@ resolved but unusable connection fails verification; an unresolved pair emits
 a Tautulli-only fallback warning.
 Verification proves reachability and authentication, not that every item has
 every provider score. The renderer explicitly requests Plex's optional
-`Rating` element so available RT pairs and exact-episode IMDb values are not
+`Rating` element so available movie RT pairs and exact-episode IMDb/RT values are not
 hidden by a selected IMDb/TMDB fallback. If JSON lacks movie RT or
-exact-episode IMDb entries, the renderer retries the same authenticated local
+exact-episode provider entries, the renderer retries the same authenticated local
 item as XML and reads only provider-labelled `Rating` elements.
 For intended movie RT output, also set every applicable Plex Movie library's
 **Edit → Advanced → Ratings Source** to **Rotten Tomatoes**,

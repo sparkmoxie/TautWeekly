@@ -21,8 +21,8 @@ DELETED_HISTORY_SCENARIOS = (
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
     old = now - (30 * 86400)
-    movie_added = now if scenario in ("active", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "cache-prime") else old
-    tv_added = now if scenario in ("active", "tv-only", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "cache-prime") else old
+    movie_added = now if scenario in ("active", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
+    tv_added = now if scenario in ("active", "tv-only", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
     rows = {
         "10": [
             {
@@ -562,7 +562,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if parsed.path.startswith("/library/metadata/"):
             scenario = self.current_scenario()
-            if scenario in {"direct-rating-optional", "direct-rating-xml-fallback"}:
+            if scenario in {"direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback"}:
                 if self.headers.get("X-Plex-Token") != "virtual-plex-token":
                     self.write_json({"error": "invalid virtual Plex token"}, status=401)
                     return
@@ -577,11 +577,13 @@ class Handler(BaseHTTPRequestHandler):
                     "Genre": [{"tag": "Drama"}, {"tag": "Mystery"}],
                 }
                 if (
-                    scenario == "direct-rating-xml-fallback"
+                    scenario in {"direct-rating-xml-fallback", "direct-episode-rt-fallback"}
                     and "application/xml" in self.headers.get("Accept", "")
                 ):
                     rating_xml = (
-                        '<Rating image="imdb://image.rating" type="audience" value="8.6" />'
+                        '<Rating image="rottentomatoes://image.rating.ripe" type="critic" value="6.2" />'
+                        if (scenario == "direct-episode-rt-fallback" and is_episode)
+                        else '<Rating image="imdb://image.rating" type="audience" value="8.6" />'
                         if (is_episode or is_show)
                         else (
                             '<Rating image="rottentomatoes://image.rating.ripe" type="critic" value="8.7" />'
@@ -597,7 +599,15 @@ class Handler(BaseHTTPRequestHandler):
                 if query.get("excludeFields") != "rating":
                     metadata["rating"] = "7.4" if (is_episode or is_show) else "6.6"
                 if query.get("includeOptionalElements") == "Rating":
-                    if scenario == "direct-rating-xml-fallback":
+                    if scenario == "direct-episode-rt-fallback" and is_episode:
+                        metadata["Rating"] = [
+                            {
+                                "image": "rottentomatoes://image.rating.ripe",
+                                "type": "critic",
+                                "value": "6.2",
+                            }
+                        ]
+                    elif scenario == "direct-rating-xml-fallback":
                         metadata["Rating"] = [
                             {
                                 "image": "themoviedb://image.rating" if (is_episode or is_show) else "imdb://image.rating",
@@ -766,7 +776,7 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 )
                 return
-            if scenario in {"direct-rating-optional", "direct-rating-xml-fallback"}:
+            if scenario in {"direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback"}:
                 title = "Selected Show" if is_show else ("Selected Episode" if is_episode else "Selected Movie")
                 media_type = "show" if is_show else ("episode" if is_episode else "movie")
                 self.api_success(
@@ -906,6 +916,7 @@ def main() -> None:
             "rating-export-fallback",
             "direct-rating-optional",
             "direct-rating-xml-fallback",
+            "direct-episode-rt-fallback",
             "deleted-history-metadata",
             "deleted-history-legacy-guid",
             "cache-prime",

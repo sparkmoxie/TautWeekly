@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
+v1.8.4 Portable
+---------------
+- prefers exact-episode IMDb on TV release rows and falls back to that episode's RT critic or audience score only when IMDb is absent
+- rejects show-level, movie, TMDB, TVDB, unknown, and unlabelled substitutes
+- preserves score-dependent RT icons and the existing movie RT-first behavior
+
 v1.8.3 Portable
 ---------------
 - recovers provider-labelled movie RT and exact-episode IMDb from authenticated native Plex XML when JSON omits those target provider entries

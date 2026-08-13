@@ -1,6 +1,8 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Prefers exact-episode IMDb on TV release rows and falls back to that episode's RT critic or audience score only when IMDb is absent.
+- Rejects show-level, movie, TMDB, TVDB, unknown, and unlabelled episode substitutes while preserving score-dependent RT icons.
 - Recovers provider-labelled movie RT and exact-episode IMDb from authenticated native Plex XML when JSON omits those target provider entries.
 - Reports an empty optional hosted exact-match fallback as informational instead of a ratings warning.
 - Ships the exact approved TautWeekly product mark and favicon on the private preview landing page while retaining FreeBSD and Podman platform identity.

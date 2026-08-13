@@ -145,7 +145,7 @@ $plexHost = (Get-Command pwsh -ErrorAction Stop).Source
 & $plexHost -NoLogo -NoProfile -File $plexVerifier -Mode VerifyPlex -ConfigPath $configPath
 $directPlexExit = $LASTEXITCODE
 if ($directPlexExit -eq 3) {
-    WARN "Direct Plex is not configured or discoverable. Core Tautulli operation remains available, but complete movie RT critic/audience ratings, exact-episode IMDb ratings, backgrounds, and selected logos may be unavailable."
+    WARN "Direct Plex is not configured or discoverable. Core Tautulli operation remains available, but complete movie RT critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and selected logos may be unavailable."
 }
 elseif ($directPlexExit -ne 0) {
     FAIL "Direct Plex verification failed. Correct the private Plex URL/token or Docker Desktop routing, DNS, TLS, and firewall access before Preview or SendTest."
@@ -260,7 +260,7 @@ try {
 }
 catch {
     FAIL "preview asset web check failed: $($_.Exception.Message)"
-    WARN "Inspect ./tautweekly.sh logs and confirm the container was recreated from v1.2.1."
+    WARN "Inspect ./tautweekly.sh logs and confirm the container was recreated from v1.2.2."
     exit 1
 }
 

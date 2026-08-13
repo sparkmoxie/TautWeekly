@@ -37,7 +37,9 @@ $providerRecoveryScenarios = @('deleted-history-metadata', 'deleted-history-lega
 $cacheScenario = 'cache-deleted'
 $directOptionalRatingScenario = 'direct-rating-optional'
 $directXmlRatingScenario = 'direct-rating-xml-fallback'
-$directRatingScenarios = @($directOptionalRatingScenario, $directXmlRatingScenario)
+$directEpisodeRtScenario = 'direct-episode-rt-fallback'
+$directImdbRatingScenarios = @($directOptionalRatingScenario, $directXmlRatingScenario)
+$directRatingScenarios = @($directImdbRatingScenarios) + @($directEpisodeRtScenario)
 $deletedHistoryScenarios = @($providerRecoveryScenarios) + @($cacheScenario)
 $sendTestScenarios = @('optional-hero-metadata', 'rating-export-fallback') + @($directRatingScenarios) + @($deletedHistoryScenarios)
 
@@ -297,7 +299,13 @@ foreach ($engine in $engines) {
 
             if ($scenario -in $directRatingScenarios) {
                 Assert-True ($normalHtml.Contains('87%') -and $normalHtml.Contains('83%')) "$($engine.Name)/$scenario did not render movie RT from Plex's optional Rating element."
-                Assert-True ($normalHtml.Contains('alt="IMDb"') -and $normalHtml.Contains('8.6')) "$($engine.Name)/$scenario did not render exact-episode IMDb from Plex's optional Rating element."
+                if ($scenario -eq $directEpisodeRtScenario) {
+                    Assert-True ($normalHtml.Contains('Selected Premiere') -and $normalHtml.Contains('alt="Rotten Tomatoes critic"') -and $normalHtml.Contains('62%')) "$($engine.Name)/$scenario did not render exact-episode RT after IMDb was unavailable."
+                    Assert-True ($previewLog.Contains("TV RT fallback: Selected Show S1E1 'Selected Premiere' -> critic 62%")) "$($engine.Name)/$scenario did not report the sanitized exact-episode RT fallback."
+                }
+                else {
+                    Assert-True ($normalHtml.Contains('alt="IMDb"') -and $normalHtml.Contains('8.6')) "$($engine.Name)/$scenario did not render exact-episode IMDb from Plex's optional Rating element."
+                }
                 Assert-True (-not $normalHtml.Contains('6.6') -and -not $normalHtml.Contains('TMDB') -and -not $normalHtml.Contains('7.4')) "$($engine.Name)/$scenario rendered the flattened selected provider instead of the optional ratings."
                 Assert-True (-not $previewLog.Contains('Design rich export result:')) "$($engine.Name)/$scenario unnecessarily used Tautulli's item export after direct optional ratings succeeded."
             }
@@ -365,7 +373,7 @@ foreach ($engine in $engines) {
                 if ($scenario -eq $directOptionalRatingScenario) {
                     Assert-True ($directRatingCalls.Count -eq $directItemCalls.Count) "$($engine.Name)/$scenario issued direct item metadata without requesting optional Rating or suppressing the colliding scalar."
                 }
-                else {
+                elseif ($scenario -eq $directXmlRatingScenario) {
                     $xmlRatingCalls = @($directItemCalls | Where-Object {
                         [string]$_.accept -like '*application/xml*' -and
                         $null -ne $_.query.PSObject.Properties['includeOptionalElements'] -and
@@ -375,6 +383,15 @@ foreach ($engine in $engines) {
                     Assert-True (@($xmlRatingCalls | Where-Object { [string]$_.path -eq '/library/metadata/selected-movie' -and $_.has_plex_token }).Count -gt 0) "$($engine.Name)/$scenario did not recover movie ratings from authenticated native XML."
                     Assert-True (@($xmlRatingCalls | Where-Object { [string]$_.path -eq '/library/metadata/selected-show' -and $_.has_plex_token }).Count -gt 0) "$($engine.Name)/$scenario did not recover show ratings from authenticated native XML."
                     Assert-True (@($xmlRatingCalls | Where-Object { [string]$_.path -eq '/library/metadata/selected-episode' -and $_.has_plex_token }).Count -gt 0) "$($engine.Name)/$scenario did not recover exact-episode ratings from authenticated native XML."
+                }
+                else {
+                    $episodeXmlCalls = @($directItemCalls | Where-Object {
+                        [string]$_.path -eq '/library/metadata/selected-episode' -and
+                        [string]$_.accept -like '*application/xml*' -and
+                        $null -ne $_.query.PSObject.Properties['includeOptionalElements'] -and
+                        [string]$_.query.includeOptionalElements -eq 'Rating'
+                    })
+                    Assert-True (@($episodeXmlCalls | Where-Object { $_.has_plex_token }).Count -gt 0) "$($engine.Name)/$scenario did not exhaust authenticated exact-episode IMDb before using RT."
                 }
             }
             if ($scenario -eq 'rating-export-fallback') {
@@ -589,7 +606,7 @@ foreach ($engine in $engines) {
                         '--forbid-html', '7.4</span>'
                     )
                 }
-                elseif ($scenario -in $directRatingScenarios) {
+                elseif ($scenario -in $directImdbRatingScenarios) {
                     $emailThemeArgs += @(
                         '--require-html', 'Rotten Tomatoes critic',
                         '--require-html', 'Rotten Tomatoes audience',
@@ -597,6 +614,18 @@ foreach ($engine in $engines) {
                         '--require-html', '87%</span>',
                         '--require-html', '83%</span>',
                         '--require-html', '8.6</span>',
+                        '--forbid-html', '6.6</span>',
+                        '--forbid-html', 'TMDB</span>',
+                        '--forbid-html', '7.4</span>'
+                    )
+                }
+                elseif ($scenario -eq $directEpisodeRtScenario) {
+                    $emailThemeArgs += @(
+                        '--require-html', 'Rotten Tomatoes critic',
+                        '--require-html', 'Rotten Tomatoes audience',
+                        '--require-html', '87%</span>',
+                        '--require-html', '83%</span>',
+                        '--require-html', '62%</span>',
                         '--forbid-html', '6.6</span>',
                         '--forbid-html', 'TMDB</span>',
                         '--forbid-html', '7.4</span>'

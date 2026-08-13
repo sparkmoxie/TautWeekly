@@ -47,9 +47,10 @@ normal metadata and single-item JSON exporter for provider-labelled ratings;
 it requests only metadata level 1, disables media information, and does not
 request library/user individual files. Movie Rotten Tomatoes remains preferred
 even when flattened metadata selects IMDb; a labelled movie IMDb score is the
-final fallback only when no RT value exists. TV release rows accept only IMDb
-for the exact episode and do not substitute a selected show, TMDB, or TVDB
-score. Both rating field pairs are still parsed because Tautulli can place its
+final fallback only when no RT value exists. TV release rows prefer IMDb for
+the exact episode, then use that exact episode's RT critic or audience value
+when IMDb is absent. They do not substitute a selected show, movie, TMDB, or
+TVDB score. Both rating field pairs are still parsed because Tautulli can place its
 selected provider in either pair. Provider-free numbers, unknown provider
 identifiers, out-of-range scores, and unavailable logo resources remain
 omitted rather than guessed.

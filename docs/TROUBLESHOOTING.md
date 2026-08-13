@@ -198,10 +198,12 @@ could prevent the later rating-only Tautulli export from supplying RT. v0.9.5
 exhausts the supported RT sources first and uses labelled IMDb only when no RT
 critic or audience value exists.
 
-For TV release rows, v0.9.5 likewise ignores selected TMDB/TVDB as a display
-substitute and continues to the exact episode's Plex IMDb entry. If that exact
-episode IMDb value is unavailable, the row remains unrated rather than showing
-a series-level or different-provider score.
+For TV release rows, v0.10.2 ignores selected TMDB/TVDB as a display substitute
+and continues to the exact episode's provider entries. Exact-episode IMDb has
+priority. If IMDb is unavailable, the row uses that same episode's Rotten
+Tomatoes critic value, then its audience value. It remains unrated when none of
+those exact-episode values exist rather than showing a series-level, movie, or
+unrelated provider score.
 
 If ratings work on Windows but not in Docker, that can mean Windows reached
 Plex directly while the container fell through to Tautulli; it does not imply
@@ -216,7 +218,7 @@ PreviewAll or SendTest.
 Plex documents response include/exclude customization as best-effort rather
 than guaranteed. v0.10.1 therefore retries the same authenticated local item
 as XML when JSON lacks the media-specific provider entries: movie RT
-critic/audience or exact-episode IMDb. This
+critic/audience or exact-episode IMDb/RT. This
 does not contact a third-party ratings service or change the configured Plex
 Ratings Source; it recovers only provider-labelled values already returned by
 the user's Plex server.
@@ -254,7 +256,7 @@ backgrounds, or selected logos directly.
 
 TautWeekly omits a rating rather than guessing its provider. A dedicated IMDb
 or Rotten Tomatoes badge still requires that provider label. TMDB/TVDB values
-are not substituted for movie RT or exact-episode IMDb. Unknown labels and
+are not substituted for movie RT or exact-episode IMDb/RT. Unknown labels and
 unlabeled numbers remain hidden, and a logo is omitted when Plex/Tautulli has
 no selected logo resource.
 Do not post `config.json`, diagnostic JSON, generated previews, or full logs;

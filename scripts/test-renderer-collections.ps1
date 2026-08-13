@@ -28,6 +28,7 @@ $requiredFunctions = @(
     'Get-DesignPlexMetadata',
     'Add-DesignRatingMetadata',
     'Get-DesignEpisodeImdbRating',
+    'Get-DesignEpisodeRtRating',
     'Enrich-TvEpisodeMetadata',
     'Get-DesignRatingLine',
     'Get-StatsMovieRatingHtml',
@@ -659,7 +660,28 @@ foreach ($relativePath in $rendererPaths) {
 
     function Invoke-TautulliApi {
         param([string]$Command, [hashtable]$Parameters = @{})
-        Assert-True ($Command -eq 'get_metadata' -and [string]$Parameters.rating_key -eq 'selected-provider-episode') "$relativePath requested unexpected episode metadata"
+        Assert-True ($Command -eq 'get_metadata') "$relativePath used an unexpected episode metadata command"
+        if ([string]$Parameters.rating_key -eq 'rt-fallback-episode') {
+            return [PSCustomObject]@{
+                media_index = 6
+                parent_media_index = 1
+                rating = '8.3'
+                rating_image = 'rottentomatoes://image.rating.ripe'
+                audience_rating = ''
+                audience_rating_image = ''
+            }
+        }
+        if ([string]$Parameters.rating_key -eq 'rt-audience-fallback-episode') {
+            return [PSCustomObject]@{
+                media_index = 7
+                parent_media_index = 1
+                rating = ''
+                rating_image = ''
+                audience_rating = '4.5'
+                audience_rating_image = 'rottentomatoes://image.rating.spilled'
+            }
+        }
+        Assert-True ([string]$Parameters.rating_key -eq 'selected-provider-episode') "$relativePath requested unexpected episode metadata"
         return [PSCustomObject]@{
             media_index = 2
             parent_media_index = 1
@@ -671,15 +693,37 @@ foreach ($relativePath in $rendererPaths) {
     }
     function Get-DesignPlexMetadata {
         param([string]$RatingKey)
-        Assert-True ($RatingKey -eq 'selected-provider-episode') "$relativePath requested IMDb for the wrong episode"
+        if ($RatingKey -eq 'rt-fallback-episode') {
+            return [PSCustomObject]@{
+                Rating = @(
+                    [PSCustomObject]@{ image = 'rottentomatoes://image.rating.ripe'; type = 'critic'; value = '8.3' }
+                )
+            }
+        }
+        if ($RatingKey -eq 'rt-audience-fallback-episode') {
+            return [PSCustomObject]@{
+                Rating = @(
+                    [PSCustomObject]@{ image = 'rottentomatoes://image.rating.spilled'; type = 'audience'; value = '4.5' }
+                )
+            }
+        }
+        Assert-True ($RatingKey -eq 'selected-provider-episode') "$relativePath requested ratings for the wrong episode"
         return [PSCustomObject]@{
             Rating = @(
                 [PSCustomObject]@{ image = 'themoviedb://image.rating'; type = 'audience'; value = '7.4' },
-                [PSCustomObject]@{ image = 'imdb://image.rating'; type = 'audience'; value = '8.6' }
+                [PSCustomObject]@{ image = 'imdb://image.rating'; type = 'audience'; value = '8.6' },
+                [PSCustomObject]@{ image = 'rottentomatoes://image.rating.ripe'; type = 'critic'; value = '8.3' }
             )
         }
     }
-    function Invoke-DesignPlexLegacyXml { param([string]$Path) throw "$relativePath unnecessarily used legacy XML after finding episode IMDb" }
+    function Invoke-DesignPlexLegacyXml {
+        param([string]$Path)
+        if ($Path -eq '/library/metadata/rt-fallback-episode?includeOptionalElements=Rating') {
+            return [xml]'<MediaContainer><Video ratingKey="rt-fallback-episode" type="episode"><Rating image="rottentomatoes://image.rating.ripe" type="critic" value="8.3" /></Video></MediaContainer>'
+        }
+        Assert-True ($Path -eq '/library/metadata/rt-audience-fallback-episode?includeOptionalElements=Rating') "$relativePath used legacy XML for the wrong episode"
+        return [xml]'<MediaContainer><Video ratingKey="rt-audience-fallback-episode" type="episode"><Rating image="rottentomatoes://image.rating.spilled" type="audience" value="4.5" /></Video></MediaContainer>'
+    }
     $selectedProviderEpisode = [PSCustomObject]@{
         RatingKey = 'selected-provider-episode'
         Title = 'Sanitized Episode'
@@ -695,7 +739,42 @@ foreach ($relativePath in $rendererPaths) {
     Enrich-TvEpisodeMetadata -ReleaseData ([PSCustomObject]@{ TV = @($episodeShow) })
     Assert-True ($selectedProviderEpisode.ImdbRating -eq '8.6') "$relativePath let a selected TMDB score prevent exact-episode IMDb recovery"
     $episodeHtml = Get-TvEpisodeLinesHtml -Item $episodeShow -ImageMode Preview
-    Assert-True ($episodeHtml.Contains('IMDb') -and $episodeHtml.Contains('8.6') -and -not $episodeHtml.Contains('TMDB') -and -not $episodeHtml.Contains('7.4')) "$relativePath rendered a non-IMDb provider on an episode row"
+    Assert-True ($episodeHtml.Contains('IMDb') -and $episodeHtml.Contains('8.6') -and -not $episodeHtml.Contains('Rotten Tomatoes') -and -not $episodeHtml.Contains('83%') -and -not $episodeHtml.Contains('TMDB') -and -not $episodeHtml.Contains('7.4')) "$relativePath did not keep exact-episode IMDb ahead of RT and generic providers"
+
+    $rtFallbackEpisode = [PSCustomObject]@{
+        RatingKey = 'rt-fallback-episode'
+        Title = 'Sanitized RT Episode'
+        Season = 1
+        Episode = 6
+        ImdbRating = ''
+        RatingImage = ''
+    }
+    $rtFallbackShow = [PSCustomObject]@{
+        Title = 'Sanitized RT Show'
+        Episodes = @($rtFallbackEpisode)
+    }
+    Enrich-TvEpisodeMetadata -ReleaseData ([PSCustomObject]@{ TV = @($rtFallbackShow) })
+    Assert-True ([string]::IsNullOrWhiteSpace($rtFallbackEpisode.ImdbRating)) "$relativePath invented exact-episode IMDb when Plex exposed only RT"
+    Assert-True ($rtFallbackEpisode.RtRating -eq '83' -and $rtFallbackEpisode.RtRatingKind -eq 'critic') "$relativePath did not retain the exact-episode RT fallback and provider state"
+    $rtEpisodeHtml = Get-TvEpisodeLinesHtml -Item $rtFallbackShow -ImageMode Preview
+    Assert-True ($rtEpisodeHtml.Contains('Rotten Tomatoes critic') -and $rtEpisodeHtml.Contains('83%') -and -not $rtEpisodeHtml.Contains('IMDb')) "$relativePath did not render RT only after exact-episode IMDb was unavailable"
+
+    $rtAudienceEpisode = [PSCustomObject]@{
+        RatingKey = 'rt-audience-fallback-episode'
+        Title = 'Sanitized RT Audience Episode'
+        Season = 1
+        Episode = 7
+        ImdbRating = ''
+        RatingImage = ''
+    }
+    $rtAudienceShow = [PSCustomObject]@{
+        Title = 'Sanitized RT Audience Show'
+        Episodes = @($rtAudienceEpisode)
+    }
+    Enrich-TvEpisodeMetadata -ReleaseData ([PSCustomObject]@{ TV = @($rtAudienceShow) })
+    Assert-True ($rtAudienceEpisode.RtRating -eq '45' -and $rtAudienceEpisode.RtRatingKind -eq 'audience') "$relativePath did not retain the exact-episode RT audience fallback"
+    $rtAudienceHtml = Get-TvEpisodeLinesHtml -Item $rtAudienceShow -ImageMode Preview
+    Assert-True ($rtAudienceHtml.Contains('Rotten Tomatoes audience') -and $rtAudienceHtml.Contains('45%') -and $rtAudienceHtml.Contains('rt_spilled.png') -and -not $rtAudienceHtml.Contains('IMDb')) "$relativePath did not render the score-dependent RT audience fallback"
 
     function Invoke-TautulliApi { param([string]$Command, [hashtable]$Parameters = @{}) throw 'Simulated deleted metadata' }
     function Get-DesignPlexMetadata { param([string]$RatingKey) return $null }
