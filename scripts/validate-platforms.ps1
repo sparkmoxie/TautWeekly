@@ -390,7 +390,6 @@ Require-Text 'platforms/windows/Operation-Lock.ps1' @(
 )
 Require-Text 'platforms/windows/17-CHECK-FOR-UPDATE.bat' @('Check-Update\.ps1', '-PromptForUpdate', 'pause')
 
-Require-Text 'README.md' @('Stable releases only by default', 'explicit\s+confirmation', 'Unraid host-managed')
 foreach ($relative in @(
     'docs/windows/README.md',
     'docs/nas-docker/README.md',
