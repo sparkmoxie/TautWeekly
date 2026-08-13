@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.3.4 Portable
+---------------
+- keeps personal TV statistics grouped by show with aggregate watch duration
+- prefers the exact show's IMDb score, then its RT critic score, then its RT audience score
+- omits absent movie/TV rating lines instead of rendering an unavailable placeholder
+
 v1.3.3 Portable
 ---------------
 - prints the ordered Plex and Tautulli metadata-readiness checklist after first setup and relevant container updates

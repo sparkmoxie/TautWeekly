@@ -31,7 +31,12 @@ $requiredFunctions = @(
     'Get-DesignEpisodeRtRating',
     'Enrich-TvEpisodeMetadata',
     'Get-DesignRatingLine',
+    'Get-DesignGenreLine',
     'Get-StatsMovieRatingHtml',
+    'Get-StatsMovieRowsHtml',
+    'Get-StatsEpisodeRowsHtml',
+    'Get-StatsTvShowRatingHtml',
+    'Get-StatsTvShowRowsHtml',
     'Get-TvEpisodeLinesHtml',
     'Get-DesignRtIconUrl',
     'HtmlEncode',
@@ -594,6 +599,14 @@ foreach ($relativePath in $rendererPaths) {
                 audience_rating_image = ''
             }
         }
+        if ([string]$Parameters.rating_key -eq 'rt-provider-show') {
+            return [PSCustomObject]@{
+                rating = '5.7'
+                rating_image = 'rottentomatoes://image.rating.rotten'
+                audience_rating = '7.8'
+                audience_rating_image = 'rottentomatoes://image.rating.upright'
+            }
+        }
         Assert-True ([string]$Parameters.rating_key -eq 'selected-provider-show') "$relativePath requested an unexpected selected-provider rating key"
         return [PSCustomObject]@{
             rating = ''
@@ -616,7 +629,9 @@ foreach ($relativePath in $rendererPaths) {
         if ($RatingKey -eq 'selected-provider-show') {
             return [PSCustomObject]@{
                 Rating = @(
-                    [PSCustomObject]@{ image = 'imdb://image.rating'; type = 'audience'; value = '8.4' }
+                    [PSCustomObject]@{ image = 'imdb://image.rating'; type = 'audience'; value = '8.4' },
+                    [PSCustomObject]@{ image = 'rottentomatoes://image.rating.ripe'; type = 'critic'; value = '7.1' },
+                    [PSCustomObject]@{ image = 'rottentomatoes://image.rating.upright'; type = 'audience'; value = '8.2' }
                 )
             }
         }
@@ -638,23 +653,61 @@ foreach ($relativePath in $rendererPaths) {
         Title = 'Preferred Provider Movie'
         Year = '2026'
     }
+    $rtProviderShow = [PSCustomObject]@{
+        RatingKey = 'rt-provider-show'
+        Type = 'show'
+        Title = 'RT Provider Show'
+    }
     $fallbackProviderMovie = [PSCustomObject]@{
         RatingKey = 'fallback-provider-movie'
         Type = 'movie'
         Title = 'Fallback Provider Movie'
         Year = '2026'
     }
-    Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @($selectedProviderMovie, $fallbackProviderMovie); TV = @($selectedProviderShow) })
+    Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @($selectedProviderMovie, $fallbackProviderMovie); TV = @($selectedProviderShow, $rtProviderShow) })
     Assert-True ($selectedProviderShow.DesignRatingProvider -eq 'TMDB' -and $selectedProviderShow.DesignRatingValue -eq '7.4') "$relativePath ignored Tautulli's selected TV audience-rating provider"
     Assert-True ($selectedProviderShow.DesignImdbRating -eq '8.4') "$relativePath let a selected TMDB score prevent an available show IMDb fallback"
+    Assert-True ($selectedProviderShow.DesignRtCritic -eq '71' -and $selectedProviderShow.DesignRtAudience -eq '82') "$relativePath did not retain show-level RT values behind the preferred IMDb score"
+    Assert-True ($rtProviderShow.DesignRtCritic -eq '57' -and $rtProviderShow.DesignRtAudience -eq '78' -and [string]::IsNullOrWhiteSpace($rtProviderShow.DesignImdbRating)) "$relativePath did not retain a show-level RT fallback when IMDb was absent"
     Assert-True ($selectedProviderMovie.DesignRtCritic -eq '53' -and $selectedProviderMovie.DesignRtAudience -eq '40') "$relativePath let a selected movie IMDb score prevent available Rotten Tomatoes ratings"
     Assert-True ($fallbackProviderMovie.DesignImdbRating -eq '6.6') "$relativePath did not retain labelled IMDb as the final movie fallback"
-    Assert-True ($script:providerDirectCalls -eq 3 -and $script:providerExportCalls -eq 1) "$relativePath did not exhaust preferred rating sources before accepting selected-provider fallbacks"
+    Assert-True ($script:providerDirectCalls -eq 4 -and $script:providerExportCalls -eq 2) "$relativePath did not exhaust preferred rating sources before accepting selected-provider fallbacks"
 
     $preferredMovieLine = Get-DesignRatingLine -Item $selectedProviderMovie -ImageMode Preview
     Assert-True ($preferredMovieLine.Contains('53%') -and $preferredMovieLine.Contains('40%') -and -not $preferredMovieLine.Contains('8.1')) "$relativePath did not render RT exclusively when a movie also retained an IMDb fallback"
     $preferredMovieStats = Get-StatsMovieRatingHtml -Item $selectedProviderMovie -ImageMode Preview
     Assert-True ($preferredMovieStats.Contains('53%') -and $preferredMovieStats.Contains('40%') -and -not $preferredMovieStats.Contains('8.1')) "$relativePath personal stats did not prefer RT over a movie IMDb fallback"
+    $unratedMovieStats = Get-StatsMovieRatingHtml -Item ([PSCustomObject]@{}) -ImageMode Preview
+    Assert-True ([string]::IsNullOrWhiteSpace($unratedMovieStats)) "$relativePath personal stats did not omit an unavailable movie rating"
+
+    function Get-ImageSource {
+        param([string]$RatingKey, [object[]]$PosterAssets, [string]$ImageMode)
+        return ''
+    }
+    $unratedMovieRows = Get-StatsMovieRowsHtml -Items @([PSCustomObject]@{
+        Title = 'Unrated Movie'; PosterRatingKey = ''; Genres = @()
+    }) -PosterAssets @() -ImageMode Preview
+    Assert-True ($unratedMovieRows.Contains('Unrated Movie') -and -not $unratedMovieRows.Contains('unavailable')) "$relativePath personal movie stats rendered an unavailable-rating placeholder"
+
+    $unratedTvRows = Get-StatsTvShowRowsHtml -Items @([PSCustomObject]@{
+        ShowTitle = 'Grouped Show'; PosterRatingKey = ''; TotalTimeText = '1h 2m'; Seconds = 3720; DesignImdbRating = ''
+    }) -PosterAssets @() -ImageMode Preview
+    Assert-True ($unratedTvRows.Contains('Grouped Show') -and $unratedTvRows.Contains('1h 2m watched') -and -not $unratedTvRows.Contains('unavailable')) "$relativePath grouped TV stats did not retain duration while omitting an unavailable rating"
+
+    $preferredShowStats = Get-StatsTvShowRatingHtml -Item $selectedProviderShow -ImageMode Preview
+    Assert-True ($preferredShowStats.Contains('IMDb') -and $preferredShowStats.Contains('8.4') -and -not $preferredShowStats.Contains('%')) "$relativePath grouped TV stats did not prefer show-level IMDb over show-level RT"
+    $rtShowStats = Get-StatsTvShowRatingHtml -Item $rtProviderShow -ImageMode Preview
+    Assert-True ($rtShowStats.Contains('Rotten Tomatoes critic') -and $rtShowStats.Contains('57%')) "$relativePath grouped TV stats did not fall back to the show-level RT critic score"
+    $audienceOnlyShowStats = Get-StatsTvShowRatingHtml -Item ([PSCustomObject]@{
+        DesignImdbRating = ''; DesignRtCritic = ''; DesignRtAudience = '42'; DesignRtAudienceImage = 'rottentomatoes://image.rating.spilled'
+    }) -ImageMode Preview
+    Assert-True ($audienceOnlyShowStats.Contains('Rotten Tomatoes audience') -and $audienceOnlyShowStats.Contains('42%')) "$relativePath grouped TV stats did not fall back to the show-level RT audience score"
+
+    $unratedEpisodeRows = Get-StatsEpisodeRowsHtml -Items @([PSCustomObject]@{
+        ShowTitle = 'Legacy Show'; EpisodeTitle = 'Pilot'; PosterRatingKey = ''; Season = 1; Episode = 1; ImdbRating = ''
+    }) -PosterAssets @() -ImageMode Preview -ImdbIconSrc '../assets/imdb.png'
+    Assert-True ($unratedEpisodeRows.Contains('S01 EP01: Pilot') -and -not $unratedEpisodeRows.Contains('unavailable')) "$relativePath legacy episode stats rendered an unavailable-rating placeholder"
+
     $fallbackMovieLine = Get-DesignRatingLine -Item $fallbackProviderMovie -ImageMode Preview
     Assert-True ($fallbackMovieLine.Contains('IMDb') -and $fallbackMovieLine.Contains('6.6')) "$relativePath did not render labelled IMDb when no movie RT rating exists"
 

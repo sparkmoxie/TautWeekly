@@ -5,7 +5,7 @@
 The Windows distribution runs directly in Windows PowerShell and uses Windows
 Task Scheduler for optional automation.
 
-Current source baseline: **1.8.5**.
+Current source baseline: **1.8.6**.
 
 ## Requirements
 

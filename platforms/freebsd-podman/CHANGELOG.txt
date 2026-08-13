@@ -1,6 +1,8 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Keeps personal TV statistics grouped by show with aggregate watch duration while preferring show-level IMDb, then RT critic, then RT audience.
+- Omits absent personal movie/TV rating lines instead of rendering an unavailable placeholder.
 - Prints the ordered Plex and Tautulli metadata-readiness checklist after first setup and relevant package updates.
 - Distinguishes direct-Plex connectivity verification from upstream metadata freshness before PreviewAll or TestEmail.
 - Documents per-library scope, potentially long Plex refreshes, and the safe routine-update exception.
