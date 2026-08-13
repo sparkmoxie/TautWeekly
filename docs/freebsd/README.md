@@ -62,7 +62,7 @@ settings file and private data directory.
 
 Setup asks for a direct Plex URL and administrator token. They remain optional
 for the core Tautulli activity flow, but are recommended for complete movie RT
-critic/audience ratings, exact-episode IMDb ratings, backgrounds, and selected
+critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and selected
 logos. The URL must work from the Podman Linux container; its localhost is not
 the FreeBSD host or a separate Plex service. `sudo tautweekly verify` checks
 Plex `/identity` plus authenticated `/library/sections` without printing the
@@ -70,9 +70,9 @@ token. A resolved but unusable connection fails verification; an unresolved
 pair emits a Tautulli-only fallback warning.
 Verification proves reachability and authentication, not that every item has
 every provider score. The renderer explicitly requests Plex's optional
-`Rating` element so available RT pairs and exact-episode IMDb values are not
+`Rating` element so available movie RT pairs and exact-episode IMDb/RT values are not
 hidden by a selected IMDb/TMDB fallback. If JSON lacks movie RT or
-exact-episode IMDb entries, the renderer retries the same authenticated local
+exact-episode provider entries, the renderer retries the same authenticated local
 item as XML and reads only provider-labelled `Rating` elements.
 For intended movie RT output, also set every applicable Plex Movie library's
 **Edit → Advanced → Ratings Source** to **Rotten Tomatoes**,

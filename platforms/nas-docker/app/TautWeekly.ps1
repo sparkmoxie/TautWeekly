@@ -11,7 +11,7 @@
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex NAS Portable v1.3.1 — Linux container production newsletter engine.
+# TautWeekly for Plex NAS Portable v1.3.2 - Linux container production newsletter engine.
 # Uses the current six-state portable production renderer with regression
 # previews, latest TV episode backfill, IMDb enrichment, and RT audience %.
 Set-StrictMode -Version Latest
@@ -1181,6 +1181,7 @@ function Enrich-TvEpisodeMetadata {
     $cache = @{}
     $lookups = 0
     $imdbFound = 0
+    $rtFound = 0
 
     foreach ($show in @($ReleaseData.TV)) {
         # Tautulli can represent a weekly TV import as episode rows, one
@@ -1247,7 +1248,7 @@ function Enrich-TvEpisodeMetadata {
                     $lookups++
                 }
                 catch {
-                    Write-Log ("IMDb lookup failed for episode rating key {0}: {1}" -f $ratingKey, $_.Exception.Message) "WARN"
+                    Write-Log ("Rating lookup failed for episode rating key {0}: {1}" -f $ratingKey, $_.Exception.Message) "WARN"
                     continue
                 }
             }
@@ -1298,6 +1299,20 @@ function Enrich-TvEpisodeMetadata {
                     -TautulliMetadata $meta
             }
 
+            # Exact-episode IMDb remains the first choice. If neither the
+            # selected Tautulli fields nor Plex's provider array has IMDb, use
+            # an exact-episode RT critic score (then audience) rather than a
+            # show-level or unrelated provider value.
+            $episodeRt = [PSCustomObject]@{ Value = ""; Image = ""; Kind = "" }
+            if ([string]::IsNullOrWhiteSpace([string]$episode.ImdbRating)) {
+                $episodeRt = Get-DesignEpisodeRtRating `
+                    -RatingKey $ratingKey `
+                    -TautulliMetadata $meta
+            }
+            $episode | Add-Member -NotePropertyName "RtRating" -NotePropertyValue ([string]$episodeRt.Value) -Force
+            $episode | Add-Member -NotePropertyName "RtRatingImage" -NotePropertyValue ([string]$episodeRt.Image) -Force
+            $episode | Add-Member -NotePropertyName "RtRatingKind" -NotePropertyValue ([string]$episodeRt.Kind) -Force
+
             if (-not [string]::IsNullOrWhiteSpace([string]$episode.ImdbRating)) {
                 $imdbFound++
                 Write-Log ("TV IMDb: {0} S{1}E{2} '{3}' -> {4}" -f `
@@ -1308,13 +1323,25 @@ function Enrich-TvEpisodeMetadata {
                     $episode.ImdbRating
                 )
             }
+            elseif (-not [string]::IsNullOrWhiteSpace([string]$episode.RtRating)) {
+                $rtFound++
+                Write-Log ("TV RT fallback: {0} S{1}E{2} '{3}' -> {4} {5}%" -f `
+                    $show.Title,
+                    $episode.Season,
+                    $episode.Episode,
+                    $episode.Title,
+                    $episode.RtRatingKind,
+                    $episode.RtRating
+                )
+            }
         }
     }
 
-    Write-Log ("{0} episode metadata enrichment: {1} get_metadata lookup(s), {2} IMDb rating(s) found." -f `
+    Write-Log ("{0} episode metadata enrichment: {1} get_metadata lookup(s), {2} IMDb rating(s), {3} RT fallback(s) found." -f `
         $ContextLabel,
         $lookups,
-        $imdbFound
+        $imdbFound,
+        $rtFound
     )
 }
 
@@ -2215,7 +2242,7 @@ function Invoke-DesignPlexJson {
 function Test-TautWeeklyDirectPlexConnection {
     $ctx = Get-DesignPlexContext
     if (-not $ctx.Available) {
-        Write-Log "Direct Plex verification skipped because no URL/token pair could be resolved. Tautulli-only fallback remains available, but complete movie RT critic/audience ratings, exact-episode IMDb ratings, backgrounds, and selected logos may be unavailable." "WARN"
+        Write-Log "Direct Plex verification skipped because no URL/token pair could be resolved. Tautulli-only fallback remains available, but complete movie RT critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and selected logos may be unavailable." "WARN"
         return 3
     }
 
@@ -2536,6 +2563,80 @@ function Get-DesignEpisodeImdbRating {
 
     return $result
 }
+
+function Get-DesignEpisodeRtRating {
+    param(
+        [string]$RatingKey,
+        [AllowNull()][object]$TautulliMetadata = $null
+    )
+
+    $empty = [PSCustomObject]@{ Value = ""; Image = ""; Kind = "" }
+    if ([string]::IsNullOrWhiteSpace($RatingKey)) { return $empty }
+
+    $critic = $null
+    $audience = $null
+
+    # The supplied metadata belongs to this exact episode. Preserve Plex's
+    # provider/state identifier so the tomato/popcorn icon remains accurate.
+    if ($null -ne $TautulliMetadata) {
+        foreach ($candidate in @(
+            [PSCustomObject]@{
+                Image = Get-OptionalStringProperty -InputObject $TautulliMetadata -Name "rating_image"
+                Value = Get-OptionalStringProperty -InputObject $TautulliMetadata -Name "rating"
+                Kind = "critic"
+            },
+            [PSCustomObject]@{
+                Image = Get-OptionalStringProperty -InputObject $TautulliMetadata -Name "audience_rating_image"
+                Value = Get-OptionalStringProperty -InputObject $TautulliMetadata -Name "audience_rating"
+                Kind = "audience"
+            }
+        )) {
+            if ($candidate.Image -notlike "rottentomatoes://image.rating.*") { continue }
+            $percent = Convert-DesignRatingPercent $candidate.Value
+            if ([string]::IsNullOrWhiteSpace($percent)) { continue }
+
+            $kind = [string]$candidate.Kind
+            if ($candidate.Image -match '(?i)\.(upright|spilled)$') { $kind = "audience" }
+            elseif ($candidate.Image -match '(?i)\.(ripe|rotten)$') { $kind = "critic" }
+            $resolved = [PSCustomObject]@{ Value = $percent; Image = [string]$candidate.Image; Kind = $kind }
+            if ($kind -eq "critic") { $critic = $resolved } else { $audience = $resolved }
+        }
+    }
+
+    # Direct Plex may expose an alternate exact-episode RT entry even when
+    # Tautulli flattened another selected provider.
+    try {
+        $plexMeta = Get-DesignPlexMetadata -RatingKey $RatingKey
+        if ($null -ne $plexMeta -and $null -ne $plexMeta.PSObject.Properties["Rating"]) {
+            foreach ($ratingEntry in @($plexMeta.Rating)) {
+                $image = Get-OptionalStringProperty -InputObject $ratingEntry -Name "image"
+                if ($image -notlike "rottentomatoes://image.rating.*") { continue }
+                $percent = Convert-DesignRatingPercent (Get-OptionalStringProperty -InputObject $ratingEntry -Name "value")
+                if ([string]::IsNullOrWhiteSpace($percent)) { continue }
+
+                $kind = (Get-OptionalStringProperty -InputObject $ratingEntry -Name "type").Trim().ToLowerInvariant()
+                if ($kind -notin @("critic", "audience")) {
+                    if ($image -match '(?i)\.(upright|spilled)$') { $kind = "audience" }
+                    else { $kind = "critic" }
+                }
+                $resolved = [PSCustomObject]@{ Value = $percent; Image = $image; Kind = $kind }
+                if ($kind -eq "critic" -and $null -eq $critic) { $critic = $resolved }
+                elseif ($kind -eq "audience" -and $null -eq $audience) { $audience = $resolved }
+            }
+        }
+    }
+    catch {
+        Write-Log ("TautWeekly for Plex direct Plex RT lookup failed for episode {0}: {1}" -f `
+            $RatingKey,
+            $_.Exception.Message
+        ) "WARN"
+    }
+
+    if ($null -ne $critic) { return $critic }
+    if ($null -ne $audience) { return $audience }
+    return $empty
+}
+
 
 function Get-DesignPlexImages {
     param([string]$RatingKey)
@@ -4696,7 +4797,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.10.1"
+                "User-Agent"      = "TautWeekly-for-Plex/0.10.2"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -4950,7 +5051,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.10.1"
+        "X-Plex-Version"           = "0.10.2"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 
@@ -5644,15 +5745,35 @@ function Get-TvEpisodeLinesHtml {
             $imdb = [string]$episode.ImdbRating
         }
 
-        $ratingHtml = if ([string]::IsNullOrWhiteSpace($imdb)) {
-            ""
-        }
-        else {
+        $ratingHtml = ""
+        if (-not [string]::IsNullOrWhiteSpace($imdb)) {
             $imdbSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "assets/imdb.png" }
-            '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:11px;font-weight:700;white-space:nowrap;">' +
+            $ratingHtml = '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:11px;font-weight:700;white-space:nowrap;">' +
             '<img src="' + $imdbSrc + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
             (HtmlEncode $imdb) +
             '</span>'
+        }
+        else {
+            $rtValue = Get-OptionalStringProperty -InputObject $episode -Name "RtRating"
+            if (-not [string]::IsNullOrWhiteSpace($rtValue)) {
+                $rtKind = (Get-OptionalStringProperty -InputObject $episode -Name "RtRatingKind").Trim().ToLowerInvariant()
+                if ($rtKind -ne "audience") { $rtKind = "critic" }
+                $rtImage = Get-OptionalStringProperty -InputObject $episode -Name "RtRatingImage"
+                if ([string]::IsNullOrWhiteSpace($rtImage)) {
+                    $rtImage = if ($rtKind -eq "audience") {
+                        if ((Safe-Int $rtValue) -ge 60) { "rottentomatoes://image.rating.upright" } else { "rottentomatoes://image.rating.spilled" }
+                    }
+                    else {
+                        if ((Safe-Int $rtValue) -ge 60) { "rottentomatoes://image.rating.ripe" } else { "rottentomatoes://image.rating.rotten" }
+                    }
+                }
+                $rtSrc = Get-DesignRtIconUrl -ImageState $rtImage -Kind $rtKind -ImageMode $ImageMode
+                $rtAlt = if ($rtKind -eq "audience") { "Rotten Tomatoes audience" } else { "Rotten Tomatoes critic" }
+                $ratingHtml = '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:11px;font-weight:700;white-space:nowrap;">' +
+                    '<img src="' + (HtmlEncode $rtSrc) + '" alt="' + $rtAlt + '" width="14" height="14" style="display:inline-block;width:14px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:4px;">' +
+                    (HtmlEncode ($rtValue + "%")) +
+                    '</span>'
+            }
         }
 
         [void]$lines.Append(

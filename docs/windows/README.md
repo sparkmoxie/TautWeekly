@@ -5,7 +5,7 @@
 The Windows distribution runs directly in Windows PowerShell and uses Windows
 Task Scheduler for optional automation.
 
-Current source baseline: **1.8.3**.
+Current source baseline: **1.8.4**.
 
 ## Requirements
 
@@ -35,7 +35,7 @@ Windows machine.
    include, then select any users to exclude. Direct Plex remains optional for
    the core Tautulli activity flow, but supplying its URL and administrator
    token is recommended for complete movie RT critic/audience ratings,
-   exact-episode IMDb ratings, backgrounds, and selected logos.
+   exact-episode IMDb/RT ratings, backgrounds, and selected logos.
 6. Run `01-VERIFY-SETUP.bat` and correct every failure before continuing.
 
 The setup wizard creates `config.json`. That file is deliberately ignored by
@@ -49,9 +49,9 @@ verification. If Windows cannot resolve a URL/token pair, verification warns
 that TautWeekly will use Tautulli's selected/flattened rating fallbacks.
 Verification proves reachability and authentication, not that every item has
 every provider score. The renderer explicitly requests Plex's optional
-`Rating` element so available RT pairs and exact-episode IMDb values are not
+`Rating` element so available movie RT pairs and exact-episode IMDb/RT values are not
 hidden by a selected IMDb/TMDB fallback. If JSON lacks movie RT or
-exact-episode IMDb entries, the renderer retries the same authenticated local
+exact-episode provider entries, the renderer retries the same authenticated local
 item as XML and reads only provider-labelled `Rating` elements.
 For intended movie RT output, also set every applicable Plex Movie library's
 **Edit → Advanced → Ratings Source** to **Rotten Tomatoes**,

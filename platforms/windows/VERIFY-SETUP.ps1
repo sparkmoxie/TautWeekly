@@ -222,7 +222,7 @@ $plexHost = Join-Path $PSHOME "powershell.exe"
 & $plexHost -NoLogo -NoProfile -ExecutionPolicy Bypass -File $plexVerifier -Mode VerifyPlex -ConfigPath $configPath
 $directPlexExit = $LASTEXITCODE
 if ($directPlexExit -eq 3) {
-    WARN "Direct Plex is not configured or discoverable. Core Tautulli operation remains available, but complete movie RT critic/audience ratings, exact-episode IMDb ratings, backgrounds, and selected logos may be unavailable."
+    WARN "Direct Plex is not configured or discoverable. Core Tautulli operation remains available, but complete movie RT critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and selected logos may be unavailable."
 }
 elseif ($directPlexExit -ne 0) {
     FAIL "Direct Plex verification failed. Correct the private Plex URL/token or its runtime connectivity before Preview or SendTest."
