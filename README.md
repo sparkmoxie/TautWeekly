@@ -62,11 +62,11 @@ them locally; send controlled tests; then schedule production delivery.
 
 | Platform | Runtime and scheduler | Preview | Best fit | Guides and source |
 |---|---|---|---|---|
-| Windows portable · baseline 1.8.2 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/) · [Documentation](docs/windows/README.md) · [Source](platforms/windows) |
-| NAS / Docker · baseline 1.3.0 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
-| macOS · baseline 1.2.0 | PowerShell 7 in Docker Desktop · internal scheduler | Localhost port 8787 by default | Intel or Apple silicon Mac | [Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/) · [Documentation](docs/mac/README.md) · [Source](platforms/mac-docker) |
-| Native Linux · baseline 1.1.1 | PowerShell 7.2+ · hardened systemd service | Localhost port 8787 by default | Current Ubuntu, Debian, or RHEL host without Docker | [Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Source](platforms/linux) |
-| FreeBSD Podman · baseline 1.1.2 | Maintained Linux OCI renderer · rc.d | Localhost port 8787 by default | FreeBSD 15.1+ amd64 host · **beta** | [Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Source](platforms/freebsd-podman) |
+| Windows portable · baseline 1.8.3 | Windows PowerShell 5.1+ · Task Scheduler | Local generated HTML | Always-on Windows host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/) · [Documentation](docs/windows/README.md) · [Source](platforms/windows) |
+| NAS / Docker · baseline 1.3.1 | PowerShell 7 in Docker · internal scheduler | Configurable port 8787 bind | QNAP, Unraid, Linux NAS, Docker host | [Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Source](platforms/nas-docker) |
+| macOS · baseline 1.2.1 | PowerShell 7 in Docker Desktop · internal scheduler | Localhost port 8787 by default | Intel or Apple silicon Mac | [Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/) · [Documentation](docs/mac/README.md) · [Source](platforms/mac-docker) |
+| Native Linux · baseline 1.1.2 | PowerShell 7.2+ · hardened systemd service | Localhost port 8787 by default | Current Ubuntu, Debian, or RHEL host without Docker | [Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Source](platforms/linux) |
+| FreeBSD Podman · baseline 1.1.3 | Maintained Linux OCI renderer · rc.d | Localhost port 8787 by default | FreeBSD 15.1+ amd64 host · **beta** | [Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Source](platforms/freebsd-podman) |
 
 All five distributions preserve the working renderer and safety gates. Their
 setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
@@ -80,7 +80,10 @@ setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
 - Direct item metadata explicitly requests Plex's optional `Rating` element.
   This matters when Tautulli returns only the selected/flattened IMDb or TMDB
   value: an available alternate RT pair or exact-episode IMDb value can still
-  be recovered from the configured Plex server.
+  be recovered from the configured Plex server. If a PMS build omits one or
+  more required provider entries from JSON or ignores the requested
+  scalar-field exclusion, TautWeekly retries that exact local item as
+  authenticated XML and reads only its provider-labelled `Rating` elements.
 - To intentionally publish movie RT scores, each Plex Movie library must use
   **Edit → Advanced → Ratings Source → Rotten Tomatoes** and have refreshed
   metadata; Plex documents that choice as library-wide.

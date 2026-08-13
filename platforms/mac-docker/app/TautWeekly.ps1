@@ -11,7 +11,7 @@
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex Mac Portable v1.2.0 — Docker Desktop production newsletter engine.
+# TautWeekly for Plex Mac Portable v1.2.1 — Docker Desktop production newsletter engine.
 # Uses the current six-state portable production renderer with regression
 # previews, latest TV episode backfill, IMDb enrichment, and RT audience %.
 Set-StrictMode -Version Latest
@@ -2324,6 +2324,74 @@ function Get-DesignPlexMetadata {
         }
     }
 
+    # PMS response customization is best-effort. Some builds ignore the JSON
+    # field exclusion or omit optional child elements there, while the same
+    # local item exposes its provider Rating elements through native XML. Use
+    # that response only when JSON lacks movie RT or exact-episode/show IMDb.
+    $jsonRatings = @()
+    if ($null -ne $meta -and $null -ne $meta.PSObject.Properties["Rating"]) {
+        $jsonRatings = @($meta.Rating)
+    }
+    $metaType = (Get-OptionalStringProperty -InputObject $meta -Name "type").Trim().ToLowerInvariant()
+    $needsXmlRatings = ($jsonRatings.Count -eq 0)
+    if ($metaType -eq "movie") {
+        $hasRtCritic = @($jsonRatings | Where-Object {
+            (Get-OptionalStringProperty -InputObject $_ -Name "image") -like "rottentomatoes://image.rating.*" -and
+            (Get-OptionalStringProperty -InputObject $_ -Name "type") -eq "critic" -and
+            -not [string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $_ -Name "value"))
+        }).Count -gt 0
+        $hasRtAudience = @($jsonRatings | Where-Object {
+            (Get-OptionalStringProperty -InputObject $_ -Name "image") -like "rottentomatoes://image.rating.*" -and
+            (Get-OptionalStringProperty -InputObject $_ -Name "type") -eq "audience" -and
+            -not [string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $_ -Name "value"))
+        }).Count -gt 0
+        $needsXmlRatings = (-not $hasRtCritic -or -not $hasRtAudience)
+    }
+    elseif ($metaType -in @("show", "episode")) {
+        $needsXmlRatings = @($jsonRatings | Where-Object {
+            (Get-OptionalStringProperty -InputObject $_ -Name "image") -like "imdb://image.rating*" -and
+            -not [string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $_ -Name "value"))
+        }).Count -eq 0
+    }
+    if ($needsXmlRatings) {
+        try {
+            $xml = Invoke-DesignPlexLegacyXml -Path (
+                "/library/metadata/" +
+                [Uri]::EscapeDataString($RatingKey) +
+                "?includeOptionalElements=Rating"
+            )
+            $xmlRatings = @()
+            if ($null -ne $xml) {
+                foreach ($node in @($xml.SelectNodes("//Rating"))) {
+                    if ($null -eq $node) { continue }
+
+                    $xmlRatings += [PSCustomObject]@{
+                        image = if ($null -ne $node.Attributes["image"]) { [string]$node.Attributes["image"].Value } else { "" }
+                        type  = if ($null -ne $node.Attributes["type"])  { [string]$node.Attributes["type"].Value }  else { "" }
+                        value = if ($null -ne $node.Attributes["value"]) { [string]$node.Attributes["value"].Value } else { "" }
+                    }
+                }
+            }
+
+            if ($xmlRatings.Count -gt 0) {
+                if ($null -eq $meta) { $meta = [PSCustomObject]@{} }
+                $mergedRatings = @($jsonRatings)
+                foreach ($xmlRating in $xmlRatings) {
+                    $duplicate = @($mergedRatings | Where-Object {
+                        (Get-OptionalStringProperty -InputObject $_ -Name "image") -eq $xmlRating.image -and
+                        (Get-OptionalStringProperty -InputObject $_ -Name "type") -eq $xmlRating.type -and
+                        (Get-OptionalStringProperty -InputObject $_ -Name "value") -eq $xmlRating.value
+                    }).Count -gt 0
+                    if (-not $duplicate) { $mergedRatings += $xmlRating }
+                }
+                $meta | Add-Member -NotePropertyName "Rating" -NotePropertyValue @($mergedRatings) -Force
+            }
+        }
+        catch {
+            Write-Log "TautWeekly for Plex native XML rating fallback failed: $($_.Exception.Message)" "WARN"
+        }
+    }
+
     $script:DesignPlexMetadataCache[$RatingKey] = $meta
     return $meta
 }
@@ -4627,7 +4695,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.10.0"
+                "User-Agent"      = "TautWeekly-for-Plex/0.10.1"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -4881,7 +4949,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.10.0"
+        "X-Plex-Version"           = "0.10.1"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 
@@ -4951,7 +5019,7 @@ function Get-PlexHostedMetadata {
 
     if ($requestCompleted -and $null -eq $metadata) {
         $attemptDescription = if ($postRetryAttempted) { "query and provider POST attempts" } else { "the supported request" }
-        Write-Log "Plex hosted metadata recovery returned no exact match for the retained $MediaType GUID after $attemptDescription." "WARN"
+        Write-Log "Optional Plex hosted metadata recovery found no exact match for the retained $MediaType GUID after $attemptDescription; continuing with available local/Tautulli metadata."
     }
 
     if ($null -ne $metadata -and $MediaType -eq "show") {

@@ -105,6 +105,7 @@ foreach ($relativePath in $rendererPaths) {
     # the full RT pair when the optional Rating element is explicitly requested.
     $script:DesignPlexMetadataCache = @{}
     $script:optionalRatingRequests = 0
+    $script:optionalRatingXmlRequests = 0
     function Write-Log { param([string]$Message, [string]$Level = 'INFO') }
     function Get-DesignPlexContext {
         return [PSCustomObject]@{
@@ -137,14 +138,62 @@ foreach ($relativePath in $rendererPaths) {
             }
         }
     }
+    function Invoke-DesignPlexLegacyXml {
+        param([string]$Path)
+        $script:optionalRatingXmlRequests++
+        throw "$relativePath unexpectedly used XML after JSON returned the optional Rating array"
+    }
     $optionalRatingMetadata = Get-DesignPlexMetadata -RatingKey 'virtual-movie'
     $cachedOptionalRatingMetadata = Get-DesignPlexMetadata -RatingKey 'virtual-movie'
     Assert-True ($script:optionalRatingRequests -eq 1) "$relativePath did not cache the optional direct Plex rating response"
+    Assert-True ($script:optionalRatingXmlRequests -eq 0) "$relativePath used XML even though JSON supplied the optional Rating array"
     Assert-True ($cachedOptionalRatingMetadata -eq $optionalRatingMetadata) "$relativePath changed the cached optional direct Plex rating response"
     Assert-True (
         $null -ne $optionalRatingMetadata.PSObject.Properties['Rating'] -and
         @($optionalRatingMetadata.Rating).Count -eq 2
     ) "$relativePath did not request Plex's optional Rating element without the colliding scalar rating field"
+
+    # PMS response customization is explicitly best-effort: a server may
+    # ignore excludeFields or omit optional children from JSON while exposing
+    # the same native Rating elements in XML. Model the reporter's observable
+    # split so movie RT does not depend on a JSON-only response shape.
+    $script:DesignPlexMetadataCache = @{}
+    $script:jsonSparseRatingRequests = 0
+    $script:xmlRatingFallbackRequests = 0
+    function Invoke-RestMethod {
+        param([string]$Uri, [hashtable]$Headers, [string]$Method, [int]$TimeoutSec)
+        $script:jsonSparseRatingRequests++
+        return [PSCustomObject]@{
+            MediaContainer = [PSCustomObject]@{
+                Metadata = @([PSCustomObject]@{
+                    ratingKey = 'virtual-json-sparse-movie'
+                    type = 'movie'
+                    ratingImage = 'imdb://image.rating'
+                    Rating = @([PSCustomObject]@{
+                        image = 'imdb://image.rating'
+                        type = 'audience'
+                        value = '7.0'
+                    })
+                    Genre = @([PSCustomObject]@{ tag = 'Drama' })
+                })
+            }
+        }
+    }
+    function Invoke-DesignPlexLegacyXml {
+        param([string]$Path)
+        $script:xmlRatingFallbackRequests++
+        Assert-True ($Path -eq '/library/metadata/virtual-json-sparse-movie?includeOptionalElements=Rating') "$relativePath changed the native XML rating fallback request"
+        return [xml]'<MediaContainer><Video ratingKey="virtual-json-sparse-movie" rating="6.6" ratingImage="imdb://image.rating"><Rating image="rottentomatoes://image.rating.ripe" type="critic" value="8.7" /><Rating image="rottentomatoes://image.rating.upright" type="audience" value="8.3" /></Video></MediaContainer>'
+    }
+    $xmlFallbackMetadata = Get-DesignPlexMetadata -RatingKey 'virtual-json-sparse-movie'
+    $cachedXmlFallbackMetadata = Get-DesignPlexMetadata -RatingKey 'virtual-json-sparse-movie'
+    Assert-True ($script:jsonSparseRatingRequests -eq 1) "$relativePath did not cache the JSON-sparse metadata response"
+    Assert-True ($script:xmlRatingFallbackRequests -eq 1) "$relativePath did not cache the native XML rating fallback"
+    Assert-True ($cachedXmlFallbackMetadata -eq $xmlFallbackMetadata) "$relativePath changed the cached XML-enriched metadata response"
+    Assert-True (
+        $null -ne $xmlFallbackMetadata.PSObject.Properties['Rating'] -and
+        @($xmlFallbackMetadata.Rating).Count -eq 3
+    ) "$relativePath did not merge native XML provider ratings when JSON retained only selected IMDb"
 
     function Get-DesignPlexMetadata { param([string]$RatingKey) return [PSCustomObject]@{} }
     function Invoke-DesignPlexLegacyXml {
@@ -441,9 +490,11 @@ foreach ($relativePath in $rendererPaths) {
     $script:PlexHostedMetadataCache = @{}
     $script:hostedMetadataRequestCount = 0
     $script:hostedMetadataWarnings = New-Object System.Collections.Generic.List[string]
+    $script:hostedMetadataMessages = New-Object System.Collections.Generic.List[string]
     $env:TAUTWEEKLY_TEST_PLEX_METADATA_PROVIDER_URL = 'http://127.0.0.1:32123/hosted'
     function Write-Log {
         param([string]$Message, [string]$Level = 'INFO')
+        $script:hostedMetadataMessages.Add($Message)
         if ($Level -eq 'WARN') { $script:hostedMetadataWarnings.Add($Message) }
     }
     function Get-DesignPlexContext {
@@ -499,14 +550,15 @@ foreach ($relativePath in $rendererPaths) {
         $cachedEmptyHostedMetadata = Get-PlexHostedMetadata -MetadataGuid 'plex://movie/noexactmatch' -MediaType 'movie' -MatchTitle 'Missing Movie'
         Assert-True ($null -eq $emptyHostedMetadata -and $null -eq $cachedEmptyHostedMetadata) "$relativePath accepted an empty hosted metadata response"
         Assert-True ($script:hostedMetadataRequestCount -eq 2) "$relativePath did not retry and cache an empty exact-match response"
-        Assert-True (@($script:hostedMetadataWarnings | Where-Object { $_ -like '*returned no exact match*' }).Count -eq 1) "$relativePath did not report an empty exact-match response exactly once"
+        Assert-True (@($script:hostedMetadataMessages | Where-Object { $_ -like '*found no exact match*' }).Count -eq 1) "$relativePath did not report an empty exact-match response exactly once"
+        Assert-True (@($script:hostedMetadataWarnings | Where-Object { $_ -like '*no exact match*' }).Count -eq 0) "$relativePath presented a best-effort hosted metadata miss as a warning"
 
         $legacyHostedMetadata = Get-PlexHostedMetadata -MetadataGuid 'com.plexapp.agents.tmdb://12345?lang=en' -MediaType 'movie' -MatchTitle 'Sanitized Movie'
         $cachedLegacyHostedMetadata = Get-PlexHostedMetadata -MetadataGuid 'com.plexapp.agents.tmdb://12345?lang=en' -MediaType 'movie' -MatchTitle 'Sanitized Movie'
         Assert-True ($null -ne $legacyHostedMetadata -and $legacyHostedMetadata.title -eq 'Sanitized exact-ID match') "$relativePath did not recover an empty query match through the provider POST contract"
         Assert-True ($cachedLegacyHostedMetadata -eq $legacyHostedMetadata) "$relativePath did not cache the provider POST match"
         Assert-True ($script:hostedMetadataRequestCount -eq 4) "$relativePath did not perform exactly one GET compatibility attempt and one POST contract retry"
-        Assert-True (@($script:hostedMetadataWarnings | Where-Object { $_ -like '*returned no exact match*' }).Count -eq 1) "$relativePath warned after a successful provider POST retry"
+        Assert-True (@($script:hostedMetadataMessages | Where-Object { $_ -like '*found no exact match*' }).Count -eq 1) "$relativePath reported a hosted miss after a successful provider POST retry"
 
         $unsupportedHostedMetadata = Get-PlexHostedMetadata -MetadataGuid 'local://private-library-item' -MediaType 'movie'
         $cachedUnsupportedHostedMetadata = Get-PlexHostedMetadata -MetadataGuid 'local://private-library-item' -MediaType 'movie'

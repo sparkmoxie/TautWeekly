@@ -6,6 +6,30 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-08-13
+
+### Fixed
+
+- Added an authenticated native Plex XML fallback for provider `Rating`
+  elements when PMS omits required provider entries from JSON or ignores the
+  requested scalar-field exclusion. Movies still prefer available Rotten
+  Tomatoes critic/audience values, while TV rows still accept only
+  exact-episode IMDb.
+- Extended the sanitized PreviewAll and SendTest regression to cover a Plex
+  server that exposes selected IMDb in JSON but the retained RT pair only in
+  XML. The original optional-JSON path remains covered across the shared
+  Windows, NAS/Docker/Linux/FreeBSD, and macOS renderer sources.
+- Reclassified an empty optional Plex hosted-metadata exact-match fallback as
+  informational. It can be unrelated to ratings and no longer appears as a
+  warning when rendering can continue with local Plex or Tautulli metadata.
+
+### Security
+
+- Kept both direct requests on the user-configured Plex server, with the
+  administrator token in an HTTP header. Regression output contains only
+  synthetic provider labels and scores; no private response, rating key,
+  configuration, recipient, history, or generated newsletter is committed.
+
 ## [0.10.0] - 2026-08-13
 
 ### Added

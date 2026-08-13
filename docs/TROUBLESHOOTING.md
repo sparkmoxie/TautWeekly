@@ -213,6 +213,14 @@ v0.9.8 requests it and excludes the case-colliding scalar JSON `rating` field
 that can mask the provider array in PowerShell. Update first, then rerun
 PreviewAll or SendTest.
 
+Plex documents response include/exclude customization as best-effort rather
+than guaranteed. v0.10.1 therefore retries the same authenticated local item
+as XML when JSON lacks the media-specific provider entries: movie RT
+critic/audience or exact-episode IMDb. This
+does not contact a third-party ratings service or change the configured Plex
+Ratings Source; it recovers only provider-labelled values already returned by
+the user's Plex server.
+
 If the log also says every direct Plex request failed, verify
 `PlexServerUrl` from the TautWeekly runtime. In a separate Docker container,
 `localhost` and `127.0.0.1` refer to TautWeekly itself, not the Plex
@@ -251,6 +259,12 @@ unlabeled numbers remain hidden, and a logo is omitted when Plex/Tautulli has
 no selected logo resource.
 Do not post `config.json`, diagnostic JSON, generated previews, or full logs;
 share only sanitized warning text if further help is required.
+
+`Optional Plex hosted metadata recovery found no exact match ...` is a
+best-effort informational fallback for an exact retained metadata GUID. It may
+be attempted for a missing summary, year, genre, or rating and is not proof
+that the authenticated local rating lookup failed. Use the final sanitized
+`Design ratings:` line to determine which provider values reached rendering.
 
 ## Deleted item still has no poster or metadata
 
