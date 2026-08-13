@@ -5,7 +5,14 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
 <meta content="dark" name="color-scheme"/>
+<meta content="#010101" name="theme-color"/>
+<meta content="https://sparkmoxie.github.io/TautWeekly/assets/branding/tautweekly-app-icon-1024.png" property="og:image"/>
+<meta content="TautWeekly detailed popcorn TW app icon" property="og:image:alt"/>
+<meta content="summary" name="twitter:card"/>
 <title>Windows Quickstart | TautWeekly for Plex</title>
+<link href="../favicon.ico" rel="icon" sizes="any"/>
+<link href="../assets/branding/tautweekly-app-icon-180.png" rel="apple-touch-icon"/>
+<link href="../site.webmanifest" rel="manifest"/>
 <style>
 :root {
   --bg:#080808; --bg-soft:#101010; --panel:#171717; --panel-2:#1e1e1e; --panel-3:#242424;
@@ -24,9 +31,8 @@ a{color:inherit}button,input{font:inherit}code,pre,kbd{font-family:"Cascadia Cod
 .topbar:after{content:"";position:absolute;inset:auto 0 -1px;height:1px;background:linear-gradient(90deg,transparent,rgba(229,160,13,.42),rgba(187,146,255,.28),transparent)}
 .topbar-inner{max-width:1500px;margin:0 auto;min-height:66px;padding:10px 24px;display:flex;align-items:center;gap:18px}
 .brand{display:flex;align-items:center;gap:12px;min-width:max-content;text-decoration:none}.brand>div:last-child strong{display:block;letter-spacing:.08em;font-size:13px}.brand>div:last-child span{display:block;color:var(--muted);font-size:11px}
-.mark{width:31px;height:31px;border-radius:8px;background:linear-gradient(145deg,#ffc13c,#d58c00);position:relative;display:grid;place-items:center;color:#0b0b0b;font-size:0;box-shadow:0 7px 26px rgba(229,160,13,.24);animation:markPulse 3.4s ease-in-out infinite}
-.mark:before{content:"";position:absolute;left:11px;top:7px;width:9px;height:17px;background:#0b0b0b;clip-path:polygon(0 0,100% 50%,0 100%,35% 50%)}
-.mark:after{content:"";position:absolute;inset:-4px;border:1px solid rgba(229,160,13,.24);border-radius:11px;opacity:.3;animation:ring 3.4s ease-out infinite}
+.mark{width:36px;height:36px;border-radius:10px;position:relative;display:block;filter:drop-shadow(0 7px 20px rgba(229,160,13,.24));animation:markPulse 3.4s ease-in-out infinite}
+.mark img{display:block;width:100%;height:100%;object-fit:contain}
 .searchbox{margin-left:auto;width:min(440px,42vw);position:relative}.searchbox input{width:100%;height:40px;border:1px solid var(--border);background:#151515;color:var(--text);border-radius:999px;padding:0 44px 0 44px;outline:none}.searchbox input:focus{border-color:var(--plex);box-shadow:0 0 0 3px rgba(229,160,13,.12)}.searchbox svg,.searchbox .search-icon{position:absolute;left:15px;top:10px;width:18px;height:18px;color:var(--plex);z-index:2}.searchbox button{position:absolute;right:7px;top:5px;width:30px;height:30px;border:0;border-radius:50%;background:transparent;color:#8d8d8d;cursor:pointer}.searchbox button:hover{background:#252525;color:#fff}
 .guide,.ready{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;white-space:nowrap}.guide b,.ready b{color:var(--green);animation:statusPulse 2.1s ease-in-out infinite}.guide em,.ready .pct{font-style:normal;color:#d5d9d3;font-variant-numeric:tabular-nums}
 .layout{max-width:1500px;margin:0 auto;display:grid;grid-template-columns:260px minmax(0,1fr);gap:32px;padding:30px 24px 80px}
@@ -49,12 +55,13 @@ main{min-width:0}.content{max-width:none;margin:0}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media (max-width:1150px){.layout{grid-template-columns:1fr}.sidebar{display:none!important}.hero-grid{grid-template-columns:1fr}.terminal{max-width:670px}.grid4{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:760px){.topbar-inner{padding:9px 14px}.brand>div:last-child span,.guide,.ready{display:none}.searchbox{width:100%;margin-left:0}.layout{padding:18px 12px 55px}.hero{padding:34px 22px;min-height:auto;border-radius:20px}.hero h1{font-size:44px}.hero p{font-size:15px}.metrics,.grid2,.grid3,.grid4,.grid-3,.states,.split{grid-template-columns:1fr}.section-head{align-items:flex-start;flex-direction:column}.section-head p{text-align:left}.steps{padding:18px}.steps:before{left:43px}.step{grid-template-columns:42px 1fr;gap:16px}.num{width:42px;height:42px}.mini-layout,.tv-card-demo{grid-template-columns:1fr}.movie-poster,.tv-poster{min-height:170px}.footer{flex-direction:column}}
+.platform-kicker:before{display:none}.platform-kicker img{display:block;width:116px;height:auto;object-fit:contain}.platform-kicker span{letter-spacing:.13em}
 </style>
 </head>
 <body>
 <div class="progress"><span id="scrollProgress"></span></div>
 <header class="topbar"><div class="topbar-inner">
-<div class="brand"><div class="mark">›</div><div><strong>TAUTWEEKLY FOR PLEX</strong><span>Windows Quickstart · Portable v1.8.1</span></div></div>
+<div class="brand"><div class="mark"><img src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="36" height="36"></div><div><strong>TAUTWEEKLY FOR PLEX</strong><span>Windows Quickstart · Portable v1.8.2</span></div></div>
 <div class="searchbox"><svg fill="none" viewbox="0 0 24 24"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8"></circle><path d="m16 16 4 4" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"></path></svg><input id="search" placeholder="Search setup, SMTP, scheduler, previews, card layout…" type="search"/><button id="clear">×</button></div>
 <div class="guide"><b>●</b> Quickstart <em id="scrollPercent">0%</em></div>
 </div></header>
@@ -64,7 +71,7 @@ main{min-width:0}.content{max-width:none;margin:0}
 </nav><div class="side-note">Self-contained offline Quickstart. Search works locally; no internet connection or external fonts are required.</div></div></aside>
 <main><div class="content">
 <section class="hero section" data-search="overview windows portable mission control newsletter powershell tautulli plex" id="overview">
-<div class="hero-grid"><div><div class="kicker">Windows · PowerShell 5.1+ · Tautulli</div><h1>Mission Control for your <em>Plex newsletter.</em></h1><p>A guided operating manual for installing, verifying, previewing, testing, scheduling, updating, and safely maintaining TautWeekly for Plex Portable v1.8.1 on Windows.</p><div class="actions"><a class="btn primary" href="#quick-start">Start the launch path →</a><a class="btn" href="#regression">Inspect all six email states</a><a class="btn ghost" href="#commands">Open BAT reference</a></div></div>
+<div class="hero-grid"><div><div class="kicker platform-kicker"><img src="../assets/platforms/windows.svg" alt="" width="1000" height="184"><span>PowerShell 5.1+ · Tautulli</span></div><h1>Mission Control for your <em>Plex newsletter.</em></h1><p>A guided operating manual for installing, verifying, previewing, testing, scheduling, updating, and safely maintaining TautWeekly for Plex Portable v1.8.2 on Windows.</p><div class="actions"><a class="btn primary" href="#quick-start">Start the launch path →</a><a class="btn" href="#regression">Inspect all six email states</a><a class="btn ghost" href="#commands">Open BAT reference</a></div></div>
 <div class="terminal"><div class="termhead"><span>PowerShell / system check</span><span class="dots"><i></i><i></i><i></i></span></div><pre><span class="p">PS C:\TautWeekly&gt;</span> .\01-VERIFY-SETUP.bat
 
 [<span class="g">OK</span>] Windows PowerShell 5.1+
@@ -257,7 +264,7 @@ Description…</pre></div>
   </div>
 </section>
 
-<footer class="footer"><span>Windows Quickstart · TautWeekly for Plex Portable v1.8.1</span><span>No external assets · Search, scroll status, copy buttons, and animations included</span><span>Reference visual system: TautWeekly for Plex READ FIRST! interactive edition</span></footer>
+<footer class="footer"><span>Windows Quickstart · TautWeekly for Plex Portable v1.8.2</span><span>No external assets · Search, scroll status, copy buttons, and animations included</span><span>Reference visual system: TautWeekly for Plex READ FIRST! interactive edition</span></footer>
 </div></main></div>
 <script>
 (()=>{const secs=[...document.querySelectorAll('.section')],links=[...document.querySelectorAll('#nav a')],q=document.getElementById('search'),c=document.getElementById('clear'),n=document.getElementById('noresults'),m=document.querySelector('.metrics'),progress=document.getElementById('scrollProgress'),scrollPct=document.getElementById('scrollPercent');function updateProgress(){const root=document.documentElement,max=Math.max(1,root.scrollHeight-root.clientHeight),pct=Math.max(0,Math.min(100,(root.scrollTop/max)*100));progress.style.width=pct+'%';scrollPct.textContent=Math.round(pct)+'%'}window.addEventListener('scroll',updateProgress,{passive:true});window.addEventListener('resize',updateProgress);updateProgress();const observer=new IntersectionObserver(entries=>{const v=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];if(v)links.forEach(a=>a.classList.toggle('active',a.hash==='#'+v.target.id))},{rootMargin:'-20% 0px -65% 0px',threshold:[0,.15,.4]});secs.forEach(s=>observer.observe(s));function search(){let x=q.value.trim().toLowerCase(),shown=0;c.style.display=x?'block':'none';secs.forEach(s=>{let ok=!x||x.split(/\s+/).every(t=>(s.dataset.search+' '+s.innerText).toLowerCase().includes(t));s.classList.toggle('filtered',!ok);if(ok)shown++});m.style.display=x?'none':'';n.classList.toggle('show',!shown)}q.addEventListener('input',search);c.onclick=()=>{q.value='';search();q.focus()};document.querySelectorAll('.copy').forEach(b=>b.onclick=async()=>{let old=b.textContent;try{await navigator.clipboard.writeText(b.closest('.code').querySelector('pre').innerText);b.textContent='Copied'}catch{b.textContent='Select text'}setTimeout(()=>b.textContent=old,1200)})})();

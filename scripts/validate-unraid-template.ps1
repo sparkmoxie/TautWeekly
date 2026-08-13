@@ -52,6 +52,10 @@ foreach ($entry in $expected.GetEnumerator()) {
         Add-Failure "Unexpected $($entry.Key): $($container.($entry.Key))"
     }
 }
+$expectedIcon = 'https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/assets/branding/tautweekly-app-icon-512.png'
+if ([string]$profile.CommunityApplications.Icon -cne $expectedIcon -or [string]$container.Icon -cne $expectedIcon) {
+    Add-Failure 'Unraid profile and template must use the canonical global TautWeekly app icon.'
+}
 
 $configs = @($container.Config)
 $requiredTargets = @('8080','/data','TZ','PUID','PGID','UMASK','TAUTWEEKLY_PREVIEW_BASE_URL')

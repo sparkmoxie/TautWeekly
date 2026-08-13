@@ -6,6 +6,37 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-13
+
+### Added
+
+- Added the exact approved detailed popcorn `TW` raster provenance, corrected
+  transparent source, transparent normalized logo master, padded transparent
+  app-icon master, reproducible Pillow build, fixed SHA-256 evidence,
+  raster-preserving SVG wrappers, web/app sizes, and Windows ICO to the durable
+  public brand source.
+- Added a Pages favicon, touch icon, web manifest, and social preview image,
+  plus packaged product icons for the private container preview landing page
+  and the Windows portable distribution.
+
+### Changed
+
+- Replaced global placeholder `TW`, chevron/play, popcorn emoji, Community Apps,
+  and preview-service marks with exact raster derivatives. Platform-specific
+  README badges remain their own identities; generic documentation
+  abbreviations were replaced by verified Windows, Apple, Docker, QNAP,
+  Unraid, Linux, and FreeBSD marks with fixed provenance and hashes.
+- Preserved each platform mark's native colors and proportions, except for the
+  user-approved Apple geometry-only derivative in TautWeekly gold; its original
+  black SVG is retained untouched as provenance.
+- Classified and documented unsupported package surfaces rather than inventing
+  them: current `main` has no QNAP QPKG/App Center package, Windows
+  Setup/uninstaller/executable, macOS app bundle, Linux desktop entry, or
+  FreeBSD GUI metadata. The approved Windows ICO is packaged for those future
+  Setup/shortcut consumers without changing portable installation behavior.
+- Kept product artwork out of generated newsletter HTML and left the existing
+  mail-state and provider assets unchanged.
+
 ## [0.9.8] - 2026-08-13
 
 ### Fixed

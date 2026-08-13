@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.3.0 Portable
+---------------
+- applies the exact approved detailed TautWeekly raster mark to the private preview landing page and browser favicon
+- publishes the canonical global product icon through the Unraid Community Apps template while preserving Unraid, QNAP, Docker, and NAS platform identity
+- includes the same product landing-page assets in native Linux and FreeBSD release packages without changing generated newsletters
+
 v1.2.2 Portable
 ---------------
 - explicitly requests Plex's optional Rating element when Tautulli exposes only the selected IMDb/TMDB score

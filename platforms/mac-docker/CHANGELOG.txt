@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 ================================
 
+v1.2.0 Portable
+---------------
+- applies the exact approved detailed TautWeekly raster mark and favicon to the private preview landing page
+- preserves macOS and Docker platform identity in package documentation
+- leaves generated newsletters and their existing mail-state artwork unchanged
+
 v1.1.2 Portable
 ---------------
 - explicitly requests Plex's optional Rating element when Tautulli exposes only the selected IMDb/TMDB score

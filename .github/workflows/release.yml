@@ -17,6 +17,7 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/validate-repository.ps1
+          ./scripts/validate-branding.ps1
           ./scripts/validate-unraid-template.ps1
           ./scripts/validate-platforms.ps1
           ./scripts/check-links.ps1

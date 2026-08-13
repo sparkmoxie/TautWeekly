@@ -59,6 +59,8 @@ docker exec "$container_name" pwsh -NoLogo -NoProfile -NonInteractive -Command \
   'if ($PSVersionTable.PSVersion -lt [Version]"7.2") { exit 1 }' || fail 'PowerShell 7.2+ is unavailable in the runtime image.'
 docker exec "$container_name" test -s /data/config.example.json || fail 'Persistent config example was not initialized.'
 docker exec "$container_name" test -s /data/output/index.html || fail 'Preview landing page was not initialized.'
+docker exec "$container_name" test -s /data/output/product-branding/favicon.ico || fail 'Preview favicon was not initialized.'
+docker exec "$container_name" test -s /data/output/product-branding/tautweekly-app-icon-128.png || fail 'Preview product icon was not initialized.'
 docker exec "$container_name" test -s /data/service-heartbeat.json || fail 'Service supervisor heartbeat was not initialized.'
 
 # A normal docker exec bypasses entrypoint.sh and therefore begins as root.

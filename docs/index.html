@@ -4,14 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="TautWeekly for Plex interactive Quickstarts for Windows, NAS/Docker/QNAP/Unraid, macOS, Linux, and FreeBSD.">
+  <meta name="theme-color" content="#010101">
+  <meta property="og:image" content="https://sparkmoxie.github.io/TautWeekly/assets/branding/tautweekly-app-icon-1024.png">
+  <meta property="og:image:alt" content="TautWeekly detailed popcorn TW app icon">
+  <meta name="twitter:card" content="summary">
   <title>TautWeekly Quickstart | TautWeekly for Plex</title>
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="assets/branding/tautweekly-app-icon-180.png">
+  <link rel="manifest" href="site.webmanifest">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
   <div class="progress" id="scroll-progress" aria-hidden="true"></div>
   <header class="site-header">
     <a class="brand" href="./" aria-label="TautWeekly Quickstart home">
-      <span class="brand-mark">TW</span>
+      <img class="brand-mark" src="assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38">
       <span>Taut<span>Weekly</span> <em>for Plex</em></span>
     </a>
     <nav aria-label="Primary navigation">
@@ -110,48 +117,48 @@
       </div>
       <div class="cards platform-cards">
         <article class="card">
-          <div class="card-icon windows">WIN</div>
+          <div class="platform-logo-card"><img class="windows-logo" src="assets/platforms/windows.svg" alt="" width="1000" height="184"></div>
           <span class="tag">PowerShell 5.1+</span>
           <h3>Windows portable</h3>
           <p>Numbered launchers, local previews, and Windows Task Scheduler on an
             always-on Windows host.</p>
-          <ul><li>Source baseline 1.8.0</li><li>No Docker required</li><li>Admin only for schedule and verified updates</li></ul>
+          <ul><li>Source baseline 1.8.2</li><li>No Docker required</li><li>Admin only for schedule and verified updates</li></ul>
           <div class="card-actions"><a href="windows/">Windows Quickstart</a><a href="windows/README.md">Documentation</a></div>
         </article>
         <article class="card featured">
-          <div class="card-icon docker">NAS</div>
+          <div class="platform-logo-card"><img class="docker-logo" src="assets/platforms/docker.svg" alt="" width="340" height="268"></div>
           <span class="tag">One NAS / Docker package</span>
           <h3>NAS / Docker</h3>
           <p>A dedicated service with persistent data and an internal scheduler
             for QNAP, Unraid, and general Linux hosts.</p>
-          <ul><li>Source baseline 1.2.0</li><li>Unraid Apps + GHCR</li><li>x86-64 and ARM64</li></ul>
+          <ul><li>Source baseline 1.3.0</li><li>Unraid Apps + GHCR</li><li>x86-64 and ARM64</li></ul>
           <div class="card-actions"><a href="nas-docker/">NAS/Docker/QNAP/Unraid Quickstart</a><a href="nas-docker/README.md">Documentation</a></div>
         </article>
         <article class="card">
-          <div class="card-icon mac">MAC</div>
+          <div class="platform-logo-card"><img class="apple-logo" src="assets/platforms/apple.svg" alt="" width="814" height="1000"></div>
           <span class="tag">Docker Desktop</span>
           <h3>macOS</h3>
           <p>Intel and Apple silicon setup with host UID/GID discovery and
             localhost-only previews by default.</p>
-          <ul><li>Source baseline 1.1.0</li><li>Guided Terminal installer</li><li>Mac preview helper</li></ul>
+          <ul><li>Source baseline 1.2.0</li><li>Guided Terminal installer</li><li>Mac preview helper</li></ul>
           <div class="card-actions"><a href="mac/">macOS Quickstart</a><a href="mac/README.md">Documentation</a></div>
         </article>
         <article class="card">
-          <div class="card-icon linux">LIN</div>
+          <div class="platform-logo-card"><img class="linux-logo" src="assets/platforms/linux-tux.png" alt="" width="104" height="120"></div>
           <span class="tag">Native PowerShell</span>
           <h3>Linux</h3>
           <p>A Docker-free systemd service with protected private storage and a
             localhost-only preview listener.</p>
-          <ul><li>Source baseline 1.1.0</li><li>PowerShell 7.2+</li><li>Ubuntu, Debian, and RHEL</li></ul>
+          <ul><li>Source baseline 1.1.1</li><li>PowerShell 7.2+</li><li>Ubuntu, Debian, and RHEL</li></ul>
           <div class="card-actions"><a href="linux/">Native Linux Quickstart</a><a href="linux/README.md">Documentation</a></div>
         </article>
         <article class="card">
-          <div class="card-icon freebsd">BSD</div>
+          <div class="platform-logo-card"><img class="freebsd-logo" src="assets/platforms/freebsd.png" alt="" width="570" height="164"></div>
           <span class="tag">Podman · Beta</span>
           <h3>FreeBSD</h3>
           <p>The maintained Linux OCI renderer under FreeBSD Podman, controlled
             by rc.d with private host storage.</p>
-          <ul><li>Source baseline 1.1.0</li><li>FreeBSD 15.1+ amd64</li><li>Linux-container support</li></ul>
+          <ul><li>Source baseline 1.1.2</li><li>FreeBSD 15.1+ amd64</li><li>Linux-container support</li></ul>
           <div class="card-actions"><a href="freebsd/">FreeBSD Podman Quickstart</a><a href="freebsd/README.md">Documentation</a></div>
         </article>
       </div>
