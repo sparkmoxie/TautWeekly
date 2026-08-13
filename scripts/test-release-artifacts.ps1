@@ -48,8 +48,8 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('function Test-PlexHostedMetadataExactMatch')) "$PackageName lacks fail-closed hosted match validation."
     Assert-True ($Renderer.Contains('-Method Post')) "$PackageName lacks the provider-contract POST retry for empty exact-ID matches."
     Assert-True ($Renderer.Contains('matching hints only: require an exact modern GUID')) "$PackageName does not document the exact-identifier hosted POST boundary."
-    Assert-True ($Renderer.Contains('"User-Agent"      = "TautWeekly-for-Plex/0.9.8"')) "$PackageName does not identify the tokenless public Plex rating fallback."
-    Assert-True ($Renderer.Contains('"X-Plex-Version"           = "0.9.8"')) "$PackageName does not identify the authenticated hosted metadata fallback."
+    Assert-True ($Renderer.Contains('"User-Agent"      = "TautWeekly-for-Plex/0.10.0"')) "$PackageName does not identify the tokenless public Plex rating fallback."
+    Assert-True ($Renderer.Contains('"X-Plex-Version"           = "0.10.0"')) "$PackageName does not identify the authenticated hosted metadata fallback."
     Assert-True ($Renderer.Contains('<meta name="color-scheme" content="light dark">')) "$PackageName does not advertise Apple-compatible email color schemes."
     Assert-True ($Renderer.Contains(':root { color-scheme:light dark; supported-color-schemes:light dark; }')) "$PackageName lacks the Apple-compatible email scheme declaration."
     Assert-True (-not $Renderer.Contains('color-scheme:dark only')) "$PackageName retains the incompatible dark-only email declaration."
@@ -101,6 +101,7 @@ $expected = [ordered]@{
         'TautWeekly-windows/Check-Update.ps1',
         'TautWeekly-windows/Windows-Update.ps1',
         'TautWeekly-windows/Operation-Lock.ps1',
+        'TautWeekly-windows/TautWeekly.ico',
         'TautWeekly-windows/RELEASE-FILES.txt',
         'TautWeekly-windows/RELEASE-METADATA.txt',
         'TautWeekly-windows/README.md'
@@ -113,6 +114,8 @@ $expected = [ordered]@{
         'TautWeekly-nas-docker/app/healthcheck.sh',
         'TautWeekly-nas-docker/app/bin/run-as-user.sh',
         'TautWeekly-nas-docker/app/bin/run-script.sh',
+        'TautWeekly-nas-docker/app/product-branding/favicon.ico',
+        'TautWeekly-nas-docker/app/product-branding/tautweekly-app-icon-128.png',
         'TautWeekly-nas-docker/tautweekly.sh',
         'TautWeekly-nas-docker/container-update.sh',
         'TautWeekly-nas-docker/compose.yaml',
@@ -126,6 +129,8 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/app/Schedule-Time.ps1',
         'TautWeekly-mac-docker/app/bin/run-as-user.sh',
         'TautWeekly-mac-docker/app/bin/run-script.sh',
+        'TautWeekly-mac-docker/app/product-branding/favicon.ico',
+        'TautWeekly-mac-docker/app/product-branding/tautweekly-app-icon-128.png',
         'TautWeekly-mac-docker/tautweekly.sh',
         'TautWeekly-mac-docker/check-release.sh',
         'TautWeekly-mac-docker/mac-update.sh',
@@ -140,6 +145,8 @@ $expected = [ordered]@{
         'TautWeekly-linux/app/Schedule-Time.ps1',
         'TautWeekly-linux/app/bin/run-as-user.sh',
         'TautWeekly-linux/app/bin/run-script.sh',
+        'TautWeekly-linux/app/product-branding/favicon.ico',
+        'TautWeekly-linux/app/product-branding/tautweekly-app-icon-128.png',
         'TautWeekly-linux/install-linux.sh',
         'TautWeekly-linux/systemd/tautweekly.service',
         'TautWeekly-linux/tautweekly',
@@ -155,6 +162,8 @@ $expected = [ordered]@{
         'TautWeekly-freebsd-podman/app/Schedule-Time.ps1',
         'TautWeekly-freebsd-podman/app/bin/run-as-user.sh',
         'TautWeekly-freebsd-podman/app/bin/run-script.sh',
+        'TautWeekly-freebsd-podman/app/product-branding/favicon.ico',
+        'TautWeekly-freebsd-podman/app/product-branding/tautweekly-app-icon-128.png',
         'TautWeekly-freebsd-podman/install-freebsd.sh',
         'TautWeekly-freebsd-podman/rc.d/tautweekly',
         'TautWeekly-freebsd-podman/tautweekly',
@@ -173,6 +182,27 @@ $assetRoots = [ordered]@{
 $expectedGifHashes = [ordered]@{
     'movies.gif' = '9BCD489463C963C38469771518700308CCADE3965A32EDA18E12DC718950C971'
     'tv.gif'     = '35FFCB45F313953AD0EEF2C7EC852B4B68B0E033E5055BC0926B87EB2EDEF117'
+}
+$expectedBrandFiles = [ordered]@{
+    'TautWeekly-windows.zip' = [ordered]@{
+        'TautWeekly-windows/TautWeekly.ico' = '22EBB62553593C12350F800769E6342165D9D1FC38A7F7CF25C14B5A2DA7199E'
+    }
+    'TautWeekly-nas-docker.zip' = [ordered]@{
+        'TautWeekly-nas-docker/app/product-branding/favicon.ico' = '8B7488E80EA2A27D02012F6D280ED154DE253AC6661AA66841AE418E54ADD495'
+        'TautWeekly-nas-docker/app/product-branding/tautweekly-app-icon-128.png' = '896AC8A1C33B8AEC75C1F2635C87E41142613E9D4311D3B140F1B86B665FFC52'
+    }
+    'TautWeekly-mac-docker.zip' = [ordered]@{
+        'TautWeekly-mac-docker/app/product-branding/favicon.ico' = '8B7488E80EA2A27D02012F6D280ED154DE253AC6661AA66841AE418E54ADD495'
+        'TautWeekly-mac-docker/app/product-branding/tautweekly-app-icon-128.png' = '896AC8A1C33B8AEC75C1F2635C87E41142613E9D4311D3B140F1B86B665FFC52'
+    }
+    'TautWeekly-linux.zip' = [ordered]@{
+        'TautWeekly-linux/app/product-branding/favicon.ico' = '8B7488E80EA2A27D02012F6D280ED154DE253AC6661AA66841AE418E54ADD495'
+        'TautWeekly-linux/app/product-branding/tautweekly-app-icon-128.png' = '896AC8A1C33B8AEC75C1F2635C87E41142613E9D4311D3B140F1B86B665FFC52'
+    }
+    'TautWeekly-freebsd-podman.zip' = [ordered]@{
+        'TautWeekly-freebsd-podman/app/product-branding/favicon.ico' = '8B7488E80EA2A27D02012F6D280ED154DE253AC6661AA66841AE418E54ADD495'
+        'TautWeekly-freebsd-podman/app/product-branding/tautweekly-app-icon-128.png' = '896AC8A1C33B8AEC75C1F2635C87E41142613E9D4311D3B140F1B86B665FFC52'
+    }
 }
 $zipReleaseManifests = @{}
 $releaseVersions = New-Object System.Collections.Generic.List[string]
@@ -266,6 +296,11 @@ foreach ($archiveName in $expected.Keys) {
             Assert-True ($gifEntry.Count -eq 1) "$archiveName is missing $gifEntryName"
             $actualGifHash = Get-ZipEntrySha256 -Entry $gifEntry[0]
             Assert-True ($actualGifHash -ceq $expectedGifHashes[$gifName]) "$archiveName contains stale $gifName bytes."
+        }
+        foreach ($brandFile in $expectedBrandFiles[$archiveName].GetEnumerator()) {
+            $brandEntry = @($archive.Entries | Where-Object { $_.FullName.Replace('\', '/') -ceq $brandFile.Key })
+            Assert-True ($brandEntry.Count -eq 1) "$archiveName is missing exact brand asset $($brandFile.Key)."
+            Assert-True ((Get-ZipEntrySha256 -Entry $brandEntry[0]) -ceq $brandFile.Value) "$archiveName changed canonical brand bytes for $($brandFile.Key)."
         }
 
         Write-Host "[PASS] Release payload contract: $archiveName ($($archive.Entries.Count) entries)"
@@ -362,6 +397,12 @@ foreach ($tarArchive in $tarArchives) {
             Assert-True (Test-Path -LiteralPath $gifPath -PathType Leaf) "$($tarArchive.Name) is missing $assetRoot/$gifName"
             $actualGifHash = (Get-FileHash -LiteralPath $gifPath -Algorithm SHA256).Hash
             Assert-True ($actualGifHash -ceq $expectedGifHashes[$gifName]) "$($tarArchive.Name) contains stale $gifName bytes."
+        }
+        foreach ($brandFile in $expectedBrandFiles[$zipName].GetEnumerator()) {
+            $relativeBrandPath = $brandFile.Key.Substring($packageName.Length + 1)
+            $brandPath = Join-Path $packageRoot $relativeBrandPath
+            Assert-True (Test-Path -LiteralPath $brandPath -PathType Leaf) "$($tarArchive.Name) is missing exact brand asset $relativeBrandPath."
+            Assert-True ((Get-FileHash -LiteralPath $brandPath -Algorithm SHA256).Hash -ceq $brandFile.Value) "$($tarArchive.Name) changed canonical brand bytes for $relativeBrandPath."
         }
 
         Write-Host "[PASS] Release payload contract: $($tarArchive.Name) ($($files.Count) files)"

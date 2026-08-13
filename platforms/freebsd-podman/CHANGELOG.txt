@@ -1,6 +1,8 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Ships the exact approved TautWeekly product mark and favicon on the private preview landing page while retaining FreeBSD and Podman platform identity.
+- Leaves generated newsletters and their existing mail-state artwork unchanged.
 - Explicitly requests Plex's optional Rating element so available movie RT and exact-episode IMDb values are not hidden by a flattened selected IMDb/TMDB score.
 - Identifies Plex Movie library Ratings Source > Rotten Tomatoes and refreshed metadata as prerequisites for intended RT output.
 - Routes every Podman exec helper through the configured non-root PUID/PGID and repairs legacy root-owned entries only within /data.

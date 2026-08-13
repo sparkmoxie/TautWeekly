@@ -1,6 +1,8 @@
 TautWeekly for Plex native Linux platform changelog
 
 Unreleased
+- Ships the exact approved TautWeekly product mark and favicon on the private preview landing page while retaining native Linux platform identity.
+- Leaves generated newsletters and their existing mail-state artwork unchanged.
 - Explicitly requests Plex's optional Rating element so available movie RT and exact-episode IMDb values are not hidden by a flattened selected IMDb/TMDB score.
 - Identifies Plex Movie library Ratings Source > Rotten Tomatoes and refreshed metadata as prerequisites for intended RT output.
 - Recommends direct Plex during setup for full rating and artwork fidelity while preserving Tautulli-only fallback operation.

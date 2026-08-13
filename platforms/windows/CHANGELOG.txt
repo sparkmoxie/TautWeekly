@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
+v1.8.2 Portable
+---------------
+- packages the exact approved multi-resolution TautWeekly.ico for approved Windows Setup, shortcut, executable, and uninstaller consumers
+- keeps the current ZIP distribution portable and does not create an installer, shortcut, executable wrapper, or uninstaller
+- leaves generated newsletters and their existing mail-state artwork unchanged
+
 v1.8.1 Portable
 ---------------
 - explicitly requests Plex's optional Rating element when Tautulli exposes only the selected IMDb/TMDB score

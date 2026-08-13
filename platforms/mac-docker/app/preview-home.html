@@ -4,14 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#010101">
   <title>TautWeekly for Plex preview server</title>
+  <link rel="icon" href="product-branding/favicon.ico" sizes="any">
   <style>
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; background: #0c1016; color: #f4f7fb; }
     main { width: min(860px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 72px; }
     header { text-align: center; margin-bottom: 30px; }
-    .mark { font-size: 64px; line-height: 1; }
+    .mark { display: block; width: 128px; height: 128px; margin: 0 auto; object-fit: contain; filter: drop-shadow(0 18px 38px rgba(229,168,32,.2)); }
     h1 { margin: 16px 0 8px; font-size: clamp(30px, 7vw, 48px); letter-spacing: -.035em; }
     .lede { margin: 0 auto; max-width: 650px; color: #aeb9c8; font-size: 18px; line-height: 1.6; }
     .online { display: inline-flex; gap: 8px; align-items: center; margin-top: 18px; padding: 7px 12px; border: 1px solid #295d43; border-radius: 999px; background: #10291d; color: #8ce1b0; font-weight: 750; }
@@ -28,13 +30,13 @@
     a { color: #72b7ff; }
     .preview-link { display: inline-block; margin-top: 10px; padding: 10px 14px; border-radius: 9px; background: #e5a820; color: #171109; font-weight: 800; text-decoration: none; }
     footer { margin-top: 24px; color: #7f8b9a; text-align: center; font-size: 14px; }
-    @media (max-width: 560px) { main { padding-top: 34px; } section { padding: 20px; } .mark { font-size: 52px; } }
+    @media (max-width: 560px) { main { padding-top: 34px; } section { padding: 20px; } .mark { width: 104px; height: 104px; } }
   </style>
 </head>
 <body>
   <main>
     <header>
-      <div class="mark" aria-hidden="true">&#127871;</div>
+      <img class="mark" src="product-branding/tautweekly-app-icon-128.png" alt="" width="128" height="128">
       <h1>TautWeekly for Plex</h1>
       <p class="lede">The private newsletter preview service is running.</p>
       <div class="online">Preview server online</div>

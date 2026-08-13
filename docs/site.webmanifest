@@ -1,0 +1,21 @@
+{
+  "name": "TautWeekly for Plex",
+  "short_name": "TautWeekly",
+  "description": "Preview-first weekly Plex activity newsletters powered by Tautulli.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#010101",
+  "theme_color": "#010101",
+  "icons": [
+    {
+      "src": "assets/branding/tautweekly-app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/branding/tautweekly-app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
