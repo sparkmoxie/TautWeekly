@@ -73,63 +73,17 @@ setup, storage, scheduling, and lifecycle wrappers remain platform-specific.
 
 ## Current newsletter behavior
 
-- Movies prefer Rotten Tomatoes critic/audience ratings across every supported
-  Plex and Tautulli source. A provider-labelled IMDb score is used only when no
-  RT value is available. TV release rows first display IMDb tied to the exact
-  episode; if it is absent, they use that exact episode's Rotten Tomatoes
-  critic score, then its audience score. Show-level, movie, TMDB, and TVDB
-  scores are not substituted.
-- Direct item metadata explicitly requests Plex's optional `Rating` element.
-  This matters when Tautulli returns only the selected/flattened IMDb or TMDB
-  value: an available alternate movie RT pair or exact-episode IMDb/RT value
-  can still be recovered from the configured Plex server. If a PMS build omits one or
-  more required provider entries from JSON or ignores the requested
-  scalar-field exclusion, TautWeekly retries that exact local item as
-  authenticated XML and reads only its provider-labelled `Rating` elements.
-- To intentionally publish movie RT scores, each Plex Movie library must use
-  **Edit → Advanced → Ratings Source → Rotten Tomatoes** and have refreshed
-  metadata; Plex documents that choice as library-wide.
-  If IMDb or TMDB is deliberately selected, TautWeekly preserves that labelled
-  movie score as the fallback rather than inventing an RT value.
-  Unlabeled and unknown-provider values remain omitted.
-- Tautulli remains the required activity source, but direct Plex is recommended
-  for the complete alternate rating set, exact-episode metadata, backgrounds,
-  and selected logos. Every setup wizard explains this boundary. The platform
-  verifier tests the resolved Plex URL/token with token-safe identity and
-  authenticated-library requests; an unreachable configured connection fails
-  verification before Preview or SendTest.
-- First-run and metadata-recovery acceptance now begins with an upstream
-  readiness sequence: refresh all metadata in every included Plex movie/TV
-  library, wait for Plex to finish, then use Tautulli's per-library
-  **Library → Media Info → Refresh media info** control and wait again. This
-  reduces the chance that an old Plex/Tautulli installation is tested against stale
-  tables. It does not make Tautulli a ratings provider or replace direct Plex.
-- A private pre-deletion cache stores only the minimum reusable presentation
-  record for a live item: exact stable GUID and media type, title/year/summary,
-  up to eight genres, displayed ratings, one poster, hashes, and timestamps.
-  It excludes watch history, recipient data, credentials, and generated mail.
-- Cache cleanup runs deterministically on initialization and update. Defaults
-  are 365 days, 1,000 items, and 256 MiB total; the oldest entries are removed
-  first when any limit is reached. The cache is exact-ID only and does not
-  silently match an already-deleted item by title.
+- New movie and TV additions with artwork, summaries, genres, ratings, and
+  episode details when available.
+- A private personal recap with watch time and most-watched movies and shows.
+- Adaptive **HOT NEW RELEASE** and **TRENDING THIS WEEK** highlights.
+- A privacy-preserving, server-wide Binge Champion award.
+- Welcome, active-week, quiet-week, and milestone newsletter layouts.
+- Best-effort presentation recovery for items deleted after they were cached.
 
-- Personal stats list up to four most-watched movie titles and four
-  most-watched TV shows, ranked by qualifying watch time. Episodes are grouped
-  under their show, and the TV card is omitted when no TV show was watched.
-- The packaged `movies.gif` and `tv.gif` artwork is CID-embedded through the
-  same repair and delivery pipeline as the other animated email icons.
-- Binge Champion ranks Plex users by qualifying watch time, breaks exact-time
-  ties by total plays, and shows every recipient the same anonymous two-line
-  metric: **4h 18m watched**, followed by **5 movies • 1 TV show**. Zero-count
-  media categories are omitted. Only the winner's card turns gold.
-- Total Watched shows duration only; qualifying-play copy is intentionally
-  omitted from the personal recap.
-- **HOT NEW RELEASE** considers only newly added movies. If no new movie was
-  added, the hero falls back to **TRENDING THIS WEEK** while any new TV titles
-  remain listed in the New Releases section.
-- Trending remains a separate server-wide media-title feature with poster and
-  exact play count; layouts that promote Trending into the hero do not repeat
-  the compact Trending card.
+See the [configuration reference](docs/CONFIGURATION.md),
+[troubleshooting guide](docs/TROUBLESHOOTING.md), and
+[security guide](docs/SECURITY.md) for detailed behavior and operational rules.
 
 ### Persistent deleted-item cache
 
@@ -221,8 +175,8 @@ missing ratings/artwork when upstream metadata may still be stale:
    also update metadata and selected artwork. Do not refresh unrelated music
    or photo libraries merely for TautWeekly.
 3. In Tautulli, open each same **Library → Media Info** tab, choose
-   **Refresh media info**, and wait for completion. The current control and API
-   are section-specific, so repeat this step for each included library.
+   **Refresh media info**, and wait for completion. This refresh is per-library,
+   so repeat it for each included library.
 4. Only then run the platform verifier, `PreviewAll`, and a controlled
    TestEmail check.
 
@@ -233,10 +187,10 @@ likewise requires a library section for its media-info refresh. Tautulli's step
 refreshes its table after Plex; it does not make Plex download provider data and
 does not replace the Plex step.
 
-Routine TautWeekly updates do not require a costly full-library refresh when
-current ratings and artwork already render correctly. Repeat the sequence when
-the update addresses metadata recovery, the Plex source/agent changed, or
-acceptance output still appears stale.
+Routine TautWeekly updates do not require a costly full-library refresh when current
+ratings and artwork already render correctly. Repeat the sequence when the update
+addresses metadata recovery, the Plex source/agent changed, or acceptance output
+still appears stale.
 
 ## Installation at a glance
 
