@@ -11,7 +11,7 @@
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex Portable v1.8.5 — production newsletter engine.
+# TautWeekly for Plex Portable v1.8.6 — production newsletter engine.
 # Includes validated production renderer changes through v1.5.14 plus portable
 # server, SMTP, schedule, preview, and safety controls.
 Set-StrictMode -Version Latest
@@ -3963,17 +3963,15 @@ function Add-DesignRatingMetadata {
                 $genres = @(ConvertTo-DesignGenreList -Value $meta.genre)
             }
 
-            if ($mediaType -eq "movie") {
-                if ($ratingImage -like 'rottentomatoes://image.rating.*') {
-                    $critic = Convert-DesignRatingPercent $ratingValue
-                    $criticImage = $ratingImage
-                }
-                if ($audienceImage -like 'rottentomatoes://image.rating.*') {
-                    $audience = Convert-DesignRatingPercent $audienceRatingValue
-                    $audienceImageState = $audienceImage
-                }
+            if ($ratingImage -like 'rottentomatoes://image.rating.*') {
+                $critic = Convert-DesignRatingPercent $ratingValue
+                $criticImage = $ratingImage
             }
-            elseif ($ratingImage -like 'imdb://image.rating*') {
+            if ($audienceImage -like 'rottentomatoes://image.rating.*') {
+                $audience = Convert-DesignRatingPercent $audienceRatingValue
+                $audienceImageState = $audienceImage
+            }
+            if ($mediaType -eq "show" -and $ratingImage -like 'imdb://image.rating*') {
                 $imdb = $ratingValue
             }
         }
@@ -4029,16 +4027,14 @@ function Add-DesignRatingMetadata {
                             $providerValue = $selectedRating.Value
                         }
 
-                        if ($mediaType -eq "movie" -and
-                            [string]::IsNullOrWhiteSpace($critic) -and
+                        if ([string]::IsNullOrWhiteSpace($critic) -and
                             $image -like "rottentomatoes://image.rating.*" -and
                             $type -eq "critic") {
                             $critic = Convert-DesignRatingPercent $value
                             $criticImage = $image
                         }
 
-                        if ($mediaType -eq "movie" -and
-                            [string]::IsNullOrWhiteSpace($audience) -and
+                        if ([string]::IsNullOrWhiteSpace($audience) -and
                             $image -like "rottentomatoes://image.rating.*" -and
                             $type -eq "audience") {
                             $audience = Convert-DesignRatingPercent $value
@@ -4152,14 +4148,12 @@ function Add-DesignRatingMetadata {
                         $hostedAudience = Get-OptionalStringProperty -InputObject $hostedMeta -Name "audience_rating"
                     }
 
-                    if ($mediaType -eq "movie" -and
-                        [string]::IsNullOrWhiteSpace($critic) -and
+                    if ([string]::IsNullOrWhiteSpace($critic) -and
                         $hostedRatingImage -like 'rottentomatoes://image.rating.*') {
                         $critic = Convert-DesignRatingPercent $hostedRating
                         $criticImage = $hostedRatingImage
                     }
-                    if ($mediaType -eq "movie" -and
-                        [string]::IsNullOrWhiteSpace($audience) -and
+                    if ([string]::IsNullOrWhiteSpace($audience) -and
                         $hostedAudienceImage -like 'rottentomatoes://image.rating.*') {
                         $audience = Convert-DesignRatingPercent $hostedAudience
                         $audienceImageState = $hostedAudienceImage
@@ -4195,15 +4189,13 @@ function Add-DesignRatingMetadata {
                                 $provider = $selectedRating.Provider
                                 $providerValue = $selectedRating.Value
                             }
-                            if ($mediaType -eq "movie" -and
-                                [string]::IsNullOrWhiteSpace($critic) -and
+                            if ([string]::IsNullOrWhiteSpace($critic) -and
                                 $image -like 'rottentomatoes://image.rating.*' -and
                                 $type -eq "critic") {
                                 $critic = Convert-DesignRatingPercent $value
                                 $criticImage = $image
                             }
-                            if ($mediaType -eq "movie" -and
-                                [string]::IsNullOrWhiteSpace($audience) -and
+                            if ([string]::IsNullOrWhiteSpace($audience) -and
                                 $image -like 'rottentomatoes://image.rating.*' -and
                                 $type -eq "audience") {
                                 $audience = Convert-DesignRatingPercent $value
@@ -4239,8 +4231,16 @@ function Add-DesignRatingMetadata {
                     $audience = Get-OptionalStringProperty -InputObject $watchRatings -Name "RtAudience"
                 }
             }
-            elseif ([string]::IsNullOrWhiteSpace($imdb)) {
-                $imdb = Get-OptionalStringProperty -InputObject $watchRatings -Name "Imdb"
+            else {
+                if ([string]::IsNullOrWhiteSpace($imdb)) {
+                    $imdb = Get-OptionalStringProperty -InputObject $watchRatings -Name "Imdb"
+                }
+                if ([string]::IsNullOrWhiteSpace($critic)) {
+                    $critic = Get-OptionalStringProperty -InputObject $watchRatings -Name "RtCritic"
+                }
+                if ([string]::IsNullOrWhiteSpace($audience)) {
+                    $audience = Get-OptionalStringProperty -InputObject $watchRatings -Name "RtAudience"
+                }
             }
         }
 
@@ -4268,8 +4268,16 @@ function Add-DesignRatingMetadata {
                     $audience = [string]$rich.RtAudience
                 }
             }
-            elseif ([string]::IsNullOrWhiteSpace($imdb)) {
-                $imdb = [string]$rich.Imdb
+            else {
+                if ([string]::IsNullOrWhiteSpace($imdb)) {
+                    $imdb = [string]$rich.Imdb
+                }
+                if ([string]::IsNullOrWhiteSpace($critic)) {
+                    $critic = [string]$rich.RtCritic
+                }
+                if ([string]::IsNullOrWhiteSpace($audience)) {
+                    $audience = [string]$rich.RtAudience
+                }
             }
             if ([string]::IsNullOrWhiteSpace($provider)) {
                 $provider = [string]$rich.Provider
@@ -4282,9 +4290,11 @@ function Add-DesignRatingMetadata {
         }
 
         if ($mediaType -eq "show") {
-            Write-Log ("Design ratings: {0} -> IMDb {1}, selected {2}" -f `
+            Write-Log ("Design ratings: {0} -> IMDb {1}, RT critic {2}, audience {3}, selected {4}" -f `
                 $item.Title,
                 $(if ($imdb) { $imdb } else { "n/a" }),
+                $(if ($critic) { $critic + "%" } else { "n/a" }),
+                $(if ($audience) { $audience + "%" } else { "n/a" }),
                 $(if ($provider) { $provider + " " + $providerValue } else { "n/a" })
             )
         }
@@ -4830,7 +4840,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.10.3"
+                "User-Agent"      = "TautWeekly-for-Plex/0.10.4"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -5084,7 +5094,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.10.3"
+        "X-Plex-Version"           = "0.10.4"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 
@@ -5566,7 +5576,7 @@ function Get-StatsMovieRatingHtml {
     }
 
     if ($pieces.Count -eq 0) {
-        return '<span style="color:#6f6f6f;">Ratings unavailable</span>'
+        return ""
     }
 
     return ($pieces -join '<span style="display:inline-block;width:6px;"></span>')
@@ -5608,6 +5618,12 @@ function Get-StatsMovieRowsHtml {
 
         $ratingHtml = Get-StatsMovieRatingHtml -Item $item -ImageMode $ImageMode
         $ratingPadding = if ([string]::IsNullOrWhiteSpace($genreHtml)) { "5px" } else { "4px" }
+        $ratingLineHtml = ""
+        if (-not [string]::IsNullOrWhiteSpace($ratingHtml)) {
+            $ratingLineHtml = '<div style="padding-top:' + $ratingPadding + ';font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700;">' +
+                $ratingHtml +
+                '</div>'
+        }
 
         [void]$rows.Append(@"
 <tr>
@@ -5615,13 +5631,57 @@ function Get-StatsMovieRowsHtml {
   <td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929;">
     <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$title</div>
     $genreHtml
-    <div style="padding-top:$ratingPadding;font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700;">$ratingHtml</div>
+    $ratingLineHtml
   </td>
 </tr>
 "@)
     }
 
     return $rows.ToString()
+}
+
+function Get-StatsTvShowRatingHtml {
+    param(
+        [object]$Item,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode
+    )
+
+    $imdb = Get-OptionalStringProperty -InputObject $Item -Name "DesignImdbRating"
+    if (-not [string]::IsNullOrWhiteSpace($imdb)) {
+        $imdbIcon = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
+        return '<span style="display:inline-block;white-space:nowrap;">' +
+            '<img src="' + (HtmlEncode $imdbIcon) + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
+            (HtmlEncode $imdb) +
+            '</span>'
+    }
+
+    $rtValue = Get-OptionalStringProperty -InputObject $Item -Name "DesignRtCritic"
+    $rtKind = "critic"
+    $rtImage = Get-OptionalStringProperty -InputObject $Item -Name "DesignRtCriticImage"
+    if ([string]::IsNullOrWhiteSpace($rtValue)) {
+        $rtValue = Get-OptionalStringProperty -InputObject $Item -Name "DesignRtAudience"
+        $rtKind = "audience"
+        $rtImage = Get-OptionalStringProperty -InputObject $Item -Name "DesignRtAudienceImage"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($rtValue)) { return "" }
+
+    if ([string]::IsNullOrWhiteSpace($rtImage)) {
+        $rtImage = if ($rtKind -eq "audience") {
+            if ((Safe-Int $rtValue) -ge 60) { "rottentomatoes://image.rating.upright" } else { "rottentomatoes://image.rating.spilled" }
+        }
+        else {
+            if ((Safe-Int $rtValue) -ge 60) { "rottentomatoes://image.rating.ripe" } else { "rottentomatoes://image.rating.rotten" }
+        }
+    }
+
+    $rtIcon = Get-DesignRtIconUrl -ImageState $rtImage -Kind $rtKind -ImageMode $ImageMode
+    $rtAlt = if ($rtKind -eq "audience") { "Rotten Tomatoes audience" } else { "Rotten Tomatoes critic" }
+    return '<span style="display:inline-block;white-space:nowrap;">' +
+        '<img src="' + (HtmlEncode $rtIcon) + '" alt="' + $rtAlt + '" width="14" height="14" style="display:inline-block;width:14px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:4px;">' +
+        (HtmlEncode ($rtValue + "%")) +
+        '</span>'
 }
 
 function Get-StatsEpisodeRowsHtml {
@@ -5658,13 +5718,14 @@ function Get-StatsEpisodeRowsHtml {
         }
 
         $imdb = [string]$item.ImdbRating
-        $imdbHtml = if ([string]::IsNullOrWhiteSpace($imdb)) {
-            '<span style="color:#6f6f6f;">IMDb unavailable</span>'
+        $imdbLineHtml = if ([string]::IsNullOrWhiteSpace($imdb)) {
+            ""
         } else {
+            '<div style="padding-top:4px;font-size:10px;line-height:1.3;color:#e5a00d;font-weight:700;">' +
             '<span style="display:inline-block;white-space:nowrap;">' +
             '<img src="' + (HtmlEncode $ImdbIconSrc) + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
             (HtmlEncode $imdb) +
-            '</span>'
+            '</span></div>'
         }
 
         [void]$rows.Append(@"
@@ -5673,7 +5734,7 @@ function Get-StatsEpisodeRowsHtml {
   <td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929;">
     <div style="font-size:11px;line-height:1.25;color:#ffffff;font-weight:800;">$showTitle</div>
     <div style="padding-top:3px;font-size:10px;line-height:1.3;color:#9b9b9b;">$(HtmlEncode $prefix)$episodeTitle</div>
-    <div style="padding-top:4px;font-size:10px;line-height:1.3;color:#e5a00d;font-weight:700;">$imdbHtml</div>
+    $imdbLineHtml
   </td>
 </tr>
 "@)
@@ -5711,15 +5772,13 @@ function Get-StatsTvShowRowsHtml {
             Format-WatchTime ([int64]$item.Seconds)
         }
 
-        $imdb = Get-OptionalStringProperty -InputObject $item -Name "DesignImdbRating"
-        $imdbHtml = if ([string]::IsNullOrWhiteSpace($imdb)) {
-            '<span style="color:#6f6f6f;">IMDb unavailable</span>'
+        $ratingHtml = Get-StatsTvShowRatingHtml -Item $item -ImageMode $ImageMode
+        $ratingLineHtml = if ([string]::IsNullOrWhiteSpace($ratingHtml)) {
+            ""
         } else {
-            $imdbIconSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
-            '<span style="display:inline-block;white-space:nowrap;">' +
-            '<img src="' + (HtmlEncode $imdbIconSrc) + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
-            (HtmlEncode $imdb) +
-            '</span>'
+            '<div style="padding-top:4px;font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700;">' +
+            $ratingHtml +
+            '</div>'
         }
 
         [void]$rows.Append(@"
@@ -5727,7 +5786,7 @@ function Get-StatsTvShowRowsHtml {
   <td width="50" valign="middle" style="width:50px;padding:7px 8px 7px 0;border-bottom:1px solid #292929;">$posterHtml</td>
   <td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929;">
     <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$showTitle</div>
-    <div style="padding-top:4px;font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700;">$imdbHtml</div>
+    $ratingLineHtml
     <div style="padding-top:3px;font-size:10px;line-height:1.35;color:#9b9b9b;font-weight:600;">$(HtmlEncode $watchTime) watched</div>
   </td>
 </tr>

@@ -6,6 +6,27 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-08-13
+
+### Fixed
+
+- Personal TV statistics continue to consolidate episode activity by show and
+  total watch duration, but now prefer that show's IMDb score and fall back to
+  its Rotten Tomatoes critic score, then its audience score. Episode-level
+  ratings remain limited to TV release rows.
+- Personal movie and TV rows now omit the rating line when no eligible score
+  exists instead of rendering `Ratings unavailable` or `IMDb unavailable`.
+- Added cross-platform renderer regressions for populated IMDb/RT priority,
+  score-dependent RT icons, aggregate TV duration, and absent-rating layout
+  across Windows, NAS/Docker/Linux/FreeBSD, and macOS sources.
+
+### Security
+
+- Reused the existing exact show rating key and bounded provider-labelled
+  metadata sources. The refinement adds no title search and does not persist or
+  expose configuration, credentials, viewing history, recipient data, upstream
+  responses, logs, or generated newsletters.
+
 ## [0.10.3] - 2026-08-13
 
 ### Changed

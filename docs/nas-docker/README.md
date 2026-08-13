@@ -9,7 +9,7 @@ general Linux Docker hosts, and Docker Desktop on x86-64 or ARM64. Docker
 Compose is the deployment mechanism for manual installations, not a separate
 edition or package.
 
-Current source baseline: **1.3.3**.
+Current source baseline: **1.3.4**.
 
 ## Requirements
 

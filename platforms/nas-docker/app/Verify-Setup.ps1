@@ -261,7 +261,7 @@ try {
 }
 catch {
     FAIL "preview asset web check failed: $($_.Exception.Message)"
-    WARN "Inspect the container logs in Unraid or on the Docker host and confirm the container was recreated from v1.3.3."
+    WARN "Inspect the container logs in Unraid or on the Docker host and confirm the container was recreated from v1.3.4."
     exit 1
 }
 
