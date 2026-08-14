@@ -1,0 +1,142 @@
+package manager
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+const maximumDiscoveryCacheBytes = 2 << 20
+
+type tautulliDiscoveryStore struct {
+	mu   sync.Mutex
+	path string
+}
+
+func newTautulliDiscoveryStore(dataDir string) *tautulliDiscoveryStore {
+	return &tautulliDiscoveryStore{path: filepath.Join(dataDir, "tautulli-discovery.json")}
+}
+
+func (s *tautulliDiscoveryStore) Save(result TautulliDiscoveryResult) error {
+	clean, ok := sanitizeCachedDiscovery(result)
+	if !ok {
+		return errIntegrationResponse
+	}
+	encoded, err := json.Marshal(clean)
+	if err != nil {
+		return err
+	}
+	encoded = append(encoded, '\n')
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return writePrivateBytes(s.path, encoded)
+}
+
+func (s *tautulliDiscoveryStore) Load(configRevision string) *TautulliDiscoveryResult {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	info, err := os.Stat(s.path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maximumDiscoveryCacheBytes {
+		return nil
+	}
+	raw, err := os.ReadFile(s.path)
+	if err != nil || len(raw) > maximumDiscoveryCacheBytes {
+		return nil
+	}
+	var stored TautulliDiscoveryResult
+	if json.Unmarshal(raw, &stored) != nil {
+		return nil
+	}
+	clean, ok := sanitizeCachedDiscovery(stored)
+	if !ok || clean.ConfigRevision != configRevision {
+		return nil
+	}
+	return &clean
+}
+
+func sanitizeCachedDiscovery(stored TautulliDiscoveryResult) (TautulliDiscoveryResult, bool) {
+	if stored.Mode != "real-lan-discovery" || stored.NetworkBoundary != "private-and-loopback-only" || !validConfigRevision(stored.ConfigRevision) {
+		return TautulliDiscoveryResult{}, false
+	}
+	completed, err := time.Parse(time.RFC3339, stored.CompletedAtUTC)
+	if err != nil {
+		return TautulliDiscoveryResult{}, false
+	}
+	clean := TautulliDiscoveryResult{
+		Mode:            stored.Mode,
+		NetworkBoundary: stored.NetworkBoundary,
+		CompletedAtUTC:  completed.UTC().Format(time.RFC3339),
+		ConfigRevision:  stored.ConfigRevision,
+		Libraries:       make([]DiscoveredLibrary, 0, min(len(stored.Libraries), maximumDiscoveryChoices)),
+		Users:           make([]DiscoveredUser, 0, min(len(stored.Users), maximumDiscoveryChoices)),
+	}
+	seenLibraries := map[string]struct{}{}
+	for _, library := range stored.Libraries {
+		id := discoveryID(library.ID)
+		mediaType := strings.ToLower(strings.TrimSpace(library.MediaType))
+		if id == "" || mediaType != "movie" && mediaType != "show" {
+			continue
+		}
+		if _, exists := seenLibraries[id]; exists {
+			continue
+		}
+		seenLibraries[id] = struct{}{}
+		name := sanitizeEvidence(library.Name, 100)
+		if name == "" {
+			name = "Library " + id
+		}
+		clean.Libraries = append(clean.Libraries, DiscoveredLibrary{ID: id, Name: name, MediaType: mediaType, ItemCount: sanitizeNumericEvidence(library.ItemCount)})
+		if len(clean.Libraries) == maximumDiscoveryChoices {
+			break
+		}
+	}
+	if len(clean.Libraries) == 0 {
+		return TautulliDiscoveryResult{}, false
+	}
+	seenUsers := map[string]struct{}{}
+	for _, user := range stored.Users {
+		id := discoveryID(user.ID)
+		if id == "" {
+			continue
+		}
+		if _, exists := seenUsers[id]; exists {
+			continue
+		}
+		seenUsers[id] = struct{}{}
+		name := sanitizeEvidence(user.Name, 100)
+		if name == "" {
+			name = "User " + id
+		}
+		eligibility := user.Eligibility
+		if eligibility != "eligible" && eligibility != "skipped" && eligibility != "unknown" {
+			eligibility = "unknown"
+		}
+		role := user.Role
+		if role != "owner" && role != "administrator" {
+			role = ""
+		}
+		clean.Users = append(clean.Users, DiscoveredUser{ID: id, Name: name, Eligibility: eligibility, Role: role})
+		if len(clean.Users) == maximumDiscoveryChoices {
+			break
+		}
+	}
+	clean.SuggestedPreviewUserID = suggestedPreviewUserID(clean.Users)
+	return clean, true
+}
+
+func validConfigRevision(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if character < '0' || character > '9' {
+			if character < 'a' || character > 'f' {
+				return false
+			}
+		}
+	}
+	return true
+}

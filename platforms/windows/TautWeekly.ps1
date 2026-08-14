@@ -6,12 +6,16 @@
 
     [string]$ConfigPath = "$PSScriptRoot\config.json",
 
+    [switch]$NoOpen,
+
+    [string]$ResultPath = "",
+
     [switch]$ConfirmSendAll,
 
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex Portable v1.8.6 — production newsletter engine.
+# TautWeekly for Plex Windows v1.9.0 — production newsletter engine.
 # Includes validated production renderer changes through v1.5.14 plus portable
 # server, SMTP, schedule, preview, and safety controls.
 Set-StrictMode -Version Latest
@@ -20,6 +24,88 @@ if ($PSVersionTable.PSVersion -lt [Version]"5.1") {
     throw "TautWeekly for Plex Portable requires Windows PowerShell 5.1 or newer. Found $($PSVersionTable.PSVersion)."
 }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+$script:TautWeeklyResultStartedAtUtc = [DateTime]::UtcNow
+$script:TautWeeklyResultWritten = $false
+$script:TautWeeklyResultWriting = $false
+$script:TautWeeklyResultSmtpAcceptedCount = 0
+$script:TautWeeklyResultSkippedCount = 0
+$script:TautWeeklyResultFailedCount = 0
+$script:TautWeeklyResultGeneratedPreviewFiles = New-Object System.Collections.Generic.List[string]
+$script:TautWeeklyResultDeliveryScope = switch ($Mode) {
+    "SendTest" { "test" }
+    "SendTestAll" { "test" }
+    "SendWelcome" { "welcome" }
+    "SendAll" { "production" }
+    default { "none" }
+}
+
+function Write-TautWeeklyStructuredResult {
+    param(
+        [ValidateSet("succeeded","partial","failed")]
+        [string]$Outcome
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ResultPath) -or
+        $script:TautWeeklyResultWritten -or
+        $script:TautWeeklyResultWriting) {
+        return
+    }
+
+    $script:TautWeeklyResultWriting = $true
+    $temporaryPath = ""
+    try {
+        $resolvedResultPath = [IO.Path]::GetFullPath($ResultPath)
+        $resultDirectory = [IO.Path]::GetDirectoryName($resolvedResultPath)
+        if ([string]::IsNullOrWhiteSpace($resultDirectory)) {
+            throw "Structured result directory is unavailable."
+        }
+        [IO.Directory]::CreateDirectory($resultDirectory) | Out-Null
+
+        $finishedAtUtc = [DateTime]::UtcNow
+        $durationMs = [Math]::Max(0, [int64]($finishedAtUtc - $script:TautWeeklyResultStartedAtUtc).TotalMilliseconds)
+        $safePreviewFiles = @(
+            $script:TautWeeklyResultGeneratedPreviewFiles |
+                ForEach-Object { [IO.Path]::GetFileName([string]$_) } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                Sort-Object -Unique
+        )
+        $result = [ordered]@{
+            schemaVersion         = 1
+            mode                  = [string]$Mode
+            outcome               = $Outcome
+            deliveryScope         = [string]$script:TautWeeklyResultDeliveryScope
+            startedAtUtc          = $script:TautWeeklyResultStartedAtUtc.ToString("o")
+            finishedAtUtc         = $finishedAtUtc.ToString("o")
+            durationMs            = $durationMs
+            smtpAcceptedCount     = [Math]::Max(0, [int]$script:TautWeeklyResultSmtpAcceptedCount)
+            skippedCount          = [Math]::Max(0, [int]$script:TautWeeklyResultSkippedCount)
+            failedCount           = [Math]::Max(0, [int]$script:TautWeeklyResultFailedCount)
+            generatedPreviewFiles = $safePreviewFiles
+        }
+
+        $temporaryPath = Join-Path $resultDirectory (".tautweekly-result-{0}.tmp" -f [Guid]::NewGuid().ToString("N"))
+        $json = $result | ConvertTo-Json -Depth 4 -Compress
+        [IO.File]::WriteAllText($temporaryPath, $json + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
+        Move-Item -LiteralPath $temporaryPath -Destination $resolvedResultPath -Force
+        $temporaryPath = ""
+        $script:TautWeeklyResultWritten = $true
+    }
+    catch {
+        Write-Warning "TautWeekly could not write the sanitized structured result."
+    }
+    finally {
+        if (-not [string]::IsNullOrWhiteSpace($temporaryPath) -and (Test-Path -LiteralPath $temporaryPath)) {
+            Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+        }
+        $script:TautWeeklyResultWriting = $false
+    }
+}
+
+trap {
+    Write-TautWeeklyStructuredResult -Outcome "failed"
+    exit 1
+}
 
 $ScriptRoot = $PSScriptRoot
 . (Join-Path $ScriptRoot "Operation-Lock.ps1")
@@ -393,7 +479,7 @@ function Mark-UserWelcomed {
 }
 
 if (-not (Test-Path $ConfigPath)) {
-    throw "Config file not found: $ConfigPath`nRun setup-config.bat first."
+    throw "Config file not found: $ConfigPath`nOpen TautWeekly Manager and complete Config, or run 00-SETUP-FIRST.bat as a terminal fallback."
 }
 
 $Config = Get-Content -Path $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -4840,7 +4926,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.10.4"
+                "User-Agent"      = "TautWeekly-for-Plex/0.11.0"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -5094,7 +5180,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.10.4"
+        "X-Plex-Version"           = "0.11.0"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 
@@ -7583,7 +7669,9 @@ function Get-NewsletterSubject {
 # MODE: VERIFY DIRECT PLEX
 # ---------------------------------------------------------------------------
 if ($Mode -eq "VerifyPlex") {
-    exit (Test-TautWeeklyDirectPlexConnection)
+    $verifyExitCode = Test-TautWeeklyDirectPlexConnection
+    Write-TautWeeklyStructuredResult -Outcome $(if ($verifyExitCode -eq 0) { "succeeded" } else { "failed" })
+    exit $verifyExitCode
 }
 
 # ---------------------------------------------------------------------------
@@ -7615,6 +7703,7 @@ if ($Mode -eq "ListUsers") {
     Write-Host ""
     Write-Host "ListUsers only displays the roster; it does not select or save a default user." -ForegroundColor Yellow
     Write-Host "Pass a numeric UserId from this table to Preview, PreviewAll, SendTest, SendTestAll, or SendWelcome."
+    Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0
 }
 
@@ -7723,8 +7812,10 @@ if ($Mode -eq "SendWelcome") {
         -PosterAssets $posterAssets `
         -HeroAssets $designHero
 
+    $script:TautWeeklyResultSmtpAcceptedCount = 1
     Mark-UserWelcomed -State $accessState -UserId $user.UserId
     Write-Log "Welcome email sent successfully to $($user.FriendlyName)."
+    Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0
 }
 
@@ -7918,7 +8009,13 @@ function Get-PopulatedPreviewStats {
 
     $sampleMovies = New-Object System.Collections.Generic.List[object]
     foreach ($movie in @($activeReleaseData.Movies | Select-Object -First 2)) {
-        $sampleMovies.Add($movie)
+        $sampleMovie = [ordered]@{}
+        foreach ($property in $movie.PSObject.Properties) {
+            $sampleMovie[$property.Name] = $property.Value
+        }
+        $sampleMovie["Plays"] = 1
+        $sampleMovie["Seconds"] = [int64](3600 - ($sampleMovies.Count * 900))
+        $sampleMovies.Add([PSCustomObject]$sampleMovie)
     }
 
     while ($sampleMovies.Count -lt 2) {
@@ -7929,7 +8026,8 @@ function Get-PopulatedPreviewStats {
             DesignRtCritic=$(if ($index -eq 1) { "87" } else { "66" });
             DesignRtAudience=$(if ($index -eq 1) { "74" } else { "81" });
             DesignRtCriticImage="rottentomatoes://image.rating.ripe";
-            DesignRtAudienceImage="rottentomatoes://image.rating.upright"
+            DesignRtAudienceImage="rottentomatoes://image.rating.upright";
+            Plays=1; Seconds=[int64](3600 - (($index - 1) * 900))
         })
     }
 
@@ -8285,6 +8383,7 @@ if ($Mode -eq "PreviewAll") {
 
     for ($i = 0; $i -lt $bundle.Variants.Count; $i++) {
         Set-Content -Path (Join-Path $previewDir $files[$i]) -Value $bundle.Variants[$i].Html -Encoding UTF8
+        $script:TautWeeklyResultGeneratedPreviewFiles.Add($files[$i])
     }
 
     $serverName = HtmlEncode (Get-ConfiguredServerName)
@@ -8323,11 +8422,15 @@ $($cards.ToString())
 
     $indexPath = Join-Path $previewDir "preview-all-00-INDEX.html"
     Set-Content -Path $indexPath -Value $indexHtml -Encoding UTF8
+    $script:TautWeeklyResultGeneratedPreviewFiles.Add("preview-all-00-INDEX.html")
 
     Write-Host ""
     Write-Host "Created all-email-type preview: $indexPath" -ForegroundColor Green
     Write-Host "No email was sent and access-state.json was not modified by this mode."
-    Start-Process $indexPath
+    if (-not $NoOpen) {
+        Start-Process $indexPath
+    }
+    Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0
 }
 
@@ -8358,12 +8461,15 @@ if ($Mode -eq "SendTestAll") {
             -PosterAssets $variant.PosterAssets `
             -HeroAssets $variant.HeroAssets
 
+        $script:TautWeeklyResultSmtpAcceptedCount++
+
         if ($delaySeconds -gt 0 -and $i -lt ($bundle.Variants.Count - 1)) {
             Start-Sleep -Seconds $delaySeconds
         }
     }
 
     Write-Log "All six email-state tests were sent to TestEmail only."
+    Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0
 }
 
@@ -8379,6 +8485,7 @@ if ($Mode -eq "Preview") {
     $safeName = Get-SafeFilePart $result.User.FriendlyName
     $previewPath = Join-Path $OutputDir ("preview_{0}.html" -f $safeName)
     Set-Content -Path $previewPath -Value $result.Html -Encoding UTF8
+    $script:TautWeeklyResultGeneratedPreviewFiles.Add([IO.Path]::GetFileName($previewPath))
 
     Write-Host ""
     Write-Host "TAUTWEEKLY FOR PLEX PREVIEW"
@@ -8391,7 +8498,10 @@ if ($Mode -eq "Preview") {
     Write-Host ("Recent access:     {0}" -f $result.RecentAccess)
     Write-Host ""
     Write-Host "Preview created: $previewPath"
-    Start-Process $previewPath
+    if (-not $NoOpen) {
+        Start-Process $previewPath
+    }
+    Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0
 }
 
@@ -8416,7 +8526,9 @@ if ($Mode -eq "SendTest") {
         -PosterAssets $result.PosterAssets `
         -HeroAssets $activeDesignHero
 
+    $script:TautWeeklyResultSmtpAcceptedCount = 1
     Write-Log "Test email sent successfully."
+    Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0
 }
 
@@ -8440,6 +8552,7 @@ if ($Mode -eq "SendAll") {
             if (Should-SkipUser -User $user) {
                 Write-Log "Skipping $($user.FriendlyName) ($($user.UserId))."
                 $skipped++
+                $script:TautWeeklyResultSkippedCount = $skipped
                 continue
             }
 
@@ -8460,6 +8573,7 @@ if ($Mode -eq "SendAll") {
             }
 
             $sent++
+            $script:TautWeeklyResultSmtpAcceptedCount = $sent
             $sendDelay = 10
             if ($null -ne $Config.PSObject.Properties["SendDelaySeconds"]) {
                 $sendDelay = [Math]::Max(0, (Safe-Int $Config.SendDelaySeconds))
@@ -8471,6 +8585,7 @@ if ($Mode -eq "SendAll") {
         }
         catch {
             $failed++
+            $script:TautWeeklyResultFailedCount = $failed
             Write-Log "Send failed for user $($n.user_id): $($_.Exception.Message)" "ERROR"
         }
     }
@@ -8481,7 +8596,11 @@ if ($Mode -eq "SendAll") {
     Write-Host ("Skipped: {0}" -f $skipped)
     Write-Host ("Failed:  {0}" -f $failed)
 
-    if ($failed -gt 0) { exit 2 }
+    if ($failed -gt 0) {
+        Write-TautWeeklyStructuredResult -Outcome $(if ($sent -gt 0) { "partial" } else { "failed" })
+        exit 2
+    }
+    Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0
 }
 

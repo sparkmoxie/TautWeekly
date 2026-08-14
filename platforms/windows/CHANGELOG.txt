@@ -1,6 +1,19 @@
 TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
+v1.9.0 Windows
+--------------
+- makes TautWeekly-Setup.exe and the loopback-only Manager the supported primary Windows install, configuration, verification, preview, test, schedule, update, and removal workflow
+- installs per Windows account into a selectable application directory with Desktop and Start Menu shortcuts, an installed uninstaller, and an external private Manager data directory
+- recognizes an installer-owned application as Update and a release-manifest-verified older portable folder as Migrate while refusing arbitrary non-empty directories
+- preserves config, credentials, delivery state, previews, logs, caches, custom assets, and Manager access/history across verified replacement and automatic rollback
+- opens trusted-local Windows sessions without a pairing token and provides an optional eight-character password lock, guarded secret reveal, sign-out, and local recovery shortcut
+- adds persistent Config status, safe automatic Tautulli/Plex/SMTP checks, guided libraries and delivery exclusions, six sandboxed local previews, and guarded six-message TestEmail delivery
+- adds typed Windows Task Scheduler Install/Refresh, Enable, Disable, and Remove actions through a narrow UAC helper with exact task ownership and postcondition verification
+- retains the numbered BAT/PowerShell entry points as documented portable, recovery, and expert fallbacks
+- validates Windows install/update/portable migration/uninstall, schedule ownership, private-data preservation, cross-platform Manager compilation, accessibility, JavaScript, and release artifacts in CI
+- remains unsigned for this release; users should verify TautWeekly-Setup.exe against SHA256SUMS.txt before accepting a SmartScreen warning
+
 v1.8.6 Portable
 ---------------
 - keeps personal TV statistics grouped by show with aggregate watch duration

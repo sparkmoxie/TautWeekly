@@ -1,0 +1,200 @@
+[CmdletBinding()]
+param(
+    [string]$Root = '',
+    [string]$DistPath = ''
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($Root)) { $Root = Split-Path -Parent $PSScriptRoot }
+$Root = [IO.Path]::GetFullPath($Root)
+if ([string]::IsNullOrWhiteSpace($DistPath)) { $DistPath = Join-Path $Root 'dist' }
+$DistPath = [IO.Path]::GetFullPath($DistPath)
+
+function Assert-True([bool]$Condition, [string]$Message) {
+    if (-not $Condition) { throw $Message }
+}
+
+function Get-InstallerFailureDetail([string]$OperationLog) {
+    if (-not (Test-Path -LiteralPath $OperationLog -PathType Leaf)) {
+        return 'The installer did not create its operation log.'
+    }
+    $tail = @(Get-Content -LiteralPath $OperationLog -Tail 12)
+    if ($tail.Count -eq 0) {
+        return 'The installer operation log is empty.'
+    }
+    return "Installer log tail:`n$($tail -join "`n")"
+}
+
+$setup = Join-Path $DistPath 'TautWeekly-Setup.exe'
+Assert-True (Test-Path -LiteralPath $setup -PathType Leaf) 'TautWeekly-Setup.exe is missing.'
+$setupHashBefore = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash
+
+$tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+$testRoot = Join-Path $tempParent ('tautweekly-installer-test-' + [Guid]::NewGuid().ToString('N'))
+$testRoot = [IO.Path]::GetFullPath($testRoot)
+Assert-True ($testRoot.StartsWith($tempParent, [StringComparison]::OrdinalIgnoreCase)) "Unsafe installer test root: $testRoot"
+$installRoot = Join-Path $testRoot 'program'
+$dataRoot = Join-Path $testRoot 'private-data'
+$logPath = Join-Path $testRoot 'installer.log'
+
+function Invoke-TestInstaller([switch]$Uninstall) {
+    $arguments = @('--test-mode', '--no-launch', '--install-dir', $installRoot, '--data-dir', $dataRoot, '--log', $logPath)
+    if ($Uninstall) { $arguments = @('--uninstall') + $arguments }
+    $process = Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
+    Assert-True ($process.ExitCode -eq 0) "Installer exited with code $($process.ExitCode).`n$(Get-InstallerFailureDetail -OperationLog $logPath)"
+    $process.Dispose()
+}
+
+function Invoke-TestInstallerAt([string]$ApplicationRoot, [string]$PrivateRoot, [string]$OperationLog) {
+    $arguments = @('--test-mode', '--no-launch', '--install-dir', $ApplicationRoot, '--data-dir', $PrivateRoot, '--log', $OperationLog)
+    $process = Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
+    Assert-True ($process.ExitCode -eq 0) "Installer exited with code $($process.ExitCode) while migrating a verified portable release.`n$(Get-InstallerFailureDetail -OperationLog $OperationLog)"
+    $process.Dispose()
+}
+
+try {
+    New-Item -ItemType Directory -Path $testRoot | Out-Null
+    Invoke-TestInstaller
+    foreach ($relative in @(
+        'tautweekly-manager.exe', 'TautWeekly.ps1', 'START-MANAGER.ps1', 'RESET-MANAGER-ACCESS.ps1',
+        'Open-TautWeekly.cmd', 'Reset-TautWeekly-Access.cmd', 'Uninstall-TautWeekly.cmd', 'TautWeekly-Uninstall.exe',
+        'tautweekly.ico', 'INSTALL-METADATA.txt', 'RELEASE-FILES.txt'
+    )) {
+        Assert-True (Test-Path -LiteralPath (Join-Path $installRoot $relative) -PathType Leaf) "Fresh install is missing $relative."
+    }
+    Assert-True (Test-Path -LiteralPath $dataRoot -PathType Container) 'Fresh install did not create the external private data directory.'
+    $metadata = Get-Content -LiteralPath (Join-Path $installRoot 'INSTALL-METADATA.txt') -Raw
+    Assert-True ($metadata.Contains("DataDirectory=$dataRoot")) 'Installer metadata does not bind the external private data directory.'
+    $launcher = Get-Content -LiteralPath (Join-Path $installRoot 'Open-TautWeekly.cmd') -Raw
+    Assert-True ($launcher.Contains('-DataRoot')) 'Installed launcher does not pass the external Manager data directory.'
+    $resetLauncher = Get-Content -LiteralPath (Join-Path $installRoot 'Reset-TautWeekly-Access.cmd') -Raw
+    Assert-True ($resetLauncher.Contains('-DataRoot')) 'Installed access reset launcher does not pass the external Manager data directory.'
+
+    $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    $listener.Start()
+    $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port
+    $listener.Stop()
+    $manager = Start-Process `
+        -FilePath (Join-Path $installRoot 'tautweekly-manager.exe') `
+        -ArgumentList @('serve', "--listen=127.0.0.1:$port", "--tautweekly-root=$installRoot", "--data-dir=$dataRoot") `
+        -WorkingDirectory $installRoot `
+        -WindowStyle Hidden `
+        -PassThru
+    try {
+        $deadline = (Get-Date).AddSeconds(10)
+        $healthy = $false
+        do {
+            Start-Sleep -Milliseconds 200
+            if ($manager.HasExited) { throw "Installed Manager stopped during boot with exit code $($manager.ExitCode)." }
+            try {
+                $health = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/health/live" -TimeoutSec 2
+                $healthy = [string]$health.status -eq 'alive'
+            }
+            catch { }
+        } while (-not $healthy -and (Get-Date) -lt $deadline)
+        Assert-True $healthy 'Installed Manager did not become healthy from the external private data directory.'
+        $setupState = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/api/v1/setup" -TimeoutSec 2
+        Assert-True (-not [bool]$setupState.authenticationRequired) 'Fresh Windows Manager unexpectedly requires authentication.'
+        Assert-True (-not [bool]$setupState.pairingRequired) 'Fresh Windows Manager unexpectedly requires a pairing token.'
+        Assert-True (-not (Test-Path -LiteralPath (Join-Path $dataRoot 'bootstrap-token.txt'))) 'Fresh Windows Manager wrote an obsolete pairing token.'
+    }
+    finally {
+        if (-not $manager.HasExited) {
+            Stop-Process -Id $manager.Id -Force -ErrorAction SilentlyContinue
+            [void]$manager.WaitForExit(10000)
+        }
+        $manager.Dispose()
+    }
+
+    [IO.File]::WriteAllText((Join-Path $installRoot 'config.json'), '{"private":"preserve"}', [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $dataRoot 'access-state.json'), '{"session":"preserve"}', [Text.UTF8Encoding]::new($false))
+    $legacyData = Join-Path $installRoot '.manager-data'
+    New-Item -ItemType Directory -Path $legacyData | Out-Null
+    [IO.File]::WriteAllText((Join-Path $legacyData 'legacy-state.json'), '{"legacy":"migrate"}', [Text.UTF8Encoding]::new($false))
+
+    Invoke-TestInstaller
+    Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'config.json') -Raw) -eq '{"private":"preserve"}') 'Upgrade replaced private config.json.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $dataRoot 'access-state.json') -Raw) -eq '{"session":"preserve"}') 'Upgrade replaced external Manager data.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $dataRoot 'legacy-state.json') -PathType Leaf) 'Upgrade did not migrate legacy .manager-data state.'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $installRoot '.manager-data'))) 'Upgrade retained a duplicate legacy .manager-data directory.'
+    $rollbackBackups = @(Get-ChildItem -LiteralPath $testRoot -Directory -Filter 'program.backup-v*')
+    Assert-True ($rollbackBackups.Count -eq 1) "Upgrade created $($rollbackBackups.Count) rollback backups instead of exactly one."
+    Assert-True ((Get-Content -LiteralPath (Join-Path $rollbackBackups[0].FullName 'config.json') -Raw) -eq '{"private":"preserve"}') 'Upgrade rollback backup did not preserve private config.json.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $rollbackBackups[0].FullName 'INSTALL-METADATA.txt') -PathType Leaf) 'Upgrade rollback backup did not capture the installed application state.'
+
+    $portableExtractRoot = Join-Path $testRoot 'portable-extract'
+    Expand-Archive -LiteralPath (Join-Path $DistPath 'TautWeekly-windows.zip') -DestinationPath $portableExtractRoot
+    $portableRoot = Join-Path $portableExtractRoot 'TautWeekly-windows'
+    $portableDataRoot = Join-Path $testRoot 'portable-private-data'
+    $portableLog = Join-Path $testRoot 'portable-installer.log'
+    [IO.File]::WriteAllText((Join-Path $portableRoot 'config.json'), '{"portable":"preserve"}', [Text.UTF8Encoding]::new($false))
+    $portableLegacyData = Join-Path $portableRoot '.manager-data'
+    New-Item -ItemType Directory -Path $portableLegacyData | Out-Null
+    [IO.File]::WriteAllText((Join-Path $portableLegacyData 'access-state.json'), '{"legacy":"preserve"}', [Text.UTF8Encoding]::new($false))
+
+    Invoke-TestInstallerAt -ApplicationRoot $portableRoot -PrivateRoot $portableDataRoot -OperationLog $portableLog
+    Assert-True ((Get-Content -LiteralPath (Join-Path $portableRoot 'config.json') -Raw) -eq '{"portable":"preserve"}') 'Portable migration replaced private config.json.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $portableDataRoot 'access-state.json') -Raw) -eq '{"legacy":"preserve"}') 'Portable migration did not retain legacy Manager state externally.'
+    Assert-True (-not (Test-Path -LiteralPath $portableLegacyData)) 'Portable migration retained duplicate in-folder Manager state.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $portableRoot 'INSTALL-METADATA.txt') -PathType Leaf) 'Portable migration did not convert the folder to an installer-owned application.'
+    Assert-True (@(Get-ChildItem -LiteralPath $portableExtractRoot -Directory -Filter 'TautWeekly-windows.backup-v*').Count -eq 1) 'Portable migration did not create exactly one rollback backup.'
+
+    $uninstaller = Join-Path $installRoot 'TautWeekly-Uninstall.exe'
+    # The installed uninstaller must recover both the custom application root
+    # and external data root without caller-supplied path arguments.
+    $uninstallArguments = @('--test-mode', '--no-launch', '--log', $logPath)
+    $uninstallProcess = Start-Process -FilePath $uninstaller -ArgumentList $uninstallArguments -Wait -PassThru -WindowStyle Hidden
+    Assert-True ($uninstallProcess.ExitCode -eq 0) "Installed uninstaller exited with code $($uninstallProcess.ExitCode)."
+    $uninstallProcess.Dispose()
+    $selfRemovalDeadline = (Get-Date).AddSeconds(8)
+    while ((Test-Path -LiteralPath $uninstaller) -and (Get-Date) -lt $selfRemovalDeadline) {
+        Start-Sleep -Milliseconds 200
+    }
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $installRoot 'tautweekly-manager.exe'))) 'Uninstall retained an application-owned Manager executable.'
+    Assert-True (-not (Test-Path -LiteralPath $uninstaller)) 'Installed uninstaller did not remove its exact executable after exit.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'config.json') -PathType Leaf) 'Uninstall removed private configuration.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $dataRoot 'access-state.json') -PathType Leaf) 'Uninstall removed external Manager data.'
+    Assert-True (Test-Path -LiteralPath $logPath -PathType Leaf) 'Installer did not retain its diagnostic log.'
+
+    Add-Type -AssemblyName System.Drawing
+    $embeddedIcon = [Drawing.Icon]::ExtractAssociatedIcon($setup)
+    try {
+        Assert-True ($null -ne $embeddedIcon) 'Setup executable has no extractable application icon.'
+        $embeddedBitmap = $embeddedIcon.ToBitmap()
+        try {
+            Assert-True ($embeddedBitmap.Width -eq 32 -and $embeddedBitmap.Height -eq 32) 'Setup icon does not expose the expected Windows shell size.'
+            $goldPixels = 0
+            $whitePixels = 0
+            $transparentCorners = 0
+            for ($x = 0; $x -lt $embeddedBitmap.Width; $x++) {
+                for ($y = 0; $y -lt $embeddedBitmap.Height; $y++) {
+                    $pixel = $embeddedBitmap.GetPixel($x, $y)
+                    if ($pixel.R -gt 180 -and $pixel.G -gt 100 -and $pixel.B -lt 100) { $goldPixels++ }
+                    if ($pixel.R -gt 200 -and $pixel.G -gt 200 -and $pixel.B -gt 200) { $whitePixels++ }
+                }
+            }
+            foreach ($corner in @(@(0,0), @(31,0), @(0,31), @(31,31))) {
+                if ($embeddedBitmap.GetPixel($corner[0], $corner[1]).A -lt 20) { $transparentCorners++ }
+            }
+            Assert-True ($goldPixels -gt 125 -and $whitePixels -gt 75 -and $transparentCorners -eq 4) 'Setup executable does not expose the approved gold, white, transparent popcorn/TW shell icon.'
+        }
+        finally {
+            $embeddedBitmap.Dispose()
+        }
+    }
+    finally {
+        if ($null -ne $embeddedIcon) { $embeddedIcon.Dispose() }
+    }
+
+    Write-Host '[PASS] Windows installer fresh install, verified upgrade, portable migration, icon, and privacy-preserving uninstall lifecycle.' -ForegroundColor Green
+}
+finally {
+    if (Test-Path -LiteralPath $testRoot) {
+        $resolved = [IO.Path]::GetFullPath($testRoot)
+        if ($resolved.StartsWith($tempParent, [StringComparison]::OrdinalIgnoreCase) -and (Split-Path -Leaf $resolved).StartsWith('tautweekly-installer-test-', [StringComparison]::Ordinal)) {
+            Remove-Item -LiteralPath $resolved -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+Assert-True ((Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash -eq $setupHashBefore) 'Installer lifecycle changed the release-candidate Setup executable.'

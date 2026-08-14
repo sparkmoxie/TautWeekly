@@ -1,0 +1,245 @@
+package manager
+
+import (
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestReadConfigEditorUsesSafeDefaultsWithoutSecrets(t *testing.T) {
+	root := t.TempDir()
+	view := ReadConfigEditor(root)
+	if view.Exists || !view.Valid || view.State != "unconfigured" || view.Revision != missingConfigRevision {
+		t.Fatalf("unexpected editor state: %+v", view)
+	}
+	for _, name := range []string{"ApiKey", "FromEmail", "SmtpHost", "SmtpPassword", "TestEmail"} {
+		if view.Issues[name] == "" {
+			t.Fatalf("missing setup issue for %s: %v", name, view.Issues)
+		}
+	}
+	apiKey := editorField(t, view, "ApiKey")
+	if apiKey.Secret == nil || apiKey.Secret.Configured || apiKey.Value != nil {
+		t.Fatalf("unexpected API key editor field: %+v", apiKey)
+	}
+	if value := editorField(t, view, "SmtpPort").Value; value != int64(587) {
+		t.Fatalf("SMTP port default: got %#v", value)
+	}
+}
+
+func TestReadConfigEditorNeverReturnsStoredSecrets(t *testing.T) {
+	root := t.TempDir()
+	config := `{"ApiKey":"editor-api-secret","PlexToken":"editor-plex-secret","SmtpAppPassword":"editor-smtp-secret"}`
+	if err := os.WriteFile(filepath.Join(root, "config.json"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	encoded, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"editor-api-secret", "editor-plex-secret", "editor-smtp-secret"} {
+		if strings.Contains(string(encoded), secret) {
+			t.Fatalf("editor response returned %q", secret)
+		}
+	}
+	for _, name := range []string{"ApiKey", "PlexToken", "SmtpPassword"} {
+		field := editorField(t, view, name)
+		if field.Secret == nil || !field.Secret.Configured {
+			t.Fatalf("%s was not reported as configured", name)
+		}
+	}
+}
+
+func TestReadConfigSecretReturnsOnlyRequestedValueWithCurrentRevision(t *testing.T) {
+	root := t.TempDir()
+	config := `{"ApiKey":"requested-api-secret","PlexToken":"other-plex-secret","SmtpAppPassword":"legacy-smtp-secret"}`
+	if err := os.WriteFile(filepath.Join(root, "config.json"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	value, err := ReadConfigSecret(root, "ApiKey", view.Revision)
+	if err != nil || value != "requested-api-secret" {
+		t.Fatalf("read API secret: value=%q err=%v", value, err)
+	}
+	value, err = ReadConfigSecret(root, "SmtpPassword", view.Revision)
+	if err != nil || value != "legacy-smtp-secret" {
+		t.Fatalf("read legacy SMTP secret: value=%q err=%v", value, err)
+	}
+	if _, err := ReadConfigSecret(root, "FromEmail", view.Revision); !errors.Is(err, ErrConfigSecretUnsupported) {
+		t.Fatalf("non-secret field reveal: got %v", err)
+	}
+	if _, err := ReadConfigSecret(root, "ApiKey", "stale"); !errors.Is(err, ErrConfigConflict) {
+		t.Fatalf("stale secret reveal: got %v", err)
+	}
+}
+
+func TestEditorHidesLegacyEmailExclusionsAndPreservesThemOnSave(t *testing.T) {
+	root := t.TempDir()
+	view := ReadConfigEditor(root)
+	request := validConfigSaveRequest(t, view)
+	request.Secrets["ApiKey"] = SecretChange{Action: "replace", Value: "fictional-api-key"}
+	request.Secrets["SmtpPassword"] = SecretChange{Action: "replace", Value: "fictional-smtp-password"}
+	_, fieldErrors, err := SaveConfig(root, request, time.Now)
+	if err != nil || len(fieldErrors) != 0 {
+		t.Fatalf("create config: fields=%v err=%v", fieldErrors, err)
+	}
+	path := filepath.Join(root, "config.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]any{}
+	if err := json.Unmarshal(raw, &values); err != nil {
+		t.Fatal(err)
+	}
+	values["ExcludedEmails"] = []string{"legacy@example.org"}
+	raw, _ = json.Marshal(values)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	view = ReadConfigEditor(root)
+	for _, field := range view.Fields {
+		if field.Name == "ExcludedEmails" {
+			t.Fatal("legacy email exclusion was exposed in the Manager editor")
+		}
+	}
+	update := validConfigSaveRequest(t, view)
+	result, fieldErrors, err := SaveConfig(root, update, time.Now)
+	if err != nil || len(fieldErrors) != 0 || !result.Saved {
+		t.Fatalf("update config: result=%+v fields=%v err=%v", result, fieldErrors, err)
+	}
+	raw, _ = os.ReadFile(path)
+	if !strings.Contains(string(raw), "legacy@example.org") {
+		t.Fatal("hidden legacy email exclusion was not preserved")
+	}
+}
+
+func TestSaveConfigCreatesAndUpdatesWithBackup(t *testing.T) {
+	root := t.TempDir()
+	now := func() time.Time { return time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC) }
+	view := ReadConfigEditor(root)
+	request := validConfigSaveRequest(t, view)
+	request.Secrets["ApiKey"] = SecretChange{Action: "replace", Value: "fictional-api-key"}
+	request.Secrets["SmtpPassword"] = SecretChange{Action: "replace", Value: "fictional-smtp-password"}
+
+	created, fieldErrors, err := SaveConfig(root, request, now)
+	if err != nil || len(fieldErrors) != 0 {
+		t.Fatalf("create config: result=%+v fields=%v err=%v", created, fieldErrors, err)
+	}
+	if !created.Saved || created.Backup != "" || !created.Editor.Exists || !created.Editor.Valid {
+		t.Fatalf("unexpected create result: %+v", created)
+	}
+	encodedResult, err := json.Marshal(created)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encodedResult), "fictional-api-key") || strings.Contains(string(encodedResult), "fictional-smtp-password") {
+		t.Fatal("save response returned a submitted secret")
+	}
+
+	raw, err := os.ReadFile(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "fictional-api-key") || !strings.Contains(string(raw), "fictional-smtp-password") {
+		t.Fatal("saved configuration did not contain the submitted credentials")
+	}
+
+	update := validConfigSaveRequest(t, created.Editor)
+	update.Secrets["ApiKey"] = SecretChange{Action: "preserve"}
+	update.Secrets["SmtpPassword"] = SecretChange{Action: "preserve"}
+	update.Values["FooterServerName"] = json.RawMessage(`"Fictional Home"`)
+	updated, fieldErrors, err := SaveConfig(root, update, now)
+	if err != nil || len(fieldErrors) != 0 {
+		t.Fatalf("update config: result=%+v fields=%v err=%v", updated, fieldErrors, err)
+	}
+	if updated.Backup == "" {
+		t.Fatal("updating an existing configuration did not create a backup")
+	}
+	if _, err := os.Stat(filepath.Join(root, updated.Backup)); err != nil {
+		t.Fatalf("configuration backup is unavailable: %v", err)
+	}
+	raw, err = os.ReadFile(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"fictional-api-key", "fictional-smtp-password", "Fictional Home"} {
+		if !strings.Contains(string(raw), expected) {
+			t.Fatalf("updated configuration did not preserve %q", expected)
+		}
+	}
+}
+
+func TestSaveConfigValidationAndRevisionConflict(t *testing.T) {
+	root := t.TempDir()
+	view := ReadConfigEditor(root)
+	request := validConfigSaveRequest(t, view)
+	request.Secrets["ApiKey"] = SecretChange{Action: "clear"}
+	request.Secrets["SmtpPassword"] = SecretChange{Action: "replace", Value: "fictional-password"}
+	request.Values["SmtpPort"] = json.RawMessage(`465`)
+	_, fieldErrors, err := SaveConfig(root, request, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fieldErrors["ApiKey"] == "" || fieldErrors["SmtpPort"] == "" {
+		t.Fatalf("expected API key and SMTP port errors, got %v", fieldErrors)
+	}
+
+	request = validConfigSaveRequest(t, view)
+	request.ExpectedRevision = "stale"
+	_, _, err = SaveConfig(root, request, time.Now)
+	if !errors.Is(err, ErrConfigConflict) {
+		t.Fatalf("stale revision error: got %v", err)
+	}
+}
+
+func TestSaveConfigRejectsSMTPURLInsteadOfReportingUnsafeDNS(t *testing.T) {
+	definition := configDefinition{Name: "SmtpHost", Type: "text", Required: true}
+	_, message := parseAndValidateConfigValue(json.RawMessage(`"smtp://smtp.gmail.com:587"`), definition)
+	if !strings.Contains(message, "hostname only") {
+		t.Fatalf("SMTP URL validation message: %q", message)
+	}
+}
+
+func validConfigSaveRequest(t *testing.T, view ConfigEditorView) ConfigSaveRequest {
+	t.Helper()
+	request := ConfigSaveRequest{ExpectedRevision: view.Revision, Values: map[string]json.RawMessage{}, Secrets: map[string]SecretChange{}}
+	for _, field := range view.Fields {
+		if field.Type == "secret" {
+			request.Secrets[field.Name] = SecretChange{Action: "preserve"}
+			continue
+		}
+		value := field.Value
+		switch field.Name {
+		case "FromEmail", "ReplyToEmail":
+			value = "newsletter@example.org"
+		case "TestEmail":
+			value = "admin@example.org"
+		case "SmtpHost":
+			value = "smtp.example.test"
+		case "SmtpUsername":
+			value = "newsletter@example.org"
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Values[field.Name] = encoded
+	}
+	return request
+}
+
+func editorField(t *testing.T, view ConfigEditorView, name string) ConfigEditorField {
+	t.Helper()
+	for _, field := range view.Fields {
+		if field.Name == name {
+			return field
+		}
+	}
+	t.Fatalf("editor field %s not found", name)
+	return ConfigEditorField{}
+}

@@ -13,6 +13,15 @@ function Assert-True([bool]$Condition, [string]$Message) {
 }
 
 function Get-Sha256([string]$Path) {
+    if ([IO.Path]::GetFileName($Path) -ceq 'build-assets.py') {
+        $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($Path)).Replace("`r`n", "`n")
+        $algorithm = [Security.Cryptography.SHA256]::Create()
+        try {
+            $digest = $algorithm.ComputeHash([Text.Encoding]::UTF8.GetBytes($text))
+            return (($digest | ForEach-Object { $_.ToString('x2') }) -join '')
+        }
+        finally { $algorithm.Dispose() }
+    }
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
@@ -143,6 +152,12 @@ $copies = [ordered]@{
     'docs/assets/branding/tautweekly-app-icon-512.png' = 'tautweekly-app-icon-512.png'
     'docs/assets/branding/tautweekly-app-icon-1024.png' = 'tautweekly-app-icon-1024.png'
     'platforms/windows/TautWeekly.ico' = 'tautweekly.ico'
+    'installer/assets/tautweekly.ico' = 'tautweekly.ico'
+    'manager/internal/manager/web/favicon.ico' = 'favicon.ico'
+    'manager/internal/manager/web/tautweekly-icon-180.png' = 'tautweekly-app-icon-180.png'
+    'manager/internal/manager/web/tautweekly-icon-192.png' = 'tautweekly-app-icon-192.png'
+    'manager/internal/manager/web/tautweekly-logo.png' = 'tautweekly-app-icon-256.png'
+    'manager/internal/manager/web/tautweekly-icon-512.png' = 'tautweekly-app-icon-512.png'
     'platforms/nas-docker/app/product-branding/favicon.ico' = 'favicon.ico'
     'platforms/nas-docker/app/product-branding/tautweekly-app-icon-128.png' = 'tautweekly-app-icon-128.png'
     'platforms/mac-docker/app/product-branding/favicon.ico' = 'favicon.ico'
@@ -153,7 +168,7 @@ foreach ($copy in $copies.GetEnumerator()) {
     Assert-True (Test-Path -LiteralPath $copyPath -PathType Leaf) "Integrated brand copy is missing: $($copy.Key)"
     Assert-True ((Get-Sha256 $copyPath) -ceq $expectedHashes[$copy.Value]) "Integrated brand copy changed bytes: $($copy.Key)"
 }
-Write-Host '[PASS] Documentation, Windows, NAS/container, and macOS package copies preserve the exact raster bytes.'
+Write-Host '[PASS] Documentation, Manager, installer, Windows, NAS/container, and macOS package copies preserve the exact raster bytes.'
 
 $expectedPlatformHashes = [ordered]@{
     'apple.svg'              = '0c4c6587bb4abedf2a01fe715d626d0807d27527bcfe302cc5bab570dfeda4c6'

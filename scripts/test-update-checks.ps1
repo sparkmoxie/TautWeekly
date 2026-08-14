@@ -44,6 +44,12 @@ function New-TestRelease([string]$Version, [string]$Marker) {
     Copy-Item -LiteralPath $updater -Destination (Join-Path $packageRoot 'Windows-Update.ps1')
     Copy-Item -LiteralPath $lockHelper -Destination (Join-Path $packageRoot 'Operation-Lock.ps1')
     [IO.File]::WriteAllText((Join-Path $packageRoot 'TautWeekly.ps1'), "Set-StrictMode -Version Latest`n# $Marker`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $packageRoot 'SCHEDULE-HELPER.ps1'), "Set-StrictMode -Version Latest`n# fictional update fixture`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $packageRoot 'START-MANAGER.ps1'), "Set-StrictMode -Version Latest`n# fictional update fixture`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $packageRoot 'RESET-MANAGER-ACCESS.ps1'), "Set-StrictMode -Version Latest`n# fictional update fixture`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $packageRoot '00-OPEN-MANAGER.bat'), "@echo off`r`nrem fictional update fixture`r`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $packageRoot '18-RESET-MANAGER-ACCESS.bat'), "@echo off`r`nrem fictional update fixture`r`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllBytes((Join-Path $packageRoot 'tautweekly-manager.exe'), [byte[]](0x4d, 0x5a, 0x00, 0x00))
     [IO.File]::WriteAllText((Join-Path $packageRoot 'README.md'), "Test release $Version`n", [Text.UTF8Encoding]::new($false))
     Write-ReleaseMetadata -Path (Join-Path $packageRoot 'RELEASE-METADATA.txt') -Version $Version
     Write-ReleaseManifest -PackageRoot $packageRoot
@@ -62,6 +68,12 @@ function New-TestRelease([string]$Version, [string]$Marker) {
 
 try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
+    $updaterSource = Get-Content -LiteralPath $updater -Raw -Encoding UTF8
+    Assert-True ($updaterSource -match 'Test-OwnedNewsletterTask') 'Windows updater does not verify scheduled-task ownership.'
+    Assert-True ($updaterSource -match 'It was left untouched') 'Windows updater does not fail closed for a same-named unowned task.'
+    foreach ($privateName in @('last-run.json', 'scheduler-heartbeat.json', 'service-heartbeat.json', 'config.backup.*.json')) {
+        Assert-True ($updaterSource.Contains($privateName)) "Windows updater private-path guard is missing $privateName."
+    }
     Write-ReleaseMetadata -Path $metadata -Version '0.5.4'
 
     $currentOutput = (& $checker -MetadataPath $metadata -LatestVersion 'v0.5.4' | Out-String)
@@ -76,14 +88,17 @@ try {
     Assert-True ($newerOutput -match "newer than GitHub's latest stable release; no update is offered") 'Windows stable-release checker offered a downgrade for a newer installed package.'
 
     $installRoot = Join-Path $testRoot 'installed'
-    New-Item -ItemType Directory -Path $installRoot, (Join-Path $installRoot 'logs'), (Join-Path $installRoot 'output'), (Join-Path $installRoot 'cache/deleted-items/artwork'), (Join-Path $installRoot 'assets') | Out-Null
+    New-Item -ItemType Directory -Path $installRoot, (Join-Path $installRoot 'logs'), (Join-Path $installRoot 'output'), (Join-Path $installRoot 'cache/deleted-items/artwork'), (Join-Path $installRoot 'assets'), (Join-Path $installRoot '.manager-data') | Out-Null
     $taskName = 'TautWeekly updater test ' + [Guid]::NewGuid().ToString('N')
     [IO.File]::WriteAllText((Join-Path $installRoot 'config.json'), ('{"ScheduledTaskName":"' + $taskName + '","secret":"preserve"}'), [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'state.json'), '{"state":"preserve"}', [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $installRoot 'last-run.json'), '{"delivery":"preserve"}', [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $installRoot 'config.backup.20260814.json'), '{"backup":"preserve"}', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'logs/private.log'), 'private log', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'output/private.html'), 'private output', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'cache/deleted-items/artwork/private.jpg'), 'private cached poster', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'assets/custom.gif'), 'custom asset', [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $installRoot '.manager-data/auth.json'), '{"private":"manager-pairing-state"}', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'TautWeekly.ps1'), "# old engine`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'deprecated-owned.txt'), "remove me`n", [Text.UTF8Encoding]::new($false))
     Write-ReleaseMetadata -Path (Join-Path $installRoot 'RELEASE-METADATA.txt') -Version '0.5.4'
@@ -109,10 +124,13 @@ try {
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'TautWeekly.ps1') -Raw) -match 'new engine 0\.5\.6') 'Verified update did not replace a release-owned file.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $installRoot 'deprecated-owned.txt'))) 'Verified update did not remove an unchanged deprecated release-owned file.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'config.json') -Raw) -match 'preserve') 'Verified update changed private configuration.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'last-run.json') -Raw) -match 'preserve') 'Verified update changed private delivery history.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'config.backup.20260814.json') -Raw) -match 'preserve') 'Verified update changed a private configuration backup.'
     Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'logs/private.log')) 'Verified update removed private logs.'
     Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'output/private.html')) 'Verified update removed private output.'
     Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'cache/deleted-items/artwork/private.jpg')) 'Verified update removed the private deleted-item cache.'
     Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'assets/custom.gif')) 'Verified update removed a custom-named asset.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot '.manager-data/auth.json') -Raw) -match 'manager-pairing-state') 'Verified update changed private Manager pairing state.'
     $backups = @(Get-ChildItem -LiteralPath $testRoot -Directory -Filter 'installed.backup-v0.5.4-*')
     Assert-True ($backups.Count -eq 1) 'Verified update did not create one private sibling backup.'
     Assert-True (Test-Path -LiteralPath (Join-Path $backups[0].FullName 'deprecated-owned.txt')) 'Rollback backup did not preserve the previous owned files.'
@@ -129,6 +147,9 @@ try {
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'RELEASE-METADATA.txt') -Raw) -match 'Repository version: 0\.5\.6') 'Automatic rollback did not restore the previous version.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'TautWeekly.ps1') -Raw) -match 'new engine 0\.5\.6') 'Automatic rollback did not restore the previous engine.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'config.json') -Raw) -match 'preserve') 'Automatic rollback changed private configuration.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'last-run.json') -Raw) -match 'preserve') 'Automatic rollback changed private delivery history.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'config.backup.20260814.json') -Raw) -match 'preserve') 'Automatic rollback changed a private configuration backup.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot '.manager-data/auth.json') -Raw) -match 'manager-pairing-state') 'Automatic rollback changed private Manager pairing state.'
 
     . $lockHelper
     $heldLock = Enter-TautWeeklyOperationLock -Root $installRoot -Purpose 'test lock holder'
@@ -158,7 +179,7 @@ try {
     Assert-True $checksumRefused 'Windows updater accepted an archive with the wrong SHA-256 checksum.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'RELEASE-METADATA.txt') -Raw) -match 'Repository version: 0\.5\.6') 'Checksum rejection changed the installation.'
 
-    Write-Host '[PASS] Windows stable check, verified apply, operation lock, private-file preservation, deprecated-file cleanup, and rollback validated.' -ForegroundColor Green
+    Write-Host '[PASS] Windows stable check, verified apply, operation lock, newsletter/Manager private-state preservation, deprecated-file cleanup, and rollback validated.' -ForegroundColor Green
 }
 finally {
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }

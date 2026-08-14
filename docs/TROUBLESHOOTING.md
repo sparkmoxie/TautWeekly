@@ -142,7 +142,9 @@ Use only the files that exist in your platform distribution.
 - If the control and scheduler zones differ after an environment change,
   restart the native Linux service or recreate/restart the Docker or Podman
   container, then run status again.
-- Windows: run `09-VERIFY-SCHEDULE.bat` as administrator.
+- Windows: open Manager **Schedule** and review ownership, state, and the
+  upcoming run. Choose **Refresh** after changing the install path or schedule
+  settings. Use `09-VERIFY-SCHEDULE.bat` as the terminal recovery fallback.
 - Docker: run `./tautweekly.sh schedule-status` and inspect container logs.
 - Linux and FreeBSD: run `sudo tautweekly schedule-status`, then inspect the
   systemd journal or Podman logs respectively.

@@ -146,6 +146,22 @@ Require-Text 'platforms/windows/VERIFY-SETUP.ps1' @(
     'Refresh All Metadata',
     'Library > Media Info > Refresh media info'
 )
+foreach ($relative in @(
+    'platforms/windows/INSTALL-SCHEDULE.ps1',
+    'platforms/windows/REMOVE-SCHEDULE.ps1'
+)) {
+    Require-Text $relative @(
+        'Get-FileHash -LiteralPath \$configPath -Algorithm SHA256',
+        'SCHEDULE-HELPER\.ps1',
+        '-ExpectedRevision \$revision'
+    )
+    Forbid-Text $relative @('Unregister-ScheduledTask', 'Register-ScheduledTask')
+}
+Require-Text 'platforms/windows/VERIFY-SCHEDULE.ps1' @(
+    'Ownership:\s+Verified',
+    'not owned by this TautWeekly installation',
+    'Principal\.UserId -ieq ''SYSTEM'''
+)
 Require-Text 'platforms/mac-docker/app/Setup-First.ps1' @(
     'Metadata readiness before Verify, Preview, or TestEmail',
     'Refresh All Metadata',
@@ -381,8 +397,21 @@ Require-Text 'platforms/windows/Windows-Update.ps1' @(
     'backup-v',
     'restored automatically',
     'Assert-ManifestFiles',
-    'Assert-PowerShellSyntax'
+    'Assert-PowerShellSyntax',
+    'Get-InstalledManagerProcesses',
+    'Start-InstalledManager',
+    '\.manager-data'
 )
+Require-Text 'platforms/windows/START-MANAGER.ps1' @(
+    '127\.0\.0\.1:8788',
+    '\.manager-data',
+    'tautweekly-manager\.exe',
+    '--open-browser',
+    'WindowStyle Hidden'
+)
+Require-Text 'platforms/windows/00-OPEN-MANAGER.bat' @('START-MANAGER\.ps1', 'NoProfile', 'NonInteractive')
+Require-Text 'platforms/windows/RESET-MANAGER-ACCESS.ps1' @('access-reset', 'Manager access', 'START-MANAGER\.ps1')
+Require-Text 'platforms/windows/18-RESET-MANAGER-ACCESS.bat' @('RESET-MANAGER-ACCESS\.ps1', 'NoProfile')
 Require-Text 'platforms/windows/Operation-Lock.ps1' @(
     '\.tautweekly-operation\.lock',
     'FileShare\]::None',

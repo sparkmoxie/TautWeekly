@@ -1,0 +1,14 @@
+{
+  "FixtureOnly": true,
+  "TautulliUrl": "http://127.0.0.1:18181",
+  "ApiKey": "fictional-browser-qa-api-key",
+  "PlexServerUrl": "http://127.0.0.1:32499",
+  "PlexToken": "fictional-browser-qa-plex-token",
+  "FromEmail": "newsletter@example.org",
+  "ReplyToEmail": "newsletter@example.org",
+  "TestEmail": "admin@example.org",
+  "SmtpHost": "smtp.fixture.invalid",
+  "SmtpUseAuthentication": true,
+  "SmtpUsername": "newsletter@example.org",
+  "SmtpPassword": "fictional-browser-qa-smtp-password"
+}

@@ -197,19 +197,18 @@ foreach ($batFile in $windowsBatFiles) {
         throw "Windows BAT command center is missing launcher: $($batFile.Name)"
     }
 }
-$numberedWindowsBatCount = @($windowsBatFiles | Where-Object Name -match '^\d{2}-').Count
-$escapedWindowsBatMetric = [regex]::Escape("<b>$numberedWindowsBatCount</b><span>numbered BAT launchers</span>")
-if ($windowsQuickstart -notmatch $escapedWindowsBatMetric) {
-    throw "Windows Quickstart launcher metric does not match the $numberedWindowsBatCount numbered BAT files."
-}
 foreach ($pattern in @(
-    'Apply this stable update safely',
+    'TautWeekly-Setup\.exe',
+    'authoritative Setup EXE',
+    'Windows Manager',
+    'Validate, save, and verify',
+    'choose the exact old portable folder for <strong>Migrate</strong>',
     'SHA256SUMS',
     'automatic rollback',
     'No periodic update task'
 )) {
     if ($windowsQuickstart -notmatch $pattern) {
-        throw "Windows Quickstart is missing safe-update guidance: $pattern"
+        throw "Windows Quickstart is missing Manager/Setup source-of-truth guidance: $pattern"
     }
 }
 

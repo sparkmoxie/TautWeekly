@@ -48,8 +48,8 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('function Test-PlexHostedMetadataExactMatch')) "$PackageName lacks fail-closed hosted match validation."
     Assert-True ($Renderer.Contains('-Method Post')) "$PackageName lacks the provider-contract POST retry for empty exact-ID matches."
     Assert-True ($Renderer.Contains('matching hints only: require an exact modern GUID')) "$PackageName does not document the exact-identifier hosted POST boundary."
-    Assert-True ($Renderer.Contains('"User-Agent"      = "TautWeekly-for-Plex/0.10.4"')) "$PackageName does not identify the tokenless public Plex rating fallback."
-    Assert-True ($Renderer.Contains('"X-Plex-Version"           = "0.10.4"')) "$PackageName does not identify the authenticated hosted metadata fallback."
+    Assert-True ($Renderer.Contains('"User-Agent"      = "TautWeekly-for-Plex/0.11.0"')) "$PackageName does not identify the tokenless public Plex rating fallback."
+    Assert-True ($Renderer.Contains('"X-Plex-Version"           = "0.11.0"')) "$PackageName does not identify the authenticated hosted metadata fallback."
     Assert-True ($Renderer.Contains('native XML rating fallback failed')) "$PackageName lacks the native Plex XML rating fallback."
     Assert-True ($Renderer.Contains('function Get-DesignEpisodeRtRating')) "$PackageName lacks exact-episode Rotten Tomatoes fallback resolution."
     Assert-True ($Renderer.Contains('TV RT fallback:')) "$PackageName lacks sanitized exact-episode Rotten Tomatoes diagnostics."
@@ -119,6 +119,14 @@ $expected = [ordered]@{
         'TautWeekly-windows/Windows-Update.ps1',
         'TautWeekly-windows/Operation-Lock.ps1',
         'TautWeekly-windows/TautWeekly.ico',
+        'TautWeekly-windows/00-OPEN-MANAGER.bat',
+        'TautWeekly-windows/START-MANAGER.ps1',
+        'TautWeekly-windows/18-RESET-MANAGER-ACCESS.bat',
+        'TautWeekly-windows/RESET-MANAGER-ACCESS.ps1',
+        'TautWeekly-windows/SCHEDULE-HELPER.ps1',
+        'TautWeekly-windows/tautweekly-manager.exe',
+        'TautWeekly-windows/TautWeekly-Uninstall.exe',
+        'TautWeekly-windows/THIRD_PARTY_NOTICES.md',
         'TautWeekly-windows/RELEASE-FILES.txt',
         'TautWeekly-windows/RELEASE-METADATA.txt',
         'TautWeekly-windows/README.md'
@@ -226,11 +234,19 @@ $releaseVersions = New-Object System.Collections.Generic.List[string]
 
 $forbiddenNames = @(
     'config.json', '.env', 'state.json', 'access-state.json',
-    'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json'
+    'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json',
+    'configuration-status.json'
 )
 
 $zipArchives = @(Get-ChildItem -LiteralPath $DistPath -File -Filter '*.zip')
 Assert-True ($zipArchives.Count -eq 5) "Expected five ZIP release artifacts, found $($zipArchives.Count)."
+
+$installerPath = Join-Path $DistPath 'TautWeekly-Setup.exe'
+Assert-True (Test-Path -LiteralPath $installerPath -PathType Leaf) 'The one-click Windows installer is missing.'
+$installerBytes = [IO.File]::ReadAllBytes($installerPath)
+Assert-True ($installerBytes.Length -gt 2 -and $installerBytes[0] -eq 0x4d -and $installerBytes[1] -eq 0x5a) 'TautWeekly-Setup.exe is not a Windows PE executable.'
+Assert-True ($installerBytes.Length -gt (Get-Item -LiteralPath (Join-Path $DistPath 'TautWeekly-windows.zip')).Length) 'TautWeekly-Setup.exe does not appear to contain the portable Windows payload.'
+Write-Host "[PASS] Windows installer contract: TautWeekly-Setup.exe ($($installerBytes.Length) bytes)"
 
 foreach ($archiveName in $expected.Keys) {
     $archivePath = Join-Path $DistPath $archiveName
@@ -246,9 +262,38 @@ foreach ($archiveName in $expected.Keys) {
             Assert-True ($entryNames -ccontains $requiredEntry) "$archiveName is missing $requiredEntry"
         }
 
+        if ($archiveName -eq 'TautWeekly-windows.zip') {
+            $managerEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-windows/tautweekly-manager.exe' })
+            Assert-True ($managerEntry.Count -eq 1) 'Windows archive has no unique Manager executable.'
+            $managerStream = $managerEntry[0].Open()
+            try {
+                $signature = New-Object byte[] 2
+                Assert-True ($managerStream.Read($signature, 0, 2) -eq 2) 'Windows Manager executable is empty.'
+                Assert-True ($signature[0] -eq 0x4d -and $signature[1] -eq 0x5a) 'Windows Manager is not a PE executable.'
+            }
+            finally { $managerStream.Dispose() }
+
+            $uninstallerEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-windows/TautWeekly-Uninstall.exe' })
+            Assert-True ($uninstallerEntry.Count -eq 1) 'Windows archive has no unique release-owned uninstaller.'
+            $uninstallerStream = $uninstallerEntry[0].Open()
+            try {
+                $signature = New-Object byte[] 2
+                Assert-True ($uninstallerStream.Read($signature, 0, 2) -eq 2) 'Windows uninstaller executable is empty.'
+                Assert-True ($signature[0] -eq 0x4d -and $signature[1] -eq 0x5a) 'Windows uninstaller is not a PE executable.'
+            }
+            finally { $uninstallerStream.Dispose() }
+
+            $noticeEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-windows/THIRD_PARTY_NOTICES.md' })
+            Assert-True ($noticeEntry.Count -eq 1) 'Windows archive has no unique third-party notices file.'
+            $noticeReader = New-Object IO.StreamReader($noticeEntry[0].Open())
+            try { $noticeText = $noticeReader.ReadToEnd() }
+            finally { $noticeReader.Dispose() }
+            Assert-True ($noticeText -match 'Copyright 2009 The Go Authors') 'Windows archive omits the Go binary redistribution notice.'
+        }
+
         $forbidden = @($entryNames | Where-Object {
             $name = ($_ -split '/')[-1]
-            $name -in $forbiddenNames -or $_ -match '/(logs|output|cache)/'
+            $name -in $forbiddenNames -or $_ -match '/(logs|output|cache|\.manager-data)/'
         })
         Assert-True ($forbidden.Count -eq 0) "$archiveName contains runtime/private paths: $($forbidden -join ', ')"
 
@@ -452,7 +497,7 @@ $checksumPath = Join-Path $DistPath 'SHA256SUMS.txt'
 Assert-True (Test-Path -LiteralPath $checksumPath) 'SHA256SUMS.txt is missing.'
 $checksumLines = @(Get-Content -LiteralPath $checksumPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 $artifacts = @(Get-ChildItem -LiteralPath $DistPath -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' })
-Assert-True ($artifacts.Count -eq 9) "Expected nine release artifacts, found $($artifacts.Count)."
+Assert-True ($artifacts.Count -eq 10) "Expected ten release artifacts, found $($artifacts.Count)."
 Assert-True ($checksumLines.Count -eq $artifacts.Count) 'Checksum manifest does not cover every artifact exactly once.'
 foreach ($artifact in $artifacts) {
     $line = @($checksumLines | Where-Object { $_ -match ('\s\s' + [regex]::Escape($artifact.Name) + '$') })

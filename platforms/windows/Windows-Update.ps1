@@ -7,12 +7,16 @@ param(
     [string]$CandidateRoot,
 
     [Parameter(Mandatory = $true)]
-    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')]
+    [ValidatePattern('^[0-9A-Za-z][0-9A-Za-z._-]*$')]
     [string]$TargetVersion,
 
     [string]$ResultPath = '',
 
-    [switch]$SimulatePostInstallFailure
+    [string]$ManagerDataRoot = '',
+
+    [switch]$SimulatePostInstallFailure,
+
+    [switch]$InstallerTestMode
 )
 
 Set-StrictMode -Version Latest
@@ -35,11 +39,13 @@ $script:Result = [ordered]@{
 
 function Write-UpdateResult {
     if ([string]::IsNullOrWhiteSpace($ResultPath)) { return }
-    $resultParent = Split-Path -Parent ([IO.Path]::GetFullPath($ResultPath))
+    $resolvedResultPath = [IO.Path]::GetFullPath($ResultPath)
+    $resultParent = Split-Path -Parent $resolvedResultPath
     if (-not (Test-Path -LiteralPath $resultParent -PathType Container)) {
         New-Item -ItemType Directory -Path $resultParent -Force | Out-Null
     }
-    $script:Result | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
+    $json = $script:Result | ConvertTo-Json -Depth 4
+    [IO.File]::WriteAllText($resolvedResultPath, $json, [Text.UTF8Encoding]::new($false))
 }
 
 function Get-SafeRelativePath {
@@ -75,9 +81,13 @@ function Assert-PackageOwnedPath {
     $privateNames = @(
         'config.json', '.env', 'state.json', 'access-state.json',
         'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json',
+        'configuration-status.json', 'last-run.json', 'deleted-item-cache.json',
         '.tautweekly-operation.lock'
     )
-    if ($leaf -in $privateNames -or $segments -contains 'logs' -or $segments -contains 'output' -or $segments -contains 'cache') {
+    if ($leaf -in $privateNames -or $leaf -like 'config.backup.*.json' -or
+        $leaf -like '*.log' -or $leaf -like '*.log.*' -or
+        $segments -contains 'logs' -or $segments -contains 'output' -or
+        $segments -contains 'cache' -or $segments -contains '.manager-data') {
         throw "Release manifest attempts to own private runtime material: $RelativePath"
     }
 }
@@ -117,7 +127,7 @@ function Get-RepositoryVersion {
     $metadataPath = Join-Path $Root 'RELEASE-METADATA.txt'
     if (-not (Test-Path -LiteralPath $metadataPath -PathType Leaf)) { return '' }
     $metadata = Get-Content -LiteralPath $metadataPath -Raw -Encoding UTF8
-    if ($metadata -match '(?m)^Repository version:\s*v?(?<version>[0-9]+\.[0-9]+\.[0-9]+)\s*$') {
+    if ($metadata -match '(?m)^Repository version:\s*v?(?<version>[0-9A-Za-z][0-9A-Za-z._-]*)\s*$') {
         return $Matches['version']
     }
     return ''
@@ -184,6 +194,34 @@ function Copy-DirectorySnapshot {
     }
 }
 
+function Get-ExpectedTaskArguments {
+    param([string]$EnginePath, [string]$ResultPath)
+    return ('-NoProfile -ExecutionPolicy Bypass -File "{0}" -Mode SendAll -ResultPath "{1}" -ConfirmSendAll' -f $EnginePath, $ResultPath)
+}
+
+function Test-OwnedNewsletterTask {
+    param(
+        [Parameter(Mandatory = $true)]$Task,
+        [Parameter(Mandatory = $true)][string]$Root
+    )
+
+    $actions = @($Task.Actions)
+    if ($actions.Count -ne 1) { return $false }
+    $taskAction = $actions[0]
+    $enginePath = Join-Path $Root 'TautWeekly.ps1'
+    $resultPath = Join-Path $Root 'last-run.json'
+    $expectedArguments = Get-ExpectedTaskArguments -EnginePath $enginePath -ResultPath $resultPath
+    if ([IO.Path]::GetFileName([string]$taskAction.Execute) -ine 'powershell.exe') { return $false }
+    if ([string]$taskAction.Arguments -ine $expectedArguments) { return $false }
+    try {
+        $workingDirectory = [IO.Path]::GetFullPath([string]$taskAction.WorkingDirectory).TrimEnd('\')
+        $expectedRoot = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+        if ($workingDirectory -ine $expectedRoot) { return $false }
+    }
+    catch { return $false }
+    return [string]$Task.Principal.UserId -ieq 'SYSTEM'
+}
+
 function Get-ScheduledNewsletterTask {
     if ($null -eq (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue)) { return $null }
     $configPath = Join-Path $InstallRoot 'config.json'
@@ -202,7 +240,12 @@ function Get-ScheduledNewsletterTask {
     if ($tasks.Count -gt 1) {
         throw "More than one scheduled task is named '$taskName'; resolve the duplicate before updating."
     }
-    if ($tasks.Count -eq 1) { return $tasks[0] }
+    if ($tasks.Count -eq 1) {
+        if (-not (Test-OwnedNewsletterTask -Task $tasks[0] -Root $InstallRoot)) {
+            throw "A scheduled task named '$taskName' exists but is not owned by this TautWeekly installation. It was left untouched."
+        }
+        return $tasks[0]
+    }
     return $null
 }
 
@@ -217,6 +260,57 @@ function Set-NewsletterTaskEnabled {
     else {
         Disable-ScheduledTask -InputObject $Task | Out-Null
     }
+}
+
+function Get-InstalledManagerProcesses {
+    $managerPath = Join-Path $InstallRoot 'tautweekly-manager.exe'
+    if (-not (Test-Path -LiteralPath $managerPath -PathType Leaf)) { return @() }
+    $expected = [IO.Path]::GetFullPath($managerPath)
+    return @(Get-Process -Name 'tautweekly-manager' -ErrorAction SilentlyContinue | Where-Object {
+        try { [IO.Path]::GetFullPath([string]$_.Path) -ieq $expected }
+        catch { $false }
+    })
+}
+
+function Start-InstalledManager {
+    $managerPath = Join-Path $InstallRoot 'tautweekly-manager.exe'
+    if (-not (Test-Path -LiteralPath $managerPath -PathType Leaf)) {
+        throw 'The packaged Manager executable is unavailable after the update.'
+    }
+    $dataRoot = if ([string]::IsNullOrWhiteSpace($ManagerDataRoot)) { Join-Path $InstallRoot '.manager-data' } else { [IO.Path]::GetFullPath($ManagerDataRoot) }
+    if ([string]::IsNullOrWhiteSpace($ManagerDataRoot)) {
+        $installMetadata = Join-Path $InstallRoot 'INSTALL-METADATA.txt'
+        if (Test-Path -LiteralPath $installMetadata -PathType Leaf) {
+            $dataLine = Get-Content -LiteralPath $installMetadata | Where-Object { $_ -match '^DataDirectory=(?<path>.+)$' } | Select-Object -First 1
+            if ($null -ne $dataLine -and $dataLine -match '^DataDirectory=(?<path>.+)$') {
+                $candidateDataRoot = [IO.Path]::GetFullPath([string]$Matches['path'])
+                if ($candidateDataRoot -eq [IO.Path]::GetFullPath($InstallRoot)) {
+                    throw 'Installer metadata contains an unsafe Manager data directory.'
+                }
+                $dataRoot = $candidateDataRoot
+            }
+        }
+    }
+    if (-not (Test-Path -LiteralPath $dataRoot -PathType Container)) {
+        New-Item -ItemType Directory -Path $dataRoot | Out-Null
+    }
+    $arguments = 'serve --listen=127.0.0.1:8788 --tautweekly-root="{0}" --data-dir="{1}" --open-browser' -f $InstallRoot, $dataRoot
+    $process = Start-Process -FilePath $managerPath -ArgumentList $arguments -WorkingDirectory $InstallRoot -WindowStyle Hidden -PassThru
+    $deadline = (Get-Date).AddSeconds(10)
+    do {
+        Start-Sleep -Milliseconds 200
+        if ($process.HasExited) {
+            throw "The packaged Manager stopped during restart with exit code $($process.ExitCode)."
+        }
+        try {
+            $health = Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/health/live' -TimeoutSec 2
+            $setup = Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/api/v1/setup' -TimeoutSec 2
+            if ([string]$health.status -eq 'alive' -and $null -ne $setup.PSObject.Properties['paired']) { return }
+        }
+        catch { }
+    } while ((Get-Date) -lt $deadline)
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    throw 'The packaged Manager did not become ready after the update.'
 }
 
 function Remove-OwnedFiles {
@@ -260,9 +354,25 @@ if (-not (Test-Path -LiteralPath $CandidateRoot -PathType Container)) {
 if ($CandidateRoot.StartsWith($InstallRoot.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
     throw 'The staged update must be outside the live installation directory.'
 }
+if ($InstallerTestMode) {
+    $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $installUnderTemporaryRoot = $InstallRoot.StartsWith($temporaryRoot, [StringComparison]::OrdinalIgnoreCase)
+    $candidateUnderTemporaryRoot = $CandidateRoot.StartsWith($temporaryRoot, [StringComparison]::OrdinalIgnoreCase)
+    $testSegment = [IO.Path]::DirectorySeparatorChar + 'tautweekly-installer-test-'
+    if (-not $installUnderTemporaryRoot -or -not $candidateUnderTemporaryRoot -or
+        $InstallRoot.IndexOf($testSegment, [StringComparison]::OrdinalIgnoreCase) -lt 0 -or
+        $CandidateRoot.IndexOf($testSegment, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        throw 'Installer test mode is restricted to an isolated TautWeekly installer test directory.'
+    }
+}
 
 $candidateManifest = Read-ReleaseManifest -Root $CandidateRoot
-$requiredFiles = @('TautWeekly.ps1', 'Check-Update.ps1', 'Windows-Update.ps1', 'Operation-Lock.ps1', 'RELEASE-METADATA.txt')
+$requiredFiles = @(
+    'TautWeekly.ps1', 'Check-Update.ps1', 'Windows-Update.ps1',
+    'Operation-Lock.ps1', 'SCHEDULE-HELPER.ps1',
+    '00-OPEN-MANAGER.bat', 'START-MANAGER.ps1', '18-RESET-MANAGER-ACCESS.bat', 'RESET-MANAGER-ACCESS.ps1',
+    'tautweekly-manager.exe', 'RELEASE-METADATA.txt'
+)
 foreach ($required in $requiredFiles) {
     if (-not $candidateManifest.Contains($required.ToLowerInvariant())) {
         throw "Staged update manifest is missing required file: $required"
@@ -282,11 +392,26 @@ $backupRoot = ''
 $oldManifest = $null
 $mutationStarted = $false
 $rollbackSucceeded = $false
+$managerWasRunning = $false
+$managerRestarted = $false
 
 try {
     $operationLock = Enter-TautWeeklyOperationLock -Root $InstallRoot -Purpose "update to $TargetVersion"
 
-    $task = Get-ScheduledNewsletterTask
+    $managerProcesses = @(Get-InstalledManagerProcesses)
+    if ($managerProcesses.Count -gt 0) {
+        $managerWasRunning = $true
+        foreach ($managerProcess in $managerProcesses) {
+            Stop-Process -Id $managerProcess.Id -Force
+        }
+        foreach ($managerProcess in $managerProcesses) {
+            if (-not $managerProcess.WaitForExit(10000)) {
+                throw 'The exact packaged Manager process did not stop for the update.'
+            }
+        }
+    }
+
+    $task = if ($InstallerTestMode) { $null } else { Get-ScheduledNewsletterTask }
     if ($null -ne $task) {
         if ([string]$task.State -eq 'Running') {
             throw 'The TautWeekly scheduled task is running. Wait for the send to finish before updating.'
@@ -342,16 +467,22 @@ try {
         $taskDisabledByUpdater = $false
     }
 
+    if ($managerWasRunning) {
+        Start-InstalledManager
+        $managerRestarted = $true
+    }
+
     $script:Result.Status = 'success'
     $script:Result.Message = "Updated safely to $TargetVersion."
     Write-UpdateResult
     Write-Host "TautWeekly updated safely to $TargetVersion." -ForegroundColor Green
     Write-Host "Private rollback backup: $backupRoot"
     Write-Host 'If this update addresses missing ratings/artwork or results still appear stale, complete metadata readiness before testing: confirm the Plex Movie Ratings Source; run Plex Refresh All Metadata for each included movie/TV library; then run Tautulli Library > Media Info > Refresh media info for each same library.'
-    Write-Host 'Run 01-VERIFY-SETUP.bat and a controlled preview/TestEmail check before the next production send.'
+    Write-Host 'Open TautWeekly Manager, run Validate, save, and verify, inspect the generated previews, and complete a controlled TestEmail check before the next production send.'
 }
 catch {
     $failure = $_
+    $managerRestartFailure = ''
     if ($mutationStarted -and -not [string]::IsNullOrWhiteSpace($backupRoot) -and (Test-Path -LiteralPath $backupRoot -PathType Container)) {
         try {
             $pathsToRemove = @($candidateManifest.Values | ForEach-Object { $_.RelativePath })
@@ -380,6 +511,16 @@ catch {
         }
     }
 
+    if ($managerWasRunning -and -not $managerRestarted) {
+        try {
+            Start-InstalledManager
+            $managerRestarted = $true
+        }
+        catch {
+            $managerRestartFailure = " The packaged Manager could not be restarted: $($_.Exception.Message)"
+        }
+    }
+
     if ([string]::IsNullOrWhiteSpace($script:Result.Message)) {
         if ($rollbackSucceeded) {
             $script:Result.Message = "Update failed; the previous installation was restored automatically: $($failure.Exception.Message)"
@@ -387,6 +528,9 @@ catch {
         else {
             $script:Result.Message = "Update stopped before completion: $($failure.Exception.Message)"
         }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($managerRestartFailure)) {
+        $script:Result.Message += $managerRestartFailure
     }
     Write-UpdateResult
     throw $script:Result.Message

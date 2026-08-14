@@ -30,6 +30,11 @@ $required = @(
     'platforms/windows/Check-Update.ps1',
     'platforms/windows/Windows-Update.ps1',
     'platforms/windows/Operation-Lock.ps1',
+    'platforms/windows/SCHEDULE-HELPER.ps1',
+    'platforms/windows/START-MANAGER.ps1',
+    'platforms/windows/00-OPEN-MANAGER.bat',
+    'platforms/windows/RESET-MANAGER-ACCESS.ps1',
+    'platforms/windows/18-RESET-MANAGER-ACCESS.bat',
     'platforms/windows/17-CHECK-FOR-UPDATE.bat',
     'platforms/nas-docker/compose.yaml',
     'platforms/nas-docker/compose.qnap.yaml',
@@ -71,11 +76,18 @@ $required = @(
     'assets/platforms/README.md', 'assets/platforms/ASSET-SHA256SUMS.txt',
     'docs/favicon.ico', 'docs/site.webmanifest',
     'platforms/windows/TautWeekly.ico',
+    'docs/WEBGUI-IMPLEMENTATION.md',
+    'manager/go.mod', 'manager/cmd/tautweekly-manager/main.go',
+    'manager/internal/manager/server.go', 'manager/internal/manager/web/index.html',
+    'installer/go.mod', 'installer/assets/tautweekly.ico',
+    'installer/cmd/tautweekly-setup/main.go', 'installer/cmd/tautweekly-setup/rsrc_windows_amd64.syso',
     'scripts/build-releases.ps1', 'scripts/validate-branding.ps1', 'scripts/validate-platforms.ps1',
     'scripts/test-container-health.sh',
     'scripts/test-deleted-item-cache.ps1',
     'scripts/test-release-reproducibility.ps1',
+    'scripts/test-windows-installer.ps1',
     'scripts/test-scheduler-timezone.ps1',
+    'scripts/test-manager-accessibility.py',
     'scripts/test-smtp-transport.py',
     'scripts/test-support/fake-smtp.py',
     'scripts/test-support/fake-tautulli.py',
@@ -134,27 +146,29 @@ if (-not ($failures | Where-Object { $_ -like '*contributor*' -or $_ -like '*Con
 
 $forbiddenNames = @(
     'config.json', '.env', 'state.json', 'access-state.json',
-    'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json'
+    'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json',
+    'configuration-status.json', 'last-run.json', 'deleted-item-cache.json',
+    '.tautweekly-operation.lock'
 )
-$forbiddenDirectories = @('logs', 'output', 'cache', '__pycache__')
+$forbiddenDirectories = @('logs', 'output', 'cache', '.manager-data', '__pycache__')
 
 $items = Get-ChildItem -LiteralPath $Root -Force -Recurse |
     Where-Object { $_.FullName -notmatch '[\\/]\.git(?:[\\/]|$)' }
 
 foreach ($item in $items) {
     $relative = $item.FullName.Substring($Root.Length).TrimStart('\','/')
-    if (-not $item.PSIsContainer -and $item.Name -in $forbiddenNames) {
+    if (-not $item.PSIsContainer -and ($item.Name -in $forbiddenNames -or $item.Name -like 'config.backup.*.json')) {
         Add-Failure "Forbidden runtime file is present: $relative"
     }
     if ($item.PSIsContainer -and $item.Name -in $forbiddenDirectories) {
         Add-Failure "Forbidden runtime directory is present: $relative"
     }
-    if (-not $item.PSIsContainer -and $item.Extension -in @('.log', '.pfx', '.pem', '.key')) {
+    if (-not $item.PSIsContainer -and ($item.Name -like '*.log' -or $item.Name -like '*.log.*' -or $item.Extension -in @('.pfx', '.pem', '.key'))) {
         Add-Failure "Forbidden credential/log file is present: $relative"
     }
 }
 if (-not ($items | Where-Object {
-    (-not $_.PSIsContainer -and ($_.Name -in $forbiddenNames -or $_.Extension -in @('.log','.pfx','.pem','.key'))) -or
+    (-not $_.PSIsContainer -and ($_.Name -in $forbiddenNames -or $_.Name -like 'config.backup.*.json' -or $_.Name -like '*.log' -or $_.Name -like '*.log.*' -or $_.Extension -in @('.pfx','.pem','.key'))) -or
     ($_.PSIsContainer -and $_.Name -in $forbiddenDirectories)
 })) { Add-Pass "No forbidden runtime or credential files are present." }
 

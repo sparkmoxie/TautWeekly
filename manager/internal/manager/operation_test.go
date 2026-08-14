@@ -1,0 +1,423 @@
+package manager
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+type fixturePreviewRunner struct {
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+	mu      sync.Mutex
+	userID  string
+	runs    int
+}
+
+func (r *fixturePreviewRunner) RunPreviewAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error) {
+	if _, err := os.Stat(configPath); err != nil {
+		return 11, err
+	}
+	r.mu.Lock()
+	r.userID = userID
+	r.runs++
+	r.mu.Unlock()
+	if r.started != nil {
+		r.once.Do(func() { close(r.started) })
+	}
+	if r.release != nil {
+		select {
+		case <-r.release:
+		case <-ctx.Done():
+			return -1, context.Canceled
+		}
+	}
+	output := filepath.Join(root, "output")
+	if err := os.MkdirAll(output, 0o700); err != nil {
+		return 12, err
+	}
+	files := []string{
+		"preview-all-00-INDEX.html",
+		"preview-all-01-manual-welcome.html",
+		"preview-all-02-new-user-no-history.html",
+		"preview-all-03-new-user-with-history.html",
+		"preview-all-04-normal-newsletter.html",
+		"preview-all-05-established-quiet.html",
+		"preview-all-06-established-warmup.html",
+	}
+	for _, name := range files {
+		if err := os.WriteFile(filepath.Join(output, name), []byte("<!doctype html><title>Fictional preview</title>"), 0o600); err != nil {
+			return 13, err
+		}
+	}
+	started := time.Now().UTC().Add(-time.Second)
+	result := rendererResult{
+		SchemaVersion:         1,
+		Mode:                  "PreviewAll",
+		Outcome:               "succeeded",
+		DeliveryScope:         "none",
+		StartedAtUTC:          started.Format(time.RFC3339Nano),
+		FinishedAtUTC:         started.Add(time.Second).Format(time.RFC3339Nano),
+		DurationMS:            1000,
+		GeneratedPreviewFiles: files,
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return 14, err
+	}
+	if err := os.WriteFile(resultPath, encoded, 0o600); err != nil {
+		return 15, err
+	}
+	return 0, nil
+}
+
+func (r *fixturePreviewRunner) RunSendTestAll(ctx context.Context, _, configPath, resultPath, userID string) (int, error) {
+	if _, err := os.Stat(configPath); err != nil {
+		return 31, err
+	}
+	r.mu.Lock()
+	r.userID = userID
+	r.runs++
+	r.mu.Unlock()
+	if r.started != nil {
+		r.once.Do(func() { close(r.started) })
+	}
+	if r.release != nil {
+		select {
+		case <-r.release:
+		case <-ctx.Done():
+			return -1, context.Canceled
+		}
+	}
+	started := time.Now().UTC().Add(-time.Second)
+	result := rendererResult{
+		SchemaVersion:         1,
+		Mode:                  "SendTestAll",
+		Outcome:               "succeeded",
+		DeliveryScope:         "test",
+		StartedAtUTC:          started.Format(time.RFC3339Nano),
+		FinishedAtUTC:         started.Add(time.Second).Format(time.RFC3339Nano),
+		DurationMS:            1000,
+		SMTPAcceptedCount:     6,
+		GeneratedPreviewFiles: []string{},
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return 32, err
+	}
+	if err := os.WriteFile(resultPath, encoded, 0o600); err != nil {
+		return 33, err
+	}
+	return 0, nil
+}
+
+func TestPreviewOperationCompletesWithSanitizedDurableHistory(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "operation-api-secret", "", "")
+	if err := os.MkdirAll(filepath.Join(root, "output"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "output", "preview-all-99-existing.html"), []byte("<!doctype html><title>Existing preview</title>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	data := t.TempDir()
+	runner := &fixturePreviewRunner{started: make(chan struct{})}
+	completedRevision := make(chan string, 1)
+	coordinator, err := newOperationCoordinator(Options{
+		DataDir:         data,
+		TautWeeklyRoot:  root,
+		Now:             time.Now,
+		operationRunner: runner,
+		operationCompleted: func(_ OperationRecord, revision string) {
+			completedRevision <- revision
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const privateUserID = "9876543210123456789"
+	view := ReadConfigEditor(root)
+	started, err := coordinator.Start(CreateOperationRequest{
+		Type:             "preview-all",
+		ExpectedRevision: view.Revision,
+		UserID:           privateUserID,
+		ConfirmNoSend:    true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.Type != "preview-all" || started.State != "queued" || !started.Cancellable {
+		t.Fatalf("unexpected start record: %+v", started)
+	}
+	finished := waitForOperationState(t, coordinator, "succeeded")
+	if finished.Outcome != "success" || finished.ExitCode == nil || *finished.ExitCode != 0 || finished.DurationMS != 1000 || len(finished.GeneratedPreviewIDs) != 7 {
+		t.Fatalf("unexpected completed record: %+v", finished)
+	}
+	select {
+	case revision := <-completedRevision:
+		if revision != view.Revision {
+			t.Fatalf("completion revision: got %q, want %q", revision, view.Revision)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("operation completion callback was not invoked")
+	}
+	history := coordinator.History()
+	if len(history.Operations) != 1 || history.Operations[0].ID != finished.ID {
+		t.Fatalf("unexpected history: %+v", history)
+	}
+	for _, name := range []string{"operation-current.json", "operation-history.jsonl"} {
+		raw, err := os.ReadFile(filepath.Join(data, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, forbidden := range []string{privateUserID, "operation-api-secret", "127.0.0.1", view.Revision} {
+			if strings.Contains(string(raw), forbidden) {
+				t.Fatalf("%s retained private value %q", name, forbidden)
+			}
+		}
+	}
+	matches, err := filepath.Glob(filepath.Join(data, "operation-*.config.json"))
+	if err != nil || len(matches) != 0 {
+		t.Fatalf("operation configuration snapshot was not removed: %v, %v", matches, err)
+	}
+	resultMatches, err := filepath.Glob(filepath.Join(data, "operation-*.result.json"))
+	if err != nil || len(resultMatches) != 0 {
+		t.Fatalf("operation renderer result was not removed: %v, %v", resultMatches, err)
+	}
+}
+
+func TestPreviewOperationCancellationAndBusyGuard(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	runner := &fixturePreviewRunner{started: make(chan struct{}), release: make(chan struct{})}
+	coordinator, err := newOperationCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Now: time.Now, operationRunner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	request := CreateOperationRequest{Type: "preview-all", ExpectedRevision: view.Revision, UserID: "42", ConfirmNoSend: true}
+	started, err := coordinator.Start(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-runner.started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("fixture operation did not start")
+	}
+	if _, err := coordinator.Start(request); !errors.Is(err, ErrOperationBusy) {
+		t.Fatalf("second operation error: got %v", err)
+	}
+	cancelling, err := coordinator.Cancel(started.ID)
+	if err != nil || cancelling.State != "cancelling" || cancelling.Cancellable {
+		t.Fatalf("cancel operation: record=%+v err=%v", cancelling, err)
+	}
+	finished := waitForOperationState(t, coordinator, "cancelled")
+	if finished.Outcome != "cancelled" || finished.ErrorCategory != "cancelled" {
+		t.Fatalf("unexpected cancelled record: %+v", finished)
+	}
+	if _, err := coordinator.Cancel(started.ID); !errors.Is(err, ErrOperationTerminal) {
+		t.Fatalf("terminal cancellation error: got %v", err)
+	}
+}
+
+func TestSendTestAllOperationRecordsAggregateSMTPAcceptanceAndCannotCancel(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	runner := &fixturePreviewRunner{started: make(chan struct{}), release: make(chan struct{})}
+	coordinator, err := newOperationCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Now: time.Now, operationRunner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	request := CreateOperationRequest{Type: "send-test-all", ExpectedRevision: view.Revision, UserID: "42", ConfirmTestSend: true}
+	started, err := coordinator.Start(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.Cancellable || started.Type != "send-test-all" {
+		t.Fatalf("test-send operation exposed unsafe cancellation: %+v", started)
+	}
+	select {
+	case <-runner.started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("fixture test-send did not start")
+	}
+	if _, err := coordinator.Cancel(started.ID); !errors.Is(err, ErrOperationNotCancellable) {
+		t.Fatalf("test-send cancellation error: got %v", err)
+	}
+	close(runner.release)
+	finished := waitForOperationState(t, coordinator, "succeeded")
+	if finished.DeliveryScope != "test" || finished.SMTPAcceptedCount != 6 || finished.FailedCount != 0 || len(finished.GeneratedPreviewIDs) != 0 {
+		t.Fatalf("unexpected test-send result: %+v", finished)
+	}
+	for _, request := range []CreateOperationRequest{
+		{Type: "send-test-all", ExpectedRevision: view.Revision, UserID: "42"},
+		{Type: "send-test-all", ExpectedRevision: view.Revision, UserID: "42", ConfirmNoSend: true, ConfirmTestSend: true},
+	} {
+		if _, err := coordinator.Start(request); err == nil {
+			t.Fatalf("unsafe test-send request was accepted: %+v", request)
+		}
+	}
+}
+
+func TestPreviewOperationValidationAndRestartRecovery(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	data := t.TempDir()
+	runner := &fixturePreviewRunner{started: make(chan struct{}), release: make(chan struct{})}
+	coordinator, err := newOperationCoordinator(Options{DataDir: data, TautWeeklyRoot: root, Now: time.Now, operationRunner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	for _, request := range []CreateOperationRequest{
+		{Type: "preview-all", ExpectedRevision: view.Revision, UserID: "not-numeric", ConfirmNoSend: true},
+		{Type: "preview-all", ExpectedRevision: view.Revision, UserID: "1", ConfirmNoSend: false},
+		{Type: "arbitrary-command", ExpectedRevision: view.Revision, UserID: "1", ConfirmNoSend: true},
+	} {
+		if _, err := coordinator.Start(request); err == nil {
+			t.Fatalf("invalid operation was accepted: %+v", request)
+		}
+	}
+	if _, err := coordinator.Start(CreateOperationRequest{Type: "preview-all", ExpectedRevision: "stale", UserID: "1", ConfirmNoSend: true}); !errors.Is(err, ErrConfigConflict) {
+		t.Fatalf("stale revision error: got %v", err)
+	}
+
+	active := OperationRecord{
+		SchemaVersion:       operationSchemaVersion,
+		ID:                  "restart-fixture",
+		Type:                "preview-all",
+		Trigger:             "gui",
+		State:               "running",
+		StartedAtUTC:        time.Now().Add(-time.Minute).UTC().Format(time.RFC3339),
+		GeneratedPreviewIDs: []string{},
+		Cancellable:         true,
+	}
+	if err := coordinator.store.saveCurrent(active); err != nil {
+		t.Fatal(err)
+	}
+	staleSnapshot := filepath.Join(data, "operation-restart-fixture.config.json")
+	if err := os.WriteFile(staleSnapshot, []byte(`{"ApiKey":"stale-secret"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	staleResult := filepath.Join(data, "operation-restart-fixture.result.json")
+	if err := os.WriteFile(staleResult, []byte(`{"recipientEmail":"private@example.org"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := newOperationCoordinator(Options{DataDir: data, TautWeeklyRoot: root, Now: time.Now, operationRunner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := recovered.Current()
+	if current == nil || current.State != "failed" || current.ErrorCategory != "manager-restarted" || current.Cancellable {
+		t.Fatalf("unexpected recovered operation: %+v", current)
+	}
+	if _, err := os.Stat(staleSnapshot); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stale secret snapshot was not removed: %v", err)
+	}
+	if _, err := os.Stat(staleResult); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stale renderer result was not removed: %v", err)
+	}
+}
+
+func TestTautulliUserIDValidationIncludesLocalOwner(t *testing.T) {
+	for _, value := range []string{"0", "1", "18446744073709551615"} {
+		if !validTautulliUserID(value) {
+			t.Fatalf("valid Tautulli user ID %q was rejected", value)
+		}
+	}
+	for _, value := range []string{"", "-1", "not-numeric", "18446744073709551616", "000000000000000000000"} {
+		if validTautulliUserID(value) {
+			t.Fatalf("invalid Tautulli user ID %q was accepted", value)
+		}
+	}
+}
+
+func TestOperationHistorySkipsMalformedEntries(t *testing.T) {
+	data := t.TempDir()
+	path := filepath.Join(data, "operation-history.jsonl")
+	valid := OperationRecord{SchemaVersion: 1, ID: "valid", Type: "preview-all", Trigger: "gui", State: "succeeded", Outcome: "success", StartedAtUTC: time.Now().UTC().Format(time.RFC3339), GeneratedPreviewIDs: []string{}}
+	encoded, err := json.Marshal(valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := append([]byte("not-json\n"), encoded...)
+	content = append(content, '\n')
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := operationStore{historyPath: path, now: time.Now}
+	records := store.readHistory()
+	if len(records) != 1 || records[0].ID != "valid" {
+		t.Fatalf("unexpected sanitized history: %+v", records)
+	}
+}
+
+func TestOperationHistoryPrunesByAgeAndCount(t *testing.T) {
+	data := t.TempDir()
+	path := filepath.Join(data, "operation-history.jsonl")
+	now := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
+	var content bytes.Buffer
+	writeRecord := func(id string, started time.Time) {
+		record := OperationRecord{
+			SchemaVersion:       operationSchemaVersion,
+			ID:                  id,
+			Type:                "preview-all",
+			Trigger:             "gui",
+			State:               "succeeded",
+			Outcome:             "success",
+			StartedAtUTC:        started.UTC().Format(time.RFC3339),
+			FinishedAtUTC:       started.Add(time.Minute).UTC().Format(time.RFC3339),
+			GeneratedPreviewIDs: []string{},
+		}
+		encoded, err := json.Marshal(record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content.Write(encoded)
+		content.WriteByte('\n')
+	}
+	writeRecord("expired", now.Add(-operationHistoryAge-time.Hour))
+	for index := 0; index < operationHistoryLimit+10; index++ {
+		writeRecord("recent-"+strconv.Itoa(index), now.Add(-time.Duration(index)*time.Minute))
+	}
+	if err := os.WriteFile(path, content.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := operationStore{historyPath: path, now: func() time.Time { return now }}
+	if err := store.pruneHistory(); err != nil {
+		t.Fatal(err)
+	}
+	records := store.readHistory()
+	if len(records) != operationHistoryLimit {
+		t.Fatalf("pruned record count: got %d, want %d", len(records), operationHistoryLimit)
+	}
+	if records[0].ID != "recent-0" || records[len(records)-1].ID != "recent-499" {
+		t.Fatalf("history did not retain the newest bounded records: first=%s last=%s", records[0].ID, records[len(records)-1].ID)
+	}
+	for _, record := range records {
+		if record.ID == "expired" {
+			t.Fatal("expired operation remained in history")
+		}
+	}
+}
+
+func waitForOperationState(t *testing.T, coordinator *operationCoordinator, expected string) OperationRecord {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		current := coordinator.Current()
+		if current != nil && current.State == expected {
+			return *current
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("operation did not reach %s; current=%+v", expected, coordinator.Current())
+	return OperationRecord{}
+}

@@ -89,12 +89,53 @@ jobs:
       - name: Test SMTP authentication protocol on Windows PowerShell
         run: python scripts/test-smtp-transport.py --helper platforms/windows/Smtp-Transport.ps1
 
+  manager-tests:
+    name: Local Manager (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: manager/go.mod
+          cache-dependency-path: |
+            manager/go.mod
+            installer/go.mod
+      - name: Test and vet the Manager
+        working-directory: manager
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Test and vet the Windows installer
+        working-directory: installer
+        run: |
+          go test ./...
+          go test -tags uninstaller ./...
+          go vet ./...
+          go vet -tags uninstaller ./...
+      - name: Cross-build the Manager for maintained targets
+        shell: pwsh
+        run: ./scripts/test-manager-cross-builds.ps1
+      - name: Validate embedded Manager JavaScript
+        run: node --check manager/internal/manager/web/app.js
+      - name: Validate Manager accessibility structure
+        run: python scripts/test-manager-accessibility.py
+
   release-archives:
     name: Reproducible release archives
     runs-on: ubuntu-latest
-    needs: [repository-validation, powershell-syntax]
+    needs: [repository-validation, powershell-syntax, manager-tests]
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: manager/go.mod
+          cache-dependency-path: |
+            manager/go.mod
+            installer/go.mod
       - name: Build archives and SHA-256 checksums
         shell: pwsh
         run: ./scripts/build-releases.ps1 -Version ci
@@ -150,3 +191,17 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 7
+
+  windows-installer:
+    name: Windows one-click installer lifecycle
+    runs-on: windows-latest
+    needs: release-archives
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: tautweekly-release-candidates
+          path: dist
+      - name: Test isolated install, upgrade, icon, and uninstall lifecycle
+        shell: powershell
+        run: .\scripts\test-windows-installer.ps1

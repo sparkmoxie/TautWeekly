@@ -4807,7 +4807,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.10.4"
+                "User-Agent"      = "TautWeekly-for-Plex/0.11.0"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -5061,7 +5061,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.10.4"
+        "X-Plex-Version"           = "0.11.0"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 
@@ -7885,7 +7885,13 @@ function Get-PopulatedPreviewStats {
 
     $sampleMovies = New-Object System.Collections.Generic.List[object]
     foreach ($movie in @($activeReleaseData.Movies | Select-Object -First 2)) {
-        $sampleMovies.Add($movie)
+        $sampleMovie = [ordered]@{}
+        foreach ($property in $movie.PSObject.Properties) {
+            $sampleMovie[$property.Name] = $property.Value
+        }
+        $sampleMovie["Plays"] = 1
+        $sampleMovie["Seconds"] = [int64](3600 - ($sampleMovies.Count * 900))
+        $sampleMovies.Add([PSCustomObject]$sampleMovie)
     }
 
     while ($sampleMovies.Count -lt 2) {
@@ -7896,7 +7902,8 @@ function Get-PopulatedPreviewStats {
             DesignRtCritic=$(if ($index -eq 1) { "87" } else { "66" });
             DesignRtAudience=$(if ($index -eq 1) { "74" } else { "81" });
             DesignRtCriticImage="rottentomatoes://image.rating.ripe";
-            DesignRtAudienceImage="rottentomatoes://image.rating.upright"
+            DesignRtAudienceImage="rottentomatoes://image.rating.upright";
+            Plays=1; Seconds=[int64](3600 - (($index - 1) * 900))
         })
     }
 
