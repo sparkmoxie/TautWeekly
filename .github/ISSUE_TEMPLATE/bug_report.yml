@@ -12,7 +12,7 @@ body:
     attributes:
       label: Platform
       options:
-        - Windows portable
+        - Windows Manager / Setup EXE
         - NAS / Docker
         - macOS / Docker Desktop
     validations:

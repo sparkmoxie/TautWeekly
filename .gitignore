@@ -12,6 +12,8 @@
 **/scheduler-state.json
 **/scheduler-heartbeat.json
 **/service-heartbeat.json
+**/configuration-status.json
+**/last-run.json
 **/.tautweekly-operation.lock
 **/logs/
 **/output/
@@ -32,6 +34,13 @@ release-staging/
 *.zip
 *.tar.gz
 SHA256SUMS.txt
+
+# Local TautWeekly Manager state and build output
+**/.manager-data/
+manager/bin/
+installer/cmd/tautweekly-setup/payload/TautWeekly-windows.zip
+installer/cmd/tautweekly-setup/payload/TautWeekly-windows.zip.sha256
+installer/cmd/tautweekly-setup/payload/tautweekly.ico
 
 # Editors and operating systems
 .DS_Store

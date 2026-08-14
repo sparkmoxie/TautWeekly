@@ -10,7 +10,7 @@ Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 if ([string]::IsNullOrWhiteSpace($Root)) { $Root = Split-Path -Parent $PSScriptRoot }
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $Version = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME -replace '^v','' } else { 'dev' }
+    $Version = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME -replace '^v','' } else { 'local' }
 }
 $Root = [IO.Path]::GetFullPath($Root)
 
@@ -74,6 +74,148 @@ function Copy-Platform {
     [IO.File]::WriteAllText((Join-Path $destination 'RELEASE-METADATA.txt'), $metadata + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 
     return $destination
+}
+
+function Build-WindowsManager {
+    param([Parameter(Mandatory = $true)][string]$Destination)
+
+    $goPath = if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_GO)) {
+        [IO.Path]::GetFullPath([string]$env:TAUTWEEKLY_GO)
+    }
+    else {
+        (Get-Command go -CommandType Application -ErrorAction Stop).Source
+    }
+    if (-not (Test-Path -LiteralPath $goPath -PathType Leaf)) {
+        throw "Go executable was not found: $goPath"
+    }
+    $managerRoot = Join-Path $Root 'manager'
+    $output = Join-Path $Destination 'tautweekly-manager.exe'
+    $previousGoOS = $env:GOOS
+    $previousGoArch = $env:GOARCH
+    $previousCGO = $env:CGO_ENABLED
+    try {
+        $env:GOOS = 'windows'
+        $env:GOARCH = 'amd64'
+        $env:CGO_ENABLED = '0'
+        Push-Location $managerRoot
+        try {
+            & $goPath build -trimpath -buildvcs=false -ldflags "-s -w -X main.version=$Version" -o $output ./cmd/tautweekly-manager
+            if ($LASTEXITCODE -ne 0) { throw 'Go failed to build the Windows Manager.' }
+        }
+        finally { Pop-Location }
+    }
+    finally {
+        if ($null -eq $previousGoOS) { Remove-Item Env:GOOS -ErrorAction SilentlyContinue } else { $env:GOOS = $previousGoOS }
+        if ($null -eq $previousGoArch) { Remove-Item Env:GOARCH -ErrorAction SilentlyContinue } else { $env:GOARCH = $previousGoArch }
+        if ($null -eq $previousCGO) { Remove-Item Env:CGO_ENABLED -ErrorAction SilentlyContinue } else { $env:CGO_ENABLED = $previousCGO }
+    }
+
+    if (-not (Test-Path -LiteralPath $output -PathType Leaf)) {
+        throw 'The Windows Manager build did not produce tautweekly-manager.exe.'
+    }
+    $header = [IO.File]::ReadAllBytes($output)
+    if ($header.Length -lt 2 -or $header[0] -ne 0x4d -or $header[1] -ne 0x5a) {
+        throw 'The Windows Manager output is not a Windows PE executable.'
+    }
+}
+
+function Build-WindowsInstaller {
+    param([Parameter(Mandatory = $true)][string]$WindowsArchive)
+
+    $goPath = if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_GO)) {
+        [IO.Path]::GetFullPath([string]$env:TAUTWEEKLY_GO)
+    }
+    else {
+        (Get-Command go -CommandType Application -ErrorAction Stop).Source
+    }
+    if (-not (Test-Path -LiteralPath $goPath -PathType Leaf)) {
+        throw "Go executable was not found: $goPath"
+    }
+
+    $installerRoot = Join-Path $Root 'installer'
+    $commandRoot = Join-Path $installerRoot 'cmd/tautweekly-setup'
+    $payloadRoot = Join-Path $commandRoot 'payload'
+    $iconSource = Join-Path $installerRoot 'assets/tautweekly.ico'
+    $resourceObject = Join-Path $commandRoot 'rsrc_windows_amd64.syso'
+    foreach ($required in @($iconSource, $resourceObject)) {
+        if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+            throw "Windows installer build input was not found: $required"
+        }
+    }
+    New-Item -ItemType Directory -Path $payloadRoot -Force | Out-Null
+    $payloadArchive = Join-Path $payloadRoot 'TautWeekly-windows.zip'
+    $payloadHash = Join-Path $payloadRoot 'TautWeekly-windows.zip.sha256'
+    $payloadIcon = Join-Path $payloadRoot 'tautweekly.ico'
+    Copy-Item -LiteralPath $WindowsArchive -Destination $payloadArchive -Force
+    Copy-Item -LiteralPath $iconSource -Destination $payloadIcon -Force
+    $hash = (Get-FileHash -LiteralPath $WindowsArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText($payloadHash, $hash, [Text.Encoding]::ASCII)
+
+    $output = Join-Path $dist 'TautWeekly-Setup.exe'
+    $previousGoOS = $env:GOOS
+    $previousGoArch = $env:GOARCH
+    $previousCGO = $env:CGO_ENABLED
+    try {
+        $env:GOOS = 'windows'
+        $env:GOARCH = 'amd64'
+        $env:CGO_ENABLED = '0'
+        Push-Location $installerRoot
+        try {
+            & $goPath build -trimpath -buildvcs=false -ldflags "-s -w -H windowsgui -X main.version=$Version" -o $output ./cmd/tautweekly-setup
+            if ($LASTEXITCODE -ne 0) { throw 'Go failed to build the Windows installer.' }
+        }
+        finally { Pop-Location }
+    }
+    finally {
+        if ($null -eq $previousGoOS) { Remove-Item Env:GOOS -ErrorAction SilentlyContinue } else { $env:GOOS = $previousGoOS }
+        if ($null -eq $previousGoArch) { Remove-Item Env:GOARCH -ErrorAction SilentlyContinue } else { $env:GOARCH = $previousGoArch }
+        if ($null -eq $previousCGO) { Remove-Item Env:CGO_ENABLED -ErrorAction SilentlyContinue } else { $env:CGO_ENABLED = $previousCGO }
+    }
+
+    if (-not (Test-Path -LiteralPath $output -PathType Leaf)) {
+        throw 'The Windows installer build did not produce TautWeekly-Setup.exe.'
+    }
+    $header = [IO.File]::ReadAllBytes($output)
+    if ($header.Length -lt 2 -or $header[0] -ne 0x4d -or $header[1] -ne 0x5a) {
+        throw 'The Windows installer output is not a Windows PE executable.'
+    }
+    return $output
+}
+
+function Build-WindowsUninstaller {
+    param([Parameter(Mandatory = $true)][string]$Destination)
+
+    $goPath = if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_GO)) {
+        [IO.Path]::GetFullPath([string]$env:TAUTWEEKLY_GO)
+    }
+    else {
+        (Get-Command go -CommandType Application -ErrorAction Stop).Source
+    }
+    $installerRoot = Join-Path $Root 'installer'
+    $output = Join-Path $Destination 'TautWeekly-Uninstall.exe'
+    $previousGoOS = $env:GOOS
+    $previousGoArch = $env:GOARCH
+    $previousCGO = $env:CGO_ENABLED
+    try {
+        $env:GOOS = 'windows'
+        $env:GOARCH = 'amd64'
+        $env:CGO_ENABLED = '0'
+        Push-Location $installerRoot
+        try {
+            & $goPath build -tags uninstaller -trimpath -buildvcs=false -ldflags "-s -w -H windowsgui -X main.version=$Version" -o $output ./cmd/tautweekly-setup
+            if ($LASTEXITCODE -ne 0) { throw 'Go failed to build the Windows uninstaller.' }
+        }
+        finally { Pop-Location }
+    }
+    finally {
+        if ($null -eq $previousGoOS) { Remove-Item Env:GOOS -ErrorAction SilentlyContinue } else { $env:GOOS = $previousGoOS }
+        if ($null -eq $previousGoArch) { Remove-Item Env:GOARCH -ErrorAction SilentlyContinue } else { $env:GOARCH = $previousGoArch }
+        if ($null -eq $previousCGO) { Remove-Item Env:CGO_ENABLED -ErrorAction SilentlyContinue } else { $env:CGO_ENABLED = $previousCGO }
+    }
+    $header = [IO.File]::ReadAllBytes($output)
+    if ($header.Length -lt 2 -or $header[0] -ne 0x4d -or $header[1] -ne 0x5a) {
+        throw 'The Windows uninstaller output is not a Windows PE executable.'
+    }
 }
 
 function Write-ReleaseManifest {
@@ -157,7 +299,9 @@ function New-TarGz {
 }
 
 try {
-    [void](Copy-Platform -SourceName 'windows' -FolderName 'TautWeekly-windows' -GuidePath 'docs/windows/README.md')
+    $windowsDestination = Copy-Platform -SourceName 'windows' -FolderName 'TautWeekly-windows' -GuidePath 'docs/windows/README.md'
+    Build-WindowsManager -Destination $windowsDestination
+    Build-WindowsUninstaller -Destination $windowsDestination
     [void](Copy-Platform -SourceName 'nas-docker' -FolderName 'TautWeekly-nas-docker' -GuidePath 'docs/nas-docker/README.md')
     [void](Copy-Platform -SourceName 'mac-docker' -FolderName 'TautWeekly-mac-docker' -GuidePath 'docs/mac/README.md')
 
@@ -180,17 +324,27 @@ try {
         $item.LastWriteTimeUtc = $sourceTimestamp
     }
 
+    $forbiddenPrivateNames = @(
+        'config.json', '.env', 'state.json', 'access-state.json',
+        'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json',
+        'configuration-status.json', 'last-run.json', 'deleted-item-cache.json',
+        '.tautweekly-operation.lock'
+    )
     $forbidden = Get-ChildItem -LiteralPath $staging -Force -Recurse | Where-Object {
-        ($_.PSIsContainer -and $_.Name -in @('logs','output','cache')) -or
-        (-not $_.PSIsContainer -and $_.Name -in @('config.json','.env','state.json','access-state.json','scheduler-state.json')) -or
-        (-not $_.PSIsContainer -and $_.Extension -eq '.log')
+        ($_.PSIsContainer -and $_.Name -in @('logs','output','cache','.manager-data')) -or
+        (-not $_.PSIsContainer -and $_.Name -in $forbiddenPrivateNames) -or
+        (-not $_.PSIsContainer -and $_.Name -like 'config.backup.*.json') -or
+        (-not $_.PSIsContainer -and ($_.Name -like '*.log' -or $_.Name -like '*.log.*'))
     }
     if ($forbidden) {
         throw "Forbidden runtime material entered release staging: $($forbidden.FullName -join ', ')"
     }
 
+    $windowsArchive = New-Zip -FolderName 'TautWeekly-windows' -ArchiveName 'TautWeekly-windows.zip'
+    $installer = Build-WindowsInstaller -WindowsArchive $windowsArchive
     $archives = @(
-        (New-Zip -FolderName 'TautWeekly-windows' -ArchiveName 'TautWeekly-windows.zip')
+        $windowsArchive
+        $installer
         (New-Zip -FolderName 'TautWeekly-nas-docker' -ArchiveName 'TautWeekly-nas-docker.zip')
         (New-TarGz -FolderName 'TautWeekly-nas-docker' -ArchiveName 'TautWeekly-nas-docker.tar.gz')
         (New-Zip -FolderName 'TautWeekly-mac-docker' -ArchiveName 'TautWeekly-mac-docker.zip')

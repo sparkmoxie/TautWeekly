@@ -34,14 +34,14 @@ $scheduledTaskCommands = @(
 $missingTaskCommands = @($scheduledTaskCommands | Where-Object { $null -eq (Get-Command $_ -ErrorAction SilentlyContinue) })
 if ($missingTaskCommands.Count -gt 0) {
     WARN ("Windows ScheduledTasks cmdlets are unavailable: " + ($missingTaskCommands -join ", "))
-    WARN "Manual preview/test/send modes can still work, but 08-INSTALL-SCHEDULE.bat will not."
+    WARN "Manual preview/test/send modes can still work, but Manager Schedule and 08-INSTALL-SCHEDULE.bat will not."
 }
 else {
     OK "Windows ScheduledTasks cmdlets are available"
 }
 
 if (-not (Test-Path $configPath)) {
-    FAIL "config.json is missing. Run 00-SETUP-FIRST.bat."
+    FAIL "config.json is missing. Open Manager Config and save a valid configuration, or use 00-SETUP-FIRST.bat as the portable fallback."
     exit 1
 }
 OK "config.json exists"
@@ -86,7 +86,7 @@ OK "Required configuration values are populated"
 if ([string]$config.SmtpHost -ieq "smtp.example.com" -or
     [string]$config.FromEmail -match '@example\.com$' -or
     [string]$config.TestEmail -match '@example\.com$') {
-    FAIL "config.json still contains example.com placeholder mail settings. Run 00-SETUP-FIRST.bat or edit config.json."
+    FAIL "config.json still contains example.com placeholder mail settings. Open Manager Config and save real settings, or use 00-SETUP-FIRST.bat as the portable fallback."
     exit 1
 }
 OK "Example mail placeholders have been replaced"

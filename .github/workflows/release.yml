@@ -9,10 +9,36 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build:
+    name: Build and validate release candidates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: manager/go.mod
+          cache-dependency-path: |
+            manager/go.mod
+            installer/go.mod
+      - name: Test and vet the Manager
+        working-directory: manager
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Test and vet the Windows installer
+        working-directory: installer
+        run: |
+          go test ./...
+          go test -tags uninstaller ./...
+          go vet ./...
+          go vet -tags uninstaller ./...
+      - name: Cross-build the Manager for maintained targets
+        shell: pwsh
+        run: ./scripts/test-manager-cross-builds.ps1
+      - name: Validate embedded Manager JavaScript
+        run: node --check manager/internal/manager/web/app.js
+      - name: Validate Manager accessibility structure
+        run: python scripts/test-manager-accessibility.py
       - name: Validate repository
         shell: pwsh
         run: |
@@ -67,6 +93,37 @@ jobs:
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/rc.d/tautweekly | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/app/bin/run-as-user.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/app/bin/run-script.sh | grep -q '^-rwx'
+      - name: Upload release candidates
+        uses: actions/upload-artifact@v4
+        with:
+          name: tautweekly-release-candidates
+          path: dist/
+          if-no-files-found: error
+
+  windows-installer:
+    name: Test Windows installer release candidate
+    runs-on: windows-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: tautweekly-release-candidates
+          path: dist
+      - name: Test isolated install, upgrade, icon, and uninstall lifecycle
+        shell: powershell
+        run: .\scripts\test-windows-installer.ps1
+
+  publish:
+    name: Publish verified release
+    runs-on: ubuntu-latest
+    needs: [build, windows-installer]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: tautweekly-release-candidates
+          path: dist
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

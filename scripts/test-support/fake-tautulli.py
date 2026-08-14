@@ -103,6 +103,7 @@ USERS = {
         "is_active": 1,
         "deleted_user": 0,
         "do_notify": 1,
+        "is_owner": 1,
     },
     "2": {
         "user_id": "2",

@@ -6,6 +6,72 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-14
+
+### Added
+
+- Added `TautWeekly-Setup.exe` as the authoritative Windows installer. It
+  installs the self-contained Manager for the current Windows account, creates
+  Desktop and Start Menu shortcuts, registers an uninstaller, and keeps
+  private Manager state outside the application directory.
+- Added the loopback-only Windows Manager with Dashboard, guided Config,
+  connection verification, persistent setup status, sandboxed six-state
+  previews, guarded TestEmail delivery, Windows schedule lifecycle, local
+  diagnostics, and optional browser password lock.
+- Added typed Task Scheduler Install/Refresh, Enable, Disable, and Remove
+  operations. Only the packaged helper receives elevation; it revalidates the
+  saved configuration and exact task ownership before and after each change.
+- Added installer lifecycle coverage for fresh install, Manager boot, verified
+  update, portable migration, application icons, privacy-preserving uninstall,
+  and cross-builds of the Manager for Windows, Linux, macOS, and FreeBSD on
+  amd64 and arm64.
+
+### Changed
+
+- Made Setup and the Manager the Windows source of truth throughout the main
+  README, Windows Quickstart, platform guide, troubleshooting, issue templates,
+  release automation, and packaged documentation. Numbered BAT/PowerShell tools
+  remain supported recovery and expert fallbacks.
+- Running a newer Setup now preselects an existing installer-owned location and
+  performs an Update. Selecting the exact folder of an older manifest-verified
+  portable/BAT release performs an in-place Migrate; Setup never scans drives
+  or guesses at legacy locations.
+- Windows first launch now trusts the local Windows account and opens the
+  Dashboard without an unrecoverable pairing token. An optional eight-character
+  password lock and local reset shortcut remain available when the Windows
+  account is shared.
+- Updated the renderer's public product version identifier to `0.11.0` across
+  maintained source copies without changing provider, recipient, or schedule
+  behavior on non-Windows packages.
+
+### Fixed
+
+- Preserved generated preview status after the preview process finishes so the
+  Config workflow reports the actual completed result rather than a stale
+  `Skipped` state.
+- Repaired authenticated preview image routing while keeping images confined to
+  the approved `output/` and packaged `assets/` roots, including symlink escape
+  rejection.
+- Prevented a fresh install from removing a predictable sibling directory and
+  prevented verified updates from disabling or enabling a same-named Scheduled
+  Task that is not owned by the selected TautWeekly installation.
+
+### Security
+
+- Setup verifies its embedded ZIP checksum and the release ownership manifest,
+  replaces only release-owned files, keeps the original candidate untouched,
+  uses an operation lock, refuses a running send, and automatically rolls back
+  after a failed replacement verification.
+- Configuration, API keys, Plex tokens, SMTP credentials, delivery history,
+  previews, logs, deleted-item cache, backups, and Manager access state are
+  excluded from release ownership and preserved across update and uninstall.
+- Manager secrets remain omitted from ordinary API responses. A single secret
+  can be revealed only through an authenticated, CSRF-protected, revision-bound
+  request and is cleared from the page automatically.
+- The Windows Setup executable is unsigned in this release. Users must verify
+  it against the release `SHA256SUMS.txt`; code signing remains a documented
+  follow-up.
+
 ## [0.10.4] - 2026-08-13
 
 ### Fixed

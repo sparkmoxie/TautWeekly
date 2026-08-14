@@ -62,6 +62,7 @@ $requiredFunctions = @(
     'Get-ConfiguredDeliveryDay',
     'Get-UserStats',
     'Add-UserStatsMediaMetadata',
+    'Get-PopulatedPreviewStats',
     'Get-HotNewRelease',
     'Get-DynamicPreheader',
     'Build-PlainText'
@@ -952,6 +953,32 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($empty.MovieItems.Count -eq 0) "$relativePath has unexpected empty-state movies"
     Assert-True ($empty.EpisodeItems.Count -eq 0) "$relativePath has unexpected empty-state episodes"
     Assert-True ($empty.TvShowItems.Count -eq 0) "$relativePath has unexpected empty-state TV shows"
+
+    $script:activeReleaseData = [PSCustomObject]@{
+        Movies = @([PSCustomObject]@{
+            Type = 'movie'; RatingKey = 'sample-release'; PosterRatingKey = 'sample-release'
+            Title = 'Sanitized Sample Release'; Year = '2026'; Summary = 'Fictional sample metadata.'
+        })
+        TV = @()
+    }
+    $samplePreview = Get-PopulatedPreviewStats -RealStats $empty
+    Assert-True ($samplePreview.IsSample) "$relativePath did not select sample preview stats for empty history"
+    Assert-True ($samplePreview.Stats.MovieItems.Count -eq 2) "$relativePath did not build two sample movie rows"
+    foreach ($sampleMovie in $samplePreview.Stats.MovieItems) {
+        Assert-True ($null -ne $sampleMovie.PSObject.Properties['Seconds']) "$relativePath omitted sample movie watch time"
+        Assert-True ((Safe-Int64 $sampleMovie.Seconds) -gt 0) "$relativePath generated invalid sample movie watch time"
+    }
+    $samplePlainText = Build-PlainText `
+        -User ([PSCustomObject]@{ FriendlyName = 'Viewer' }) `
+        -Stats $samplePreview.Stats `
+        -ReleaseData $script:activeReleaseData `
+        -HotRelease $null `
+        -TrendingTitle '' `
+        -SystemWarmingUp $false `
+        -RecentAccess $false `
+        -StartLabel 'August 1' `
+        -EndLabel 'August 7'
+    Assert-True ($samplePlainText.Contains('movies watched')) "$relativePath could not render empty-history sample movie stats as plain text"
 
     $threeMovies = Get-UserStats -History @(
         $movie,

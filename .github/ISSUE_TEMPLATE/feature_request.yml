@@ -9,7 +9,7 @@ body:
       label: Scope
       options:
         - All platforms
-        - Windows portable
+        - Windows Manager / Setup EXE
         - NAS / Docker
         - macOS / Docker Desktop
         - Documentation or automation
