@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-08-14
+
 ### Changed
 
 - Styled the production-newsletter selector with the same bounded chevron and
