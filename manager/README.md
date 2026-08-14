@@ -38,9 +38,10 @@ Current capabilities:
 - guarded all-state test delivery through the fixed `SendTestAll` renderer
   mode, restricted to the configured `TestEmail`, with aggregate SMTP
   acceptance evidence only;
-- guarded manual production delivery through the fixed `SendAll` renderer
-  mode, requiring explicit confirmation and retaining only aggregate accepted,
-  skipped, and failed counts;
+- guarded manual production delivery through the fixed `SendWelcome` and
+  `SendAll` renderer modes, requiring a selected numeric user for the former,
+  distinct recipient-scope messaging, explicit confirmation, and only
+  aggregate accepted, skipped, and failed counts;
 - single-operation coordination, safe cancellation, restart recovery, and
   bounded sanitized local operation history;
 - an opt-in, atomic renderer-result contract that separates preview output,
@@ -70,10 +71,11 @@ only for that revision; saving or restoring a different configuration resets
 them before the new checks run. Guarded test delivery is
 always manual, sends six messages only to the saved `TestEmail`, and cannot be
 cancelled after it starts because some messages may already have been accepted
-by SMTP. A separate manual production-send card invokes only the fixed
-`SendAll` mode, requires its own explicit confirmation, cannot be cancelled,
-and reports SMTP acceptance separately from inbox delivery. One-off welcome
-delivery remains available only through the recovery/expert interface.
+by SMTP. A separate manual production-send card invokes either the fixed
+one-user `SendWelcome` mode or the full `SendAll` mode, requires its own explicit
+confirmation, cannot be cancelled, and reports SMTP acceptance separately from
+inbox delivery. The selected welcome user ID is passed only to the private
+renderer process and is not retained in Manager operation history.
 
 Schedule changes accept only four action enums. The normal Manager remains
 unelevated; the packaged helper requests UAC, rechecks the exact configuration

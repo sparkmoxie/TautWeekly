@@ -181,9 +181,10 @@ known modes using argument arrays rather than a shell command string:
 Production send and welcome modes retain explicit confirmation gates. The
 existing operation lock remains authoritative during the transition.
 
-The implemented renderer operations are `PreviewAll`, `SendTestAll`, and
-`SendAll` on Windows. Preview and TestEmail operations pass only a validated
-numeric user ID; production delivery does not accept one. Every mode receives a
+The implemented renderer operations are `PreviewAll`, `SendTestAll`,
+`SendWelcome`, and `SendAll` on Windows. Preview, TestEmail, and Manual Welcome
+operations pass only a validated numeric user ID; all-recipient production
+delivery does not accept one. Every mode receives a
 private per-run configuration snapshot through the fixed packaged PowerShell
 script, discards raw process output, and records only a sanitized operation
 result.
@@ -191,10 +192,12 @@ result.
 access roster or welcome state. `SendTestAll` requires a separate confirmation,
 delivers six variants only to the configured `TestEmail`, and cannot be
 cancelled after starting because a partial set may already have been accepted
-by SMTP. `SendAll` requires a distinct production confirmation, runs the same
-fixed delivery contract as the weekly schedule, exposes no cancellation, and
-retains only aggregate accepted, skipped, and failed counts. One-off welcome
-delivery remains unavailable from the Manager.
+by SMTP. `SendWelcome` requires a selected user plus production confirmation,
+sends one real welcome newsletter, updates that user's welcome state, and
+retains no user identifier. `SendAll` requires a distinct production
+confirmation, runs the same fixed delivery contract as the weekly schedule,
+exposes no cancellation, and retains only aggregate accepted, skipped, and
+failed counts.
 
 The renderer should gain an optional structured result path. On completion it
 writes a sanitized result containing mode, outcome, duration, sent count,
@@ -271,6 +274,31 @@ Podman lifecycle status.
 
 The container must not gain access to the Podman socket merely to show the
 host's external container state.
+
+### 6.5 Shared configuration migration contract
+
+Every maintained package must follow the same upgrade behavior when the
+Manager is added or its schema grows:
+
+- Preserve the existing private configuration before replacing release-owned
+  files; never infer that a missing newer field was deleted by the updater.
+- Distinguish a legacy field that never existed from a configured value that
+  is present, empty, or explicitly cleared.
+- Normalize missing current-schema keys only after an explicit validated save
+  and retain the original file as a private timestamped backup.
+- Recover a secret only from an explicit trusted runtime source appropriate to
+  that package (for example the same-account Windows Plex registry or an
+  operator-supplied container secret). Never scrape an unrelated profile,
+  return the secret to the browser, write it into diagnostics, or silently copy
+  it into `config.json`.
+- Use a runtime-reachable service URL: loopback for a same-host native service,
+  and a service name, host gateway, or private LAN address for a separate
+  container. Never rewrite that boundary by guessing.
+- If safe recovery is unavailable, keep the package operational through its
+  documented fallback and show one precise completion step in Config.
+
+This contract is shared by Windows, NAS/macOS Docker, native Linux, and FreeBSD
+Podman even though their credential sources and scheduler adapters differ.
 
 ## 7. Health model
 

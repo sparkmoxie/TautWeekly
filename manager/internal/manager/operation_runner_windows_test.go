@@ -215,3 +215,62 @@ $result = @{
 		t.Fatalf("unexpected production-send structured result: %+v", result)
 	}
 }
+
+func TestWindowsSendWelcomeRunnerRequiresFixedUserAndConfirmation(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(t.TempDir(), "operation.config.json")
+	if err := os.WriteFile(configPath, []byte(`{"fixture":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := `param(
+  [string]$Mode,
+  [string]$UserId,
+  [string]$ConfigPath,
+  [string]$ResultPath,
+  [switch]$NoOpen,
+  [switch]$ConfirmWelcome
+)
+if ($Mode -ne 'SendWelcome') { exit 51 }
+if ($UserId -ne '42') { exit 52 }
+if ($NoOpen) { exit 53 }
+if (-not $ConfirmWelcome) { exit 54 }
+if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { exit 55 }
+if ($env:PLEX_TOKEN -or $env:TAUTWEEKLY_CONFIG -or $env:HTTP_PROXY -or $env:HTTPS_PROXY -or $env:ALL_PROXY -or $env:NO_PROXY) { exit 56 }
+$result = @{
+  schemaVersion = 1
+  mode = 'SendWelcome'
+  outcome = 'succeeded'
+  deliveryScope = 'welcome'
+  startedAtUtc = '2031-04-18T16:30:00.0000000Z'
+  finishedAtUtc = '2031-04-18T16:30:02.0000000Z'
+  durationMs = 2000
+  smtpAcceptedCount = 1
+  skippedCount = 0
+  failedCount = 0
+  generatedPreviewFiles = @()
+}
+[IO.File]::WriteAllText($ResultPath, ($result | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding($false)))
+`
+	if err := os.WriteFile(filepath.Join(root, "TautWeekly.ps1"), []byte(script), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PLEX_TOKEN", "must-not-reach-fixture")
+	t.Setenv("TAUTWEEKLY_CONFIG", "must-not-reach-fixture")
+	t.Setenv("HTTP_PROXY", "http://127.0.0.1:1")
+	t.Setenv("HTTPS_PROXY", "http://127.0.0.1:1")
+	t.Setenv("ALL_PROXY", "http://127.0.0.1:1")
+	t.Setenv("NO_PROXY", "localhost")
+
+	resultPath := filepath.Join(t.TempDir(), "operation.result.json")
+	exitCode, err := (platformPreviewOperationRunner{}).RunSendWelcome(context.Background(), root, configPath, resultPath, "42")
+	if err != nil || exitCode != 0 {
+		t.Fatalf("Manual Welcome runner: exit=%d err=%v", exitCode, err)
+	}
+	result, err := readRendererResult(resultPath, "SendWelcome")
+	if err != nil {
+		t.Fatalf("read Manual Welcome structured result: %v", err)
+	}
+	if result.SMTPAcceptedCount != 1 || result.DeliveryScope != "welcome" || len(result.GeneratedPreviewFiles) != 0 {
+		t.Fatalf("unexpected Manual Welcome structured result: %+v", result)
+	}
+}

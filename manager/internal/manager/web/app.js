@@ -574,6 +574,7 @@ function renderConfigEditor() {
   form.hidden = !editor.valid;
   blocked.hidden = editor.valid;
   if (!editor.valid) {
+    renderDirectPlexNotice();
     renderDiscovery();
     return;
   }
@@ -615,7 +616,32 @@ function renderConfigEditor() {
   if (Object.keys(editor.issues || {}).length) {
     showConfigErrors("Complete the required setup fields before saving.", editor.issues, false);
   }
+  renderDirectPlexNotice();
   renderDiscovery();
+}
+
+function renderDirectPlexNotice() {
+  const notice = byId("direct-plex-notice");
+  const status = state.editor?.directPlex;
+  const visible = Boolean(state.editor?.exists && status && (!status.urlConfigured || (!status.tokenConfigured && !status.runtimeTokenAvailable)));
+  notice.hidden = !visible;
+  if (!visible) return;
+  const legacy = Boolean(status.legacyFieldsMissing);
+  setText("direct-plex-notice-heading", legacy ? "Legacy config needs one direct Plex review" : "Complete optional direct Plex access");
+  let copy = legacy
+    ? "This older config.json never contained one or both direct Plex fields; the updater preserved it instead of guessing. "
+    : "Direct Plex is optional, but one part of the connection is not available. ";
+  if (!status.urlConfigured) copy += "For Plex on this computer, use http://127.0.0.1:32400; otherwise enter the Plex URL reachable from this runtime. ";
+  if (!status.tokenConfigured && status.runtimeTokenAvailable) copy += "A trusted runtime Plex token is available and will be used without copying it into config.json. ";
+  else if (!status.tokenConfigured) copy += "Paste the Plex administrator token to enable authenticated direct-Plex checks. ";
+  copy += "Validate, save, and verify to normalize the legacy fields and re-run the safe checks.";
+  setText("direct-plex-notice-copy", copy);
+}
+
+function reviewDirectPlexFields() {
+  const input = byId("config-PlexServerUrl") || byId("config-PlexToken");
+  input?.scrollIntoView({ behavior: "smooth", block: "center" });
+  setTimeout(() => input?.focus({ preventScroll: true }), 250);
 }
 
 function renderDiscovery() {
@@ -888,7 +914,11 @@ function createConfigControl(field) {
   } else {
     input = document.createElement("input");
     input.type = configInputType(field.type);
-    input.placeholder = field.type === "secret" && field.secret?.configured ? "Stored value will be preserved" : field.placeholder || "";
+    input.placeholder = field.type === "secret" && field.secret?.configured
+      ? "Stored value will be preserved"
+      : field.type === "secret" && field.secret?.availableFromRuntime
+        ? "Runtime value available · paste only to store a copy"
+        : field.placeholder || "";
     if (field.type === "integer") {
       if (field.min !== undefined) input.min = String(field.min);
       if (field.max !== undefined) input.max = String(field.max);
@@ -931,8 +961,11 @@ function createConfigControl(field) {
     const secretLine = document.createElement("span");
     secretLine.className = "secret-state";
     const stateText = document.createElement("span");
-    stateText.textContent = field.secret?.configured ? "Configured · value withheld" : "Not configured";
-    stateText.textContent = field.secret?.configured ? "Configured - hidden by default" : "Not configured";
+    stateText.textContent = field.secret?.configured
+      ? "Configured - hidden by default"
+      : field.secret?.availableFromRuntime
+        ? "Available from this runtime - not copied"
+        : "Not configured";
     stateText.id = `config-secret-state-${field.name}`;
     secretLine.append(stateText);
     if (field.secret?.configured) {
@@ -1620,6 +1653,11 @@ function renderOperations() {
   const operation = state.operation;
   const active = operationIsActive(operation);
   const scheduleActive = scheduleOperationIsActive(state.scheduleOperation);
+  const manualSendType = byId("manual-send-mode").value === "send-welcome" ? "send-welcome" : "send-all";
+  const manualWelcome = manualSendType === "send-welcome";
+  const manualSendUserID = byId("manual-send-user-id").value.trim();
+  const manualSendUserValid = !manualWelcome || validPreviewUserID(manualSendUserID);
+  renderManualSendChoice(manualSendType);
   const userID = byId("preview-user-id").value.trim();
   const userIDValid = validPreviewUserID(userID);
   const confirmed = byId("preview-confirm").checked;
@@ -1654,14 +1692,16 @@ function renderOperations() {
   setText("test-send-operation-message", testMessage);
 
   const manualSendButton = byId("manual-send-run-button");
-  manualSendButton.disabled = state.operationStarting || active || scheduleActive || !ready || !manualSendConfirmed;
-  setSwappingButtonText("manual-send-run-button", state.operationStarting && state.operationStartingType === "send-all" ? "Starting manual delivery..." : active || scheduleActive ? "Another operation is active" : "Send newsletter now");
-  let manualSendMessage = "Explicitly confirm the production delivery to enable this action.";
-  if (!ready) manualSendMessage = "Complete and save configuration before sending the production newsletter.";
-  else if (active) manualSendMessage = operation.type === "send-all" ? "The production delivery is running. Cancellation is disabled because messages may already be accepted by SMTP." : "Another Manager operation is active. Wait for it to finish before sending the production newsletter.";
-  else if (scheduleActive) manualSendMessage = "Wait for the active Windows schedule change before sending the production newsletter.";
+  manualSendButton.disabled = state.operationStarting || active || scheduleActive || !ready || !manualSendConfirmed || !manualSendUserValid;
+  const manualSendButtonLabel = manualWelcome ? "Send Manual Welcome" : "Send newsletter to all";
+  setSwappingButtonText("manual-send-run-button", state.operationStarting && state.operationStartingType === manualSendType ? "Starting manual delivery..." : active || scheduleActive ? "Another operation is active" : manualSendButtonLabel);
+  let manualSendMessage = manualWelcome ? "Choose a Tautulli user, then explicitly confirm the one-message Manual Welcome delivery." : "Explicitly confirm the all-recipient production delivery to enable this action.";
+  if (!ready) manualSendMessage = "Complete and save configuration before sending a production newsletter.";
+  else if (active) manualSendMessage = ["send-welcome", "send-all"].includes(operation.type) ? "A production delivery is running. Cancellation is disabled because a message may already be accepted by SMTP." : "Another Manager operation is active. Wait for it to finish before sending a production newsletter.";
+  else if (scheduleActive) manualSendMessage = "Wait for the active Windows schedule change before sending a production newsletter.";
   else if (state.operationStarting) manualSendMessage = "Starting a fixed Manager operation...";
-  else if (manualSendConfirmed) manualSendMessage = "Ready to send real email to every currently eligible recipient.";
+  else if (manualWelcome && manualSendUserID && !manualSendUserValid) manualSendMessage = "Enter a numeric Tautulli user ID using no more than 20 digits.";
+  else if (manualSendConfirmed && manualSendUserValid) manualSendMessage = manualWelcome ? "Ready to send one real Manual Welcome message to the selected user." : "Ready to send real email to every currently eligible recipient.";
   setText("manual-send-operation-message", manualSendMessage);
 
   renderCurrentOperation(operation);
@@ -1671,10 +1711,24 @@ function renderOperations() {
   if (state.status && state.editor) renderSchedule();
 }
 
+function renderManualSendChoice(type) {
+  const manualWelcome = type === "send-welcome";
+  byId("manual-send-user-field").hidden = !manualWelcome;
+  setSwappingText("manual-send-runner-heading", manualWelcome ? "Send one Manual Welcome" : "Send this week's newsletter now");
+  setText("manual-send-runner-copy", manualWelcome
+    ? "Sends the renderer's Manual Welcome state to one selected Tautulli user, then updates that recipient's welcome and history state. It does not contact other Plex users."
+    : "Runs the same fixed production delivery used by the schedule, applies saved library and user exclusions, and updates recipient welcome and history state for every eligible recipient.");
+  setText("manual-send-confirm-heading", manualWelcome ? "Send one Manual Welcome newsletter" : "Send the production newsletter to all eligible recipients");
+  setText("manual-send-confirm-copy", manualWelcome
+    ? "I understand this sends one real email to the selected Plex user and updates that user's welcome state. The operation cannot be cancelled after it starts."
+    : "I understand this may send real email to every eligible recipient and updates recipient state. The operation cannot be cancelled after it starts.");
+}
+
 function renderManualSendStatus(operation) {
-  const manualSend = operation?.type === "send-all"
+  const manualTypes = new Set(["send-welcome", "send-all"]);
+  const manualSend = manualTypes.has(operation?.type)
     ? operation
-    : state.history.find((candidate) => candidate.type === "send-all");
+    : state.history.find((candidate) => manualTypes.has(candidate.type));
   const card = byId("manual-send-status");
   card.hidden = !manualSend;
   if (!manualSend) return;
@@ -1762,7 +1816,7 @@ function renderOperationHistory() {
     chip.className = `state-chip ${operationTone(operation)}`;
     chip.textContent = titleCase(operation.outcome || operation.state);
     const count = document.createElement("small");
-    count.textContent = operation.type === "send-test-all"
+    count.textContent = operation.type === "send-test-all" || operation.type === "send-welcome"
       ? `${operation.smtpAcceptedCount || 0} accepted by SMTP`
       : operation.type === "send-all"
         ? `${operation.smtpAcceptedCount || 0} accepted · ${operation.skippedCount || 0} skipped · ${operation.failedCount || 0} failed`
@@ -1775,6 +1829,15 @@ function renderOperationHistory() {
 
 function operationSummary(operation) {
   const count = operation.generatedPreviewIds?.length || 0;
+  if (operation.type === "send-welcome") {
+    switch (operation.state) {
+    case "queued": return { heading: "Manual Welcome queued", copy: "One selected-user welcome newsletter is waiting to start." };
+    case "running": return { heading: "Sending one Manual Welcome", copy: "One selected Plex user is being processed. Cancellation is disabled once delivery begins." };
+    case "succeeded": return { heading: "Manual Welcome accepted by SMTP", copy: "One welcome message was accepted by SMTP. The selected user's welcome state was updated; inbox delivery is not asserted." };
+    case "failed": return { heading: "Manual Welcome delivery failed", copy: operation.supportCode ? `The welcome renderer failed. Support code: ${operation.supportCode}.` : "The welcome renderer failed without exposing its recipient or raw output." };
+    default: return { heading: "Manual Welcome delivery recorded", copy: "Review aggregate SMTP acceptance without exposing the selected recipient." };
+    }
+  }
   if (operation.type === "send-all") {
     const accepted = operation.smtpAcceptedCount || 0;
     const skipped = operation.skippedCount || 0;
@@ -1882,18 +1945,21 @@ async function startTestSendOperation() {
 }
 
 async function startManualSendOperation() {
-  if (state.editor?.state !== "ready" || !byId("manual-send-confirm").checked) return;
+  const type = byId("manual-send-mode").value === "send-welcome" ? "send-welcome" : "send-all";
+  const userID = byId("manual-send-user-id").value.trim();
+  if (state.editor?.state !== "ready" || !byId("manual-send-confirm").checked || (type === "send-welcome" && !validPreviewUserID(userID))) return;
   state.operationStarting = true;
-  state.operationStartingType = "send-all";
+  state.operationStartingType = type;
   renderOperations();
-  setGlobalStatus("Starting the confirmed production newsletter delivery...");
+  setGlobalStatus(type === "send-welcome" ? "Starting the confirmed Manual Welcome delivery..." : "Starting the confirmed all-recipient newsletter delivery...");
   try {
     state.operation = await request("/api/v1/operations", {
       method: "POST",
-      body: JSON.stringify({ type: "send-all", expectedRevision: state.editor.revision, confirmProductionSend: true }),
+      body: JSON.stringify({ type, expectedRevision: state.editor.revision, userId: type === "send-welcome" ? userID : "", confirmProductionSend: true }),
     });
+    if (type === "send-welcome") byId("manual-send-user-id").value = "";
     byId("manual-send-confirm").checked = false;
-    setGlobalStatus("Manual production delivery started. Aggregate SMTP evidence will be retained locally.", true);
+    setGlobalStatus(type === "send-welcome" ? "Manual Welcome delivery started. The selected user is not retained in Manager history." : "All-recipient production delivery started. Aggregate SMTP evidence will be retained locally.", true);
   } catch (error) {
     setGlobalStatus(error.message, true);
   } finally {
@@ -2387,6 +2453,7 @@ document.addEventListener("pointerdown", (event) => {
 });
 byId("config-form").addEventListener("submit", submitConfig);
 byId("config-reset-button").addEventListener("click", renderConfigEditor);
+byId("direct-plex-review-button").addEventListener("click", reviewDirectPlexFields);
 byId("discovery-confirm").addEventListener("change", renderDiscovery);
 byId("discovery-run-button").addEventListener("click", runTautulliDiscovery);
 byId("verification-confirm").addEventListener("change", renderVerification);
@@ -2400,6 +2467,11 @@ byId("preview-cancel-button").addEventListener("click", cancelPreviewOperation);
 byId("test-send-user-id").addEventListener("input", renderOperations);
 byId("test-send-confirm").addEventListener("change", renderOperations);
 byId("test-send-run-button").addEventListener("click", startTestSendOperation);
+byId("manual-send-mode").addEventListener("change", () => {
+  byId("manual-send-confirm").checked = false;
+  renderOperations();
+});
+byId("manual-send-user-id").addEventListener("input", renderOperations);
 byId("manual-send-confirm").addEventListener("change", renderOperations);
 byId("manual-send-run-button").addEventListener("click", startManualSendOperation);
 byId("schedule-confirm").addEventListener("change", renderSchedule);

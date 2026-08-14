@@ -20,7 +20,8 @@ var secretConfigKeys = map[string]struct{}{
 }
 
 type SecretStatus struct {
-	Configured bool `json:"configured"`
+	Configured           bool `json:"configured"`
+	AvailableFromRuntime bool `json:"availableFromRuntime,omitempty"`
 }
 
 type ConfigField struct {

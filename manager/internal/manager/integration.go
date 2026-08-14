@@ -383,15 +383,21 @@ func verifyTautulli(ctx context.Context, client *http.Client, values map[string]
 
 func verifyPlex(ctx context.Context, client *http.Client, values map[string]any, serverData tautulliServerData) IntegrationCheckStep {
 	serverURL := configMapString(values, "PlexServerUrl")
-	token := configMapString(values, "PlexToken")
-	if serverURL == "" && token != "" {
+	token := runtimePlexToken(values)
+	if serverURL == "" {
 		serverURL = strings.TrimSpace(serverData.PMSURL)
 	}
 	if serverURL == "" || token == "" {
+		summary := "Direct Plex was not tested because a URL/token pair is not available to the Manager; Tautulli core access was tested separately."
+		if serverURL == "" && token != "" {
+			summary = "Direct Plex was not tested because no server URL was configured or reported by Tautulli; a runtime token is available."
+		} else if serverURL != "" && token == "" {
+			summary = "Direct Plex was not tested because no stored, environment, or same-PC Windows Plex token is available."
+		}
 		return IntegrationCheckStep{
 			Service: "plex",
 			State:   "skipped",
-			Summary: "Direct Plex was not tested because a URL/token pair is not available to the Manager; Tautulli core access was tested separately.",
+			Summary: summary,
 		}
 	}
 	base, err := parseLANBaseURL(serverURL)

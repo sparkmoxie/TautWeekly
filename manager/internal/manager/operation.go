@@ -72,6 +72,7 @@ type OperationHistory struct {
 type operationRunner interface {
 	RunPreviewAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error)
 	RunSendTestAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error)
+	RunSendWelcome(ctx context.Context, root, configPath, resultPath, userID string) (int, error)
 	RunSendAll(ctx context.Context, root, configPath, resultPath string) (int, error)
 }
 
@@ -138,7 +139,7 @@ func newOperationCoordinator(options Options) (*operationCoordinator, error) {
 }
 
 func (c *operationCoordinator) Start(request CreateOperationRequest) (OperationRecord, error) {
-	if request.Type != "preview-all" && request.Type != "send-test-all" && request.Type != "send-all" {
+	if request.Type != "preview-all" && request.Type != "send-test-all" && request.Type != "send-welcome" && request.Type != "send-all" {
 		return OperationRecord{}, ErrOperationInvalid
 	}
 	if request.Type == "preview-all" {
@@ -157,7 +158,7 @@ func (c *operationCoordinator) Start(request CreateOperationRequest) (OperationR
 			return OperationRecord{}, ErrOperationConfirmation
 		}
 	}
-	if request.Type == "send-all" {
+	if request.Type == "send-welcome" || request.Type == "send-all" {
 		if request.ConfirmNoSend || request.ConfirmTestSend {
 			return OperationRecord{}, ErrOperationInvalid
 		}
@@ -229,6 +230,9 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 	if record.Type == "send-all" {
 		mode = "SendAll"
 		exitCode, runErr = c.runner.RunSendAll(ctx, c.root, snapshotPath, resultPath)
+	} else if record.Type == "send-welcome" {
+		mode = "SendWelcome"
+		exitCode, runErr = c.runner.RunSendWelcome(ctx, c.root, snapshotPath, resultPath, userID)
 	} else if record.Type == "send-test-all" {
 		mode = "SendTestAll"
 		exitCode, runErr = c.runner.RunSendTestAll(ctx, c.root, snapshotPath, resultPath, userID)
@@ -491,7 +495,7 @@ func validTautulliUserID(value string) bool {
 }
 
 func validOperationRecord(record OperationRecord) bool {
-	return record.SchemaVersion == operationSchemaVersion && record.ID != "" && (record.Type == "preview-all" || record.Type == "send-test-all" || record.Type == "send-all") && record.StartedAtUTC != ""
+	return record.SchemaVersion == operationSchemaVersion && record.ID != "" && (record.Type == "preview-all" || record.Type == "send-test-all" || record.Type == "send-welcome" || record.Type == "send-all") && record.StartedAtUTC != ""
 }
 
 func operationActive(state string) bool {
