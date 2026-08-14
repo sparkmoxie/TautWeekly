@@ -54,6 +54,54 @@ func TestReadConfigEditorNeverReturnsStoredSecrets(t *testing.T) {
 	}
 }
 
+func TestLegacyDirectPlexFieldsAreExplainedAndNormalizedWithoutCopyingRuntimeToken(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	path := filepath.Join(root, "config.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]any{}
+	if err := json.Unmarshal(raw, &values); err != nil {
+		t.Fatal(err)
+	}
+	delete(values, "PlexServerUrl")
+	delete(values, "PlexToken")
+	raw, _ = json.Marshal(values)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PLEX_TOKEN", "fictional-runtime-only-token")
+
+	view := ReadConfigEditor(root)
+	if !view.DirectPlex.LegacyFieldsMissing || view.DirectPlex.URLConfigured || view.DirectPlex.TokenConfigured || !view.DirectPlex.RuntimeTokenAvailable {
+		t.Fatalf("unexpected legacy direct Plex status: %+v", view.DirectPlex)
+	}
+	plexTokenField := editorField(t, view, "PlexToken")
+	if plexTokenField.Secret == nil || plexTokenField.Secret.Configured || !plexTokenField.Secret.AvailableFromRuntime {
+		t.Fatalf("runtime Plex token status was not redacted correctly: %+v", plexTokenField)
+	}
+
+	request := validConfigSaveRequest(t, view)
+	result, fieldErrors, err := SaveConfig(root, request, time.Now)
+	if err != nil || len(fieldErrors) != 0 || !result.Saved {
+		t.Fatalf("normalize legacy config: result=%+v fields=%v err=%v", result, fieldErrors, err)
+	}
+	if result.Editor.DirectPlex.LegacyFieldsMissing {
+		t.Fatalf("legacy direct Plex fields remained absent after save: %+v", result.Editor.DirectPlex)
+	}
+	raw, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "fictional-runtime-only-token") {
+		t.Fatal("runtime Plex token was copied into config.json")
+	}
+	if !strings.Contains(string(raw), `"PlexServerUrl": ""`) || !strings.Contains(string(raw), `"PlexToken": ""`) {
+		t.Fatalf("normalized direct Plex fields are missing: %s", raw)
+	}
+}
+
 func TestReadConfigSecretReturnsOnlyRequestedValueWithCurrentRevision(t *testing.T) {
 	root := t.TempDir()
 	config := `{"ApiKey":"requested-api-secret","PlexToken":"other-plex-secret","SmtpAppPassword":"legacy-smtp-secret"}`

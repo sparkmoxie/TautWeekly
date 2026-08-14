@@ -88,6 +88,15 @@ or a password on first run.
 - The lock icon in the Manager header reports whether browser access is locked
   and links to the password controls under **Settings**.
 
+Older BAT-era configurations may predate `PlexServerUrl` and `PlexToken`.
+The Manager labels that case as a legacy omission instead of implying that
+Setup erased the values. For Plex on the same computer, use
+`http://127.0.0.1:32400`; the Windows runtime can use the current account's
+local Plex token without copying it into `config.json`. If Plex runs elsewhere,
+enter the URL reachable from this computer and paste its administrator token.
+The next validated save adds the current direct-Plex fields while preserving a
+private backup of the original file.
+
 Opening or refreshing the Dashboard does not contact Tautulli, Plex, or SMTP and
 does not change configuration.
 
@@ -295,10 +304,14 @@ include:
 - `18-RESET-MANAGER-ACCESS.bat` for portable password-lock recovery.
 
 The Manager's confirmed manual-send card is the normal one-off production
-workflow. `07-SEND-WELCOME-NOW.bat` and `11-SEND-ALL-NOW.bat` remain expert
-break/fix fallbacks that can send to real users and retain explicit confirmation
-gates. Read their warnings before use. Terminal roster output can contain
-private names and email addresses; do not publish it.
+workflow. Choose **Manual Welcome** to send one real welcome newsletter to a
+selected Tautulli user, or **All eligible recipients** to run the same full
+production delivery as the schedule. The selected Manual Welcome user ID is
+never retained in Manager history. Both modes require their own explicit
+confirmation, cannot be cancelled after sending starts, and report SMTP
+acceptance separately from inbox delivery. `07-SEND-WELCOME-NOW.bat` and
+`11-SEND-ALL-NOW.bat` remain expert break/fix fallbacks. Terminal roster output
+can contain private names and email addresses; do not publish it.
 
 ## Troubleshooting
 

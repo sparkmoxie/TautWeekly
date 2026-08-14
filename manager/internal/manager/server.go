@@ -898,6 +898,8 @@ func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
 		message := "Confirm that this operation creates local previews and sends no email."
 		if request.Type == "send-test-all" {
 			message = "Confirm that this operation sends six real test messages only to the configured TestEmail."
+		} else if request.Type == "send-welcome" {
+			message = "Confirm that this operation sends one real Manual Welcome newsletter to the selected Tautulli user."
 		} else if request.Type == "send-all" {
 			message = "Confirm that this operation sends the production newsletter to all currently eligible recipients."
 		}

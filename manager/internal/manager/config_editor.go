@@ -65,6 +65,14 @@ type ConfigEditorView struct {
 	Groups        []string            `json:"groups"`
 	Fields        []ConfigEditorField `json:"fields"`
 	Issues        map[string]string   `json:"issues,omitempty"`
+	DirectPlex    DirectPlexStatus    `json:"directPlex"`
+}
+
+type DirectPlexStatus struct {
+	LegacyFieldsMissing   bool `json:"legacyFieldsMissing"`
+	URLConfigured         bool `json:"urlConfigured"`
+	TokenConfigured       bool `json:"tokenConfigured"`
+	RuntimeTokenAvailable bool `json:"runtimeTokenAvailable"`
 }
 
 type SecretChange struct {
@@ -102,7 +110,7 @@ func configDefinitions() []configDefinition {
 		{Name: "TautulliUrl", Label: "Tautulli URL", Group: "Connections", Type: "url", Required: true, Help: "Base URL reachable from this Windows host. Verification runs after a successful save and is restricted to private or loopback destinations.", Placeholder: "http://127.0.0.1:8181", Default: "http://127.0.0.1:8181"},
 		{Name: "ApiKey", Label: "Tautulli API key", Group: "Connections", Type: "secret", Required: true, Help: "Leave blank to preserve the stored key. Revealing it requires your Manager password and clears automatically."},
 		{Name: "PlexServerUrl", Label: "Direct Plex server URL", Group: "Connections", Type: "url", Help: "Recommended for complete ratings, exact-episode metadata, backgrounds, and selected logos. Must be reachable from this Windows host.", Placeholder: "http://plex.example.test:32400", Default: ""},
-		{Name: "PlexToken", Label: "Plex token", Group: "Connections", Type: "secret", Help: "Recommended with the direct Plex URL. Leave blank to preserve it; guarded reveal clears automatically."},
+		{Name: "PlexToken", Label: "Plex token", Group: "Connections", Type: "secret", Help: "Recommended with the direct Plex URL. Leave blank to preserve it. On a same-PC Windows Plex installation, the runtime token can be used without copying it into config.json."},
 		{Name: "PlexWebUrl", Label: "Open Plex button URL", Group: "Identity", Type: "url", Required: true, Default: "https://app.plex.tv/desktop/"},
 		{Name: "ServerLabel", Label: "Header label", Group: "Identity", Type: "text", Required: true, Default: "PLEX"},
 		{Name: "FooterServerName", Label: "Server display name", Group: "Identity", Type: "text", Required: true, Default: "My Plex"},
@@ -143,6 +151,14 @@ func configDefinitions() []configDefinition {
 func ReadConfigEditor(root string) ConfigEditorView {
 	values, raw, exists, state := readConfigDocument(root)
 	view := ConfigEditorView{SchemaVersion: 1, Exists: exists, Valid: state == "ready" || state == "unconfigured", State: state, Revision: configRevision(raw, exists)}
+	_, plexURLPresent := values["PlexServerUrl"]
+	_, plexTokenPresent := values["PlexToken"]
+	view.DirectPlex = DirectPlexStatus{
+		LegacyFieldsMissing:   exists && (!plexURLPresent || !plexTokenPresent),
+		URLConfigured:         configValueConfigured(values["PlexServerUrl"]),
+		TokenConfigured:       configValueConfigured(values["PlexToken"]),
+		RuntimeTokenAvailable: runtimePlexToken(values) != "" && !configValueConfigured(values["PlexToken"]),
+	}
 	view.Groups = []string{"Connections", "Identity", "Email", "SMTP", "Schedule", "Newsletter", "Cache", "Advanced"}
 	if !view.Valid {
 		view.Fields = []ConfigEditorField{}
@@ -155,6 +171,9 @@ func ReadConfigEditor(root string) ConfigEditorView {
 		field := ConfigEditorField{Name: definition.Name, Label: definition.Label, Group: definition.Group, Type: definition.Type, Required: definition.Required, Help: definition.Help, Placeholder: definition.Placeholder, Options: definition.Options, Min: definition.Min, Max: definition.Max}
 		if definition.Type == "secret" {
 			field.Secret = &SecretStatus{Configured: secretConfigured(values, definition.Name)}
+			if definition.Name == "PlexToken" {
+				field.Secret.AvailableFromRuntime = view.DirectPlex.RuntimeTokenAvailable
+			}
 		} else if value, ok := values[definition.Name]; ok {
 			field.Value = editorValue(value, definition)
 		} else {
@@ -223,6 +242,11 @@ func SaveConfig(root string, request ConfigSaveRequest, now func() time.Time) (C
 		}
 		switch change.Action {
 		case "preserve":
+			if name == "PlexToken" {
+				if _, present := next[name]; !present {
+					next[name] = ""
+				}
+			}
 		case "replace":
 			if strings.TrimSpace(change.Value) == "" || strings.HasPrefix(strings.ToUpper(strings.TrimSpace(change.Value)), "PASTE_") {
 				fieldErrors[name] = "Enter a real value or leave the field blank to preserve the stored secret."

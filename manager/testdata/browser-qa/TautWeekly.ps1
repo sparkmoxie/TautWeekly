@@ -1,15 +1,16 @@
 param(
-    [ValidateSet("PreviewAll", "SendTestAll")]
+    [ValidateSet("PreviewAll", "SendTestAll", "SendWelcome")]
     [string]$Mode,
     [string]$UserId,
     [string]$ConfigPath,
     [string]$ResultPath,
-    [switch]$NoOpen
+    [switch]$NoOpen,
+    [switch]$ConfirmWelcome
 )
 
 $ErrorActionPreference = "Stop"
 
-if ($UserId -notmatch '^\d{1,20}$' -or ($Mode -eq "PreviewAll" -and -not $NoOpen)) {
+if ($UserId -notmatch '^\d{1,20}$' -or ($Mode -eq "PreviewAll" -and -not $NoOpen) -or ($Mode -eq "SendWelcome" -and -not $ConfirmWelcome)) {
     throw "The browser QA fixture accepts only fixed Manager operation contracts."
 }
 
@@ -35,6 +36,24 @@ if ($Mode -eq "SendTestAll") {
         generatedPreviewFiles = @()
     }
     [IO.File]::WriteAllText($ResultPath, (($testResult | ConvertTo-Json -Compress) + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
+    exit 0
+}
+
+if ($Mode -eq "SendWelcome") {
+    $welcomeResult = [ordered]@{
+        schemaVersion = 1
+        mode = "SendWelcome"
+        outcome = "succeeded"
+        deliveryScope = "welcome"
+        startedAtUtc = [DateTime]::UtcNow.AddSeconds(-2).ToString("o")
+        finishedAtUtc = [DateTime]::UtcNow.ToString("o")
+        durationMs = 2000
+        smtpAcceptedCount = 1
+        skippedCount = 0
+        failedCount = 0
+        generatedPreviewFiles = @()
+    }
+    [IO.File]::WriteAllText($ResultPath, (($welcomeResult | ConvertTo-Json -Compress) + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
     exit 0
 }
 

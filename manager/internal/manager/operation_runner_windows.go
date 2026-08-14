@@ -15,18 +15,22 @@ import (
 type platformPreviewOperationRunner struct{}
 
 func (platformPreviewOperationRunner) RunPreviewAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error) {
-	return runWindowsRendererOperation(ctx, root, configPath, resultPath, userID, "PreviewAll", true, false)
+	return runWindowsRendererOperation(ctx, root, configPath, resultPath, userID, "PreviewAll", true, false, false)
 }
 
 func (platformPreviewOperationRunner) RunSendTestAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error) {
-	return runWindowsRendererOperation(ctx, root, configPath, resultPath, userID, "SendTestAll", false, false)
+	return runWindowsRendererOperation(ctx, root, configPath, resultPath, userID, "SendTestAll", false, false, false)
+}
+
+func (platformPreviewOperationRunner) RunSendWelcome(ctx context.Context, root, configPath, resultPath, userID string) (int, error) {
+	return runWindowsRendererOperation(ctx, root, configPath, resultPath, userID, "SendWelcome", false, false, true)
 }
 
 func (platformPreviewOperationRunner) RunSendAll(ctx context.Context, root, configPath, resultPath string) (int, error) {
-	return runWindowsRendererOperation(ctx, root, configPath, resultPath, "", "SendAll", false, true)
+	return runWindowsRendererOperation(ctx, root, configPath, resultPath, "", "SendAll", false, true, false)
 }
 
-func runWindowsRendererOperation(ctx context.Context, root, configPath, resultPath, userID, mode string, noOpen, confirmSendAll bool) (int, error) {
+func runWindowsRendererOperation(ctx context.Context, root, configPath, resultPath, userID, mode string, noOpen, confirmSendAll, confirmWelcome bool) (int, error) {
 	scriptPath := filepath.Join(root, "TautWeekly.ps1")
 	if info, err := os.Stat(scriptPath); err != nil || !info.Mode().IsRegular() {
 		return -1, errors.New("packaged renderer is unavailable")
@@ -57,6 +61,9 @@ func runWindowsRendererOperation(ctx context.Context, root, configPath, resultPa
 	}
 	if confirmSendAll {
 		arguments = append(arguments, "-ConfirmSendAll")
+	}
+	if confirmWelcome {
+		arguments = append(arguments, "-ConfirmWelcome")
 	}
 	command := exec.CommandContext(ctx, powerShellPath, arguments...)
 	command.Dir = root

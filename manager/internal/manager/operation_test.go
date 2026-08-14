@@ -121,6 +121,46 @@ func (r *fixturePreviewRunner) RunSendTestAll(ctx context.Context, _, configPath
 	return 0, nil
 }
 
+func (r *fixturePreviewRunner) RunSendWelcome(ctx context.Context, _, configPath, resultPath, userID string) (int, error) {
+	if _, err := os.Stat(configPath); err != nil {
+		return 36, err
+	}
+	r.mu.Lock()
+	r.userID = userID
+	r.runs++
+	r.mu.Unlock()
+	if r.started != nil {
+		r.once.Do(func() { close(r.started) })
+	}
+	if r.release != nil {
+		select {
+		case <-r.release:
+		case <-ctx.Done():
+			return -1, context.Canceled
+		}
+	}
+	started := time.Now().UTC().Add(-time.Second)
+	result := rendererResult{
+		SchemaVersion:         1,
+		Mode:                  "SendWelcome",
+		Outcome:               "succeeded",
+		DeliveryScope:         "welcome",
+		StartedAtUTC:          started.Format(time.RFC3339Nano),
+		FinishedAtUTC:         started.Add(time.Second).Format(time.RFC3339Nano),
+		DurationMS:            1000,
+		SMTPAcceptedCount:     1,
+		GeneratedPreviewFiles: []string{},
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return 37, err
+	}
+	if err := os.WriteFile(resultPath, encoded, 0o600); err != nil {
+		return 38, err
+	}
+	return 0, nil
+}
+
 func (r *fixturePreviewRunner) RunSendAll(ctx context.Context, _, configPath, resultPath string) (int, error) {
 	if _, err := os.Stat(configPath); err != nil {
 		return 41, err
@@ -350,6 +390,42 @@ func TestSendAllOperationRequiresProductionConfirmationAndRecordsOnlyAggregates(
 	request.UserID = "42"
 	if _, err := coordinator.Start(request); !errors.Is(err, ErrOperationInvalid) {
 		t.Fatalf("production send accepted an unnecessary user ID: %v", err)
+	}
+}
+
+func TestSendWelcomeOperationRequiresSelectedUserAndProductionConfirmation(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	runner := &fixturePreviewRunner{}
+	coordinator, err := newOperationCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Now: time.Now, operationRunner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	request := CreateOperationRequest{Type: "send-welcome", ExpectedRevision: view.Revision, UserID: "42"}
+	if _, err := coordinator.Start(request); !errors.Is(err, ErrOperationConfirmation) {
+		t.Fatalf("unconfirmed Manual Welcome error: got %v", err)
+	}
+	request.ConfirmProductionSend = true
+	started, err := coordinator.Start(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.Cancellable || started.Type != "send-welcome" {
+		t.Fatalf("Manual Welcome exposed unsafe cancellation: %+v", started)
+	}
+	finished := waitForOperationState(t, coordinator, "succeeded")
+	if finished.DeliveryScope != "welcome" || finished.SMTPAcceptedCount != 1 || finished.SkippedCount != 0 || finished.FailedCount != 0 {
+		t.Fatalf("unexpected Manual Welcome result: %+v", finished)
+	}
+	runner.mu.Lock()
+	selectedUserID := runner.userID
+	runner.mu.Unlock()
+	if selectedUserID != "42" {
+		t.Fatalf("Manual Welcome selected user: got %q", selectedUserID)
+	}
+	request.UserID = ""
+	if _, err := coordinator.Start(request); !errors.Is(err, ErrOperationInvalid) {
+		t.Fatalf("Manual Welcome accepted no selected user: %v", err)
 	}
 }
 

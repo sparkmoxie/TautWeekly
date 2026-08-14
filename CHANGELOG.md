@@ -6,6 +6,45 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-08-14
+
+### Added
+
+- Added a guarded **Manual Welcome** choice to the Windows Manager's production
+  delivery card. It sends the renderer's existing one-user welcome state or,
+  when **All eligible recipients** is selected, retains the established full
+  production-send behavior.
+- Added guided legacy direct-Plex recovery status without returning tokens to
+  the browser. The Windows Manager can use a same-account Plex registry token
+  or `PLEX_TOKEN` at runtime and can use the Plex URL reported by Tautulli.
+
+### Changed
+
+- Documented a shared migration contract for future Windows, container, Linux,
+  macOS, NAS, and FreeBSD Manager packages: preserve private configuration,
+  distinguish absent legacy fields from explicit clears, recover only from
+  trusted platform sources, and never silently copy recovered secrets.
+- Added a focused Config notice when an older configuration never contained
+  the newer direct-Plex fields, with same-computer URL guidance and a direct
+  path to the relevant controls.
+
+### Fixed
+
+- Normalized absent direct-Plex keys only after an explicit validated save,
+  preserving the legacy configuration and its timestamped backup instead of
+  treating updater-era omissions as lost values.
+- Allowed direct-Plex verification to use safe runtime recovery sources while
+  retaining the existing private/loopback destination checks and precise
+  skipped-state diagnostics when recovery is unavailable.
+
+### Security
+
+- Runtime-recovered Plex tokens remain process-local: they are not copied to
+  `config.json`, returned by the API, logged, or exposed to the browser.
+- Manual Welcome accepts only a validated numeric Tautulli user ID for the
+  current run. That ID is cleared after start and is not retained in Manager
+  operation history or API responses.
+
 ## [0.12.0] - 2026-08-14
 
 ### Added

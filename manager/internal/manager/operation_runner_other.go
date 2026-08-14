@@ -14,6 +14,10 @@ func (platformPreviewOperationRunner) RunSendTestAll(_ context.Context, _, _, _,
 	return -1, ErrOperationUnsupported
 }
 
+func (platformPreviewOperationRunner) RunSendWelcome(_ context.Context, _, _, _, _ string) (int, error) {
+	return -1, ErrOperationUnsupported
+}
+
 func (platformPreviewOperationRunner) RunSendAll(_ context.Context, _, _, _ string) (int, error) {
 	return -1, ErrOperationUnsupported
 }

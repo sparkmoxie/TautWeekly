@@ -717,6 +717,49 @@ func TestSendAllOperationAPIRequiresExplicitConfirmationAndReturnsOnlyAggregateD
 	}
 }
 
+func TestSendWelcomeOperationAPIRequiresExplicitConfirmationAndDoesNotReturnSelectedUser(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "operation-api-secret", "", "")
+	server, err := New(Options{
+		DataDir:         t.TempDir(),
+		TautWeeklyRoot:  root,
+		Version:         "test",
+		operationRunner: &fixturePreviewRunner{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := server.auth.newSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{Name: sessionCookieName, Value: current.Token}
+	const selectedUserID = "9876543210123456789"
+	request := CreateOperationRequest{Type: "send-welcome", ExpectedRevision: ReadConfigEditor(root).Revision, UserID: selectedUserID}
+	unconfirmedBody, _ := json.Marshal(request)
+	unconfirmed := mutationRequestForTest(server, http.MethodPost, "/api/v1/operations", unconfirmedBody, cookie, current.CSRFToken)
+	if unconfirmed.Code != http.StatusUnprocessableEntity || !strings.Contains(unconfirmed.Body.String(), `"code":"operation-confirmation-required"`) {
+		t.Fatalf("unconfirmed Manual Welcome: got %d, body %s", unconfirmed.Code, unconfirmed.Body.String())
+	}
+
+	request.ConfirmProductionSend = true
+	body, _ := json.Marshal(request)
+	created := mutationRequestForTest(server, http.MethodPost, "/api/v1/operations", body, cookie, current.CSRFToken)
+	if created.Code != http.StatusAccepted {
+		t.Fatalf("create Manual Welcome: got %d, body %s", created.Code, created.Body.String())
+	}
+	assertOperationResponseSanitized(t, created.Body.String(), selectedUserID)
+	finished := waitForOperationState(t, server.operations, "succeeded")
+	if finished.Type != "send-welcome" || finished.DeliveryScope != "welcome" || finished.SMTPAcceptedCount != 1 || finished.Cancellable {
+		t.Fatalf("unexpected Manual Welcome record: %+v", finished)
+	}
+	for _, target := range []string{"/api/v1/operations/current", "/api/v1/operations/" + finished.ID, "/api/v1/history"} {
+		response := requestForTest(server, http.MethodGet, target, nil, cookie)
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"deliveryScope":"welcome"`) || strings.Contains(response.Body.String(), selectedUserID) {
+			t.Fatalf("GET %s returned unsafe Manual Welcome evidence: %s", target, response.Body.String())
+		}
+	}
+}
+
 func TestScheduleLifecycleAPIRequiresCSRFConfirmationAndReturnsSanitizedState(t *testing.T) {
 	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "schedule-api-secret", "", "")
 	setFixtureTaskName(t, root, "Private API Fixture Task")

@@ -238,8 +238,14 @@ def main() -> int:
         failures.append("protected access-policy requests are incorrectly excluded from session recovery")
     if 'id="manual-send-runner-heading"' not in combined or 'id="manual-send-status"' not in combined:
         failures.append("Preview center has no guarded production delivery and retained status cards")
-    if 'type: "send-all"' not in javascript or "confirmProductionSend: true" not in javascript:
-        failures.append("manual production delivery does not use the fixed confirmed operation contract")
+    if 'value="send-all"' not in combined or 'value="send-welcome"' not in combined:
+        failures.append("manual production delivery does not expose both all-recipient and Manual Welcome scopes")
+    if 'type === "send-welcome"' not in javascript or "confirmProductionSend: true" not in javascript:
+        failures.append("manual production delivery does not use the fixed confirmed operation contracts")
+    if 'id="manual-send-user-id"' not in combined or 'state.history.find((candidate) => manualTypes.has(candidate.type))' not in javascript:
+        failures.append("Manual Welcome lacks selected-user input or shared sanitized status")
+    if 'id="direct-plex-notice"' not in combined or "legacyFieldsMissing" not in javascript:
+        failures.append("legacy direct Plex omissions have no guided completion message")
     if 'card.hidden = !manualSend;' not in javascript:
         failures.append("manual production status is visible before a manual send exists")
     for label in ("Index", "Manual Welcome", "New User - No History", "New User - With History", "Normal Newsletter", "Established Quiet", "Established Warnings"):

@@ -389,6 +389,16 @@ func TestRealIntegrationCheckUsesLANServicesWithoutReturningSecrets(t *testing.T
 	if result.Overall != "passed" || len(result.Steps) != 2 || result.Steps[0].State != "passed" || result.Steps[1].State != "passed" {
 		t.Fatalf("unexpected verification result: %+v", result)
 	}
+	setIntegrationConfigValues(t, root, map[string]any{"PlexServerUrl": "", "PlexToken": ""})
+	t.Setenv("PLEX_TOKEN", plexSecret)
+	runtimeView := ReadConfigEditor(root)
+	runtimeResult, err := RunRealIntegrationCheck(context.Background(), root, RealIntegrationCheckRequest{
+		ExpectedRevision:   runtimeView.Revision,
+		ConfirmRealNetwork: true,
+	}, time.Now)
+	if err != nil || runtimeResult.Overall != "passed" || runtimeResult.Steps[1].State != "passed" {
+		t.Fatalf("runtime Plex fallback verification: result=%+v err=%v", runtimeResult, err)
+	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		t.Fatal(err)

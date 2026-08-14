@@ -40,6 +40,17 @@ the `X-Plex-Token` header, and tests `/identity` plus authenticated
 a verification failure. If no URL/token pair can be resolved, verification
 warns and preserves the supported Tautulli-only fallback.
 
+An older configuration may legitimately contain neither direct-Plex key. A
+guided migration preserves that file, identifies the omission, and adds the
+current fields only after an explicit validated save. It never invents or
+returns a Plex token. The Windows runtime may use `PlexOnlineToken` from the
+current account's local Plex Media Server installation without copying it into
+`config.json`; container/native runtimes may use an explicitly supplied
+`PLEX_TOKEN` environment secret. The Manager reports only that a runtime token
+is available. It never returns that value to the browser or writes it into a
+configuration during normalization. A separately hosted Plex server still
+requires a runtime-reachable `PlexServerUrl` and an explicitly supplied token.
+
 ### Metadata readiness before acceptance
 
 Connection verification cannot prove that Plex or Tautulli holds current item
