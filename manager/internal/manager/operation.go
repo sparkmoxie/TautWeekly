@@ -266,15 +266,21 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 		record.State = "succeeded"
 		record.Outcome = "success"
 	}
+	// Finish transient-file cleanup and downstream status updates before the
+	// terminal operation state becomes observable. This keeps callers from
+	// racing final side effects, especially on Windows where open-directory
+	// cleanup is strict.
+	_ = os.Remove(snapshotPath)
+	_ = os.Remove(resultPath)
+	if c.onComplete != nil {
+		c.onComplete(record, revision)
+	}
 	c.mu.Lock()
 	c.cancel = nil
 	c.current = &record
 	_ = c.store.saveCurrent(record)
 	_ = c.store.appendHistory(record)
 	c.mu.Unlock()
-	if c.onComplete != nil {
-		c.onComplete(record, revision)
-	}
 }
 
 func operationSnapshotRevision(snapshotPath string) string {

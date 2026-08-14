@@ -88,18 +88,16 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 }
 
 func TestServerNormalizesRelativeRuntimePaths(t *testing.T) {
-	workingDirectory, err := os.Getwd()
-	if err != nil {
+	base := t.TempDir()
+	t.Chdir(base)
+	relativeRoot := "root"
+	relativeData := "data"
+	root := filepath.Join(base, relativeRoot)
+	data := filepath.Join(base, relativeData)
+	if err := os.MkdirAll(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	root := t.TempDir()
-	data := t.TempDir()
-	relativeRoot, err := filepath.Rel(workingDirectory, root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	relativeData, err := filepath.Rel(workingDirectory, data)
-	if err != nil {
+	if err := os.MkdirAll(data, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	server, err := New(Options{DataDir: relativeData, TautWeeklyRoot: relativeRoot, Version: "test"})

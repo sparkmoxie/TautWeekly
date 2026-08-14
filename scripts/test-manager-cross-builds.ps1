@@ -9,7 +9,8 @@ $ErrorActionPreference = 'Stop'
 if ([string]::IsNullOrWhiteSpace($Root)) { $Root = Split-Path -Parent $PSScriptRoot }
 $Root = [IO.Path]::GetFullPath($Root)
 if ([string]::IsNullOrWhiteSpace($GoPath)) {
-    $GoPath = (Get-Command go -CommandType Application -ErrorAction Stop).Source
+    $GoPath = Get-Command go -CommandType Application -ErrorAction Stop |
+        Select-Object -First 1 -ExpandProperty Source
 }
 $GoPath = [IO.Path]::GetFullPath($GoPath)
 if (-not (Test-Path -LiteralPath $GoPath -PathType Leaf)) {
