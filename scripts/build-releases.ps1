@@ -33,6 +33,35 @@ if ($Version -notmatch '^[0-9A-Za-z][0-9A-Za-z._-]*$') {
     throw "Version contains unsupported characters: $Version"
 }
 
+function Set-Utf16ResourceString {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$CurrentValue,
+        [Parameter(Mandatory = $true)][string]$ReplacementValue
+    )
+    if ($ReplacementValue.Length -gt $CurrentValue.Length) {
+        throw "Replacement resource string is longer than its fixed resource field: $ReplacementValue"
+    }
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $needle = [Text.Encoding]::Unicode.GetBytes($CurrentValue + [char]0)
+    $replacement = [Text.Encoding]::Unicode.GetBytes($ReplacementValue + [char]0)
+    $matches = [Collections.Generic.List[int]]::new()
+    for ($offset = 0; $offset -le $bytes.Length - $needle.Length; $offset++) {
+        $matched = $true
+        for ($index = 0; $index -lt $needle.Length; $index++) {
+            if ($bytes[$offset + $index] -ne $needle[$index]) { $matched = $false; break }
+        }
+        if ($matched) { $matches.Add($offset) }
+    }
+    if ($matches.Count -ne 1) {
+        throw "Expected exactly one fixed resource string '$CurrentValue' in $Path; found $($matches.Count)."
+    }
+    $start = $matches[0]
+    for ($index = 0; $index -lt $needle.Length; $index++) { $bytes[$start + $index] = 0 }
+    [Buffer]::BlockCopy($replacement, 0, $bytes, $start, $replacement.Length)
+    [IO.File]::WriteAllBytes($Path, $bytes)
+}
+
 $dist = Join-Path $Root 'dist'
 $staging = Join-Path $Root 'release-staging'
 foreach ($path in @($dist,$staging)) {
@@ -90,11 +119,22 @@ function Build-WindowsManager {
         throw "Go executable was not found: $goPath"
     }
     $managerRoot = Join-Path $Root 'manager'
+    $managerCommandRoot = Join-Path $managerRoot 'cmd/tautweekly-manager'
+    $managerResource = Join-Path $managerCommandRoot 'rsrc_windows_amd64.syso'
+    $setupResource = Join-Path $Root 'installer/cmd/tautweekly-setup/rsrc_windows_amd64.syso'
+    if (-not (Test-Path -LiteralPath $setupResource -PathType Leaf)) {
+        throw "Windows Manager resource source was not found: $setupResource"
+    }
+    if (Test-Path -LiteralPath $managerResource) {
+        throw "Refusing to replace an unexpected Windows Manager resource object: $managerResource"
+    }
     $output = Join-Path $Destination 'tautweekly-manager.exe'
     $previousGoOS = $env:GOOS
     $previousGoArch = $env:GOARCH
     $previousCGO = $env:CGO_ENABLED
     try {
+        Copy-Item -LiteralPath $setupResource -Destination $managerResource
+        Set-Utf16ResourceString -Path $managerResource -CurrentValue 'TautWeekly for Plex Setup' -ReplacementValue 'TautWeekly for Plex'
         $env:GOOS = 'windows'
         $env:GOARCH = 'amd64'
         $env:CGO_ENABLED = '0'
@@ -106,6 +146,7 @@ function Build-WindowsManager {
         finally { Pop-Location }
     }
     finally {
+        Remove-Item -LiteralPath $managerResource -Force -ErrorAction SilentlyContinue
         if ($null -eq $previousGoOS) { Remove-Item Env:GOOS -ErrorAction SilentlyContinue } else { $env:GOOS = $previousGoOS }
         if ($null -eq $previousGoArch) { Remove-Item Env:GOARCH -ErrorAction SilentlyContinue } else { $env:GOARCH = $previousGoArch }
         if ($null -eq $previousCGO) { Remove-Item Env:CGO_ENABLED -ErrorAction SilentlyContinue } else { $env:CGO_ENABLED = $previousCGO }
@@ -117,6 +158,10 @@ function Build-WindowsManager {
     $header = [IO.File]::ReadAllBytes($output)
     if ($header.Length -lt 2 -or $header[0] -ne 0x4d -or $header[1] -ne 0x5a) {
         throw 'The Windows Manager output is not a Windows PE executable.'
+    }
+    $fileInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($output)
+    if ($fileInfo.FileDescription -ne 'TautWeekly for Plex' -or $fileInfo.ProductName -ne 'TautWeekly for Plex') {
+        throw "The Windows Manager does not expose the expected TautWeekly for Plex file metadata."
     }
 }
 

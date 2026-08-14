@@ -248,10 +248,14 @@ def main() -> int:
         failures.append("Manual Welcome lacks selected-user input or shared sanitized status")
     if 'id="direct-plex-notice"' not in combined or "legacyFieldsMissing" not in javascript:
         failures.append("legacy direct Plex omissions have no guided completion message")
-    if "legacyRuleExcluded" not in javascript or "Legacy email exclusion" not in javascript:
+    if "legacyRuleExcluded" not in javascript or "Excluded by existing config" not in javascript:
         failures.append("legacy email exclusions are not represented in guided delivery choices")
+    if "const orderedUsers = [...users].sort" not in javascript or "leftExcluded ? -1 : 1" not in javascript:
+        failures.append("configured delivery exclusions are not grouped visibly at the top of discovered users")
     if ".user-combobox>input" not in css or ".manual-send-mode-field select{border-color:var(--line-strong)" not in css:
         failures.append("guided user and delivery-mode selectors do not share consistent control styling")
+    if 'input.addEventListener("click"' not in javascript or 'if (open) input.focus();' not in javascript:
+        failures.append("guided user selectors do not open from the full input field for typing or mouse selection")
     if 'card.hidden = !manualSend;' not in javascript:
         failures.append("manual production status is visible before a manual send exists")
     for label in ("Index", "Manual Welcome", "New User - No History", "New User - With History", "Normal Newsletter", "Established Quiet", "Established Warnings"):
@@ -259,6 +263,8 @@ def main() -> int:
             failures.append(f"preview scenario label is missing: {label}")
     if "function orderedPreviews(" not in javascript or "previewScenarioIndex(left) - previewScenarioIndex(right)" not in javascript:
         failures.append("available previews are not rendered in deterministic scenario order")
+    if "function initializePreviewIndexNavigation()" not in javascript or 'link.addEventListener("click"' not in javascript:
+        failures.append("preview index links do not select their scenario in the existing authenticated viewer")
 
     if failures:
         for failure in sorted(set(failures)):

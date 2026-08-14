@@ -152,7 +152,7 @@ func TestInstallationCompletionPointsToManagerShortcut(t *testing.T) {
 	}
 }
 
-func TestFinishInstallationDismissesCompletionBeforeLaunchingManager(t *testing.T) {
+func TestFinishInstallationDismissesCompletionBeforeQueueingManagerLaunch(t *testing.T) {
 	opts := options{installDir: filepath.Join(t.TempDir(), "TautWeekly")}
 	events := []string{}
 	err := finishInstallation(opts,
@@ -167,15 +167,29 @@ func TestFinishInstallationDismissesCompletionBeforeLaunchingManager(t *testing.
 			if workingDirectory != opts.installDir {
 				t.Fatalf("Manager launch used %q instead of %q", workingDirectory, opts.installDir)
 			}
-			events = append(events, "manager-launched")
+			events = append(events, "manager-launch-queued")
 			return nil
 		},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(events, ","); got != "completion-dismissed,manager-launched" {
+	if got := strings.Join(events, ","); got != "completion-dismissed,manager-launch-queued" {
 		t.Fatalf("installer completion and launch order was %q", got)
+	}
+}
+
+func TestParseOptionsRestrictsExitMarkerToTestMode(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "setup-exited.txt")
+	if _, err := parseOptions([]string{"--test-exit-marker", marker}); err == nil {
+		t.Fatal("production installer accepted the test-only exit marker")
+	}
+	opts, err := parseOptions([]string{"--test-mode", "--test-exit-marker", marker})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.testExitMarker != marker {
+		t.Fatalf("test exit marker = %q, want %q", opts.testExitMarker, marker)
 	}
 }
 

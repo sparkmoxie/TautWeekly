@@ -31,6 +31,7 @@ type options struct {
 	uninstall          bool
 	testMode           bool
 	noLaunch           bool
+	testExitMarker     string
 	installDir         string
 	installDirExplicit bool
 	dataDir            string
@@ -47,6 +48,10 @@ func main() {
 		_ = showFailure("TautWeekly setup could not finish", err.Error(), hasArgument(os.Args[1:], "--test-mode"))
 		os.Exit(1)
 	}
+	// A successful GUI installer must terminate explicitly. In particular, do
+	// not let a detached Manager/browser handoff keep the downloaded Setup
+	// executable open after the completion dialog has been dismissed.
+	os.Exit(0)
 }
 
 func run(args []string) error {
@@ -102,13 +107,19 @@ func run(args []string) error {
 		logger.Printf("install failed: %v", err)
 		return fmt.Errorf("Installation stopped safely. Existing configuration and history were not removed.\n\nReview the installer log for details:\n%s", opts.logPath)
 	}
-	return finishInstallation(opts, showCompletion, startDetached)
+	return finishInstallation(opts, showCompletion, queueManagerLaunchAfterExit)
 }
 
-func finishInstallation(opts options, completion func(string, string, bool) error, launch func(string, string) error) error {
+func finishInstallation(opts options, completion func(string, string, bool) error, queueLaunch func(string, string) error) error {
 	completionErr := completion("TautWeekly is ready", installationCompletionMessage(opts.noLaunch), opts.testMode)
+	if opts.testExitMarker != "" {
+		if err := queueExitMarkerAfterExit(opts.testExitMarker, opts.installDir); err != nil {
+			return fmt.Errorf("queue installer exit verification: %w", err)
+		}
+		return completionErr
+	}
 	if !opts.noLaunch && !opts.testMode {
-		if err := launch(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir); err != nil {
+		if err := queueLaunch(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir); err != nil {
 			return fmt.Errorf("open installed Manager: %w", err)
 		}
 	}
@@ -139,6 +150,7 @@ func parseOptions(args []string) (options, error) {
 	flags.BoolVar(&opts.uninstall, "uninstall", false, "remove installed application files and shortcuts")
 	flags.BoolVar(&opts.testMode, "test-mode", false, "skip registry, shortcuts, and process launch")
 	flags.BoolVar(&opts.noLaunch, "no-launch", false, "do not open the Manager after installation")
+	flags.StringVar(&opts.testExitMarker, "test-exit-marker", "", "test-only marker written after the Setup process exits")
 	flags.StringVar(&opts.installDir, "install-dir", "", "explicit installation directory")
 	flags.StringVar(&opts.dataDir, "data-dir", "", "explicit private data directory")
 	flags.StringVar(&opts.logPath, "log", "", "explicit installer log path")
@@ -147,6 +159,9 @@ func parseOptions(args []string) (options, error) {
 	}
 	if flags.NArg() != 0 {
 		return options{}, fmt.Errorf("unexpected arguments: %s", strings.Join(flags.Args(), " "))
+	}
+	if opts.testExitMarker != "" && !opts.testMode {
+		return options{}, errors.New("test-exit-marker requires test-mode")
 	}
 
 	localAppData := os.Getenv("LOCALAPPDATA")
@@ -182,6 +197,13 @@ func parseOptions(args []string) (options, error) {
 	}
 	if opts.logPath == "" {
 		opts.logPath = filepath.Join(localAppData, installFolderName, "installer.log")
+	}
+	if opts.testExitMarker != "" {
+		absolute, err := filepath.Abs(opts.testExitMarker)
+		if err != nil {
+			return options{}, fmt.Errorf("resolve test exit marker: %w", err)
+		}
+		opts.testExitMarker = absolute
 	}
 	if err := normalizeAndValidatePaths(&opts); err != nil {
 		return options{}, err
@@ -776,5 +798,39 @@ func startDetached(_ string, workingDirectory string) error {
 	command := exec.Command("powershell.exe", arguments...)
 	command.Dir = workingDirectory
 	hideProcessWindow(command)
-	return command.Start()
+	if err := command.Start(); err != nil {
+		return err
+	}
+	return command.Process.Release()
+}
+
+func queueManagerLaunchAfterExit(_ string, workingDirectory string) error {
+	if runtime.GOOS != "windows" {
+		return errors.New("installed Manager can be launched only on Windows")
+	}
+	dataDir, _ := installedDataDirectory(workingDirectory)
+	const script = `$parent=Get-Process -Id ([int]$env:TAUTWEEKLY_SETUP_PARENT) -ErrorAction SilentlyContinue;if($null-ne $parent){$parent.WaitForExit()};$arguments=@('-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',$env:TAUTWEEKLY_MANAGER_SCRIPT);if(-not [string]::IsNullOrWhiteSpace($env:TAUTWEEKLY_MANAGER_DATA)){$arguments+=@('-DataRoot',$env:TAUTWEEKLY_MANAGER_DATA)};& powershell.exe @arguments;exit $LASTEXITCODE`
+	return queuePostExitHandoff(script, workingDirectory, []string{
+		"TAUTWEEKLY_MANAGER_SCRIPT=" + filepath.Join(workingDirectory, "START-MANAGER.ps1"),
+		"TAUTWEEKLY_MANAGER_DATA=" + dataDir,
+	})
+}
+
+func queueExitMarkerAfterExit(markerPath, workingDirectory string) error {
+	if runtime.GOOS != "windows" {
+		return errors.New("installer exit verification is available only on Windows")
+	}
+	const script = `$parent=Get-Process -Id ([int]$env:TAUTWEEKLY_SETUP_PARENT) -ErrorAction SilentlyContinue;if($null-ne $parent){$parent.WaitForExit()};[IO.File]::WriteAllText($env:TAUTWEEKLY_SETUP_EXIT_MARKER,'exited',[Text.UTF8Encoding]::new($false))`
+	return queuePostExitHandoff(script, workingDirectory, []string{"TAUTWEEKLY_SETUP_EXIT_MARKER=" + markerPath})
+}
+
+func queuePostExitHandoff(script, workingDirectory string, environment []string) error {
+	command := exec.Command("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
+	command.Dir = workingDirectory
+	command.Env = append(os.Environ(), append([]string{fmt.Sprintf("TAUTWEEKLY_SETUP_PARENT=%d", os.Getpid())}, environment...)...)
+	hideProcessWindow(command)
+	if err := command.Start(); err != nil {
+		return err
+	}
+	return command.Process.Release()
 }

@@ -38,8 +38,9 @@ $installRoot = Join-Path $testRoot 'program'
 $dataRoot = Join-Path $testRoot 'private-data'
 $logPath = Join-Path $testRoot 'installer.log'
 
-function Invoke-TestInstaller([switch]$Uninstall) {
-    $arguments = @('--test-mode', '--no-launch', '--install-dir', $installRoot, '--data-dir', $dataRoot, '--log', $logPath)
+function Invoke-TestInstaller([switch]$Uninstall, [string]$ExitMarker = '') {
+    $arguments = @('--test-mode', '--install-dir', $installRoot, '--data-dir', $dataRoot, '--log', $logPath)
+    if ([string]::IsNullOrWhiteSpace($ExitMarker)) { $arguments += '--no-launch' } else { $arguments += @('--test-exit-marker', $ExitMarker) }
     if ($Uninstall) { $arguments = @('--uninstall') + $arguments }
     $process = Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
     Assert-True ($process.ExitCode -eq 0) "Installer exited with code $($process.ExitCode).`n$(Get-InstallerFailureDetail -OperationLog $logPath)"
@@ -55,7 +56,13 @@ function Invoke-TestInstallerAt([string]$ApplicationRoot, [string]$PrivateRoot, 
 
 try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
-    Invoke-TestInstaller
+    $exitMarker = Join-Path $testRoot 'setup-exited.txt'
+    Invoke-TestInstaller -ExitMarker $exitMarker
+    $exitMarkerDeadline = (Get-Date).AddSeconds(8)
+    while (-not (Test-Path -LiteralPath $exitMarker -PathType Leaf) -and (Get-Date) -lt $exitMarkerDeadline) {
+        Start-Sleep -Milliseconds 100
+    }
+    Assert-True ((Get-Content -LiteralPath $exitMarker -Raw) -eq 'exited') 'Post-exit handoff did not observe the Setup process terminating.'
     $lockProbe = [IO.Path]::GetFullPath((Join-Path $DistPath 'TautWeekly-Setup.lock-probe.exe'))
     Assert-True ([string]::Equals([IO.Path]::GetDirectoryName($lockProbe), $DistPath, [StringComparison]::OrdinalIgnoreCase)) 'Unsafe Setup lock-probe path.'
     try {
@@ -74,6 +81,18 @@ try {
         'tautweekly.ico', 'INSTALL-METADATA.txt', 'RELEASE-FILES.txt'
     )) {
         Assert-True (Test-Path -LiteralPath (Join-Path $installRoot $relative) -PathType Leaf) "Fresh install is missing $relative."
+    }
+    $managerExecutable = Join-Path $installRoot 'tautweekly-manager.exe'
+    $managerInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($managerExecutable)
+    Assert-True ($managerInfo.FileDescription -eq 'TautWeekly for Plex') 'Installed Manager does not use the requested TautWeekly for Plex Task Manager name.'
+    Assert-True ($managerInfo.ProductName -eq 'TautWeekly for Plex') 'Installed Manager does not use the requested TautWeekly for Plex product metadata.'
+    Add-Type -AssemblyName System.Drawing
+    $managerIcon = [Drawing.Icon]::ExtractAssociatedIcon($managerExecutable)
+    try {
+        Assert-True ($null -ne $managerIcon) 'Installed Manager has no extractable popcorn/TW application icon.'
+    }
+    finally {
+        if ($null -ne $managerIcon) { $managerIcon.Dispose() }
     }
     Assert-True (Test-Path -LiteralPath $dataRoot -PathType Container) 'Fresh install did not create the external private data directory.'
     $metadata = Get-Content -LiteralPath (Join-Path $installRoot 'INSTALL-METADATA.txt') -Raw
@@ -169,7 +188,6 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $dataRoot 'access-state.json') -PathType Leaf) 'Uninstall removed external Manager data.'
     Assert-True (Test-Path -LiteralPath $logPath -PathType Leaf) 'Installer did not retain its diagnostic log.'
 
-    Add-Type -AssemblyName System.Drawing
     $embeddedIcon = [Drawing.Icon]::ExtractAssociatedIcon($setup)
     try {
         Assert-True ($null -ne $embeddedIcon) 'Setup executable has no extractable application icon.'
