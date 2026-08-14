@@ -152,6 +152,56 @@ func TestInstallationCompletionPointsToManagerShortcut(t *testing.T) {
 	}
 }
 
+func TestFinishInstallationDismissesCompletionBeforeLaunchingManager(t *testing.T) {
+	opts := options{installDir: filepath.Join(t.TempDir(), "TautWeekly")}
+	events := []string{}
+	err := finishInstallation(opts,
+		func(_, message string, suppressed bool) error {
+			if suppressed || !strings.Contains(message, "will now open in your browser") {
+				t.Fatalf("unexpected completion state: suppressed=%t message=%q", suppressed, message)
+			}
+			events = append(events, "completion-dismissed")
+			return nil
+		},
+		func(_, workingDirectory string) error {
+			if workingDirectory != opts.installDir {
+				t.Fatalf("Manager launch used %q instead of %q", workingDirectory, opts.installDir)
+			}
+			events = append(events, "manager-launched")
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(events, ","); got != "completion-dismissed,manager-launched" {
+		t.Fatalf("installer completion and launch order was %q", got)
+	}
+}
+
+func TestFinishInstallationNoLaunchClosesWithoutStartingManager(t *testing.T) {
+	opts := options{installDir: t.TempDir(), noLaunch: true}
+	launchCalled := false
+	err := finishInstallation(opts,
+		func(_, message string, suppressed bool) error {
+			if suppressed || strings.Contains(message, "will now open in your browser") {
+				t.Fatalf("unexpected no-launch completion state: suppressed=%t message=%q", suppressed, message)
+			}
+			return nil
+		},
+		func(_, _ string) error {
+			launchCalled = true
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if launchCalled {
+		t.Fatal("no-launch installation started the Manager")
+	}
+}
+
 func TestMigrateLegacyManagerDataRejectsConflictingExternalState(t *testing.T) {
 	existing := t.TempDir()
 	data := t.TempDir()

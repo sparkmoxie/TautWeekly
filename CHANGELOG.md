@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.3] - 2026-08-14
+
 ### Changed
 
 - Styled the production Manual Welcome user selector with the same bounded
@@ -24,6 +26,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   hidden legacy rule.
 - Restored consistent sizing, borders, typography, and responsive containment
   across the production newsletter and Tautulli user selectors.
+- Kept the Windows Setup completion dialog in the foreground and delayed the
+  Manager/browser launch until that dialog is dismissed, preventing a hidden
+  Setup process from retaining the downloaded EXE after installation.
 
 ### Security
 
