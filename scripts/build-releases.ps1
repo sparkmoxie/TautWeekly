@@ -83,7 +83,8 @@ function Build-WindowsManager {
         [IO.Path]::GetFullPath([string]$env:TAUTWEEKLY_GO)
     }
     else {
-        (Get-Command go -CommandType Application -ErrorAction Stop).Source
+        Get-Command go -CommandType Application -ErrorAction Stop |
+            Select-Object -First 1 -ExpandProperty Source
     }
     if (-not (Test-Path -LiteralPath $goPath -PathType Leaf)) {
         throw "Go executable was not found: $goPath"
@@ -126,7 +127,8 @@ function Build-WindowsInstaller {
         [IO.Path]::GetFullPath([string]$env:TAUTWEEKLY_GO)
     }
     else {
-        (Get-Command go -CommandType Application -ErrorAction Stop).Source
+        Get-Command go -CommandType Application -ErrorAction Stop |
+            Select-Object -First 1 -ExpandProperty Source
     }
     if (-not (Test-Path -LiteralPath $goPath -PathType Leaf)) {
         throw "Go executable was not found: $goPath"
@@ -189,7 +191,8 @@ function Build-WindowsUninstaller {
         [IO.Path]::GetFullPath([string]$env:TAUTWEEKLY_GO)
     }
     else {
-        (Get-Command go -CommandType Application -ErrorAction Stop).Source
+        Get-Command go -CommandType Application -ErrorAction Stop |
+            Select-Object -First 1 -ExpandProperty Source
     }
     $installerRoot = Join-Path $Root 'installer'
     $output = Join-Path $Destination 'TautWeekly-Uninstall.exe'
