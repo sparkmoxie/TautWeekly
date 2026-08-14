@@ -35,23 +35,24 @@ type verifiedUpdateResult struct {
 }
 
 var (
-	user32          = syscall.NewLazyDLL("user32.dll")
-	messageBox      = user32.NewProc("MessageBoxW")
-	sendMessage     = user32.NewProc("SendMessageW")
-	showWindow      = user32.NewProc("ShowWindow")
-	setForeground   = user32.NewProc("SetForegroundWindow")
-	setWindowPos    = user32.NewProc("SetWindowPos")
-	shell32         = syscall.NewLazyDLL("shell32.dll")
-	browseForFolder = shell32.NewProc("SHBrowseForFolderW")
-	getFolderPath   = shell32.NewProc("SHGetPathFromIDListW")
-	ole32           = syscall.NewLazyDLL("ole32.dll")
-	coTaskMemFree   = ole32.NewProc("CoTaskMemFree")
-	buttonYesNo     = uintptr(0x00000004)
-	iconQuestion    = uintptr(0x00000020)
-	iconInformation = uintptr(0x00000040)
-	iconError       = uintptr(0x00000010)
-	buttonOK        = uintptr(0x00000000)
-	resultYes       = uintptr(6)
+	user32            = syscall.NewLazyDLL("user32.dll")
+	messageBox        = user32.NewProc("MessageBoxW")
+	sendMessage       = user32.NewProc("SendMessageW")
+	showWindow        = user32.NewProc("ShowWindow")
+	setForeground     = user32.NewProc("SetForegroundWindow")
+	setWindowPos      = user32.NewProc("SetWindowPos")
+	shell32           = syscall.NewLazyDLL("shell32.dll")
+	browseForFolder   = shell32.NewProc("SHBrowseForFolderW")
+	getFolderPath     = shell32.NewProc("SHGetPathFromIDListW")
+	ole32             = syscall.NewLazyDLL("ole32.dll")
+	coTaskMemFree     = ole32.NewProc("CoTaskMemFree")
+	buttonYesNo       = uintptr(0x00000004)
+	iconQuestion      = uintptr(0x00000020)
+	iconInformation   = uintptr(0x00000040)
+	iconError         = uintptr(0x00000010)
+	messageForeground = uintptr(0x00010000)
+	buttonOK          = uintptr(0x00000000)
+	resultYes         = uintptr(6)
 )
 
 type browseInfo struct {
@@ -218,7 +219,7 @@ func confirmAction(title, message string, testMode bool) (bool, error) {
 	if testMode {
 		return true, nil
 	}
-	result, err := showMessage(title, message, buttonYesNo|iconQuestion)
+	result, err := showMessage(title, message, buttonYesNo|iconQuestion|messageForeground)
 	return result == resultYes, err
 }
 
@@ -226,7 +227,7 @@ func showCompletion(title, message string, suppressed bool) error {
 	if suppressed {
 		return nil
 	}
-	_, err := showMessage(title, message, buttonOK|iconInformation)
+	_, err := showMessage(title, message, buttonOK|iconInformation|messageForeground)
 	return err
 }
 
@@ -234,7 +235,7 @@ func showFailure(title, message string, suppressed bool) error {
 	if suppressed {
 		return nil
 	}
-	_, err := showMessage(title, message, buttonOK|iconError)
+	_, err := showMessage(title, message, buttonOK|iconError|messageForeground)
 	return err
 }
 

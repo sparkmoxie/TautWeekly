@@ -102,7 +102,17 @@ func run(args []string) error {
 		logger.Printf("install failed: %v", err)
 		return fmt.Errorf("Installation stopped safely. Existing configuration and history were not removed.\n\nReview the installer log for details:\n%s", opts.logPath)
 	}
-	return showCompletion("TautWeekly is ready", installationCompletionMessage(opts.noLaunch), opts.testMode)
+	return finishInstallation(opts, showCompletion, startDetached)
+}
+
+func finishInstallation(opts options, completion func(string, string, bool) error, launch func(string, string) error) error {
+	completionErr := completion("TautWeekly is ready", installationCompletionMessage(opts.noLaunch), opts.testMode)
+	if !opts.noLaunch && !opts.testMode {
+		if err := launch(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir); err != nil {
+			return fmt.Errorf("open installed Manager: %w", err)
+		}
+	}
+	return completionErr
 }
 
 func installationCompletionMessage(noLaunch bool) string {
@@ -273,6 +283,7 @@ func install(opts options, logger *log.Logger) error {
 	}
 	managerWasRunning := false
 	managerRestarted := false
+	installSucceeded := false
 	if updatingExisting {
 		if err := migrateLegacyManagerData(opts.installDir, opts.dataDir); err != nil {
 			return err
@@ -305,7 +316,7 @@ func install(opts options, logger *log.Logger) error {
 			return err
 		}
 		defer func() {
-			if managerWasRunning && !managerRestarted {
+			if managerWasRunning && !managerRestarted && !installSucceeded {
 				_ = startDetached(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir)
 			}
 		}()
@@ -323,12 +334,13 @@ func install(opts options, logger *log.Logger) error {
 		}
 	}
 	logger.Printf("install complete version=%s", version)
-	if (!opts.noLaunch || managerWasRunning) && !opts.testMode {
+	if managerWasRunning && opts.noLaunch && !opts.testMode {
 		if err := startDetached(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir); err != nil {
 			return fmt.Errorf("open installed Manager: %w", err)
 		}
-		managerRestarted = managerWasRunning
+		managerRestarted = true
 	}
+	installSucceeded = true
 	return nil
 }
 

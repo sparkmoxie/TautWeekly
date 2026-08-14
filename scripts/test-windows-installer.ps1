@@ -56,6 +56,18 @@ function Invoke-TestInstallerAt([string]$ApplicationRoot, [string]$PrivateRoot, 
 try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
     Invoke-TestInstaller
+    $lockProbe = [IO.Path]::GetFullPath((Join-Path $DistPath 'TautWeekly-Setup.lock-probe.exe'))
+    Assert-True ([string]::Equals([IO.Path]::GetDirectoryName($lockProbe), $DistPath, [StringComparison]::OrdinalIgnoreCase)) 'Unsafe Setup lock-probe path.'
+    try {
+        Move-Item -LiteralPath $setup -Destination $lockProbe -ErrorAction Stop
+        Move-Item -LiteralPath $lockProbe -Destination $setup -ErrorAction Stop
+    }
+    finally {
+        if ((Test-Path -LiteralPath $lockProbe -PathType Leaf) -and -not (Test-Path -LiteralPath $setup)) {
+            Move-Item -LiteralPath $lockProbe -Destination $setup -ErrorAction SilentlyContinue
+        }
+    }
+    Assert-True (Test-Path -LiteralPath $setup -PathType Leaf) 'Setup remained locked or was not restored after its process exited.'
     foreach ($relative in @(
         'tautweekly-manager.exe', 'TautWeekly.ps1', 'START-MANAGER.ps1', 'RESET-MANAGER-ACCESS.ps1',
         'Open-TautWeekly.cmd', 'Reset-TautWeekly-Access.cmd', 'Uninstall-TautWeekly.cmd', 'TautWeekly-Uninstall.exe',
@@ -187,7 +199,7 @@ try {
         if ($null -ne $embeddedIcon) { $embeddedIcon.Dispose() }
     }
 
-    Write-Host '[PASS] Windows installer fresh install, verified upgrade, portable migration, icon, and privacy-preserving uninstall lifecycle.' -ForegroundColor Green
+    Write-Host '[PASS] Windows installer fresh install, process-lock release, verified upgrade, portable migration, icon, and privacy-preserving uninstall lifecycle.' -ForegroundColor Green
 }
 finally {
     if (Test-Path -LiteralPath $testRoot) {
