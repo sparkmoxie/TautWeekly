@@ -697,17 +697,48 @@ func (s *Server) handleRunIntegrationCheck(w http.ResponseWriter, r *http.Reques
 	s.lastVerification = &result
 	s.verificationMu.Unlock()
 	s.configMu.Unlock()
-	lanState := result.Overall
-	lanSummary := "Tautulli and direct Plex verification passed."
-	if lanState == "failed" {
-		lanSummary = "One or more Tautulli or Plex connection checks failed. Review Verify for details."
-	} else if lanState != "passed" {
-		lanState = "warning"
-		lanSummary = "Tautulli and Plex verification completed with a result that needs review."
-	}
+	lanState, lanSummary, diagnosticCode := integrationCheckPresentation(result)
 	s.updateConfigurationStep(result.ConfigRevision, "lan", lanState, lanSummary)
-	s.recordDiagnostic("lan-verification", diagnosticOutcome(result.Overall), "verification-"+diagnosticResultCode(result.Overall))
+	s.recordDiagnostic("lan-verification", diagnosticOutcome(lanState), diagnosticCode)
 	writeJSON(w, http.StatusOK, result)
+}
+
+func integrationCheckPresentation(result IntegrationCheckResult) (state, summary, diagnosticCode string) {
+	state = result.Overall
+	if state != "passed" && state != "warning" && state != "failed" {
+		state = "warning"
+	}
+
+	failedTautulli := false
+	failedPlex := false
+	plexSkipped := false
+	for _, step := range result.Steps {
+		switch {
+		case step.Service == "tautulli" && step.State == "failed":
+			failedTautulli = true
+		case step.Service == "plex" && step.State == "failed":
+			failedPlex = true
+		case step.Service == "plex" && step.State == "skipped":
+			plexSkipped = true
+		}
+	}
+
+	switch {
+	case failedTautulli && failedPlex:
+		return "failed", "Tautulli and direct Plex verification failed. Review Verify for the sanitized component results.", "verification-multiple-failed"
+	case failedTautulli:
+		return "failed", "Tautulli verification failed. Review Verify for the sanitized component result.", "verification-tautulli-failed"
+	case failedPlex:
+		return "failed", "Direct Plex verification failed. Review Verify for the sanitized component result.", "verification-plex-failed"
+	case state == "passed" && plexSkipped:
+		return "passed", "Tautulli verification passed. Optional direct Plex verification was skipped because a complete URL and token were not available.", "verification-passed-plex-skipped"
+	case state == "passed":
+		return "passed", "Tautulli and direct Plex verification passed.", "verification-passed"
+	case state == "failed":
+		return "failed", "One or more connection checks failed. Review Verify for the sanitized component results.", "verification-result-failed"
+	default:
+		return "warning", "Connection verification completed with a result that needs review under Verify.", "verification-warning"
+	}
 }
 
 func (s *Server) handleRunSMTPNetworkCheck(w http.ResponseWriter, r *http.Request) {
@@ -867,6 +898,8 @@ func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
 		message := "Confirm that this operation creates local previews and sends no email."
 		if request.Type == "send-test-all" {
 			message = "Confirm that this operation sends six real test messages only to the configured TestEmail."
+		} else if request.Type == "send-all" {
+			message = "Confirm that this operation sends the production newsletter to all currently eligible recipients."
 		}
 		writeAPIError(w, http.StatusUnprocessableEntity, "operation-confirmation-required", message)
 		return
@@ -874,7 +907,7 @@ func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
 		if request.Type == "preview-all" {
 			s.updateConfigurationStep(request.ExpectedRevision, "previews", "failed", "Preview generation could not start because its user selection was invalid.")
 		}
-		writeAPIError(w, http.StatusUnprocessableEntity, "operation-invalid", "Choose a supported operation and enter a numeric Tautulli user ID.")
+		writeAPIError(w, http.StatusUnprocessableEntity, "operation-invalid", "Choose a supported operation and provide only the inputs required for that operation.")
 		return
 	case errors.Is(err, ErrOperationNotReady):
 		if request.Type == "preview-all" {
@@ -898,7 +931,7 @@ func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
 		if request.Type == "preview-all" {
 			s.updateConfigurationStep(request.ExpectedRevision, "previews", "failed", "Local preview generation could not be started safely.")
 		}
-		writeAPIError(w, http.StatusInternalServerError, "operation-start-failed", "The preview operation could not be started safely.")
+		writeAPIError(w, http.StatusInternalServerError, "operation-start-failed", "The Manager operation could not be started safely.")
 		return
 	}
 	if request.Type == "preview-all" {

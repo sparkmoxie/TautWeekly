@@ -400,6 +400,20 @@ func TestRealIntegrationCheckUsesLANServicesWithoutReturningSecrets(t *testing.T
 	}
 }
 
+func TestIntegrationCheckOverallTreatsOptionalDirectPlexSkipAsPassed(t *testing.T) {
+	steps := []IntegrationCheckStep{
+		{Service: "tautulli", State: "passed"},
+		{Service: "plex", State: "skipped"},
+	}
+	if result := integrationCheckOverall(steps); result != "passed" {
+		t.Fatalf("optional Plex result: got %q, want passed", result)
+	}
+	steps[1].State = "failed"
+	if result := integrationCheckOverall(steps); result != "failed" {
+		t.Fatalf("failed Plex result: got %q, want failed", result)
+	}
+}
+
 func TestRealIntegrationCheckRequiresConfirmationRevisionAndLAN(t *testing.T) {
 	root := integrationConfigRoot(t, "http://203.0.113.10:8181", "fictional-api-key", "", "")
 	view := ReadConfigEditor(root)

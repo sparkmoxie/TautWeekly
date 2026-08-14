@@ -114,16 +114,7 @@ func RunRealIntegrationCheck(ctx context.Context, root string, request RealInteg
 	tautulliStep, serverData := verifyTautulli(checkContext, client, values)
 	plexStep := verifyPlex(checkContext, client, values, serverData)
 	steps := []IntegrationCheckStep{tautulliStep, plexStep}
-	overall := "passed"
-	for _, step := range steps {
-		if step.State == "failed" {
-			overall = "failed"
-			break
-		}
-		if step.State != "passed" {
-			overall = "warning"
-		}
-	}
+	overall := integrationCheckOverall(steps)
 	return IntegrationCheckResult{
 		Mode:            "real-lan",
 		NetworkBoundary: "private-and-loopback-only",
@@ -133,6 +124,20 @@ func RunRealIntegrationCheck(ctx context.Context, root string, request RealInteg
 		ConfigRevision:  revision,
 		Steps:           steps,
 	}, nil
+}
+
+func integrationCheckOverall(steps []IntegrationCheckStep) string {
+	overall := "passed"
+	for _, step := range steps {
+		if step.State == "failed" {
+			return "failed"
+		}
+		if step.State == "passed" || step.Service == "plex" && step.State == "skipped" {
+			continue
+		}
+		overall = "warning"
+	}
+	return overall
 }
 
 // DiscoverTautulliChoices performs one explicit, non-persistent LAN lookup for

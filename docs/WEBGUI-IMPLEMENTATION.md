@@ -181,15 +181,20 @@ known modes using argument arrays rather than a shell command string:
 Production send and welcome modes retain explicit confirmation gates. The
 existing operation lock remains authoritative during the transition.
 
-The first implemented renderer operations are `PreviewAll` and `SendTestAll`
-on Windows. The Manager passes only a validated numeric user ID and a private
-per-run configuration snapshot to the fixed packaged PowerShell script,
-discards raw process output, and records only a sanitized operation result.
+The implemented renderer operations are `PreviewAll`, `SendTestAll`, and
+`SendAll` on Windows. Preview and TestEmail operations pass only a validated
+numeric user ID; production delivery does not accept one. Every mode receives a
+private per-run configuration snapshot through the fixed packaged PowerShell
+script, discards raw process output, and records only a sanitized operation
+result.
 `PreviewAll` adds `-NoOpen`, does not contact SMTP, and does not update the
 access roster or welcome state. `SendTestAll` requires a separate confirmation,
 delivers six variants only to the configured `TestEmail`, and cannot be
 cancelled after starting because a partial set may already have been accepted
-by SMTP. Production and welcome sends remain unavailable from the Manager.
+by SMTP. `SendAll` requires a distinct production confirmation, runs the same
+fixed delivery contract as the weekly schedule, exposes no cancellation, and
+retains only aggregate accepted, skipped, and failed counts. One-off welcome
+delivery remains unavailable from the Manager.
 
 The renderer should gain an optional structured result path. On completion it
 writes a sanitized result containing mode, outcome, duration, sent count,
@@ -564,7 +569,7 @@ Operations run asynchronously and expose structured progress:
 - waiting-for-lock
 - running
 - finalizing
-- succeeded, failed, cancelled, or blocked
+- succeeded, partial, failed, cancelled, or blocked
 
 Server-sent events are preferred for progress, with polling as a fallback.
 Progress text is emitted from known stage codes and sanitized arguments, not
@@ -579,7 +584,8 @@ Destructive or externally visible operations require confirmation:
 
 - Test delivery: confirm the configured test recipient.
 - Welcome delivery: confirm the selected account and one-off nature.
-- Production delivery: type a confirmation phrase and review aggregate scope.
+- Production delivery: explicitly confirm the real-recipient scope and review
+  aggregate results.
 - Schedule enable: confirm timezone, next run, and successful test prerequisite.
 - Backup restore: show configuration revision and create a pre-restore backup.
 - Update: remain deferred until the existing guarded updater has a typed
@@ -904,12 +910,16 @@ service URLs, email addresses, credentials, and raw responses are excluded. A
 separate SMTP preflight validates reachability and
 STARTTLS without sending credentials or message data, with deterministic plain,
 missing-STARTTLS, certificate-validated STARTTLS, CSRF, and redaction tests.
-The typed Windows renderer operations now run `PreviewAll` and guarded
-`SendTestAll`. Preview generation adds headless `-NoOpen` behavior, supports
+The typed Windows renderer operations now run `PreviewAll`, guarded
+`SendTestAll`, and explicitly confirmed `SendAll`. Preview generation adds
+headless `-NoOpen` behavior, supports
 safe cancellation and restart recovery, and attributes only files changed by
 that run. Test delivery is limited by the renderer to the saved `TestEmail`,
 records aggregate SMTP acceptance only, and exposes no unsafe cancellation.
-Both write bounded sanitized current/history records without the user ID,
+Manual production delivery uses the same fixed renderer contract as the
+schedule, accepts no browser-supplied user or command input, cannot be
+cancelled, and retains aggregate accepted, skipped, and failed counts. All
+three write bounded sanitized current/history records without the user ID,
 configuration, service addresses, command line, or raw process output. The
 renderer's opt-in structured result contains only mode, outcome, timing,
 delivery scope, aggregate counts, and preview basenames; scheduled Windows

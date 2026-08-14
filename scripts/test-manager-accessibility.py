@@ -230,6 +230,23 @@ def main() -> int:
         failures.append("static masked typing fields do not receive show/hide controls")
     if "function concealMaskedInputs(" not in javascript or ".masked-input-shell" not in css:
         failures.append("masked typing fields do not share concealment and layout behavior")
+    if "function renewTrustedLocalSession(" not in javascript or "return await request(path, options, false);" not in javascript:
+        failures.append("trusted-local sessions do not recover once after a Manager restart")
+    if "function reloadAfterTrustedLocalRestart(" not in javascript or "window.location.reload();" not in javascript:
+        failures.append("trusted-local restart races do not recover without a manual refresh")
+    if "const authBootstrapEndpoint =" not in javascript or 'path.startsWith("/api/v1/auth/")' in javascript:
+        failures.append("protected access-policy requests are incorrectly excluded from session recovery")
+    if 'id="manual-send-runner-heading"' not in combined or 'id="manual-send-status"' not in combined:
+        failures.append("Preview center has no guarded production delivery and retained status cards")
+    if 'type: "send-all"' not in javascript or "confirmProductionSend: true" not in javascript:
+        failures.append("manual production delivery does not use the fixed confirmed operation contract")
+    if 'card.hidden = !manualSend;' not in javascript:
+        failures.append("manual production status is visible before a manual send exists")
+    for label in ("Index", "Manual Welcome", "New User - No History", "New User - With History", "Normal Newsletter", "Established Quiet", "Established Warnings"):
+        if label not in javascript:
+            failures.append(f"preview scenario label is missing: {label}")
+    if "function orderedPreviews(" not in javascript or "previewScenarioIndex(left) - previewScenarioIndex(right)" not in javascript:
+        failures.append("available previews are not rendered in deterministic scenario order")
 
     if failures:
         for failure in sorted(set(failures)):

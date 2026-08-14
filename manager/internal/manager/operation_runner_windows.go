@@ -15,14 +15,18 @@ import (
 type platformPreviewOperationRunner struct{}
 
 func (platformPreviewOperationRunner) RunPreviewAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error) {
-	return runWindowsRendererOperation(ctx, root, configPath, resultPath, userID, "PreviewAll", true)
+	return runWindowsRendererOperation(ctx, root, configPath, resultPath, userID, "PreviewAll", true, false)
 }
 
 func (platformPreviewOperationRunner) RunSendTestAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error) {
-	return runWindowsRendererOperation(ctx, root, configPath, resultPath, userID, "SendTestAll", false)
+	return runWindowsRendererOperation(ctx, root, configPath, resultPath, userID, "SendTestAll", false, false)
 }
 
-func runWindowsRendererOperation(ctx context.Context, root, configPath, resultPath, userID, mode string, noOpen bool) (int, error) {
+func (platformPreviewOperationRunner) RunSendAll(ctx context.Context, root, configPath, resultPath string) (int, error) {
+	return runWindowsRendererOperation(ctx, root, configPath, resultPath, "", "SendAll", false, true)
+}
+
+func runWindowsRendererOperation(ctx context.Context, root, configPath, resultPath, userID, mode string, noOpen, confirmSendAll bool) (int, error) {
 	scriptPath := filepath.Join(root, "TautWeekly.ps1")
 	if info, err := os.Stat(scriptPath); err != nil || !info.Mode().IsRegular() {
 		return -1, errors.New("packaged renderer is unavailable")
@@ -42,12 +46,17 @@ func runWindowsRendererOperation(ctx context.Context, root, configPath, resultPa
 		"-ExecutionPolicy", "Bypass",
 		"-File", scriptPath,
 		"-Mode", mode,
-		"-UserId", userID,
 		"-ConfigPath", configPath,
 		"-ResultPath", resultPath,
 	}
+	if userID != "" {
+		arguments = append(arguments, "-UserId", userID)
+	}
 	if noOpen {
 		arguments = append(arguments, "-NoOpen")
+	}
+	if confirmSendAll {
+		arguments = append(arguments, "-ConfirmSendAll")
 	}
 	command := exec.CommandContext(ctx, powerShellPath, arguments...)
 	command.Dir = root
