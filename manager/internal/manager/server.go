@@ -42,10 +42,7 @@ type Server struct {
 	authLimiter       *attemptLimiter
 	configMu          sync.Mutex
 	actionStartMu     sync.Mutex
-	verificationMu    sync.RWMutex
 	verificationRunMu sync.Mutex
-	lastVerification  *IntegrationCheckResult
-	lastSMTPCheck     *SMTPNetworkCheckResult
 	diagnostics       *diagnosticStore
 	discovery         *tautulliDiscoveryStore
 	configuration     *configurationStatusStore
@@ -588,7 +585,6 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		writeAPIFieldErrors(w, http.StatusUnprocessableEntity, "config-validation-failed", "Review the highlighted configuration fields.", fieldErrors)
 		return
 	}
-	s.clearLastVerification()
 	if err := s.configuration.Reset(result.Editor.Revision); err != nil {
 		s.recordDiagnostic("configuration", "warning", "config-status-write-failed")
 	}
@@ -636,7 +632,6 @@ func (s *Server) handleRestoreConfig(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, "backup-restore-failed", "The backup could not be restored safely.")
 		return
 	}
-	s.clearLastVerification()
 	if err := s.configuration.ResetNotRun(result.Editor.Revision); err != nil {
 		s.recordDiagnostic("configuration", "warning", "config-status-write-failed")
 	}
@@ -645,9 +640,10 @@ func (s *Server) handleRestoreConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIntegrationCheckState(w http.ResponseWriter, _ *http.Request) {
-	s.verificationMu.RLock()
-	defer s.verificationMu.RUnlock()
-	writeJSON(w, http.StatusOK, map[string]any{"last": s.lastVerification, "smtp": s.lastSMTPCheck})
+	editor := ReadConfigEditor(s.options.TautWeeklyRoot)
+	status := s.configuration.Load(editor.Revision)
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"last": status.LastVerification, "smtp": status.LastSMTPCheck})
 }
 
 func (s *Server) handleRunIntegrationCheck(w http.ResponseWriter, r *http.Request) {
@@ -693,9 +689,9 @@ func (s *Server) handleRunIntegrationCheck(w http.ResponseWriter, r *http.Reques
 		writeAPIError(w, http.StatusConflict, "config-changed-during-verification", "Configuration changed while the real connection test was running. Review the new settings and run it again.")
 		return
 	}
-	s.verificationMu.Lock()
-	s.lastVerification = &result
-	s.verificationMu.Unlock()
+	if err := s.configuration.StoreIntegrationCheck(result.ConfigRevision, result); err != nil {
+		s.recordDiagnostic("lan-verification", "warning", "verification-status-write-failed")
+	}
 	s.configMu.Unlock()
 	lanState, lanSummary, diagnosticCode := integrationCheckPresentation(result)
 	s.updateConfigurationStep(result.ConfigRevision, "lan", lanState, lanSummary)
@@ -784,9 +780,9 @@ func (s *Server) handleRunSMTPNetworkCheck(w http.ResponseWriter, r *http.Reques
 		writeAPIError(w, http.StatusConflict, "config-changed-during-verification", "Configuration changed while SMTP preflight was running. Review the new settings and run it again.")
 		return
 	}
-	s.verificationMu.Lock()
-	s.lastSMTPCheck = &result
-	s.verificationMu.Unlock()
+	if err := s.configuration.StoreSMTPCheck(result.ConfigRevision, result); err != nil {
+		s.recordDiagnostic("smtp-preflight", "warning", "smtp-status-write-failed")
+	}
 	s.configMu.Unlock()
 	smtpState := result.Overall
 	if smtpState != "passed" && smtpState != "warning" && smtpState != "failed" {
@@ -863,13 +859,6 @@ func (s *Server) handleTautulliDiscovery(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, result)
-}
-
-func (s *Server) clearLastVerification() {
-	s.verificationMu.Lock()
-	s.lastVerification = nil
-	s.lastSMTPCheck = nil
-	s.verificationMu.Unlock()
 }
 
 func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {

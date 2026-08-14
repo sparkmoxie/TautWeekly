@@ -312,7 +312,7 @@ function renderIntegrationStatus() {
   const overallLabel = verificationActive ? "Running" : overall === "not-run" ? "Not run" : titleCase(overall);
   setChip("integration-chip", overallLabel, overallTone);
   setText("integration-copy", outcomes.length
-    ? "Latest checks run after a successful save or a manual retest and remain available for this Manager session."
+    ? "Latest checks from validation or a targeted retest are retained for this saved configuration."
     : "Safe real checks run after a successful save or when you start a manual retest.");
   return { overallLabel, overallTone };
 }
@@ -1291,6 +1291,19 @@ async function runPostSaveSetup(revision) {
     renderSetupWorkflow();
   }
   try {
+    const [status, verification] = await Promise.all([
+      request("/api/v1/status"),
+      request("/api/v1/checks/integrations"),
+    ]);
+    state.status = status;
+    state.verification = verification || { last: null, smtp: null };
+    renderStatus();
+    renderVerification();
+  } catch (_) {
+    renderDashboardConfigStatus();
+    renderIntegrationStatus();
+  }
+  try {
     state.diagnostics = await request("/api/v1/diagnostics");
     renderAbout();
   } catch (_) {
@@ -1494,10 +1507,10 @@ function renderVerification() {
       appendVerificationResult(results, step.service === "plex" ? "Direct Plex" : titleCase(step.service), step.state, step.summary);
     }
   } else {
-    setText("verification-observed", "No integration test has been run since the Manager started.");
+    setText("verification-observed", "No integration result is retained for this saved configuration.");
     const empty = document.createElement("div");
     empty.className = "config-empty";
-    empty.textContent = "Run a connection test to collect live Tautulli and direct Plex evidence.";
+    empty.textContent = "Validate and save to run every safe setup check, or repeat this targeted connection test.";
     results.append(empty);
   }
 
@@ -1505,10 +1518,10 @@ function renderVerification() {
     setText("smtp-verification-observed", `Completed ${formatDate(smtp.completedAtUtc)} · ${titleCase(smtp.security)}.`);
     appendVerificationResult(smtpResults, "SMTP preflight", smtp.state, smtp.summary);
   } else {
-    setText("smtp-verification-observed", "No SMTP preflight has been run since the Manager started.");
+    setText("smtp-verification-observed", "No SMTP preflight is retained for this saved configuration.");
     const empty = document.createElement("div");
     empty.className = "config-empty";
-    empty.textContent = "Run the separate preflight to collect reachability and STARTTLS evidence without sending a message.";
+    empty.textContent = "Validate and save to run every safe setup check, or repeat this targeted SMTP preflight.";
     smtpResults.append(empty);
   }
 
@@ -1540,7 +1553,7 @@ async function runVerification() {
     try {
       await refreshConfigurationStatus();
     } catch (_) {
-      // The detailed verification result remains available for this Manager session.
+      // The detailed result is already visible; a later refresh will load its durable server record.
     }
     renderVerification();
     renderDiscovery();
@@ -1573,7 +1586,7 @@ async function runSMTPVerification() {
     try {
       await refreshConfigurationStatus();
     } catch (_) {
-      // The detailed SMTP result remains available for this Manager session.
+      // The detailed result is already visible; a later refresh will load its durable server record.
     }
     renderVerification();
     renderDiscovery();
