@@ -6,6 +6,32 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.4] - 2026-08-14
+
+### Changed
+
+- Opened every Tautulli user selector from the full field surface so users can
+  immediately type to search or scroll the same bounded, styled result list.
+- Grouped configured ID and legacy email delivery exclusions first in the
+  guided roster. Existing email-rule matches remain visibly checked and are
+  identified without exposing an email address.
+- Embedded the approved TautWeekly popcorn artwork and `TautWeekly for Plex`
+  product identity in the Windows Manager executable while retaining its
+  compatibility-sensitive installed filename.
+
+### Fixed
+
+- Routed links in the generated preview index back through the Manager's
+  authenticated preview selector. **Open preview** now replaces the current
+  preview in place and highlights the matching scenario instead of navigating
+  to an invalid nested or separate browser target.
+- Handed Manager startup to a detached post-exit process after Windows Setup's
+  completion dialog closes. Setup now terminates and releases the downloaded
+  EXE before the Manager and browser are opened.
+- Added installer lifecycle coverage that waits for the real Setup process to
+  exit, moves the exact candidate EXE to prove its file lock is released, and
+  verifies the installed Manager's identity and extractable application icon.
+
 ## [0.12.3] - 2026-08-14
 
 ### Changed

@@ -727,7 +727,13 @@ function renderDiscoveredUsers() {
   const legacySummary = legacyRuleCount ? ` · ${matchedLegacyRuleCount}/${legacyRuleCount} legacy matched` : "";
   setText("discovery-user-count", `${users.length} found${legacySummary}`);
   const configured = new Set(currentListField("ExcludedUserIds"));
-  for (const item of users) {
+  const orderedUsers = [...users].sort((left, right) => {
+    const leftExcluded = configured.has(left.id) || left.legacyRuleExcluded === true;
+    const rightExcluded = configured.has(right.id) || right.legacyRuleExcluded === true;
+    if (leftExcluded !== rightExcluded) return leftExcluded ? -1 : 1;
+    return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+  });
+  for (const item of orderedUsers) {
     const label = document.createElement("label");
     label.className = "choice-row";
     const input = document.createElement("input");
@@ -741,9 +747,9 @@ function renderDiscoveredUsers() {
     label.classList.toggle("legacy-exclusion", legacyRuleExcluded);
     const copy = document.createElement("span");
     const name = document.createElement("strong");
-    name.textContent = legacyRuleExcluded ? `${item.name} · Legacy email exclusion` : item.name;
+    name.textContent = item.name;
     const detail = document.createElement("small");
-    detail.textContent = `User ${item.id} · ${titleCase(item.eligibility)}${item.role ? ` · ${titleCase(item.role)}` : ""}`;
+    detail.textContent = `User ${item.id} · ${titleCase(item.eligibility)}${item.role ? ` · ${titleCase(item.role)}` : ""}${legacyRuleExcluded ? " · Excluded by existing config" : ""}`;
     copy.append(name, detail);
     input.addEventListener("change", () => {
       const unknown = currentListField("ExcludedUserIds").filter((id) => !users.some((user) => user.id === id));
@@ -843,6 +849,12 @@ function navigateUserComboboxOptions(event, container, option) {
 function initializeUserCombobox(container) {
   const input = container.querySelector("input");
   const toggle = container.querySelector(".user-combobox-toggle");
+  input.addEventListener("click", () => {
+    if (!container.classList.contains("open")) {
+      container.dataset.filter = "false";
+      setUserComboboxOpen(container, true);
+    }
+  });
   input.addEventListener("input", () => {
     container.dataset.filter = "true";
     setUserComboboxOpen(container, true);
@@ -860,7 +872,7 @@ function initializeUserCombobox(container) {
     const open = !container.classList.contains("open");
     container.dataset.filter = "false";
     setUserComboboxOpen(container, open);
-    if (open) container.querySelector(".user-combobox-option")?.focus();
+    if (open) input.focus();
   });
 }
 
@@ -2301,6 +2313,29 @@ function openPreview(id, button) {
   frame.hidden = false;
 }
 
+function initializePreviewIndexNavigation() {
+  const frame = byId("preview-frame");
+  const documentRoot = frame.contentDocument;
+  const selected = state.previews.find((preview) => preview.id === state.selectedPreviewID);
+  if (!documentRoot || !/-00-index(?:\.html)?$/i.test(selected?.name || "")) return;
+  documentRoot.querySelectorAll("a[href]").forEach((link) => {
+    let fileName = "";
+    try {
+      const target = new URL(link.getAttribute("href"), documentRoot.baseURI);
+      fileName = decodeURIComponent(target.pathname.split("/").pop() || "").toLowerCase();
+    } catch (_) {
+      return;
+    }
+    const preview = state.previews.find((candidate) => `${candidate.name}.html`.toLowerCase() === fileName);
+    if (!preview) return;
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      const button = byId("preview-list").querySelector(`[data-preview-id="${CSS.escape(preview.id)}"]`);
+      if (button) openPreview(preview.id, button);
+    });
+  });
+}
+
 function selectView(name) {
   if (name !== "configuration") clearAllRevealedSecrets();
   document.querySelectorAll("[data-user-combobox].open").forEach((container) => setUserComboboxOpen(container, false));
@@ -2487,6 +2522,7 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) clear
 materializeMaterialIcons();
 initializeMaskedInputToggles();
 document.querySelectorAll("[data-user-combobox]").forEach(initializeUserCombobox);
+byId("preview-frame").addEventListener("load", initializePreviewIndexNavigation);
 document.addEventListener("pointerdown", (event) => {
   document.querySelectorAll("[data-user-combobox].open").forEach((container) => {
     if (!container.contains(event.target)) setUserComboboxOpen(container, false);
