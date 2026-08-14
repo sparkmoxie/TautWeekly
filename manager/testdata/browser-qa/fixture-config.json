@@ -10,5 +10,10 @@
   "SmtpHost": "smtp.fixture.invalid",
   "SmtpUseAuthentication": true,
   "SmtpUsername": "newsletter@example.org",
-  "SmtpPassword": "fictional-browser-qa-smtp-password"
+  "SmtpPassword": "fictional-browser-qa-smtp-password",
+  "ExcludedUserIds": [],
+  "ExcludedEmails": [
+    "VIEWER@example.com",
+    "unmatched-legacy@example.org"
+  ]
 }

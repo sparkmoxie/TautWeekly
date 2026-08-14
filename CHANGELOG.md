@@ -6,6 +6,31 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Styled the production Manual Welcome user selector with the same bounded
+  control geometry used by preview generation and TestEmail delivery.
+- Displayed retained safe-save results on Dashboard and Verify when a newer
+  manual diagnostic result is not available for the saved configuration.
+
+### Fixed
+
+- Reconciled legacy `ExcludedEmails` rules with Tautulli's guided delivery
+  exclusions. Matching users now remain visibly excluded without converting,
+  exposing, or discarding the original email rules; unmatched rules are
+  counted so they cannot disappear silently.
+- Kept legacy email exclusions protected when ID-based delivery choices are
+  edited, preventing a visually unchecked user from remaining excluded by a
+  hidden legacy rule.
+- Restored consistent sizing, borders, typography, and responsive containment
+  across the production newsletter and Tautulli user selectors.
+
+### Security
+
+- Legacy exclusion matching remains server-side. The Manager returns and
+  caches only a per-user match flag and bounded aggregate counts; email
+  addresses are never returned to the browser or stored in discovery state.
+
 ## [0.12.2] - 2026-08-14
 
 ### Changed

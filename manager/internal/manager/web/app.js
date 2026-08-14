@@ -297,15 +297,20 @@ function renderIntegrationStatus() {
   const last = state.verification?.last || null;
   const smtp = state.verification?.smtp || null;
   const steps = new Map((last?.steps || []).map((step) => [step.service, step]));
-  setText("tautulli-state", titleCase(steps.get("tautulli")?.state || "not checked"));
-  setText("plex-state", titleCase(steps.get("plex")?.state || "not checked"));
-  setText("smtp-state", titleCase(smtp?.state || "not checked"));
+  const retainedLANState = retainedSetupCheckState("lan");
+  const retainedSMTPState = retainedSetupCheckState("smtp");
+  const tautulliState = steps.get("tautulli")?.state || retainedLANState || "not checked";
+  const plexState = steps.get("plex")?.state || retainedLANState || "not checked";
+  const smtpState = smtp?.state || retainedSMTPState || "not checked";
+  setText("tautulli-state", titleCase(tautulliState));
+  setText("plex-state", titleCase(plexState));
+  setText("smtp-state", titleCase(smtpState));
 
-  const outcomes = [last?.overall, smtp?.overall].filter(Boolean);
+  const outcomes = [last?.overall || retainedLANState, smtp?.overall || retainedSMTPState].filter(Boolean);
   let overall = "not-run";
   if (outcomes.includes("failed")) overall = "failed";
   else if (outcomes.includes("warning")) overall = "warning";
-  else if (last && smtp) overall = "passed";
+  else if (outcomes.length === 2 && outcomes.every((outcome) => outcome === "passed")) overall = "passed";
   else if (outcomes.length) overall = "partial";
   const verificationActive = state.verificationRunning || state.smtpVerificationRunning;
   const overallTone = verificationActive ? "pending" : overall === "passed" ? "good" : overall === "failed" ? "bad" : "neutral";
@@ -315,6 +320,11 @@ function renderIntegrationStatus() {
     ? "Latest checks from validation or a targeted retest are retained for this saved configuration."
     : "Safe real checks run after a successful save or when you start a manual retest.");
   return { overallLabel, overallTone };
+}
+
+function retainedSetupCheckState(name) {
+  const checkState = state.setupWorkflow?.steps?.[name]?.state || "";
+  return ["passed", "warning", "failed"].includes(checkState) ? checkState : "";
 }
 
 function renderStatus() {
@@ -712,24 +722,34 @@ function renderDiscoveredUsers() {
   const container = byId("discovery-users");
   container.replaceChildren();
   const users = state.discovery?.users || [];
-  setText("discovery-user-count", `${users.length} found`);
+  const legacyRuleCount = Number(state.discovery?.legacyRuleCount || 0);
+  const matchedLegacyRuleCount = Number(state.discovery?.matchedLegacyRuleCount || 0);
+  const legacySummary = legacyRuleCount ? ` · ${matchedLegacyRuleCount}/${legacyRuleCount} legacy matched` : "";
+  setText("discovery-user-count", `${users.length} found${legacySummary}`);
   const configured = new Set(currentListField("ExcludedUserIds"));
   for (const item of users) {
     const label = document.createElement("label");
     label.className = "choice-row";
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.checked = configured.has(item.id);
+    const configuredByID = configured.has(item.id);
+    const legacyRuleExcluded = item.legacyRuleExcluded === true;
+    input.checked = configuredByID || legacyRuleExcluded;
+    input.disabled = legacyRuleExcluded;
     input.dataset.choiceId = item.id;
+    input.dataset.configuredId = String(configuredByID);
+    label.classList.toggle("legacy-exclusion", legacyRuleExcluded);
     const copy = document.createElement("span");
     const name = document.createElement("strong");
-    name.textContent = item.name;
+    name.textContent = legacyRuleExcluded ? `${item.name} · Legacy email exclusion` : item.name;
     const detail = document.createElement("small");
     detail.textContent = `User ${item.id} · ${titleCase(item.eligibility)}${item.role ? ` · ${titleCase(item.role)}` : ""}`;
     copy.append(name, detail);
     input.addEventListener("change", () => {
       const unknown = currentListField("ExcludedUserIds").filter((id) => !users.some((user) => user.id === id));
-      const known = [...container.querySelectorAll("input:checked")].map((choice) => choice.dataset.choiceId);
+      const known = [...container.querySelectorAll("input:checked")]
+        .filter((choice) => !choice.disabled || choice.dataset.configuredId === "true")
+        .map((choice) => choice.dataset.choiceId);
       setListField("ExcludedUserIds", [...unknown, ...known]);
     });
     label.append(input, copy);
@@ -1501,11 +1521,16 @@ function renderVerification() {
       : "No SMTP request occurs until the confirmation is checked and the button is pressed.";
   }
 
+  const retainedLANState = retainedSetupCheckState("lan");
+  const retainedSMTPState = retainedSetupCheckState("smtp");
   if (last) {
     setText("verification-observed", `Completed ${formatDate(last.completedAtUtc)} · ${titleCase(last.networkBoundary)}.`);
     for (const step of last.steps || []) {
       appendVerificationResult(results, step.service === "plex" ? "Direct Plex" : titleCase(step.service), step.state, step.summary);
     }
+  } else if (retainedLANState) {
+    setText("verification-observed", "Retained from the latest safe setup validation for this configuration.");
+    appendVerificationResult(results, "Tautulli and direct Plex", retainedLANState, state.setupWorkflow.steps.lan.summary);
   } else {
     setText("verification-observed", "No integration result is retained for this saved configuration.");
     const empty = document.createElement("div");
@@ -1517,6 +1542,9 @@ function renderVerification() {
   if (smtp) {
     setText("smtp-verification-observed", `Completed ${formatDate(smtp.completedAtUtc)} · ${titleCase(smtp.security)}.`);
     appendVerificationResult(smtpResults, "SMTP preflight", smtp.state, smtp.summary);
+  } else if (retainedSMTPState) {
+    setText("smtp-verification-observed", "Retained from the latest safe setup validation for this configuration.");
+    appendVerificationResult(smtpResults, "SMTP preflight", retainedSMTPState, state.setupWorkflow.steps.smtp.summary);
   } else {
     setText("smtp-verification-observed", "No SMTP preflight is retained for this saved configuration.");
     const empty = document.createElement("div");

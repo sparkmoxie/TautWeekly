@@ -174,6 +174,8 @@ def main() -> int:
 
     if "function renderIntegrationStatus()" not in javascript:
         failures.append("dashboard integration details have no shared verification renderer")
+    if "function retainedSetupCheckState(" not in javascript or 'last?.overall || retainedLANState' not in javascript:
+        failures.append("dashboard integrations do not fall back to retained save-verification state")
     if javascript.count("renderIntegrationStatus();") < 2:
         failures.append("status and verification refreshes do not share integration evidence")
     if "snapshot.integrations.tautulli" in javascript:
@@ -246,6 +248,10 @@ def main() -> int:
         failures.append("Manual Welcome lacks selected-user input or shared sanitized status")
     if 'id="direct-plex-notice"' not in combined or "legacyFieldsMissing" not in javascript:
         failures.append("legacy direct Plex omissions have no guided completion message")
+    if "legacyRuleExcluded" not in javascript or "Legacy email exclusion" not in javascript:
+        failures.append("legacy email exclusions are not represented in guided delivery choices")
+    if ".user-combobox>input" not in css or ".manual-send-mode-field select{border-color:var(--line-strong)" not in css:
+        failures.append("guided user and delivery-mode selectors do not share consistent control styling")
     if 'card.hidden = !manualSend;' not in javascript:
         failures.append("manual production status is visible before a manual send exists")
     for label in ("Index", "Manual Welcome", "New User - No History", "New User - With History", "Normal Newsletter", "Established Quiet", "Established Warnings"):
