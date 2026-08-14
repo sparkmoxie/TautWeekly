@@ -227,11 +227,23 @@
             <p class="verification-message" id="test-send-operation-message" role="status" aria-live="polite">Complete and save configuration, then enter a numeric Tautulli user ID.</p>
           </div>
         </section>
+        <section class="preview-runner manual-send-runner" aria-labelledby="manual-send-runner-heading">
+          <div class="preview-runner-copy"><span class="eyebrow">Guarded production delivery</span><h2 id="manual-send-runner-heading">Send this week's newsletter now</h2><p>Runs the same fixed production delivery used by the schedule, applies the saved library and user exclusions, and updates recipient welcome and history state. This sends real email to every currently eligible recipient.</p></div>
+          <div class="preview-runner-form">
+            <label class="verification-confirm preview-confirm manual-send-confirm"><input id="manual-send-confirm" type="checkbox"><span><strong>Send the production newsletter now</strong><small>I understand this contacts the saved Plex/Tautulli and SMTP services and may send real email to all eligible recipients. The operation cannot be cancelled after it starts.</small></span></label>
+            <button class="button button-danger" id="manual-send-run-button" type="button" disabled>Send newsletter now</button>
+            <p class="verification-message" id="manual-send-operation-message" role="status" aria-live="polite">Complete and save configuration, then explicitly confirm the production delivery.</p>
+          </div>
+        </section>
+        <section class="current-operation manual-send-status" id="manual-send-status" aria-labelledby="manual-send-status-heading" hidden>
+          <div><span class="eyebrow">Current or latest manual send</span><h2 id="manual-send-status-heading">No manual delivery recorded</h2><p id="manual-send-status-copy">Aggregate delivery evidence will appear after a manual send starts.</p></div>
+          <div class="current-operation-meta"><span class="state-chip neutral" id="manual-send-status-chip">Idle</span><small id="manual-send-status-time">Not recorded</small></div>
+        </section>
         <section class="current-operation" id="current-operation" aria-labelledby="current-operation-heading">
           <div><span class="eyebrow">Current or latest run</span><h2 id="current-operation-heading">No preview operation recorded</h2><p id="current-operation-copy">The Manager keeps sanitized operation state locally.</p></div>
           <div class="current-operation-meta"><span class="state-chip neutral" id="current-operation-chip">Idle</span><small id="current-operation-time">Not recorded</small><button class="button button-danger" id="preview-cancel-button" type="button" hidden>Cancel preview generation</button></div>
         </section>
-        <div class="preview-layout"><div class="preview-list-panel"><div class="panel-heading"><h2>Available previews</h2><small>Newest first</small></div><div class="preview-list" id="preview-list"></div></div><div class="preview-stage"><div class="preview-placeholder" id="preview-placeholder"><span aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-preview"></use></svg></span><h2>Loading the latest preview</h2><p>The newest preview from the latest successful run opens automatically.</p></div><iframe id="preview-frame" title="Selected newsletter preview" sandbox="allow-same-origin" hidden></iframe></div></div>
+        <div class="preview-layout"><div class="preview-list-panel"><div class="panel-heading"><h2>Available previews</h2><small>Scenario order</small></div><div class="preview-list" id="preview-list"></div></div><div class="preview-stage"><div class="preview-placeholder" id="preview-placeholder"><span aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-preview"></use></svg></span><h2>Loading the latest preview</h2><p>The index from the latest successful run opens automatically.</p></div><iframe id="preview-frame" title="Selected newsletter preview" sandbox="allow-same-origin" hidden></iframe></div></div>
         <div class="section-heading"><div><span class="eyebrow">Private local record</span><h2>Recent Manager operations</h2></div><p>History contains only operation type, timestamps, aggregate counts, package version, exit status, generated preview identifiers, and a sanitized support code on failure.</p></div>
         <section class="operation-history" id="operation-history" aria-label="Recent Manager operation history"></section>
       </section>

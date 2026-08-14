@@ -145,9 +145,9 @@ installs a schedule.
 
 Open **Previews** after a successful Config validation:
 
-1. Inspect all six locally generated HTML states: manual welcome, new user
-   without history, new user with history, established normal, established
-   quiet, and established warm-up.
+1. Inspect the generated index and six HTML states in scenario order: Manual
+   Welcome, New User - No History, New User - With History, Normal Newsletter,
+   Established Quiet, and Established Warnings.
 2. Confirm artwork, ratings, summaries, personal statistics, conditional cards,
    and responsive layout.
 3. When the previews are correct, select a Tautulli owner/administrator ID and
@@ -158,6 +158,21 @@ Open **Previews** after a successful Config validation:
 
 This guarded six-message TestEmail action is the only Manager setup workflow
 that authenticates to SMTP or sends mail.
+
+## Send a manual production newsletter
+
+After previews and TestEmail delivery are approved, **Previews** also provides
+**Send this week's newsletter now**. This is the primary one-off production
+send control; it does not require a Windows Scheduled Task.
+
+The action runs only the packaged `SendAll` mode, applies the saved library and
+delivery exclusions, updates the same welcome/history state used by scheduled
+delivery, and requires a separate explicit confirmation. It can send real mail
+to every currently eligible recipient and cannot be cancelled after it starts.
+Once triggered, a dedicated **Current or latest manual send** card retains only
+aggregate accepted, skipped, and failed counts. SMTP acceptance does not prove
+inbox delivery, and recipient identities are never returned to the browser or
+operation history.
 
 ## Install the weekly schedule
 
@@ -264,8 +279,9 @@ For a no-install portable or recovery workflow, download and verify
 extract it to a permanent writable folder, and run `00-OPEN-MANAGER.bat`.
 Portable Manager state lives in `.manager-data\` beside the application.
 
-The numbered BAT and PowerShell launchers remain available for recovery,
-terminal automation, and detailed troubleshooting. Common fallbacks include:
+The numbered BAT and PowerShell launchers remain available for break/fix
+recovery, terminal automation, and detailed troubleshooting. Common fallbacks
+include:
 
 - `00-SETUP-FIRST.bat` and `01-VERIFY-SETUP.bat` for terminal configuration and
   verification.
@@ -278,9 +294,11 @@ terminal automation, and detailed troubleshooting. Common fallbacks include:
 - `17-CHECK-FOR-UPDATE.bat` for the portable/expert stable update workflow.
 - `18-RESET-MANAGER-ACCESS.bat` for portable password-lock recovery.
 
-`07-SEND-WELCOME-NOW.bat` and `11-SEND-ALL-NOW.bat` can send to real users and
-retain explicit confirmation gates. Read their warnings before use. Terminal
-roster output can contain private names and email addresses; do not publish it.
+The Manager's confirmed manual-send card is the normal one-off production
+workflow. `07-SEND-WELCOME-NOW.bat` and `11-SEND-ALL-NOW.bat` remain expert
+break/fix fallbacks that can send to real users and retain explicit confirmation
+gates. Read their warnings before use. Terminal roster output can contain
+private names and email addresses; do not publish it.
 
 ## Troubleshooting
 

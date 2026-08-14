@@ -6,6 +6,48 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-14
+
+### Added
+
+- Added a guarded **Send this week's newsletter now** control to the Windows
+  Manager. It invokes only the packaged `SendAll` renderer mode, requires a
+  separate real-recipient confirmation, and retains a dedicated aggregate
+  result card after the operation starts.
+- Added explicit sanitized connection diagnostics that identify Tautulli,
+  direct Plex, or combined verification failures without retaining URLs,
+  addresses, credentials, identities, upstream responses, or raw process
+  output.
+
+### Changed
+
+- Ordered and labelled generated previews by scenario: Index, Manual Welcome,
+  New User - No History, New User - With History, Normal Newsletter,
+  Established Quiet, and Established Warnings.
+- Treated an omitted optional direct Plex connection as a successful Tautulli
+  verification with a clear informational note instead of a generic warning.
+- Documented the Manager as the normal one-off production-send interface and
+  retained the numbered BAT/PowerShell senders as expert break/fix fallbacks.
+
+### Fixed
+
+- Restored the trusted-local browser session automatically after a Manager
+  restart or update when the optional password lock is disabled. Protected
+  actions retry once with a fresh CSRF token instead of displaying a stale
+  `Authentication is required` error or requiring a manual page refresh.
+- Preserved valid partial `SendAll` renderer results even when PowerShell exits
+  with its documented partial-delivery status, so accepted, skipped, and failed
+  counts remain visible with a sanitized support code.
+
+### Security
+
+- The browser cannot choose an executable, script, command, recipient, or user
+  for a production send. The Manager supplies a private configuration snapshot
+  to the fixed packaged renderer and discards process output.
+- Manual production history contains only operation type, timestamps, package
+  version, aggregate SMTP accepted/skipped/failed counts, exit status, and a
+  sanitized support code. SMTP acceptance is not presented as inbox delivery.
+
 ## [0.11.1] - 2026-08-14
 
 ### Changed

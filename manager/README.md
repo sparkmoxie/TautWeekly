@@ -38,6 +38,9 @@ Current capabilities:
 - guarded all-state test delivery through the fixed `SendTestAll` renderer
   mode, restricted to the configured `TestEmail`, with aggregate SMTP
   acceptance evidence only;
+- guarded manual production delivery through the fixed `SendAll` renderer
+  mode, requiring explicit confirmation and retaining only aggregate accepted,
+  skipped, and failed counts;
 - single-operation coordination, safe cancellation, restart recovery, and
   bounded sanitized local operation history;
 - an opt-in, atomic renderer-result contract that separates preview output,
@@ -67,7 +70,10 @@ only for that revision; saving or restoring a different configuration resets
 them before the new checks run. Guarded test delivery is
 always manual, sends six messages only to the saved `TestEmail`, and cannot be
 cancelled after it starts because some messages may already have been accepted
-by SMTP. Production and welcome delivery remain unavailable from the Manager.
+by SMTP. A separate manual production-send card invokes only the fixed
+`SendAll` mode, requires its own explicit confirmation, cannot be cancelled,
+and reports SMTP acceptance separately from inbox delivery. One-off welcome
+delivery remains available only through the recovery/expert interface.
 
 Schedule changes accept only four action enums. The normal Manager remains
 unelevated; the packaged helper requests UAC, rechecks the exact configuration
@@ -82,8 +88,10 @@ idempotent refresh, and removal without executing the scheduled newsletter.
 Automated acceptance uses sanitized loopback fixtures and never contacts a live
 Tautulli, Plex, or SMTP configuration. Separate, explicit live-host acceptance
 has verified Tautulli, direct Plex, SMTP preflight, preview generation, and
-TestEmail delivery. Manager-initiated package updating, immediate production
-sends, and arbitrary command execution remain unavailable. Package installation,
+TestEmail delivery. Manual production delivery uses the same packaged renderer
+contract as the scheduled task but is not exercised by automated live
+acceptance because it sends to real recipients. Manager-initiated package
+updating and arbitrary command execution remain unavailable. Package installation,
 verified updates, and old-portable-folder migration are owned by the separate
 `TautWeekly-Setup.exe`; the explicitly confirmed stable-update BAT workflow
 remains an expert fallback.

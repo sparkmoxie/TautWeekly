@@ -156,3 +156,62 @@ $result = @{
 		t.Fatalf("unexpected test-send structured result: %+v", result)
 	}
 }
+
+func TestWindowsSendAllRunnerRequiresFixedProductionConfirmation(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(t.TempDir(), "operation.config.json")
+	if err := os.WriteFile(configPath, []byte(`{"fixture":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := `param(
+  [string]$Mode,
+  [string]$UserId,
+  [string]$ConfigPath,
+  [string]$ResultPath,
+  [switch]$NoOpen,
+  [switch]$ConfirmSendAll
+)
+if ($Mode -ne 'SendAll') { exit 41 }
+if (-not [string]::IsNullOrWhiteSpace($UserId)) { exit 42 }
+if ($NoOpen) { exit 43 }
+if (-not $ConfirmSendAll) { exit 44 }
+if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { exit 45 }
+if ($env:PLEX_TOKEN -or $env:TAUTWEEKLY_CONFIG -or $env:HTTP_PROXY -or $env:HTTPS_PROXY -or $env:ALL_PROXY -or $env:NO_PROXY) { exit 46 }
+$result = @{
+  schemaVersion = 1
+  mode = 'SendAll'
+  outcome = 'succeeded'
+  deliveryScope = 'production'
+  startedAtUtc = '2031-04-18T16:30:00.0000000Z'
+  finishedAtUtc = '2031-04-18T16:30:02.0000000Z'
+  durationMs = 2000
+  smtpAcceptedCount = 4
+  skippedCount = 2
+  failedCount = 0
+  generatedPreviewFiles = @()
+}
+[IO.File]::WriteAllText($ResultPath, ($result | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding($false)))
+`
+	if err := os.WriteFile(filepath.Join(root, "TautWeekly.ps1"), []byte(script), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PLEX_TOKEN", "must-not-reach-fixture")
+	t.Setenv("TAUTWEEKLY_CONFIG", "must-not-reach-fixture")
+	t.Setenv("HTTP_PROXY", "http://127.0.0.1:1")
+	t.Setenv("HTTPS_PROXY", "http://127.0.0.1:1")
+	t.Setenv("ALL_PROXY", "http://127.0.0.1:1")
+	t.Setenv("NO_PROXY", "localhost")
+
+	resultPath := filepath.Join(t.TempDir(), "operation.result.json")
+	exitCode, err := (platformPreviewOperationRunner{}).RunSendAll(context.Background(), root, configPath, resultPath)
+	if err != nil || exitCode != 0 {
+		t.Fatalf("production-send runner: exit=%d err=%v", exitCode, err)
+	}
+	result, err := readRendererResult(resultPath, "SendAll")
+	if err != nil {
+		t.Fatalf("read production structured result: %v", err)
+	}
+	if result.SMTPAcceptedCount != 4 || result.SkippedCount != 2 || result.DeliveryScope != "production" || len(result.GeneratedPreviewFiles) != 0 {
+		t.Fatalf("unexpected production-send structured result: %+v", result)
+	}
+}

@@ -15,12 +15,13 @@ import (
 )
 
 type fixturePreviewRunner struct {
-	started chan struct{}
-	release chan struct{}
-	once    sync.Once
-	mu      sync.Mutex
-	userID  string
-	runs    int
+	started        chan struct{}
+	release        chan struct{}
+	once           sync.Once
+	mu             sync.Mutex
+	userID         string
+	runs           int
+	sendAllPartial bool
 }
 
 func (r *fixturePreviewRunner) RunPreviewAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error) {
@@ -118,6 +119,61 @@ func (r *fixturePreviewRunner) RunSendTestAll(ctx context.Context, _, configPath
 		return 33, err
 	}
 	return 0, nil
+}
+
+func (r *fixturePreviewRunner) RunSendAll(ctx context.Context, _, configPath, resultPath string) (int, error) {
+	if _, err := os.Stat(configPath); err != nil {
+		return 41, err
+	}
+	r.mu.Lock()
+	r.runs++
+	r.mu.Unlock()
+	if r.started != nil {
+		r.once.Do(func() { close(r.started) })
+	}
+	if r.release != nil {
+		select {
+		case <-r.release:
+		case <-ctx.Done():
+			return -1, context.Canceled
+		}
+	}
+	started := time.Now().UTC().Add(-time.Second)
+	outcome := "succeeded"
+	accepted := 4
+	skipped := 2
+	failed := 0
+	exitCode := 0
+	var runErr error
+	if r.sendAllPartial {
+		outcome = "partial"
+		accepted = 3
+		skipped = 1
+		failed = 1
+		exitCode = 2
+		runErr = errors.New("renderer returned exit status 2")
+	}
+	result := rendererResult{
+		SchemaVersion:         1,
+		Mode:                  "SendAll",
+		Outcome:               outcome,
+		DeliveryScope:         "production",
+		StartedAtUTC:          started.Format(time.RFC3339Nano),
+		FinishedAtUTC:         started.Add(time.Second).Format(time.RFC3339Nano),
+		DurationMS:            1000,
+		SMTPAcceptedCount:     accepted,
+		SkippedCount:          skipped,
+		FailedCount:           failed,
+		GeneratedPreviewFiles: []string{},
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return 42, err
+	}
+	if err := os.WriteFile(resultPath, encoded, 0o600); err != nil {
+		return 43, err
+	}
+	return exitCode, runErr
 }
 
 func TestPreviewOperationCompletesWithSanitizedDurableHistory(t *testing.T) {
@@ -264,6 +320,53 @@ func TestSendTestAllOperationRecordsAggregateSMTPAcceptanceAndCannotCancel(t *te
 		if _, err := coordinator.Start(request); err == nil {
 			t.Fatalf("unsafe test-send request was accepted: %+v", request)
 		}
+	}
+}
+
+func TestSendAllOperationRequiresProductionConfirmationAndRecordsOnlyAggregates(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	runner := &fixturePreviewRunner{started: make(chan struct{})}
+	coordinator, err := newOperationCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Now: time.Now, operationRunner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	request := CreateOperationRequest{Type: "send-all", ExpectedRevision: view.Revision}
+	if _, err := coordinator.Start(request); !errors.Is(err, ErrOperationConfirmation) {
+		t.Fatalf("unconfirmed production send error: got %v", err)
+	}
+	request.ConfirmProductionSend = true
+	started, err := coordinator.Start(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.Cancellable || started.Type != "send-all" {
+		t.Fatalf("production send exposed unsafe cancellation: %+v", started)
+	}
+	finished := waitForOperationState(t, coordinator, "succeeded")
+	if finished.DeliveryScope != "production" || finished.SMTPAcceptedCount != 4 || finished.SkippedCount != 2 || finished.FailedCount != 0 || len(finished.GeneratedPreviewIDs) != 0 {
+		t.Fatalf("unexpected production send result: %+v", finished)
+	}
+	request.UserID = "42"
+	if _, err := coordinator.Start(request); !errors.Is(err, ErrOperationInvalid) {
+		t.Fatalf("production send accepted an unnecessary user ID: %v", err)
+	}
+}
+
+func TestSendAllOperationRetainsStructuredPartialDeliveryEvidence(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	runner := &fixturePreviewRunner{sendAllPartial: true}
+	coordinator, err := newOperationCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Now: time.Now, operationRunner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	if _, err := coordinator.Start(CreateOperationRequest{Type: "send-all", ExpectedRevision: view.Revision, ConfirmProductionSend: true}); err != nil {
+		t.Fatal(err)
+	}
+	finished := waitForOperationState(t, coordinator, "partial")
+	if finished.Outcome != "partial" || finished.ExitCode == nil || *finished.ExitCode != 2 || finished.SMTPAcceptedCount != 3 || finished.SkippedCount != 1 || finished.FailedCount != 1 || finished.SupportCode == "" {
+		t.Fatalf("unexpected partial production result: %+v", finished)
 	}
 }
 

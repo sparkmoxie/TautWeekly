@@ -32,6 +32,7 @@ const titleCase = (value) => String(value || "unknown").replaceAll("-", " ").rep
 const guidedConfigFields = new Set(["IncludedLibraryIds", "ExcludedUserIds"]);
 const activeSecretReveals = new Map();
 let pendingSecretReveal = null;
+let sessionRecoveryPromise = null;
 
 function materializeMaterialIcon(svg) {
   const use = svg?.querySelector("use");
@@ -96,7 +97,7 @@ function concealMaskedInputs(root = document) {
   });
 }
 
-async function request(path, options = {}) {
+async function performRequest(path, options = {}) {
   const method = options.method || "GET";
   const headers = new Headers(options.headers || {});
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
@@ -112,6 +113,53 @@ async function request(path, options = {}) {
     throw error;
   }
   return payload;
+}
+
+async function renewTrustedLocalSession() {
+  const session = await performRequest("/api/v1/auth/session");
+  state.csrfToken = session.csrfToken || "";
+  return session;
+}
+
+async function reloadAfterTrustedLocalRestart() {
+  try {
+    const setup = await performRequest("/api/v1/setup");
+    if (!setup?.authenticationRequired) {
+      window.location.reload();
+      return true;
+    }
+  } catch (_) {
+    // Preserve the original authentication error when setup cannot be read.
+  }
+  return false;
+}
+
+async function request(path, options = {}, allowSessionRecovery = true) {
+  try {
+    return await performRequest(path, options);
+  } catch (error) {
+    const authBootstrapEndpoint = ["/api/v1/auth/session", "/api/v1/auth/login", "/api/v1/auth/pair", "/api/v1/auth/logout"].includes(path);
+    if (error.status !== 401 || !allowSessionRecovery || authBootstrapEndpoint) throw error;
+    if (!sessionRecoveryPromise) {
+      sessionRecoveryPromise = renewTrustedLocalSession().finally(() => {
+        sessionRecoveryPromise = null;
+      });
+    }
+    try {
+      await sessionRecoveryPromise;
+      return await request(path, options, false);
+    } catch (recoveryError) {
+      if (recoveryError.status === 401 && await reloadAfterTrustedLocalRestart()) {
+        const restoring = new Error("Manager restarted; restoring the trusted-local session.");
+        restoring.code = "session-restoring";
+        restoring.status = 0;
+        throw restoring;
+      }
+      state.csrfToken = "";
+      showAuthentication();
+      throw recoveryError;
+    }
+  }
 }
 
 function pairingTokenFromFragment() {
@@ -1499,9 +1547,37 @@ async function runSMTPVerification() {
   }
 }
 
+function previewScenarioIndex(preview) {
+  const match = String(preview?.name || "").match(/^preview-all-(\d{2})-/i);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+function previewDisplayName(preview) {
+  const name = String(preview?.name || "");
+  const scenarios = [
+    [/-00-index(?:\.html)?$/i, "Index"],
+    [/-01-manual-welcome(?:\.html)?$/i, "Manual Welcome"],
+    [/-02-new-user-no-history(?:\.html)?$/i, "New User - No History"],
+    [/-03-new-user-with-history(?:\.html)?$/i, "New User - With History"],
+    [/-04-normal-newsletter(?:\.html)?$/i, "Normal Newsletter"],
+    [/-05-established-quiet(?:\.html)?$/i, "Established Quiet"],
+    [/-06-established-warmup(?:\.html)?$/i, "Established Warnings"],
+  ];
+  return scenarios.find(([pattern]) => pattern.test(name))?.[1] || name;
+}
+
+function orderedPreviews() {
+  return [...state.previews].sort((left, right) => {
+    const scenarioDifference = previewScenarioIndex(left) - previewScenarioIndex(right);
+    if (scenarioDifference) return scenarioDifference;
+    return String(right.modifiedUtc || "").localeCompare(String(left.modifiedUtc || ""));
+  });
+}
+
 function renderPreviews() {
   const list = byId("preview-list");
   list.replaceChildren();
+  const previews = orderedPreviews();
   setChip("preview-chip", state.previews.length ? `${state.previews.length} available` : "None generated", state.previews.length ? "good" : "neutral");
   if (!state.previews.length) {
     state.selectedPreviewID = "";
@@ -1516,26 +1592,26 @@ function renderPreviews() {
     list.append(empty);
     return;
   }
-  for (const preview of state.previews) {
+  for (const preview of previews) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "preview-button";
     button.dataset.previewId = preview.id;
     const name = document.createElement("strong");
-    name.textContent = preview.name;
+    name.textContent = previewDisplayName(preview);
     const meta = document.createElement("small");
     meta.textContent = `${formatDate(preview.modifiedUtc)} · ${formatBytes(preview.sizeBytes)}`;
     button.append(name, meta);
     button.addEventListener("click", () => openPreview(preview.id, button));
     list.append(button);
   }
-  const selected = state.previews.find((preview) => preview.id === state.selectedPreviewID);
+  const selected = previews.find((preview) => preview.id === state.selectedPreviewID);
   const latestRun = state.history.find((operation) => operation.type === "preview-all" && operation.state === "succeeded" && operation.generatedPreviewIds?.length);
   const generated = new Set(latestRun?.generatedPreviewIds || []);
   const preferred = selected
-    || state.previews.find((preview) => generated.has(preview.id) && /-00-index$/i.test(preview.name))
-    || state.previews.find((preview) => generated.has(preview.id))
-    || state.previews[0];
+    || previews.find((preview) => generated.has(preview.id) && /-00-index(?:\.html)?$/i.test(preview.name))
+    || previews.find((preview) => generated.has(preview.id))
+    || previews[0];
   const button = list.querySelector(`[data-preview-id="${CSS.escape(preferred.id)}"]`);
   if (button) openPreview(preferred.id, button);
 }
@@ -1550,6 +1626,7 @@ function renderOperations() {
   const testUserID = byId("test-send-user-id").value.trim();
   const testUserIDValid = validPreviewUserID(testUserID);
   const testConfirmed = byId("test-send-confirm").checked;
+  const manualSendConfirmed = byId("manual-send-confirm").checked;
   const ready = state.editor?.state === "ready";
   const startButton = byId("preview-run-button");
   startButton.disabled = state.operationStarting || state.operationCancelling || active || scheduleActive || !ready || !userIDValid || !confirmed;
@@ -1557,7 +1634,7 @@ function renderOperations() {
 
   let message = "Enter a numeric Tautulli user ID, then confirm this preview-only run.";
   if (!ready) message = "Complete and save configuration before generating previews.";
-  else if (active) message = operation.type === "preview-all" ? (operation.state === "cancelling" ? "Stopping the local preview process safely..." : "Generating previews. You can leave this page while the Manager tracks the operation.") : "A test delivery is active. Wait for its aggregate SMTP result before starting another operation.";
+  else if (active) message = operation.type === "preview-all" ? (operation.state === "cancelling" ? "Stopping the local preview process safely..." : "Generating previews. You can leave this page while the Manager tracks the operation.") : "An email delivery is active. Wait for its aggregate SMTP result before starting another operation.";
   else if (scheduleActive) message = "Wait for the active Windows schedule change before generating previews.";
   else if (state.operationStarting) message = "Starting a fixed Manager operation...";
   else if (!userIDValid && userID) message = "Enter a numeric Tautulli user ID using no more than 20 digits.";
@@ -1569,17 +1646,44 @@ function renderOperations() {
   setSwappingButtonText("test-send-run-button", state.operationStarting && state.operationStartingType === "send-test-all" ? "Starting test delivery..." : active || scheduleActive ? "Another operation is active" : "Send six test messages");
   let testMessage = "Enter a numeric Tautulli user ID, then confirm the six-message test delivery.";
   if (!ready) testMessage = "Complete and save configuration before sending a test delivery.";
-  else if (active) testMessage = operation.type === "send-test-all" ? "Sending to the configured TestEmail. Cancellation is disabled because some messages may already be accepted by SMTP." : "Preview generation is active. Wait for it to finish before starting a test delivery.";
+  else if (active) testMessage = operation.type === "send-test-all" ? "Sending to the configured TestEmail. Cancellation is disabled because some messages may already be accepted by SMTP." : "Another Manager operation is active. Wait for it to finish before starting a test delivery.";
   else if (scheduleActive) testMessage = "Wait for the active Windows schedule change before starting a test delivery.";
   else if (state.operationStarting) testMessage = "Starting a fixed Manager operation...";
   else if (!testUserIDValid && testUserID) testMessage = "Enter a numeric Tautulli user ID using no more than 20 digits.";
   else if (testUserIDValid && testConfirmed) testMessage = "Ready to send six real messages only to the configured TestEmail.";
   setText("test-send-operation-message", testMessage);
 
+  const manualSendButton = byId("manual-send-run-button");
+  manualSendButton.disabled = state.operationStarting || active || scheduleActive || !ready || !manualSendConfirmed;
+  setSwappingButtonText("manual-send-run-button", state.operationStarting && state.operationStartingType === "send-all" ? "Starting manual delivery..." : active || scheduleActive ? "Another operation is active" : "Send newsletter now");
+  let manualSendMessage = "Explicitly confirm the production delivery to enable this action.";
+  if (!ready) manualSendMessage = "Complete and save configuration before sending the production newsletter.";
+  else if (active) manualSendMessage = operation.type === "send-all" ? "The production delivery is running. Cancellation is disabled because messages may already be accepted by SMTP." : "Another Manager operation is active. Wait for it to finish before sending the production newsletter.";
+  else if (scheduleActive) manualSendMessage = "Wait for the active Windows schedule change before sending the production newsletter.";
+  else if (state.operationStarting) manualSendMessage = "Starting a fixed Manager operation...";
+  else if (manualSendConfirmed) manualSendMessage = "Ready to send real email to every currently eligible recipient.";
+  setText("manual-send-operation-message", manualSendMessage);
+
   renderCurrentOperation(operation);
+  renderManualSendStatus(operation);
   renderOperationHistory();
   renderDashboardOperation(operation);
   if (state.status && state.editor) renderSchedule();
+}
+
+function renderManualSendStatus(operation) {
+  const manualSend = operation?.type === "send-all"
+    ? operation
+    : state.history.find((candidate) => candidate.type === "send-all");
+  const card = byId("manual-send-status");
+  card.hidden = !manualSend;
+  if (!manualSend) return;
+  const summary = operationSummary(manualSend);
+  setText("manual-send-status-heading", summary.heading);
+  setText("manual-send-status-copy", summary.copy);
+  const duration = manualSend.durationMs ? ` · ${formatDuration(manualSend.durationMs)}` : "";
+  setText("manual-send-status-time", manualSend.finishedAtUtc ? `Finished ${formatDate(manualSend.finishedAtUtc)}${duration}` : `Started ${formatDate(manualSend.startedAtUtc)}`);
+  setChip("manual-send-status-chip", titleCase(manualSend.outcome || manualSend.state), operationTone(manualSend));
 }
 
 function renderCurrentOperation(operation) {
@@ -1605,7 +1709,7 @@ function renderCurrentOperation(operation) {
 function renderDashboardOperation(operation) {
   if (!operation) {
     setText("dashboard-operation-heading", "No Manager operation recorded");
-    setText("dashboard-operation-copy", "Generate local previews or send a guarded six-message test from the Preview center.");
+    setText("dashboard-operation-copy", "Generate local previews, send a guarded six-message test, or start a confirmed production delivery from the Preview center.");
     setChip("dashboard-operation-chip", "Idle", "neutral");
     return;
   }
@@ -1643,7 +1747,7 @@ function renderOperationHistory() {
         if (!preview) continue;
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = preview.name;
+        button.textContent = previewDisplayName(preview);
         button.addEventListener("click", () => {
           const previewButton = document.querySelector(`[data-preview-id="${CSS.escape(id)}"]`);
           if (previewButton) openPreview(id, previewButton);
@@ -1660,7 +1764,9 @@ function renderOperationHistory() {
     const count = document.createElement("small");
     count.textContent = operation.type === "send-test-all"
       ? `${operation.smtpAcceptedCount || 0} accepted by SMTP`
-      : `${operation.generatedPreviewIds?.length || 0} preview${operation.generatedPreviewIds?.length === 1 ? "" : "s"}`;
+      : operation.type === "send-all"
+        ? `${operation.smtpAcceptedCount || 0} accepted · ${operation.skippedCount || 0} skipped · ${operation.failedCount || 0} failed`
+        : `${operation.generatedPreviewIds?.length || 0} preview${operation.generatedPreviewIds?.length === 1 ? "" : "s"}`;
     meta.append(chip, count);
     row.append(copy, meta);
     container.append(row);
@@ -1669,6 +1775,19 @@ function renderOperationHistory() {
 
 function operationSummary(operation) {
   const count = operation.generatedPreviewIds?.length || 0;
+  if (operation.type === "send-all") {
+    const accepted = operation.smtpAcceptedCount || 0;
+    const skipped = operation.skippedCount || 0;
+    const failed = operation.failedCount || 0;
+    switch (operation.state) {
+    case "queued": return { heading: "Manual newsletter delivery queued", copy: "The fixed production delivery is waiting to start." };
+    case "running": return { heading: "Sending the production newsletter", copy: "Eligible recipients are being processed. Cancellation is disabled once delivery begins." };
+    case "succeeded": return { heading: "Manual newsletter accepted by SMTP", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted by SMTP and ${skipped} recipient${skipped === 1 ? " was" : "s were"} skipped. Inbox delivery is not asserted.` };
+    case "partial": return { heading: "Manual newsletter completed with delivery failures", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed. Inbox delivery is not asserted${operation.supportCode ? `; support code: ${operation.supportCode}` : ""}.` };
+    case "failed": return { heading: "Manual newsletter delivery failed", copy: operation.supportCode ? `${accepted} messages were accepted before failure. Support code: ${operation.supportCode}.` : "The production renderer failed without exposing recipients or raw output." };
+    default: return { heading: "Manual newsletter delivery recorded", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed. Inbox delivery is not asserted.` };
+    }
+  }
   if (operation.type === "send-test-all") {
     switch (operation.state) {
     case "queued": return { heading: "Test delivery queued", copy: "The fixed six-message TestEmail operation is waiting to start." };
@@ -1692,6 +1811,7 @@ function operationSummary(operation) {
 function operationTone(operation) {
   if (operation?.state === "succeeded") return "good";
   if (operation?.state === "failed") return "bad";
+  if (operation?.state === "partial") return "neutral";
   if (operationIsActive(operation)) return "pending";
   return "neutral";
 }
@@ -1751,6 +1871,29 @@ async function startTestSendOperation() {
     byId("test-send-user-id").value = "";
     byId("test-send-confirm").checked = false;
     setGlobalStatus("Test delivery started. Messages go only to the configured TestEmail.", true);
+  } catch (error) {
+    setGlobalStatus(error.message, true);
+  } finally {
+    state.operationStarting = false;
+    state.operationStartingType = "";
+    renderOperations();
+    manageOperationPolling();
+  }
+}
+
+async function startManualSendOperation() {
+  if (state.editor?.state !== "ready" || !byId("manual-send-confirm").checked) return;
+  state.operationStarting = true;
+  state.operationStartingType = "send-all";
+  renderOperations();
+  setGlobalStatus("Starting the confirmed production newsletter delivery...");
+  try {
+    state.operation = await request("/api/v1/operations", {
+      method: "POST",
+      body: JSON.stringify({ type: "send-all", expectedRevision: state.editor.revision, confirmProductionSend: true }),
+    });
+    byId("manual-send-confirm").checked = false;
+    setGlobalStatus("Manual production delivery started. Aggregate SMTP evidence will be retained locally.", true);
   } catch (error) {
     setGlobalStatus(error.message, true);
   } finally {
@@ -2105,6 +2248,7 @@ async function logout() {
 
 function showAuthentication() {
   clearAllRevealedSecrets();
+  closeSecretRevealDialog();
   concealMaskedInputs(byId("auth-shell"));
   state.discovery = null;
   byId("discovery-libraries").replaceChildren();
@@ -2256,6 +2400,8 @@ byId("preview-cancel-button").addEventListener("click", cancelPreviewOperation);
 byId("test-send-user-id").addEventListener("input", renderOperations);
 byId("test-send-confirm").addEventListener("change", renderOperations);
 byId("test-send-run-button").addEventListener("click", startTestSendOperation);
+byId("manual-send-confirm").addEventListener("change", renderOperations);
+byId("manual-send-run-button").addEventListener("click", startManualSendOperation);
 byId("schedule-confirm").addEventListener("change", renderSchedule);
 byId("schedule-confirm-cancel").addEventListener("click", cancelScheduleConfirmation);
 byId("schedule-confirm-run").addEventListener("click", startScheduleOperation);

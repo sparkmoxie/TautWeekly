@@ -206,6 +206,48 @@ func TestDiagnosticsAPIRequiresAuthenticationAndReturnsSanitizedSetupEvents(t *t
 	}
 }
 
+func TestIntegrationCheckPresentationIdentifiesComponentWithoutRawEvidence(t *testing.T) {
+	tests := []struct {
+		name        string
+		result      IntegrationCheckResult
+		wantState   string
+		wantCode    string
+		wantSummary string
+	}{
+		{
+			name: "optional direct Plex omitted",
+			result: IntegrationCheckResult{Overall: "passed", Steps: []IntegrationCheckStep{
+				{Service: "tautulli", State: "passed"},
+				{Service: "plex", State: "skipped"},
+			}},
+			wantState:   "passed",
+			wantCode:    "verification-passed-plex-skipped",
+			wantSummary: "Optional direct Plex verification was skipped",
+		},
+		{
+			name: "direct Plex failure",
+			result: IntegrationCheckResult{Overall: "failed", Steps: []IntegrationCheckStep{
+				{Service: "tautulli", State: "passed"},
+				{Service: "plex", State: "failed", Summary: "private raw evidence must not be retained"},
+			}},
+			wantState:   "failed",
+			wantCode:    "verification-plex-failed",
+			wantSummary: "Direct Plex verification failed",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			state, summary, code := integrationCheckPresentation(test.result)
+			if state != test.wantState || code != test.wantCode || !strings.Contains(summary, test.wantSummary) {
+				t.Fatalf("presentation: got state=%q summary=%q code=%q", state, summary, code)
+			}
+			if strings.Contains(summary, "private raw evidence") {
+				t.Fatalf("presentation retained raw step evidence: %q", summary)
+			}
+		})
+	}
+}
+
 func TestConfigurationStatusAPIIsRevisionScopedAndPersists(t *testing.T) {
 	root := t.TempDir()
 	data := t.TempDir()
@@ -630,6 +672,47 @@ func TestSendTestAllOperationAPIRequiresExplicitConfirmationAndReturnsOnlyAggreg
 		assertOperationResponseSanitized(t, response.Body.String(), privateUserID)
 		if !strings.Contains(response.Body.String(), `"smtpAcceptedCount":6`) || !strings.Contains(response.Body.String(), `"deliveryScope":"test"`) {
 			t.Fatalf("GET %s omitted aggregate test-send evidence: %s", target, response.Body.String())
+		}
+	}
+}
+
+func TestSendAllOperationAPIRequiresExplicitConfirmationAndReturnsOnlyAggregateDeliveryEvidence(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "operation-api-secret", "", "")
+	server, err := New(Options{
+		DataDir:         t.TempDir(),
+		TautWeeklyRoot:  root,
+		Version:         "test",
+		operationRunner: &fixturePreviewRunner{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := server.auth.newSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{Name: sessionCookieName, Value: current.Token}
+	request := CreateOperationRequest{Type: "send-all", ExpectedRevision: ReadConfigEditor(root).Revision}
+	unconfirmedBody, _ := json.Marshal(request)
+	unconfirmed := mutationRequestForTest(server, http.MethodPost, "/api/v1/operations", unconfirmedBody, cookie, current.CSRFToken)
+	if unconfirmed.Code != http.StatusUnprocessableEntity || !strings.Contains(unconfirmed.Body.String(), `"code":"operation-confirmation-required"`) {
+		t.Fatalf("unconfirmed production send: got %d, body %s", unconfirmed.Code, unconfirmed.Body.String())
+	}
+
+	request.ConfirmProductionSend = true
+	body, _ := json.Marshal(request)
+	created := mutationRequestForTest(server, http.MethodPost, "/api/v1/operations", body, cookie, current.CSRFToken)
+	if created.Code != http.StatusAccepted {
+		t.Fatalf("create production send: got %d, body %s", created.Code, created.Body.String())
+	}
+	finished := waitForOperationState(t, server.operations, "succeeded")
+	if finished.Type != "send-all" || finished.DeliveryScope != "production" || finished.SMTPAcceptedCount != 4 || finished.SkippedCount != 2 || finished.FailedCount != 0 || finished.Cancellable {
+		t.Fatalf("unexpected aggregate production record: %+v", finished)
+	}
+	for _, target := range []string{"/api/v1/operations/current", "/api/v1/operations/" + finished.ID, "/api/v1/history"} {
+		response := requestForTest(server, http.MethodGet, target, nil, cookie)
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"deliveryScope":"production"`) || !strings.Contains(response.Body.String(), `"smtpAcceptedCount":4`) {
+			t.Fatalf("GET %s omitted aggregate production evidence: %s", target, response.Body.String())
 		}
 	}
 }
