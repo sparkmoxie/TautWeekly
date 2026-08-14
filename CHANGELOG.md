@@ -6,6 +6,23 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Styled the production-newsletter selector with the same bounded chevron and
+  state transition used by the Manager's Tautulli user selectors.
+
+### Fixed
+
+- Retained sanitized Tautulli, direct Plex, and SMTP validation evidence for
+  the current saved configuration so Dashboard and Verify remain synchronized
+  after validation, refresh, or a Manager restart.
+- Refreshed Manager runtime, Config status, and Integration cards together when
+  **Validate, save, and verify** finishes. Manual Verify actions remain optional
+  targeted reruns for diagnosing an individual failure.
+- Cleared retained verification evidence whenever the configuration revision
+  changes or a backup is restored, preventing stale successful checks from
+  appearing against different settings.
+
 ## [0.12.1] - 2026-08-14
 
 ### Added

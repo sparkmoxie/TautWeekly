@@ -38,12 +38,14 @@ type ConfigurationStatusStep struct {
 }
 
 type ConfigurationStatus struct {
-	SchemaVersion  int                                `json:"schemaVersion"`
-	Available      bool                               `json:"available"`
-	ConfigRevision string                             `json:"configRevision,omitempty"`
-	Running        bool                               `json:"running"`
-	UpdatedAtUTC   string                             `json:"updatedAtUtc,omitempty"`
-	Steps          map[string]ConfigurationStatusStep `json:"steps"`
+	SchemaVersion    int                                `json:"schemaVersion"`
+	Available        bool                               `json:"available"`
+	ConfigRevision   string                             `json:"configRevision,omitempty"`
+	Running          bool                               `json:"running"`
+	UpdatedAtUTC     string                             `json:"updatedAtUtc,omitempty"`
+	Steps            map[string]ConfigurationStatusStep `json:"steps"`
+	LastVerification *IntegrationCheckResult            `json:"lastVerification,omitempty"`
+	LastSMTPCheck    *SMTPNetworkCheckResult            `json:"lastSmtpCheck,omitempty"`
 }
 
 type configurationStatusStore struct {
@@ -145,6 +147,44 @@ func (s *configurationStatusStore) Update(revision, name, state, summary string)
 	return writePrivateJSON(s.path, status)
 }
 
+func (s *configurationStatusStore) StoreIntegrationCheck(revision string, result IntegrationCheckResult) error {
+	clean, ok := cleanStoredIntegrationCheck(revision, result)
+	if !ok {
+		return errConfigurationStatusRevision
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if storedRevision, exists := s.storedRevisionLocked(); exists && storedRevision != revision {
+		return errConfigurationStatusRevision
+	}
+	status, exists := s.readLocked(revision)
+	if !exists {
+		status = newConfigurationStatus(revision, "not-run", s.now())
+	}
+	status.LastVerification = &clean
+	status.UpdatedAtUTC = s.now().UTC().Format(time.RFC3339)
+	return writePrivateJSON(s.path, status)
+}
+
+func (s *configurationStatusStore) StoreSMTPCheck(revision string, result SMTPNetworkCheckResult) error {
+	clean, ok := cleanStoredSMTPCheck(revision, result)
+	if !ok {
+		return errConfigurationStatusRevision
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if storedRevision, exists := s.storedRevisionLocked(); exists && storedRevision != revision {
+		return errConfigurationStatusRevision
+	}
+	status, exists := s.readLocked(revision)
+	if !exists {
+		status = newConfigurationStatus(revision, "not-run", s.now())
+	}
+	status.LastSMTPCheck = &clean
+	status.UpdatedAtUTC = s.now().UTC().Format(time.RFC3339)
+	return writePrivateJSON(s.path, status)
+}
+
 func (s *configurationStatusStore) storedRevisionLocked() (string, bool) {
 	info, err := os.Stat(s.path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() > maximumConfigurationStatusBytes {
@@ -204,7 +244,80 @@ func (s *configurationStatusStore) readLocked(revision string) (ConfigurationSta
 		}
 		clean.Steps[name] = ConfigurationStatusStep{State: step.State, Summary: summary, UpdatedAtUTC: step.UpdatedAtUTC}
 	}
+	if stored.LastVerification != nil {
+		result, valid := cleanStoredIntegrationCheck(revision, *stored.LastVerification)
+		if !valid {
+			return ConfigurationStatus{}, false
+		}
+		clean.LastVerification = &result
+	}
+	if stored.LastSMTPCheck != nil {
+		result, valid := cleanStoredSMTPCheck(revision, *stored.LastSMTPCheck)
+		if !valid {
+			return ConfigurationStatus{}, false
+		}
+		clean.LastSMTPCheck = &result
+	}
 	return clean, true
+}
+
+func cleanStoredIntegrationCheck(revision string, result IntegrationCheckResult) (IntegrationCheckResult, bool) {
+	if result.ConfigRevision != revision || result.Mode != "real-lan" || result.NetworkBoundary != "private-and-loopback-only" || !validStoredCheckState(result.Overall) {
+		return IntegrationCheckResult{}, false
+	}
+	if _, err := time.Parse(time.RFC3339, result.StartedAtUTC); err != nil {
+		return IntegrationCheckResult{}, false
+	}
+	if _, err := time.Parse(time.RFC3339, result.CompletedAtUTC); err != nil {
+		return IntegrationCheckResult{}, false
+	}
+	steps := make(map[string]IntegrationCheckStep, 2)
+	for _, step := range result.Steps {
+		if (step.Service != "tautulli" && step.Service != "plex") || !validStoredCheckState(step.State) {
+			return IntegrationCheckResult{}, false
+		}
+		summary := sanitizeEvidence(step.Summary, 240)
+		if summary == "" {
+			return IntegrationCheckResult{}, false
+		}
+		if _, exists := steps[step.Service]; exists {
+			return IntegrationCheckResult{}, false
+		}
+		steps[step.Service] = IntegrationCheckStep{Service: step.Service, State: step.State, Summary: summary}
+	}
+	if len(steps) != 2 {
+		return IntegrationCheckResult{}, false
+	}
+	result.Steps = []IntegrationCheckStep{steps["tautulli"], steps["plex"]}
+	return result, true
+}
+
+func cleanStoredSMTPCheck(revision string, result SMTPNetworkCheckResult) (SMTPNetworkCheckResult, bool) {
+	if result.ConfigRevision != revision || result.Mode != "smtp-network" || !validStoredCheckState(result.Overall) || !validStoredCheckState(result.State) {
+		return SMTPNetworkCheckResult{}, false
+	}
+	if _, err := time.Parse(time.RFC3339, result.CompletedAtUTC); err != nil {
+		return SMTPNetworkCheckResult{}, false
+	}
+	switch result.Security {
+	case "starttls-validated", "plaintext-configured", "not-established":
+	default:
+		return SMTPNetworkCheckResult{}, false
+	}
+	result.Summary = sanitizeEvidence(result.Summary, 240)
+	if result.Summary == "" {
+		return SMTPNetworkCheckResult{}, false
+	}
+	return result, true
+}
+
+func validStoredCheckState(value string) bool {
+	switch value {
+	case "passed", "warning", "failed", "skipped":
+		return true
+	default:
+		return false
+	}
 }
 
 func validConfigurationStatusStep(value string) bool {

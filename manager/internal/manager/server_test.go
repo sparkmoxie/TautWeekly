@@ -299,6 +299,24 @@ func TestConfigurationStatusAPIIsRevisionScopedAndPersists(t *testing.T) {
 	if skipped.Code != http.StatusOK || !strings.Contains(skipped.Body.String(), `"state":"skipped"`) {
 		t.Fatalf("skip preview status: got %d, body %s", skipped.Code, skipped.Body.String())
 	}
+	completedAt := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
+	if err := server.configuration.StoreIntegrationCheck(revision, IntegrationCheckResult{
+		Mode:            "real-lan",
+		NetworkBoundary: "private-and-loopback-only",
+		Overall:         "passed",
+		StartedAtUTC:    completedAt.Add(-time.Second).Format(time.RFC3339),
+		CompletedAtUTC:  completedAt.Format(time.RFC3339),
+		ConfigRevision:  revision,
+		Steps: []IntegrationCheckStep{
+			{Service: "tautulli", State: "passed", Summary: "Authenticated Tautulli API compatibility passed."},
+			{Service: "plex", State: "passed", Summary: "Authenticated direct Plex compatibility passed."},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.configuration.StoreSMTPCheck(revision, SMTPNetworkCheckResult{Mode: "smtp-network", Overall: "passed", State: "passed", Security: "starttls-validated", CompletedAtUTC: completedAt.Format(time.RFC3339), ConfigRevision: revision, Summary: "SMTP connectivity and certificate-validated STARTTLS passed."}); err != nil {
+		t.Fatal(err)
+	}
 
 	restarted, err := New(Options{DataDir: data, TautWeeklyRoot: root, Version: "test"})
 	if err != nil {
@@ -312,6 +330,10 @@ func TestConfigurationStatusAPIIsRevisionScopedAndPersists(t *testing.T) {
 	persisted := requestForTest(restarted, http.MethodGet, "/api/v1/config/status", nil, restartedCookie)
 	if persisted.Code != http.StatusOK || !strings.Contains(persisted.Body.String(), `"state":"skipped"`) {
 		t.Fatalf("persisted configuration status: got %d, body %s", persisted.Code, persisted.Body.String())
+	}
+	verification := requestForTest(restarted, http.MethodGet, "/api/v1/checks/integrations", nil, restartedCookie)
+	if verification.Code != http.StatusOK || !strings.Contains(verification.Body.String(), `"service":"tautulli","state":"passed"`) || !strings.Contains(verification.Body.String(), `"smtp":{"mode":"smtp-network","overall":"passed"`) {
+		t.Fatalf("persisted verification status: got %d, body %s", verification.Code, verification.Body.String())
 	}
 }
 
