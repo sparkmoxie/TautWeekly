@@ -33,6 +33,23 @@ if ($Version -notmatch '^[0-9A-Za-z][0-9A-Za-z._-]*$') {
     throw "Version contains unsupported characters: $Version"
 }
 
+function Find-ByteSequenceOffsets {
+    param(
+        [Parameter(Mandatory = $true)][byte[]]$Bytes,
+        [Parameter(Mandatory = $true)][byte[]]$Needle
+    )
+    if ($Needle.Length -eq 0) { throw 'Byte sequence cannot be empty.' }
+    $matches = [Collections.Generic.List[int]]::new()
+    for ($offset = 0; $offset -le $Bytes.Length - $Needle.Length; $offset++) {
+        $matched = $true
+        for ($index = 0; $index -lt $Needle.Length; $index++) {
+            if ($Bytes[$offset + $index] -ne $Needle[$index]) { $matched = $false; break }
+        }
+        if ($matched) { $matches.Add($offset) }
+    }
+    return $matches.ToArray()
+}
+
 function Set-Utf16ResourceString {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -45,14 +62,7 @@ function Set-Utf16ResourceString {
     $bytes = [IO.File]::ReadAllBytes($Path)
     $needle = [Text.Encoding]::Unicode.GetBytes($CurrentValue + [char]0)
     $replacement = [Text.Encoding]::Unicode.GetBytes($ReplacementValue + [char]0)
-    $matches = [Collections.Generic.List[int]]::new()
-    for ($offset = 0; $offset -le $bytes.Length - $needle.Length; $offset++) {
-        $matched = $true
-        for ($index = 0; $index -lt $needle.Length; $index++) {
-            if ($bytes[$offset + $index] -ne $needle[$index]) { $matched = $false; break }
-        }
-        if ($matched) { $matches.Add($offset) }
-    }
+    $matches = @(Find-ByteSequenceOffsets -Bytes $bytes -Needle $needle)
     if ($matches.Count -ne 1) {
         throw "Expected exactly one fixed resource string '$CurrentValue' in $Path; found $($matches.Count)."
     }
@@ -159,9 +169,16 @@ function Build-WindowsManager {
     if ($header.Length -lt 2 -or $header[0] -ne 0x4d -or $header[1] -ne 0x5a) {
         throw 'The Windows Manager output is not a Windows PE executable.'
     }
-    $fileInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($output)
-    if ($fileInfo.FileDescription -ne 'TautWeekly for Plex' -or $fileInfo.ProductName -ne 'TautWeekly for Plex') {
-        throw "The Windows Manager does not expose the expected TautWeekly for Plex file metadata."
+    $identityNeedle = [Text.Encoding]::Unicode.GetBytes('TautWeekly for Plex' + [char]0)
+    $identityMatches = @(Find-ByteSequenceOffsets -Bytes $header -Needle $identityNeedle)
+    if ($identityMatches.Count -lt 2) {
+        throw "The Windows Manager does not contain both expected TautWeekly for Plex identity resources."
+    }
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        $fileInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($output)
+        if ($fileInfo.FileDescription -ne 'TautWeekly for Plex' -or $fileInfo.ProductName -ne 'TautWeekly for Plex') {
+            throw "Windows does not expose the expected TautWeekly for Plex file metadata."
+        }
     }
 }
 
