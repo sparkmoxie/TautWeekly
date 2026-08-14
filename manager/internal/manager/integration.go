@@ -46,10 +46,11 @@ type DiscoveredLibrary struct {
 }
 
 type DiscoveredUser struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Eligibility string `json:"eligibility"`
-	Role        string `json:"role,omitempty"`
+	ID                 string `json:"id"`
+	Name               string `json:"name"`
+	Eligibility        string `json:"eligibility"`
+	Role               string `json:"role,omitempty"`
+	LegacyRuleExcluded bool   `json:"legacyRuleExcluded,omitempty"`
 }
 
 type TautulliDiscoveryResult struct {
@@ -60,6 +61,8 @@ type TautulliDiscoveryResult struct {
 	Libraries              []DiscoveredLibrary `json:"libraries"`
 	Users                  []DiscoveredUser    `json:"users"`
 	SuggestedPreviewUserID string              `json:"suggestedPreviewUserId,omitempty"`
+	LegacyRuleCount        int                 `json:"legacyRuleCount,omitempty"`
+	MatchedLegacyRuleCount int                 `json:"matchedLegacyRuleCount,omitempty"`
 }
 
 type IntegrationCheckStep struct {
@@ -180,7 +183,8 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 	}
 
 	libraries := normalizeDiscoveredLibraries(rawLibraries)
-	users := normalizeDiscoveredUsers(rawNames, rawUsers)
+	legacyRules := normalizedLegacyExclusionRules(values["ExcludedEmails"])
+	users, matchedLegacyRules := normalizeDiscoveredUsers(rawNames, rawUsers, legacyRules)
 	if len(libraries) == 0 {
 		return TautulliDiscoveryResult{}, fmt.Errorf("%w: no active movie or TV libraries", errIntegrationResponse)
 	}
@@ -192,6 +196,8 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 		Libraries:              libraries,
 		Users:                  users,
 		SuggestedPreviewUserID: suggestedPreviewUserID(users),
+		LegacyRuleCount:        len(legacyRules),
+		MatchedLegacyRuleCount: matchedLegacyRules,
 	}, nil
 }
 
@@ -227,7 +233,7 @@ func normalizeDiscoveredLibraries(values []map[string]any) []DiscoveredLibrary {
 	return result
 }
 
-func normalizeDiscoveredUsers(names, details []map[string]any) []DiscoveredUser {
+func normalizeDiscoveredUsers(names, details []map[string]any, legacyRules map[string]struct{}) ([]DiscoveredUser, int) {
 	detailsByID := make(map[string]map[string]any)
 	nameByID := make(map[string]string)
 	ids := make([]string, 0, len(names)+len(details))
@@ -257,6 +263,7 @@ func normalizeDiscoveredUsers(names, details []map[string]any) []DiscoveredUser 
 		}
 	}
 	result := make([]DiscoveredUser, 0, min(len(ids), maximumDiscoveryChoices))
+	matchedLegacyRules := make(map[string]struct{})
 	for _, id := range ids {
 		detail, hasDetails := detailsByID[id]
 		name := sanitizeEvidence(fmt.Sprint(detail["friendly_name"]), 100)
@@ -270,19 +277,49 @@ func normalizeDiscoveredUsers(names, details []map[string]any) []DiscoveredUser 
 			name = "User " + id
 		}
 		eligibility := "unknown"
+		legacyRuleExcluded := false
 		if hasDetails {
 			eligibility = "skipped"
-			email := strings.TrimSpace(fmt.Sprint(detail["email"]))
+			email := strings.ToLower(strings.TrimSpace(fmt.Sprint(detail["email"])))
 			if integrationTruthy(detail["is_active"]) && integrationTruthy(detail["do_notify"]) && email != "" && email != "<nil>" {
 				eligibility = "eligible"
 			}
+			if _, excluded := legacyRules[email]; excluded {
+				legacyRuleExcluded = true
+				matchedLegacyRules[email] = struct{}{}
+			}
 		}
-		result = append(result, DiscoveredUser{ID: id, Name: name, Eligibility: eligibility, Role: discoveredUserRole(detail)})
+		result = append(result, DiscoveredUser{ID: id, Name: name, Eligibility: eligibility, Role: discoveredUserRole(detail), LegacyRuleExcluded: legacyRuleExcluded})
 		if len(result) == maximumDiscoveryChoices {
 			break
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name) })
+	return result, len(matchedLegacyRules)
+}
+
+func normalizedLegacyExclusionRules(value any) map[string]struct{} {
+	result := make(map[string]struct{})
+	appendRule := func(candidate any) {
+		text, ok := candidate.(string)
+		if !ok {
+			return
+		}
+		text = strings.ToLower(strings.TrimSpace(text))
+		if text != "" {
+			result[text] = struct{}{}
+		}
+	}
+	switch typed := value.(type) {
+	case []any:
+		for _, candidate := range typed {
+			appendRule(candidate)
+		}
+	case []string:
+		for _, candidate := range typed {
+			appendRule(candidate)
+		}
+	}
 	return result
 }
 

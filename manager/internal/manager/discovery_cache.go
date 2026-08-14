@@ -66,12 +66,17 @@ func sanitizeCachedDiscovery(stored TautulliDiscoveryResult) (TautulliDiscoveryR
 		return TautulliDiscoveryResult{}, false
 	}
 	clean := TautulliDiscoveryResult{
-		Mode:            stored.Mode,
-		NetworkBoundary: stored.NetworkBoundary,
-		CompletedAtUTC:  completed.UTC().Format(time.RFC3339),
-		ConfigRevision:  stored.ConfigRevision,
-		Libraries:       make([]DiscoveredLibrary, 0, min(len(stored.Libraries), maximumDiscoveryChoices)),
-		Users:           make([]DiscoveredUser, 0, min(len(stored.Users), maximumDiscoveryChoices)),
+		Mode:                   stored.Mode,
+		NetworkBoundary:        stored.NetworkBoundary,
+		CompletedAtUTC:         completed.UTC().Format(time.RFC3339),
+		ConfigRevision:         stored.ConfigRevision,
+		Libraries:              make([]DiscoveredLibrary, 0, min(len(stored.Libraries), maximumDiscoveryChoices)),
+		Users:                  make([]DiscoveredUser, 0, min(len(stored.Users), maximumDiscoveryChoices)),
+		LegacyRuleCount:        min(max(stored.LegacyRuleCount, 0), maximumDiscoveryChoices),
+		MatchedLegacyRuleCount: min(max(stored.MatchedLegacyRuleCount, 0), maximumDiscoveryChoices),
+	}
+	if clean.MatchedLegacyRuleCount > clean.LegacyRuleCount {
+		return TautulliDiscoveryResult{}, false
 	}
 	seenLibraries := map[string]struct{}{}
 	for _, library := range stored.Libraries {
@@ -118,7 +123,7 @@ func sanitizeCachedDiscovery(stored TautulliDiscoveryResult) (TautulliDiscoveryR
 		if role != "owner" && role != "administrator" {
 			role = ""
 		}
-		clean.Users = append(clean.Users, DiscoveredUser{ID: id, Name: name, Eligibility: eligibility, Role: role})
+		clean.Users = append(clean.Users, DiscoveredUser{ID: id, Name: name, Eligibility: eligibility, Role: role, LegacyRuleExcluded: user.LegacyRuleExcluded})
 		if len(clean.Users) == maximumDiscoveryChoices {
 			break
 		}

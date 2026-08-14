@@ -478,6 +478,9 @@ func TestTautulliDiscoveryReturnsSanitizedChoicesWithoutEmailOrSecrets(t *testin
 	defer tautulli.Close()
 
 	root := integrationConfigRoot(t, tautulli.URL, secret, "", "")
+	setIntegrationConfigValues(t, root, map[string]any{
+		"ExcludedEmails": []string{"PRIVATE-ADMIN@example.org", "unmatched-legacy@example.org"},
+	})
 	view := ReadConfigEditor(root)
 	result, err := DiscoverTautulliChoices(context.Background(), root, TautulliDiscoveryRequest{
 		ExpectedRevision:   view.Revision,
@@ -495,11 +498,14 @@ func TestTautulliDiscoveryReturnsSanitizedChoicesWithoutEmailOrSecrets(t *testin
 	if result.Users[0].Eligibility != "eligible" || result.Users[1].Eligibility != "unknown" || result.Users[1].ID != "1234567890123456789" || result.Users[2].Eligibility != "skipped" {
 		t.Fatalf("unexpected eligibility normalization: %+v", result.Users)
 	}
+	if result.LegacyRuleCount != 2 || result.MatchedLegacyRuleCount != 1 || !result.Users[0].LegacyRuleExcluded || result.Users[1].LegacyRuleExcluded || result.Users[2].LegacyRuleExcluded {
+		t.Fatalf("legacy rules were not matched without disclosure: %+v", result)
+	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, private := range []string{secret, "private-admin@example.org", "private-viewer@example.org", tautulli.URL} {
+	for _, private := range []string{secret, "private-admin@example.org", "private-viewer@example.org", "unmatched-legacy@example.org", tautulli.URL} {
 		if strings.Contains(string(encoded), private) {
 			t.Fatalf("discovery response returned private value %q", private)
 		}
