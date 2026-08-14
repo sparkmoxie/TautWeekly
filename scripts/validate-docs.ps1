@@ -190,25 +190,57 @@ foreach ($relative in @('nas-docker/index.html', 'mac/index.html', 'linux/index.
 }
 
 $windowsQuickstart = [IO.File]::ReadAllText((Join-Path $docs 'windows/index.html'))
-$windowsBatFiles = @(Get-ChildItem -LiteralPath (Join-Path $Root 'platforms/windows') -File -Filter '*.bat')
-foreach ($batFile in $windowsBatFiles) {
-    $escapedBatName = [regex]::Escape($batFile.Name)
-    if ($windowsQuickstart -notmatch "(?i)<strong>$escapedBatName</strong>") {
-        throw "Windows BAT command center is missing launcher: $($batFile.Name)"
-    }
-}
+$windowsReadme = [IO.File]::ReadAllText((Join-Path $docs 'windows/README.md'))
 foreach ($pattern in @(
     'TautWeekly-Setup\.exe',
     'authoritative Setup EXE',
     'Windows Manager',
+    'First time setup',
     'Validate, save, and verify',
+    'Libraries and users',
+    'Tautulli and Plex',
+    'SMTP preflight',
+    'Local previews',
+    'persistent Config',
+    'No pairing token',
+    'at least 8 characters',
+    'Reset TautWeekly Manager Access',
     'choose the exact old portable folder for <strong>Migrate</strong>',
     'SHA256SUMS',
     'automatic rollback',
-    'No periodic update task'
+    'No periodic update task',
+    'Portable recovery and advanced tools'
 )) {
     if ($windowsQuickstart -notmatch $pattern) {
         throw "Windows Quickstart is missing Manager/Setup source-of-truth guidance: $pattern"
+    }
+}
+
+foreach ($pattern in @(
+    'TautWeekly-Setup\.exe',
+    '(?i)normal setup flow',
+    '\*\*Install\*\*',
+    '\*\*Update\*\*',
+    '\*\*Migrate\*\*',
+    'First time setup',
+    'Validate, save, and verify',
+    'Optional Manager password',
+    'at least 8 characters',
+    'Portable recovery and advanced tools'
+)) {
+    if ($windowsReadme -notmatch $pattern) {
+        throw "Windows README is missing Setup/Manager primary-flow guidance: $pattern"
+    }
+}
+
+foreach ($source in @{
+    'Windows Quickstart' = $windowsQuickstart
+    'Windows README'     = $windowsReadme
+}.GetEnumerator()) {
+    $setupPosition = $source.Value.IndexOf('TautWeekly-Setup.exe', [StringComparison]::OrdinalIgnoreCase)
+    $batPosition = $source.Value.IndexOf('.bat', [StringComparison]::OrdinalIgnoreCase)
+    if ($setupPosition -lt 0 -or ($batPosition -ge 0 -and $batPosition -lt $setupPosition)) {
+        throw "$($source.Key) presents a BAT launcher before the supported Setup EXE flow."
     }
 }
 
