@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"log"
 	"os/exec"
 )
 
@@ -14,7 +15,7 @@ func chooseInstallDirectory(string) (string, bool, error) {
 func preferredInstallDirectory(value string) string     { return value }
 func hideProcessWindow(*exec.Cmd)                       {}
 func unregisterUninstaller() error                      { return errors.New("Windows-only operation") }
-func createShortcuts(options) error                     { return errors.New("Windows-only operation") }
+func createShortcuts(options, *log.Logger) error        { return errors.New("Windows-only operation") }
 func removeShortcuts() error                            { return errors.New("Windows-only operation") }
 func stopInstalledManager(string, bool) (bool, error)   { return false, nil }
 func applyVerifiedUpdate(options, string, string) error { return errors.New("Windows-only operation") }

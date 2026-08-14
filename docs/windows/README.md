@@ -49,9 +49,10 @@ Use `127.0.0.1` only for a service running on the same Windows computer.
    Do not continue a BAT migration unless the button reads **Migrate**. Setup
    refuses an arbitrary non-empty folder and does not scan drives or guess at
    legacy locations.
-4. Setup installs for the current Windows account, adds Desktop and Start Menu
-   shortcuts, registers uninstall information, and opens the loopback-only
-   Manager. The default application folder is
+4. Setup installs for the current Windows account, adds the Start Menu launcher
+   and a Desktop launcher when Windows exposes a usable Desktop, registers
+   uninstall information, and opens the loopback-only Manager. The default
+   application folder is
    `%LOCALAPPDATA%\Programs\TautWeekly`; a fresh install may use another
    permanent writable location.
 
@@ -64,8 +65,9 @@ warning is a code-signing limitation, not evidence that the hash is wrong.
 Update and migration replace only release-owned files. Setup preserves private
 `config.json`, state, logs, cache, output/previews, custom assets, Manager
 history, and compatible Task Scheduler state. It creates a private timestamped
-backup before replacement and automatically rolls release-owned files back if
-verification fails. The backup can contain credentials and must not be shared.
+backup before replacement and automatically performs a rollback of
+release-owned files if verification fails. The backup can contain credentials
+and must not be shared.
 
 When updating an existing Setup installation, keep its registered folder.
 Changing the installed folder requires uninstalling the application first;

@@ -56,7 +56,7 @@
   <header class="topbar">
     <div class="topbar-inner">
       <a class="brand" href="../" aria-label="TautWeekly Quickstart home">
-        <img src="../assets/branding/tautweekly-app-icon-64.png" alt="">
+        <img src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38">
         <span><strong>TAUTWEEKLY FOR PLEX</strong><span>Windows Quickstart · Setup and Manager</span></span>
       </a>
       <div class="search"><input id="search" type="search" placeholder="Search install, Config, password, previews…" aria-label="Search this guide"><button id="clear" type="button" aria-label="Clear search">×</button></div>
@@ -94,7 +94,7 @@
       <section class="hero section" id="overview" data-search="overview setup exe windows manager gui quickstart install">
         <div class="hero-grid">
           <div class="hero-copy">
-            <div class="platform"><img src="../assets/platforms/windows.svg" alt="Windows"><span class="kicker">Current stable workflow</span></div>
+            <div class="platform"><img src="../assets/platforms/windows.svg" alt="" width="1000" height="184"><span class="kicker">Current stable workflow</span></div>
             <h1>Install once.<em>Manage visually.</em></h1>
             <p><strong>TautWeekly-Setup.exe</strong> installs the self-contained Windows Manager. Configure services, verify connections, choose libraries and delivery exclusions, inspect previews, protect local access, and own the weekly task without using the BAT setup wizard.</p>
             <div class="actions">
@@ -104,7 +104,7 @@
             </div>
           </div>
           <div class="setup-visual" aria-label="Windows setup flow">
-            <div class="setup-head"><img src="../assets/branding/tautweekly-app-icon-180.png" alt=""><div><small>TAUTWEEKLY</small><strong>Windows Manager</strong></div></div>
+            <div class="setup-head"><img src="../assets/branding/tautweekly-app-icon-180.png" alt="" width="54" height="54"><div><small>TAUTWEEKLY</small><strong>Windows Manager</strong></div></div>
             <div class="setup-flow">
               <div><b>1</b><span>Run Setup<small>Choose a permanent application folder</small></span></div>
               <div><b>2</b><span>Open Config<small>Enter or review the saved settings</small></span></div>
@@ -137,7 +137,7 @@
           <div class="step"><div class="number">1</div><div><h3>Download both release files</h3><p>Get <a href="https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-Setup.exe"><code>TautWeekly-Setup.exe</code></a> and <a href="https://github.com/sparkmoxie/TautWeekly/releases/latest/download/SHA256SUMS.txt"><code>SHA256SUMS.txt</code></a> from the same latest release.</p></div></div>
           <div class="step"><div class="number">2</div><div><h3>Verify the SHA-256 value</h3><div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button">Copy</button></div><pre>Get-FileHash .\TautWeekly-Setup.exe -Algorithm SHA256</pre></div><p>Match the result to the Setup line in <code>SHA256SUMS.txt</code>.</p></div></div>
           <div class="step"><div class="number">3</div><div><h3>Choose a permanent folder</h3><p>Run Setup, select an empty permanent writable folder, and confirm the action reads <strong>Install</strong>. The default is <code>%LOCALAPPDATA%\Programs\TautWeekly</code>.</p></div></div>
-          <div class="step"><div class="number">4</div><div><h3>Open the Manager</h3><p>Setup adds Desktop and Start Menu shortcuts, registers uninstall information, starts the local Manager, and opens it at <code>127.0.0.1:8788</code>.</p></div></div>
+          <div class="step"><div class="number">4</div><div><h3>Open the Manager</h3><p>Setup always adds the Start Menu launcher and adds a Desktop launcher when Windows exposes a usable Desktop. It registers uninstall information, starts the local Manager, and opens it at <code>127.0.0.1:8788</code>.</p></div></div>
         </div>
         <div class="callout"><div><strong>Unsigned release notice.</strong><p>Windows SmartScreen may report an unknown publisher. Confirm the official SHA-256 value before choosing Run anyway.</p></div></div>
       </section>

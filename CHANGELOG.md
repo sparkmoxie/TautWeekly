@@ -6,6 +6,34 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-08-14
+
+### Changed
+
+- Made the Start Menu launcher the authoritative post-install entry point.
+  Setup still adds the Desktop launcher when Windows exposes a usable Desktop,
+  but a missing or unavailable optional Desktop no longer aborts an otherwise
+  successful install, update, or migration.
+- Reworked the Windows README and Quickstart around the one-click Setup and
+  local Manager workflow. BAT and PowerShell launchers remain documented as
+  portable recovery and advanced fallbacks rather than the primary setup path.
+
+### Fixed
+
+- Resolved Windows Desktop and Programs locations through the Windows shell
+  instead of guessing `%USERPROFILE%\Desktop`. This supports redirected and
+  OneDrive-managed Desktops and fixes the v0.11.0 `DirectoryNotFoundException`
+  reported while Setup was creating `Open TautWeekly Manager.lnk`.
+- Added regression coverage for redirected Desktops, an unavailable optional
+  Desktop, a failed optional Desktop shortcut write, required Start Menu
+  launchers, and cleanup through the same Windows shell locations.
+
+### Security
+
+- The shortcut correction does not read or move configuration, credentials,
+  history, previews, or recipient data. The Setup executable remains unsigned;
+  verify it against the release `SHA256SUMS.txt` before running it.
+
 ## [0.11.0] - 2026-08-14
 
 ### Added
