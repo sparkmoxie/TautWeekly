@@ -4806,7 +4806,7 @@ function Get-PlexWatchRatings {
             -Uri ((Get-PlexWatchBaseUrl) + "/" + $MediaType + "/" + $slugValue) `
             -Headers @{
                 "Accept-Language" = "en-US,en;q=0.9"
-                "User-Agent"      = "TautWeekly-for-Plex/0.11.0"
+                "User-Agent"      = "TautWeekly-for-Plex/0.11.1"
             } `
             -TimeoutSec 60
         $content = [string]$response.Content
@@ -5060,7 +5060,7 @@ function Get-PlexHostedMetadata {
         "Accept"                   = "application/json"
         "X-Plex-Token"             = $token
         "X-Plex-Product"           = "TautWeekly for Plex"
-        "X-Plex-Version"           = "0.11.0"
+        "X-Plex-Version"           = "0.11.1"
         "X-Plex-Client-Identifier" = "tautweekly-history-artwork"
     }
 

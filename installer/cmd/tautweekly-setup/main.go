@@ -106,7 +106,7 @@ func run(args []string) error {
 }
 
 func installationCompletionMessage(noLaunch bool) string {
-	message := "Installation completed successfully.\n\nUse Open TautWeekly Manager on your Desktop or in the Start menu."
+	message := "Installation completed successfully.\n\nUse Open TautWeekly Manager in the Start menu."
 	if !noLaunch {
 		message += "\n\nThe local Manager will now open in your browser."
 	}
@@ -318,7 +318,7 @@ func install(opts options, logger *log.Logger) error {
 		if err := registerUninstaller(opts); err != nil {
 			return err
 		}
-		if err := createShortcuts(opts); err != nil {
+		if err := createShortcuts(opts, logger); err != nil {
 			return err
 		}
 	}

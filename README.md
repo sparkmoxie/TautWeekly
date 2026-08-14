@@ -43,6 +43,24 @@ and milestone emails. Preview locally, send controlled tests, then schedule deli
 | Native Linux | Current Ubuntu, Debian, or RHEL host with systemd | [Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-linux.tar.gz) |
 | FreeBSD / Podman **beta** | FreeBSD 15.1+ amd64 host | [FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-freebsd-podman.tar.gz) |
 
+### Windows Manager: the normal setup path
+
+Windows users should download and run
+[`TautWeekly-Setup.exe`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-Setup.exe),
+choose a permanent application folder, and complete setup in the local Manager.
+The Manager opens on the Dashboard; a new installation shows a blue **First time
+setup** card that leads to **Config**. **Validate, save, and verify** then loads
+the available libraries and users, checks Tautulli and direct Plex, runs a
+non-sending SMTP preflight, and prepares six local previews when metadata is
+ready. Those four results persist and are summarized on the Dashboard.
+
+Windows trusted-local access requires no first-run pairing token. If other
+people use the same Windows account, an optional password lock can be enabled,
+changed, disabled, or recovered under **Settings**. Install or refresh the
+weekly Windows task from **Schedule** only after reviewing local previews and a
+controlled six-message `TestEmail` delivery. The numbered BAT launchers remain
+available only for portable recovery and advanced troubleshooting.
+
 ## Current newsletter behavior
 
 - New movie and TV additions with artwork, summaries, genres, ratings, and

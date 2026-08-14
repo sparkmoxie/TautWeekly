@@ -139,7 +139,7 @@ func TestInstalledApplicationRequiresInstallerMetadata(t *testing.T) {
 
 func TestInstallationCompletionPointsToManagerShortcut(t *testing.T) {
 	message := installationCompletionMessage(false)
-	for _, expected := range []string{"Open TautWeekly Manager", "will now open in your browser"} {
+	for _, expected := range []string{"Open TautWeekly Manager", "Start menu", "will now open in your browser"} {
 		if !strings.Contains(message, expected) {
 			t.Fatalf("completion message is missing %q: %s", expected, message)
 		}

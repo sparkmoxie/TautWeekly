@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -282,16 +283,19 @@ func unregisterUninstaller() error {
 	return nil
 }
 
-func createShortcuts(opts options) error {
-	appData := os.Getenv("APPDATA")
-	userProfile := os.Getenv("USERPROFILE")
-	if appData == "" || userProfile == "" {
-		return fmt.Errorf("resolve Windows shortcut locations")
+var (
+	resolveWindowsSpecialFolder = windowsSpecialFolder
+	writeWindowsShortcut        = createShortcut
+)
+
+func createShortcuts(opts options, logger *log.Logger) error {
+	programs, err := resolveWindowsSpecialFolder("Programs")
+	if err != nil {
+		return fmt.Errorf("resolve Windows Start menu: %w", err)
 	}
-	startMenu := filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs", "TautWeekly")
-	desktop := filepath.Join(userProfile, "Desktop")
+	startMenu := filepath.Join(programs, "TautWeekly")
 	if err := os.MkdirAll(startMenu, 0o755); err != nil {
-		return err
+		return fmt.Errorf("create Windows Start menu folder: %w", err)
 	}
 	systemRoot := os.Getenv("SystemRoot")
 	if systemRoot == "" {
@@ -300,16 +304,46 @@ func createShortcuts(opts options) error {
 	target := filepath.Join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
 	arguments := fmt.Sprintf(`-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "%s" -DataRoot "%s"`, filepath.Join(opts.installDir, "START-MANAGER.ps1"), opts.dataDir)
 	icon := filepath.Join(opts.installDir, "tautweekly.ico")
-	for _, destination := range []string{filepath.Join(startMenu, launcherName), filepath.Join(desktop, launcherName)} {
-		if err := createShortcut(destination, target, arguments, opts.installDir, icon); err != nil {
-			return err
-		}
-	}
-	resetArguments := fmt.Sprintf(`-NoLogo -NoProfile -ExecutionPolicy Bypass -File "%s" -DataRoot "%s"`, filepath.Join(opts.installDir, "RESET-MANAGER-ACCESS.ps1"), opts.dataDir)
-	if err := createShortcut(filepath.Join(startMenu, resetLauncherName), target, resetArguments, opts.installDir, icon); err != nil {
+	if err := writeWindowsShortcut(filepath.Join(startMenu, launcherName), target, arguments, opts.installDir, icon); err != nil {
 		return err
 	}
+	resetArguments := fmt.Sprintf(`-NoLogo -NoProfile -ExecutionPolicy Bypass -File "%s" -DataRoot "%s"`, filepath.Join(opts.installDir, "RESET-MANAGER-ACCESS.ps1"), opts.dataDir)
+	if err := writeWindowsShortcut(filepath.Join(startMenu, resetLauncherName), target, resetArguments, opts.installDir, icon); err != nil {
+		return err
+	}
+
+	desktop, err := resolveWindowsSpecialFolder("Desktop")
+	if err != nil {
+		logger.Printf("desktop shortcut skipped: %v", err)
+		return nil
+	}
+	if info, statErr := os.Stat(desktop); statErr != nil || !info.IsDir() {
+		if statErr != nil {
+			logger.Printf("desktop shortcut skipped: resolved Desktop is unavailable: %v", statErr)
+		} else {
+			logger.Printf("desktop shortcut skipped: resolved Desktop is not a directory")
+		}
+		return nil
+	}
+	if err := writeWindowsShortcut(filepath.Join(desktop, launcherName), target, arguments, opts.installDir, icon); err != nil {
+		logger.Printf("desktop shortcut skipped: %v", err)
+	}
 	return nil
+}
+
+func windowsSpecialFolder(name string) (string, error) {
+	script := `$folder=(New-Object -ComObject WScript.Shell).SpecialFolders.Item($env:TAUTWEEKLY_SPECIAL_FOLDER);if([string]::IsNullOrWhiteSpace($folder)){exit 2};[Console]::Out.Write($folder)`
+	command := hiddenCommand("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
+	command.Env = append(os.Environ(), "TAUTWEEKLY_SPECIAL_FOLDER="+name)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("resolve %s shell folder: %w: %s", name, err, strings.TrimSpace(string(output)))
+	}
+	path := strings.TrimSpace(string(output))
+	if path == "" || !filepath.IsAbs(path) {
+		return "", fmt.Errorf("resolve %s shell folder: Windows returned an invalid path", name)
+	}
+	return filepath.Clean(path), nil
 }
 
 func createShortcut(destination, target, arguments, workingDirectory, icon string) error {
@@ -330,14 +364,20 @@ func createShortcut(destination, target, arguments, workingDirectory, icon strin
 }
 
 func removeShortcuts() error {
-	appData := os.Getenv("APPDATA")
-	userProfile := os.Getenv("USERPROFILE")
-	if strings.TrimSpace(appData) == "" || strings.TrimSpace(userProfile) == "" {
-		return errors.New("resolve Windows shortcut locations")
+	programs, err := resolveWindowsSpecialFolder("Programs")
+	if err != nil {
+		return fmt.Errorf("resolve Windows Start menu: %w", err)
 	}
 	paths := []string{
-		filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs", "TautWeekly"),
-		filepath.Join(userProfile, "Desktop", launcherName),
+		filepath.Join(programs, "TautWeekly"),
+	}
+	if desktop, desktopErr := resolveWindowsSpecialFolder("Desktop"); desktopErr == nil {
+		paths = append(paths, filepath.Join(desktop, launcherName))
+	}
+	// v0.11.0 guessed this legacy path instead of consulting Windows. Remove a
+	// stale launcher there when it differs from the current shell Desktop.
+	if userProfile := strings.TrimSpace(os.Getenv("USERPROFILE")); userProfile != "" {
+		paths = append(paths, filepath.Join(userProfile, "Desktop", launcherName))
 	}
 	for _, path := range paths {
 		if err := os.RemoveAll(path); err != nil {
