@@ -48,6 +48,41 @@ func TestInstalledDataDirectory(t *testing.T) {
 	}
 }
 
+func TestParseOptionsReusesInstalledPrivateDataDirectory(t *testing.T) {
+	root := t.TempDir()
+	expected := filepath.Join(t.TempDir(), "TautWeekly Manager")
+	metadata := "Version=test\r\nDataDirectory=" + expected + "\r\n"
+	if err := os.WriteFile(filepath.Join(root, "INSTALL-METADATA.txt"), []byte(metadata), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	opts, err := parseOptions([]string{"--install-dir", root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.dataDir != expected {
+		t.Fatalf("update data directory = %q, want stored directory %q", opts.dataDir, expected)
+	}
+}
+
+func TestParseOptionsExplicitPrivateDataDirectoryOverridesInstalledMetadata(t *testing.T) {
+	root := t.TempDir()
+	stored := filepath.Join(t.TempDir(), "stored-data")
+	explicit := filepath.Join(t.TempDir(), "explicit-data")
+	metadata := "Version=test\r\nDataDirectory=" + stored + "\r\n"
+	if err := os.WriteFile(filepath.Join(root, "INSTALL-METADATA.txt"), []byte(metadata), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	opts, err := parseOptions([]string{"--install-dir", root, "--data-dir", explicit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.dataDir != explicit {
+		t.Fatalf("explicit data directory = %q, want %q", opts.dataDir, explicit)
+	}
+}
+
 func TestExtractPayloadRejectsTraversal(t *testing.T) {
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)

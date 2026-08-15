@@ -37,9 +37,12 @@ Assert-True ($testRoot.StartsWith($tempParent, [StringComparison]::OrdinalIgnore
 $installRoot = Join-Path $testRoot 'program'
 $dataRoot = Join-Path $testRoot 'private-data'
 $logPath = Join-Path $testRoot 'installer.log'
+$originalLocalAppData = $env:LOCALAPPDATA
+$env:LOCALAPPDATA = Join-Path $testRoot 'isolated-local-app-data'
 
-function Invoke-TestInstaller([switch]$Uninstall, [string]$ExitMarker = '') {
-    $arguments = @('--test-mode', '--install-dir', $installRoot, '--data-dir', $dataRoot, '--log', $logPath)
+function Invoke-TestInstaller([switch]$Uninstall, [switch]$UseRecordedData, [string]$ExitMarker = '') {
+    $arguments = @('--test-mode', '--install-dir', $installRoot, '--log', $logPath)
+    if (-not $UseRecordedData) { $arguments += @('--data-dir', $dataRoot) }
     if ([string]::IsNullOrWhiteSpace($ExitMarker)) { $arguments += '--no-launch' } else { $arguments += @('--test-exit-marker', $ExitMarker) }
     if ($Uninstall) { $arguments = @('--uninstall') + $arguments }
     $process = Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
@@ -164,11 +167,17 @@ try {
     New-Item -ItemType Directory -Path $legacyData | Out-Null
     [IO.File]::WriteAllText((Join-Path $legacyData 'legacy-state.json'), '{"legacy":"migrate"}', [Text.UTF8Encoding]::new($false))
 
-    Invoke-TestInstaller
+    # Do not pass --data-dir on update: a production update must retain the
+    # private path already recorded in INSTALL-METADATA.txt.
+    Invoke-TestInstaller -UseRecordedData
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'config.json') -Raw) -eq '{"private":"preserve"}') 'Upgrade replaced private config.json.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $dataRoot 'access-state.json') -Raw) -eq '{"session":"preserve"}') 'Upgrade replaced external Manager data.'
     Assert-True (Test-Path -LiteralPath (Join-Path $dataRoot 'legacy-state.json') -PathType Leaf) 'Upgrade did not migrate legacy .manager-data state.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $installRoot '.manager-data'))) 'Upgrade retained a duplicate legacy .manager-data directory.'
+    $updatedMetadata = Get-Content -LiteralPath (Join-Path $installRoot 'INSTALL-METADATA.txt') -Raw
+    Assert-True ($updatedMetadata.Contains("DataDirectory=$dataRoot")) 'Upgrade replaced the recorded private data directory.'
+    $updatedLauncher = Get-Content -LiteralPath (Join-Path $installRoot 'Open-TautWeekly.cmd') -Raw
+    Assert-True ($updatedLauncher.Contains($dataRoot)) 'Upgrade rewrote the Manager launcher to a different private data directory.'
     $rollbackBackups = @(Get-ChildItem -LiteralPath $testRoot -Directory -Filter 'program.backup-v*')
     Assert-True ($rollbackBackups.Count -eq 1) "Upgrade created $($rollbackBackups.Count) rollback backups instead of exactly one."
     Assert-True ((Get-Content -LiteralPath (Join-Path $rollbackBackups[0].FullName 'config.json') -Raw) -eq '{"private":"preserve"}') 'Upgrade rollback backup did not preserve private config.json.'
@@ -240,6 +249,7 @@ try {
     Write-Host '[PASS] Windows installer fresh install, process-lock release, verified upgrade, portable migration, icon, and privacy-preserving uninstall lifecycle.' -ForegroundColor Green
 }
 finally {
+    $env:LOCALAPPDATA = $originalLocalAppData
     if (Test-Path -LiteralPath $testRoot) {
         $resolved = [IO.Path]::GetFullPath($testRoot)
         if ($resolved.StartsWith($tempParent, [StringComparison]::OrdinalIgnoreCase) -and (Split-Path -Leaf $resolved).StartsWith('tautweekly-installer-test-', [StringComparison]::Ordinal)) {

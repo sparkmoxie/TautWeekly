@@ -48,6 +48,17 @@ function Write-UpdateResult {
     [IO.File]::WriteAllText($resolvedResultPath, $json, [Text.UTF8Encoding]::new($false))
 }
 
+# Preflight failures happen before the mutation/rollback try block below. Keep
+# those failures machine-readable so Setup can report the actual guarded reason
+# instead of a generic child-process exit.
+trap {
+    $script:Result.Status = 'failed'
+    $script:Result.Message = $_.Exception.Message
+    try { Write-UpdateResult } catch { }
+    Write-Error $_
+    exit 1
+}
+
 function Get-SafeRelativePath {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -70,6 +81,19 @@ function Get-SafeRelativePath {
         throw "Release path escapes the installation directory: $RelativePath"
     }
     return $full
+}
+
+function Get-Sha256Hex {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $stream = [IO.File]::OpenRead($Path)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+        $stream.Dispose()
+    }
 }
 
 function Assert-PackageOwnedPath {
@@ -144,7 +168,7 @@ function Assert-ManifestFiles {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
             throw "Release file is missing: $($entry.RelativePath)"
         }
-        $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actual = Get-Sha256Hex -Path $path
         if ($actual -ne $entry.Hash) {
             throw "Release file hash mismatch: $($entry.RelativePath)"
         }
@@ -462,7 +486,7 @@ try {
             if ($candidateManifest.Contains($entry.RelativePath.ToLowerInvariant())) { return $false }
             $existingPath = Get-SafeRelativePath -Root $InstallRoot -RelativePath $entry.RelativePath
             if (-not (Test-Path -LiteralPath $existingPath -PathType Leaf)) { return $false }
-            $existingHash = (Get-FileHash -LiteralPath $existingPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $existingHash = Get-Sha256Hex -Path $existingPath
             return $existingHash -eq $entry.Hash
         } | ForEach-Object { $_.RelativePath })
         Remove-OwnedFiles -RelativePaths $deprecated -Root $InstallRoot

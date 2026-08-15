@@ -327,6 +327,10 @@ For a no-install portable or recovery workflow, download and verify
 [`TautWeekly-windows.zip`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-windows.zip),
 extract it to a permanent writable folder, and run `00-OPEN-MANAGER.bat`.
 Portable Manager state lives in `.manager-data\` beside the application.
+It is intentionally separate from an installed Manager's private data. Use
+`TautWeekly-Setup.exe` and keep the installer-selected existing application
+folder when validating an update against installed configuration; Setup reuses
+the private data directory recorded by that installation.
 
 The numbered BAT and PowerShell launchers remain available for break/fix
 recovery, terminal automation, and detailed troubleshooting. Common fallbacks

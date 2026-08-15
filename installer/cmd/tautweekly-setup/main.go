@@ -35,6 +35,7 @@ type options struct {
 	installDir         string
 	installDirExplicit bool
 	dataDir            string
+	dataDirExplicit    bool
 	logPath            string
 }
 
@@ -69,6 +70,13 @@ func run(args []string) error {
 			return nil
 		}
 		opts.installDir = selected
+		if !opts.dataDirExplicit {
+			dataDir, err := automaticDataDirectory(opts.installDir)
+			if err != nil {
+				return err
+			}
+			opts.dataDir = dataDir
+		}
 		if err := normalizeAndValidatePaths(&opts); err != nil {
 			return err
 		}
@@ -146,6 +154,7 @@ func hasArgument(args []string, wanted string) bool {
 func parseOptions(args []string) (options, error) {
 	var opts options
 	opts.installDirExplicit = hasOption(args, "--install-dir")
+	opts.dataDirExplicit = hasOption(args, "--data-dir")
 	flags := flag.NewFlagSet("TautWeekly-Setup", flag.ContinueOnError)
 	flags.BoolVar(&opts.uninstall, "uninstall", false, "remove installed application files and shortcuts")
 	flags.BoolVar(&opts.testMode, "test-mode", false, "skip registry, shortcuts, and process launch")
@@ -184,16 +193,11 @@ func parseOptions(args []string) (options, error) {
 		}
 	}
 	if opts.dataDir == "" {
-		if uninstallerOnly {
-			storedDataDir, err := installedDataDirectory(opts.installDir)
-			if err != nil {
-				return options{}, err
-			}
-			opts.dataDir = storedDataDir
+		resolvedDataDir, err := automaticDataDirectory(opts.installDir)
+		if err != nil {
+			return options{}, err
 		}
-		if opts.dataDir == "" {
-			opts.dataDir = filepath.Join(localAppData, installFolderName, "data")
-		}
+		opts.dataDir = resolvedDataDir
 	}
 	if opts.logPath == "" {
 		opts.logPath = filepath.Join(localAppData, installFolderName, "installer.log")
@@ -209,6 +213,27 @@ func parseOptions(args []string) (options, error) {
 		return options{}, err
 	}
 	return opts, nil
+}
+
+func automaticDataDirectory(installDir string) (string, error) {
+	storedDataDir, err := installedDataDirectory(installDir)
+	if err != nil {
+		return "", err
+	}
+	if storedDataDir != "" {
+		if !filepath.IsAbs(storedDataDir) {
+			return "", errors.New("installed private data-directory metadata must be an absolute path")
+		}
+		return storedDataDir, nil
+	}
+	localAppData := os.Getenv("LOCALAPPDATA")
+	if localAppData == "" {
+		localAppData, err = os.UserConfigDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve local application data: %w", err)
+		}
+	}
+	return filepath.Join(localAppData, installFolderName, "data"), nil
 }
 
 func hasOption(args []string, wanted string) bool {
