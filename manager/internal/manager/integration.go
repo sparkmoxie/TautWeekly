@@ -94,6 +94,10 @@ type tautulliEnvelope struct {
 	} `json:"response"`
 }
 
+type tautulliUsersTable struct {
+	Data []map[string]any `json:"data"`
+}
+
 func RunRealIntegrationCheck(ctx context.Context, root string, request RealIntegrationCheckRequest, now func() time.Time) (IntegrationCheckResult, error) {
 	if !request.ConfirmRealNetwork {
 		return IntegrationCheckResult{}, ErrRealCheckConfirmation
@@ -182,9 +186,20 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 		return TautulliDiscoveryResult{}, errIntegrationResponse
 	}
 
-	libraries := normalizeDiscoveredLibraries(rawLibraries)
 	legacyRules := normalizedLegacyExclusionRules(values["ExcludedEmails"])
 	users, matchedLegacyRules := normalizeDiscoveredUsers(rawNames, rawUsers, legacyRules)
+	if matchedLegacyRules < len(legacyRules) {
+		var table tautulliUsersTable
+		params := url.Values{
+			"start":  {"0"},
+			"length": {strconv.Itoa(maximumDiscoveryChoices)},
+		}
+		if err := tautulliCommandWithParams(checkContext, client, base, apiKey, "get_users_table", params, &table); err == nil {
+			rawUsers = mergeDiscoveredUserDetails(rawUsers, table.Data)
+			users, matchedLegacyRules = normalizeDiscoveredUsers(rawNames, rawUsers, legacyRules)
+		}
+	}
+	libraries := normalizeDiscoveredLibraries(rawLibraries)
 	if len(libraries) == 0 {
 		return TautulliDiscoveryResult{}, fmt.Errorf("%w: no active movie or TV libraries", errIntegrationResponse)
 	}
@@ -280,7 +295,7 @@ func normalizeDiscoveredUsers(names, details []map[string]any, legacyRules map[s
 		legacyRuleExcluded := false
 		if hasDetails {
 			eligibility = "skipped"
-			email := strings.ToLower(strings.TrimSpace(fmt.Sprint(detail["email"])))
+			email := discoveredUserEmail(detail)
 			if integrationTruthy(detail["is_active"]) && integrationTruthy(detail["do_notify"]) && email != "" && email != "<nil>" {
 				eligibility = "eligible"
 			}
@@ -296,6 +311,64 @@ func normalizeDiscoveredUsers(names, details []map[string]any, legacyRules map[s
 	}
 	sort.Slice(result, func(i, j int) bool { return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name) })
 	return result, len(matchedLegacyRules)
+}
+
+func mergeDiscoveredUserDetails(primary, fallback []map[string]any) []map[string]any {
+	result := make([]map[string]any, 0, len(primary)+len(fallback))
+	byID := make(map[string]map[string]any, len(primary)+len(fallback))
+	for _, source := range primary {
+		copyOfSource := make(map[string]any, len(source))
+		for key, value := range source {
+			copyOfSource[key] = value
+		}
+		id := discoveryID(copyOfSource["user_id"])
+		if id != "" {
+			byID[id] = copyOfSource
+		}
+		result = append(result, copyOfSource)
+	}
+	for _, source := range fallback {
+		id := discoveryID(source["user_id"])
+		if id == "" {
+			continue
+		}
+		if existing, ok := byID[id]; ok {
+			for key, value := range source {
+				if discoveryValueMissing(existing[key]) && !discoveryValueMissing(value) {
+					existing[key] = value
+				}
+			}
+			continue
+		}
+		copyOfSource := make(map[string]any, len(source))
+		for key, value := range source {
+			copyOfSource[key] = value
+		}
+		byID[id] = copyOfSource
+		result = append(result, copyOfSource)
+	}
+	return result
+}
+
+func discoveredUserEmail(detail map[string]any) string {
+	for _, key := range []string{"email", "user_email"} {
+		value := strings.ToLower(strings.TrimSpace(fmt.Sprint(detail[key])))
+		if value != "" && value != "<nil>" {
+			return value
+		}
+	}
+	return ""
+}
+
+func discoveryValueMissing(value any) bool {
+	if value == nil {
+		return true
+	}
+	if text, ok := value.(string); ok {
+		text = strings.TrimSpace(text)
+		return text == "" || text == "<nil>"
+	}
+	return false
 }
 
 func normalizedLegacyExclusionRules(value any) map[string]struct{} {
@@ -461,10 +534,20 @@ func verifyPlex(ctx context.Context, client *http.Client, values map[string]any,
 }
 
 func tautulliCommand(ctx context.Context, client *http.Client, base *url.URL, apiKey, command string, target any) error {
+	return tautulliCommandWithParams(ctx, client, base, apiKey, command, nil, target)
+}
+
+func tautulliCommandWithParams(ctx context.Context, client *http.Client, base *url.URL, apiKey, command string, params url.Values, target any) error {
 	endpoint := integrationEndpoint(base, "api/v2")
 	query := endpoint.Query()
 	query.Set("apikey", apiKey)
 	query.Set("cmd", command)
+	for key, values := range params {
+		query.Del(key)
+		for _, value := range values {
+			query.Add(key, value)
+		}
+	}
 	endpoint.RawQuery = query.Encode()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {

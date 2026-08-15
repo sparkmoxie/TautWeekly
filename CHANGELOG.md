@@ -6,6 +6,30 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.6] - 2026-08-15
+
+### Changed
+
+- Distinguished unsaved delivery choices from persisted exclusions in the
+  guided Tautulli roster. Checkbox changes now show a gold **selected** count;
+  after validation and save, the same count is reported as soft-red
+  **excluded** state.
+
+### Fixed
+
+- Recovered legacy `ExcludedEmails` matches when a Tautulli installation omits
+  email fields from `get_users`. The Manager now uses a bounded
+  `get_users_table` compatibility lookup only when legacy rules remain
+  unmatched, then keeps matched users visible, checked, and grouped first.
+- Prevented upgraded Manager pages from retaining stale embedded JavaScript or
+  styles by serving the local application shell and assets with `no-store`.
+
+### Security
+
+- Kept legacy email matching entirely server-side during the compatibility
+  lookup. Email addresses, API keys, and raw Tautulli responses are not returned
+  to the browser, cached in discovery state, or written to diagnostics.
+
 ## [0.12.5] - 2026-08-14
 
 ### Changed

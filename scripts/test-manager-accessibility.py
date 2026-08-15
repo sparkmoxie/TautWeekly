@@ -250,8 +250,10 @@ def main() -> int:
         failures.append("legacy direct Plex omissions have no guided completion message")
     if "legacyRuleExcluded" not in javascript or "Excluded by existing config" not in javascript:
         failures.append("legacy email exclusions are not represented in guided delivery choices")
-    if 'excluded.className = "discovery-excluded-count"' not in javascript or "rgba(255,122,114,.48)" not in css:
+    if 'status.className = changed ? "discovery-selected-count" : "discovery-excluded-count"' not in javascript or "rgba(255,122,114,.48)" not in css:
         failures.append("guided delivery choices do not show the requested effective exclusion count")
+    if 'status.textContent = `${effective} ${changed ? "selected" : "excluded"}`' not in javascript or ".discovery-selected-count{color:var(--gold-bright)" not in css:
+        failures.append("guided delivery choices do not distinguish unsaved selections from saved exclusions")
     if "const orderedUsers = [...users].sort" not in javascript or "leftExcluded ? -1 : 1" not in javascript:
         failures.append("configured delivery exclusions are not grouped visibly at the top of discovered users")
     if ".user-combobox>input" not in css or ".manual-send-mode-field select{border-color:var(--line-strong)" not in css:

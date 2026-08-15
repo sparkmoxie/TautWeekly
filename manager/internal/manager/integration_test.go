@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -466,9 +467,17 @@ func TestTautulliDiscoveryReturnsSanitizedChoicesWithoutEmailOrSecrets(t *testin
 			}
 		case "get_users":
 			data = []any{
-				map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "email": "private-admin@example.org", "is_active": 1, "do_notify": 1, "is_admin": 1},
+				map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "is_active": 1, "do_notify": 1, "is_admin": 1},
 				map[string]any{"user_id": "2", "username": "viewer", "email": "private-viewer@example.org", "is_active": 0, "do_notify": 1},
 			}
+		case "get_users_table":
+			if r.URL.Query().Get("start") != "0" || r.URL.Query().Get("length") != strconv.Itoa(maximumDiscoveryChoices) {
+				http.Error(w, "invalid table window", http.StatusBadRequest)
+				return
+			}
+			data = map[string]any{"data": []any{
+				map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "email": "private-admin@example.org", "is_active": 1, "do_notify": 1},
+			}}
 		default:
 			http.Error(w, "unsupported", http.StatusBadRequest)
 			return

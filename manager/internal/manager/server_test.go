@@ -85,6 +85,9 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 	if !strings.Contains(response.Body.String(), "TautWeekly Manager") {
 		t.Fatal("static root did not serve the embedded application shell")
 	}
+	if cache := response.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("static application cache policy: got %q, want no-store", cache)
+	}
 }
 
 func TestServerNormalizesRelativeRuntimePaths(t *testing.T) {
