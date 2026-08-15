@@ -152,7 +152,7 @@ func TestInstallationCompletionPointsToManagerShortcut(t *testing.T) {
 	}
 }
 
-func TestFinishInstallationDismissesCompletionBeforeQueueingManagerLaunch(t *testing.T) {
+func TestFinishInstallationDismissesCompletionBeforeLaunchingManager(t *testing.T) {
 	opts := options{installDir: filepath.Join(t.TempDir(), "TautWeekly")}
 	events := []string{}
 	err := finishInstallation(opts,
@@ -167,14 +167,14 @@ func TestFinishInstallationDismissesCompletionBeforeQueueingManagerLaunch(t *tes
 			if workingDirectory != opts.installDir {
 				t.Fatalf("Manager launch used %q instead of %q", workingDirectory, opts.installDir)
 			}
-			events = append(events, "manager-launch-queued")
+			events = append(events, "manager-launch-started")
 			return nil
 		},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(events, ","); got != "completion-dismissed,manager-launch-queued" {
+	if got := strings.Join(events, ","); got != "completion-dismissed,manager-launch-started" {
 		t.Fatalf("installer completion and launch order was %q", got)
 	}
 }

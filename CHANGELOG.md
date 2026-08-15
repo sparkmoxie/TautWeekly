@@ -6,6 +6,28 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.5] - 2026-08-14
+
+### Changed
+
+- Summarized the guided Tautulli roster as **found ● excluded**, with the
+  effective exclusion count covering both configured user IDs and users matched
+  privately by retained legacy email rules.
+- Kept legacy email-rule matches visibly checked at the top of the delivery
+  roster while preserving the underlying email rule as the source of truth.
+
+### Fixed
+
+- Displayed Manual Welcome and all-recipient production sends only in the
+  dedicated **Current or latest manual send** card instead of duplicating the
+  same operation in the generic current-run card.
+- Started the installed Manager directly after Setup's completion dialog closes
+  and prevented hidden Windows child processes from inheriting Setup handles.
+  The completed installer now exits without retaining its downloaded EXE.
+- Added fictional loopback browser fixtures and regression coverage for 78
+  discovered users, two retained exclusions, the single manual-send status
+  surface, and the Windows handle-inheritance boundary.
+
 ## [0.12.4] - 2026-08-14
 
 ### Changed

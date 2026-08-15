@@ -7,10 +7,22 @@ import (
 	"errors"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestHiddenChildProcessesDoNotInheritSetupHandles(t *testing.T) {
+	command := exec.Command("cmd.exe", "/d", "/c", "exit 0")
+	hideProcessWindow(command)
+	if command.SysProcAttr == nil || !command.SysProcAttr.HideWindow {
+		t.Fatal("hidden child process does not retain the Windows hidden-window contract")
+	}
+	if !command.SysProcAttr.NoInheritHandles {
+		t.Fatal("detached child process may inherit and retain a handle to Setup")
+	}
+}
 
 func TestCreateShortcutAcceptsPathsWithSpaces(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "folder with spaces")

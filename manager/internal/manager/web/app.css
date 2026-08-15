@@ -58,4 +58,5 @@
 .user-combobox>input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(229,160,13,.12)}
 .manual-send-mode-field select{border-color:var(--line-strong);font:inherit}
 .choice-row.legacy-exclusion{cursor:default;border-color:rgba(229,160,13,.28);background:linear-gradient(110deg,rgba(229,160,13,.065),var(--surface) 48%)}
-.choice-row.legacy-exclusion input:disabled{cursor:not-allowed;opacity:.78}
+.choice-row.legacy-exclusion input:disabled{cursor:not-allowed;opacity:1}
+.discovery-excluded-count{color:rgba(255,122,114,.48);font-weight:750}

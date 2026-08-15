@@ -722,11 +722,17 @@ function renderDiscoveredUsers() {
   const container = byId("discovery-users");
   container.replaceChildren();
   const users = state.discovery?.users || [];
-  const legacyRuleCount = Number(state.discovery?.legacyRuleCount || 0);
-  const matchedLegacyRuleCount = Number(state.discovery?.matchedLegacyRuleCount || 0);
-  const legacySummary = legacyRuleCount ? ` · ${matchedLegacyRuleCount}/${legacyRuleCount} legacy matched` : "";
-  setText("discovery-user-count", `${users.length} found${legacySummary}`);
   const configured = new Set(currentListField("ExcludedUserIds"));
+  const excludedCount = users.filter((item) => configured.has(item.id) || item.legacyRuleExcluded === true).length;
+  const count = byId("discovery-user-count");
+  count.replaceChildren(document.createTextNode(`${users.length} found`));
+  if (excludedCount > 0) {
+    count.append(document.createTextNode(" ● "));
+    const excluded = document.createElement("span");
+    excluded.className = "discovery-excluded-count";
+    excluded.textContent = `${excludedCount} excluded`;
+    count.append(excluded);
+  }
   const orderedUsers = [...users].sort((left, right) => {
     const leftExcluded = configured.has(left.id) || left.legacyRuleExcluded === true;
     const rightExcluded = configured.has(right.id) || right.legacyRuleExcluded === true;
@@ -1794,7 +1800,14 @@ function renderManualSendStatus(operation) {
 }
 
 function renderCurrentOperation(operation) {
+  const card = byId("current-operation");
   const cancel = byId("preview-cancel-button");
+  const manualSend = ["send-welcome", "send-all"].includes(operation?.type);
+  card.hidden = manualSend;
+  if (manualSend) {
+    cancel.hidden = true;
+    return;
+  }
   cancel.hidden = !operation?.cancellable || !operationIsActive(operation);
   cancel.disabled = state.operationCancelling;
   setSwappingButtonText("preview-cancel-button", state.operationCancelling ? "Cancelling..." : "Cancel preview generation");

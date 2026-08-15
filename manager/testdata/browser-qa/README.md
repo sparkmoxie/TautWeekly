@@ -9,6 +9,12 @@ SMTP acceptances; and SendWelcome reports one fictional acceptance. None opens
 a connection. Each writes one sanitized structured result. The fixture contains
 no network, SMTP, browser-launch, or scheduler operation.
 
+`mock-tautulli.mjs` is an optional loopback-only companion for interactive
+browser QA. It exposes exactly the three read-only Tautulli discovery commands
+used by the Manager and returns three fictional libraries and 78 fictional
+users. Two users match the fixture's legacy email exclusions so the retained,
+checked exclusion presentation can be verified without exposing real addresses.
+
 Browser QA copies these files to an ignored temporary directory and renames
 `fixture-config.json` to `config.json`. The temporary root and Manager data are
 removed before repository validation.
