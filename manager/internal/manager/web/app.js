@@ -688,6 +688,11 @@ function setListField(name, values) {
   if (input) input.value = [...new Set(values)].join(", ");
 }
 
+function savedListField(name) {
+  const field = (state.editor?.fields || []).find((candidate) => candidate.name === name);
+  return Array.isArray(field?.value) ? field.value.map((value) => String(value).trim()).filter(Boolean) : [];
+}
+
 function renderDiscoveredLibraries() {
   const container = byId("discovery-libraries");
   container.replaceChildren();
@@ -723,16 +728,7 @@ function renderDiscoveredUsers() {
   container.replaceChildren();
   const users = state.discovery?.users || [];
   const configured = new Set(currentListField("ExcludedUserIds"));
-  const excludedCount = users.filter((item) => configured.has(item.id) || item.legacyRuleExcluded === true).length;
-  const count = byId("discovery-user-count");
-  count.replaceChildren(document.createTextNode(`${users.length} found`));
-  if (excludedCount > 0) {
-    count.append(document.createTextNode(" ● "));
-    const excluded = document.createElement("span");
-    excluded.className = "discovery-excluded-count";
-    excluded.textContent = `${excludedCount} excluded`;
-    count.append(excluded);
-  }
+  renderDiscoveryUserCount(users);
   const orderedUsers = [...users].sort((left, right) => {
     const leftExcluded = configured.has(left.id) || left.legacyRuleExcluded === true;
     const rightExcluded = configured.has(right.id) || right.legacyRuleExcluded === true;
@@ -763,10 +759,26 @@ function renderDiscoveredUsers() {
         .filter((choice) => !choice.disabled || choice.dataset.configuredId === "true")
         .map((choice) => choice.dataset.choiceId);
       setListField("ExcludedUserIds", [...unknown, ...known]);
+      renderDiscoveryUserCount(users);
     });
     label.append(input, copy);
     container.append(label);
   }
+}
+
+function renderDiscoveryUserCount(users = state.discovery?.users || []) {
+  const current = new Set(currentListField("ExcludedUserIds"));
+  const saved = new Set(savedListField("ExcludedUserIds"));
+  const changed = users.some((item) => current.has(item.id) !== saved.has(item.id));
+  const effective = users.filter((item) => current.has(item.id) || item.legacyRuleExcluded === true).length;
+  const count = byId("discovery-user-count");
+  count.replaceChildren(document.createTextNode(`${users.length} found`));
+  if (effective === 0) return;
+  count.append(document.createTextNode(" ● "));
+  const status = document.createElement("span");
+  status.className = changed ? "discovery-selected-count" : "discovery-excluded-count";
+  status.textContent = `${effective} ${changed ? "selected" : "excluded"}`;
+  count.append(status);
 }
 
 function renderUserDatalist() {

@@ -38,7 +38,19 @@ const server = http.createServer((request, response) => {
       data = users.map(({ user_id, friendly_name }) => ({ user_id, friendly_name }));
       break;
     case "get_users":
-      data = users;
+      data = users.map((user, index) => {
+        if (index > 1) return user;
+        const { email: _email, ...withoutEmail } = user;
+        return withoutEmail;
+      });
+      break;
+    case "get_users_table":
+      if (target.searchParams.get("start") !== "0" || target.searchParams.get("length") !== "2000") {
+        response.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+        response.end("invalid fixture table window");
+        return;
+      }
+      data = { data: users };
       break;
     default:
       response.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
