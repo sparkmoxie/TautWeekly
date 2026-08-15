@@ -117,8 +117,9 @@ portable copies use `.manager-data`. The legacy BAT/PowerShell workflows remain
 available but are not the primary Windows quickstart.
 
 The interactive Windows process owns one native notification-area icon and one
-loopback listener. Repeated normal launches wait for and open that existing
-Dashboard. **Exit TautWeekly for Plex** shuts down only the HTTP control surface
+loopback listener. Repeated normal launches wait for the existing Manager and
+bring its visible Dashboard browser window to the foreground instead of opening
+a duplicate. **Exit TautWeekly for Plex** shuts down only the HTTP control surface
 and tray process; it neither edits the weekly Task Scheduler definition nor
 terminates its newsletter process. A non-cancellable delivery started from the
 Manager is allowed to finish in its PowerShell process, and a later Manager

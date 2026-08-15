@@ -39,6 +39,8 @@ func run(args []string) error {
 	switch command {
 	case "serve":
 		return serve(args)
+	case "open":
+		return openManager(args)
 	case "access-reset":
 		return resetAccess(args)
 	case "status":
@@ -49,8 +51,20 @@ func run(args []string) error {
 		fmt.Printf("TautWeekly Manager %s\n", version)
 		return nil
 	default:
-		return fmt.Errorf("unknown command %q; use serve, access-reset, status, shutdown, or version", command)
+		return fmt.Errorf("unknown command %q; use serve, open, access-reset, status, shutdown, or version", command)
 	}
+}
+
+func openManager(args []string) error {
+	flags := flag.NewFlagSet("open", flag.ContinueOnError)
+	listen := flags.String("listen", "127.0.0.1:8788", "loopback address for the local manager")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if err := requireLoopback(*listen); err != nil {
+		return err
+	}
+	return waitForExistingManager(*listen)
 }
 
 func serve(args []string) error {

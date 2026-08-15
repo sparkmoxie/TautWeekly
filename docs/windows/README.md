@@ -107,9 +107,10 @@ The notification-area icon is the persistent Windows control for the local
 Manager:
 
 - Hover over the TautWeekly icon to see **TautWeekly Dashboard**. Left-click it
-  to open the existing Dashboard in the default browser. Opening TautWeekly
-  again also reuses this same Manager; it does not create a second server or
-  tray process.
+  to bring an existing visible Dashboard browser window to the foreground,
+  opening one only when no Dashboard window is available. Opening TautWeekly
+  again also reuses this same Manager; it does not create a second server, tray
+  process, or visible duplicate Dashboard window.
 - Right-click to see one non-actionable native status row: **Healthy**,
   **Needs attention**, or **Failed**. The row includes a colored native menu
   icon, while the text keeps the state understandable without color.

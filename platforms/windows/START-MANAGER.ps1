@@ -42,7 +42,10 @@ if (-not (Test-Path -LiteralPath $manager -PathType Leaf)) {
 
 if (Test-ExistingManager) {
     if (-not $Startup -or $OpenDashboard) {
-        Start-Process -FilePath $baseUri | Out-Null
+        & $manager open '--listen=127.0.0.1:8788'
+        if ($LASTEXITCODE -ne 0) {
+            throw "The existing TautWeekly Dashboard could not be activated (exit code $LASTEXITCODE)."
+        }
     }
     exit 0
 }

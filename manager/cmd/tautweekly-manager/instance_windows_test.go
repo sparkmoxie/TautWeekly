@@ -51,3 +51,25 @@ func TestTrayTooltipIdentifiesDashboard(t *testing.T) {
 		t.Fatal("tray tooltip is not enabled for NOTIFYICON_VERSION_4")
 	}
 }
+
+func TestDashboardWindowTitleMatchesSupportedBrowserCaptions(t *testing.T) {
+	for _, title := range []string{
+		"TautWeekly Manager",
+		"TautWeekly Manager - Google Chrome",
+		"TautWeekly Manager - Microsoft Edge",
+		"TautWeekly Manager — Mozilla Firefox",
+	} {
+		if !isDashboardWindowTitle(title) {
+			t.Errorf("dashboard browser title %q was not recognized", title)
+		}
+	}
+	for _, title := range []string{
+		"TautWeekly Manager notes - Notepad",
+		"Another page - Google Chrome",
+		"",
+	} {
+		if isDashboardWindowTitle(title) {
+			t.Errorf("unrelated window title %q was recognized as the Dashboard", title)
+		}
+	}
+}

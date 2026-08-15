@@ -106,6 +106,8 @@ try {
     Assert-True ($managerLauncher.Contains('[switch]$Startup')) 'Installed Manager launcher has no silent sign-in mode.'
     Assert-True ($managerLauncher.Contains('[switch]$OpenDashboard')) 'Installed Manager launcher has no dependent sign-in Dashboard mode.'
     Assert-True ($managerLauncher.Contains('-not $Startup -or $OpenDashboard')) 'Installed Manager launcher does not keep browser opening dependent on the sign-in setting.'
+    Assert-True ($managerLauncher.Contains("& `$manager open '--listen=127.0.0.1:8788'")) 'Installed Manager launcher does not delegate repeated opens to Dashboard activation.'
+    Assert-True (-not $managerLauncher.Contains('Start-Process -FilePath $baseUri')) 'Installed Manager launcher still creates a new browser window for every repeated open.'
     $resetLauncher = Get-Content -LiteralPath (Join-Path $installRoot 'Reset-TautWeekly-Access.cmd') -Raw
     Assert-True ($resetLauncher.Contains('-DataRoot')) 'Installed access reset launcher does not pass the external Manager data directory.'
 
