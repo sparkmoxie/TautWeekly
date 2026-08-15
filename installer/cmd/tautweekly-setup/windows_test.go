@@ -53,6 +53,46 @@ func TestWindowsSpecialFolderReturnsAbsolutePaths(t *testing.T) {
 	}
 }
 
+func TestWindowsSpecialFolderFallsBackToPerUserPaths(t *testing.T) {
+	root := t.TempDir()
+	appData := filepath.Join(root, "AppData", "Roaming")
+	profile := filepath.Join(root, "Profile")
+	originalQuery := queryWindowsSpecialFolder
+	t.Cleanup(func() { queryWindowsSpecialFolder = originalQuery })
+	queryWindowsSpecialFolder = func(string) (string, error) {
+		return "", errors.New("shell folder unavailable")
+	}
+	t.Setenv("APPDATA", appData)
+	t.Setenv("USERPROFILE", profile)
+
+	tests := map[string]string{
+		"Programs": filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs"),
+		"Desktop":  filepath.Join(profile, "Desktop"),
+	}
+	for name, want := range tests {
+		got, err := windowsSpecialFolder(name)
+		if err != nil {
+			t.Fatalf("resolve %s through fallback: %v", name, err)
+		}
+		if !samePath(got, want) {
+			t.Fatalf("%s fallback = %s, want %s", name, got, want)
+		}
+	}
+}
+
+func TestWindowsSpecialFolderRejectsInvalidNativeAndFallbackPaths(t *testing.T) {
+	originalQuery := queryWindowsSpecialFolder
+	t.Cleanup(func() { queryWindowsSpecialFolder = originalQuery })
+	queryWindowsSpecialFolder = func(string) (string, error) {
+		return "relative", nil
+	}
+	t.Setenv("APPDATA", "")
+	t.Setenv("USERPROFILE", "")
+	if _, err := windowsSpecialFolder("Programs"); err == nil {
+		t.Fatal("invalid native and fallback paths were accepted")
+	}
+}
+
 func TestCreateShortcutsUsesRedirectedDesktop(t *testing.T) {
 	root := t.TempDir()
 	programs := filepath.Join(root, "Programs")

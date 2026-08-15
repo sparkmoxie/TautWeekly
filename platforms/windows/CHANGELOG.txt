@@ -5,6 +5,7 @@ v1.9.0 Windows
 --------------
 - makes TautWeekly-Setup.exe and the loopback-only Manager the supported primary Windows install, configuration, verification, preview, test, schedule, update, and removal workflow
 - installs per Windows account into a selectable application directory with Desktop and Start Menu shortcuts, an installed uninstaller, and an external private Manager data directory
+- resolves the Start Menu through the native Windows Shell API with a bounded per-user fallback for profiles whose shell-folder lookup returns an invalid path
 - recognizes an installer-owned application as Update and a release-manifest-verified older portable folder as Migrate while refusing arbitrary non-empty directories
 - preserves config, credentials, delivery state, previews, logs, caches, custom assets, and Manager access/history across verified replacement and automatic rollback
 - opens trusted-local Windows sessions without a pairing token and provides an optional eight-character password lock, guarded secret reveal, sign-out, and local recovery shortcut

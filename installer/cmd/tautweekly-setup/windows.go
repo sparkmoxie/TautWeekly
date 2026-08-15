@@ -44,6 +44,7 @@ var (
 	shell32           = syscall.NewLazyDLL("shell32.dll")
 	browseForFolder   = shell32.NewProc("SHBrowseForFolderW")
 	getFolderPath     = shell32.NewProc("SHGetPathFromIDListW")
+	getSpecialFolder  = shell32.NewProc("SHGetFolderPathW")
 	ole32             = syscall.NewLazyDLL("ole32.dll")
 	coTaskMemFree     = ole32.NewProc("CoTaskMemFree")
 	buttonYesNo       = uintptr(0x00000004)
@@ -290,6 +291,7 @@ func unregisterUninstaller() error {
 
 var (
 	resolveWindowsSpecialFolder = windowsSpecialFolder
+	queryWindowsSpecialFolder   = nativeWindowsSpecialFolder
 	writeWindowsShortcut        = createShortcut
 )
 
@@ -337,18 +339,69 @@ func createShortcuts(opts options, logger *log.Logger) error {
 }
 
 func windowsSpecialFolder(name string) (string, error) {
-	script := `$folder=(New-Object -ComObject WScript.Shell).SpecialFolders.Item($env:TAUTWEEKLY_SPECIAL_FOLDER);if([string]::IsNullOrWhiteSpace($folder)){exit 2};[Console]::Out.Write($folder)`
-	command := hiddenCommand("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
-	command.Env = append(os.Environ(), "TAUTWEEKLY_SPECIAL_FOLDER="+name)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("resolve %s shell folder: %w: %s", name, err, strings.TrimSpace(string(output)))
+	path, nativeErr := queryWindowsSpecialFolder(name)
+	if cleaned, ok := cleanAbsoluteWindowsPath(path); ok {
+		return cleaned, nil
 	}
-	path := strings.TrimSpace(string(output))
+	if fallback, ok := fallbackWindowsSpecialFolder(name); ok {
+		return fallback, nil
+	}
+	if nativeErr != nil {
+		return "", fmt.Errorf("resolve %s shell folder: %w", name, nativeErr)
+	}
+	return "", fmt.Errorf("resolve %s shell folder: Windows returned an invalid path", name)
+}
+
+func nativeWindowsSpecialFolder(name string) (string, error) {
+	var folderID uintptr
+	switch name {
+	case "Programs":
+		folderID = 0x0002 // CSIDL_PROGRAMS
+	case "Desktop":
+		folderID = 0x0010 // CSIDL_DESKTOPDIRECTORY
+	default:
+		return "", fmt.Errorf("unsupported Windows shell folder %q", name)
+	}
+	if err := getSpecialFolder.Find(); err != nil {
+		return "", fmt.Errorf("load SHGetFolderPathW: %w", err)
+	}
+	buffer := make([]uint16, 260) // SHGetFolderPathW is defined for MAX_PATH.
+	result, _, callErr := getSpecialFolder.Call(
+		0,
+		folderID,
+		0,
+		0, // SHGFP_TYPE_CURRENT
+		uintptr(unsafe.Pointer(&buffer[0])),
+	)
+	if result != 0 {
+		return "", fmt.Errorf("SHGetFolderPathW returned HRESULT 0x%08x: %v", uint32(result), callErr)
+	}
+	return syscall.UTF16ToString(buffer), nil
+}
+
+func fallbackWindowsSpecialFolder(name string) (string, bool) {
+	switch name {
+	case "Programs":
+		if appData, ok := cleanAbsoluteWindowsPath(os.Getenv("APPDATA")); ok {
+			return filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs"), true
+		}
+		if profile, ok := cleanAbsoluteWindowsPath(os.Getenv("USERPROFILE")); ok {
+			return filepath.Join(profile, "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs"), true
+		}
+	case "Desktop":
+		if profile, ok := cleanAbsoluteWindowsPath(os.Getenv("USERPROFILE")); ok {
+			return filepath.Join(profile, "Desktop"), true
+		}
+	}
+	return "", false
+}
+
+func cleanAbsoluteWindowsPath(path string) (string, bool) {
+	path = strings.TrimSpace(path)
 	if path == "" || !filepath.IsAbs(path) {
-		return "", fmt.Errorf("resolve %s shell folder: Windows returned an invalid path", name)
+		return "", false
 	}
-	return filepath.Clean(path), nil
+	return filepath.Clean(path), true
 }
 
 func createShortcut(destination, target, arguments, workingDirectory, icon string) error {

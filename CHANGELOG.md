@@ -6,6 +6,16 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.7] - 2026-08-15
+
+### Fixed
+
+- Resolved the per-user Windows Start-menu folder through the native Shell API
+  instead of a PowerShell COM lookup. If Windows does not return a usable
+  known-folder path, Setup now uses a bounded per-user `APPDATA`/`USERPROFILE`
+  fallback so an otherwise valid update can finish without touching private
+  configuration or history.
+
 ## [0.12.6] - 2026-08-15
 
 ### Changed
