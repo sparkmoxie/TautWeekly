@@ -29,3 +29,14 @@ func TestWindowsManagerInstanceRejectsDuplicateAndAcceptsShutdownSignal(t *testi
 		t.Fatal("Manager instance did not receive its shutdown signal")
 	}
 }
+
+func TestTrayStatusDotUsesMostOfTheNativeMenuIconSlot(t *testing.T) {
+	left, top, right, bottom := trayStatusDotBounds(16, 16)
+	if left != 2 || top != 2 || right != 14 || bottom != 14 {
+		t.Fatalf("16-pixel status dot bounds = (%d,%d)-(%d,%d), want (2,2)-(14,14)", left, top, right, bottom)
+	}
+	left, top, right, bottom = trayStatusDotBounds(20, 24)
+	if right-left != 15 || bottom-top != 15 || left < 0 || top < 0 {
+		t.Fatalf("scaled status dot bounds = (%d,%d)-(%d,%d), want a centered 15-pixel dot", left, top, right, bottom)
+	}
+}

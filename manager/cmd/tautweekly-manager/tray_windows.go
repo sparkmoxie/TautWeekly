@@ -529,11 +529,25 @@ func createTrayStatusBitmap(health trayHealth) uintptr {
 	defer trayDeleteObject.Call(pen)
 	oldBrush, _, _ := traySelectObject.Call(memory, brush)
 	oldPen, _, _ := traySelectObject.Call(memory, pen)
-	inset := int32(4)
-	trayEllipse.Call(memory, uintptr(inset), uintptr(inset), uintptr(int32(width)-inset), uintptr(int32(height)-inset))
+	left, top, right, bottom := trayStatusDotBounds(int32(width), int32(height))
+	trayEllipse.Call(memory, uintptr(left), uintptr(top), uintptr(right), uintptr(bottom))
 	traySelectObject.Call(memory, oldBrush)
 	traySelectObject.Call(memory, oldPen)
 	return bitmap
+}
+
+func trayStatusDotBounds(width, height int32) (left, top, right, bottom int32) {
+	dotSize := width
+	if height < dotSize {
+		dotSize = height
+	}
+	dotSize = dotSize * 3 / 4
+	if dotSize < 8 {
+		dotSize = 8
+	}
+	left = (width - dotSize) / 2
+	top = (height - dotSize) / 2
+	return left, top, left + dotSize, top + dotSize
 }
 
 func trayStatusColor(health trayHealth) uint32 {
