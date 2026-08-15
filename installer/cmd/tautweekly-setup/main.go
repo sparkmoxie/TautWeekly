@@ -107,7 +107,7 @@ func run(args []string) error {
 		logger.Printf("install failed: %v", err)
 		return fmt.Errorf("Installation stopped safely. Existing configuration and history were not removed.\n\nReview the installer log for details:\n%s", opts.logPath)
 	}
-	return finishInstallation(opts, showCompletion, queueManagerLaunchAfterExit)
+	return finishInstallation(opts, showCompletion, startDetached)
 }
 
 func finishInstallation(opts options, completion func(string, string, bool) error, queueLaunch func(string, string) error) error {
@@ -802,18 +802,6 @@ func startDetached(_ string, workingDirectory string) error {
 		return err
 	}
 	return command.Process.Release()
-}
-
-func queueManagerLaunchAfterExit(_ string, workingDirectory string) error {
-	if runtime.GOOS != "windows" {
-		return errors.New("installed Manager can be launched only on Windows")
-	}
-	dataDir, _ := installedDataDirectory(workingDirectory)
-	const script = `$parent=Get-Process -Id ([int]$env:TAUTWEEKLY_SETUP_PARENT) -ErrorAction SilentlyContinue;if($null-ne $parent){$parent.WaitForExit()};$arguments=@('-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',$env:TAUTWEEKLY_MANAGER_SCRIPT);if(-not [string]::IsNullOrWhiteSpace($env:TAUTWEEKLY_MANAGER_DATA)){$arguments+=@('-DataRoot',$env:TAUTWEEKLY_MANAGER_DATA)};& powershell.exe @arguments;exit $LASTEXITCODE`
-	return queuePostExitHandoff(script, workingDirectory, []string{
-		"TAUTWEEKLY_MANAGER_SCRIPT=" + filepath.Join(workingDirectory, "START-MANAGER.ps1"),
-		"TAUTWEEKLY_MANAGER_DATA=" + dataDir,
-	})
 }
 
 func queueExitMarkerAfterExit(markerPath, workingDirectory string) error {

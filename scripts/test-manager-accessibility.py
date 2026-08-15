@@ -250,6 +250,8 @@ def main() -> int:
         failures.append("legacy direct Plex omissions have no guided completion message")
     if "legacyRuleExcluded" not in javascript or "Excluded by existing config" not in javascript:
         failures.append("legacy email exclusions are not represented in guided delivery choices")
+    if 'excluded.className = "discovery-excluded-count"' not in javascript or "rgba(255,122,114,.48)" not in css:
+        failures.append("guided delivery choices do not show the requested effective exclusion count")
     if "const orderedUsers = [...users].sort" not in javascript or "leftExcluded ? -1 : 1" not in javascript:
         failures.append("configured delivery exclusions are not grouped visibly at the top of discovered users")
     if ".user-combobox>input" not in css or ".manual-send-mode-field select{border-color:var(--line-strong)" not in css:
@@ -258,6 +260,8 @@ def main() -> int:
         failures.append("guided user selectors do not open from the full input field for typing or mouse selection")
     if 'card.hidden = !manualSend;' not in javascript:
         failures.append("manual production status is visible before a manual send exists")
+    if 'card.hidden = manualSend;' not in javascript:
+        failures.append("manual production delivery is duplicated in the generic current-run card")
     for label in ("Index", "Manual Welcome", "New User - No History", "New User - With History", "Normal Newsletter", "Established Quiet", "Established Warnings"):
         if label not in javascript:
             failures.append(f"preview scenario label is missing: {label}")
