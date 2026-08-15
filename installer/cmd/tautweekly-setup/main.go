@@ -275,6 +275,10 @@ func newLogger(path string) (*log.Logger, func(), error) {
 
 func install(opts options, logger *log.Logger) error {
 	logger.Printf("install start version=%s test=%t", version, opts.testMode)
+	startupPreference, err := captureManagerStartup(opts.testMode)
+	if err != nil {
+		return err
+	}
 	if err := verifyPayload(); err != nil {
 		return err
 	}
@@ -355,6 +359,9 @@ func install(opts options, logger *log.Logger) error {
 			return err
 		}
 	}
+	if err := reconcileManagerStartup(startupPreference, opts, opts.testMode); err != nil {
+		return err
+	}
 	logger.Printf("install complete version=%s", version)
 	if managerWasRunning && opts.noLaunch && !opts.testMode {
 		if err := startDetached(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir); err != nil {
@@ -415,6 +422,10 @@ func verifiedPortableApplication(root string) bool {
 
 func uninstall(opts options, logger *log.Logger) error {
 	logger.Printf("uninstall start test=%t", opts.testMode)
+	startupPreference, err := captureManagerStartup(opts.testMode)
+	if err != nil {
+		return err
+	}
 	if err := removeInstalledSchedule(opts.installDir, opts.testMode); err != nil {
 		return err
 	}
@@ -422,11 +433,17 @@ func uninstall(opts options, logger *log.Logger) error {
 	if err != nil {
 		return err
 	}
+	if err := removeManagerStartup(opts.installDir, opts.testMode); err != nil {
+		return err
+	}
 	if !opts.testMode {
 		_ = removeShortcuts()
 		_ = unregisterUninstaller()
 	}
 	if err := removeOwnedInstall(opts.installDir); err != nil {
+		if startupPreference.Enabled && samePath(startupPreference.InstallRoot, opts.installDir) {
+			_ = reconcileManagerStartup(startupPreference, opts, opts.testMode)
+		}
 		if managerWasRunning {
 			_ = startDetached(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir)
 		}

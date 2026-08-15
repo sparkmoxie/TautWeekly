@@ -210,6 +210,13 @@ def main() -> int:
         failures.append("access lock status does not route to password settings")
     if 'return "Container access"' not in javascript or 'return "Browser access"' not in javascript:
         failures.append("access lock tooltip is not platform-aware")
+    for control in ("startup-manager", "startup-dashboard", "startup-settings-save", "startup-settings-message"):
+        if f'id="{control}"' not in combined:
+            failures.append(f"Manager startup settings omit accessible control: {control}")
+    if 'request("/api/v1/startup")' not in javascript or 'method: "PUT"' not in javascript:
+        failures.append("Manager startup settings do not read and write the typed API")
+    if 'dashboardToggle.disabled = state.startupSaving || unavailable || !managerToggle.checked;' not in javascript:
+        failures.append("Open Dashboard after sign-in is not visibly dependent on Manager startup")
     if "function materializeMaterialIcons(" not in javascript or "materializeMaterialIcons();" not in javascript:
         failures.append("local Material Symbols are not materialized for embedded-webview compatibility")
     if 'accessButton.replaceChildren(createMaterialIcon(locked ? "lock" : "lock-open"));' not in javascript:

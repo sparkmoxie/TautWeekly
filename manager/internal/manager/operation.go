@@ -21,6 +21,7 @@ const (
 	operationHistoryLimit  = 500
 	operationHistoryAge    = 90 * 24 * time.Hour
 	maximumOperationLine   = 64 << 10
+	operationRecoveryAge   = 24 * time.Hour
 )
 
 var (
@@ -117,21 +118,12 @@ func newOperationCoordinator(options Options) (*operationCoordinator, error) {
 	}
 	coordinator.current = coordinator.store.readCurrent()
 	if coordinator.current != nil && operationActive(coordinator.current.State) {
-		revision := operationSnapshotRevision(coordinator.snapshotPath(coordinator.current.ID))
-		coordinator.current.State = "failed"
-		coordinator.current.Outcome = "failed"
-		coordinator.current.Cancellable = false
-		coordinator.current.FinishedAtUTC = coordinator.now().UTC().Format(time.RFC3339)
-		coordinator.current.ErrorCategory = "manager-restarted"
-		coordinator.current.SupportCode = operationSupportCode(coordinator.current.ID)
-		if err := coordinator.store.saveCurrent(*coordinator.current); err != nil {
+		record := *coordinator.current
+		revision := operationSnapshotRevision(coordinator.snapshotPath(record.ID))
+		if recoverableDeliveryOperation(record.Type) && revision != "" {
+			go coordinator.recoverDelivery(record, revision)
+		} else if err := coordinator.failInterruptedOperation(record, revision); err != nil {
 			return nil, err
-		}
-		if err := coordinator.store.appendHistory(*coordinator.current); err != nil {
-			return nil, err
-		}
-		if coordinator.onComplete != nil {
-			coordinator.onComplete(*coordinator.current, revision)
 		}
 	}
 	coordinator.removeStaleSnapshots()
@@ -292,21 +284,112 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 		record.State = "succeeded"
 		record.Outcome = "success"
 	}
-	// Finish transient-file cleanup and downstream status updates before the
-	// terminal operation state becomes observable. This keeps callers from
-	// racing final side effects, especially on Windows where open-directory
-	// cleanup is strict.
-	_ = os.Remove(snapshotPath)
-	_ = os.Remove(resultPath)
+	_ = c.commitTerminalOperation(record, revision, true, snapshotPath, resultPath)
+}
+
+func recoverableDeliveryOperation(operationType string) bool {
+	return operationType == "send-test-all" || operationType == "send-welcome" || operationType == "send-all"
+}
+
+func operationMode(operationType string) string {
+	switch operationType {
+	case "send-test-all":
+		return "SendTestAll"
+	case "send-welcome":
+		return "SendWelcome"
+	case "send-all":
+		return "SendAll"
+	default:
+		return ""
+	}
+}
+
+func (c *operationCoordinator) recoverDelivery(record OperationRecord, revision string) {
+	resultPath := c.resultPath(record.ID)
+	snapshotPath := c.snapshotPath(record.ID)
+	deadline := c.now().UTC().Add(operationRecoveryAge)
+	if started, err := time.Parse(time.RFC3339, record.StartedAtUTC); err == nil {
+		deadline = started.UTC().Add(operationRecoveryAge)
+	}
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		result, err := readRendererResult(resultPath, operationMode(record.Type))
+		if err == nil {
+			c.finishRecoveredDelivery(record, revision, result, snapshotPath, resultPath)
+			return
+		}
+		if !c.now().UTC().Before(deadline) {
+			_ = c.failInterruptedOperation(record, revision, snapshotPath, resultPath)
+			return
+		}
+		<-ticker.C
+	}
+}
+
+func (c *operationCoordinator) finishRecoveredDelivery(record OperationRecord, revision string, result rendererResult, cleanupPaths ...string) {
+	record.Cancellable = false
+	record.FinishedAtUTC = result.FinishedAtUTC
+	record.DurationMS = result.DurationMS
+	record.DeliveryScope = result.DeliveryScope
+	record.SMTPAcceptedCount = result.SMTPAcceptedCount
+	record.SkippedCount = result.SkippedCount
+	record.FailedCount = result.FailedCount
+	switch {
+	case record.Type == "send-all" && result.Outcome == "partial":
+		record.State = "partial"
+		record.Outcome = "partial"
+		record.SupportCode = operationSupportCode(record.ID)
+	case result.Outcome == "succeeded":
+		record.State = "succeeded"
+		record.Outcome = "success"
+	default:
+		record.State = "failed"
+		record.Outcome = "failed"
+		record.ErrorCategory = "renderer-failed"
+		record.SupportCode = operationSupportCode(record.ID)
+	}
+	_ = c.commitTerminalOperation(record, revision, true, cleanupPaths...)
+}
+
+func (c *operationCoordinator) failInterruptedOperation(record OperationRecord, revision string, cleanupPaths ...string) error {
+	record.State = "failed"
+	record.Outcome = "failed"
+	record.Cancellable = false
+	record.FinishedAtUTC = c.now().UTC().Format(time.RFC3339)
+	record.ErrorCategory = "manager-restarted"
+	record.SupportCode = operationSupportCode(record.ID)
+	return c.commitTerminalOperation(record, revision, true, cleanupPaths...)
+}
+
+func (c *operationCoordinator) commitTerminalOperation(record OperationRecord, revision string, requireActive bool, cleanupPaths ...string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if requireActive && (c.current == nil || c.current.ID != record.ID || !operationActive(c.current.State)) {
+		return nil
+	}
+	saveErr := c.store.saveCurrent(record)
+	var historyErr error
+	if saveErr == nil {
+		historyErr = c.store.appendHistory(record)
+	}
+	c.cancel = nil
+	c.current = &record
+	// Remove recovery inputs only after the terminal record is durable. If that
+	// write fails, the live Manager can still report the terminal state while a
+	// later restart reconciles the retained renderer result safely.
+	if saveErr == nil {
+		for _, path := range cleanupPaths {
+			_ = os.Remove(path)
+		}
+	}
 	if c.onComplete != nil {
 		c.onComplete(record, revision)
 	}
-	c.mu.Lock()
-	c.cancel = nil
-	c.current = &record
-	_ = c.store.saveCurrent(record)
-	_ = c.store.appendHistory(record)
-	c.mu.Unlock()
+	if saveErr != nil {
+		return saveErr
+	}
+	return historyErr
 }
 
 func operationSnapshotRevision(snapshotPath string) string {
@@ -397,6 +480,9 @@ func (c *operationCoordinator) removeStaleSnapshots() {
 	}
 	for _, entry := range entries {
 		name := entry.Name()
+		if c.current != nil && operationActive(c.current.State) && strings.HasPrefix(name, "operation-"+c.current.ID+".") {
+			continue
+		}
 		if entry.Type().IsRegular() && strings.HasPrefix(name, "operation-") && (strings.HasSuffix(name, ".config.json") || strings.HasSuffix(name, ".result.json")) {
 			_ = os.Remove(filepath.Join(c.dataDir, name))
 		}

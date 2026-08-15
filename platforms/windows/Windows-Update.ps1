@@ -272,6 +272,33 @@ function Get-InstalledManagerProcesses {
     })
 }
 
+function Stop-InstalledManager {
+    $managerProcesses = @(Get-InstalledManagerProcesses)
+    if ($managerProcesses.Count -eq 0) { return $false }
+    $managerPath = Join-Path $InstallRoot 'tautweekly-manager.exe'
+    try {
+        & $managerPath shutdown --listen=127.0.0.1:8788 "--tautweekly-root=$InstallRoot" 2>$null
+    }
+    catch { }
+    $deadline = (Get-Date).AddSeconds(10)
+    foreach ($managerProcess in $managerProcesses) {
+        $remaining = [Math]::Max(0, [int]($deadline - (Get-Date)).TotalMilliseconds)
+        if (-not $managerProcess.HasExited -and $remaining -gt 0) {
+            [void]$managerProcess.WaitForExit($remaining)
+        }
+    }
+    $remainingProcesses = @(Get-InstalledManagerProcesses)
+    foreach ($managerProcess in $remainingProcesses) {
+        Stop-Process -Id $managerProcess.Id -Force -ErrorAction Stop
+    }
+    foreach ($managerProcess in $remainingProcesses) {
+        if (-not $managerProcess.WaitForExit(10000)) {
+            throw 'The exact packaged Manager process did not stop for the update.'
+        }
+    }
+    return $true
+}
+
 function Start-InstalledManager {
     $managerPath = Join-Path $InstallRoot 'tautweekly-manager.exe'
     if (-not (Test-Path -LiteralPath $managerPath -PathType Leaf)) {
@@ -398,18 +425,7 @@ $managerRestarted = $false
 try {
     $operationLock = Enter-TautWeeklyOperationLock -Root $InstallRoot -Purpose "update to $TargetVersion"
 
-    $managerProcesses = @(Get-InstalledManagerProcesses)
-    if ($managerProcesses.Count -gt 0) {
-        $managerWasRunning = $true
-        foreach ($managerProcess in $managerProcesses) {
-            Stop-Process -Id $managerProcess.Id -Force
-        }
-        foreach ($managerProcess in $managerProcesses) {
-            if (-not $managerProcess.WaitForExit(10000)) {
-                throw 'The exact packaged Manager process did not stop for the update.'
-            }
-        }
-    }
+    $managerWasRunning = Stop-InstalledManager
 
     $task = if ($InstallerTestMode) { $null } else { Get-ScheduledNewsletterTask }
     if ($null -ne $task) {

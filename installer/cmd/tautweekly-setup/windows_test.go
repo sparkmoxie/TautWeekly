@@ -315,6 +315,66 @@ func TestRemoveShortcutsUsesWindowsShellFolders(t *testing.T) {
 	}
 }
 
+func TestManagerStartupCommandRoundTripsAndMigratesPaths(t *testing.T) {
+	t.Setenv("SystemRoot", `C:\Windows`)
+	oldRoot := filepath.Join(t.TempDir(), "Old TautWeekly")
+	oldData := filepath.Join(t.TempDir(), "Old Manager Data")
+	command, err := managerStartupCommand(oldRoot, oldData, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preference, owned := parseManagerStartupCommand(command)
+	if !owned || !preference.Enabled || !preference.OpenDashboard || !samePath(preference.InstallRoot, oldRoot) || !samePath(preference.DataRoot, oldData) {
+		t.Fatalf("startup command did not round-trip: owned=%t preference=%+v command=%q", owned, preference, command)
+	}
+
+	var value = command
+	var exists = true
+	originalRead := readManagerStartupValue
+	originalWrite := writeManagerStartupValue
+	originalDelete := deleteManagerStartupValue
+	t.Cleanup(func() {
+		readManagerStartupValue = originalRead
+		writeManagerStartupValue = originalWrite
+		deleteManagerStartupValue = originalDelete
+	})
+	readManagerStartupValue = func() (string, bool, error) { return value, exists, nil }
+	writeManagerStartupValue = func(next string) error { value, exists = next, true; return nil }
+	deleteManagerStartupValue = func() error { value, exists = "", false; return nil }
+	captured, err := captureManagerStartup(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newRoot := filepath.Join(t.TempDir(), "New TautWeekly")
+	newData := filepath.Join(t.TempDir(), "New Manager Data")
+	if err := reconcileManagerStartup(captured, options{installDir: newRoot, dataDir: newData}, false); err != nil {
+		t.Fatal(err)
+	}
+	migrated, owned := parseManagerStartupCommand(value)
+	if !owned || !migrated.OpenDashboard || !samePath(migrated.InstallRoot, newRoot) || !samePath(migrated.DataRoot, newData) {
+		t.Fatalf("startup entry retained a stale path: %+v, value %q", migrated, value)
+	}
+	if err := removeManagerStartup(newRoot, false); err != nil {
+		t.Fatal(err)
+	}
+	if exists {
+		t.Fatal("uninstall retained the owned Manager startup entry")
+	}
+}
+
+func TestManagerStartupParserRejectsUnownedCommands(t *testing.T) {
+	t.Setenv("SystemRoot", `C:\Windows`)
+	for _, command := range []string{
+		`"C:\Windows\System32\cmd.exe" /c calc.exe`,
+		`"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -File "C:\Other\script.ps1"`,
+		`"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\TautWeekly\START-MANAGER.ps1" -DataRoot "C:\Data" -Startup -Unexpected`,
+	} {
+		if _, owned := parseManagerStartupCommand(command); owned {
+			t.Fatalf("unowned startup command was accepted: %q", command)
+		}
+	}
+}
+
 func containsPath(paths []string, wanted string) bool {
 	for _, path := range paths {
 		if samePath(path, wanted) {

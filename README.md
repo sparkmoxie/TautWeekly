@@ -55,6 +55,13 @@ the available libraries and users, checks Tautulli and direct Plex, runs a
 non-sending SMTP preflight, and prepares six local previews when metadata is
 ready. Those four results persist and are summarized on the Dashboard.
 
+While the interactive Windows Manager is running, the TautWeekly icon remains
+in the notification area. Left-click opens the existing Dashboard; the native
+right-click menu shows current Manager health and provides a graceful Exit.
+Settings can start the Manager silently for the current user at sign-in and,
+optionally, open the Dashboard once it is ready. Exiting the Manager does not
+disable the independent weekly Scheduled Task.
+
 Windows trusted-local access requires no first-run pairing token. If other
 people use the same Windows account, an optional password lock can be enabled,
 changed, disabled, or recovered under **Settings**. Install or refresh the

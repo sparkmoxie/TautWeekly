@@ -34,6 +34,7 @@ type Options struct {
 	operationRunner       operationRunner
 	operationCompleted    func(OperationRecord, string)
 	scheduleRunner        scheduleMutationRunner
+	startupController     startupSettingsController
 }
 
 type Server struct {
@@ -48,6 +49,7 @@ type Server struct {
 	configuration     *configurationStatusStore
 	operations        *operationCoordinator
 	schedule          *scheduleCoordinator
+	startup           startupSettingsController
 	handler           http.Handler
 	bootstrapToken    string
 }
@@ -150,6 +152,10 @@ func New(options Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	startup := options.startupController
+	if startup == nil {
+		startup = newPlatformStartupController(options.TautWeeklyRoot, options.DataDir)
+	}
 	server := &Server{
 		options:        options,
 		auth:           store,
@@ -159,6 +165,7 @@ func New(options Options) (*Server, error) {
 		configuration:  configuration,
 		operations:     operations,
 		schedule:       schedule,
+		startup:        startup,
 		bootstrapToken: store.bootstrapToken,
 	}
 	server.handler = server.routes()
@@ -187,6 +194,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/about", s.protected(s.handleAbout, false))
 	mux.HandleFunc("GET /api/v1/diagnostics", s.protected(s.handleDiagnostics, false))
 	mux.HandleFunc("GET /api/v1/status", s.protected(s.handleStatus, false))
+	mux.HandleFunc("GET /api/v1/startup", s.protected(s.handleStartupSettings, false))
+	mux.HandleFunc("PUT /api/v1/startup", s.protected(s.handleUpdateStartupSettings, true))
 	mux.HandleFunc("GET /api/v1/config", s.protected(s.handleConfig, false))
 	mux.HandleFunc("GET /api/v1/config/editor", s.protected(s.handleConfigEditor, false))
 	mux.HandleFunc("GET /api/v1/config/status", s.protected(s.handleConfigurationStatus, false))

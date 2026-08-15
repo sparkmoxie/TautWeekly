@@ -23,6 +23,9 @@ const state = {
   scheduleOperation: null,
   schedulePendingAction: "",
   scheduleStarting: false,
+  startup: null,
+  startupDirty: false,
+  startupSaving: false,
   authAccess: null,
   about: null,
   diagnostics: { events: [], maximumEntries: 200, retentionDays: 30 },
@@ -202,7 +205,7 @@ async function enterApplication(preferredView = "") {
 async function loadAll() {
   setGlobalStatus("Refreshing local status…");
   try {
-    const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, authAccess, about, diagnostics] = await Promise.all([
+    const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, startup, authAccess, about, diagnostics] = await Promise.all([
       request("/api/v1/status"),
       request("/api/v1/config"),
       request("/api/v1/config/editor"),
@@ -214,6 +217,7 @@ async function loadAll() {
       request("/api/v1/operations/current"),
       request("/api/v1/history"),
       request("/api/v1/schedule/operation"),
+      request("/api/v1/startup"),
       request("/api/v1/auth/access"),
       request("/api/v1/about"),
       request("/api/v1/diagnostics"),
@@ -229,6 +233,8 @@ async function loadAll() {
     state.operation = operation.current || null;
     state.history = history.operations || [];
     state.scheduleOperation = scheduleOperation.current || null;
+    state.startup = startup;
+    state.startupDirty = false;
     state.authAccess = authAccess;
     state.about = about;
     state.diagnostics = diagnostics;
@@ -241,6 +247,7 @@ async function loadAll() {
     renderPreviews();
     renderOperations();
     renderSchedule();
+    renderStartupSettings();
     renderAccessSettings();
     renderAbout();
     manageOperationPolling();
@@ -2190,6 +2197,74 @@ async function pollScheduleOperation() {
   }
 }
 
+function renderStartupSettings() {
+  const startup = state.startup || { supported: false, state: "unsupported" };
+  const panel = byId("startup-settings-panel");
+  panel.hidden = !startup.supported;
+  if (!startup.supported) return;
+  const managerToggle = byId("startup-manager");
+  const dashboardToggle = byId("startup-dashboard");
+  const unavailable = ["conflict", "unavailable"].includes(startup.state);
+  if (!state.startupDirty) {
+    managerToggle.checked = Boolean(startup.startManager);
+    dashboardToggle.checked = Boolean(startup.openDashboard && startup.startManager);
+  }
+  if (!managerToggle.checked) dashboardToggle.checked = false;
+  managerToggle.disabled = state.startupSaving || unavailable;
+  dashboardToggle.disabled = state.startupSaving || unavailable || !managerToggle.checked;
+  managerToggle.closest(".config-toggle").querySelector("em").textContent = managerToggle.checked ? "On" : "Off";
+  dashboardToggle.closest(".config-toggle").querySelector("em").textContent = dashboardToggle.checked ? "On" : "Off";
+  const dependent = dashboardToggle.closest(".startup-setting");
+  dependent.classList.toggle("disabled", dashboardToggle.disabled);
+  const label = startup.state === "conflict" ? "Needs review" : startup.state === "unavailable" ? "Unavailable" : managerToggle.checked ? "Enabled" : "Disabled";
+  const tone = startup.state === "conflict" || startup.state === "unavailable" ? "bad" : managerToggle.checked ? "good" : "neutral";
+  setChip("startup-settings-chip", label, tone);
+  const save = byId("startup-settings-save");
+  save.disabled = state.startupSaving || unavailable || !state.startupDirty;
+  setSwappingButtonText("startup-settings-save", state.startupSaving ? "Saving startup settings..." : "Save startup settings");
+  if (!state.startupDirty && !state.startupSaving) {
+    const message = byId("startup-settings-message");
+    if (startup.state === "conflict") message.textContent = "A same-named Windows sign-in entry does not match this installation. It was left unchanged.";
+    else if (startup.state === "unavailable") message.textContent = "Windows sign-in startup status could not be read safely.";
+    else if (startup.startManager && startup.openDashboard) message.textContent = "The Manager starts silently at sign-in, then opens the Dashboard once it is ready.";
+    else if (startup.startManager) message.textContent = "The Manager starts silently in the notification area at sign-in.";
+    else message.textContent = "The Manager starts only when you open it.";
+  }
+}
+
+function startupSettingsChanged() {
+  const managerToggle = byId("startup-manager");
+  const dashboardToggle = byId("startup-dashboard");
+  if (!managerToggle.checked) dashboardToggle.checked = false;
+  state.startupDirty = managerToggle.checked !== Boolean(state.startup?.startManager)
+    || dashboardToggle.checked !== Boolean(state.startup?.openDashboard);
+  byId("startup-settings-message").textContent = state.startupDirty ? "Review and save this sign-in behavior." : "Startup settings are unchanged.";
+  renderStartupSettings();
+}
+
+async function submitStartupSettings(event) {
+  event.preventDefault();
+  if (!state.startupDirty || state.startupSaving) return;
+  state.startupSaving = true;
+  renderStartupSettings();
+  try {
+    state.startup = await request("/api/v1/startup", {
+      method: "PUT",
+      body: JSON.stringify({
+        startManager: byId("startup-manager").checked,
+        openDashboard: byId("startup-dashboard").checked,
+      }),
+    });
+    state.startupDirty = false;
+    setGlobalStatus("Windows sign-in settings saved.", true);
+  } catch (error) {
+    byId("startup-settings-message").textContent = error.message;
+  } finally {
+    state.startupSaving = false;
+    renderStartupSettings();
+  }
+}
+
 function renderAccessSettings() {
   const access = state.authAccess || {};
   const locked = Boolean(access.authenticationRequired);
@@ -2580,6 +2655,9 @@ byId("schedule-confirm").addEventListener("change", renderSchedule);
 byId("schedule-confirm-cancel").addEventListener("click", cancelScheduleConfirmation);
 byId("schedule-confirm-run").addEventListener("click", startScheduleOperation);
 document.querySelectorAll("[data-schedule-action]").forEach((button) => button.addEventListener("click", () => chooseScheduleAction(button.dataset.scheduleAction)));
+byId("startup-settings-form").addEventListener("submit", submitStartupSettings);
+byId("startup-manager").addEventListener("change", startupSettingsChanged);
+byId("startup-dashboard").addEventListener("change", startupSettingsChanged);
 byId("logout-button").addEventListener("click", logout);
 byId("refresh-button").addEventListener("click", loadAll);
 byId("access-status-button").addEventListener("click", openAccessSettings);

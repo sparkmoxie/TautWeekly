@@ -99,6 +99,10 @@ try {
     Assert-True ($metadata.Contains("DataDirectory=$dataRoot")) 'Installer metadata does not bind the external private data directory.'
     $launcher = Get-Content -LiteralPath (Join-Path $installRoot 'Open-TautWeekly.cmd') -Raw
     Assert-True ($launcher.Contains('-DataRoot')) 'Installed launcher does not pass the external Manager data directory.'
+    $managerLauncher = Get-Content -LiteralPath (Join-Path $installRoot 'START-MANAGER.ps1') -Raw
+    Assert-True ($managerLauncher.Contains('[switch]$Startup')) 'Installed Manager launcher has no silent sign-in mode.'
+    Assert-True ($managerLauncher.Contains('[switch]$OpenDashboard')) 'Installed Manager launcher has no dependent sign-in Dashboard mode.'
+    Assert-True ($managerLauncher.Contains('-not $Startup -or $OpenDashboard')) 'Installed Manager launcher does not keep browser opening dependent on the sign-in setting.'
     $resetLauncher = Get-Content -LiteralPath (Join-Path $installRoot 'Reset-TautWeekly-Access.cmd') -Raw
     Assert-True ($resetLauncher.Contains('-DataRoot')) 'Installed access reset launcher does not pass the external Manager data directory.'
 
@@ -129,6 +133,22 @@ try {
         Assert-True (-not [bool]$setupState.authenticationRequired) 'Fresh Windows Manager unexpectedly requires authentication.'
         Assert-True (-not [bool]$setupState.pairingRequired) 'Fresh Windows Manager unexpectedly requires a pairing token.'
         Assert-True (-not (Test-Path -LiteralPath (Join-Path $dataRoot 'bootstrap-token.txt'))) 'Fresh Windows Manager wrote an obsolete pairing token.'
+        $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+        Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/api/v1/auth/session" -WebSession $session -TimeoutSec 2 | Out-Null
+        $startupState = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/api/v1/startup" -WebSession $session -TimeoutSec 2
+        Assert-True ([bool]$startupState.supported) 'Installed Windows Manager did not report sign-in startup capability.'
+        $startupJson = $startupState | ConvertTo-Json -Compress
+        Assert-True (-not $startupJson.Contains($installRoot) -and -not $startupJson.Contains($dataRoot)) 'Startup status leaked an application or private-data path.'
+        $shutdown = Start-Process `
+            -FilePath $managerExecutable `
+            -ArgumentList @('shutdown', "--listen=127.0.0.1:$port", "--tautweekly-root=$installRoot") `
+            -WorkingDirectory $installRoot `
+            -Wait `
+            -PassThru `
+            -WindowStyle Hidden
+        Assert-True ($shutdown.ExitCode -eq 0) 'Installed Manager rejected its named graceful-shutdown request.'
+        $shutdown.Dispose()
+        Assert-True ($manager.WaitForExit(10000)) 'Installed Manager did not release its tray, listener, and executable promptly.'
     }
     finally {
         if (-not $manager.HasExited) {

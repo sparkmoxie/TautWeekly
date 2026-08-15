@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
-    [string]$DataRoot = ''
+    [string]$DataRoot = '',
+    [switch]$Startup,
+    [switch]$OpenDashboard
 )
 
 Set-StrictMode -Version Latest
@@ -19,6 +21,10 @@ $baseUri = 'http://127.0.0.1:8788/'
 $healthUri = $baseUri + 'health/live'
 $setupUri = $baseUri + 'api/v1/setup'
 
+if ($OpenDashboard -and -not $Startup) {
+    throw '-OpenDashboard is valid only with -Startup.'
+}
+
 function Test-ExistingManager {
     try {
         $health = Invoke-RestMethod -UseBasicParsing -Uri $healthUri -TimeoutSec 2
@@ -35,7 +41,9 @@ if (-not (Test-Path -LiteralPath $manager -PathType Leaf)) {
 }
 
 if (Test-ExistingManager) {
-    Start-Process -FilePath $baseUri | Out-Null
+    if (-not $Startup -or $OpenDashboard) {
+        Start-Process -FilePath $baseUri | Out-Null
+    }
     exit 0
 }
 
@@ -48,7 +56,10 @@ if (-not (Test-Path -LiteralPath $dataRoot -PathType Container)) {
     New-Item -ItemType Directory -Path $dataRoot | Out-Null
 }
 
-$arguments = 'serve --listen=127.0.0.1:8788 --tautweekly-root="{0}" --data-dir="{1}" --open-browser' -f $root, $dataRoot
+$arguments = 'serve --listen=127.0.0.1:8788 --tautweekly-root="{0}" --data-dir="{1}"' -f $root, $dataRoot
+if (-not $Startup -or $OpenDashboard) {
+    $arguments += ' --open-browser'
+}
 $process = Start-Process -FilePath $manager -ArgumentList $arguments -WorkingDirectory $root -WindowStyle Hidden -PassThru
 $deadline = (Get-Date).AddSeconds(10)
 do {
