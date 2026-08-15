@@ -47,4 +47,7 @@ func TestTrayTooltipIdentifiesDashboard(t *testing.T) {
 	if actual := syscall.UTF16ToString(data.Tip[:]); actual != "TautWeekly Dashboard" {
 		t.Fatalf("tray tooltip = %q, want TautWeekly Dashboard", actual)
 	}
+	if data.Flags&trayNIFShowTip == 0 {
+		t.Fatal("tray tooltip is not enabled for NOTIFYICON_VERSION_4")
+	}
 }

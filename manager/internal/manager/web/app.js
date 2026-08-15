@@ -2525,8 +2525,17 @@ function setChip(id, text, tone, iconName = "") {
     label = document.createElement("span");
     label.className = "state-chip-label";
     label.textContent = chip.textContent;
+    chip.replaceChildren(label);
   }
-  chip.replaceChildren(...(iconName ? [createMaterialIcon(iconName), label] : [label]));
+  const currentIcon = chip.querySelector(":scope > .ui-icon");
+  if (iconName && (!currentIcon || chip.dataset.iconName !== iconName)) {
+    const nextIcon = createMaterialIcon(iconName);
+    if (currentIcon) currentIcon.replaceWith(nextIcon);
+    else chip.insertBefore(nextIcon, label);
+  } else if (!iconName && currentIcon) {
+    currentIcon.remove();
+  }
+  chip.dataset.iconName = iconName;
   setSwappingElementText(label, text);
   chip.className = `state-chip ${resolvedTone}`;
   const card = chip.closest(".health-card,.operation-strip,.current-operation,.setup-workflow-steps article,.setup-workflow");

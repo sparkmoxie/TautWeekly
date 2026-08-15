@@ -30,6 +30,7 @@ const (
 	trayNIFMessage    = 0x00000001
 	trayNIFIcon       = 0x00000002
 	trayNIFTip        = 0x00000004
+	trayNIFShowTip    = 0x00000080
 	trayNotifyVersion = 4
 
 	trayWMDestroy       = 0x0002
@@ -294,6 +295,11 @@ func (t *windowsManagerTray) notificationData(flags uint32) trayNotifyIconData {
 		Icon:            t.icon,
 	}
 	data.Size = uint32(unsafe.Sizeof(data))
+	if flags&trayNIFTip != 0 {
+		// NOTIFYICON_VERSION_4 suppresses the standard Windows hover tooltip
+		// unless NIF_SHOWTIP is explicitly retained on the icon.
+		data.Flags |= trayNIFShowTip
+	}
 	tip, _ := syscall.UTF16FromString(trayTooltip)
 	copy(data.Tip[:], tip)
 	return data

@@ -221,6 +221,8 @@ def main() -> int:
         failures.append("Manager startup badge follows unsaved form state instead of the saved setting")
     if 'label.className = "state-chip-label";' not in javascript:
         failures.append("state badges do not inherit the smooth shared text transition")
+    if 'chip.replaceChildren(...(iconName ?' in javascript or 'chip.insertBefore(nextIcon, label);' not in javascript:
+        failures.append("unchanged state badges are detached and replay their animation during form edits")
     if "function materializeMaterialIcons(" not in javascript or "materializeMaterialIcons();" not in javascript:
         failures.append("local Material Symbols are not materialized for embedded-webview compatibility")
     if 'accessButton.replaceChildren(createMaterialIcon(locked ? "lock" : "lock-open"));' not in javascript:
