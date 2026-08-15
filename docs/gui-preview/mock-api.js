@@ -4,13 +4,13 @@
   const now = () => new Date().toISOString();
   const revision = "demo-revision-2026";
   const previewDefinitions = [
-    ["demo-index", "preview-all-00-INDEX", 3900],
-    ["demo-welcome", "preview-all-01-manual-welcome", 18200],
-    ["demo-new", "preview-all-02-new-user-no-history", 19600],
-    ["demo-history", "preview-all-03-new-user-with-history", 21400],
-    ["demo-normal", "preview-all-04-normal-newsletter", 24600],
-    ["demo-quiet", "preview-all-05-established-quiet", 17800],
-    ["demo-warnings", "preview-all-06-established-warmup", 18400],
+    ["demo-index", "preview-all-00-INDEX", 42800],
+    ["demo-welcome", "preview-all-01-manual-welcome", 96400],
+    ["demo-new", "preview-all-02-new-user-no-history", 112600],
+    ["demo-history", "preview-all-03-new-user-with-history", 148900],
+    ["demo-normal", "preview-all-04-normal-newsletter", 186200],
+    ["demo-quiet", "preview-all-05-established-quiet", 108400],
+    ["demo-warnings", "preview-all-06-established-warmup", 126700],
   ];
   const previewLabels = [
     "Index",
@@ -105,7 +105,7 @@
       choices: { state: "passed", summary: "3 fictional libraries and 18 fictional users loaded in memory." },
       lan: { state: "passed", summary: "Synthetic Tautulli and direct Plex verification passed." },
       smtp: { state: "passed", summary: "Synthetic SMTP reachability and STARTTLS validation passed." },
-      previews: { state: "passed", summary: "Six fictional newsletter states are available for review." },
+      previews: { state: "passed", summary: "Six production-faithful newsletter states are available for review." },
     },
     lastVerification: integration,
     lastSmtpCheck: smtp,
@@ -186,7 +186,7 @@
       },
       integrations: { tautulli: "passed", plex: "passed", smtp: "passed" },
       previewCount: previews.length,
-      previewSummary: "6 fictional states + index",
+      previewSummary: "6 rich local states + index",
     };
   }
 

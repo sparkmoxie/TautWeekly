@@ -35,6 +35,7 @@ jobs:
           ./scripts/check-links.ps1
           ./scripts/validate-docs.ps1
           node --check docs/gui-preview/mock-api.js
+          node --check docs/gui-preview/rich-preview.js
           node --check docs/gui-preview/app.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

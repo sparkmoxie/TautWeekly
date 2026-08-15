@@ -1693,8 +1693,9 @@ function renderPreviews() {
   const latestRun = state.history.find((operation) => operation.type === "preview-all" && operation.state === "succeeded" && operation.generatedPreviewIds?.length);
   const generated = new Set(latestRun?.generatedPreviewIds || []);
   const preferred = selected
-    || previews.find((preview) => generated.has(preview.id) && /-00-index(?:\.html)?$/i.test(preview.name))
+    || previews.find((preview) => preview.id === "demo-normal" && generated.has(preview.id))
     || previews.find((preview) => generated.has(preview.id))
+    || previews.find((preview) => preview.id === "demo-normal")
     || previews[0];
   const button = list.querySelector(`[data-preview-id="${CSS.escape(preferred.id)}"]`);
   if (button) openPreview(preferred.id, button);

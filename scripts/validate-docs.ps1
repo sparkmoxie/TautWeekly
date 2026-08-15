@@ -107,8 +107,9 @@ foreach ($relative in $pages) {
 $guiPreview = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/index.html'))
 $guiPreviewApp = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/app.js'))
 $guiPreviewAPI = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/mock-api.js'))
+$guiPreviewRich = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/rich-preview.js'))
 $guiPreviewManifest = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/manifest.webmanifest'))
-$guiPreviewCombined = $guiPreview + $guiPreviewApp + $guiPreviewAPI + $guiPreviewManifest
+$guiPreviewCombined = $guiPreview + $guiPreviewApp + $guiPreviewAPI + $guiPreviewRich + $guiPreviewManifest
 
 foreach ($pattern in @(
     'connect-src ''none''',
@@ -120,6 +121,9 @@ foreach ($pattern in @(
     'window\.TautWeeklyPreviewDemo',
     'srcdoc',
     'synthetic-demo',
+    'Rotten Tomatoes',
+    'IMDb',
+    'media/',
     'demo\.invalid',
     'start_url"\s*:\s*"\./"',
     'scope"\s*:\s*"\./"'
@@ -160,7 +164,20 @@ if ($guiPreviewAPI -match '(?i)https?://(?![^"'']*\.invalid(?:[:/]|["'']))') {
     throw 'GUI Preview mock API contains a non-fictional HTTP endpoint.'
 }
 
-Write-Host '[PASS] GUI Preview is static, relative, package-neutral, fictional, non-persistent, and network-blocked.'
+if ($guiPreviewRich -match '(?i)https?://') {
+    throw 'GUI Preview rich newsletter renderer contains an external HTTP endpoint.'
+}
+
+$guiPreviewMedia = Join-Path $docs 'gui-preview/media'
+$mediaReferences = [regex]::Matches($guiPreviewRich, '(?i)"(?<name>[^"/]+\.(?:gif|png|jpe?g))"')
+foreach ($reference in $mediaReferences) {
+    $assetPath = Join-Path $guiPreviewMedia $reference.Groups['name'].Value
+    if (-not (Test-Path -LiteralPath $assetPath -PathType Leaf)) {
+        throw "GUI Preview local media asset is missing: $assetPath"
+    }
+}
+
+Write-Host '[PASS] GUI Preview is static, relative, package-neutral, locally enriched, non-persistent, and network-blocked.'
 
 $previewGallery = [IO.File]::ReadAllText((Join-Path $docs 'examples/preview-all-00-INDEX.html'))
 foreach ($previewCopy in @(
