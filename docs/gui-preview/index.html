@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>TautWeekly Manager GUI Preview</title>
   <meta name="description" content="Interactive TautWeekly Manager GUI preview using fictional data only.">
   <link rel="canonical" href="https://sparkmoxie.github.io/TautWeekly/gui-preview/">
@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="app.css">
   <link rel="stylesheet" href="demo.css">
   <script src="mock-api.js" defer></script>
+  <script src="rich-preview.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -213,7 +214,7 @@
       </section>
 
       <section class="view" id="view-previews" data-panel="previews" hidden>
-        <div class="page-heading"><div><span class="eyebrow">Fictional newsletter previews</span><h1>Review before delivery.</h1><p>Bundled synthetic HTML renders inside the existing sandboxed preview frame. Nothing is generated on disk or sent.</p></div><span class="state-chip pending" id="preview-chip">Checking</span></div>
+        <div class="page-heading"><div><span class="eyebrow">Production-faithful newsletter previews</span><h1>Review before delivery.</h1><p>Real public media art and dated rating snapshots render locally inside the sandboxed preview frame. Viewer activity, counts, and delivery state remain fictional; nothing is generated on disk or sent.</p></div><span class="state-chip pending" id="preview-chip">Checking</span></div>
         <section class="preview-runner" aria-labelledby="preview-runner-heading">
           <div class="preview-runner-copy"><span class="eyebrow">Typed simulation</span><h2 id="preview-runner-heading">Generate all six newsletter states</h2><p>Uses a fictional user ID to refresh six bundled <code>srcdoc</code> previews in memory. No output file, service request, email, or recipient state change occurs.</p></div>
           <div class="preview-runner-form">
@@ -252,7 +253,7 @@
           <div><span class="eyebrow">Current or latest simulation</span><h2 id="current-operation-heading">No preview operation recorded</h2><p id="current-operation-copy">The page keeps temporary operation state in memory only.</p></div>
           <div class="current-operation-meta"><span class="state-chip neutral" id="current-operation-chip">Idle</span><small id="current-operation-time">Not recorded</small><button class="button button-danger" id="preview-cancel-button" type="button" hidden>Cancel preview generation</button></div>
         </section>
-        <div class="preview-layout"><div class="preview-list-panel"><div class="panel-heading"><h2>Available previews</h2><small>Scenario order</small></div><div class="preview-list" id="preview-list"></div></div><div class="preview-stage"><div class="preview-placeholder" id="preview-placeholder"><span aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-preview"></use></svg></span><h2>Loading the latest preview</h2><p>The index from the latest successful run opens automatically.</p></div><iframe id="preview-frame" title="Selected newsletter preview" sandbox="allow-same-origin" hidden></iframe></div></div>
+        <div class="preview-layout"><div class="preview-list-panel"><div class="panel-heading"><h2>Available previews</h2><small>Scenario order</small></div><div class="preview-list" id="preview-list"></div></div><div class="preview-stage"><div class="preview-placeholder" id="preview-placeholder"><span aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-preview"></use></svg></span><h2>Loading the newsletter preview</h2><p>The complete weekly newsletter opens automatically.</p></div><iframe id="preview-frame" title="Selected newsletter preview" sandbox="allow-same-origin" hidden></iframe></div></div>
         <div class="section-heading"><div><span class="eyebrow">Temporary fictional record</span><h2>Recent simulated operations</h2></div><p>History exists only until reload and contains invented operation types, timestamps, aggregate counts, and preview identifiers.</p></div>
         <section class="operation-history" id="operation-history" aria-label="Recent fictional Manager operation history"></section>
       </section>

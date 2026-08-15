@@ -28,6 +28,7 @@ jobs:
           pwsh ./scripts/validate-docs.ps1
           node --check docs/assets/site.js
           node --check docs/gui-preview/mock-api.js
+          node --check docs/gui-preview/rich-preview.js
           node --check docs/gui-preview/app.js
       - name: Validate shell scripts
         run: ./scripts/validate-shell.sh

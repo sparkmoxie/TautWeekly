@@ -2,8 +2,15 @@
 
 The rendered [GUI Preview](https://sparkmoxie.github.io/TautWeekly/gui-preview/)
 is a static, package-neutral demonstration of the Manager interface. It uses a
-synthetic in-memory API and only fictional users, libraries, endpoints, email
-addresses, schedules, newsletters, diagnostics, and operation results.
+synthetic in-memory API. Users, libraries, endpoints, email addresses,
+schedules, viewer activity, counts, diagnostics, and operation results are
+fictional.
+
+The newsletter frames intentionally mirror the production email presentation.
+They bundle local copies of public media artwork and title logos plus dated
+Rotten Tomatoes and IMDb visual-score snapshots. Those media fixtures remain
+property of their respective owners, may change at their sources, and imply no
+affiliation or endorsement. The score snapshot date is shown inside each frame.
 
 The page never contacts Plex, Tautulli, SMTP, a scheduler, or another external
 service; it writes no files and stores no credentials or entered values. Its

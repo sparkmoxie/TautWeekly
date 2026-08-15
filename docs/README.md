@@ -10,11 +10,11 @@ and terminal demonstrations.
 - [Open the interactive GUI Preview](https://sparkmoxie.github.io/TautWeekly/gui-preview/)
 
 The static demonstration mirrors the Manager interface with a synthetic
-in-memory API and fictional users, libraries, endpoints, email addresses,
-schedules, newsletters, diagnostics, and operation results. It makes no
-outbound application or host-service requests, writes no files, stores no
-credentials or entered values, and resets every temporary change when the page
-reloads.
+in-memory API and fictional private/account activity. Its production-faithful
+newsletter frames bundle public media artwork and dated Rotten Tomatoes/IMDb
+score snapshots locally. It makes no outbound application or host-service
+requests, writes no files, stores no credentials or entered values, and resets
+every temporary change when the page reloads.
 
 ## Email States Preview
 
