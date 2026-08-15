@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -44,6 +45,7 @@ var (
 	shell32           = syscall.NewLazyDLL("shell32.dll")
 	browseForFolder   = shell32.NewProc("SHBrowseForFolderW")
 	getFolderPath     = shell32.NewProc("SHGetPathFromIDListW")
+	getSpecialFolder  = shell32.NewProc("SHGetFolderPathW")
 	ole32             = syscall.NewLazyDLL("ole32.dll")
 	coTaskMemFree     = ole32.NewProc("CoTaskMemFree")
 	buttonYesNo       = uintptr(0x00000004)
@@ -115,19 +117,77 @@ func chooseInstallDirectory(initial string) (string, bool, error) {
 }
 
 func preferredInstallDirectory(fallback string) string {
-	command := hiddenCommand("reg.exe", "query", `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`, "/v", "InstallLocation")
-	output, err := command.CombinedOutput()
+	for _, registered := range []struct {
+		name      string
+		directory func(string) string
+	}{
+		{name: "InstallLocation", directory: registeredInstallLocation},
+		{name: "UninstallString", directory: registeredExecutableDirectory},
+		{name: "DisplayIcon", directory: registeredDisplayIconDirectory},
+	} {
+		value, err := readWindowsUninstallValue(registered.name)
+		if err != nil {
+			continue
+		}
+		candidate := registered.directory(value)
+		if filepath.IsAbs(candidate) && (installedApplication(candidate) || verifiedPortableApplication(candidate)) {
+			return filepath.Clean(candidate)
+		}
+	}
+	return fallback
+}
+
+const windowsUninstallRegistryKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`
+
+var readWindowsUninstallValue = windowsUninstallValue
+
+func windowsUninstallValue(name string) (string, error) {
+	output, err := hiddenCommand("reg.exe", "query", windowsUninstallRegistryKey, "/v", name).CombinedOutput()
 	if err != nil {
-		return fallback
+		return "", err
 	}
 	for _, line := range strings.Split(string(output), "\n") {
 		if index := strings.Index(line, "REG_SZ"); index >= 0 {
 			if value := strings.TrimSpace(line[index+len("REG_SZ"):]); value != "" {
-				return value
+				return value, nil
 			}
 		}
 	}
-	return fallback
+	return "", fmt.Errorf("Windows uninstall value %s is unavailable", name)
+}
+
+func registeredInstallLocation(value string) string {
+	return strings.Trim(strings.TrimSpace(value), `"`)
+}
+
+func registeredExecutableDirectory(value string) string {
+	executable := strings.TrimSpace(value)
+	if strings.HasPrefix(executable, `"`) {
+		executable = strings.TrimPrefix(executable, `"`)
+		if closing := strings.Index(executable, `"`); closing >= 0 {
+			executable = executable[:closing]
+		}
+	} else if separator := strings.IndexAny(executable, " \t"); separator >= 0 {
+		executable = executable[:separator]
+	}
+	if executable == "" {
+		return ""
+	}
+	return filepath.Dir(executable)
+}
+
+func registeredDisplayIconDirectory(value string) string {
+	icon := strings.TrimSpace(value)
+	if comma := strings.LastIndex(icon, ","); comma >= 0 {
+		if _, err := strconv.Atoi(strings.TrimSpace(icon[comma+1:])); err == nil {
+			icon = icon[:comma]
+		}
+	}
+	icon = strings.Trim(strings.TrimSpace(icon), `"`)
+	if icon == "" {
+		return ""
+	}
+	return filepath.Dir(icon)
 }
 
 func hiddenCommand(name string, args ...string) *exec.Cmd {
@@ -261,7 +321,7 @@ func showMessage(title, message string, style uintptr) (uintptr, error) {
 
 func registerUninstaller(opts options) error {
 	uninstaller := filepath.Join(opts.installDir, "TautWeekly-Uninstall.exe")
-	key := `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`
+	key := windowsUninstallRegistryKey
 	values := [][]string{
 		{"add", key, "/v", "DisplayName", "/t", "REG_SZ", "/d", productName, "/f"},
 		{"add", key, "/v", "DisplayVersion", "/t", "REG_SZ", "/d", version, "/f"},
@@ -281,7 +341,7 @@ func registerUninstaller(opts options) error {
 }
 
 func unregisterUninstaller() error {
-	output, err := hiddenCommand("reg.exe", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`, "/f").CombinedOutput()
+	output, err := hiddenCommand("reg.exe", "delete", windowsUninstallRegistryKey, "/f").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("unregister uninstaller: %w: %s", err, output)
 	}
@@ -290,6 +350,7 @@ func unregisterUninstaller() error {
 
 var (
 	resolveWindowsSpecialFolder = windowsSpecialFolder
+	queryWindowsSpecialFolder   = nativeWindowsSpecialFolder
 	writeWindowsShortcut        = createShortcut
 )
 
@@ -337,18 +398,69 @@ func createShortcuts(opts options, logger *log.Logger) error {
 }
 
 func windowsSpecialFolder(name string) (string, error) {
-	script := `$folder=(New-Object -ComObject WScript.Shell).SpecialFolders.Item($env:TAUTWEEKLY_SPECIAL_FOLDER);if([string]::IsNullOrWhiteSpace($folder)){exit 2};[Console]::Out.Write($folder)`
-	command := hiddenCommand("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
-	command.Env = append(os.Environ(), "TAUTWEEKLY_SPECIAL_FOLDER="+name)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("resolve %s shell folder: %w: %s", name, err, strings.TrimSpace(string(output)))
+	path, nativeErr := queryWindowsSpecialFolder(name)
+	if cleaned, ok := cleanAbsoluteWindowsPath(path); ok {
+		return cleaned, nil
 	}
-	path := strings.TrimSpace(string(output))
+	if fallback, ok := fallbackWindowsSpecialFolder(name); ok {
+		return fallback, nil
+	}
+	if nativeErr != nil {
+		return "", fmt.Errorf("resolve %s shell folder: %w", name, nativeErr)
+	}
+	return "", fmt.Errorf("resolve %s shell folder: Windows returned an invalid path", name)
+}
+
+func nativeWindowsSpecialFolder(name string) (string, error) {
+	var folderID uintptr
+	switch name {
+	case "Programs":
+		folderID = 0x0002 // CSIDL_PROGRAMS
+	case "Desktop":
+		folderID = 0x0010 // CSIDL_DESKTOPDIRECTORY
+	default:
+		return "", fmt.Errorf("unsupported Windows shell folder %q", name)
+	}
+	if err := getSpecialFolder.Find(); err != nil {
+		return "", fmt.Errorf("load SHGetFolderPathW: %w", err)
+	}
+	buffer := make([]uint16, 260) // SHGetFolderPathW is defined for MAX_PATH.
+	result, _, callErr := getSpecialFolder.Call(
+		0,
+		folderID,
+		0,
+		0, // SHGFP_TYPE_CURRENT
+		uintptr(unsafe.Pointer(&buffer[0])),
+	)
+	if result != 0 {
+		return "", fmt.Errorf("SHGetFolderPathW returned HRESULT 0x%08x: %v", uint32(result), callErr)
+	}
+	return syscall.UTF16ToString(buffer), nil
+}
+
+func fallbackWindowsSpecialFolder(name string) (string, bool) {
+	switch name {
+	case "Programs":
+		if appData, ok := cleanAbsoluteWindowsPath(os.Getenv("APPDATA")); ok {
+			return filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs"), true
+		}
+		if profile, ok := cleanAbsoluteWindowsPath(os.Getenv("USERPROFILE")); ok {
+			return filepath.Join(profile, "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs"), true
+		}
+	case "Desktop":
+		if profile, ok := cleanAbsoluteWindowsPath(os.Getenv("USERPROFILE")); ok {
+			return filepath.Join(profile, "Desktop"), true
+		}
+	}
+	return "", false
+}
+
+func cleanAbsoluteWindowsPath(path string) (string, bool) {
+	path = strings.TrimSpace(path)
 	if path == "" || !filepath.IsAbs(path) {
-		return "", fmt.Errorf("resolve %s shell folder: Windows returned an invalid path", name)
+		return "", false
 	}
-	return filepath.Clean(path), nil
+	return filepath.Clean(path), true
 }
 
 func createShortcut(destination, target, arguments, workingDirectory, icon string) error {
