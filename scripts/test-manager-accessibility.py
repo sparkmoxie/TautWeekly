@@ -217,6 +217,10 @@ def main() -> int:
         failures.append("Manager startup settings do not read and write the typed API")
     if 'dashboardToggle.disabled = state.startupSaving || unavailable || !managerToggle.checked;' not in javascript:
         failures.append("Open Dashboard after sign-in is not visibly dependent on Manager startup")
+    if 'const savedManagerEnabled = Boolean(startup.startManager);' not in javascript:
+        failures.append("Manager startup badge follows unsaved form state instead of the saved setting")
+    if 'label.className = "state-chip-label";' not in javascript:
+        failures.append("state badges do not inherit the smooth shared text transition")
     if "function materializeMaterialIcons(" not in javascript or "materializeMaterialIcons();" not in javascript:
         failures.append("local Material Symbols are not materialized for embedded-webview compatibility")
     if 'accessButton.replaceChildren(createMaterialIcon(locked ? "lock" : "lock-open"));' not in javascript:

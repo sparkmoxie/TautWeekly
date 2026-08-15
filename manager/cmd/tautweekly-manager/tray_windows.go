@@ -53,6 +53,7 @@ const (
 	traySMCXMenuCheck   = 71
 	traySMCYMenuCheck   = 72
 	trayDefaultIconSize = 16
+	trayTooltip         = "TautWeekly Dashboard"
 )
 
 var (
@@ -293,7 +294,7 @@ func (t *windowsManagerTray) notificationData(flags uint32) trayNotifyIconData {
 		Icon:            t.icon,
 	}
 	data.Size = uint32(unsafe.Sizeof(data))
-	tip, _ := syscall.UTF16FromString("TautWeekly for Plex — " + t.currentHealth().label())
+	tip, _ := syscall.UTF16FromString(trayTooltip)
 	copy(data.Tip[:], tip)
 	return data
 }

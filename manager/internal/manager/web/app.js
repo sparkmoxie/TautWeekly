@@ -2216,8 +2216,9 @@ function renderStartupSettings() {
   dashboardToggle.closest(".config-toggle").querySelector("em").textContent = dashboardToggle.checked ? "On" : "Off";
   const dependent = dashboardToggle.closest(".startup-setting");
   dependent.classList.toggle("disabled", dashboardToggle.disabled);
-  const label = startup.state === "conflict" ? "Needs review" : startup.state === "unavailable" ? "Unavailable" : managerToggle.checked ? "Enabled" : "Disabled";
-  const tone = startup.state === "conflict" || startup.state === "unavailable" ? "bad" : managerToggle.checked ? "good" : "neutral";
+  const savedManagerEnabled = Boolean(startup.startManager);
+  const label = startup.state === "conflict" ? "Needs review" : startup.state === "unavailable" ? "Unavailable" : savedManagerEnabled ? "Enabled" : "Disabled";
+  const tone = startup.state === "conflict" || startup.state === "unavailable" ? "bad" : savedManagerEnabled ? "good" : "neutral";
   setChip("startup-settings-chip", label, tone);
   const save = byId("startup-settings-save");
   save.disabled = state.startupSaving || unavailable || !state.startupDirty;
@@ -2519,8 +2520,14 @@ function createMaterialIcon(name) {
 function setChip(id, text, tone, iconName = "") {
   const chip = byId(id);
   const resolvedTone = tone || "neutral";
-  if (iconName) chip.replaceChildren(createMaterialIcon(iconName), document.createTextNode(text));
-  else chip.textContent = text;
+  let label = chip.querySelector(".state-chip-label");
+  if (!label) {
+    label = document.createElement("span");
+    label.className = "state-chip-label";
+    label.textContent = chip.textContent;
+  }
+  chip.replaceChildren(...(iconName ? [createMaterialIcon(iconName), label] : [label]));
+  setSwappingElementText(label, text);
   chip.className = `state-chip ${resolvedTone}`;
   const card = chip.closest(".health-card,.operation-strip,.current-operation,.setup-workflow-steps article,.setup-workflow");
   if (card) {

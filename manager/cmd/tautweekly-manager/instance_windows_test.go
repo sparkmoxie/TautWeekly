@@ -4,6 +4,7 @@ package main
 
 import (
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -38,5 +39,12 @@ func TestTrayStatusDotUsesMostOfTheNativeMenuIconSlot(t *testing.T) {
 	left, top, right, bottom = trayStatusDotBounds(20, 24)
 	if right-left != 15 || bottom-top != 15 || left < 0 || top < 0 {
 		t.Fatalf("scaled status dot bounds = (%d,%d)-(%d,%d), want a centered 15-pixel dot", left, top, right, bottom)
+	}
+}
+
+func TestTrayTooltipIdentifiesDashboard(t *testing.T) {
+	data := (&windowsManagerTray{}).notificationData(trayNIFTip)
+	if actual := syscall.UTF16ToString(data.Tip[:]); actual != "TautWeekly Dashboard" {
+		t.Fatalf("tray tooltip = %q, want TautWeekly Dashboard", actual)
 	}
 }
