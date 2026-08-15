@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>TautWeekly Manager GUI Preview</title>
+  <meta name="description" content="Interactive TautWeekly Manager GUI preview using fictional data only.">
+  <link rel="canonical" href="https://sparkmoxie.github.io/TautWeekly/gui-preview/">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="tautweekly-icon-180.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="demo.css">
+  <script src="mock-api.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <svg class="material-symbol-sprite" aria-hidden="true" focusable="false">
+    <symbol id="icon-dashboard" viewBox="0 -960 960 960"><path d="M520-640v-160q0-17 11.5-28.5T560-840h240q17 0 28.5 11.5T840-800v160q0 17-11.5 28.5T800-600H560q-17 0-28.5-11.5T520-640ZM120-480v-320q0-17 11.5-28.5T160-840h240q17 0 28.5 11.5T440-800v320q0 17-11.5 28.5T400-440H160q-17 0-28.5-11.5T120-480Zm400 320v-320q0-17 11.5-28.5T560-520h240q17 0 28.5 11.5T840-480v320q0 17-11.5 28.5T800-120H560q-17 0-28.5-11.5T520-160Zm-400 0v-160q0-17 11.5-28.5T160-360h240q17 0 28.5 11.5T440-320v160q0 17-11.5 28.5T400-120H160q-17 0-28.5-11.5T120-160Zm80-360h160v-240H200v240Zm400 320h160v-240H600v240Zm0-480h160v-80H600v80ZM200-200h160v-80H200v80Z"/></symbol>
+    <symbol id="icon-tune" viewBox="0 -960 960 960"><path d="M451.5-131.5Q440-143 440-160v-160q0-17 11.5-28.5T480-360q17 0 28.5 11.5T520-320v40h280q17 0 28.5 11.5T840-240q0 17-11.5 28.5T800-200H520v40q0 17-11.5 28.5T480-120q-17 0-28.5-11.5ZM160-200q-17 0-28.5-11.5T120-240q0-17 11.5-28.5T160-280h160q17 0 28.5 11.5T360-240q0 17-11.5 28.5T320-200H160Zm131.5-171.5Q280-383 280-400v-40H160q-17 0-28.5-11.5T120-480q0-17 11.5-28.5T160-520h120v-40q0-17 11.5-28.5T320-600q17 0 28.5 11.5T360-560v160q0 17-11.5 28.5T320-360q-17 0-28.5-11.5ZM480-440q-17 0-28.5-11.5T440-480q0-17 11.5-28.5T480-520h320q17 0 28.5 11.5T840-480q0 17-11.5 28.5T800-440H480Zm131.5-171.5Q600-623 600-640v-160q0-17 11.5-28.5T640-840q17 0 28.5 11.5T680-800v40h120q17 0 28.5 11.5T840-720q0 17-11.5 28.5T800-680H680v40q0 17-11.5 28.5T640-600q-17 0-28.5-11.5ZM160-680q-17 0-28.5-11.5T120-720q0-17 11.5-28.5T160-760h320q17 0 28.5 11.5T520-720q0 17-11.5 28.5T480-680H160Z"/></symbol>
+    <symbol id="icon-calendar-clock" viewBox="0 -960 960 960"><path d="M200-640h560v-80H200v80Zm0 560q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-40q0-17 11.5-28.5T280-880q17 0 28.5 11.5T320-840v40h320v-40q0-17 11.5-28.5T680-880q17 0 28.5 11.5T720-840v40h40q33 0 56.5 23.5T840-720v187q0 17-11.5 28.5T800-493q-17 0-28.5-11.5T760-533v-27H200v400h232q17 0 28.5 11.5T472-120q0 17-11.5 28.5T432-80H200Zm378.5-18.5Q520-157 520-240t58.5-141.5Q637-440 720-440t141.5 58.5Q920-323 920-240T861.5-98.5Q803-40 720-40T578.5-98.5ZM740-248v-92q0-8-6-14t-14-6q-8 0-14 6t-6 14v91q0 8 3 15.5t9 13.5l61 61q6 6 14 6t14-6q6-6 6-14t-6-14l-61-61Z"/></symbol>
+    <symbol id="icon-verified" viewBox="0 -960 960 960"><path d="m438-452-58-57q-11-11-27.5-11T324-508q-11 11-11 28t11 28l86 86q12 12 28 12t28-12l170-170q12-12 11.5-28T636-592q-12-12-28.5-12.5T579-593L438-452ZM326-90l-58-98-110-24q-15-3-24-15.5t-7-27.5l11-113-75-86q-10-11-10-26t10-26l75-86-11-113q-2-15 7-27.5t24-15.5l110-24 58-98q8-13 22-17.5t28 1.5l104 44 104-44q14-6 28-1.5t22 17.5l58 98 110 24q15 3 24 15.5t7 27.5l-11 113 75 86q10 11 10 26t-10 26l-75 86 11 113q2 15-7 27.5T802-212l-110 24-58 98q-8 13-22 17.5T584-74l-104-44-104 44q-14 6-28 1.5T326-90Zm52-72 102-44 104 44 56-96 110-26-10-112 74-84-74-86 10-112-110-24-58-96-102 44-104-44-56 96-110 24 10 112-74 86 74 84-10 114 110 24 58 96Z"/></symbol>
+    <symbol id="icon-preview" viewBox="0 -960 960 960"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-480H200v480Zm133.5-124.5Q269-369 240-440q29-71 93.5-115.5T480-600q82 0 146.5 44.5T720-440q-29 71-93.5 115.5T480-280q-82 0-146.5-44.5Zm248.5-42q46-26.5 72-73.5-26-47-72-73.5T480-540q-56 0-102 26.5T306-440q26 47 72 73.5T480-340q56 0 102-26.5ZM522.5-397.5Q540-415 540-440t-17.5-42.5Q505-500 480-500t-42.5 17.5Q420-465 420-440t17.5 42.5Q455-380 480-380t42.5-17.5Z"/></symbol>
+    <symbol id="icon-settings" viewBox="0 -960 960 960"><path d="M433-80q-27 0-46.5-18T363-142l-9-66q-13-5-24.5-12T307-235l-62 26q-25 11-50 2t-39-32l-47-82q-14-23-8-49t27-43l53-40q-1-7-1-13.5v-27q0-6.5 1-13.5l-53-40q-21-17-27-43t8-49l47-82q14-23 39-32t50 2l62 26q11-8 23-15t24-12l9-66q4-26 23.5-44t46.5-18h94q27 0 46.5 18t23.5 44l9 66q13 5 24.5 12t22.5 15l62-26q25-11 50-2t39 32l47 82q14 23 8 49t-27 43l-53 40q1 7 1 13.5v27q0 6.5-2 13.5l53 40q21 17 27 43t-8 49l-48 82q-14 23-39 32t-50-2l-60-26q-11 8-23 15t-24 12l-9 66q-4 26-23.5 44T527-80h-94Zm7-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Z"/></symbol>
+    <symbol id="icon-monitor-heart" viewBox="0 -960 960 960"><path d="M80-720q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v80q0 17-11.5 28.5T840-600q-17 0-28.5-11.5T800-640v-80H160v80q0 17-11.5 28.5T120-600q-17 0-28.5-11.5T80-640v-80Zm80 560q-33 0-56.5-23.5T80-240v-80q0-17 11.5-28.5T120-360q17 0 28.5 11.5T160-320v80h640v-80q0-17 11.5-28.5T840-360q17 0 28.5 11.5T880-320v80q0 33-23.5 56.5T800-160H160Zm261-125.5q10-5.5 15-16.5l124-248 44 88q5 11 15 16.5t21 5.5h200q17 0 28.5-11.5T880-480q0-17-11.5-28.5T840-520H665l-69-138q-5-11-15-15.5t-21-4.5q-11 0-21 4.5T524-658L400-410l-44-88q-5-11-15-16.5t-21-5.5H120q-17 0-28.5 11.5T80-480q0 17 11.5 28.5T120-440h175l69 138q5 11 15 16.5t21 5.5q11 0 21-5.5Z"/></symbol>
+    <symbol id="icon-email-read" viewBox="0 -960 960 960"><path d="m160-720 320 200 320-200H160Zm0 560q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v200q0 17-11.5 28.5T840-480q-17 0-28.5-11.5T800-520v-120L501-453q-3 2-21 6-5 0-10.5-1.5T459-453L160-640v400h220q17 0 28.5 11.5T420-200q0 17-11.5 28.5T380-160H160Zm478-32 198-198q11-11 28-11t28 11q11 11 11 28t-11 28L666-108q-12 12-28 12t-28-12L496-222q-11-11-11-28t11-28q11-11 28-11t28 11l86 86Z"/></symbol>
+    <symbol id="icon-hub" viewBox="0 -960 960 960"><path d="M155-75q-35-35-35-85t35-85q35-35 85-35 14 0 26 3t23 8l57-71q-28-31-39-70t-5-78l-81-27q-17 25-43 40t-58 15q-50 0-85-35T0-580q0-50 35-85t85-35q50 0 85 35t35 85v8l81 28q20-36 53.5-61t75.5-32v-87q-39-11-64.5-42.5T360-840q0-50 35-85t85-35q50 0 85 35t35 85q0 42-26 73.5T510-724v87q42 7 75.5 32t53.5 61l81-28v-8q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35q-32 0-58.5-15T739-515l-81 27q6 39-5 77.5T614-340l57 70q11-5 23-7.5t26-2.5q50 0 85 35t35 85q0 50-35 85t-85 35q-50 0-85-35t-35-85q0-20 6.5-38.5T624-232l-57-71q-41 23-87.5 23T392-303l-56 71q11 15 17.5 33.5T360-160q0 50-35 85t-85 35q-50 0-85-35Zm-35-465q17 0 28.5-11.5T160-580q0-17-11.5-28.5T120-620q-17 0-28.5 11.5T80-580q0 17 11.5 28.5T120-540Zm148.5 408.5Q280-143 280-160t-11.5-28.5Q257-200 240-200t-28.5 11.5Q200-177 200-160t11.5 28.5Q223-120 240-120t28.5-11.5ZM480-360q42 0 71-29t29-71q0-42-29-71t-71-29q-42 0-71 29t-29 71q0 42 29 71t71 29Zm28.5-451.5Q520-823 520-840t-11.5-28.5Q497-880 480-880t-28.5 11.5Q440-857 440-840t11.5 28.5Q463-800 480-800t28.5-11.5Zm240 680Q760-143 760-160t-11.5-28.5Q737-200 720-200t-28.5 11.5Q680-177 680-160t11.5 28.5Q703-120 720-120t28.5-11.5Zm120-420Q880-563 880-580t-11.5-28.5Q857-620 840-620t-28.5 11.5Q800-597 800-580t11.5 28.5Q823-540 840-540t28.5-11.5Z"/></symbol>
+    <symbol id="icon-rocket" viewBox="0 -960 960 960"><path d="M284-506q14-28 29-54t33-52l-56-11-84 84 78 33Zm482-275q-70 2-149.5 41T472-636q-42 42-75 90t-49 90l114 113q42-16 90-49t90-75q65-65 104-144t41-149q0-4-1.5-8t-4.5-7q-3-3-7-4.5t-8-1.5ZM523-597.5q0-33.5 23-56.5t57-23q34 0 57 23t23 56.5q0 33.5-23 56.5t-57 23q-34 0-57-23t-23-56.5ZM512-279l33 79 84-84-11-56q-26 18-52 32.5T512-279Zm351-534q8 110-36 214.5T688-399l20 99q4 20-2 39t-20 33L560-102q-15 15-36 11.5T495-114l-61-143-171-171-143-61q-20-8-24-29t11-36l126-126q14-14 33.5-20t39.5-2l99 20q95-95 199.5-139T819-857q8 1 16 4.5t14 9.5q6 6 9.5 14t4.5 16ZM157-321q35-35 85.5-35.5T328-322q35 35 34.5 85.5T327-151q-48 48-113.5 57T82-76q9-66 18-131.5T157-321Zm57 56q-17 17-23.5 41T180-175q25-4 49-10t41-23q12-12 13-29t-11-29q-12-12-29-11.5T214-265Z"/></symbol>
+    <symbol id="icon-play-circle" viewBox="0 -960 960 960"><path d="m426-330 195-125q14-9 14-25t-14-25L426-630q-15-10-30.5-1.5T380-605v250q0 18 15.5 26.5T426-330Zm54 250q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Z"/></symbol>
+    <symbol id="icon-security" viewBox="0 -960 960 960"><path d="M480-164q97-30 162-118.5T718-480H480v-315l-240 90v207q0 7 2 18h238v316Zm-13 79q-6-1-12-3-135-45-215-166.5T160-516v-189q0-25 14.5-45t37.5-29l240-90q14-5 28-5t28 5l240 90q23 9 37.5 29t14.5 45v189q0 140-80 261.5T505-88q-6 2-12 3t-13 1q-7 0-13-1Z"/></symbol>
+    <symbol id="icon-add-task" viewBox="0 -960 960 960"><path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q48 0 93.5 11t87.5 32q15 8 19.5 24t-5.5 30q-10 14-26.5 18t-32.5-4q-32-15-66.5-23t-69.5-8q-134 0-227 93t-93 227q0 134 93 227t227 93q26 0 51-4t50-12q17-5 33-.5t25 19.5q8 14 3.5 30T622-105q-34 13-70 19t-72 6Zm280-200h-80q-17 0-28.5-11.5T640-320q0-17 11.5-28.5T680-360h80v-80q0-17 11.5-28.5T800-480q17 0 28.5 11.5T840-440v80h80q17 0 28.5 11.5T960-320q0 17-11.5 28.5T920-280h-80v80q0 17-11.5 28.5T800-160q-17 0-28.5-11.5T760-200v-80ZM424-408l372-373q11-11 28-11t28 11q11 11 11 28t-11 28L452-324q-12 12-28 12t-28-12L282-438q-11-11-11-28t11-28q11-11 28-11t28 11l86 86Z"/></symbol>
+    <symbol id="icon-play" viewBox="0 -960 960 960"><path d="M320-273v-414q0-17 12-28.5t28-11.5q5 0 10.5 1.5T381-721l326 207q9 6 13.5 15t4.5 19q0 10-4.5 19T707-446L381-239q-5 3-10.5 4.5T360-233q-16 0-28-11.5T320-273Zm80-73 210-134-210-134v268Z"/></symbol>
+    <symbol id="icon-pause" viewBox="0 -960 960 960"><path d="M600-200q-33 0-56.5-23.5T520-280v-400q0-33 23.5-56.5T600-760h80q33 0 56.5 23.5T760-680v400q0 33-23.5 56.5T680-200h-80Zm-320 0q-33 0-56.5-23.5T200-280v-400q0-33 23.5-56.5T280-760h80q33 0 56.5 23.5T440-680v400q0 33-23.5 56.5T360-200h-80Zm320-80h80v-400h-80v400Zm-320 0h80v-400h-80v400Z"/></symbol>
+    <symbol id="icon-delete" viewBox="0 -960 960 960"><path d="M280-120q-33 0-56.5-23.5T200-200v-520q-17 0-28.5-11.5T160-760q0-17 11.5-28.5T200-800h160q0-17 11.5-28.5T400-840h160q17 0 28.5 11.5T600-800h160q17 0 28.5 11.5T800-760q0 17-11.5 28.5T760-720v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM428.5-291.5Q440-303 440-320v-280q0-17-11.5-28.5T400-640q-17 0-28.5 11.5T360-600v280q0 17 11.5 28.5T400-280q17 0 28.5-11.5Zm160 0Q600-303 600-320v-280q0-17-11.5-28.5T560-640q-17 0-28.5 11.5T520-600v280q0 17 11.5 28.5T560-280q17 0 28.5-11.5Z"/></symbol>
+    <symbol id="icon-network" viewBox="0 -960 960 960"><path d="M42-558q-18-18-17-43.5T46-643q45-36 94.5-65.5T245-758q55-20 112-30.5T472-800q24 0 39.5 18.5T524-738q-3 25-22 41t-45 17q-43 2-84.5 10.5T291-647q-45 16-85.5 39T129-556q-20 16-45 15.5T42-558Zm257 175q-27 20-51.5 14T209-392q-14-17-14-40t20-39q32-25 68.5-42.5T358-542q28-8 47 5.5t26 34.5q7 21-1.5 43T392-428q-25 8-48.5 19T299-383Zm153 217q-32-11-47-42.5t-1-59.5l240-488q4-8 11.5-10.5t16.5.5q8 3 12 10.5t2 15.5L556-214q-8 32-39.5 46.5T452-166Zm467-396q-15 17-39 21.5T830-557q-8-8-19.5-15.5T790-586q-27-18-30-42t8-43q11-19 32.5-27t44.5 6q17 11 35.5 24.5T914-642q21 17 20.5 40T919-562ZM751.5-329q-23.5 3-46.5-17l-12-11q-24-20-24-44t14-42q14-18 38-23.5t47 13.5q5 5 11.5 10.5T791-432q20 20 18 44t-18 40q-16 16-39.5 19Z"/></symbol>
+    <symbol id="icon-email" viewBox="0 -960 960 960"><path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480v58q0 59-40.5 100.5T740-280q-35 0-66-15t-52-43q-29 29-65.5 43.5T480-280q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480v58q0 26 17 44t43 18q26 0 43-18t17-44v-58q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93h160q17 0 28.5 11.5T680-120q0 17-11.5 28.5T640-80H480Zm85-315q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35Z"/></symbol>
+    <symbol id="icon-lock" viewBox="0 -960 960 960"><path d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm0-80h480v-400H240v400Zm296.5-143.5Q560-327 560-360t-23.5-56.5Q513-440 480-440t-56.5 23.5Q400-393 400-360t23.5 56.5Q447-280 480-280t56.5-23.5ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80Z"/></symbol>
+    <symbol id="icon-lock-open" viewBox="0 -960 960 960"><path d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h360v-80q0-50-35-85t-85-35q-42 0-73.5 25.5T364-751q-4 14-16.5 22.5T320-720q-17 0-28.5-11t-8.5-26q14-69 69-116t128-47q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm0-80h480v-400H240v400Zm296.5-143.5Q560-327 560-360t-23.5-56.5Q513-440 480-440t-56.5 23.5Q400-393 400-360t23.5 56.5Q447-280 480-280t56.5-23.5Z"/></symbol>
+    <symbol id="icon-visibility" viewBox="0 -960 960 960"><path d="M480-320q50 0 85-35t35-85q0-50-35-85t-85-35q-50 0-85 35t-35 85q0 50 35 85t85 35Zm0 160q-123 0-224.5-68.5T88-408q-8-13-8-32t8-32q66-111 167.5-179.5T480-720q123 0 224.5 68.5T872-472q8 13 8 32t-8 32q-66 111-167.5 179.5T480-160Zm0-80q105 0 191-57.5T800-440q-43-85-129-142.5T480-640q-105 0-191 57.5T160-440q43 85 129 142.5T480-240Z"/></symbol>
+  </svg>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <main class="auth-shell" id="auth-shell">
+    <section class="auth-card" aria-labelledby="auth-title">
+      <div class="brand-lockup brand-lockup-large"><img class="brand-mark" src="tautweekly-logo.png" alt=""><div><span class="brand-kicker">TautWeekly</span><strong>Manager</strong></div></div>
+      <div class="auth-intro"><span class="eyebrow">Private local administration</span><h1 id="auth-title">Your newsletter control room.</h1><p>Review health, schedule state, configuration, and generated previews without exposing TautWeekly to a cloud service.</p></div>
+      <form id="pair-form" class="auth-form" hidden>
+        <div class="form-heading"><h2>Pair this browser</h2><p>Use the one-time token from the Manager launch message, then create a local administrator password.</p></div>
+        <label>Pairing token<input id="pair-token" name="token" type="password" autocomplete="one-time-code" required></label>
+        <label>Administrator password<input id="pair-password" name="password" type="password" autocomplete="new-password" minlength="8" required><span class="field-hint">At least 8 characters. Stored locally as a salted hash.</span></label>
+        <label>Confirm password<input id="pair-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="8" required></label>
+        <button class="button button-primary button-wide" type="submit">Pair and continue <span aria-hidden="true">&#8594;</span></button>
+      </form>
+      <form id="login-form" class="auth-form" hidden>
+        <div class="form-heading"><h2>Welcome back</h2><p>Sign in with the administrator password stored on this TautWeekly host.</p></div>
+        <label>Administrator password<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
+        <button class="button button-primary button-wide" type="submit">Open Manager <span aria-hidden="true">&#8594;</span></button>
+        <p class="field-hint">Forgot the password? Run the local <strong>Reset Manager Access</strong> helper from the TautWeekly installation. It disables only this optional lock.</p>
+      </form>
+      <p class="form-message" id="auth-message" role="status" aria-live="polite"></p>
+      <div class="auth-boundary"><span aria-hidden="true">&#9670;</span><p><strong>Local by design.</strong> This Manager binds only to this computer and makes no analytics or cloud-management requests.</p></div>
+    </section>
+  </main>
+
+  <div class="app-shell" id="app-shell" hidden>
+    <header class="topbar">
+      <div class="brand-lockup"><img class="brand-mark" src="tautweekly-logo.png" alt=""><div><span class="brand-kicker">TautWeekly</span><strong>Manager</strong></div></div>
+      <div class="topbar-actions">
+        <button class="access-status-button unlocked" id="access-status-button" type="button" aria-label="Browser access unlocked" data-tooltip="Browser access unlocked"><svg class="ui-icon" viewBox="0 -960 960 960" aria-hidden="true"><use href="#icon-lock-open"></use></svg></button>
+        <span class="mode-pill"><span class="mode-dot"></span> GUI Preview</span>
+        <button class="icon-button" id="refresh-button" type="button" aria-label="Refresh local status"><span aria-hidden="true">&#8635;</span><span class="button-label">Refresh</span></button>
+        <button class="icon-button" id="logout-button" type="button" aria-label="Sign out of Manager"><span aria-hidden="true">&#8599;</span><span class="button-label">Sign out</span></button>
+      </div>
+    </header>
+    <aside class="sidebar" aria-label="Manager navigation">
+      <nav class="nav-list">
+        <button class="nav-button active" type="button" data-view="dashboard" aria-current="page"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-dashboard"></use></svg></span><span><strong>Dashboard</strong><small>System overview</small></span></button>
+        <button class="nav-button" type="button" data-view="configuration"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-tune"></use></svg></span><span><strong>Config</strong><small>Guided local setup</small></span></button>
+        <button class="nav-button" type="button" data-view="schedule"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-calendar-clock"></use></svg></span><span><strong>Schedule</strong><small>Scheduler lifecycle</small></span></button>
+        <button class="nav-button" type="button" data-view="verification"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-verified"></use></svg></span><span><strong>Verify</strong><small>Connection checks</small></span></button>
+        <button class="nav-button" type="button" data-view="previews"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-preview"></use></svg></span><span><strong>Previews</strong><small>Generated newsletters</small></span></button>
+        <button class="nav-button" type="button" data-view="about"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-settings"></use></svg></span><span><strong>Settings</strong><small>Access and diagnostics</small></span></button>
+      </nav>
+      <div class="sidebar-note"><span class="status-beacon"></span><div><strong>Local connection</strong><small id="sidebar-platform">Checking platform...</small></div></div>
+    </aside>
+
+    <main class="content" id="main-content" tabindex="-1">
+      <aside class="demo-banner" role="note" aria-label="GUI preview boundary"><span class="demo-banner-dot" aria-hidden="true"></span><strong>Interactive GUI Preview</strong><span>Synthetic data only</span><span aria-hidden="true">•</span><span>No services, email, files, or schedulers are contacted</span></aside>
+      <section class="view" id="view-dashboard" data-panel="dashboard">
+        <div class="page-heading"><div><span class="eyebrow">Operational overview</span><h1 id="dashboard-greeting">Good afternoon.</h1><p>Here is what TautWeekly can confirm from this host right now.</p></div><div class="observed"><small>Last observed</small><strong id="observed-time">Checking...</strong></div></div>
+        <section class="hero-status" aria-labelledby="overall-heading">
+          <div><div class="status-label"><span class="status-orb" id="overall-orb"></span><span id="overall-label">Checking system</span></div><h2 id="overall-heading">Reading the local TautWeekly package...</h2><p id="overall-copy">No operational action is performed by this dashboard.</p></div>
+          <div class="hero-art" aria-hidden="true"><div class="hero-ring ring-one"></div><div class="hero-ring ring-two"></div><img class="hero-logo" src="tautweekly-logo.png" alt=""></div>
+        </section>
+        <section class="operation-strip first-time-setup" id="first-time-setup" aria-labelledby="first-time-setup-heading" hidden>
+          <div class="operation-strip-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-rocket"></use></svg></div>
+          <div><span class="eyebrow">First time setup</span><h2 id="first-time-setup-heading">Connect TautWeekly to your services</h2><p>Add Tautulli, Plex, and email settings, then let the Manager validate the non-sending setup checks.</p></div>
+          <span class="state-chip pending" id="first-time-setup-chip">Not run</span>
+          <button class="button button-secondary first-time-setup-button" type="button" data-open-view="configuration">Setup</button>
+        </section>
+        <section class="operation-strip" aria-labelledby="dashboard-operation-heading">
+          <div class="operation-strip-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-play-circle"></use></svg></div>
+          <div><span class="eyebrow">Preview operation</span><h2 id="dashboard-operation-heading">No preview operation recorded</h2><p id="dashboard-operation-copy">Generate local newsletter previews from the Preview center. Email is never sent by that action.</p></div>
+          <span class="state-chip neutral" id="dashboard-operation-chip">Idle</span>
+          <button class="button button-secondary" type="button" data-open-view="previews">Open previews</button>
+        </section>
+        <div class="section-heading"><div><span class="eyebrow">Health layers</span><h2>System status</h2></div><p>Runtime health is kept separate from configuration and external integrations.</p></div>
+        <div class="health-grid">
+          <article class="health-card"><div class="card-topline"><span class="card-icon gold" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-monitor-heart"></use></svg></span><span class="state-chip pending" id="runtime-chip">Checking</span></div><h3>Manager runtime</h3><p id="runtime-copy">Waiting for the local service snapshot.</p><dl class="metric-list"><div><dt>Manager</dt><dd id="manager-state">-</dd></div><div><dt>Preview index</dt><dd id="preview-state">-</dd></div><div><dt>Scheduler</dt><dd id="scheduler-state">-</dd></div></dl></article>
+          <article class="health-card" id="configuration-status-card"><div class="card-topline"><span class="card-icon blue" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-add-task"></use></svg></span><span class="state-chip neutral" id="configuration-status-chip">Not run</span></div><h3>Config status</h3><p id="configuration-status-copy">Safe setup checks have not been recorded.</p><dl class="metric-list"><div><dt>Libraries and users</dt><dd id="configuration-status-choices">Not run</dd></div><div><dt>Tautulli and Plex</dt><dd id="configuration-status-lan">Not run</dd></div><div><dt>SMTP preflight</dt><dd id="configuration-status-smtp">Not run</dd></div><div><dt>Local previews</dt><dd id="configuration-status-previews">Not run</dd></div></dl></article>
+          <article class="health-card"><div class="card-topline"><span class="card-icon blue" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-calendar-clock"></use></svg></span><span class="state-chip pending" id="schedule-chip">Checking</span></div><h3>Schedule</h3><p id="schedule-copy">Inspecting the configured Windows task.</p><dl class="metric-list"><div><dt>Installed</dt><dd id="schedule-installed">-</dd></div><div><dt>Enabled</dt><dd id="schedule-enabled">-</dd></div><div><dt>Ownership</dt><dd id="schedule-ownership">-</dd></div><div><dt>State</dt><dd id="schedule-state">-</dd></div></dl></article>
+          <article class="health-card"><div class="card-topline"><span class="card-icon violet" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-email-read"></use></svg></span><span class="state-chip" id="delivery-chip">No history</span></div><h3>Delivery</h3><p id="delivery-copy">Task execution is not presented as inbox delivery.</p><dl class="metric-list"><div><dt>Last application attempt</dt><dd id="last-attempt">Not recorded</dd></div><div><dt>Application result</dt><dd id="last-result">Not recorded</dd></div><div><dt>Accepted by SMTP</dt><dd id="last-accepted-count">Not recorded</dd></div><div><dt>Last accepted run</dt><dd id="last-success">Not recorded</dd></div></dl></article>
+          <article class="health-card"><div class="card-topline"><span class="card-icon green" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-hub"></use></svg></span><span class="state-chip neutral" id="integration-chip">Not run</span></div><h3>Integrations</h3><p id="integration-copy">Safe checks run after a successful save and remain available for manual retesting.</p><dl class="metric-list"><div><dt>Tautulli</dt><dd id="tautulli-state">Not checked</dd></div><div><dt>Direct Plex</dt><dd id="plex-state">Not checked</dd></div><div><dt>SMTP</dt><dd id="smtp-state">Not checked</dd></div></dl></article>
+        </div>
+        <div class="section-heading timeline-heading"><div><span class="eyebrow">Delivery timeline</span><h2>Last and upcoming</h2></div></div>
+        <div class="timeline-grid">
+          <article class="timeline-card featured"><span class="timeline-index">01</span><div><small>Upcoming task run</small><strong id="next-run">Not scheduled</strong><p id="next-run-utc">Task Scheduler has not reported an upcoming run.</p></div></article>
+          <article class="timeline-card"><span class="timeline-index">02</span><div><small>Latest application attempt</small><strong id="timeline-last-attempt">Not recorded</strong><p id="timeline-last-copy">No sanitized renderer result has been recorded.</p></div></article>
+          <article class="timeline-card"><span class="timeline-index">03</span><div><small>Generated previews</small><strong id="preview-count">None found</strong><p>Only authenticated, indexed HTML files are available.</p></div></article>
+        </div>
+        <aside class="foundation-callout"><div class="callout-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-security"></use></svg></div><div><span class="eyebrow">Guarded administration</span><h2>Setup, testing, and scheduling stay explicit.</h2><p>A successful configuration save runs clearly labeled, non-sending connection checks and local discovery. Email delivery remains limited to an explicit TestEmail action, and schedule changes use a fixed UAC helper that verifies task ownership.</p></div><button class="button button-secondary" type="button" data-open-view="schedule">Manage schedule</button></aside>
+      </section>
+
+      <section class="view" id="view-configuration" data-panel="configuration" hidden>
+        <div class="page-heading"><div><span class="eyebrow">Guided setup preview</span><h1>Configure without touching JSON.</h1><p>Explore the package-neutral Manager workflow with fictional values, synthetic choices, simulated verification, and local demo previews.</p></div><span class="state-chip pending" id="config-chip">Checking</span></div>
+        <div class="privacy-banner"><span aria-hidden="true">&#9671;</span><p id="config-secret-policy"><strong>Secrets stay hidden by default:</strong> saving preserves stored credentials unless you replace or clear them. Revealing returns only the selected field and clears it from the page after 30 seconds. Existing configurations receive a private timestamped backup.</p></div>
+        <div class="direct-plex-notice" id="direct-plex-notice" hidden><span aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-hub"></use></svg></span><div><strong id="direct-plex-notice-heading">Complete direct Plex setup</strong><p id="direct-plex-notice-copy"></p></div><button class="button button-secondary" id="direct-plex-review-button" type="button">Review connections</button></div>
+        <section class="setup-workflow" id="setup-workflow" aria-labelledby="setup-workflow-heading" hidden>
+          <div class="setup-workflow-heading"><div><span class="eyebrow">Save verification</span><h2 id="setup-workflow-heading">Safe setup checks</h2></div><span class="state-chip neutral" id="setup-workflow-chip">Waiting</span></div>
+          <p id="setup-workflow-summary" role="status" aria-live="polite">Waiting for a validated configuration save.</p>
+          <div class="setup-workflow-steps">
+            <article id="setup-choices-step"><span class="setup-step-index" aria-hidden="true">01</span><div><strong>Libraries and users</strong><small id="setup-choices-summary">Waiting for the saved configuration.</small></div><span class="state-chip neutral" id="setup-choices-chip">Waiting</span></article>
+            <article id="setup-lan-step"><span class="setup-step-index" aria-hidden="true">02</span><div><strong>Tautulli and Plex</strong><small id="setup-lan-summary">Waiting for the saved configuration.</small></div><span class="state-chip neutral" id="setup-lan-chip">Waiting</span></article>
+            <article id="setup-smtp-step"><span class="setup-step-index" aria-hidden="true">03</span><div><strong>SMTP preflight</strong><small id="setup-smtp-summary">Waiting for the saved configuration.</small></div><span class="state-chip neutral" id="setup-smtp-chip">Waiting</span></article>
+            <article id="setup-previews-step"><span class="setup-step-index" aria-hidden="true">04</span><div><strong>Local previews</strong><small id="setup-previews-summary">Waiting for the saved configuration.</small></div><span class="state-chip neutral" id="setup-previews-chip">Waiting</span></article>
+          </div>
+          <div class="setup-workflow-boundary"><span aria-hidden="true">&#9671;</span><p>This workflow never authenticates to SMTP, sends email, changes welcome state, or installs or modifies a schedule. Every check remains available for manual retesting.</p></div>
+        </section>
+        <section class="discovery-panel" aria-labelledby="discovery-heading">
+          <div><span class="eyebrow">Guided Tautulli choices</span><h2 id="discovery-heading">Included libraries and delivery exclusions</h2><p>A successful save loads these choices automatically. Sanitized library metadata, user IDs, display names, and explicit roles are retained locally for the saved configuration; email addresses and credentials are never stored in this cache.</p></div>
+          <label class="verification-confirm"><input id="discovery-confirm" type="checkbox"><span><strong>Repeat this Tautulli lookup</strong><small>Refresh active movie/TV libraries and user display names from the saved configuration.</small></span></label>
+          <button class="button button-secondary" id="discovery-run-button" type="button" disabled>Refresh Tautulli choices</button>
+          <p class="verification-message" id="discovery-message" role="status" aria-live="polite">Save a complete configuration before loading choices.</p>
+          <div class="discovery-results" id="discovery-results" hidden>
+            <section><div class="panel-heading"><h3>Included libraries</h3><small id="discovery-library-count"></small></div><p>Select at least one active movie or TV library. Saving the form applies these choices without exposing raw IDs.</p><div class="choice-list" id="discovery-libraries" role="group" aria-label="Included library choices" tabindex="0"></div></section>
+            <section><div class="panel-heading"><h3>Delivery exclusions</h3><small id="discovery-user-count"></small></div><p>Checked users are excluded from production delivery but remain available for previews and TestEmail runs.</p><div class="choice-list" id="discovery-users" role="group" aria-label="User delivery exclusion choices" tabindex="0"></div></section>
+          </div>
+        </section>
+        <div class="config-alert" id="config-errors" role="alert" hidden><strong>Configuration needs attention</strong><ul id="config-error-list"></ul></div>
+        <div class="config-blocked" id="config-blocked" hidden><h2>Automatic editing is unavailable</h2><p>The current config.json is invalid or unreadable. The Manager will not overwrite it or guess at its contents.</p></div>
+        <form class="config-form" id="config-form" novalidate>
+          <div class="config-sections" id="config-sections"></div>
+          <div class="config-actions"><div><strong>Safe local save and verification</strong><small id="config-save-copy">Values are validated server-side before config.json is replaced. Six local previews then run automatically without sending email.</small></div><div class="config-action-buttons"><button class="button button-secondary" id="config-reset-button" type="button">Discard edits</button><button class="button button-primary" id="config-save-button" type="submit">Validate, save, and verify</button></div></div>
+        </form>
+        <div class="section-heading"><div><span class="eyebrow">Recovery</span><h2>Configuration backups</h2></div><p>Backups expose metadata only. Restoring validates the selected file and first saves the current configuration.</p></div>
+        <section class="backup-panel" aria-labelledby="backup-heading"><div class="panel-heading"><h2 id="backup-heading">Private local backups</h2><small id="backup-count">Checking</small></div><div class="backup-list" id="backup-list"></div></section>
+      </section>
+
+      <section class="view" id="view-schedule" data-panel="schedule" hidden>
+        <div class="page-heading"><div><span class="eyebrow">Delivery lifecycle preview</span><h1>Own the weekly send.</h1><p>Review the configured delivery window, verify scheduler ownership, and explore one explicit typed change at a time.</p></div><span class="state-chip neutral" id="schedule-view-chip">Checking</span></div>
+        <div class="schedule-boundary"><div class="callout-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-calendar-clock"></use></svg></div><div><span class="eyebrow">Typed scheduler boundary</span><h2>The browser never supplies a command.</h2><p>The Manager accepts only install/refresh, enable, disable, or remove. A real package applies its host-native approval and ownership checks; this preview only simulates the resulting state.</p></div></div>
+        <section class="schedule-overview" aria-labelledby="schedule-overview-heading">
+          <div class="panel-heading"><h2 id="schedule-overview-heading">Observed scheduler state</h2><small id="schedule-observed">Waiting for synthetic status</small></div>
+          <dl class="schedule-metrics">
+            <div><dt>Configured window</dt><dd id="schedule-configured-window">Not configured</dd></div>
+            <div><dt>Installed</dt><dd id="schedule-view-installed">No</dd></div>
+            <div><dt>Enabled</dt><dd id="schedule-view-enabled">No</dd></div>
+            <div><dt>Ownership</dt><dd id="schedule-view-ownership">Not installed</dd></div>
+            <div><dt>Task state</dt><dd id="schedule-view-state">Not installed</dd></div>
+            <div><dt>Upcoming run</dt><dd id="schedule-view-next-run">Not scheduled</dd></div>
+          </dl>
+          <p class="schedule-warning" id="schedule-warning" role="status" aria-live="polite"></p>
+        </section>
+        <div class="section-heading"><div><span class="eyebrow">Typed actions</span><h2>Schedule lifecycle</h2></div><p>Disabling or removing a schedule never cancels a newsletter process that is already running.</p></div>
+        <div class="schedule-actions" aria-label="Scheduler actions">
+          <article id="schedule-install-card"><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-add-task"></use></svg></span><h3><span class="schedule-state-label" id="schedule-install-heading">Install</span></h3><p id="schedule-install-copy">Create the verified SYSTEM task from the configured day and local time.</p><button class="button button-primary" type="button" data-schedule-action="install"><span class="schedule-state-label" id="schedule-install-button-label">Install</span></button></article>
+          <article><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-play"></use></svg></span><h3>Enable</h3><p>Allow an installed, verified task to begin future scheduled newsletter runs.</p><button class="button button-secondary" type="button" data-schedule-action="enable">Enable schedule</button></article>
+          <article><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-pause"></use></svg></span><h3>Disable</h3><p>Prevent future task starts while preserving configuration, history, output, and the task definition.</p><button class="button button-secondary" type="button" data-schedule-action="disable">Disable schedule</button></article>
+          <article class="schedule-remove"><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-delete"></use></svg></span><h3>Remove</h3><p>Delete only a task whose ownership matches this installation. Private TautWeekly files remain in place.</p><button class="button button-danger" type="button" data-schedule-action="remove">Remove schedule</button></article>
+        </div>
+        <section class="schedule-confirmation" id="schedule-confirmation" aria-labelledby="schedule-confirmation-heading" hidden>
+          <div><span class="eyebrow">Final review</span><h2 id="schedule-confirmation-heading">Confirm schedule change</h2><p id="schedule-confirmation-copy">Review this operation before requesting Windows administrator approval.</p></div>
+          <label class="verification-confirm"><input id="schedule-confirm" type="checkbox"><span><strong id="schedule-confirm-label">Confirm this schedule change</strong><small id="schedule-confirm-help">Windows will display a UAC approval prompt.</small></span></label>
+          <div class="schedule-confirm-actions"><button class="button button-secondary" id="schedule-confirm-cancel" type="button">Go back</button><button class="button button-primary" id="schedule-confirm-run" type="button" disabled>Request administrator approval</button></div>
+        </section>
+        <section class="current-operation schedule-current" aria-labelledby="schedule-current-heading">
+          <div><span class="eyebrow">Latest schedule operation</span><h2 id="schedule-current-heading">No schedule change recorded</h2><p id="schedule-current-copy">No UAC request has been started by this Manager.</p></div>
+          <div class="current-operation-meta"><span class="state-chip neutral" id="schedule-current-chip">Idle</span><small id="schedule-current-time">Not recorded</small></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-verification" data-panel="verification" hidden>
+        <div class="page-heading"><div><span class="eyebrow">Connection verification</span><h1>Verify the live connections.</h1><p>Successful saves run these safe compatibility checks automatically. Use this page to repeat the saved Tautulli, direct Plex, and SMTP tests; they are not background heartbeats.</p></div><span class="state-chip neutral" id="verification-chip">Not run</span></div>
+        <div class="verification-boundary"><div class="callout-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-network"></use></svg></div><div><span class="eyebrow">Network boundary</span><h2>Private and loopback destinations only</h2><p>The Manager disables proxies and redirects, applies short timeouts, and rejects public or link-local addresses. Tautulli receives its API key using its required API query format; Plex receives its token only in the <code>X-Plex-Token</code> header. Neither secret is returned to this browser or logged.</p></div></div>
+        <section class="verification-runner" aria-labelledby="verification-runner-heading">
+          <div><span class="eyebrow">On-demand operation</span><h2 id="verification-runner-heading">Test Tautulli and direct Plex</h2><p>No connection is attempted on page load or dashboard refresh. SMTP, newsletter generation, email delivery, and scheduling are outside this service check.</p></div>
+          <label class="verification-confirm"><input id="verification-confirm" type="checkbox"><span><strong>Allow this connection test</strong><small>Contact the Tautulli and, when configured, direct Plex addresses currently saved in config.json.</small></span></label>
+          <button class="button button-primary" id="verification-run-button" type="button" disabled>Run real connection test</button>
+          <p class="verification-message" id="verification-message" role="status" aria-live="polite">Save a complete configuration, then confirm the one-time test above.</p>
+        </section>
+        <div class="section-heading"><div><span class="eyebrow">Connection evidence</span><h2>Latest result for this configuration</h2></div><p id="verification-observed">No integration result is retained for this saved configuration.</p></div>
+        <div class="verification-results" id="verification-results"></div>
+        <div class="verification-boundary smtp-boundary"><div class="callout-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-email"></use></svg></div><div><span class="eyebrow">SMTP boundary</span><h2>Reachability and STARTTLS only</h2><p>SMTP may be a public provider, so this separate check permits routable private or public unicast endpoints while rejecting unsafe address classes. It stops before authentication and never sends sender, recipient, subject, newsletter, or message data.</p></div></div>
+        <section class="verification-runner smtp-runner" aria-labelledby="smtp-runner-heading">
+          <div><span class="eyebrow">Manual SMTP preflight</span><h2 id="smtp-runner-heading">Test the saved SMTP endpoint without sending</h2><p>The Manager checks DNS/TCP, the SMTP greeting, EHLO, and certificate-validated STARTTLS when enabled. Authentication and sender permission require the separate guarded TestEmail delivery.</p></div>
+          <label class="verification-confirm"><input id="smtp-verification-confirm" type="checkbox"><span><strong>Allow this one SMTP preflight</strong><small>Contact the SMTP host and port currently saved in config.json, but do not authenticate or submit a message.</small></span></label>
+          <button class="button button-primary" id="smtp-verification-run-button" type="button" disabled>Run SMTP preflight</button>
+          <p class="verification-message" id="smtp-verification-message" role="status" aria-live="polite">Save a complete configuration, then confirm the one-time preflight above.</p>
+        </section>
+        <div class="section-heading"><div><span class="eyebrow">SMTP evidence</span><h2>Latest preflight for this configuration</h2></div><p id="smtp-verification-observed">No SMTP preflight is retained for this saved configuration.</p></div>
+        <div class="verification-results smtp-verification-results" id="smtp-verification-results"></div>
+      </section>
+
+      <section class="view" id="view-previews" data-panel="previews" hidden>
+        <div class="page-heading"><div><span class="eyebrow">Newsletter previews</span><h1>Review before delivery.</h1><p>Generated HTML is served through an authenticated, sandboxed viewer.</p></div><span class="state-chip pending" id="preview-chip">Checking</span></div>
+        <section class="preview-runner" aria-labelledby="preview-runner-heading">
+          <div class="preview-runner-copy"><span class="eyebrow">Typed local operation</span><h2 id="preview-runner-heading">Generate all six newsletter states</h2><p>Uses the saved configuration and Tautulli user ID to create local HTML in the package <code>output</code> folder. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state.</p></div>
+          <div class="preview-runner-form">
+            <label for="preview-user-id"><strong>Tautulli user ID</strong><small>Numeric ID for this run only. It is cleared after start and never written to operation history.</small></label>
+            <div class="user-combobox" data-user-combobox><input id="preview-user-id" type="text" inputmode="numeric" pattern="[0-9]{1,20}" maxlength="20" autocomplete="off" spellcheck="false" placeholder="e.g. 42" aria-describedby="preview-operation-message" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="preview-user-options"><button class="user-combobox-toggle" type="button" aria-label="Choose a Tautulli user" aria-controls="preview-user-options" aria-expanded="false"><span aria-hidden="true"></span></button><div class="user-combobox-options" id="preview-user-options" role="listbox" aria-label="Tautulli users for preview" hidden></div></div>
+            <label class="verification-confirm preview-confirm"><input id="preview-confirm" type="checkbox"><span><strong>Generate local previews only</strong><small>I understand this contacts the saved Plex/Tautulli services and creates six preview-state variants, but sends no email.</small></span></label>
+            <button class="button button-primary" id="preview-run-button" type="button" disabled>Generate all previews</button>
+            <p class="verification-message" id="preview-operation-message" role="status" aria-live="polite">Complete and save configuration, then enter a numeric Tautulli user ID.</p>
+          </div>
+        </section>
+        <section class="preview-runner test-send-runner" aria-labelledby="test-send-runner-heading">
+          <div class="preview-runner-copy"><span class="eyebrow">Guarded test delivery</span><h2 id="test-send-runner-heading">Send all six states to TestEmail</h2><p>Uses the saved configuration and selected Tautulli user to send six real messages exclusively to the configured <code>TestEmail</code>. The address is not copied into operation history. This does not send to Plex users or change welcome state.</p></div>
+          <div class="preview-runner-form">
+            <label for="test-send-user-id"><strong>Tautulli user ID</strong><small>Numeric ID for content selection in this run only. It is cleared after start and never written to history.</small></label>
+            <div class="user-combobox" data-user-combobox><input id="test-send-user-id" type="text" inputmode="numeric" pattern="[0-9]{1,20}" maxlength="20" autocomplete="off" spellcheck="false" placeholder="e.g. 42" aria-describedby="test-send-operation-message" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="test-send-user-options"><button class="user-combobox-toggle" type="button" aria-label="Choose a Tautulli user" aria-controls="test-send-user-options" aria-expanded="false"><span aria-hidden="true"></span></button><div class="user-combobox-options" id="test-send-user-options" role="listbox" aria-label="Tautulli users for test send" hidden></div></div>
+            <label class="verification-confirm preview-confirm test-send-confirm"><input id="test-send-confirm" type="checkbox"><span><strong>Send six real test messages</strong><small>I understand this contacts the saved Plex/Tautulli and SMTP services. All six messages go only to the configured TestEmail.</small></span></label>
+            <button class="button button-primary" id="test-send-run-button" type="button" disabled>Send six test messages</button>
+            <p class="verification-message" id="test-send-operation-message" role="status" aria-live="polite">Complete and save configuration, then enter a numeric Tautulli user ID.</p>
+          </div>
+        </section>
+        <section class="preview-runner manual-send-runner" aria-labelledby="manual-send-runner-heading">
+          <div class="preview-runner-copy"><span class="eyebrow">Guarded production delivery</span><h2 id="manual-send-runner-heading">Send this week's newsletter now</h2><p id="manual-send-runner-copy">Choose one Manual Welcome newsletter for a selected user or the normal production send for every eligible recipient.</p></div>
+          <div class="preview-runner-form">
+            <label class="manual-send-mode-field" for="manual-send-mode"><strong>Newsletter to send</strong><small>The confirmation and recipient scope update with this choice.</small><span class="styled-select-shell"><select id="manual-send-mode"><option value="send-all" selected>All eligible recipients</option><option value="send-welcome">Manual Welcome · selected user</option></select><span class="styled-select-chevron" aria-hidden="true"><span></span></span></span></label>
+            <div class="manual-send-user-field" id="manual-send-user-field" hidden><label for="manual-send-user-id"><strong>Tautulli user ID</strong><small>The selected recipient is used for this one welcome message and is never written to operation history.</small></label><div class="user-combobox" data-user-combobox><input id="manual-send-user-id" type="text" inputmode="numeric" pattern="[0-9]{1,20}" maxlength="20" autocomplete="off" spellcheck="false" placeholder="e.g. 42" aria-describedby="manual-send-operation-message" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="manual-send-user-options"><button class="user-combobox-toggle" type="button" aria-label="Choose a Tautulli user" aria-controls="manual-send-user-options" aria-expanded="false"><span aria-hidden="true"></span></button><div class="user-combobox-options" id="manual-send-user-options" role="listbox" aria-label="Tautulli user for Manual Welcome" hidden></div></div></div>
+            <label class="verification-confirm preview-confirm manual-send-confirm"><input id="manual-send-confirm" type="checkbox"><span><strong id="manual-send-confirm-heading">Send the production newsletter now</strong><small id="manual-send-confirm-copy">I understand this contacts the saved Plex/Tautulli and SMTP services and may send real email to all eligible recipients. The operation cannot be cancelled after it starts.</small></span></label>
+            <button class="button button-danger" id="manual-send-run-button" type="button" disabled>Send newsletter now</button>
+            <p class="verification-message" id="manual-send-operation-message" role="status" aria-live="polite">Complete and save configuration, then explicitly confirm the production delivery.</p>
+          </div>
+        </section>
+        <section class="current-operation manual-send-status" id="manual-send-status" aria-labelledby="manual-send-status-heading" hidden>
+          <div><span class="eyebrow">Current or latest manual send</span><h2 id="manual-send-status-heading">No manual delivery recorded</h2><p id="manual-send-status-copy">Aggregate delivery evidence will appear after a manual send starts.</p></div>
+          <div class="current-operation-meta"><span class="state-chip neutral" id="manual-send-status-chip">Idle</span><small id="manual-send-status-time">Not recorded</small></div>
+        </section>
+        <section class="current-operation" id="current-operation" aria-labelledby="current-operation-heading">
+          <div><span class="eyebrow">Current or latest run</span><h2 id="current-operation-heading">No preview operation recorded</h2><p id="current-operation-copy">The Manager keeps sanitized operation state locally.</p></div>
+          <div class="current-operation-meta"><span class="state-chip neutral" id="current-operation-chip">Idle</span><small id="current-operation-time">Not recorded</small><button class="button button-danger" id="preview-cancel-button" type="button" hidden>Cancel preview generation</button></div>
+        </section>
+        <div class="preview-layout"><div class="preview-list-panel"><div class="panel-heading"><h2>Available previews</h2><small>Scenario order</small></div><div class="preview-list" id="preview-list"></div></div><div class="preview-stage"><div class="preview-placeholder" id="preview-placeholder"><span aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-preview"></use></svg></span><h2>Loading the latest preview</h2><p>The index from the latest successful run opens automatically.</p></div><iframe id="preview-frame" title="Selected newsletter preview" sandbox="allow-same-origin" hidden></iframe></div></div>
+        <div class="section-heading"><div><span class="eyebrow">Private local record</span><h2>Recent Manager operations</h2></div><p>History contains only operation type, timestamps, aggregate counts, package version, exit status, generated preview identifiers, and a sanitized support code on failure.</p></div>
+        <section class="operation-history" id="operation-history" aria-label="Recent Manager operation history"></section>
+      </section>
+
+      <section class="view" id="view-about" data-panel="about" hidden>
+        <div class="page-heading"><div><span class="eyebrow">Manager settings preview</span><h1>Local access, your way.</h1><p>Explore the optional local access lock. This demonstration changes only temporary in-memory state and never stores the entered value.</p></div></div>
+        <section class="access-settings-panel" id="access-settings-panel" aria-labelledby="access-settings-heading">
+          <div class="access-settings-heading"><div><span class="eyebrow">Optional Manager lock</span><h2 id="access-settings-heading">Browser access</h2><p id="access-settings-copy">Checking the local access policy.</p></div><span class="state-chip pending" id="access-settings-chip">Checking</span></div>
+          <form class="access-password-form" id="access-password-form">
+            <label for="access-password"><strong id="access-password-label">Create password</strong><input id="access-password" name="password" type="password" autocomplete="new-password" minlength="8" required><small>At least 8 characters. Stored locally only as a salted hash.</small></label>
+            <label for="access-password-confirm"><strong>Confirm password</strong><input id="access-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="8" required></label>
+            <div class="access-settings-actions"><button class="button button-primary" id="access-password-submit" type="submit">Enable password lock</button><button class="button button-danger" id="access-disable-button" type="button" hidden>Disable password lock</button></div>
+          </form>
+          <p class="verification-message" id="access-settings-message" role="status" aria-live="polite"></p>
+          <div class="access-recovery-note"><span aria-hidden="true">&#9671;</span><p><strong>Local recovery remains available.</strong> If the password is forgotten, run <code>18-RESET-MANAGER-ACCESS.bat</code> from the TautWeekly folder. Installed copies also include <code>Reset-TautWeekly-Access.cmd</code>. Recovery disables only the Manager lock and leaves configuration, credentials, schedules, history, and previews untouched.</p></div>
+        </section>
+        <div class="about-grid">
+          <article><span class="about-number">01</span><h2>Typed operations</h2><p>Preview and schedule actions are allowlisted. Browser input cannot choose an executable, script path, or command string.</p></article>
+          <article><span class="about-number">02</span><h2>Loopback-only access</h2><p>The Manager accepts browser connections only from this computer and rejects unrecognized hostnames.</p></article>
+          <article><span class="about-number">03</span><h2>Guarded secret access</h2><p>Secrets stay hidden during normal reads. Revealing returns only the selected credential, uses password re-authentication when the optional lock is enabled, and automatically clears from the page.</p></article>
+          <article><span class="about-number">04</span><h2>Delivery truthfulness</h2><p>Task execution, SMTP acceptance, and inbox delivery remain distinct states in both API copy and interface labels.</p></article>
+        </div>
+        <dl class="build-details"><div><dt>Manager build</dt><dd id="about-version">Checking...</dd></div><div><dt>Package baseline</dt><dd id="about-package">Checking...</dd></div><div><dt>Platform</dt><dd id="about-platform">Checking...</dd></div><div><dt>Edition</dt><dd>Package-neutral GUI Preview</dd></div></dl>
+        <div class="section-heading"><div><span class="eyebrow">Private local record</span><h2>Configuration diagnostics</h2></div><p>Useful setup evidence is retained without storing configuration values or raw service responses.</p></div>
+        <section class="diagnostics-panel" aria-labelledby="diagnostics-heading">
+          <div class="panel-heading"><h2 id="diagnostics-heading">Setup and verification events</h2><small id="diagnostics-count">Checking</small></div>
+          <p class="diagnostics-policy"><strong>Sanitized and bounded.</strong> Each event contains only a timestamp, category, outcome, fixed summary, and support code. URLs, IP addresses, email addresses, user identities, media data, credentials, and raw command output are excluded. <span id="diagnostics-retention">Up to 200 events for 30 days.</span></p>
+          <div class="diagnostics-list" id="diagnostics-list"></div>
+        </section>
+      </section>
+    </main>
+    <dialog class="secret-reveal-dialog" id="secret-reveal-dialog" aria-labelledby="secret-reveal-title" aria-describedby="secret-reveal-copy">
+      <form class="secret-reveal-form" id="secret-reveal-form" method="dialog">
+        <span class="eyebrow" id="secret-reveal-eyebrow">Administrator confirmation</span>
+        <h2 id="secret-reveal-title">Reveal saved secret</h2>
+        <p id="secret-reveal-copy">Re-enter your Manager administrator password. Only this value will be returned, and it will clear automatically after 30 seconds.</p>
+        <label id="secret-reveal-password-label" for="secret-reveal-password">Administrator password</label>
+        <input id="secret-reveal-password" name="password" type="password" autocomplete="current-password" required>
+        <p class="secret-reveal-message" id="secret-reveal-message" role="status" aria-live="polite"></p>
+        <div class="secret-reveal-actions"><button class="button button-secondary" id="secret-reveal-cancel" type="button">Cancel</button><button class="button button-primary" id="secret-reveal-submit" type="submit">Reveal for 30 seconds</button></div>
+      </form>
+    </dialog>
+    <div class="global-status" id="global-status" role="status" aria-live="polite"></div>
+  </div>
+</body>
+</html>
