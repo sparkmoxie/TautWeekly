@@ -13,6 +13,7 @@ $pages = @(
     'mac/index.html',
     'linux/index.html',
     'freebsd/index.html',
+    'gui-preview/index.html',
     'examples/preview-all-00-INDEX.html'
 )
 $redirectPages = @('nas-docker/quickstart.html')
@@ -24,6 +25,7 @@ $renderedUrls = @{
     'mac/index.html'              = 'https://sparkmoxie.github.io/TautWeekly/mac/'
     'linux/index.html'            = 'https://sparkmoxie.github.io/TautWeekly/linux/'
     'freebsd/index.html'          = 'https://sparkmoxie.github.io/TautWeekly/freebsd/'
+    'gui-preview/index.html'      = 'https://sparkmoxie.github.io/TautWeekly/gui-preview/'
     'examples/preview-all-00-INDEX.html' = 'https://sparkmoxie.github.io/TautWeekly/examples/preview-all-00-INDEX.html'
 }
 $expectedTitles = @{
@@ -33,6 +35,7 @@ $expectedTitles = @{
     'mac/index.html'         = 'macOS Quickstart | TautWeekly for Plex'
     'linux/index.html'       = 'Native Linux Quickstart | TautWeekly for Plex'
     'freebsd/index.html'     = 'FreeBSD Podman Quickstart | TautWeekly for Plex'
+    'gui-preview/index.html' = 'TautWeekly Manager GUI Preview'
 }
 
 foreach ($relative in $pages) {
@@ -43,6 +46,12 @@ foreach ($relative in $pages) {
         $combined += [IO.File]::ReadAllText((Join-Path $docs 'assets/styles.css'))
         $combined += [IO.File]::ReadAllText((Join-Path $docs 'assets/site.js'))
     }
+    if ($relative -eq 'gui-preview/index.html') {
+        $combined += [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/app.css'))
+        $combined += [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/demo.css'))
+        $combined += [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/mock-api.js'))
+        $combined += [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/app.js'))
+    }
 
     $requiredPatterns = @(
         '(?i)<!doctype\s+html',
@@ -50,7 +59,7 @@ foreach ($relative in $pages) {
         '(?i)<meta[^>]+name=["'']viewport["'']',
         '(?i)@media'
     )
-    if ($relative -ne 'examples/preview-all-00-INDEX.html') {
+    if ($relative -notin @('examples/preview-all-00-INDEX.html', 'gui-preview/index.html')) {
         $requiredPatterns += @(
             '(?i)search',
             '(?i)progress',
@@ -94,6 +103,64 @@ foreach ($relative in $pages) {
     if ($combined -match '(?i)terminal') { $terminalPages++ }
     Write-Host "[PASS] Documentation features: $relative"
 }
+
+$guiPreview = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/index.html'))
+$guiPreviewApp = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/app.js'))
+$guiPreviewAPI = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/mock-api.js'))
+$guiPreviewManifest = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/manifest.webmanifest'))
+$guiPreviewCombined = $guiPreview + $guiPreviewApp + $guiPreviewAPI + $guiPreviewManifest
+
+foreach ($pattern in @(
+    'connect-src ''none''',
+    'Interactive GUI Preview',
+    'Fictional data',
+    'No services, email, files, credentials, or schedulers are contacted',
+    'sandbox="allow-same-origin"',
+    'window\.fetch\s*=',
+    'window\.TautWeeklyPreviewDemo',
+    'srcdoc',
+    'synthetic-demo',
+    'demo\.invalid',
+    'start_url"\s*:\s*"\./"',
+    'scope"\s*:\s*"\./"'
+)) {
+    if ($guiPreviewCombined -notmatch $pattern) {
+        throw "GUI Preview boundary or behavior is missing: $pattern"
+    }
+}
+
+foreach ($forbiddenPattern in @(
+    '(?i)\blocalStorage\b',
+    '(?i)\bsessionStorage\b',
+    '(?i)\bindexedDB\b',
+    '(?i)\bXMLHttpRequest\b',
+    '(?i)\bWebSocket\b',
+    '(?i)\bEventSource\b',
+    '(?i)sendBeacon',
+    '(?i)\bWindows\b',
+    '(?i)\bUAC\b',
+    '(?i)\bSYSTEM principal\b'
+)) {
+    if ($guiPreviewCombined -match $forbiddenPattern) {
+        throw "GUI Preview contains a forbidden persistence, network, or platform-specific pattern: $forbiddenPattern"
+    }
+}
+
+$previewResourceAttributes = [regex]::Matches($guiPreview, '(?i)\b(?:src|href)=["''](?<target>[^"'']+)["'']')
+foreach ($attribute in $previewResourceAttributes) {
+    $target = $attribute.Groups['target'].Value
+    if ($target.StartsWith('#') -or $target -eq '../') { continue }
+    if ($target -match '^https://sparkmoxie\.github\.io/TautWeekly/gui-preview/$') { continue }
+    if ($target -match '^(?:https?:)?//' -or $target.StartsWith('/')) {
+        throw "GUI Preview asset or navigation target must be relative and local: $target"
+    }
+}
+
+if ($guiPreviewAPI -match '(?i)https?://(?![^"'']*\.invalid(?:[:/]|["'']))') {
+    throw 'GUI Preview mock API contains a non-fictional HTTP endpoint.'
+}
+
+Write-Host '[PASS] GUI Preview is static, relative, package-neutral, fictional, non-persistent, and network-blocked.'
 
 $previewGallery = [IO.File]::ReadAllText((Join-Path $docs 'examples/preview-all-00-INDEX.html'))
 foreach ($previewCopy in @(

@@ -5,6 +5,17 @@ preserves the supplied Plex-inspired dark Quickstart experience, including
 search, sticky navigation, scroll progress, responsive layouts, copy controls,
 and terminal demonstrations.
 
+## GUI Preview
+
+- [Open the interactive GUI Preview](https://sparkmoxie.github.io/TautWeekly/gui-preview/)
+
+The static demonstration mirrors the Manager interface with a synthetic
+in-memory API and fictional users, libraries, endpoints, email addresses,
+schedules, newsletters, diagnostics, and operation results. It makes no
+outbound application or host-service requests, writes no files, stores no
+credentials or entered values, and resets every temporary change when the page
+reloads.
+
 ## Email States Preview
 
 - [Open the rendered Email States Preview](https://sparkmoxie.github.io/TautWeekly/examples/preview-all-00-INDEX.html)

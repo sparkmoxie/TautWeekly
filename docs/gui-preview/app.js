@@ -200,7 +200,7 @@ async function enterApplication(preferredView = "") {
 }
 
 async function loadAll() {
-  setGlobalStatus("Refreshing local status…");
+  setGlobalStatus("Refreshing synthetic status…");
   try {
     const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, authAccess, about, diagnostics] = await Promise.all([
       request("/api/v1/status"),
@@ -245,7 +245,7 @@ async function loadAll() {
     renderAbout();
     manageOperationPolling();
     manageSchedulePolling();
-    setGlobalStatus("Local status refreshed.", true);
+    setGlobalStatus("Synthetic status refreshed.", true);
   } catch (error) {
     if (error.status === 401) {
       showAuthentication();
@@ -275,13 +275,13 @@ function setupWorkflowPresentation(workflow = state.setupWorkflow) {
   const steps = setupWorkflowSteps.map((name) => workflow.steps?.[name]).filter(Boolean);
   const states = steps.map((step) => step.state);
   const active = state.setupWorkflowRunning || states.includes("running");
-  if (active) return { label: "Running", tone: "pending", summary: "Safe setup checks are running and each result is retained as it completes." };
-  if (states.includes("failed")) return { label: "Needs review", tone: "bad", summary: "One or more saved setup checks need review before live delivery." };
+  if (active) return { label: "Running", tone: "pending", summary: "Synthetic setup checks are running in memory." };
+  if (states.includes("failed")) return { label: "Needs review", tone: "bad", summary: "One or more synthetic setup checks need review." };
   if (states.every((stepState) => stepState === "not-run")) return { label: "Not run", tone: "neutral", summary: "Validate and save to run the four safe setup checks." };
   if (states.includes("waiting")) return { label: "Pending", tone: "pending", summary: "One or more setup checks are waiting to run for this configuration." };
-  if (states.some((stepState) => ["warning", "skipped"].includes(stepState))) return { label: "Completed with notes", tone: "neutral", summary: "The saved configuration was checked; review the noted result before live delivery." };
-  if (states.length === setupWorkflowSteps.length && states.every((stepState) => stepState === "passed")) return { label: "Passed", tone: "good", summary: "All four safe setup checks passed for the saved configuration." };
-  return { label: "Incomplete", tone: "neutral", summary: "Some setup checks have not completed for the saved configuration." };
+  if (states.some((stepState) => ["warning", "skipped"].includes(stepState))) return { label: "Completed with notes", tone: "neutral", summary: "The fictional configuration was checked; review the synthetic note." };
+  if (states.length === setupWorkflowSteps.length && states.every((stepState) => stepState === "passed")) return { label: "Passed", tone: "good", summary: "All four synthetic setup checks passed in memory." };
+  return { label: "Incomplete", tone: "neutral", summary: "Some synthetic setup checks have not completed." };
 }
 
 function renderDashboardConfigStatus() {
@@ -317,8 +317,8 @@ function renderIntegrationStatus() {
   const overallLabel = verificationActive ? "Running" : overall === "not-run" ? "Not run" : titleCase(overall);
   setChip("integration-chip", overallLabel, overallTone);
   setText("integration-copy", outcomes.length
-    ? "Latest checks from validation or a targeted retest are retained for this saved configuration."
-    : "Safe real checks run after a successful save or when you start a manual retest.");
+    ? "Latest passing synthetic checks are retained in memory for this tab."
+    : "Passing synthetic checks run after a demo save or manual simulation.");
   return { overallLabel, overallTone };
 }
 
@@ -342,7 +342,7 @@ function renderStatus() {
   setText("preview-state", titleCase(snapshot.runtime.preview));
   setText("scheduler-state", titleCase(snapshot.runtime.scheduler));
   setChip("runtime-chip", snapshot.runtime.manager === "healthy" ? "Healthy" : "Degraded", snapshot.runtime.manager === "healthy" ? "good" : "bad");
-  setText("runtime-copy", `${titleCase(snapshot.readiness.configuration)} configuration · ${titleCase(snapshot.readiness.privateData)} private state.`);
+  setText("runtime-copy", `${titleCase(snapshot.readiness.configuration)} fictional configuration · ${titleCase(snapshot.readiness.privateData)} temporary state.`);
   setText("schedule-installed", yesNo(snapshot.schedule.installed));
   setText("schedule-enabled", yesNo(snapshot.schedule.enabled));
   setText("schedule-ownership", titleCase(snapshot.schedule.ownership));
@@ -359,19 +359,19 @@ function renderStatus() {
   const rendererEvidence = snapshot.delivery.evidence === "renderer-result";
   setText("last-accepted-count", rendererEvidence ? String(snapshot.delivery.smtpAcceptedCount || 0) : "Not recorded");
   setText("delivery-copy", rendererEvidence
-    ? "Application evidence records SMTP acceptance, not inbox delivery."
-    : "Task execution is not presented as SMTP acceptance or inbox delivery.");
+    ? "Fictional evidence models SMTP acceptance; no message or inbox exists."
+    : "Simulated task state is not presented as real SMTP acceptance or inbox delivery.");
   setText("timeline-last-copy", rendererEvidence
-    ? `${snapshot.delivery.smtpAcceptedCount || 0} accepted by SMTP · ${snapshot.delivery.skippedCount || 0} skipped · ${snapshot.delivery.failedCount || 0} failed.`
-    : "No sanitized renderer result has been recorded.");
-  const deliveryTone = snapshot.delivery.result === "smtp-accepted" ? "good" : snapshot.delivery.result === "failed" ? "bad" : "neutral";
-  setChip("delivery-chip", snapshot.delivery.result === "not-recorded" ? "No history" : titleCase(snapshot.delivery.result), deliveryTone);
+    ? `${snapshot.delivery.smtpAcceptedCount || 0} fictional SMTP accepts · ${snapshot.delivery.skippedCount || 0} skipped · ${snapshot.delivery.failedCount || 0} failed.`
+    : "No fictional renderer result has been recorded.");
+  const deliveryTone = ["smtp-accepted", "simulated-accepted"].includes(snapshot.delivery.result) ? "good" : snapshot.delivery.result === "failed" ? "bad" : "neutral";
+  setChip("delivery-chip", snapshot.delivery.result === "not-recorded" ? "No history" : snapshot.delivery.result === "simulated-accepted" ? "Simulated" : titleCase(snapshot.delivery.result), deliveryTone);
   renderIntegrationStatus();
   renderDashboardConfigStatus();
   setText("next-run", formatDate(snapshot.schedule.nextRunLocal));
-  setText("next-run-utc", snapshot.schedule.nextRunUtc ? `UTC: ${formatDate(snapshot.schedule.nextRunUtc)}` : "Task Scheduler has not reported an upcoming run.");
+  setText("next-run-utc", snapshot.schedule.nextRunUtc ? `Fictional UTC: ${formatDate(snapshot.schedule.nextRunUtc)}` : "The synthetic scheduler has no upcoming run.");
   setText("preview-count", snapshot.previewSummary);
-  setText("sidebar-platform", `${titleCase(snapshot.platform)} · local only`);
+  setText("sidebar-platform", `${titleCase(snapshot.platform)} · static preview`);
   setText("about-platform", titleCase(snapshot.platform));
 }
 
@@ -439,18 +439,18 @@ function renderSchedule() {
   }
   else if (!ready) warning.textContent = "Complete and save configuration before requesting a schedule change.";
   else if (!owned) {
-    warning.textContent = "Safety stop: a same-named task exists but its action, working directory, or SYSTEM principal does not match this TautWeekly installation. The Manager will not modify it.";
+    warning.textContent = "Safety stop simulation: a fictional same-named schedule does not match this installation, so the mock Manager leaves it untouched.";
     warning.classList.add("bad");
   } else if (managerActive) warning.textContent = "Wait for the active preview or test-delivery operation before changing the schedule.";
-  else if (scheduleActive) warning.textContent = "A fixed schedule operation is waiting for UAC approval or completing. No second change can start.";
+  else if (scheduleActive) warning.textContent = "A synthetic schedule operation is completing in memory. No second change can start.";
   else warning.textContent = "This synthetic scheduler is interactive. No host task, email, or service is changed.";
 
   const installLabel = schedule.installed ? "Refresh" : "Install";
   setSwappingText("schedule-install-heading", installLabel);
   setSwappingText("schedule-install-button-label", installLabel);
   setText("schedule-install-copy", schedule.installed
-    ? "Safely refresh the verified host schedule after configuration changes."
-    : "Create the verified host schedule from the configured day and local time.");
+    ? "Simulate refreshing the verified host schedule after configuration changes."
+    : "Simulate creating the verified host schedule from the configured day and local time.");
 
   for (const button of document.querySelectorAll("[data-schedule-action]")) {
     const action = button.dataset.scheduleAction;
@@ -472,7 +472,7 @@ function renderSchedule() {
     setText("schedule-confirm-help", copy.help);
     const confirmed = byId("schedule-confirm").checked;
     byId("schedule-confirm-run").disabled = blocked || !confirmed;
-    setSwappingButtonText("schedule-confirm-run", state.scheduleStarting ? "Starting fixed helper..." : "Request administrator approval");
+    setSwappingButtonText("schedule-confirm-run", state.scheduleStarting ? "Running simulation..." : "Run simulation");
   }
   renderScheduleOperation(operation);
 }
@@ -480,23 +480,23 @@ function renderSchedule() {
 function renderScheduleOperation(operation) {
   if (!operation) {
     setText("schedule-current-heading", "No schedule change recorded");
-    setText("schedule-current-copy", "No UAC request has been started by this Manager.");
+    setText("schedule-current-copy", "No synthetic schedule operation has started.");
     setText("schedule-current-time", "Not recorded");
     setChip("schedule-current-chip", "Idle", "neutral");
     return;
   }
   const action = titleCase(operation.action);
   let heading = `${action} schedule ${titleCase(operation.state)}`;
-  let copy = "The fixed helper is waiting to report a sanitized result.";
+  let copy = "The in-memory mock is waiting to report a synthetic result.";
   if (operation.state === "queued") {
     heading = `${action} schedule queued`;
-    copy = "Windows may be preparing the UAC approval prompt.";
+    copy = "The simulated host approval step is queued; no system prompt appears.";
   } else if (operation.state === "running") {
     heading = `${action} schedule in progress`;
-    copy = "Approve the Windows UAC prompt if it is visible. This operation cannot be changed from browser input.";
+    copy = "The fictional host approval step is running in memory; no system prompt or mutation occurs.";
   } else if (operation.state === "succeeded") {
     heading = `${action} schedule completed`;
-    copy = "The helper completed and the Manager observed the expected Task Scheduler state.";
+    copy = "The simulation completed and the Manager observed the expected fictional scheduler state.";
   } else if (operation.state === "failed") {
     heading = `${action} schedule was not completed`;
     copy = scheduleFailureCopy(operation.errorCategory, operation.supportCode);
@@ -519,32 +519,32 @@ function scheduleOperationIsActive(operation) {
 function scheduleActionCopy(action, day, time, scheduleInstalled = false) {
   switch (action) {
   case "install": return scheduleInstalled
-    ? { heading: "Refresh the weekly task", copy: `Update the verified host schedule for ${day} at ${time} local time.`, label: "Refresh this owned TautWeekly schedule", help: "The GUI preview simulates native host approval and leaves the computer untouched." }
-    : { heading: "Install the weekly task", copy: `Create the verified host schedule for ${day} at ${time} local time.`, label: "Install this TautWeekly schedule", help: "The GUI preview simulates native host approval and leaves the computer untouched." };
-  case "enable": return { heading: "Enable future scheduled delivery", copy: "Allow the installed and ownership-verified task to start on its configured weekly window.", label: "Enable this verified schedule", help: "This does not send a newsletter immediately." };
-  case "disable": return { heading: "Disable future scheduled starts", copy: "Keep the verified task definition but prevent it from starting future newsletter runs.", label: "Disable this verified schedule", help: "A newsletter process already running will not be cancelled." };
-  case "remove": return { heading: "Remove the verified schedule", copy: "Delete only the ownership-verified Windows task while preserving configuration, state, history, previews, and logs.", label: "Remove this verified schedule", help: "This cannot be undone from operation history, but it can be installed again later." };
-  default: return { heading: "Confirm schedule change", copy: "Review this typed operation.", label: "Confirm this schedule change", help: "Windows will request administrator approval." };
+    ? { heading: "Refresh the fictional weekly schedule", copy: `Model an update for ${day} at ${time} local time.`, label: "Simulate refreshing this owned schedule", help: "The GUI preview changes only temporary in-memory state." }
+    : { heading: "Install the fictional weekly schedule", copy: `Model a schedule for ${day} at ${time} local time.`, label: "Simulate installing this schedule", help: "The GUI preview changes only temporary in-memory state." };
+  case "enable": return { heading: "Enable fictional scheduled delivery", copy: "Model allowing the ownership-verified schedule to start on its weekly window.", label: "Simulate enabling this schedule", help: "No task is enabled and no newsletter is sent." };
+  case "disable": return { heading: "Disable fictional scheduled starts", copy: "Model preserving the schedule definition while preventing future starts.", label: "Simulate disabling this schedule", help: "No host task or process is changed." };
+  case "remove": return { heading: "Remove the fictional schedule", copy: "Model deleting only the ownership-verified schedule while preserving in-memory demo state.", label: "Simulate removing this schedule", help: "Reloading the page restores the initial fictional state." };
+  default: return { heading: "Confirm simulated schedule change", copy: "Review this typed fictional operation.", label: "Confirm this simulated change", help: "No administrator approval or host mutation occurs." };
   }
 }
 
 function scheduleFailureCopy(category, supportCode) {
   const suffix = supportCode ? ` Support code: ${supportCode}.` : "";
   switch (category) {
-  case "elevation-declined": return "Windows administrator approval was declined or closed." + suffix;
-  case "configuration-changed": return "Configuration changed while Windows approval was pending. Refresh and review before retrying." + suffix;
-  case "task-not-found": return "The expected verified task was not found. Refresh local status before retrying." + suffix;
-  case "task-ownership-mismatch": return "The same-named task did not match this installation and was left untouched." + suffix;
-  case "schedule-invalid": return "The saved day or time could not be interpreted safely." + suffix;
-  case "renderer-missing": return "The packaged newsletter renderer is unavailable, so the schedule was not enabled." + suffix;
-  case "postcondition-failed": return "The helper returned, but the expected Task Scheduler state could not be verified." + suffix;
-  case "schedule-configuration-read-failed": return "Windows approval succeeded, but the helper could not validate the saved schedule configuration." + suffix;
-  case "task-definition-failed": return "Windows approval succeeded, but Task Scheduler rejected the requested schedule definition." + suffix;
-  case "task-mutation-failed": return "Windows approval succeeded, but Task Scheduler could not apply the requested change." + suffix;
-  case "task-verification-failed": return "Task Scheduler accepted the request, but the helper could not verify the resulting owned task state." + suffix;
-  case "task-read-access-failed": return "Task Scheduler accepted the request, but Windows could not grant this signed-in user read-only status access to the task." + suffix;
-  case "manager-restarted": return "The Manager restarted while elevation was pending, so the final result is unknown. Refresh Task Scheduler status." + suffix;
-  default: return "The schedule helper did not complete successfully. No raw PowerShell output was retained." + suffix;
+  case "elevation-declined": return "The fictional host approval was declined or closed." + suffix;
+  case "configuration-changed": return "The synthetic configuration changed while approval was pending. Refresh and retry." + suffix;
+  case "task-not-found": return "The expected fictional schedule was not found." + suffix;
+  case "task-ownership-mismatch": return "The fictional same-named schedule did not match this installation and was left untouched." + suffix;
+  case "schedule-invalid": return "The fictional day or time could not be interpreted safely." + suffix;
+  case "renderer-missing": return "The mock renderer is unavailable, so the fictional schedule was not enabled." + suffix;
+  case "postcondition-failed": return "The simulation returned, but the expected scheduler state could not be verified." + suffix;
+  case "schedule-configuration-read-failed": return "The simulation could not validate the fictional schedule configuration." + suffix;
+  case "task-definition-failed": return "The synthetic scheduler rejected the fictional definition." + suffix;
+  case "task-mutation-failed": return "The synthetic scheduler could not apply the fictional change." + suffix;
+  case "task-verification-failed": return "The simulation could not verify the resulting fictional owned state." + suffix;
+  case "task-read-access-failed": return "The simulation could not read the fictional schedule state." + suffix;
+  case "manager-restarted": return "The demo state changed while the simulation was pending; reload to reset it." + suffix;
+  default: return "The schedule simulation did not complete successfully." + suffix;
   }
 }
 
@@ -556,7 +556,7 @@ function renderConfig() {
   if (!config.fields.length) {
     const empty = document.createElement("div");
     empty.className = "config-empty";
-    empty.textContent = config.exists ? "The configuration could not be displayed safely." : "No private config.json exists yet. Complete guided setup to create it.";
+    empty.textContent = config.exists ? "The fictional configuration could not be displayed safely." : "No demo configuration is loaded. Reload the page to restore it.";
     grid.append(empty);
     return;
   }
@@ -620,9 +620,7 @@ function renderConfigEditor() {
     input.value = Array.isArray(field.value) ? field.value.join(", ") : "";
     sections.append(input);
   }
-  byId("config-save-copy").textContent = editor.exists
-    ? "A private timestamped backup is created before config.json is replaced, then safe discovery, connection checks, and six non-sending local previews run."
-    : "A new private config.json is created only after validation, then safe discovery, connection checks, and six non-sending local previews run.";
+  byId("config-save-copy").textContent = "The mock API validates values in this tab, records a fictional backup, runs passing synthetic checks, and refreshes six bundled previews. Nothing is persisted.";
   if (Object.keys(editor.issues || {}).length) {
     showConfigErrors("Complete the required setup fields before saving.", editor.issues, false);
   }
@@ -639,12 +637,11 @@ function renderDirectPlexNotice() {
   const legacy = Boolean(status.legacyFieldsMissing);
   setText("direct-plex-notice-heading", legacy ? "Legacy config needs one direct Plex review" : "Complete optional direct Plex access");
   let copy = legacy
-    ? "This older config.json never contained one or both direct Plex fields; the updater preserved it instead of guessing. "
-    : "Direct Plex is optional, but one part of the connection is not available. ";
-  if (!status.urlConfigured) copy += "For Plex on this computer, use http://127.0.0.1:32400; otherwise enter the Plex URL reachable from this runtime. ";
-  if (!status.tokenConfigured && status.runtimeTokenAvailable) copy += "A trusted runtime Plex token is available and will be used without copying it into config.json. ";
-  else if (!status.tokenConfigured) copy += "Paste the Plex administrator token to enable authenticated direct-Plex checks. ";
-  copy += "Validate, save, and verify to normalize the legacy fields and re-run the safe checks.";
+    ? "This fictional legacy scenario omits one or both direct Plex fields so the review workflow can be explored. "
+    : "Optional direct Plex access is incomplete in this fictional scenario. ";
+  if (!status.urlConfigured) copy += "Use an invented .invalid URL; this preview never connects to it. ";
+  if (!status.tokenConfigured) copy += "The demo secret control exposes only a fixed placeholder and never retains an entered value. ";
+  copy += "Validate, save, and verify to model the passing in-memory checks.";
   setText("direct-plex-notice-copy", copy);
 }
 
@@ -661,17 +658,17 @@ function renderDiscovery() {
   const ready = state.editor?.state === "ready";
   const networkBusy = state.discoveryRunning || state.verificationRunning || state.smtpVerificationRunning;
   button.disabled = networkBusy || !ready || !confirm.checked;
-  setSwappingButtonText("discovery-run-button", state.discoveryRunning ? "Loading choices..." : "Refresh Tautulli choices");
+  setSwappingButtonText("discovery-run-button", state.discoveryRunning ? "Loading fictional choices..." : "Refresh fictional choices");
   if (!state.discovery) {
     byId("discovery-results").hidden = true;
     byId("discovery-message").textContent = ready
-      ? "A successful save loads these choices automatically. Confirm above to repeat the saved service lookup now."
-      : "Save a complete configuration before loading choices.";
+      ? "A simulated save loads these choices automatically. Confirm above to replay bundled discovery now."
+      : "Save the synthetic configuration before loading fictional choices.";
     renderUserComboboxes();
     return;
   }
   byId("discovery-results").hidden = false;
-  byId("discovery-message").textContent = `Choices loaded ${formatDate(state.discovery.completedAtUtc)} and retained locally for this saved configuration.`;
+  byId("discovery-message").textContent = `Fictional choices loaded ${formatDate(state.discovery.completedAtUtc)} and retained only in memory for this tab.`;
   renderDiscoveredLibraries();
   renderDiscoveredUsers();
   renderUserComboboxes();
@@ -692,7 +689,7 @@ function renderDiscoveredLibraries() {
   const container = byId("discovery-libraries");
   container.replaceChildren();
   const libraries = state.discovery?.libraries || [];
-  setText("discovery-library-count", `${libraries.length} active`);
+  setText("discovery-library-count", `${libraries.length} fictional`);
   const configured = new Set(currentListField("IncludedLibraryIds"));
   const selected = configured.size ? configured : new Set(libraries.map((item) => item.id));
   for (const item of libraries) {
@@ -725,7 +722,7 @@ function renderDiscoveredUsers() {
   const legacyRuleCount = Number(state.discovery?.legacyRuleCount || 0);
   const matchedLegacyRuleCount = Number(state.discovery?.matchedLegacyRuleCount || 0);
   const legacySummary = legacyRuleCount ? ` · ${matchedLegacyRuleCount}/${legacyRuleCount} legacy matched` : "";
-  setText("discovery-user-count", `${users.length} found${legacySummary}`);
+  setText("discovery-user-count", `${users.length} fictional${legacySummary}`);
   const configured = new Set(currentListField("ExcludedUserIds"));
   const orderedUsers = [...users].sort((left, right) => {
     const leftExcluded = configured.has(left.id) || left.legacyRuleExcluded === true;
@@ -787,7 +784,7 @@ function renderUserComboboxOptions(container) {
   if (!users.length) {
     const empty = document.createElement("p");
     empty.className = "user-combobox-empty";
-    empty.textContent = state.discovery ? "No matching Tautulli user." : "Load Tautulli choices from Config to browse users.";
+    empty.textContent = state.discovery ? "No matching fictional Tautulli user." : "Load fictional Tautulli choices from Config to browse users.";
     list.append(empty);
     return;
   }
@@ -881,7 +878,7 @@ async function runTautulliDiscovery() {
   state.discoveryRunning = true;
   renderDiscovery();
   renderVerification();
-  setGlobalStatus("Loading private Tautulli choices...");
+  setGlobalStatus("Loading fictional Tautulli choices...");
   try {
     state.discovery = await request("/api/v1/discovery/tautulli", {
       method: "POST",
@@ -889,7 +886,7 @@ async function runTautulliDiscovery() {
     });
     if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
     byId("discovery-confirm").checked = false;
-    setGlobalStatus("Tautulli choices loaded and retained locally.", true);
+    setGlobalStatus("Fictional choices loaded in memory.", true);
   } catch (error) {
     byId("discovery-message").textContent = error.message;
     setGlobalStatus(error.message, true);
@@ -947,9 +944,9 @@ function createConfigControl(field) {
     input = document.createElement("input");
     input.type = configInputType(field.type);
     input.placeholder = field.type === "secret" && field.secret?.configured
-      ? "Stored value will be preserved"
+      ? "Fictional placeholder is configured"
       : field.type === "secret" && field.secret?.availableFromRuntime
-        ? "Runtime value available · paste only to store a copy"
+        ? "Fictional runtime placeholder available"
         : field.placeholder || "";
     if (field.type === "integer") {
       if (field.min !== undefined) input.min = String(field.min);
@@ -994,10 +991,10 @@ function createConfigControl(field) {
     secretLine.className = "secret-state";
     const stateText = document.createElement("span");
     stateText.textContent = field.secret?.configured
-      ? "Configured - hidden by default"
+      ? "Fictional placeholder - hidden"
       : field.secret?.availableFromRuntime
-        ? "Available from this runtime - not copied"
-        : "Not configured";
+        ? "Fictional runtime placeholder"
+        : "No fictional placeholder";
     stateText.id = `config-secret-state-${field.name}`;
     secretLine.append(stateText);
     if (field.secret?.configured) {
@@ -1006,7 +1003,7 @@ function createConfigControl(field) {
       const clear = document.createElement("input");
       clear.type = "checkbox";
       clear.id = `config-clear-${field.name}`;
-      clearLabel.append(clear, " Clear stored value");
+      clearLabel.append(clear, " Clear fictional placeholder");
       secretLine.append(clearLabel);
       input.addEventListener("input", () => { if (input.value) clear.checked = false; });
       clear.addEventListener("change", () => {
@@ -1041,7 +1038,7 @@ function updateSecretToggle(field, input, button) {
   button.setAttribute("aria-pressed", String(visible));
   if (visible) button.setAttribute("aria-label", `Hide ${field.label}`);
   else if (hasValue) button.setAttribute("aria-label", `Show ${field.label}`);
-  else button.setAttribute("aria-label", `Reveal saved ${field.label}`);
+  else button.setAttribute("aria-label", `Reveal fictional ${field.label} placeholder`);
 }
 
 function toggleSecretVisibility(field, input, button) {
@@ -1056,11 +1053,11 @@ function toggleSecretVisibility(field, input, button) {
 function openSecretReveal(field, input, button) {
   pendingSecretReveal = { field, input, button };
   const passwordRequired = Boolean(state.authAccess?.authenticationRequired);
-  byId("secret-reveal-title").textContent = `Reveal ${field.label}`;
-  byId("secret-reveal-eyebrow").textContent = passwordRequired ? "Administrator confirmation" : "Explicit local reveal";
+  byId("secret-reveal-title").textContent = `Reveal fictional ${field.label}`;
+  byId("secret-reveal-eyebrow").textContent = passwordRequired ? "Demo password confirmation" : "Demo placeholder reveal";
   byId("secret-reveal-copy").textContent = passwordRequired
-    ? "Re-enter your Manager administrator password. Only this value will be returned, and it will clear automatically after 30 seconds."
-    : "Confirm this one local reveal. Only the selected value will be returned, and it will clear automatically after 30 seconds.";
+    ? "Enter the temporary demo password. A fixed non-secret placeholder will appear for 30 seconds."
+    : "Confirm this demonstration. A fixed non-secret placeholder will appear for 30 seconds.";
   byId("secret-reveal-message").textContent = "";
   const passwordInput = byId("secret-reveal-password");
   passwordInput.value = "";
@@ -1099,7 +1096,7 @@ async function submitSecretReveal(event) {
     updateSecretToggle(target.field, target.input, target.button);
     byId("secret-reveal-dialog").close();
     target.input.focus();
-    setGlobalStatus(`${target.field.label} revealed temporarily.`, true);
+    setGlobalStatus(`Fictional ${target.field.label} placeholder revealed temporarily.`, true);
   } catch (error) {
     passwordInput.value = "";
     byId("secret-reveal-message").textContent = error.message;
@@ -1119,7 +1116,7 @@ function forgetSecretReveal(name, clearValue) {
   active.input.type = "password";
   const field = state.editor?.fields.find((candidate) => candidate.name === name);
   const stateText = byId(`config-secret-state-${name}`);
-  if (stateText) stateText.textContent = "Configured - hidden by default";
+  if (stateText) stateText.textContent = "Fictional placeholder - hidden";
   if (field) updateSecretToggle(field, active.input, active.button);
 }
 
@@ -1172,7 +1169,7 @@ function beginSetupWorkflow() {
   state.setupWorkflow = {
     available: true,
     running: true,
-    steps: Object.fromEntries(setupWorkflowSteps.map((name) => [name, { state: "waiting", summary: "Waiting for the saved configuration." }])),
+    steps: Object.fromEntries(setupWorkflowSteps.map((name) => [name, { state: "waiting", summary: "Waiting for the synthetic configuration." }])),
   };
   state.setupWorkflowRunning = true;
   renderSetupWorkflow();
@@ -1228,7 +1225,7 @@ async function retainSkippedPreviewStatus(revision, reason) {
 async function runPostSaveSetup(revision) {
   let discovered = null;
   state.discoveryRunning = true;
-  updateSetupWorkflowStep("choices", "running", "Loading active libraries, users, and any explicit owner or administrator role...");
+  updateSetupWorkflowStep("choices", "running", "Loading bundled fictional libraries, users, and roles...");
   renderDiscovery();
   renderVerification();
   try {
@@ -1238,7 +1235,7 @@ async function runPostSaveSetup(revision) {
     });
     state.discovery = discovered;
     if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
-    updateSetupWorkflowStep("choices", "passed", `${discovered.libraries?.length || 0} active libraries and ${discovered.users?.length || 0} users loaded and retained locally.`);
+    updateSetupWorkflowStep("choices", "passed", `${discovered.libraries?.length || 0} fictional libraries and ${discovered.users?.length || 0} fictional users loaded in memory.`);
   } catch (error) {
     updateSetupWorkflowStep("choices", "failed", error.message);
   } finally {
@@ -1248,7 +1245,7 @@ async function runPostSaveSetup(revision) {
   }
 
   state.verificationRunning = true;
-  updateSetupWorkflowStep("lan", "running", "Testing the saved Tautulli and direct Plex endpoints...");
+  updateSetupWorkflowStep("lan", "running", "Simulating Tautulli and direct Plex checks with fictional endpoints...");
   renderDiscovery();
   renderVerification();
   try {
@@ -1258,8 +1255,8 @@ async function runPostSaveSetup(revision) {
     });
     state.verification = { ...state.verification, last: result };
     updateSetupWorkflowStep("lan", result.overall, result.overall === "passed"
-      ? "Tautulli and direct Plex verification passed. Detailed evidence is available under Verify."
-      : "The connection checks completed with a result that needs review under Verify.");
+      ? "Synthetic Tautulli and direct Plex verification passed. Detailed fictional evidence is available under Verify."
+      : "The synthetic connection checks completed with a result that needs review under Verify.");
   } catch (error) {
     updateSetupWorkflowStep("lan", "failed", error.message);
   } finally {
@@ -1269,7 +1266,7 @@ async function runPostSaveSetup(revision) {
   }
 
   state.smtpVerificationRunning = true;
-  updateSetupWorkflowStep("smtp", "running", "Checking SMTP reachability and STARTTLS without authenticating or sending...");
+  updateSetupWorkflowStep("smtp", "running", "Simulating SMTP reachability and STARTTLS without opening a socket...");
   renderDiscovery();
   renderVerification();
   try {
@@ -1289,7 +1286,7 @@ async function runPostSaveSetup(revision) {
 
   const suggestedUserID = discovered?.suggestedPreviewUserId || "";
   if (!validPreviewUserID(suggestedUserID)) {
-    updateSetupWorkflowStep("previews", "skipped", "Tautulli did not expose one unambiguous owner or administrator ID. Choose a user under Previews to generate the six local states manually.");
+    updateSetupWorkflowStep("previews", "skipped", "The fictional roster has no unambiguous administrator ID. Choose a demo user under Previews to model the six states manually.");
     await retainSkippedPreviewStatus(revision, "owner-not-found");
   } else if (operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation)) {
     updateSetupWorkflowStep("previews", "skipped", "Another Manager or schedule operation is active. Generate previews manually after it finishes.");
@@ -1297,14 +1294,14 @@ async function runPostSaveSetup(revision) {
   } else {
     state.operationStarting = true;
     state.operationStartingType = "preview-all";
-    updateSetupWorkflowStep("previews", "running", "Starting six local newsletter previews for the verified owner or administrator...");
+    updateSetupWorkflowStep("previews", "running", "Refreshing six bundled newsletter previews for the fictional administrator...");
     renderOperations();
     try {
       state.operation = await request("/api/v1/operations", {
         method: "POST",
         body: JSON.stringify({ type: "preview-all", expectedRevision: revision, userId: suggestedUserID, confirmNoSend: true }),
       });
-      updateSetupWorkflowStep("previews", "running", "Six-state local preview generation started. No email will be sent; progress is available under Previews.");
+      updateSetupWorkflowStep("previews", "running", "Six-state in-memory preview simulation started. No service or file is contacted.");
       manageOperationPolling();
     } catch (error) {
       updateSetupWorkflowStep("previews", error.code === "operation-busy" || error.code === "schedule-busy" ? "skipped" : "failed", error.message);
@@ -1350,16 +1347,16 @@ async function submitConfig(event) {
   saveButton.disabled = true;
   byId("config-reset-button").disabled = true;
   setSwappingButtonText("config-save-button", "Saving...");
-  setGlobalStatus("Validating local configuration...");
+  setGlobalStatus("Validating fictional configuration in memory...");
   try {
     const result = await request("/api/v1/config", { method: "PUT", body: JSON.stringify(collectConfigSaveRequest()) });
     state.editor = result.editor;
     beginSetupWorkflow();
     await loadAll();
     selectView("configuration");
-    setGlobalStatus(result.backup ? "Configuration saved and backed up. Running safe checks..." : "Configuration saved. Running safe checks...");
+    setGlobalStatus(result.backup ? "Demo configuration saved in memory with a fictional backup. Running synthetic checks..." : "Demo configuration saved in memory. Running synthetic checks...");
     await runPostSaveSetup(result.editor.revision);
-    setGlobalStatus("Save verification finished. Review the results above.", true);
+    setGlobalStatus("Synthetic save verification finished. Review the results above.", true);
   } catch (error) {
     showConfigErrors(error.message, error.fields);
     setGlobalStatus(error.message, true);
@@ -1407,11 +1404,11 @@ function clearConfigErrors() {
 function renderBackups() {
   const list = byId("backup-list");
   list.replaceChildren();
-  setText("backup-count", state.backups.length ? `${state.backups.length} available` : "None created");
+  setText("backup-count", state.backups.length ? `${state.backups.length} fictional` : "None created");
   if (!state.backups.length) {
     const empty = document.createElement("div");
     empty.className = "config-empty";
-    empty.textContent = "No backup exists yet. The first update to an existing config.json creates one automatically.";
+    empty.textContent = "No fictional backup exists yet. Reloading restores the initial demo configuration.";
     list.append(empty);
     return;
   }
@@ -1467,7 +1464,7 @@ async function restoreBackup(backup, button, cancel) {
   button.disabled = true;
   cancel.disabled = true;
   setSwappingButtonElementText(button, "Restoring...");
-  setGlobalStatus("Validating and restoring the selected backup...");
+  setGlobalStatus("Restoring the fictional backup in memory...");
   try {
     const result = await request(`/api/v1/config/backups/${encodeURIComponent(backup.id)}/restore`, {
       method: "POST",
@@ -1475,7 +1472,7 @@ async function restoreBackup(backup, button, cancel) {
     });
     await loadAll();
     selectView("configuration");
-    setGlobalStatus(result.safetyBackup ? "Backup restored. The replaced configuration was saved as a new safety backup." : "Backup restored.", true);
+    setGlobalStatus(result.safetyBackup ? "Fictional backup restored in memory; a synthetic safety backup was recorded." : "Fictional backup restored in memory.", true);
   } catch (error) {
     setGlobalStatus(error.message, true);
   } finally {
@@ -1518,19 +1515,19 @@ function renderVerification() {
   smtpResults.replaceChildren();
   runButton.disabled = networkBusy || !confirm.checked || !ready;
   smtpRunButton.disabled = networkBusy || !smtpConfirm.checked || !ready;
-  setSwappingButtonText("verification-run-button", state.verificationRunning ? "Testing saved services..." : "Run connection test");
-  setSwappingButtonText("smtp-verification-run-button", state.smtpVerificationRunning ? "Testing SMTP..." : "Run SMTP preflight");
+  setSwappingButtonText("verification-run-button", state.verificationRunning ? "Running synthetic checks..." : "Run synthetic connection test");
+  setSwappingButtonText("smtp-verification-run-button", state.smtpVerificationRunning ? "Simulating SMTP..." : "Run synthetic SMTP preflight");
 
   if (!ready) {
-    byId("verification-message").textContent = "Complete and save configuration before running a connection test.";
-    byId("smtp-verification-message").textContent = "Complete and save configuration before running SMTP preflight.";
+    byId("verification-message").textContent = "Save the fictional configuration before running the simulation.";
+    byId("smtp-verification-message").textContent = "Save the fictional configuration before running the SMTP simulation.";
   } else {
     byId("verification-message").textContent = state.verificationRunning
-      ? "Contacting the saved Tautulli and direct Plex services. This may take up to 45 seconds."
-      : "No service request occurs until the confirmation is checked and the button is pressed.";
+      ? "Returning passing synthetic Tautulli and direct Plex results from memory."
+      : "The button runs an in-memory simulation; no service request can occur.";
     byId("smtp-verification-message").textContent = state.smtpVerificationRunning
-      ? "Contacting the saved SMTP endpoint without authenticating or sending. This may take up to 45 seconds."
-      : "No SMTP request occurs until the confirmation is checked and the button is pressed.";
+      ? "Returning a passing synthetic SMTP and STARTTLS result from memory."
+      : "The button runs an in-memory simulation; no SMTP request can occur.";
   }
 
   const retainedLANState = retainedSetupCheckState("lan");
@@ -1541,13 +1538,13 @@ function renderVerification() {
       appendVerificationResult(results, step.service === "plex" ? "Direct Plex" : titleCase(step.service), step.state, step.summary);
     }
   } else if (retainedLANState) {
-    setText("verification-observed", "Retained from the latest safe setup validation for this configuration.");
+    setText("verification-observed", "Retained in memory from the latest synthetic setup validation.");
     appendVerificationResult(results, "Tautulli and direct Plex", retainedLANState, state.setupWorkflow.steps.lan.summary);
   } else {
-    setText("verification-observed", "No integration result is retained for this saved configuration.");
+    setText("verification-observed", "No synthetic integration result is available yet.");
     const empty = document.createElement("div");
     empty.className = "config-empty";
-    empty.textContent = "Validate and save to run every safe setup check, or repeat this targeted connection test.";
+    empty.textContent = "Validate and save to run every synthetic setup check, or repeat this simulated connection test.";
     results.append(empty);
   }
 
@@ -1555,13 +1552,13 @@ function renderVerification() {
     setText("smtp-verification-observed", `Completed ${formatDate(smtp.completedAtUtc)} · ${titleCase(smtp.security)}.`);
     appendVerificationResult(smtpResults, "SMTP preflight", smtp.state, smtp.summary);
   } else if (retainedSMTPState) {
-    setText("smtp-verification-observed", "Retained from the latest safe setup validation for this configuration.");
+    setText("smtp-verification-observed", "Retained in memory from the latest synthetic setup validation.");
     appendVerificationResult(smtpResults, "SMTP preflight", retainedSMTPState, state.setupWorkflow.steps.smtp.summary);
   } else {
-    setText("smtp-verification-observed", "No SMTP preflight is retained for this saved configuration.");
+    setText("smtp-verification-observed", "No synthetic SMTP preflight is available yet.");
     const empty = document.createElement("div");
     empty.className = "config-empty";
-    empty.textContent = "Validate and save to run every safe setup check, or repeat this targeted SMTP preflight.";
+    empty.textContent = "Validate and save to run every synthetic setup check, or repeat this simulated SMTP preflight.";
     smtpResults.append(empty);
   }
 
@@ -1573,10 +1570,10 @@ async function runVerification() {
   if (state.verificationRunning || state.smtpVerificationRunning || state.discoveryRunning || !byId("verification-confirm").checked || state.editor?.state !== "ready") return;
   state.verificationRunning = true;
   const button = byId("verification-run-button");
-  setSwappingButtonText("verification-run-button", "Testing saved services...");
+  setSwappingButtonText("verification-run-button", "Running synthetic checks...");
   renderVerification();
   renderDiscovery();
-  setGlobalStatus("Running Tautulli and direct Plex connection checks...");
+  setGlobalStatus("Running synthetic Tautulli and direct Plex checks in memory...");
   try {
     const result = await request("/api/v1/checks/integrations", {
       method: "POST",
@@ -1584,12 +1581,12 @@ async function runVerification() {
     });
     state.verification = { ...state.verification, last: result };
     byId("verification-confirm").checked = false;
-    setGlobalStatus(result.overall === "failed" ? "Connection test completed with failures." : "Connection test completed.", true);
+    setGlobalStatus(result.overall === "failed" ? "Synthetic connection test completed with failures." : "Synthetic connection test passed. No network request occurred.", true);
   } catch (error) {
     setGlobalStatus(error.message, true);
   } finally {
     state.verificationRunning = false;
-    setSwappingButtonText("verification-run-button", "Run connection test");
+    setSwappingButtonText("verification-run-button", "Run synthetic connection test");
     try {
       await refreshConfigurationStatus();
     } catch (_) {
@@ -1605,7 +1602,7 @@ async function runSMTPVerification() {
   state.smtpVerificationRunning = true;
   renderVerification();
   renderDiscovery();
-  setGlobalStatus("Running the non-sending SMTP reachability and STARTTLS preflight...");
+  setGlobalStatus("Running the synthetic SMTP and STARTTLS preflight in memory...");
   try {
     const result = await request("/api/v1/checks/smtp-network", {
       method: "POST",
@@ -1614,10 +1611,10 @@ async function runSMTPVerification() {
     state.verification = { ...state.verification, smtp: result };
     byId("smtp-verification-confirm").checked = false;
     const message = result.overall === "failed"
-      ? "SMTP preflight completed with a failure. No credentials or message data were sent."
+      ? "Synthetic SMTP preflight completed with a failure. No network request occurred."
       : result.overall === "warning"
-        ? "SMTP is reachable, but the saved configuration has STARTTLS disabled."
-        : "SMTP reachability and certificate-validated STARTTLS passed. Authentication still requires TestEmail.";
+        ? "The fictional SMTP result warns that STARTTLS is disabled."
+        : "Synthetic SMTP reachability and certificate-validated STARTTLS passed. No host was contacted.";
     setGlobalStatus(message, true);
   } catch (error) {
     setGlobalStatus(error.message, true);
@@ -1664,7 +1661,8 @@ function renderPreviews() {
   const list = byId("preview-list");
   list.replaceChildren();
   const previews = orderedPreviews();
-  setChip("preview-chip", state.previews.length ? `${state.previews.length} available` : "None generated", state.previews.length ? "good" : "neutral");
+  const previewStateCount = previews.filter((preview) => previewScenarioIndex(preview) > 0).length;
+  setChip("preview-chip", state.previews.length ? `${previewStateCount} states + index` : "None generated", state.previews.length ? "good" : "neutral");
   if (!state.previews.length) {
     state.selectedPreviewID = "";
     byId("preview-placeholder").hidden = false;
@@ -1674,7 +1672,7 @@ function renderPreviews() {
     frame.src = "about:blank";
     const empty = document.createElement("div");
     empty.className = "config-empty";
-    empty.textContent = "No generated HTML previews were found in the package output folder.";
+    empty.textContent = "No bundled fictional previews are available in this demo.";
     list.append(empty);
     return;
   }
@@ -1723,38 +1721,38 @@ function renderOperations() {
   startButton.disabled = state.operationStarting || state.operationCancelling || active || scheduleActive || !ready || !userIDValid || !confirmed;
   setSwappingButtonText("preview-run-button", state.operationStarting && state.operationStartingType === "preview-all" ? "Starting preview generation..." : active || scheduleActive ? "Another operation is active" : "Generate all previews");
 
-  let message = "Enter a numeric Tautulli user ID, then confirm this preview-only run.";
-  if (!ready) message = "Complete and save configuration before generating previews.";
-  else if (active) message = operation.type === "preview-all" ? (operation.state === "cancelling" ? "Stopping the local preview process safely..." : "Generating previews. You can leave this page while the Manager tracks the operation.") : "An email delivery is active. Wait for its aggregate SMTP result before starting another operation.";
-  else if (scheduleActive) message = "Wait for the active Windows schedule change before generating previews.";
-  else if (state.operationStarting) message = "Starting a fixed Manager operation...";
-  else if (!userIDValid && userID) message = "Enter a numeric Tautulli user ID using no more than 20 digits.";
-  else if (userIDValid && confirmed) message = "Ready to generate six local previews without sending email.";
+  let message = "Choose a fictional numeric Tautulli user ID, then confirm the preview simulation.";
+  if (!ready) message = "Save the fictional configuration before generating previews.";
+  else if (active) message = operation.type === "preview-all" ? (operation.state === "cancelling" ? "Stopping the in-memory preview simulation..." : "Refreshing bundled previews in memory.") : "A fictional delivery simulation is active. Wait for its aggregate result.";
+  else if (scheduleActive) message = "Wait for the in-memory schedule simulation before generating previews.";
+  else if (state.operationStarting) message = "Starting a synthetic Manager operation...";
+  else if (!userIDValid && userID) message = "Enter a fictional numeric Tautulli user ID using no more than 20 digits.";
+  else if (userIDValid && confirmed) message = "Ready to refresh six bundled previews without contacting a service or file system.";
   setText("preview-operation-message", message);
 
   const testButton = byId("test-send-run-button");
   testButton.disabled = state.operationStarting || active || scheduleActive || !ready || !testUserIDValid || !testConfirmed;
-  setSwappingButtonText("test-send-run-button", state.operationStarting && state.operationStartingType === "send-test-all" ? "Starting test delivery..." : active || scheduleActive ? "Another operation is active" : "Send six test messages");
-  let testMessage = "Enter a numeric Tautulli user ID, then confirm the six-message test delivery.";
-  if (!ready) testMessage = "Complete and save configuration before sending a test delivery.";
-  else if (active) testMessage = operation.type === "send-test-all" ? "Sending to the configured TestEmail. Cancellation is disabled because some messages may already be accepted by SMTP." : "Another Manager operation is active. Wait for it to finish before starting a test delivery.";
-  else if (scheduleActive) testMessage = "Wait for the active Windows schedule change before starting a test delivery.";
-  else if (state.operationStarting) testMessage = "Starting a fixed Manager operation...";
-  else if (!testUserIDValid && testUserID) testMessage = "Enter a numeric Tautulli user ID using no more than 20 digits.";
-  else if (testUserIDValid && testConfirmed) testMessage = "Ready to send six real messages only to the configured TestEmail.";
+  setSwappingButtonText("test-send-run-button", state.operationStarting && state.operationStartingType === "send-test-all" ? "Starting simulation..." : active || scheduleActive ? "Another operation is active" : "Simulate six test messages");
+  let testMessage = "Choose a fictional Tautulli user ID, then confirm the six-message simulation.";
+  if (!ready) testMessage = "Save the fictional configuration before starting a test-delivery simulation.";
+  else if (active) testMessage = operation.type === "send-test-all" ? "Modeling six SMTP accepts in memory; no message or mailbox exists." : "Another synthetic Manager operation is active.";
+  else if (scheduleActive) testMessage = "Wait for the in-memory schedule simulation before starting a test-delivery simulation.";
+  else if (state.operationStarting) testMessage = "Starting a synthetic Manager operation...";
+  else if (!testUserIDValid && testUserID) testMessage = "Enter a fictional numeric Tautulli user ID using no more than 20 digits.";
+  else if (testUserIDValid && testConfirmed) testMessage = "Ready to model six fictional TestEmail messages without contacting SMTP.";
   setText("test-send-operation-message", testMessage);
 
   const manualSendButton = byId("manual-send-run-button");
   manualSendButton.disabled = state.operationStarting || active || scheduleActive || !ready || !manualSendConfirmed || !manualSendUserValid;
-  const manualSendButtonLabel = manualWelcome ? "Send Manual Welcome" : "Send newsletter to all";
-  setSwappingButtonText("manual-send-run-button", state.operationStarting && state.operationStartingType === manualSendType ? "Starting manual delivery..." : active || scheduleActive ? "Another operation is active" : manualSendButtonLabel);
-  let manualSendMessage = manualWelcome ? "Choose a Tautulli user, then explicitly confirm the one-message Manual Welcome delivery." : "Explicitly confirm the all-recipient production delivery to enable this action.";
-  if (!ready) manualSendMessage = "Complete and save configuration before sending a production newsletter.";
-  else if (active) manualSendMessage = ["send-welcome", "send-all"].includes(operation.type) ? "A production delivery is running. Cancellation is disabled because a message may already be accepted by SMTP." : "Another Manager operation is active. Wait for it to finish before sending a production newsletter.";
-  else if (scheduleActive) manualSendMessage = "Wait for the active Windows schedule change before sending a production newsletter.";
-  else if (state.operationStarting) manualSendMessage = "Starting a fixed Manager operation...";
-  else if (manualWelcome && manualSendUserID && !manualSendUserValid) manualSendMessage = "Enter a numeric Tautulli user ID using no more than 20 digits.";
-  else if (manualSendConfirmed && manualSendUserValid) manualSendMessage = manualWelcome ? "Ready to send one real Manual Welcome message to the selected user." : "Ready to send real email to every currently eligible recipient.";
+  const manualSendButtonLabel = manualWelcome ? "Simulate Manual Welcome" : "Simulate all-recipient delivery";
+  setSwappingButtonText("manual-send-run-button", state.operationStarting && state.operationStartingType === manualSendType ? "Starting simulation..." : active || scheduleActive ? "Another operation is active" : manualSendButtonLabel);
+  let manualSendMessage = manualWelcome ? "Choose a fictional user, then confirm the one-message Manual Welcome simulation." : "Confirm the fictional all-recipient delivery simulation.";
+  if (!ready) manualSendMessage = "Save the fictional configuration before starting a delivery simulation.";
+  else if (active) manualSendMessage = ["send-welcome", "send-all"].includes(operation.type) ? "A fictional delivery simulation is running in memory." : "Another synthetic Manager operation is active.";
+  else if (scheduleActive) manualSendMessage = "Wait for the in-memory schedule simulation before starting a delivery simulation.";
+  else if (state.operationStarting) manualSendMessage = "Starting a synthetic Manager operation...";
+  else if (manualWelcome && manualSendUserID && !manualSendUserValid) manualSendMessage = "Enter a fictional numeric Tautulli user ID using no more than 20 digits.";
+  else if (manualSendConfirmed && manualSendUserValid) manualSendMessage = manualWelcome ? "Ready to model one fictional Manual Welcome message." : "Ready to model delivery to all fictional eligible recipients.";
   setText("manual-send-operation-message", manualSendMessage);
 
   renderCurrentOperation(operation);
@@ -1767,14 +1765,14 @@ function renderOperations() {
 function renderManualSendChoice(type) {
   const manualWelcome = type === "send-welcome";
   byId("manual-send-user-field").hidden = !manualWelcome;
-  setSwappingText("manual-send-runner-heading", manualWelcome ? "Send one Manual Welcome" : "Send this week's newsletter now");
+  setSwappingText("manual-send-runner-heading", manualWelcome ? "Model one Manual Welcome" : "Model this week's newsletter now");
   setText("manual-send-runner-copy", manualWelcome
-    ? "Sends the renderer's Manual Welcome state to one selected Tautulli user, then updates that recipient's welcome and history state. It does not contact other Plex users."
-    : "Runs the same fixed production delivery used by the schedule, applies saved library and user exclusions, and updates recipient welcome and history state for every eligible recipient.");
-  setText("manual-send-confirm-heading", manualWelcome ? "Send one Manual Welcome newsletter" : "Send the production newsletter to all eligible recipients");
+    ? "Models the Manual Welcome flow for one fictional user without creating a message or changing recipient state."
+    : "Models the scheduled all-recipient flow with temporary library and user exclusions. No recipient state changes.");
+  setText("manual-send-confirm-heading", manualWelcome ? "Simulate one Manual Welcome" : "Simulate the all-recipient newsletter");
   setText("manual-send-confirm-copy", manualWelcome
-    ? "I understand this sends one real email to the selected Plex user and updates that user's welcome state. The operation cannot be cancelled after it starts."
-    : "I understand this may send real email to every eligible recipient and updates recipient state. The operation cannot be cancelled after it starts.");
+    ? "I understand this models one fictional message and changes no mailbox, service, or recipient state."
+    : "I understand this models aggregate results for fictional recipients and changes no mailbox, service, or recipient state.");
 }
 
 function renderManualSendStatus(operation) {
@@ -1799,8 +1797,8 @@ function renderCurrentOperation(operation) {
   cancel.disabled = state.operationCancelling;
   setSwappingButtonText("preview-cancel-button", state.operationCancelling ? "Cancelling..." : "Cancel preview generation");
   if (!operation) {
-    setText("current-operation-heading", "No Manager operation recorded");
-    setText("current-operation-copy", "The Manager keeps sanitized operation state locally.");
+    setText("current-operation-heading", "No simulated Manager operation recorded");
+    setText("current-operation-copy", "The page keeps temporary fictional operation state in memory only.");
     setText("current-operation-time", "Not recorded");
     setChip("current-operation-chip", "Idle", "neutral");
     return;
@@ -1815,8 +1813,8 @@ function renderCurrentOperation(operation) {
 
 function renderDashboardOperation(operation) {
   if (!operation) {
-    setText("dashboard-operation-heading", "No Manager operation recorded");
-    setText("dashboard-operation-copy", "Generate local previews, send a guarded six-message test, or start a confirmed production delivery from the Preview center.");
+    setText("dashboard-operation-heading", "No simulated Manager operation recorded");
+    setText("dashboard-operation-copy", "Refresh bundled previews or explore fictional test and all-recipient delivery flows from the Preview center.");
     setChip("dashboard-operation-chip", "Idle", "neutral");
     return;
   }
@@ -1832,7 +1830,7 @@ function renderOperationHistory() {
   if (!state.history.length) {
     const empty = document.createElement("div");
     empty.className = "config-empty";
-    empty.textContent = "No completed Manager operation has been recorded yet.";
+    empty.textContent = "No completed fictional Manager operation has been recorded in this tab.";
     container.append(empty);
     return;
   }
@@ -1870,10 +1868,10 @@ function renderOperationHistory() {
     chip.textContent = titleCase(operation.outcome || operation.state);
     const count = document.createElement("small");
     count.textContent = operation.type === "send-test-all" || operation.type === "send-welcome"
-      ? `${operation.smtpAcceptedCount || 0} accepted by SMTP`
+      ? `${operation.smtpAcceptedCount || 0} fictional SMTP accepts`
       : operation.type === "send-all"
-        ? `${operation.smtpAcceptedCount || 0} accepted · ${operation.skippedCount || 0} skipped · ${operation.failedCount || 0} failed`
-        : `${operation.generatedPreviewIds?.length || 0} preview${operation.generatedPreviewIds?.length === 1 ? "" : "s"}`;
+        ? `${operation.smtpAcceptedCount || 0} fictional accepts · ${operation.skippedCount || 0} skipped · ${operation.failedCount || 0} failed`
+        : `${Math.max(0, (operation.generatedPreviewIds?.length || 0) - 1)} states + index`;
     meta.append(chip, count);
     row.append(copy, meta);
     container.append(row);
@@ -1884,11 +1882,11 @@ function operationSummary(operation) {
   const count = operation.generatedPreviewIds?.length || 0;
   if (operation.type === "send-welcome") {
     switch (operation.state) {
-    case "queued": return { heading: "Manual Welcome queued", copy: "One selected-user welcome newsletter is waiting to start." };
-    case "running": return { heading: "Sending one Manual Welcome", copy: "One selected Plex user is being processed. Cancellation is disabled once delivery begins." };
-    case "succeeded": return { heading: "Manual Welcome accepted by SMTP", copy: "One welcome message was accepted by SMTP. The selected user's welcome state was updated; inbox delivery is not asserted." };
-    case "failed": return { heading: "Manual Welcome delivery failed", copy: operation.supportCode ? `The welcome renderer failed. Support code: ${operation.supportCode}.` : "The welcome renderer failed without exposing its recipient or raw output." };
-    default: return { heading: "Manual Welcome delivery recorded", copy: "Review aggregate SMTP acceptance without exposing the selected recipient." };
+    case "queued": return { heading: "Manual Welcome simulation queued", copy: "One fictional welcome workflow is waiting to start in memory." };
+    case "running": return { heading: "Modeling one Manual Welcome", copy: "One fictional user is being processed in memory; no message exists." };
+    case "succeeded": return { heading: "Manual Welcome simulation passed", copy: "One fictional SMTP accept was modeled. No welcome state or inbox changed." };
+    case "failed": return { heading: "Manual Welcome simulation failed", copy: operation.supportCode ? `The mock renderer failed. Demo code: ${operation.supportCode}.` : "The mock renderer failed without exposing a fictional recipient." };
+    default: return { heading: "Manual Welcome simulation recorded", copy: "Review fictional aggregate evidence without exposing the selected demo user." };
     }
   }
   if (operation.type === "send-all") {
@@ -1896,31 +1894,31 @@ function operationSummary(operation) {
     const skipped = operation.skippedCount || 0;
     const failed = operation.failedCount || 0;
     switch (operation.state) {
-    case "queued": return { heading: "Manual newsletter delivery queued", copy: "The fixed production delivery is waiting to start." };
-    case "running": return { heading: "Sending the production newsletter", copy: "Eligible recipients are being processed. Cancellation is disabled once delivery begins." };
-    case "succeeded": return { heading: "Manual newsletter accepted by SMTP", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted by SMTP and ${skipped} recipient${skipped === 1 ? " was" : "s were"} skipped. Inbox delivery is not asserted.` };
-    case "partial": return { heading: "Manual newsletter completed with delivery failures", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed. Inbox delivery is not asserted${operation.supportCode ? `; support code: ${operation.supportCode}` : ""}.` };
-    case "failed": return { heading: "Manual newsletter delivery failed", copy: operation.supportCode ? `${accepted} messages were accepted before failure. Support code: ${operation.supportCode}.` : "The production renderer failed without exposing recipients or raw output." };
-    default: return { heading: "Manual newsletter delivery recorded", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed. Inbox delivery is not asserted.` };
+    case "queued": return { heading: "All-recipient simulation queued", copy: "The fictional delivery workflow is waiting to start in memory." };
+    case "running": return { heading: "Modeling all-recipient delivery", copy: "Fictional eligible recipients are being processed in memory." };
+    case "succeeded": return { heading: "All-recipient simulation passed", copy: `${accepted} fictional SMTP accept${accepted === 1 ? " was" : "s were"} modeled and ${skipped} fictional recipient${skipped === 1 ? " was" : "s were"} skipped. No inbox exists.` };
+    case "partial": return { heading: "All-recipient simulation completed with failures", copy: `${accepted} fictional accepts, ${skipped} skipped, and ${failed} failed${operation.supportCode ? `; demo code: ${operation.supportCode}` : ""}.` };
+    case "failed": return { heading: "All-recipient simulation failed", copy: operation.supportCode ? `${accepted} fictional accepts were modeled before failure. Demo code: ${operation.supportCode}.` : "The mock renderer failed without exposing fictional recipients." };
+    default: return { heading: "All-recipient simulation recorded", copy: `${accepted} fictional accepts, ${skipped} skipped, and ${failed} failed. No inbox exists.` };
     }
   }
   if (operation.type === "send-test-all") {
     switch (operation.state) {
-    case "queued": return { heading: "Test delivery queued", copy: "The fixed six-message TestEmail operation is waiting to start." };
-    case "running": return { heading: "Sending six test messages", copy: "Messages go only to the configured TestEmail; cancellation is disabled once sending begins." };
-    case "succeeded": return { heading: "Test delivery accepted by SMTP", copy: `${operation.smtpAcceptedCount || 0} test messages were accepted by SMTP. Inbox delivery is not asserted.` };
-    case "failed": return { heading: "Test delivery failed", copy: operation.supportCode ? `${operation.smtpAcceptedCount || 0} messages were accepted before failure. Support code: ${operation.supportCode}.` : "The test renderer failed without exposing its destination or raw output." };
-    default: return { heading: "Test delivery recorded", copy: "Review aggregate SMTP acceptance and failure counts." };
+    case "queued": return { heading: "Test-delivery simulation queued", copy: "The fictional six-message workflow is waiting to start in memory." };
+    case "running": return { heading: "Modeling six test messages", copy: "Fictional TestEmail results are being modeled; no message or mailbox exists." };
+    case "succeeded": return { heading: "Test-delivery simulation passed", copy: `${operation.smtpAcceptedCount || 0} fictional SMTP accepts were modeled. No inbox exists.` };
+    case "failed": return { heading: "Test-delivery simulation failed", copy: operation.supportCode ? `${operation.smtpAcceptedCount || 0} fictional accepts were modeled before failure. Demo code: ${operation.supportCode}.` : "The mock renderer failed without contacting a destination." };
+    default: return { heading: "Test-delivery simulation recorded", copy: "Review fictional aggregate counts." };
     }
   }
   switch (operation.state) {
-  case "queued": return { heading: "Preview generation queued", copy: "The fixed Windows preview operation is waiting to start." };
-  case "running": return { heading: "Generating newsletter previews", copy: "The package renderer is creating local HTML; no email is sent." };
-  case "cancelling": return { heading: "Cancelling preview generation", copy: "The Manager is stopping the local renderer and retaining a sanitized result." };
-  case "succeeded": return { heading: "Preview generation completed", copy: `${count} generated preview${count === 1 ? " is" : "s are"} available for authenticated review.` };
-  case "cancelled": return { heading: "Preview generation cancelled", copy: "The local renderer was stopped before normal completion; no email was sent." };
-  case "failed": return { heading: "Preview generation failed", copy: operation.supportCode ? `A sanitized support code is available: ${operation.supportCode}.` : "The renderer exited without exposing private output to the browser." };
-  default: return { heading: "Preview operation recorded", copy: "Review the sanitized state and generated preview list." };
+  case "queued": return { heading: "Preview simulation queued", copy: "The in-memory preview operation is waiting to start." };
+  case "running": return { heading: "Refreshing fictional newsletter previews", copy: "Bundled HTML is being prepared in memory; no file or email is created." };
+  case "cancelling": return { heading: "Cancelling preview simulation", copy: "The mock Manager is stopping the in-memory operation." };
+  case "succeeded": return { heading: "Preview simulation completed", copy: `${Math.max(0, count - 1)} fictional states plus the index are available in the sandboxed frame.` };
+  case "cancelled": return { heading: "Preview simulation cancelled", copy: "The in-memory operation stopped before normal completion." };
+  case "failed": return { heading: "Preview simulation failed", copy: operation.supportCode ? `A fictional demo code is available: ${operation.supportCode}.` : "The mock renderer exited without exposing any private output." };
+  default: return { heading: "Preview simulation recorded", copy: "Review the temporary state and bundled preview list." };
   }
 }
 
@@ -1948,7 +1946,7 @@ async function startPreviewOperation() {
   state.operationStarting = true;
   state.operationStartingType = "preview-all";
   renderOperations();
-  setGlobalStatus("Starting the fixed local preview operation...");
+  setGlobalStatus("Starting the in-memory preview simulation...");
   try {
     state.operation = await request("/api/v1/operations", {
       method: "POST",
@@ -1956,7 +1954,7 @@ async function startPreviewOperation() {
     });
     byId("preview-user-id").value = "";
     byId("preview-confirm").checked = false;
-    setGlobalStatus("Preview generation started. No email will be sent.", true);
+    setGlobalStatus("Preview simulation started. No service, file, or email is contacted.", true);
   } catch (error) {
     setGlobalStatus(error.message, true);
   } finally {
@@ -1978,7 +1976,7 @@ async function startTestSendOperation() {
   state.operationStarting = true;
   state.operationStartingType = "send-test-all";
   renderOperations();
-  setGlobalStatus("Starting the guarded six-message test delivery...");
+  setGlobalStatus("Starting the fictional six-message test-delivery simulation...");
   try {
     state.operation = await request("/api/v1/operations", {
       method: "POST",
@@ -1986,7 +1984,7 @@ async function startTestSendOperation() {
     });
     byId("test-send-user-id").value = "";
     byId("test-send-confirm").checked = false;
-    setGlobalStatus("Test delivery started. Messages go only to the configured TestEmail.", true);
+    setGlobalStatus("Test-delivery simulation started. No message or SMTP request exists.", true);
   } catch (error) {
     setGlobalStatus(error.message, true);
   } finally {
@@ -2004,7 +2002,7 @@ async function startManualSendOperation() {
   state.operationStarting = true;
   state.operationStartingType = type;
   renderOperations();
-  setGlobalStatus(type === "send-welcome" ? "Starting the confirmed Manual Welcome delivery..." : "Starting the confirmed all-recipient newsletter delivery...");
+  setGlobalStatus(type === "send-welcome" ? "Starting the fictional Manual Welcome simulation..." : "Starting the fictional all-recipient delivery simulation...");
   try {
     state.operation = await request("/api/v1/operations", {
       method: "POST",
@@ -2012,7 +2010,7 @@ async function startManualSendOperation() {
     });
     if (type === "send-welcome") byId("manual-send-user-id").value = "";
     byId("manual-send-confirm").checked = false;
-    setGlobalStatus(type === "send-welcome" ? "Manual Welcome delivery started. The selected user is not retained in Manager history." : "All-recipient production delivery started. Aggregate SMTP evidence will be retained locally.", true);
+    setGlobalStatus(type === "send-welcome" ? "Manual Welcome simulation started. The fictional user ID is not retained." : "All-recipient simulation started. Aggregate fictional evidence exists only in memory.", true);
   } catch (error) {
     setGlobalStatus(error.message, true);
   } finally {
@@ -2027,7 +2025,7 @@ async function cancelPreviewOperation() {
   if (!operationIsActive(state.operation) || !state.operation?.cancellable) return;
   state.operationCancelling = true;
   renderOperations();
-  setGlobalStatus("Cancelling local preview generation...");
+  setGlobalStatus("Cancelling the in-memory preview simulation...");
   try {
     state.operation = await request(`/api/v1/operations/${encodeURIComponent(state.operation.id)}/cancel`, { method: "POST" });
     setGlobalStatus("Cancellation requested.", true);
@@ -2106,7 +2104,7 @@ async function startScheduleOperation() {
   if (!validScheduleAction(action) || !byId("schedule-confirm").checked || state.editor?.state !== "ready") return;
   state.scheduleStarting = true;
   renderSchedule();
-  setGlobalStatus("Starting the fixed Windows schedule helper...");
+  setGlobalStatus("Starting the in-memory schedule simulation...");
   try {
     state.scheduleOperation = await request(`/api/v1/schedule/${encodeURIComponent(action)}`, {
       method: "POST",
@@ -2114,7 +2112,7 @@ async function startScheduleOperation() {
     });
     state.schedulePendingAction = "";
     byId("schedule-confirm").checked = false;
-    setGlobalStatus("Schedule operation started. Review the Windows UAC prompt.", true);
+    setGlobalStatus("Schedule simulation started. No host approval prompt or mutation occurs.", true);
   } catch (error) {
     setGlobalStatus(error.message, true);
   } finally {
@@ -2181,25 +2179,22 @@ function renderAccessSettings() {
   accessButton.setAttribute("aria-label", `${accessLabel}. Open password settings.`);
   accessButton.replaceChildren(createMaterialIcon(locked ? "lock" : "lock-open"));
   setText("access-settings-copy", runtimeRequired
-    ? "This Manager mode requires authentication. A password can be changed here, but the lock cannot be disabled while this mode is active."
+    ? "This fictional Manager mode requires a demo password. Reloading clears the temporary state."
     : localLock
-      ? "The optional password lock is enabled. Existing sessions remain active; a password is required after sign-out or restart."
-      : `${accessSurfaceLabel()} is currently trusted without a password. Enable the optional lock when other people can reach this Manager.`);
-  setText("access-password-label", passwordLockActive ? "New password" : "Create password");
-  setSwappingButtonText("access-password-submit", passwordLockActive ? "Change password" : "Enable password lock");
+      ? "The optional demo lock is enabled in memory. Sign out to preview the fictional login screen, or reload to reset it."
+      : `${accessSurfaceLabel()} is unlocked. Enable the optional demo lock to explore the workflow; no value will be stored.`);
+  setText("access-password-label", passwordLockActive ? "New demo password" : "Create demo password");
+  setSwappingButtonText("access-password-submit", passwordLockActive ? "Change demo password" : "Enable demo lock");
   byId("access-disable-button").hidden = !localLock || !access.canDisable;
   byId("logout-button").hidden = !locked;
   const policy = byId("config-secret-policy");
   if (policy) policy.textContent = locked
-    ? "Secrets stay hidden by default. Saving preserves stored credentials unless you replace or clear them. Revealing one value requires your Manager password, returns only that field, and clears it from the page after 30 seconds. Existing configurations receive a private timestamped backup."
-    : "Secrets stay hidden by default. Saving preserves stored credentials unless you replace or clear them. An explicit reveal returns only the selected field and clears it from the page after 30 seconds. Existing configurations receive a private timestamped backup.";
+    ? "Fictional values only: edits live in memory for this tab and reset on reload. The temporary demo password gates a fixed non-secret placeholder reveal; no credential is stored."
+    : "Fictional values only: edits live in memory for this tab and reset on reload. Secret controls reveal a fixed non-secret placeholder; no credential is stored.";
 }
 
 function accessSurfaceLabel() {
-  const platform = String(state.status?.platform || "").toLowerCase();
-  if (platform === "windows") return "Browser access";
-  if (platform === "linux" || platform === "freebsd") return "Container access";
-  return "Manager access";
+  return "GUI Preview access";
 }
 
 function openAccessSettings() {
@@ -2223,15 +2218,15 @@ async function submitAccessPassword(event) {
   const button = byId("access-password-submit");
   button.disabled = true;
   setSwappingButtonText("access-password-submit", state.authAccess?.passwordLockEnabled ? "Changing password..." : "Enabling lock...");
-  message.textContent = state.authAccess?.passwordLockEnabled ? "Changing the local Manager password..." : "Enabling the local Manager password lock...";
+  message.textContent = state.authAccess?.passwordLockEnabled ? "Changing the temporary demo password..." : "Enabling the in-memory demo lock...";
   try {
     state.authAccess = await request("/api/v1/auth/access/password", { method: "POST", body: JSON.stringify({ password }) });
     byId("access-password").value = "";
     byId("access-password-confirm").value = "";
     concealMaskedInputs(byId("access-password-form"));
     renderAccessSettings();
-    message.textContent = "Manager access settings saved. This browser remains signed in.";
-    setGlobalStatus("Manager password lock updated.", true);
+    message.textContent = "Demo lock state updated in memory. This browser remains signed in.";
+    setGlobalStatus("Temporary Manager lock updated.", true);
   } catch (error) {
     message.textContent = error.message;
   } finally {
@@ -2245,12 +2240,12 @@ async function disableAccessPassword() {
   const message = byId("access-settings-message");
   button.disabled = true;
   setSwappingButtonText("access-disable-button", "Disabling lock...");
-  message.textContent = "Disabling the optional Manager password lock...";
+  message.textContent = "Disabling the temporary demo lock...";
   try {
     state.authAccess = await request("/api/v1/auth/access/disable", { method: "POST", body: "{}" });
     renderAccessSettings();
-    message.textContent = "Password lock disabled. The Manager remains limited to this computer.";
-    setGlobalStatus("Manager returned to trusted-local access.", true);
+    message.textContent = "Demo lock disabled. No value was persisted.";
+    setGlobalStatus("Manager preview returned to unlocked demo access.", true);
   } catch (error) {
     message.textContent = error.message;
   } finally {
@@ -2263,8 +2258,8 @@ function renderAbout() {
   setText("about-version", state.about.version || "Version unavailable");
   setText("about-package", state.about.packageVersion || "Package version unavailable");
   const events = state.diagnostics?.events || [];
-  setText("diagnostics-count", events.length ? `${events.length} retained` : "No events");
-  setText("diagnostics-retention", `Up to ${state.diagnostics?.maximumEntries || 200} events for ${state.diagnostics?.retentionDays || 30} days.`);
+  setText("diagnostics-count", events.length ? `${events.length} fictional` : "No events");
+  setText("diagnostics-retention", "Bundled demo events; reset on reload.");
   const container = byId("diagnostics-list");
   container.replaceChildren();
   if (!events.length) {
@@ -2281,7 +2276,7 @@ function renderAbout() {
     const heading = document.createElement("h3");
     heading.textContent = event.summary;
     const metadata = document.createElement("p");
-    metadata.textContent = `${diagnosticAreaLabel(event.area)} · Support code ${event.code}`;
+    metadata.textContent = `${diagnosticAreaLabel(event.area)} · Demo code ${event.code}`;
     copy.append(heading, metadata);
     const evidence = document.createElement("div");
     evidence.className = "diagnostic-evidence";
@@ -2307,8 +2302,9 @@ function openPreview(id, button) {
   byId("preview-placeholder").hidden = true;
   const frame = byId("preview-frame");
   if (frame.dataset.previewId !== id) {
-    if (window.TautWeeklyPreviewDemo?.html) frame.srcdoc = window.TautWeeklyPreviewDemo.html(id);
-    else frame.src = `/preview/${encodeURIComponent(id)}`;
+    frame.srcdoc = window.TautWeeklyPreviewDemo?.html
+      ? window.TautWeeklyPreviewDemo.html(id)
+      : "<!doctype html><html><body><p>Synthetic preview content is unavailable. No request was made.</p></body></html>";
     frame.dataset.previewId = id;
   }
   frame.hidden = false;
@@ -2467,18 +2463,18 @@ function setGlobalStatus(message, dismiss = false) {
 
 function overallHeading(overall) {
   switch (overall) {
-  case "healthy": return "The local management surface is responding.";
-  case "unconfigured": return "TautWeekly is ready for guided setup.";
-  case "blocked": return "Configuration needs attention before delivery.";
-  default: return "The manager is online with a degraded signal.";
+  case "healthy": return "The synthetic management surface is ready.";
+  case "unconfigured": return "The GUI Preview is ready for guided setup.";
+  case "blocked": return "The fictional configuration needs attention.";
+  default: return "The GUI Preview is showing a degraded synthetic signal.";
   }
 }
 function overallCopy(overall) {
   switch (overall) {
-  case "healthy": return "Status is read from this host. No settings were changed and no external connection tests were run.";
-  case "unconfigured": return "No private configuration was found. Automatic delivery remains unavailable until setup is completed.";
-  case "blocked": return "A configuration file exists but cannot be interpreted safely. The manager will not guess or coerce its values.";
-  default: return "One or more optional status probes could not be completed. Review the health cards below.";
+  case "healthy": return "Fictional status is generated in memory. No host setting, service, file, credential, message, or scheduler is touched.";
+  case "unconfigured": return "No fictional configuration is loaded. Complete the demo setup to explore the remaining workflows.";
+  case "blocked": return "The synthetic configuration cannot be interpreted safely. Reload the page to restore the fixed demo values.";
+  default: return "One or more synthetic probes could not be completed. Review the health cards below.";
   }
 }
 function formatDate(value) {
