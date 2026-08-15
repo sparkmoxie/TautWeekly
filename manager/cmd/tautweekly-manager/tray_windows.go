@@ -40,8 +40,6 @@ const (
 	trayNINSelect       = 0x0400
 	trayNINKeySelect    = 0x0401
 	trayMFString        = 0x0000
-	trayMFGray          = 0x0001
-	trayMFDisabled      = 0x0002
 	trayMFSeparator     = 0x0800
 	trayMIIMBitmap      = 0x0080
 	trayTPMRightButton  = 0x0002
@@ -364,9 +362,12 @@ func (t *windowsManagerTray) showMenu() {
 		return
 	}
 	defer trayDestroyMenu.Call(menu)
-	statusLabel, _ := syscall.UTF16PtrFromString(t.currentHealth().label())
+	statusLabel, _ := syscall.UTF16PtrFromString("Status: " + t.currentHealth().label())
 	exitLabel, _ := syscall.UTF16PtrFromString("Exit TautWeekly for Plex")
-	trayAppendMenu.Call(menu, trayMFString|trayMFGray|trayMFDisabled, trayStatusMenuID, uintptr(unsafe.Pointer(statusLabel)))
+	// Windows desaturates an hbmpItem on disabled menu rows. Keep this native
+	// status row enabled so its health color remains truthful, but intentionally
+	// ignore its command below; the "Status:" label makes the no-op clear.
+	trayAppendMenu.Call(menu, trayMFString, trayStatusMenuID, uintptr(unsafe.Pointer(statusLabel)))
 	trayAppendMenu.Call(menu, trayMFSeparator, 0, 0)
 	trayAppendMenu.Call(menu, trayMFString, trayExitMenuID, uintptr(unsafe.Pointer(exitLabel)))
 	bitmap := createTrayStatusBitmap(t.currentHealth())
