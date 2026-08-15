@@ -1,0 +1,22 @@
+{
+  "name": "TautWeekly Manager GUI Preview",
+  "short_name": "GUI Preview",
+  "description": "Static interactive TautWeekly Manager preview with fictional data only.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#080909",
+  "theme_color": "#080909",
+  "icons": [
+    {
+      "src": "tautweekly-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "tautweekly-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

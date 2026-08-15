@@ -21,6 +21,7 @@ Turn Plex activity into polished new-release, personal-recap, welcome, quiet-wee
 and milestone emails. Preview locally, send controlled tests, then schedule delivery.
 
 [TautWeekly Quickstart](https://sparkmoxie.github.io/TautWeekly/) ·
+[GUI Preview](https://sparkmoxie.github.io/TautWeekly/gui-preview/) ·
 [Preview the email states](https://sparkmoxie.github.io/TautWeekly/examples/preview-all-00-INDEX.html) ·
 [Download the latest release](https://github.com/sparkmoxie/TautWeekly/releases/latest) ·
 [Read the documentation](docs/README.md)
@@ -88,6 +89,7 @@ sequence, update and rollback behavior, network guidance, and troubleshooting.
 ## Quick links
 
 - [Interactive Quickstart home](https://sparkmoxie.github.io/TautWeekly/)
+- [GUI Preview](https://sparkmoxie.github.io/TautWeekly/gui-preview/)
 - [Email States Preview](https://sparkmoxie.github.io/TautWeekly/examples/preview-all-00-INDEX.html)
 - [Latest release and notes](https://github.com/sparkmoxie/TautWeekly/releases/latest)
 - [SHA-256 checksums](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/SHA256SUMS.txt)

@@ -1,0 +1,334 @@
+"use strict";
+
+(() => {
+  const now = () => new Date().toISOString();
+  const revision = "demo-revision-2026";
+  const previewDefinitions = [
+    ["demo-index", "preview-all-00-INDEX", 3900],
+    ["demo-welcome", "preview-all-01-manual-welcome", 18200],
+    ["demo-new", "preview-all-02-new-user-no-history", 19600],
+    ["demo-history", "preview-all-03-new-user-with-history", 21400],
+    ["demo-normal", "preview-all-04-normal-newsletter", 24600],
+    ["demo-quiet", "preview-all-05-established-quiet", 17800],
+    ["demo-warnings", "preview-all-06-established-warmup", 18400],
+  ];
+  const previewLabels = [
+    "Index",
+    "Manual Welcome",
+    "New User - No History",
+    "New User - With History",
+    "Normal Newsletter",
+    "Established Quiet",
+    "Established Warnings",
+  ];
+  const userNames = [
+    "Morgan Vale", "Avery Stone", "Casey Rowan", "Drew Harbor", "Emery Quinn", "Finley Park",
+    "Harper Lane", "Indigo Reed", "Jordan Frost", "Kai Meadow", "Logan Wren", "Marlow Sage",
+    "Nova Brooks", "Oakley Rivers", "Parker Bloom", "Quinn Lake", "Remy North", "Sasha Cove",
+  ];
+  const users = userNames.map((name, index) => ({
+    id: String(41001 + index),
+    name,
+    eligibility: "eligible",
+    ...(index === 0 ? { role: "administrator" } : {}),
+  }));
+  const libraries = [
+    { id: "11", name: "Cinema", mediaType: "movie", itemCount: "642" },
+    { id: "12", name: "Series", mediaType: "show", itemCount: "118" },
+    { id: "13", name: "Family Matinee", mediaType: "movie", itemCount: "204" },
+  ];
+  const field = (name, label, group, type, value, extras = {}) => ({ name, label, group, type, value, required: false, ...extras });
+  const editorFields = [
+    field("TautulliUrl", "Tautulli URL", "Connections", "url", "http://tautulli.demo.invalid:8181", { required: true, help: "Fictional demonstration endpoint. No request leaves this page." }),
+    field("ApiKey", "Tautulli API key", "Connections", "secret", undefined, { required: true, secret: { configured: true }, help: "A synthetic write-only value is represented here." }),
+    field("PlexServerUrl", "Direct Plex server URL", "Connections", "url", "http://plex.demo.invalid:32400", { help: "Fictional demonstration endpoint." }),
+    field("PlexToken", "Plex token", "Connections", "secret", undefined, { secret: { configured: true }, help: "A synthetic write-only value is represented here." }),
+    field("PlexWebUrl", "Open Plex button URL", "Identity", "url", "https://plex-web.demo.invalid/", { required: true, help: "Fictional demonstration link. It is never opened by this preview." }),
+    field("ServerLabel", "Header label", "Identity", "text", "STARLIGHT CINEMA", { required: true }),
+    field("FooterServerName", "Server display name", "Identity", "text", "Starlight Cinema", { required: true }),
+    field("FromName", "From display name", "Email", "text", "Starlight Weekly", { required: true }),
+    field("FromEmail", "From email", "Email", "email", "newsletter@example.com", { required: true }),
+    field("ReplyToEmail", "Reply-to email", "Email", "email", "hello@example.com"),
+    field("TestEmail", "Test recipient", "Email", "email", "operator@example.com", { required: true }),
+    field("SmtpHost", "SMTP host", "SMTP", "text", "smtp.starlight.invalid", { required: true }),
+    field("SmtpPort", "SMTP port", "SMTP", "integer", 587, { required: true, min: 1, max: 65535 }),
+    field("SmtpEnableSsl", "Use TLS / STARTTLS", "SMTP", "boolean", true),
+    field("SmtpUseAuthentication", "Use SMTP authentication", "SMTP", "boolean", true),
+    field("SmtpUsername", "SMTP username", "SMTP", "text", "newsletter@example.com"),
+    field("SmtpPassword", "SMTP password", "SMTP", "secret", undefined, { secret: { configured: true }, help: "A synthetic write-only value is represented here." }),
+    field("SmtpAuthenticationMethod", "Authentication method", "SMTP", "select", "Auto", { required: true, options: ["Auto"] }),
+    field("SmtpTimeoutSeconds", "SMTP timeout (seconds)", "SMTP", "integer", 30, { required: true, min: 1, max: 300 }),
+    field("ScheduleDay", "Weekly send day", "Schedule", "select", "Friday", { required: true, options: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] }),
+    field("ScheduleTime", "Weekly local send time", "Schedule", "time", "09:30", { required: true }),
+    field("ScheduledTaskName", "Scheduler task name", "Schedule", "text", "TautWeekly for Plex Newsletter", { required: true }),
+    field("DaysBack", "Newsletter history days", "Newsletter", "integer", 7, { required: true, min: 1, max: 3650 }),
+    field("RecentAccessDays", "Recent-access days", "Newsletter", "integer", 7, { required: true, min: 1, max: 3650 }),
+    field("WatchedPercent", "Watched threshold (%)", "Newsletter", "integer", 85, { required: true, min: 1, max: 100 }),
+    field("MaxMovies", "Maximum movies", "Newsletter", "integer", 8, { required: true, min: 0, max: 100 }),
+    field("MaxTv", "Maximum TV entries", "Newsletter", "integer", 8, { required: true, min: 0, max: 100 }),
+    field("DeletedItemCacheEnabled", "Enable deleted-item cache", "Cache", "boolean", true),
+    field("DeletedItemCacheRetentionDays", "Cache retention days", "Cache", "integer", 365, { required: true, min: 1, max: 3650 }),
+    field("DeletedItemCacheMaxItems", "Maximum cached items", "Cache", "integer", 1000, { required: true, min: 1, max: 10000 }),
+    field("IncludedLibraryIds", "Included library IDs", "Advanced", "string-list", ["11", "12", "13"]),
+    field("ExcludedUserIds", "Excluded user IDs", "Advanced", "string-list", ["41005", "41012"]),
+    field("ExcludedEmails", "Excluded email addresses", "Advanced", "email-list", []),
+  ];
+
+  const integration = {
+    mode: "synthetic-demo",
+    networkBoundary: "simulated only",
+    overall: "passed",
+    startedAtUtc: now(),
+    completedAtUtc: now(),
+    configRevision: revision,
+    steps: [
+      { service: "tautulli", state: "passed", summary: "Synthetic Tautulli identity, library, and user checks passed." },
+      { service: "plex", state: "passed", summary: "Synthetic direct Plex identity and library checks passed." },
+    ],
+  };
+  const smtp = {
+    mode: "synthetic-demo",
+    overall: "passed",
+    state: "passed",
+    security: "STARTTLS simulated",
+    completedAtUtc: now(),
+    configRevision: revision,
+    summary: "Synthetic SMTP greeting, EHLO, and certificate-validated STARTTLS checks passed.",
+  };
+  const setupStatus = {
+    schemaVersion: 1,
+    available: true,
+    configRevision: revision,
+    running: false,
+    updatedAtUtc: now(),
+    steps: {
+      choices: { state: "passed", summary: "3 fictional libraries and 18 fictional users loaded in memory." },
+      lan: { state: "passed", summary: "Synthetic Tautulli and direct Plex verification passed." },
+      smtp: { state: "passed", summary: "Synthetic SMTP reachability and STARTTLS validation passed." },
+      previews: { state: "passed", summary: "Six fictional newsletter states are available for review." },
+    },
+    lastVerification: integration,
+    lastSmtpCheck: smtp,
+  };
+  const discovery = {
+    mode: "synthetic-demo",
+    networkBoundary: "no network",
+    completedAtUtc: now(),
+    configRevision: revision,
+    libraries,
+    users,
+    suggestedPreviewUserId: "41001",
+  };
+  const previews = previewDefinitions.map(([id, name, sizeBytes]) => ({ id, name, sizeBytes, modifiedUtc: now() }));
+  const completedPreview = {
+    schemaVersion: 1,
+    id: "demo-operation-initial",
+    type: "preview-all",
+    trigger: "gui-preview",
+    packageVersion: "GUI Preview",
+    state: "succeeded",
+    outcome: "succeeded",
+    startedAtUtc: new Date(Date.now() - 9000).toISOString(),
+    finishedAtUtc: now(),
+    durationMs: 9000,
+    generatedPreviewIds: previews.map((item) => item.id),
+    cancellable: false,
+  };
+  const model = {
+    schedule: { installed: true, enabled: true, owned: true, ownership: "verified", state: "ready" },
+    operation: completedPreview,
+    operationStartedMS: 0,
+    history: [completedPreview],
+    scheduleOperation: null,
+    scheduleStartedMS: 0,
+    lockEnabled: false,
+  };
+
+  function editor() {
+    return {
+      schemaVersion: 1,
+      exists: true,
+      valid: true,
+      state: "ready",
+      revision,
+      groups: ["Connections", "Identity", "Email", "SMTP", "Schedule", "Newsletter", "Cache", "Advanced"],
+      fields: editorFields,
+      issues: {},
+      directPlex: { legacyFieldsMissing: false, urlConfigured: true, tokenConfigured: true, runtimeTokenAvailable: false },
+    };
+  }
+
+  function status() {
+    const observedAtUtc = now();
+    const next = new Date(Date.now() + 1000 * 60 * 60 * 38);
+    return {
+      schemaVersion: 1,
+      observedAtUtc,
+      overall: "healthy",
+      platform: "demo",
+      version: "GUI Preview",
+      runtime: { manager: "healthy", preview: "ready", scheduler: model.schedule.installed ? "ready" : "not-installed" },
+      readiness: { configuration: "ready", privateData: "ready" },
+      schedule: {
+        supported: true,
+        ...model.schedule,
+        nextRunUtc: model.schedule.installed ? next.toISOString() : "",
+        nextRunLocal: model.schedule.installed ? next.toISOString() : "",
+      },
+      delivery: {
+        lastAttemptUtc: new Date(Date.now() - 1000 * 60 * 60 * 18).toISOString(),
+        lastSuccessUtc: new Date(Date.now() - 1000 * 60 * 60 * 18).toISOString(),
+        result: "simulated-accepted",
+        evidence: "renderer-result",
+        smtpAcceptedCount: 14,
+        skippedCount: 2,
+        failedCount: 0,
+      },
+      integrations: { tautulli: "passed", plex: "passed", smtp: "passed" },
+      previewCount: previews.length,
+      previewSummary: "6 fictional states + index",
+    };
+  }
+
+  function configView() {
+    return {
+      exists: true,
+      valid: true,
+      state: "ready",
+      fields: editorFields.map((item) => item.type === "secret"
+        ? { name: item.name, type: item.type, secret: { configured: true } }
+        : { name: item.name, type: item.type, value: item.value }),
+    };
+  }
+
+  function finishOperationIfReady() {
+    if (!model.operation || !["queued", "running", "cancelling"].includes(model.operation.state)) return;
+    if (Date.now() - model.operationStartedMS < 900) return;
+    const operation = model.operation;
+    operation.state = operation.state === "cancelling" ? "cancelled" : "succeeded";
+    operation.outcome = operation.state === "cancelled" ? "cancelled" : "succeeded";
+    operation.finishedAtUtc = now();
+    operation.durationMs = Date.now() - model.operationStartedMS;
+    operation.cancellable = false;
+    if (operation.type === "preview-all") operation.generatedPreviewIds = previews.map((item) => item.id);
+    if (operation.type === "send-test-all") operation.smtpAcceptedCount = 6;
+    if (operation.type === "send-welcome") operation.smtpAcceptedCount = 1;
+    if (operation.type === "send-all") operation.smtpAcceptedCount = 14;
+    model.history = [operation, ...model.history.filter((item) => item.id !== operation.id)].slice(0, 8);
+  }
+
+  function startOperation(body) {
+    const id = `demo-operation-${Date.now()}`;
+    model.operationStartedMS = Date.now();
+    model.operation = {
+      schemaVersion: 1,
+      id,
+      type: body.type,
+      trigger: "gui-preview",
+      packageVersion: "GUI Preview",
+      state: "running",
+      startedAtUtc: now(),
+      deliveryScope: body.type === "send-test-all" ? "test-email" : body.type === "send-all" ? "all-eligible" : body.type === "send-welcome" ? "selected-user" : "local-preview",
+      generatedPreviewIds: [],
+      cancellable: body.type === "preview-all",
+    };
+    return model.operation;
+  }
+
+  function finishScheduleIfReady() {
+    if (!model.scheduleOperation || !["queued", "running"].includes(model.scheduleOperation.state)) return;
+    if (Date.now() - model.scheduleStartedMS < 800) return;
+    const action = model.scheduleOperation.action;
+    if (action === "install") Object.assign(model.schedule, { installed: true, enabled: true, owned: true, ownership: "verified", state: "ready" });
+    if (action === "enable") Object.assign(model.schedule, { installed: true, enabled: true, state: "ready" });
+    if (action === "disable") Object.assign(model.schedule, { enabled: false, state: "disabled" });
+    if (action === "remove") Object.assign(model.schedule, { installed: false, enabled: false, owned: false, ownership: "not-installed", state: "not-installed" });
+    model.scheduleOperation.state = "succeeded";
+    model.scheduleOperation.finishedAtUtc = now();
+  }
+
+  function startSchedule(action) {
+    model.scheduleStartedMS = Date.now();
+    model.scheduleOperation = { schemaVersion: 1, id: `demo-schedule-${Date.now()}`, action, state: "running", startedAtUtc: now() };
+    return model.scheduleOperation;
+  }
+
+  function json(payload, statusCode = 200) {
+    return Promise.resolve(new Response(JSON.stringify(payload), { status: statusCode, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } }));
+  }
+
+  function bodyOf(init) {
+    if (!init?.body) return {};
+    try { return JSON.parse(init.body); } catch (_) { return {}; }
+  }
+
+  window.fetch = (input, init = {}) => {
+    const raw = typeof input === "string" ? input : input.url;
+    const url = new URL(raw, window.location.href);
+    const path = url.pathname.replace(/^\/TautWeekly/, "");
+    const method = String(init.method || (typeof input !== "string" && input.method) || "GET").toUpperCase();
+    const body = bodyOf(init);
+    finishOperationIfReady();
+    finishScheduleIfReady();
+
+    if (path === "/api/v1/setup") return json({ paired: true, authenticationRequired: false, pairingRequired: false });
+    if (path === "/api/v1/auth/session" || path === "/api/v1/auth/login" || path === "/api/v1/auth/pair") return json({ authenticated: true, csrfToken: "synthetic-demo-token", expiresAtUtc: new Date(Date.now() + 86400000).toISOString() });
+    if (path === "/api/v1/auth/logout") return json({ signedOut: true });
+    if (path === "/api/v1/auth/access" && method === "GET") return json({ mode: "trusted-local", authenticationRequired: model.lockEnabled, passwordConfigured: model.lockEnabled, passwordLockEnabled: model.lockEnabled, pairingRequired: false, runtimeRequired: false, canDisable: model.lockEnabled });
+    if (path === "/api/v1/auth/access/password") { model.lockEnabled = true; return json({ mode: "optional-lock", authenticationRequired: true, passwordConfigured: true, passwordLockEnabled: true, pairingRequired: false, runtimeRequired: false, canDisable: true }); }
+    if (path === "/api/v1/auth/access/disable") { model.lockEnabled = false; return json({ mode: "trusted-local", authenticationRequired: false, passwordConfigured: false, passwordLockEnabled: false, pairingRequired: false, runtimeRequired: false, canDisable: false }); }
+    if (path === "/api/v1/status") return json(status());
+    if (path === "/api/v1/config") {
+      if (method === "PUT") {
+        for (const [name, value] of Object.entries(body.values || {})) {
+          const target = editorFields.find((item) => item.name === name);
+          if (target) target.value = value;
+        }
+        return json({ saved: true, backup: "synthetic-demo-backup", editor: editor() });
+      }
+      return json(configView());
+    }
+    if (path === "/api/v1/config/editor") return json(editor());
+    if (path === "/api/v1/config/status" || path === "/api/v1/config/status/previews/skipped") return json(setupStatus);
+    if (path === "/api/v1/config/backups") return json({ backups: [{ id: "demo-backup", createdAtUtc: new Date(Date.now() - 86400000).toISOString(), sizeBytes: 4812, revision: "demo-backup-revision" }] });
+    if (/^\/api\/v1\/config\/backups\/[^/]+\/restore$/.test(path)) return json({ restored: true, sourceId: "demo-backup", safetyBackup: "synthetic-safety-backup", editor: editor() });
+    if (/^\/api\/v1\/config\/secrets\/[^/]+\/reveal$/.test(path)) return json({ name: decodeURIComponent(path.split("/").at(-2)), value: "FICTIONAL-DEMO-VALUE" });
+    if (path === "/api/v1/checks/integrations") return json(integration);
+    if (path === "/api/v1/checks/smtp-network") return json(smtp);
+    if (path === "/api/v1/discovery/tautulli") return json(method === "POST" ? discovery : { last: discovery });
+    if (path === "/api/v1/previews") return json({ previews });
+    if (path === "/api/v1/operations" && method === "POST") return json(startOperation(body), 202);
+    if (path === "/api/v1/operations/current") return json({ current: model.operation });
+    if (/^\/api\/v1\/operations\/[^/]+\/cancel$/.test(path)) { if (model.operation) model.operation.state = "cancelling"; return json(model.operation); }
+    if (/^\/api\/v1\/operations\/[^/]+$/.test(path)) return json(model.operation);
+    if (path === "/api/v1/history") return json({ operations: model.history });
+    if (path === "/api/v1/schedule/operation") return json({ current: model.scheduleOperation });
+    if (/^\/api\/v1\/schedule\/(install|enable|disable|remove)$/.test(path) && method === "POST") return json(startSchedule(path.split("/").at(-1)), 202);
+    if (path === "/api/v1/about") return json({ version: "GUI Preview", packageVersion: "Synthetic demonstration" });
+    if (path === "/api/v1/diagnostics") return json({ events: [
+      { schemaVersion: 1, recordedAtUtc: now(), area: "configuration", outcome: "passed", code: "config-saved", summary: "Synthetic configuration validation completed." },
+      { schemaVersion: 1, recordedAtUtc: now(), area: "tautulli-discovery", outcome: "passed", code: "discovery-completed", summary: "Fictional library and user choices were loaded in memory." },
+      { schemaVersion: 1, recordedAtUtc: now(), area: "lan-verification", outcome: "passed", code: "verification-passed", summary: "Synthetic Tautulli and Plex connection checks passed." },
+      { schemaVersion: 1, recordedAtUtc: now(), area: "smtp-preflight", outcome: "passed", code: "smtp-passed", summary: "Synthetic SMTP connectivity and STARTTLS validation passed." },
+    ], maximumEntries: 200, retentionDays: 30 });
+    return json({ error: { code: "demo-route-unavailable", message: "This action is outside the synthetic GUI preview." } }, 404);
+  };
+
+  function newsletterFrame(title, eyebrow, accent, quiet = false) {
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+      :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#090a0a;color:#f7f4ed;font:15px/1.55 Arial,sans-serif}.mail{max-width:760px;margin:auto;padding:46px 28px 80px}.brand{color:#ffb000;font-weight:900;letter-spacing:.18em}.hero{margin:26px 0;padding:28px;border:1px solid #7a5700;border-radius:18px;background:linear-gradient(135deg,#251d09,#121313 55%)}h1{font-size:42px;line-height:1;margin:8px 0 12px}h2{font-size:26px;margin:34px 0 12px}.meta{color:#a8b1b6}.shelf{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.poster{min-height:225px;border-radius:14px;padding:18px;display:flex;align-items:flex-end;background:linear-gradient(160deg,${accent},#181919 72%);border:1px solid #333}.poster strong{font-size:18px}.badge{display:inline-block;color:#ffb000;font-weight:800;text-transform:uppercase;letter-spacing:.12em}.quiet{padding:36px;text-align:center;border:1px solid #333;border-radius:18px;background:#131414}@media(max-width:620px){.mail{padding:28px 16px}.shelf{grid-template-columns:1fr 1fr}h1{font-size:34px}}
+    </style></head><body><main class="mail"><div class="brand">STARLIGHT CINEMA</div><section class="hero"><span class="badge">${eyebrow}</span><h1>${title}</h1><p class="meta">A fictional TautWeekly email state for GUI demonstration only.</p></section>${quiet ? `<div class="quiet"><div style="font-size:42px">🍿</div><h2>A quiet week can still feel polished.</h2><p>No qualifying new releases were found in this synthetic state.</p></div>` : `<h2>Fresh this week</h2><div class="shelf"><div class="poster"><strong>Orbit House</strong></div><div class="poster" style="background:linear-gradient(160deg,#48336d,#181919 72%)"><strong>Neon Harbor</strong></div><div class="poster" style="background:linear-gradient(160deg,#194e4a,#181919 72%)"><strong>Paper Moons</strong></div></div>`}<p class="meta" style="margin-top:38px">All names, titles, counts, and events on this page are fictional.</p></main></body></html>`;
+  }
+
+  window.TautWeeklyPreviewDemo = {
+    html(id) {
+      if (id === "demo-index") {
+        const links = previewDefinitions.slice(1).map(([, name], index) => `<article><div><strong>${previewLabels[index + 1]}</strong><small>Synthetic newsletter scenario</small></div><a href="${name}.html">Open preview</a></article>`).join("");
+        return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#090a0a;color:#f7f4ed;font:15px Arial,sans-serif}.wrap{max-width:820px;margin:auto;padding:42px 26px}span{color:#ffb000;font-weight:900;letter-spacing:.15em}h1{font-size:42px;margin:10px 0}p,small{color:#9aa4aa}article{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:12px 0;padding:20px;border:1px solid #303333;border-radius:14px;background:#141515}article strong,article small{display:block}a{padding:12px 16px;border-radius:10px;background:#f0a900;color:#090a0a;font-weight:900;text-decoration:none}@media(max-width:580px){article{align-items:flex-start;flex-direction:column}h1{font-size:34px}}</style></head><body><main class="wrap"><span>TAUTWEEKLY GUI PREVIEW</span><h1>Six fictional email states.</h1><p>Choose any scenario. Links stay inside this preview frame and never open a service or a new window.</p>${links}</main></body></html>`;
+      }
+      const index = previewDefinitions.findIndex(([previewID]) => previewID === id);
+      const label = previewLabels[Math.max(1, index)] || "Newsletter Preview";
+      return newsletterFrame(label, index === 1 ? "Welcome aboard" : index === 6 ? "Readiness note" : "Weekly Plex drop", index === 6 ? "#6d352f" : "#70520d", index === 5);
+    },
+  };
+})();

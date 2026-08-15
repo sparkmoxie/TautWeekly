@@ -22,6 +22,7 @@
       <span>Taut<span>Weekly</span> <em>for Plex</em></span>
     </a>
     <nav aria-label="Primary navigation">
+      <a href="gui-preview/">GUI Preview</a>
       <a href="#platforms">Platforms</a>
       <a href="#workflow">Workflow</a>
       <a href="#architecture">Architecture</a>
@@ -45,6 +46,7 @@
           and enable delivery only when the result is ready.</p>
         <div class="actions">
           <a class="button primary" href="#platforms">Choose a platform</a>
+          <a class="button" href="gui-preview/">Explore GUI Preview</a>
           <a class="button" href="https://github.com/sparkmoxie/TautWeekly/releases/latest">Download latest release</a>
         </div>
         <div class="pills" aria-label="Supported platforms">
@@ -90,23 +92,35 @@
       <div><strong>0</strong><span>credentials shipped</span></div>
     </section>
 
-    <section id="showcase" class="section searchable" data-search="newsletter preview showcase examples states quiet week latest releases binge champion artwork ratings">
+    <section id="showcase" class="section searchable" data-search="manager gui newsletter preview showcase examples states quiet week latest releases binge champion artwork ratings">
       <div class="section-heading">
-        <div><div class="eyebrow">Visual reference</div><h2>Eight newsletter states, one standalone gallery</h2></div>
-        <p>Review the high-usage, onboarding, warmup, and quiet-week latest-release
-          treatments with representative real-title artwork before configuring a server.</p>
+        <div><div class="eyebrow">Interactive references</div><h2>Explore the Manager and newsletter output</h2></div>
+        <p>Try the complete Manager workflow with fictional data, then review the
+          standalone email-state gallery before configuring a server.</p>
       </div>
-      <article class="card featured">
-        <div class="card-icon docker">08</div>
-        <span class="tag">Standalone HTML</span>
-        <h3>Email States Preview</h3>
-        <p>Includes both anonymous duration-and-media-count Binge Champion treatments,
-          up-to-four movie/TV-show stats, a TV-only Trending-hero fallback,
-          Rotten Tomatoes movie scores, dense release shelves, and the
-          production quiet-week fallback.</p>
-        <ul><li>No Plex token</li><li>Public Plex Discover artwork</li><li>Dated score snapshot</li></ul>
-        <div class="card-actions"><a href="examples/preview-all-00-INDEX.html">Open Email States Preview</a></div>
-      </article>
+      <div class="cards">
+        <article class="card featured">
+          <div class="card-icon windows">GUI</div>
+          <span class="tag">Interactive · fictional</span>
+          <h3>Manager GUI Preview</h3>
+          <p>Explore configuration and discovery, passing synthetic checks,
+            scheduler lifecycle, sandboxed previews, guarded delivery simulations,
+            the optional lock, and diagnostics.</p>
+          <ul><li>No external requests</li><li>No saved values</li><li>Resets on reload</li></ul>
+          <div class="card-actions"><a href="gui-preview/">Open GUI Preview</a></div>
+        </article>
+        <article class="card">
+          <div class="card-icon docker">08</div>
+          <span class="tag">Standalone HTML</span>
+          <h3>Email States Preview</h3>
+          <p>Includes both anonymous duration-and-media-count Binge Champion treatments,
+            up-to-four movie/TV-show stats, a TV-only Trending-hero fallback,
+            Rotten Tomatoes movie scores, dense release shelves, and the
+            production quiet-week fallback.</p>
+          <ul><li>No Plex token</li><li>Public Plex Discover artwork</li><li>Dated score snapshot</li></ul>
+          <div class="card-actions"><a href="examples/preview-all-00-INDEX.html">Open Email States Preview</a></div>
+        </article>
+      </div>
     </section>
 
     <section id="platforms" class="section searchable" data-search="install platform windows nas docker qnap unraid macos apple silicon intel linux systemd freebsd podman">
