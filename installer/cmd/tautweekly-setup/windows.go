@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -116,19 +117,77 @@ func chooseInstallDirectory(initial string) (string, bool, error) {
 }
 
 func preferredInstallDirectory(fallback string) string {
-	command := hiddenCommand("reg.exe", "query", `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`, "/v", "InstallLocation")
-	output, err := command.CombinedOutput()
+	for _, registered := range []struct {
+		name      string
+		directory func(string) string
+	}{
+		{name: "InstallLocation", directory: registeredInstallLocation},
+		{name: "UninstallString", directory: registeredExecutableDirectory},
+		{name: "DisplayIcon", directory: registeredDisplayIconDirectory},
+	} {
+		value, err := readWindowsUninstallValue(registered.name)
+		if err != nil {
+			continue
+		}
+		candidate := registered.directory(value)
+		if filepath.IsAbs(candidate) && (installedApplication(candidate) || verifiedPortableApplication(candidate)) {
+			return filepath.Clean(candidate)
+		}
+	}
+	return fallback
+}
+
+const windowsUninstallRegistryKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`
+
+var readWindowsUninstallValue = windowsUninstallValue
+
+func windowsUninstallValue(name string) (string, error) {
+	output, err := hiddenCommand("reg.exe", "query", windowsUninstallRegistryKey, "/v", name).CombinedOutput()
 	if err != nil {
-		return fallback
+		return "", err
 	}
 	for _, line := range strings.Split(string(output), "\n") {
 		if index := strings.Index(line, "REG_SZ"); index >= 0 {
 			if value := strings.TrimSpace(line[index+len("REG_SZ"):]); value != "" {
-				return value
+				return value, nil
 			}
 		}
 	}
-	return fallback
+	return "", fmt.Errorf("Windows uninstall value %s is unavailable", name)
+}
+
+func registeredInstallLocation(value string) string {
+	return strings.Trim(strings.TrimSpace(value), `"`)
+}
+
+func registeredExecutableDirectory(value string) string {
+	executable := strings.TrimSpace(value)
+	if strings.HasPrefix(executable, `"`) {
+		executable = strings.TrimPrefix(executable, `"`)
+		if closing := strings.Index(executable, `"`); closing >= 0 {
+			executable = executable[:closing]
+		}
+	} else if separator := strings.IndexAny(executable, " \t"); separator >= 0 {
+		executable = executable[:separator]
+	}
+	if executable == "" {
+		return ""
+	}
+	return filepath.Dir(executable)
+}
+
+func registeredDisplayIconDirectory(value string) string {
+	icon := strings.TrimSpace(value)
+	if comma := strings.LastIndex(icon, ","); comma >= 0 {
+		if _, err := strconv.Atoi(strings.TrimSpace(icon[comma+1:])); err == nil {
+			icon = icon[:comma]
+		}
+	}
+	icon = strings.Trim(strings.TrimSpace(icon), `"`)
+	if icon == "" {
+		return ""
+	}
+	return filepath.Dir(icon)
 }
 
 func hiddenCommand(name string, args ...string) *exec.Cmd {
@@ -262,7 +321,7 @@ func showMessage(title, message string, style uintptr) (uintptr, error) {
 
 func registerUninstaller(opts options) error {
 	uninstaller := filepath.Join(opts.installDir, "TautWeekly-Uninstall.exe")
-	key := `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`
+	key := windowsUninstallRegistryKey
 	values := [][]string{
 		{"add", key, "/v", "DisplayName", "/t", "REG_SZ", "/d", productName, "/f"},
 		{"add", key, "/v", "DisplayVersion", "/t", "REG_SZ", "/d", version, "/f"},
@@ -282,7 +341,7 @@ func registerUninstaller(opts options) error {
 }
 
 func unregisterUninstaller() error {
-	output, err := hiddenCommand("reg.exe", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`, "/f").CombinedOutput()
+	output, err := hiddenCommand("reg.exe", "delete", windowsUninstallRegistryKey, "/f").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("unregister uninstaller: %w: %s", err, output)
 	}

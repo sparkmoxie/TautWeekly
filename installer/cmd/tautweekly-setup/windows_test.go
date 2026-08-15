@@ -93,6 +93,77 @@ func TestWindowsSpecialFolderRejectsInvalidNativeAndFallbackPaths(t *testing.T) 
 	}
 }
 
+func TestPreferredInstallDirectoryUsesValidatedInstallLocation(t *testing.T) {
+	installed := filepath.Join(t.TempDir(), "Custom TautWeekly")
+	writeInstallerMarker(t, installed)
+	stubWindowsUninstallValues(t, map[string]string{"InstallLocation": installed})
+
+	if got := preferredInstallDirectory(filepath.Join(t.TempDir(), "fallback")); !samePath(got, installed) {
+		t.Fatalf("preferred install directory = %s, want %s", got, installed)
+	}
+}
+
+func TestPreferredInstallDirectoryRecoversFromRegisteredUninstaller(t *testing.T) {
+	installed := filepath.Join(t.TempDir(), "Custom TautWeekly With Spaces")
+	writeInstallerMarker(t, installed)
+	stubWindowsUninstallValues(t, map[string]string{
+		"InstallLocation": filepath.Join(t.TempDir(), "missing"),
+		"UninstallString": windowsQuote(filepath.Join(installed, "TautWeekly-Uninstall.exe")) + " --uninstall",
+	})
+
+	if got := preferredInstallDirectory(filepath.Join(t.TempDir(), "fallback")); !samePath(got, installed) {
+		t.Fatalf("recovered install directory = %s, want %s", got, installed)
+	}
+}
+
+func TestPreferredInstallDirectoryRecoversFromRegisteredIcon(t *testing.T) {
+	installed := filepath.Join(t.TempDir(), "Custom TautWeekly")
+	writeInstallerMarker(t, installed)
+	stubWindowsUninstallValues(t, map[string]string{
+		"DisplayIcon": windowsQuote(filepath.Join(installed, "tautweekly.ico")) + ",0",
+	})
+
+	if got := preferredInstallDirectory(filepath.Join(t.TempDir(), "fallback")); !samePath(got, installed) {
+		t.Fatalf("icon-derived install directory = %s, want %s", got, installed)
+	}
+}
+
+func TestPreferredInstallDirectoryRejectsUnownedRegistryPaths(t *testing.T) {
+	fallback := filepath.Join(t.TempDir(), "Programs", "TautWeekly")
+	stubWindowsUninstallValues(t, map[string]string{
+		"InstallLocation": t.TempDir(),
+		"UninstallString": windowsQuote(filepath.Join(t.TempDir(), "TautWeekly-Uninstall.exe")),
+		"DisplayIcon":     filepath.Join(t.TempDir(), "tautweekly.ico"),
+	})
+
+	if got := preferredInstallDirectory(fallback); !samePath(got, fallback) {
+		t.Fatalf("unowned registry path was accepted: got %s, want %s", got, fallback)
+	}
+}
+
+func stubWindowsUninstallValues(t *testing.T, values map[string]string) {
+	t.Helper()
+	original := readWindowsUninstallValue
+	t.Cleanup(func() { readWindowsUninstallValue = original })
+	readWindowsUninstallValue = func(name string) (string, error) {
+		value, ok := values[name]
+		if !ok {
+			return "", errors.New("registry value unavailable")
+		}
+		return value, nil
+	}
+}
+
+func writeInstallerMarker(t *testing.T, root string) {
+	t.Helper()
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "INSTALL-METADATA.txt"), []byte("Version=test\r\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCreateShortcutsUsesRedirectedDesktop(t *testing.T) {
 	root := t.TempDir()
 	programs := filepath.Join(root, "Programs")
