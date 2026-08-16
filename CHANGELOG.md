@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-16
+
 ### Added
 
 - Added a native Windows notification-area experience for the interactive
