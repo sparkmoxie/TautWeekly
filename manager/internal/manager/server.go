@@ -28,8 +28,12 @@ type Options struct {
 	ListenAddress         string
 	DataDir               string
 	TautWeeklyRoot        string
+	RuntimeRoot           string
 	Version               string
+	RuntimeMode           string
 	RequireAuthentication bool
+	AllowedHosts          []string
+	SecureCookies         bool
 	Now                   func() time.Time
 	operationRunner       operationRunner
 	operationCompleted    func(OperationRecord, string)
@@ -50,6 +54,7 @@ type Server struct {
 	operations        *operationCoordinator
 	schedule          *scheduleCoordinator
 	startup           startupSettingsController
+	capabilities      Capabilities
 	handler           http.Handler
 	bootstrapToken    string
 }
@@ -118,8 +123,21 @@ func New(options Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	runtimeRoot := options.RuntimeRoot
+	if strings.TrimSpace(runtimeRoot) == "" {
+		runtimeRoot = root
+	}
+	runtimeRoot, err = filepath.Abs(runtimeRoot)
+	if err != nil {
+		return nil, err
+	}
 	options.TautWeeklyRoot = filepath.Clean(root)
+	options.RuntimeRoot = filepath.Clean(runtimeRoot)
 	options.DataDir = filepath.Clean(dataDir)
+	options.RuntimeMode = normalizedRuntimeMode(options.RuntimeMode)
+	if options.RuntimeMode == runtimeModeNAS {
+		options.RequireAuthentication = true
+	}
 	store, err := newAuthStore(options.DataDir, options.Now, options.RequireAuthentication)
 	if err != nil {
 		return nil, err
@@ -129,7 +147,7 @@ func New(options Options) (*Server, error) {
 		if record.Type != "preview-all" || !validConfigRevision(revision) {
 			return
 		}
-		editor := ReadConfigEditor(options.TautWeeklyRoot)
+		editor := ReadConfigEditor(options.RuntimeRoot)
 		if editor.State != "ready" || editor.Revision != revision {
 			return
 		}
@@ -153,7 +171,9 @@ func New(options Options) (*Server, error) {
 		return nil, err
 	}
 	startup := options.startupController
-	if startup == nil {
+	if options.RuntimeMode == runtimeModeNAS {
+		startup = disabledStartupController{}
+	} else if startup == nil {
 		startup = newPlatformStartupController(options.TautWeeklyRoot, options.DataDir)
 	}
 	server := &Server{
@@ -166,6 +186,7 @@ func New(options Options) (*Server, error) {
 		operations:     operations,
 		schedule:       schedule,
 		startup:        startup,
+		capabilities:   capabilitiesFor(options),
 		bootstrapToken: store.bootstrapToken,
 	}
 	server.handler = server.routes()
@@ -192,6 +213,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/access/password", s.protected(s.handleAccessPassword, true))
 	mux.HandleFunc("POST /api/v1/auth/access/disable", s.protected(s.handleAccessDisable, true))
 	mux.HandleFunc("GET /api/v1/about", s.protected(s.handleAbout, false))
+	mux.HandleFunc("GET /api/v1/capabilities", s.protected(s.handleCapabilities, false))
 	mux.HandleFunc("GET /api/v1/diagnostics", s.protected(s.handleDiagnostics, false))
 	mux.HandleFunc("GET /api/v1/status", s.protected(s.handleStatus, false))
 	mux.HandleFunc("GET /api/v1/startup", s.protected(s.handleStartupSettings, false))
@@ -253,6 +275,9 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+		if s.options.SecureCookies {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		if !strings.HasPrefix(r.URL.Path, "/preview/") {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 			w.Header().Set("X-Frame-Options", "DENY")
@@ -271,7 +296,18 @@ func (s *Server) allowedHost(value string) bool {
 		return true
 	}
 	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	if ip != nil {
+		return ip.IsLoopback() || s.capabilities.RuntimeMode == runtimeModeNAS
+	}
+	if s.capabilities.RuntimeMode != runtimeModeNAS {
+		return false
+	}
+	for _, allowed := range s.options.AllowedHosts {
+		if strings.EqualFold(strings.TrimSpace(allowed), host) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) protected(next http.HandlerFunc, mutation bool) http.HandlerFunc {
@@ -321,6 +357,8 @@ func (s *Server) handleSetup(w http.ResponseWriter, _ *http.Request) {
 		"paired":                 s.auth.paired(),
 		"authenticationRequired": access.AuthenticationRequired,
 		"pairingRequired":        access.PairingRequired,
+		"runtimeMode":            s.capabilities.RuntimeMode,
+		"networkScope":           s.capabilities.NetworkScope,
 	})
 }
 
@@ -451,8 +489,12 @@ func (s *Server) handleAbout(w http.ResponseWriter, _ *http.Request) {
 		"name":           "TautWeekly Manager",
 		"version":        s.options.Version,
 		"packageVersion": readPackageVersion(s.options.TautWeeklyRoot),
-		"mode":           "windows-manager",
+		"mode":           s.capabilities.RuntimeMode + "-manager",
 	})
+}
+
+func (s *Server) handleCapabilities(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.capabilities)
 }
 
 func (s *Server) handleDiagnostics(w http.ResponseWriter, _ *http.Request) {
@@ -468,15 +510,15 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, ReadRedactedConfig(s.options.TautWeeklyRoot))
+	writeJSON(w, http.StatusOK, ReadRedactedConfig(s.options.RuntimeRoot))
 }
 
 func (s *Server) handleConfigEditor(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, ReadConfigEditor(s.options.TautWeeklyRoot))
+	writeJSON(w, http.StatusOK, ReadConfigEditor(s.options.RuntimeRoot))
 }
 
 func (s *Server) handleConfigurationStatus(w http.ResponseWriter, _ *http.Request) {
-	editor := ReadConfigEditor(s.options.TautWeeklyRoot)
+	editor := ReadConfigEditor(s.options.RuntimeRoot)
 	if editor.State != "ready" {
 		writeJSON(w, http.StatusOK, unavailableConfigurationStatus())
 		return
@@ -503,7 +545,7 @@ func (s *Server) handleSkipConfigurationPreviews(w http.ResponseWriter, r *http.
 		writeAPIError(w, http.StatusUnprocessableEntity, "invalid-preview-status-reason", "Choose a supported preview status reason.")
 		return
 	}
-	editor := ReadConfigEditor(s.options.TautWeeklyRoot)
+	editor := ReadConfigEditor(s.options.RuntimeRoot)
 	if editor.State != "ready" || editor.Revision != request.ExpectedRevision {
 		writeAPIError(w, http.StatusConflict, "config-conflict", "Configuration changed before preview status could be retained.")
 		return
@@ -513,7 +555,7 @@ func (s *Server) handleSkipConfigurationPreviews(w http.ResponseWriter, r *http.
 }
 
 func (s *Server) updateConfigurationStep(revision, name, state, summary string) {
-	editor := ReadConfigEditor(s.options.TautWeeklyRoot)
+	editor := ReadConfigEditor(s.options.RuntimeRoot)
 	if editor.State != "ready" || editor.Revision != revision {
 		return
 	}
@@ -541,7 +583,7 @@ func (s *Server) handleRevealConfigSecret(w http.ResponseWriter, r *http.Request
 
 	name := r.PathValue("name")
 	s.configMu.Lock()
-	value, err := ReadConfigSecret(s.options.TautWeeklyRoot, name, request.ExpectedRevision)
+	value, err := ReadConfigSecret(s.options.RuntimeRoot, name, request.ExpectedRevision)
 	s.configMu.Unlock()
 	switch {
 	case errors.Is(err, ErrConfigConflict):
@@ -573,7 +615,7 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	s.configMu.Lock()
 	defer s.configMu.Unlock()
-	result, fieldErrors, err := SaveConfig(s.options.TautWeeklyRoot, request, s.options.Now)
+	result, fieldErrors, err := SaveConfig(s.options.RuntimeRoot, request, s.options.Now)
 	if errors.Is(err, ErrConfigConflict) {
 		s.recordDiagnostic("configuration", "warning", "config-conflict")
 		writeAPIError(w, http.StatusConflict, "config-conflict", "Configuration changed after this form was loaded. Refresh and review the latest values.")
@@ -602,7 +644,7 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConfigBackups(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, ListConfigBackups(s.options.TautWeeklyRoot))
+	writeJSON(w, http.StatusOK, ListConfigBackups(s.options.RuntimeRoot))
 }
 
 func (s *Server) handleRestoreConfig(w http.ResponseWriter, r *http.Request) {
@@ -614,7 +656,7 @@ func (s *Server) handleRestoreConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	s.configMu.Lock()
 	defer s.configMu.Unlock()
-	result, fieldErrors, err := RestoreConfigBackup(s.options.TautWeeklyRoot, r.PathValue("id"), request.ExpectedRevision, s.options.Now)
+	result, fieldErrors, err := RestoreConfigBackup(s.options.RuntimeRoot, r.PathValue("id"), request.ExpectedRevision, s.options.Now)
 	switch {
 	case errors.Is(err, ErrBackupNotFound):
 		s.recordDiagnostic("recovery", "warning", "backup-not-found")
@@ -649,7 +691,7 @@ func (s *Server) handleRestoreConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIntegrationCheckState(w http.ResponseWriter, _ *http.Request) {
-	editor := ReadConfigEditor(s.options.TautWeeklyRoot)
+	editor := ReadConfigEditor(s.options.RuntimeRoot)
 	status := s.configuration.Load(editor.Revision)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"last": status.LastVerification, "smtp": status.LastSMTPCheck})
@@ -668,7 +710,7 @@ func (s *Server) handleRunIntegrationCheck(w http.ResponseWriter, r *http.Reques
 	}
 	defer s.verificationRunMu.Unlock()
 	s.updateConfigurationStep(request.ExpectedRevision, "lan", "running", "Testing the saved Tautulli and direct Plex endpoints.")
-	result, err := RunRealIntegrationCheck(r.Context(), s.options.TautWeeklyRoot, request, s.options.Now)
+	result, err := RunRealIntegrationCheck(r.Context(), s.options.RuntimeRoot, request, s.options.Now)
 	switch {
 	case errors.Is(err, ErrRealCheckConfirmation):
 		s.updateConfigurationStep(request.ExpectedRevision, "lan", "skipped", "Connection verification requires explicit confirmation before contacting saved services.")
@@ -691,7 +733,7 @@ func (s *Server) handleRunIntegrationCheck(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.configMu.Lock()
-	if ReadConfigEditor(s.options.TautWeeklyRoot).Revision != result.ConfigRevision {
+	if ReadConfigEditor(s.options.RuntimeRoot).Revision != result.ConfigRevision {
 		s.configMu.Unlock()
 		s.updateConfigurationStep(request.ExpectedRevision, "lan", "failed", "Configuration changed while Tautulli and Plex verification was running.")
 		s.recordDiagnostic("lan-verification", "warning", "verification-config-changed")
@@ -759,7 +801,7 @@ func (s *Server) handleRunSMTPNetworkCheck(w http.ResponseWriter, r *http.Reques
 	}
 	defer s.verificationRunMu.Unlock()
 	s.updateConfigurationStep(request.ExpectedRevision, "smtp", "running", "Checking SMTP reachability and certificate-validated STARTTLS without authenticating or sending.")
-	result, err := RunSMTPNetworkCheck(r.Context(), s.options.TautWeeklyRoot, request, s.options.Now)
+	result, err := RunSMTPNetworkCheck(r.Context(), s.options.RuntimeRoot, request, s.options.Now)
 	switch {
 	case errors.Is(err, ErrRealCheckConfirmation):
 		s.updateConfigurationStep(request.ExpectedRevision, "smtp", "skipped", "SMTP preflight requires explicit confirmation before contacting the saved endpoint.")
@@ -782,7 +824,7 @@ func (s *Server) handleRunSMTPNetworkCheck(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.configMu.Lock()
-	if ReadConfigEditor(s.options.TautWeeklyRoot).Revision != result.ConfigRevision {
+	if ReadConfigEditor(s.options.RuntimeRoot).Revision != result.ConfigRevision {
 		s.configMu.Unlock()
 		s.updateConfigurationStep(request.ExpectedRevision, "smtp", "failed", "Configuration changed while SMTP preflight was running.")
 		s.recordDiagnostic("smtp-preflight", "warning", "smtp-config-changed")
@@ -804,7 +846,7 @@ func (s *Server) handleRunSMTPNetworkCheck(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleTautulliDiscoveryState(w http.ResponseWriter, _ *http.Request) {
-	revision := ReadConfigEditor(s.options.TautWeeklyRoot).Revision
+	revision := ReadConfigEditor(s.options.RuntimeRoot).Revision
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"last": s.discovery.Load(revision)})
 }
@@ -822,7 +864,7 @@ func (s *Server) handleTautulliDiscovery(w http.ResponseWriter, r *http.Request)
 	}
 	defer s.verificationRunMu.Unlock()
 	s.updateConfigurationStep(request.ExpectedRevision, "choices", "running", "Loading active libraries, users, and explicit owner or administrator roles from Tautulli.")
-	result, err := DiscoverTautulliChoices(r.Context(), s.options.TautWeeklyRoot, request, s.options.Now)
+	result, err := DiscoverTautulliChoices(r.Context(), s.options.RuntimeRoot, request, s.options.Now)
 	switch {
 	case errors.Is(err, ErrRealCheckConfirmation):
 		s.updateConfigurationStep(request.ExpectedRevision, "choices", "skipped", "Tautulli lookup requires explicit confirmation before contacting the saved service.")
@@ -850,7 +892,7 @@ func (s *Server) handleTautulliDiscovery(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	s.configMu.Lock()
-	if ReadConfigEditor(s.options.TautWeeklyRoot).Revision != result.ConfigRevision {
+	if ReadConfigEditor(s.options.RuntimeRoot).Revision != result.ConfigRevision {
 		s.configMu.Unlock()
 		s.updateConfigurationStep(request.ExpectedRevision, "choices", "failed", "Configuration changed while Tautulli libraries and users were loading.")
 		s.recordDiagnostic("tautulli-discovery", "warning", "discovery-config-changed")
@@ -882,7 +924,7 @@ func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
 		if request.Type == "preview-all" {
 			s.updateConfigurationStep(request.ExpectedRevision, "previews", "skipped", "A schedule operation was active. Generate previews manually after it finishes.")
 		}
-		writeAPIError(w, http.StatusConflict, "schedule-busy", "Wait for the active Windows schedule change before starting a Manager operation.")
+		writeAPIError(w, http.StatusConflict, "schedule-busy", "Wait for the active schedule change before starting a Manager operation.")
 		return
 	}
 	s.configMu.Lock()
@@ -997,16 +1039,28 @@ func (s *Server) handleScheduleMutation(w http.ResponseWriter, r *http.Request) 
 	s.configMu.Unlock()
 	switch {
 	case errors.Is(err, ErrScheduleConfirmation):
-		writeAPIError(w, http.StatusUnprocessableEntity, "schedule-confirmation-required", "Confirm the selected Windows Task Scheduler change.")
+		message := "Confirm the selected Windows Task Scheduler change."
+		if s.capabilities.RuntimeMode == runtimeModeNAS {
+			message = "Confirm the selected embedded scheduler change."
+		}
+		writeAPIError(w, http.StatusUnprocessableEntity, "schedule-confirmation-required", message)
 		return
 	case errors.Is(err, ErrScheduleInvalid):
-		writeAPIError(w, http.StatusUnprocessableEntity, "schedule-action-invalid", "Choose install, enable, disable, or remove.")
+		message := "Choose install, enable, disable, or remove."
+		if s.capabilities.RuntimeMode == runtimeModeNAS {
+			message = "Choose enable or disable for the embedded scheduler."
+		}
+		writeAPIError(w, http.StatusUnprocessableEntity, "schedule-action-invalid", message)
 		return
 	case errors.Is(err, ErrScheduleNotReady):
 		writeAPIError(w, http.StatusConflict, "schedule-not-ready", "Complete and save configuration before changing the schedule.")
 		return
 	case errors.Is(err, ErrScheduleBusy):
-		writeAPIError(w, http.StatusConflict, "schedule-busy", "Another schedule change is waiting for elevation or still running.")
+		message := "Another schedule change is waiting for elevation or still running."
+		if s.capabilities.RuntimeMode == runtimeModeNAS {
+			message = "Another embedded scheduler change is still running."
+		}
+		writeAPIError(w, http.StatusConflict, "schedule-busy", message)
 		return
 	case errors.Is(err, ErrConfigConflict):
 		writeAPIError(w, http.StatusConflict, "config-conflict", "Configuration changed after this schedule view was loaded. Refresh before continuing.")
@@ -1019,12 +1073,12 @@ func (s *Server) handleScheduleMutation(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handlePreviews(w http.ResponseWriter, _ *http.Request) {
-	previews, _ := listPreviews(s.options.TautWeeklyRoot)
+	previews, _ := listPreviews(s.options.RuntimeRoot)
 	writeJSON(w, http.StatusOK, map[string]any{"previews": previews})
 }
 
 func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
-	_, paths := listPreviews(s.options.TautWeeklyRoot)
+	_, paths := listPreviews(s.options.RuntimeRoot)
 	previewPath, ok := paths[r.PathValue("id")]
 	if !ok {
 		writeAPIError(w, http.StatusNotFound, "preview-not-found", "Preview is unavailable.")
@@ -1034,7 +1088,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePreviewAsset(w http.ResponseWriter, r *http.Request) {
-	servePreviewAsset(w, r, s.options.TautWeeklyRoot, r.PathValue("asset"))
+	servePreviewAsset(w, r, s.options.RuntimeRoot, r.PathValue("asset"))
 }
 
 func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, current session) {
@@ -1043,7 +1097,7 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, curren
 		Value:    current.Token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   r.TLS != nil || s.options.SecureCookies,
 		SameSite: http.SameSiteStrictMode,
 		Expires:  current.ExpiresAt,
 		MaxAge:   int(current.ExpiresAt.Sub(s.options.Now()).Seconds()),

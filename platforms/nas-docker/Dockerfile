@@ -1,3 +1,13 @@
+FROM golang:1.26.5-bookworm AS manager-build
+
+ARG TARGETARCH
+ARG BUILD_VERSION=dev
+WORKDIR /src/manager
+COPY manager/ ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH:-amd64}" \
+    go build -trimpath -buildvcs=false -ldflags "-s -w -X main.version=${BUILD_VERSION}" \
+    -o /out/tautweekly-manager ./cmd/tautweekly-manager
+
 FROM debian:bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -61,14 +71,20 @@ RUN groupadd --gid 1000 tautweekly \
     && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash tautweekly
 
 WORKDIR /opt/tautweekly
-COPY app/ /opt/tautweekly/
+COPY platforms/nas-docker/app/ /opt/tautweekly/
+COPY --from=manager-build /out/tautweekly-manager /opt/tautweekly/bin/tautweekly-manager
 RUN chmod +x /opt/tautweekly/entrypoint.sh \
     /opt/tautweekly/run-service.sh \
     /opt/tautweekly/healthcheck.sh \
-    /opt/tautweekly/bin/*.sh
+    /opt/tautweekly/bin/*.sh \
+    /opt/tautweekly/bin/tautweekly-manager
 
 ENV TAUTWEEKLY_DATA_DIR=/data \
     TAUTWEEKLY_CONFIG=/data/config.json \
+    TAUTWEEKLY_MANAGER_LISTEN=0.0.0.0:8080 \
+    XDG_CONFIG_HOME=/tmp/tautweekly/config \
+    XDG_CACHE_HOME=/tmp/tautweekly/cache \
+    DOTNET_BUNDLE_EXTRACT_BASE_DIR=/tmp/tautweekly/dotnet \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 \

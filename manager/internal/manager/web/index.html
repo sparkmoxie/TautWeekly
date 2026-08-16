@@ -39,22 +39,22 @@
   <main class="auth-shell" id="auth-shell">
     <section class="auth-card" aria-labelledby="auth-title">
       <div class="brand-lockup brand-lockup-large"><img class="brand-mark" src="/tautweekly-logo.png" alt=""><div><span class="brand-kicker">TautWeekly</span><strong>Manager</strong></div></div>
-      <div class="auth-intro"><span class="eyebrow">Private local administration</span><h1 id="auth-title">Your newsletter control room.</h1><p>Review health, schedule state, configuration, and generated previews without exposing TautWeekly to a cloud service.</p></div>
+      <div class="auth-intro"><span class="eyebrow" id="auth-runtime-eyebrow">Private local administration</span><h1 id="auth-title">Your newsletter control room.</h1><p id="auth-runtime-copy">Review health, schedule state, configuration, and generated previews without exposing TautWeekly to a cloud service.</p></div>
       <form id="pair-form" class="auth-form" hidden>
         <div class="form-heading"><h2>Pair this browser</h2><p>Use the one-time token from the Manager launch message, then create a local administrator password.</p></div>
         <label>Pairing token<input id="pair-token" name="token" type="password" autocomplete="one-time-code" required></label>
-        <label>Administrator password<input id="pair-password" name="password" type="password" autocomplete="new-password" minlength="8" required><span class="field-hint">At least 8 characters. Stored locally as a salted hash.</span></label>
-        <label>Confirm password<input id="pair-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="8" required></label>
+        <label>Administrator password<input id="pair-password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="256" required><span class="field-hint">8–256 UTF-8 bytes. Stored locally as a salted hash.</span></label>
+        <label>Confirm password<input id="pair-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="8" maxlength="256" required></label>
         <button class="button button-primary button-wide" type="submit">Pair and continue <span aria-hidden="true">&#8594;</span></button>
       </form>
       <form id="login-form" class="auth-form" hidden>
         <div class="form-heading"><h2>Welcome back</h2><p>Sign in with the administrator password stored on this TautWeekly host.</p></div>
-        <label>Administrator password<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
+        <label>Administrator password<input id="login-password" name="password" type="password" autocomplete="current-password" maxlength="256" required></label>
         <button class="button button-primary button-wide" type="submit">Open Manager <span aria-hidden="true">&#8594;</span></button>
-        <p class="field-hint">Forgot the password? Run the local <strong>Reset Manager Access</strong> helper from the TautWeekly installation. It disables only this optional lock.</p>
+        <p class="field-hint">Forgot the password? Run the packaged <strong>Reset Manager Access</strong> recovery for this installation.</p>
       </form>
       <p class="form-message" id="auth-message" role="status" aria-live="polite"></p>
-      <div class="auth-boundary"><span aria-hidden="true">&#9670;</span><p><strong>Local by design.</strong> This Manager binds only to this computer and makes no analytics or cloud-management requests.</p></div>
+      <div class="auth-boundary"><span aria-hidden="true">&#9670;</span><p><strong>Private by design.</strong> This Manager makes no analytics or cloud-management requests.</p></div>
     </section>
   </main>
 
@@ -63,7 +63,7 @@
       <div class="brand-lockup"><img class="brand-mark" src="/tautweekly-logo.png" alt=""><div><span class="brand-kicker">TautWeekly</span><strong>Manager</strong></div></div>
       <div class="topbar-actions">
         <button class="access-status-button unlocked" id="access-status-button" type="button" aria-label="Browser access unlocked" data-tooltip="Browser access unlocked"><svg class="ui-icon" viewBox="0 -960 960 960" aria-hidden="true"><use href="#icon-lock-open"></use></svg></button>
-        <span class="mode-pill"><span class="mode-dot"></span> Windows setup</span>
+        <span class="mode-pill"><span class="mode-dot"></span> <span id="mode-pill-label">Manager setup</span></span>
         <button class="icon-button" id="refresh-button" type="button" aria-label="Refresh local status"><span aria-hidden="true">&#8635;</span><span class="button-label">Refresh</span></button>
         <button class="icon-button" id="logout-button" type="button" aria-label="Sign out of Manager"><span aria-hidden="true">&#8599;</span><span class="button-label">Sign out</span></button>
       </div>
@@ -71,13 +71,13 @@
     <aside class="sidebar" aria-label="Manager navigation">
       <nav class="nav-list">
         <button class="nav-button active" type="button" data-view="dashboard" aria-current="page"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-dashboard"></use></svg></span><span><strong>Dashboard</strong><small>System overview</small></span></button>
-        <button class="nav-button" type="button" data-view="configuration"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-tune"></use></svg></span><span><strong>Config</strong><small>Guided local setup</small></span></button>
-        <button class="nav-button" type="button" data-view="schedule"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-calendar-clock"></use></svg></span><span><strong>Schedule</strong><small>Windows lifecycle</small></span></button>
+        <button class="nav-button" type="button" data-view="configuration"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-tune"></use></svg></span><span><strong>Config</strong><small id="config-nav-copy">Guided local setup</small></span></button>
+        <button class="nav-button" type="button" data-view="schedule"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-calendar-clock"></use></svg></span><span><strong>Schedule</strong><small id="schedule-nav-copy">Delivery lifecycle</small></span></button>
         <button class="nav-button" type="button" data-view="verification"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-verified"></use></svg></span><span><strong>Verify</strong><small>Connection checks</small></span></button>
         <button class="nav-button" type="button" data-view="previews"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-preview"></use></svg></span><span><strong>Previews</strong><small>Generated newsletters</small></span></button>
         <button class="nav-button" type="button" data-view="about"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-settings"></use></svg></span><span><strong>Settings</strong><small>Access and diagnostics</small></span></button>
       </nav>
-      <div class="sidebar-note"><span class="status-beacon"></span><div><strong>Local connection</strong><small id="sidebar-platform">Checking platform...</small></div></div>
+      <div class="sidebar-note"><span class="status-beacon"></span><div><strong id="sidebar-connection-label">Local connection</strong><small id="sidebar-platform">Checking platform...</small></div></div>
     </aside>
 
     <main class="content" id="main-content" tabindex="-1">
@@ -109,15 +109,15 @@
         </div>
         <div class="section-heading timeline-heading"><div><span class="eyebrow">Delivery timeline</span><h2>Last and upcoming</h2></div></div>
         <div class="timeline-grid">
-          <article class="timeline-card featured"><span class="timeline-index">01</span><div><small>Upcoming task run</small><strong id="next-run">Not scheduled</strong><p id="next-run-utc">Task Scheduler has not reported an upcoming run.</p></div></article>
+          <article class="timeline-card featured"><span class="timeline-index">01</span><div><small id="upcoming-run-label">Upcoming task run</small><strong id="next-run">Not scheduled</strong><p id="next-run-utc">Task Scheduler has not reported an upcoming run.</p></div></article>
           <article class="timeline-card"><span class="timeline-index">02</span><div><small>Latest application attempt</small><strong id="timeline-last-attempt">Not recorded</strong><p id="timeline-last-copy">No sanitized renderer result has been recorded.</p></div></article>
           <article class="timeline-card"><span class="timeline-index">03</span><div><small>Generated previews</small><strong id="preview-count">None found</strong><p>Only authenticated, indexed HTML files are available.</p></div></article>
         </div>
-        <aside class="foundation-callout"><div class="callout-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-security"></use></svg></div><div><span class="eyebrow">Guarded administration</span><h2>Setup, testing, and scheduling stay explicit.</h2><p>A successful configuration save runs clearly labeled, non-sending connection checks and local discovery. Email delivery remains limited to an explicit TestEmail action, and schedule changes use a fixed UAC helper that verifies task ownership.</p></div><button class="button button-secondary" type="button" data-open-view="schedule">Manage schedule</button></aside>
+        <aside class="foundation-callout"><div class="callout-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-security"></use></svg></div><div><span class="eyebrow">Guarded administration</span><h2>Setup, testing, and scheduling stay explicit.</h2><p id="foundation-schedule-copy">A successful configuration save runs clearly labeled, non-sending connection checks and local discovery. Email delivery and schedule changes remain explicit.</p></div><button class="button button-secondary" type="button" data-open-view="schedule">Manage schedule</button></aside>
       </section>
 
       <section class="view" id="view-configuration" data-panel="configuration" hidden>
-        <div class="page-heading"><div><span class="eyebrow">Guided Windows setup</span><h1>Configure without touching JSON.</h1><p>Review every supported value, preserve stored credentials, then save once to load choices, test connectivity, and generate six non-sending local previews.</p></div><span class="state-chip pending" id="config-chip">Checking</span></div>
+        <div class="page-heading"><div><span class="eyebrow" id="configuration-platform-label">Guided setup</span><h1>Configure without touching JSON.</h1><p>Review every supported value, preserve stored credentials, then save once to load choices, test connectivity, and generate six non-sending local previews.</p></div><span class="state-chip pending" id="config-chip">Checking</span></div>
         <div class="privacy-banner"><span aria-hidden="true">&#9671;</span><p id="config-secret-policy"><strong>Secrets stay hidden by default:</strong> saving preserves stored credentials unless you replace or clear them. Revealing returns only the selected field and clears it from the page after 30 seconds. Existing configurations receive a private timestamped backup.</p></div>
         <div class="direct-plex-notice" id="direct-plex-notice" hidden><span aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-hub"></use></svg></span><div><strong id="direct-plex-notice-heading">Complete direct Plex setup</strong><p id="direct-plex-notice-copy"></p></div><button class="button button-secondary" id="direct-plex-review-button" type="button">Review connections</button></div>
         <section class="setup-workflow" id="setup-workflow" aria-labelledby="setup-workflow-heading" hidden>
@@ -152,8 +152,8 @@
       </section>
 
       <section class="view" id="view-schedule" data-panel="schedule" hidden>
-        <div class="page-heading"><div><span class="eyebrow">Windows delivery lifecycle</span><h1>Own the weekly send.</h1><p>Review the configured delivery window, verify task ownership, and make one explicit elevated change at a time.</p></div><span class="state-chip neutral" id="schedule-view-chip">Checking</span></div>
-        <div class="schedule-boundary"><div class="callout-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-calendar-clock"></use></svg></div><div><span class="eyebrow">Narrow elevation boundary</span><h2>The browser never supplies a command.</h2><p>The Manager accepts only install/refresh, enable, disable, or remove. Windows asks for administrator approval, the helper rechecks the saved configuration revision, and a same-named task is left untouched unless its executable arguments, working directory, and SYSTEM principal match this installation.</p></div></div>
+        <div class="page-heading"><div><span class="eyebrow" id="schedule-page-eyebrow">Delivery lifecycle</span><h1>Own the weekly send.</h1><p id="schedule-page-copy">Review the configured delivery window and make one explicit change at a time.</p></div><span class="state-chip neutral" id="schedule-view-chip">Checking</span></div>
+        <div class="schedule-boundary"><div class="callout-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-calendar-clock"></use></svg></div><div><span class="eyebrow" id="schedule-boundary-eyebrow">Narrow operation boundary</span><h2 id="schedule-boundary-heading">The browser never supplies a command.</h2><p id="schedule-boundary-copy">The Manager accepts only package-defined schedule actions and rechecks the saved configuration revision before applying one.</p></div></div>
         <section class="schedule-overview" aria-labelledby="schedule-overview-heading">
           <div class="panel-heading"><h2 id="schedule-overview-heading">Observed Task Scheduler state</h2><small id="schedule-observed">Waiting for local status</small></div>
           <dl class="schedule-metrics">
@@ -161,17 +161,17 @@
             <div><dt>Installed</dt><dd id="schedule-view-installed">No</dd></div>
             <div><dt>Enabled</dt><dd id="schedule-view-enabled">No</dd></div>
             <div><dt>Ownership</dt><dd id="schedule-view-ownership">Not installed</dd></div>
-            <div><dt>Task state</dt><dd id="schedule-view-state">Not installed</dd></div>
+            <div><dt id="schedule-state-label">Task state</dt><dd id="schedule-view-state">Not installed</dd></div>
             <div><dt>Upcoming run</dt><dd id="schedule-view-next-run">Not scheduled</dd></div>
           </dl>
           <p class="schedule-warning" id="schedule-warning" role="status" aria-live="polite"></p>
         </section>
-        <div class="section-heading"><div><span class="eyebrow">Typed actions</span><h2>Schedule lifecycle</h2></div><p>Disabling or removing a schedule never cancels a newsletter process that is already running.</p></div>
-        <div class="schedule-actions" aria-label="Windows schedule actions">
-          <article id="schedule-install-card"><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-add-task"></use></svg></span><h3><span class="schedule-state-label" id="schedule-install-heading">Install</span></h3><p id="schedule-install-copy">Create the verified SYSTEM task from the configured day and local time.</p><button class="button button-primary" type="button" data-schedule-action="install"><span class="schedule-state-label" id="schedule-install-button-label">Install</span></button></article>
-          <article><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-play"></use></svg></span><h3>Enable</h3><p>Allow an installed, verified task to begin future scheduled newsletter runs.</p><button class="button button-secondary" type="button" data-schedule-action="enable">Enable schedule</button></article>
-          <article><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-pause"></use></svg></span><h3>Disable</h3><p>Prevent future task starts while preserving configuration, history, output, and the task definition.</p><button class="button button-secondary" type="button" data-schedule-action="disable">Disable schedule</button></article>
-          <article class="schedule-remove"><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-delete"></use></svg></span><h3>Remove</h3><p>Delete only a task whose ownership matches this installation. Private TautWeekly files remain in place.</p><button class="button button-danger" type="button" data-schedule-action="remove">Remove schedule</button></article>
+        <div class="section-heading"><div><span class="eyebrow">Typed actions</span><h2>Schedule lifecycle</h2></div><p id="schedule-lifecycle-copy">Disabling or removing a schedule never cancels a newsletter process that is already running.</p></div>
+        <div class="schedule-actions" id="schedule-actions" aria-label="Schedule actions">
+          <article id="schedule-install-card" data-windows-schedule-only><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-add-task"></use></svg></span><h3><span class="schedule-state-label" id="schedule-install-heading">Install</span></h3><p id="schedule-install-copy">Create the verified SYSTEM task from the configured day and local time.</p><button class="button button-primary" type="button" data-schedule-action="install"><span class="schedule-state-label" id="schedule-install-button-label">Install</span></button></article>
+          <article><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-play"></use></svg></span><h3>Enable</h3><p id="schedule-enable-copy">Allow the package scheduler to begin future scheduled newsletter runs.</p><button class="button button-secondary" type="button" data-schedule-action="enable">Enable schedule</button></article>
+          <article><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-pause"></use></svg></span><h3>Disable</h3><p id="schedule-disable-copy">Prevent future starts while preserving configuration, history, output, and any delivery already running.</p><button class="button button-secondary" type="button" data-schedule-action="disable">Disable schedule</button></article>
+          <article class="schedule-remove" data-windows-schedule-only><span class="schedule-action-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-delete"></use></svg></span><h3>Remove</h3><p>Delete only a task whose ownership matches this installation. Private TautWeekly files remain in place.</p><button class="button button-danger" type="button" data-schedule-action="remove">Remove schedule</button></article>
         </div>
         <section class="schedule-confirmation" id="schedule-confirmation" aria-labelledby="schedule-confirmation-heading" hidden>
           <div><span class="eyebrow">Final review</span><h2 id="schedule-confirmation-heading">Confirm schedule change</h2><p id="schedule-confirmation-copy">Review this operation before requesting Windows administrator approval.</p></div>
@@ -209,7 +209,7 @@
       <section class="view" id="view-previews" data-panel="previews" hidden>
         <div class="page-heading"><div><span class="eyebrow">Newsletter previews</span><h1>Review before delivery.</h1><p>Generated HTML is served through an authenticated, sandboxed viewer.</p></div><span class="state-chip pending" id="preview-chip">Checking</span></div>
         <section class="preview-runner" aria-labelledby="preview-runner-heading">
-          <div class="preview-runner-copy"><span class="eyebrow">Typed local operation</span><h2 id="preview-runner-heading">Generate all six newsletter states</h2><p>Uses the saved configuration and Tautulli user ID to create local HTML in the package <code>output</code> folder. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state.</p></div>
+          <div class="preview-runner-copy"><span class="eyebrow">Typed local operation</span><h2 id="preview-runner-heading">Generate all six newsletter states</h2><p id="preview-runner-copy">Uses the saved configuration and Tautulli user ID to create local HTML in the package <code>output</code> folder. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state.</p></div>
           <div class="preview-runner-form">
             <label for="preview-user-id"><strong>Tautulli user ID</strong><small>Numeric ID for this run only. It is cleared after start and never written to operation history.</small></label>
             <div class="user-combobox" data-user-combobox><input id="preview-user-id" type="text" inputmode="numeric" pattern="[0-9]{1,20}" maxlength="20" autocomplete="off" spellcheck="false" placeholder="e.g. 42" aria-describedby="preview-operation-message" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="preview-user-options"><button class="user-combobox-toggle" type="button" aria-label="Choose a Tautulli user" aria-controls="preview-user-options" aria-expanded="false"><span aria-hidden="true"></span></button><div class="user-combobox-options" id="preview-user-options" role="listbox" aria-label="Tautulli users for preview" hidden></div></div>
@@ -252,7 +252,7 @@
       </section>
 
       <section class="view" id="view-about" data-panel="about" hidden>
-        <div class="page-heading"><div><span class="eyebrow">Manager settings</span><h1>Local access, your way.</h1><p>Windows trusts this computer by default. Add a password lock when the extra boundary is useful, without making first-run setup depend on a one-time token.</p></div></div>
+        <div class="page-heading"><div><span class="eyebrow">Manager settings</span><h1 id="settings-page-heading">Private access, your way.</h1><p id="settings-platform-copy">Review the authentication controls for this package.</p></div></div>
         <section class="startup-settings-panel" id="startup-settings-panel" aria-labelledby="startup-settings-heading" hidden>
           <div class="access-settings-heading"><div><span class="eyebrow">Windows sign-in</span><h2 id="startup-settings-heading">Manager startup</h2><p>Keep the local Manager available from the notification area without changing the independent newsletter schedule.</p></div><span class="state-chip pending" id="startup-settings-chip">Checking</span></div>
           <div class="startup-settings-controls" id="startup-settings-controls">
@@ -263,22 +263,22 @@
           <p class="startup-boundary"><strong>Closing the Manager is separate from newsletter delivery.</strong> Exit TautWeekly for Plex removes only the tray icon and local Dashboard server. It does not disable the weekly Windows Scheduled Task or cancel a newsletter delivery already running.</p>
         </section>
         <section class="access-settings-panel" id="access-settings-panel" aria-labelledby="access-settings-heading">
-          <div class="access-settings-heading"><div><span class="eyebrow">Optional Manager lock</span><h2 id="access-settings-heading">Browser access</h2><p id="access-settings-copy">Checking the local access policy.</p></div><span class="state-chip pending" id="access-settings-chip">Checking</span></div>
+          <div class="access-settings-heading"><div><span class="eyebrow" id="access-settings-eyebrow">Optional Manager lock</span><h2 id="access-settings-heading">Browser access</h2><p id="access-settings-copy">Checking the local access policy.</p></div><span class="state-chip pending" id="access-settings-chip">Checking</span></div>
           <form class="access-password-form" id="access-password-form">
-            <label for="access-password"><strong id="access-password-label">Create password</strong><input id="access-password" name="password" type="password" autocomplete="new-password" minlength="8" required><small>At least 8 characters. Stored locally only as a salted hash.</small></label>
-            <label for="access-password-confirm"><strong>Confirm password</strong><input id="access-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="8" required></label>
+            <label for="access-password"><strong id="access-password-label">Create password</strong><input id="access-password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="256" required><small>8–256 UTF-8 bytes. Stored locally only as a salted hash.</small></label>
+            <label for="access-password-confirm"><strong>Confirm password</strong><input id="access-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="8" maxlength="256" required></label>
             <div class="access-settings-actions"><button class="button button-primary" id="access-password-submit" type="submit">Enable password lock</button><button class="button button-danger" id="access-disable-button" type="button" hidden>Disable password lock</button></div>
           </form>
           <p class="verification-message" id="access-settings-message" role="status" aria-live="polite"></p>
-          <div class="access-recovery-note"><span aria-hidden="true">&#9671;</span><p><strong>Local recovery remains available.</strong> If the password is forgotten, run <code>18-RESET-MANAGER-ACCESS.bat</code> from the TautWeekly folder. Installed copies also include <code>Reset-TautWeekly-Access.cmd</code>. Recovery disables only the Manager lock and leaves configuration, credentials, schedules, history, and previews untouched.</p></div>
+          <div class="access-recovery-note"><span aria-hidden="true">&#9671;</span><p id="access-recovery-copy"><strong>Local recovery remains available.</strong> If the password is forgotten, run <code>18-RESET-MANAGER-ACCESS.bat</code> from the TautWeekly folder. Installed copies also include <code>Reset-TautWeekly-Access.cmd</code>. Recovery disables only the Manager lock and leaves configuration, credentials, schedules, history, and previews untouched.</p></div>
         </section>
         <div class="about-grid">
           <article><span class="about-number">01</span><h2>Typed operations</h2><p>Preview and schedule actions are allowlisted. Browser input cannot choose an executable, script path, or command string.</p></article>
-          <article><span class="about-number">02</span><h2>Loopback-only access</h2><p>The Manager accepts browser connections only from this computer and rejects unrecognized hostnames.</p></article>
-          <article><span class="about-number">03</span><h2>Guarded secret access</h2><p>Secrets stay hidden during normal reads. Revealing returns only the selected credential, uses password re-authentication when the optional lock is enabled, and automatically clears from the page.</p></article>
-          <article><span class="about-number">04</span><h2>Delivery truthfulness</h2><p>Task execution, SMTP acceptance, and inbox delivery remain distinct states in both API copy and interface labels.</p></article>
+          <article><span class="about-number">02</span><h2 id="about-access-heading">Private access</h2><p id="about-access-copy">The Manager applies the network and authentication boundary owned by this package.</p></article>
+          <article><span class="about-number">03</span><h2>Guarded secret access</h2><p id="about-secret-copy">Secrets stay hidden during normal reads. Revealing returns only the selected credential, uses password re-authentication when the optional lock is enabled, and automatically clears from the page.</p></article>
+          <article><span class="about-number">04</span><h2>Delivery truthfulness</h2><p id="about-delivery-copy">Task execution, SMTP acceptance, and inbox delivery remain distinct states in both API copy and interface labels.</p></article>
         </div>
-        <dl class="build-details"><div><dt>Manager build</dt><dd id="about-version">Checking...</dd></div><div><dt>Package baseline</dt><dd id="about-package">Checking...</dd></div><div><dt>Platform</dt><dd id="about-platform">Checking...</dd></div><div><dt>Edition</dt><dd>Windows Manager</dd></div></dl>
+        <dl class="build-details"><div><dt>Manager build</dt><dd id="about-version">Checking...</dd></div><div><dt>Package baseline</dt><dd id="about-package">Checking...</dd></div><div><dt>Platform</dt><dd id="about-platform">Checking...</dd></div><div><dt>Edition</dt><dd id="about-edition">Manager</dd></div></dl>
         <div class="section-heading"><div><span class="eyebrow">Private local record</span><h2>Configuration diagnostics</h2></div><p>Useful setup evidence is retained without storing configuration values or raw service responses.</p></div>
         <section class="diagnostics-panel" aria-labelledby="diagnostics-heading">
           <div class="panel-heading"><h2 id="diagnostics-heading">Setup and verification events</h2><small id="diagnostics-count">Checking</small></div>
@@ -293,7 +293,7 @@
         <h2 id="secret-reveal-title">Reveal saved secret</h2>
         <p id="secret-reveal-copy">Re-enter your Manager administrator password. Only this value will be returned, and it will clear automatically after 30 seconds.</p>
         <label id="secret-reveal-password-label" for="secret-reveal-password">Administrator password</label>
-        <input id="secret-reveal-password" name="password" type="password" autocomplete="current-password" required>
+        <input id="secret-reveal-password" name="password" type="password" autocomplete="current-password" maxlength="256" required>
         <p class="secret-reveal-message" id="secret-reveal-message" role="status" aria-live="polite"></p>
         <div class="secret-reveal-actions"><button class="button button-secondary" id="secret-reveal-cancel" type="button">Cancel</button><button class="button button-primary" id="secret-reveal-submit" type="submit">Reveal for 30 seconds</button></div>
       </form>

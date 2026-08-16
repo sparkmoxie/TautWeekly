@@ -26,6 +26,7 @@ type ReadinessStatus struct {
 
 type ScheduleStatus struct {
 	Supported    bool   `json:"supported"`
+	Provider     string `json:"provider"`
 	Installed    bool   `json:"installed"`
 	Enabled      bool   `json:"enabled"`
 	Owned        bool   `json:"owned"`
@@ -85,10 +86,15 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 		now = time.Now
 	}
 	observed := now().UTC()
-	config := ReadRedactedConfig(options.TautWeeklyRoot)
-	editor := ReadConfigEditor(options.TautWeeklyRoot)
-	previews, _ := listPreviews(options.TautWeeklyRoot)
+	runtimeRoot := options.RuntimeRoot
+	if strings.TrimSpace(runtimeRoot) == "" {
+		runtimeRoot = options.TautWeeklyRoot
+	}
+	config := ReadRedactedConfig(runtimeRoot)
+	editor := ReadConfigEditor(runtimeRoot)
+	previews, _ := listPreviews(runtimeRoot)
 
+	capabilities := capabilitiesFor(options)
 	snapshot := StatusSnapshot{
 		SchemaVersion: 1,
 		ObservedAtUTC: observed.Format(time.RFC3339),
@@ -105,7 +111,8 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 			PrivateData:   dataReadiness(options.DataDir),
 		},
 		Schedule: ScheduleStatus{
-			Supported: runtime.GOOS == "windows",
+			Supported: capabilities.ScheduleProvider != "unsupported",
+			Provider:  capabilities.ScheduleProvider,
 			Ownership: "not-installed",
 			State:     "not-installed",
 		},
@@ -131,7 +138,7 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 		snapshot.Overall = "blocked"
 	}
 
-	if runtime.GOOS == "windows" {
+	if capabilities.RuntimeMode == runtimeModeWindows && runtime.GOOS == "windows" {
 		taskName := configString(config, "ScheduledTaskName", "TautWeekly for Plex Newsletter")
 		probe, err := probeWindowsTask(ctx, taskName, options.TautWeeklyRoot)
 		if err != nil {
@@ -152,6 +159,7 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 			}
 			snapshot.Schedule = ScheduleStatus{
 				Supported:    true,
+				Provider:     capabilities.ScheduleProvider,
 				Installed:    true,
 				Enabled:      probe.Enabled,
 				Owned:        probe.Owned,
@@ -168,8 +176,102 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 			}
 		}
 	}
-	applyLatestRendererDelivery(&snapshot, options.TautWeeklyRoot)
+	if capabilities.RuntimeMode == runtimeModeNAS {
+		applyContainerScheduleStatus(&snapshot, runtimeRoot, observed)
+	}
+	applyLatestRendererDelivery(&snapshot, runtimeRoot)
 	return snapshot
+}
+
+type containerSchedulerHeartbeat struct {
+	UTC        string `json:"Utc"`
+	Local      string `json:"Local"`
+	TimeZoneID string `json:"TimeZoneId"`
+}
+
+type containerSchedulerState struct {
+	LastAttemptUTC string `json:"LastAttemptUtc"`
+	LastSuccessUTC string `json:"LastSuccessUtc"`
+	LastResult     string `json:"LastResult"`
+	LastExitCode   *int64 `json:"LastExitCode"`
+}
+
+func applyContainerScheduleStatus(snapshot *StatusSnapshot, runtimeRoot string, observed time.Time) {
+	values, _, exists, state := readConfigDocument(runtimeRoot)
+	enabled := exists && state == "ready" && configMapBool(values, "ScheduleEnabled", false)
+	snapshot.Schedule = ScheduleStatus{
+		Supported: true,
+		Provider:  "embedded-container",
+		Installed: true,
+		Enabled:   enabled,
+		Owned:     true,
+		Ownership: "package-managed",
+		State:     "starting",
+	}
+	snapshot.Runtime.Scheduler = "starting"
+
+	var heartbeat containerSchedulerHeartbeat
+	if !readSmallJSON(filepath.Join(runtimeRoot, "scheduler-heartbeat.json"), &heartbeat) {
+		if snapshot.Overall == "healthy" {
+			snapshot.Overall = "degraded"
+		}
+	} else if stamp, err := time.Parse(time.RFC3339, heartbeat.UTC); err != nil || observed.Sub(stamp.UTC()) > 90*time.Second || observed.Before(stamp.UTC().Add(-5*time.Second)) {
+		snapshot.Schedule.State = "heartbeat-stale"
+		snapshot.Runtime.Scheduler = "heartbeat-stale"
+		if snapshot.Overall == "healthy" {
+			snapshot.Overall = "degraded"
+		}
+	} else {
+		snapshot.Schedule.State = "running"
+		snapshot.Runtime.Scheduler = "running"
+		snapshot.Schedule.NextRunLocal, snapshot.Schedule.NextRunUTC = nextContainerRun(values, heartbeat.TimeZoneID, observed)
+	}
+
+	var schedulerState containerSchedulerState
+	if readSmallJSON(filepath.Join(runtimeRoot, "scheduler-state.json"), &schedulerState) {
+		snapshot.Delivery.LastAttemptUTC = schedulerState.LastAttemptUTC
+		snapshot.Delivery.LastSuccessUTC = schedulerState.LastSuccessUTC
+		snapshot.Delivery.ExitCode = schedulerState.LastExitCode
+		if strings.TrimSpace(schedulerState.LastResult) != "" {
+			snapshot.Delivery.Result = strings.ToLower(strings.ReplaceAll(schedulerState.LastResult, " ", "-"))
+			snapshot.Delivery.Evidence = "embedded-scheduler"
+		}
+	}
+}
+
+func readSmallJSON(path string, target any) bool {
+	raw, err := os.ReadFile(path)
+	if err != nil || len(raw) > 64<<10 {
+		return false
+	}
+	return json.Unmarshal(raw, target) == nil
+}
+
+func nextContainerRun(values map[string]any, zoneName string, observed time.Time) (string, string) {
+	location, err := time.LoadLocation(strings.TrimSpace(zoneName))
+	if err != nil {
+		return "", ""
+	}
+	dayName := strings.ToLower(strings.TrimSpace(configMapString(values, "ScheduleDay")))
+	weekdays := map[string]time.Weekday{
+		"sunday": time.Sunday, "monday": time.Monday, "tuesday": time.Tuesday,
+		"wednesday": time.Wednesday, "thursday": time.Thursday, "friday": time.Friday, "saturday": time.Saturday,
+	}
+	weekday, ok := weekdays[dayName]
+	if !ok {
+		return "", ""
+	}
+	parsed, err := time.Parse("15:04", strings.TrimSpace(configMapString(values, "ScheduleTime")))
+	if err != nil {
+		return "", ""
+	}
+	localNow := observed.In(location)
+	daysAhead := (int(weekday) - int(localNow.Weekday()) + 7) % 7
+	next := time.Date(localNow.Year(), localNow.Month(), localNow.Day()+daysAhead, parsed.Hour(), parsed.Minute(), 0, 0, location)
+	if !next.After(localNow) {
+		next = next.AddDate(0, 0, 7)
+	}
+	return next.Format(time.RFC3339), next.UTC().Format(time.RFC3339)
 }
 
 func applyLatestRendererDelivery(snapshot *StatusSnapshot, root string) {

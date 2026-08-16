@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Authenticated TautWeekly Manager installation for Unraid Apps, QNAP Container Station, Linux NAS, and compatible Docker hosts.">
+  <meta name="theme-color" content="#010101">
+  <meta property="og:image" content="https://sparkmoxie.github.io/TautWeekly/assets/branding/tautweekly-app-icon-1024.png">
+  <meta property="og:image:alt" content="TautWeekly detailed popcorn TW app icon">
+  <meta name="twitter:card" content="summary">
+  <title>NAS / Docker Manager Quickstart | TautWeekly for Plex</title>
+  <link rel="canonical" href="https://sparkmoxie.github.io/TautWeekly/nas-docker/">
+  <link rel="icon" href="../favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="../assets/branding/tautweekly-app-icon-180.png">
+  <link rel="manifest" href="../site.webmanifest">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .guide-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.guide-card{padding:27px;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(150deg,#1a1a1d,#121214)}.guide-card h3{margin-top:0}.guide-card p,.guide-card li{color:var(--muted)}.guide-card code,.paths code{color:var(--gold2)}.paths{width:100%;border-collapse:collapse;border:1px solid var(--line);background:var(--panel)}.paths th,.paths td{padding:14px 16px;border:1px solid var(--line);text-align:left;vertical-align:top}.paths th{color:var(--gold);font-size:12px;text-transform:uppercase}.paths td{color:#c7c7cd}.command{overflow:auto;margin:16px 0;padding:18px;border:1px solid #343439;border-radius:12px;background:#0d0d0f;color:#e3e3e6;white-space:pre-wrap;font:13px/1.7 "SFMono-Regular",Consolas,monospace}.warning{border-color:rgba(255,92,92,.42);background:rgba(255,92,92,.07)}.section h3{margin-bottom:8px}.section p{color:var(--muted)}.hero .terminal pre{min-height:auto}.hero .terminal{transform:none}@media(max-width:760px){.guide-grid{grid-template-columns:1fr}.paths{display:block;overflow-x:auto}}
+  </style>
+</head>
+<body>
+  <div class="progress" id="scroll-progress" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="../"><img class="brand-mark" src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38"><span>Taut<span>Weekly</span> for Plex <em>NAS</em></span></a>
+    <nav aria-label="Quickstart navigation"><a href="#install">Install</a><a href="#first-access">First access</a><a href="#security">Security</a><a href="#lifecycle">Lifecycle</a><a href="#limits">Limits</a></nav>
+    <label class="search"><span class="sr-only">Search the NAS Manager Quickstart</span><input id="site-search" type="search" placeholder="Search NAS Quickstart" autocomplete="off"><kbd>/</kbd></label>
+  </header>
+
+  <main>
+    <section class="hero searchable" data-search="nas docker qnap unraid compose manager authenticated overview">
+      <div class="hero-copy">
+        <div class="eyebrow">Shared NAS / container Manager</div>
+        <h1>One secure core.<br><span>Host-owned lifecycle.</span></h1>
+        <p>Run the authenticated TautWeekly Manager beside Tautulli on Unraid, QNAP Container Station, a Linux NAS, or another compatible amd64/arm64 Docker host. The image stays replaceable; configuration, credentials, schedules, output, and recovery data live in the persistent volume.</p>
+        <div class="pills"><span>password required</span><span>amd64 + arm64</span><span>embedded scheduler</span><span>persistent /data</span></div>
+        <div class="actions"><a class="button primary" href="#install">Choose an install path</a><a class="button" href="README.md">Open detailed reference</a></div>
+      </div>
+      <div class="terminal" aria-label="First access sequence"><div class="terminal-head"><span></span><span></span><span></span><b>trusted NAS host</b></div><pre>docker compose up -d
+./tautweekly.sh manager-bootstrap
+
+Open http://NAS_IP:8787/
+Pair once, then create the admin password.
+
+<span class="ok">No default password</span>
+<span class="ok">No token in container logs</span>
+<span class="gold">Automatic delivery remains disabled</span></pre></div>
+    </section>
+
+    <section class="metrics searchable" data-search="facts authentication session csrf health volume"><div><strong>required</strong><span>Manager authentication</span></div><div><strong>8 hours</strong><span>in-memory session lifetime</span></div><div><strong>/health/live</strong><span>minimal public liveness</span></div><div><strong>30 min</strong><span>Compose shutdown grace</span></div></section>
+
+    <section id="install" class="section searchable" data-search="install unraid apps community applications qnap container station compose linux docker desktop">
+      <div class="section-heading"><div><div class="eyebrow">Installation</div><h2>Use the adapter your host owns.</h2></div><p>Every path runs the same image and Manager core. The host remains responsible for image pulls, ports, TLS, volumes, UID/GID, and container start/stop behavior.</p></div>
+      <div class="guide-grid">
+        <article class="guide-card"><h3>Unraid Apps</h3><p>Install the maintained Community Applications template, review the appdata path, host port, timezone, PUID, and PGID, then start the container.</p><div class="command"># Docker &gt; TautWeekly for Plex &gt; Console
+/opt/tautweekly/bin/run-as-user.sh \
+  /opt/tautweekly/bin/tautweekly-manager \
+  access-bootstrap --data-dir /data/manager</div><p>Open <code>http://UNRAID_HOST:8787/</code>. The host-side <code>./tautweekly.sh</code> wrapper does not exist inside an Unraid Apps container.</p></article>
+        <article class="guide-card"><h3>QNAP Container Station</h3><p>In <strong>Create Application</strong>, paste <code>compose.qnap.yaml</code>, set the timezone and non-root identity, and replace the example host data path before validation and creation. Or extract the release over SSH and run:</p><div class="command">chmod +x qnap-install.sh tautweekly.sh container-update.sh
+./qnap-install.sh
+./tautweekly.sh manager-bootstrap</div><p>Open <code>http://QNAP_IP:8787/</code>. A native QPKG is not part of this delivery; signing, App Center submission, and hardware-specific lifecycle would require a separately tested package.</p></article>
+        <article class="guide-card"><h3>Generic Compose / Linux NAS</h3><div class="command">cp .env.example .env
+# Set TZ, PUID, PGID, host bind/port and base URL.
+mkdir -p data
+docker compose pull
+docker compose up -d
+./tautweekly.sh manager-bootstrap</div><p>Use the supplied release Compose file with the published image. A source build must use the repository root: <code>docker build -f platforms/nas-docker/Dockerfile .</code></p></article>
+        <article class="guide-card"><h3>Other Docker hosts</h3><p>Compatible hosts need Linux containers, Compose-compatible service settings, amd64 or arm64, a writable persistent mount at <code>/data</code>, and a non-root UID/GID. Docker Desktop can use the PowerShell wrapper:</p><div class="command">docker compose pull
+docker compose up -d
+.\tautweekly-docker.ps1 manager-bootstrap</div><p>For host-published Tautulli on Docker Desktop, use the platform's host gateway name or a shared private Docker network—not container-local <code>localhost</code>.</p></article>
+      </div>
+    </section>
+
+    <section id="first-access" class="section searchable" data-search="first run bootstrap password pair login schedule setup recovery token">
+      <div class="section-heading"><div><div class="eyebrow">First run</div><h2>Pair locally; configure in the Manager.</h2></div><p>The container creates a random one-time token in private persistent storage. Startup logs say pairing is required but never print the token or a credentialed URL.</p></div>
+      <div class="timeline"><div><b>01</b><h3>Retrieve</h3><p>Run <code>manager-bootstrap</code> explicitly from the trusted host or container Console.</p></div><div><b>02</b><h3>Pair</h3><p>Open the NAS IP URL, enter the token, and create an administrator password of 8–256 UTF-8 bytes.</p></div><div><b>03</b><h3>Configure</h3><p>Save Tautulli, recommended direct Plex, SMTP, branding, library scope, exclusions, and the weekly window.</p></div><div><b>04</b><h3>Accept</h3><p>Run safe checks, generate six preview states, and send only to TestEmail.</p></div><div><b>05</b><h3>Enable</h3><p>Explicitly enable future starts only after the recipient roster and test messages pass review.</p></div></div>
+      <div class="callout"><div class="shield">!</div><div><h3>Recovery is narrow by design.</h3><p><code>./tautweekly.sh manager-reset-access</code> removes only Manager credentials, pairing material, and active browser sessions, then restarts the container. It preserves newsletter configuration, secrets, schedules, state, output, history, and backups. Retrieve the new one-time token with <code>manager-bootstrap</code>.</p></div><ul><li>No default password</li><li>No secret in normal diagnostics</li><li>Five failed attempts in five minutes are rate-limited</li></ul></div>
+    </section>
+
+    <section id="security" class="section searchable" data-search="network binding lan reverse proxy tls hosts csrf cookie hsts health security permissions uid gid">
+      <div class="section-heading"><div><div class="eyebrow">Network and storage</div><h2>Secure defaults that remain reachable.</h2></div><p>IP-literal Host headers are accepted for NAS LAN access. DNS names are rejected unless listed exactly; proxy forwarding headers are intentionally not trusted.</p></div>
+      <table class="paths"><thead><tr><th>Setting or path</th><th>Purpose</th><th>Boundary</th></tr></thead><tbody>
+        <tr><td><code>PREVIEW_BIND / PREVIEW_PORT</code></td><td>Host mapping to the Manager's internal port 8080</td><td>Default <code>0.0.0.0:8787</code>; restrict with firewall/VLAN policy and never public-port-forward plain HTTP</td></tr>
+        <tr><td><code>MANAGER_ALLOWED_HOSTS</code></td><td>Comma-separated exact DNS names</td><td>No schemes, ports, paths, wildcards, or IP entries; the reverse proxy must preserve the allowed Host</td></tr>
+        <tr><td><code>MANAGER_SECURE_COOKIES=true</code></td><td>TLS reverse-proxy mode</td><td>Marks sessions Secure and emits HSTS; enable only when browsers use HTTPS</td></tr>
+        <tr><td><code>/data/manager</code></td><td>Password hash, pairing state, sanitized Manager operations</td><td>Persistent, private, writable by configured PUID/PGID</td></tr>
+        <tr><td><code>/data/config.json</code></td><td>Tautulli/Plex/SMTP credentials and schedule</td><td>Never bake into the image, upload to issues, or expose through diagnostics</td></tr>
+        <tr><td><code>/data/output</code>, logs, state, backups</td><td>Newsletter output and private operational history</td><td>May reveal recipients and viewing activity; back up privately</td></tr>
+      </tbody></table>
+      <div class="guide-grid"><article class="guide-card"><h3>Browser request protection</h3><ul><li>HttpOnly, SameSite=Strict session cookie</li><li>Per-session CSRF token plus same-origin mutation checks</li><li>Sessions live only in memory and expire after eight hours</li><li>Restart signs out every browser</li></ul></article><article class="guide-card"><h3>Container hardening</h3><ul><li>Non-root PUID/PGID; root identities are refused</li><li><code>UMASK=077</code> and persistent ownership repair without following external symlinks</li><li><code>no-new-privileges</code>, all capabilities dropped, then only ownership-transition capabilities added</li><li>Read-only image assumptions; mutable state belongs under <code>/data</code></li></ul></article></div>
+      <div class="callout warning"><div class="shield">TLS</div><div><h3>Reverse proxies terminate TLS; the Manager does not.</h3><p>Preserve the original Host, proxy only from a trusted network, list that DNS name, and enable secure cookies. The Manager ignores <code>X-Forwarded-For</code> and <code>X-Forwarded-Proto</code>. The unauthenticated <code>/health/live</code> response contains only liveness; every Manager API carrying state requires a session.</p></div><ul><li>No public HTTP exposure</li><li>No broad DNS wildcard</li><li>No credential in health checks</li></ul></div>
+    </section>
+
+    <section id="scheduling" class="section searchable" data-search="schedule embedded enable disable independent graceful shutdown running delivery">
+      <div class="section-heading"><div><div class="eyebrow">Delivery lifecycle</div><h2>The scheduler is independent of the browser.</h2></div><p>The GUI can only enable or disable future starts for this package. It revision-checks configuration, writes a private backup, and verifies the saved boolean.</p></div>
+      <div class="guide-grid"><article class="guide-card"><h3>Closing and restarting</h3><p>Signing out or closing a browser changes nothing. During container shutdown the Manager listener stops first, the supervisor waits up to the configured 29-minute delivery drain, and only then stops the scheduler. Compose grants 30 minutes. A host that enforces a shorter hard-kill timeout can still interrupt a delivery.</p></article><article class="guide-card"><h3>Truthful status</h3><p>The Manager reads the embedded scheduler heartbeat and persistent attempt state. A process exit is not reported as inbox delivery. Only sanitized renderer results distinguish SMTP-accepted, skipped, failed, partial, and unrecorded outcomes.</p></article></div>
+    </section>
+
+    <section id="lifecycle" class="section searchable" data-search="upgrade update rollback backup restore reinstall uninstall reset volume permissions migration">
+      <div class="section-heading"><div><div class="eyebrow">Data lifecycle</div><h2>Replace the image; preserve the volume.</h2></div><p>Back up before upgrades or UID/GID changes. Updates take the shared operation lock, pull the requested image, verify health, and restore the previous image reference if startup fails.</p></div>
+      <div class="guide-grid"><article class="guide-card"><h3>Backup and upgrade</h3><div class="command">./tautweekly.sh backup
+./tautweekly.sh check-update
+./tautweekly.sh update
+# then sign in, verify status, preview, and TestEmail</div><p>For named volumes, use a temporary trusted container or NAS-native backup tool to archive the volume while preserving ownership and modes.</p></article><article class="guide-card"><h3>Rollback</h3><p>Pin <code>TAUTWEEKLY_IMAGE</code> to the prior verified version or digest and recreate the service. Do not restore an older config over a newer one blindly; use the timestamped <code>config.backup.*.json</code> files and review compatibility first.</p></article><article class="guide-card"><h3>Reinstall or move</h3><p>Recreate the container with the same <code>/data</code> bind mount or named volume. Keep PUID/GID consistent or repair ownership from the trusted host before start. Stale absolute host paths belong in the host manifest, not in container configuration.</p></article><article class="guide-card"><h3>Uninstall</h3><div class="command">docker compose down
+# The data directory/volume remains.
+# Delete it separately only after a verified backup
+# and only when permanent data removal is intended.</div><p>Never use a volume-removal option as part of a routine reinstall or rollback.</p></article></div>
+    </section>
+
+    <section id="limits" class="section searchable" data-search="limitations qpkg hardware testing validation arm64 qnap app store unraid">
+      <div class="section-heading"><div><div class="eyebrow">Validation and gaps</div><h2>Automated confidence, explicit hardware limits.</h2></div><p>The repository exercises shared Manager unit/security/accessibility tests, shell and package contracts, a virtual health service, isolated persistent data, amd64 boot smoke, and multi-architecture image builds in CI.</p></div>
+      <div class="guide-grid"><article class="guide-card"><h3>Covered without real services</h3><ul><li>No real Tautulli, Plex, SMTP, or user configuration</li><li>Private Manager bootstrap and log-redaction checks</li><li>Host-header, CSRF, cookie, recovery, and scheduler contracts</li><li>Container health, non-root ownership, and root-refusal smoke tests</li><li>amd64 and arm64 Buildx targets</li></ul></article><article class="guide-card"><h3>Irreducible acceptance gaps</h3><ul><li>QNAP firmware/Container Station behavior on physical hardware</li><li>Unraid Community Applications moderation and live WebUI behavior</li><li>NAS-vendor reverse proxies, firewalls, storage ACLs, and hard-stop timeouts</li><li>Real SMTP providers, Plex/Tautulli datasets, and mail clients</li><li>Native QPKG signing or App Center submission, which is not in scope</li></ul></article></div>
+      <div class="callout"><div class="shield">QA</div><div><h3>Complete environment acceptance before enabling delivery.</h3><p>Confirm the Manager URL, authentication recovery, volume backup, direct Plex and Tautulli checks, six browser previews, all six TestEmail messages, restart persistence, scheduler timezone, update/rollback, and non-destructive uninstall behavior on the actual NAS.</p></div><ul><li>Keep production disabled</li><li>Use synthetic data for support</li><li>Never share private diagnostics</li></ul></div>
+    </section>
+
+    <div class="no-results" id="no-results" hidden>No sections matched. Try “Unraid”, “QNAP”, “password”, “TLS”, “upgrade”, or “uninstall”.</div>
+  </main>
+  <footer><span>NAS / Docker Manager Quickstart — TautWeekly for Plex</span><span>Independent community project — not affiliated with Plex or Tautulli</span><a href="README.md">Detailed documentation</a></footer>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

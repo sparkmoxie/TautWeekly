@@ -3,7 +3,6 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 healthcheck="$repo_root/platforms/nas-docker/app/healthcheck.sh"
-asset_source="$repo_root/platforms/nas-docker/app/assets-default/movies.gif"
 python_bin="${PYTHON_BIN:-python3}"
 temp_root="$(mktemp -d)"
 data_root="$temp_root/data"
@@ -21,9 +20,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$data_root" "$web_root/assets"
+mkdir -p "$data_root" "$web_root/health"
 printf '%s\n' 'TautWeekly preview test' >"$web_root/index.html"
-cp "$asset_source" "$web_root/assets/movies.gif"
+printf '%s\n' '{"status":"alive"}' >"$web_root/health/live"
 
 data_root_for_python="$data_root"
 web_root_for_python="$web_root"
@@ -105,20 +104,10 @@ expect_fail_with() {
 }
 
 write_heartbeat "$data_root/service-heartbeat.json" 0
-expect_pass 'fresh supervisor heartbeat and preview root'
+expect_pass 'fresh supervisor heartbeat and Manager liveness'
 
 write_heartbeat "$data_root/scheduler-heartbeat.json" 3600
 expect_pass 'stale scheduler progress does not fail container liveness'
-
-rm "$web_root/assets/movies.gif"
-asset_output="$(run_healthcheck 2>&1)"
-grep -Fq '[WARN] Preview asset movies.gif is unavailable' <<<"$asset_output" || {
-  printf '[FAIL] Missing preview asset did not emit its repair warning.\n%s\n' "$asset_output" >&2
-  exit 1
-}
-pass_count=$((pass_count + 1))
-printf '[PASS] missing decorative asset warns without failing liveness\n'
-cp "$asset_source" "$web_root/assets/movies.gif"
 
 write_heartbeat "$data_root/service-heartbeat.json" 300
 expect_fail_with 'stale supervisor heartbeat' 'Service supervisor heartbeat is stale'
@@ -135,6 +124,6 @@ expect_pass 'health recovers after supervisor heartbeat refresh'
 kill "$server_pid"
 wait "$server_pid" 2>/dev/null || true
 server_pid=""
-expect_fail_with 'stopped preview server' 'Preview root did not respond'
+expect_fail_with 'stopped Manager endpoint' 'Manager liveness did not respond'
 
 printf '[PASS] Container health regression suite completed with %d scenarios.\n' "$pass_count"

@@ -20,7 +20,28 @@ Current source baseline: **1.3.4**.
   complete movie RT critic/audience ratings, exact-episode IMDb/RT ratings,
   backgrounds, and selected logos.
 - A Tautulli API key.
-- A trusted host port for the local preview service; default 8787.
+- A trusted-LAN host port for the authenticated Manager; default 8787.
+- A browser that can reach the NAS by IP address, or an explicit
+  `MANAGER_ALLOWED_HOSTS` entry when a DNS name or reverse proxy is used.
+
+## Required Manager authentication
+
+The NAS Manager never has a default password. On first start it creates a
+random, one-time pairing token in private `/data/manager` storage. The token is
+not printed to container logs. Retrieve it only through an explicit local
+administrator command:
+
+```bash
+./tautweekly.sh manager-bootstrap
+```
+
+Open `http://NAS_IP:8787/`, enter that token, and create an administrator
+password of at least eight characters. The Manager stores only a salted,
+iterated password hash; sessions are in memory, expire after eight hours, use
+HttpOnly SameSite=Strict cookies, and require a per-session CSRF token for
+changes. Five failed authentication attempts within five minutes temporarily
+limit further attempts. Restarting the Manager signs out all browsers but does
+not change the password, newsletter schedule, or a newsletter already running.
 
 ## Install from Unraid Apps
 
@@ -40,25 +61,15 @@ After installation, open **Docker > TautWeekly for Plex > Console** and run:
 > configured non-root PUID/PGID.
 
 ```bash
-/opt/tautweekly/bin/run-script.sh Setup-First.ps1
-# Complete metadata readiness for the included libraries, then:
-/opt/tautweekly/bin/run-script.sh Verify-Setup.ps1
-/opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1
-/opt/tautweekly/bin/run-script.sh Manage-User-Exclusions.ps1
-/opt/tautweekly/bin/run-mode.sh ListUsers
-/opt/tautweekly/bin/run-mode.sh PreviewAll USER_ID
-/opt/tautweekly/bin/run-mode.sh SendTest USER_ID
+/opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager \
+  access-bootstrap --data-dir /data/manager
 ```
 
-Replace `USER_ID` with a numeric value printed by `ListUsers`. `ListUsers`
-only displays the roster; it does not select or save a default user.
-
-Open `http://UNRAID_HOST:8787/` to confirm the preview service and review its
-first-run instructions. After `PreviewAll` completes, open
-`http://UNRAID_HOST:8787/preview-all-00-INDEX.html` and review every state
-before sending a TestEmail or enabling the schedule. Port 8787 is a private,
-read-only preview viewer—not an administration Web UI. Never expose it to the
-public internet.
+Open `http://UNRAID_HOST:8787/`, pair the browser, and use the guided Manager
+to configure, verify, generate previews, send controlled TestEmail messages,
+and enable the embedded schedule. The legacy Console helpers remain available
+for recovery, but they are no longer the normal setup path. Never port-forward
+plain HTTP Manager access to the public internet.
 
 Community Applications listings are moderated. The template can be audited
 directly from its [raw URL](https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/templates/tautweekly.xml).
@@ -73,6 +84,11 @@ timezone and non-root PUID/PGID, and confirm the host data path before creating
 the application. QNAP documents Compose applications in Container Station;
 App Center repositories distribute native QPKG applications instead, so this
 Docker edition is not presented as a QPKG.
+
+A native QPKG is not warranted for this delivery: it would add a second
+installer, signing and App Center review obligations, and hardware-specific
+lifecycle code without improving the Docker-native runtime. It may be scoped
+separately only with QNAP hardware and store-submission validation.
 
 References: [QNAP Container Station application creation](https://docs.qnap.com/operating-system/qne-network/1.0.x/en-us/container-creation-1A95801A.html)
 and [QNAP App Center repository settings](https://docs.qnap.com/operating-system/qts/5.0.x/en-us/app-center-settings-8C55F8A1.html).
@@ -100,15 +116,16 @@ For a general Docker host, use the portable Compose workflow:
 
 ```bash
 cp .env.example .env
-# Edit .env: timezone, UID/GID, preview bind, and preview URL.
+# Edit .env: timezone, UID/GID, Manager bind, URL, and optional allowed hosts.
 docker compose pull
 docker compose up -d
-./tautweekly.sh setup
-# Complete metadata readiness for the included libraries, then:
-./tautweekly.sh verify
-./tautweekly.sh manage-libraries
-./tautweekly.sh exclude-users
+./tautweekly.sh manager-bootstrap
 ```
+
+Open `http://NAS_IP:8787/`, pair the browser, and complete guided setup. A DNS
+name such as `tautweekly.example.test` must be listed exactly in
+`MANAGER_ALLOWED_HOSTS`; IP-literal access needs no entry. Do not add schemes,
+paths, ports, or wildcards.
 
 Use a hostname reachable from inside the container, for example
 `http://media.example.test:8181`. Do not use `127.0.0.1` for Tautulli unless it
@@ -244,16 +261,39 @@ or schedule settings.
 
 The default Compose file publishes container port 8080 as host port 8787. Set
 `PREVIEW_BIND=127.0.0.1` for host-only access or bind to a trusted LAN interface
-when remote preview access is required. Never port-forward this service to the
-public internet.
+when LAN Manager access is required. IP-literal Host headers are accepted in
+NAS mode. DNS names are rejected unless listed exactly, comma-separated, in
+`MANAGER_ALLOWED_HOSTS`; this keeps the default usable with dynamic NAS
+addresses while resisting DNS-rebinding through attacker-controlled names.
+The Manager ignores `Forwarded` and `X-Forwarded-*` headers and never infers
+trust, client identity, host, or TLS from them.
+
+For remote access, place the Manager behind a reverse proxy that terminates
+TLS, preserves the original `Host` header, and does not publish the port
+directly. Add the public DNS name to `MANAGER_ALLOWED_HOSTS`, verify HTTPS end
+to end, then set `MANAGER_SECURE_COOKIES=true` and recreate the container.
+That setting forces Secure cookies and HSTS; enabling it on a plain HTTP URL
+makes login intentionally fail. TautWeekly does not provision certificates or
+declare any proxy trusted. Prefer a VPN for administration and never expose
+plain HTTP to the public internet.
 
 When TautWeekly for Plex and Tautulli share a user-defined Docker network, a service URL
 such as `http://tautulli:8181` is appropriate. Otherwise, use a DNS name the
 container can resolve.
 
-The server root always provides a small status and onboarding page. It does
-not expose configuration, credentials, send controls, or scheduler controls.
-Generated previews appear only after running `preview` or `preview-all`.
+Only `GET /health/live`, the minimal first-run state, and the pairing/login
+endpoints are unauthenticated. Configuration, diagnostics, previews, send
+controls, scheduler controls, and all other status require an authenticated
+session. Liveness never contacts Tautulli, Plex, SMTP, or another network
+service.
+
+The supplied Compose definitions run with a read-only image filesystem, a
+bounded in-memory `/tmp`, `no-new-privileges`, and all Linux capabilities
+dropped except the narrow ownership and UID/GID transition set needed by the
+root-only entrypoint. The Manager, scheduler, and renderer then run as the
+configured non-root numeric identity. These fields follow Docker's official
+[Compose service specification](https://docs.docker.com/reference/compose-file/services/);
+vendor Compose screens may expose the same controls under different labels.
 
 ## First-run and connection troubleshooting
 
@@ -269,27 +309,27 @@ If the browser reports **connection refused**:
 ./tautweekly.sh status
 ./tautweekly.sh logs
 docker compose port tautweekly 8080
-docker compose exec tautweekly tail -n 40 /data/logs/preview-server.log
+docker compose exec tautweekly tail -n 40 /data/logs/manager.log
 ```
 
 Confirm the container is running and healthy, the published host port is the
 one used in the browser, and a firewall is not blocking that host port. Use a
 real host name or address in the browser—not Docker's `*:8787` port-listing
-notation. The container now exits with a clear error if its preview server
+notation. The container exits with a clear error if its Manager
 cannot bind, allowing the restart policy and health status to expose the
 failure.
 
-If logs say they are waiting for `/data/config.json`, run
-`./tautweekly.sh setup` from the extracted Compose directory. In Unraid, use
-the exact `Setup-First.ps1` command shown above from the container Console.
-Running the container alone does not authorize delivery: setup creates the
-configuration, previews are generated on request, and scheduling stays off
-until `schedule-enable` is confirmed.
+If the Manager requests a pairing token, run `manager-bootstrap`; do not search
+logs because the token is intentionally absent. Running the container alone
+does not authorize delivery: guided setup creates `/data/config.json`, preview
+and email operations remain explicit, and scheduling stays disabled until the
+administrator enables it.
 
 ## Persistent data
 
-The relative bind mount `./data:/data` contains configuration, state, logs,
-assets, generated output, and the bounded future-deletion cache at
+The relative bind mount `./data:/data` contains configuration, Manager
+credentials and sanitized history under `data/manager`, state, logs, private
+backups, assets, generated output, and the bounded future-deletion cache at
 `data/cache/deleted-items`. It is excluded from git and Docker build context.
 The cache stores presentation metadata/posters only after an item is observed
 live; it cannot recreate assets already discarded before v0.9.0.
@@ -303,19 +343,32 @@ Create a private backup with:
 The backup contains credentials. Store it as securely as the live
 configuration.
 
-Image updates and recreation preserve `data/` and its cache. To clear cached
+Named volumes are also supported, but the same `/data` contract applies. Never
+mount configuration over `/opt/tautweekly`; the image may be treated as
+read-only and that layer is disposable. Image updates, recreation, and
+reinstall preserve `data/` and its cache. To clear cached
 media without changing settings, stop the service and remove only
 `data/cache/deleted-items`, then restart. During uninstall, retain or privately
-back up `data/` unless configuration, state, output, cache entries, and backups
-are all intentionally being removed.
+back up `data/` unless configuration, Manager access, state, output, cache
+entries, and backups are all intentionally being removed. `docker compose
+down` does not delete a bind mount; do not add `--volumes` when a named volume
+must be retained.
+
+When changing PUID/PGID, stop the container, back up `/data`, change the values,
+and start it once. The root-only entrypoint adjusts the dedicated data tree and
+drops to the configured non-root identity before the Manager, scheduler, or
+renderer starts. It refuses UID or GID 0 and does not follow symlinks outside
+the data mount during legacy ownership recovery. A host that denies ownership
+changes must be repaired by its administrator before startup; TautWeekly never
+falls back to running the application as root.
 
 ## Container health
 
 Release v0.5.3 and newer reports liveness from the service supervisor every
 five seconds. Scheduled `SendAll` work may take several minutes without making
-the container unhealthy. The preview root and supervisor heartbeat are hard
-health requirements; missing decorative artwork emits a repair warning and is
-handled by `./tautweekly.sh repair-assets`.
+the container unhealthy. Minimal Manager liveness and the supervisor heartbeat
+are hard health requirements; external dependency outages remain application
+status and never trigger a restart loop.
 
 Use `docker inspect` to read the exact failed probe, `./tautweekly.sh logs` for
 service output, and `./tautweekly.sh schedule-status` for separate scheduler
@@ -339,7 +392,13 @@ separate host actions:
 The update command refuses to start while the application operation lock is
 busy, never deletes `data/`, forces Compose to use the pulled image instead of
 rebuilding bundled source, and restores the prior image automatically when the
-new container fails health verification. Backups contain credentials.
+new container fails health verification. The supplied Compose file grants a
+29-minute delivery drain inside a 30-minute stop grace period: Manager HTTP
+access closes first, then shutdown waits on the shared newsletter operation
+lock before stopping the independent scheduler. A NAS UI or engine that forces
+a shorter stop timeout can still terminate container processes; check for an
+idle Manager operation before applying updates on such hosts. Backups contain
+credentials.
 
 Unraid Apps installations do not receive the host wrapper and do not need an
 in-container updater. Unraid's Apps Action Center reports an available update
@@ -347,9 +406,43 @@ when the configured `latest` digest changes; apply it from Unraid's Docker/Apps
 controls. An optional automatic-update plugin may apply administrator-selected
 updates, but unattended application is opt-in. Leave the template on `latest`,
 not `edge`, unless deliberately testing unreleased code. After any update, run
-the Console verification and controlled preview/TestEmail sequence again. If
+the Manager verification and controlled preview/TestEmail sequence again. If
 the update addresses missing ratings/artwork or output remains stale, complete
 metadata readiness before those checks.
+
+### Password recovery
+
+Compose installations can reset only Manager authentication:
+
+```bash
+./tautweekly.sh manager-reset-access
+./tautweekly.sh manager-bootstrap
+```
+
+For Unraid, open the Console of the running container or use an equivalent
+local `docker exec`, run the following recovery command, then restart the
+container and retrieve the new bootstrap token:
+
+```bash
+/opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager \
+  access-recover --data-dir /data/manager --confirm
+```
+
+Recovery removes only Manager authentication files. It preserves
+`config.json`, SMTP/Plex/Tautulli secrets, schedule settings, newsletter state,
+previews, cache, backups, and sanitized operation history. Restart is required
+to invalidate in-memory sessions and create the new one-time token. Never
+delete all of `/data` merely to recover Manager access.
+
+### Rollback and incompatible data
+
+Before an upgrade, keep a private `/data` backup and record the current image
+digest. The host wrapper automatically returns to the prior image when the new
+container fails health checks. If a future package reports an unsupported data
+schema, stop it, preserve the failed `/data` tree, restore the matching private
+backup, and recreate with the recorded image digest. Do not start an older
+image repeatedly against newer data or copy only `config.json`; Manager access,
+schedule guards, and recipient state are part of the durable installation.
 
 ## Lifecycle commands
 
@@ -361,11 +454,22 @@ updates; application commands use the direct Console forms shown above.
 ./tautweekly.sh status
 ./tautweekly.sh logs
 ./tautweekly.sh restart
+./tautweekly.sh manager-bootstrap
+./tautweekly.sh manager-reset-access
 ./tautweekly.sh check-update
 ./tautweekly.sh update
 ./tautweekly.sh schedule-disable
 docker compose down
 ```
+
+`restart`, `down`, NAS power-off, and image replacement are host lifecycle
+actions, not Manager buttons. Disabling the schedule prevents future starts
+but never cancels a delivery already running. For uninstall, first disable the
+schedule, confirm no operation is active, stop/remove the container, and retain
+or back up the bind mount or named volume. Delete `/data` only as a separate,
+explicit data-destruction decision after verifying the backup; reinstalling
+against retained `/data` restores configuration, Manager credentials, schedule,
+and state.
 
 See [configuration](../CONFIGURATION.md), [security](../SECURITY.md), and
 [troubleshooting](../TROUBLESHOOTING.md).

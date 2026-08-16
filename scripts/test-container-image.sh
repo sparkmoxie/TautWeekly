@@ -35,6 +35,15 @@ if [[ "$host_gid" -eq 0 ]]; then host_gid=1000; fi
 
 docker run --detach \
   --name "$container_name" \
+  --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=256m,mode=1777 \
+  --security-opt no-new-privileges:true \
+  --cap-drop ALL \
+  --cap-add CHOWN \
+  --cap-add DAC_OVERRIDE \
+  --cap-add FOWNER \
+  --cap-add SETGID \
+  --cap-add SETUID \
   -e "PUID=$host_uid" \
   -e "PGID=$host_gid" \
   -e 'UMASK=077' \
@@ -58,10 +67,18 @@ done
 docker exec "$container_name" pwsh -NoLogo -NoProfile -NonInteractive -Command \
   'if ($PSVersionTable.PSVersion -lt [Version]"7.2") { exit 1 }' || fail 'PowerShell 7.2+ is unavailable in the runtime image.'
 docker exec "$container_name" test -s /data/config.example.json || fail 'Persistent config example was not initialized.'
-docker exec "$container_name" test -s /data/output/index.html || fail 'Preview landing page was not initialized.'
 docker exec "$container_name" test -s /data/output/product-branding/favicon.ico || fail 'Preview favicon was not initialized.'
 docker exec "$container_name" test -s /data/output/product-branding/tautweekly-app-icon-128.png || fail 'Preview product icon was not initialized.'
 docker exec "$container_name" test -s /data/service-heartbeat.json || fail 'Service supervisor heartbeat was not initialized.'
+docker exec "$container_name" test -x /opt/tautweekly/bin/tautweekly-manager || fail 'NAS Manager binary is unavailable.'
+setup_json="$(docker exec "$container_name" curl -fsS http://127.0.0.1:8080/api/v1/setup)"
+grep -Fq '"authenticationRequired":true' <<<"$setup_json" || fail 'NAS Manager authentication is not mandatory.'
+grep -Fq '"runtimeMode":"nas"' <<<"$setup_json" || fail 'NAS Manager did not report its container runtime profile.'
+bootstrap_token="$(docker exec "$container_name" /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager)"
+[[ "$bootstrap_token" =~ ^[A-Za-z0-9_-]{32,}$ ]] || fail 'Explicit bootstrap command did not return a one-time token.'
+if docker logs "$container_name" 2>&1 | grep -Fq "$bootstrap_token"; then
+  fail 'The one-time Manager bootstrap token was exposed in container logs.'
+fi
 
 # A normal docker exec bypasses entrypoint.sh and therefore begins as root.
 # run-mode.sh must still drop to PUID/PGID before it creates any data.

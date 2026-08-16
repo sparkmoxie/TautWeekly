@@ -76,6 +76,7 @@ foreach ($engine in $engines) {
         $sendStderr = Join-Path $tempRoot 'send.stderr.txt'
         $sendAllStdout = Join-Path $tempRoot 'send-all.stdout.txt'
         $sendAllStderr = Join-Path $tempRoot 'send-all.stderr.txt'
+        $managerResultPath = Join-Path $tempRoot 'manager-operation-result.json'
         $server = $null
         $smtpServer = $null
         $casePassed = $false
@@ -222,11 +223,16 @@ foreach ($engine in $engines) {
                     Get-ChildItem -LiteralPath $outputRoot -File -Filter 'preview-all-*.html' -ErrorAction SilentlyContinue | Remove-Item -Force
                     New-Item -ItemType Directory -Force -Path (Join-Path $outputRoot 'posters') | Out-Null
                 }
-                $process = Start-Process -FilePath $engine.Host -ArgumentList @(
+                $previewArguments = @(
                     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
                     '-RendererPath', (Join-Path $appRoot $engine.Renderer), '-ConfigPath', $configPath,
                     '-UserId', '1', '-Mode', 'PreviewAll'
-                ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+                )
+                if ($engine.Name -eq 'nas-docker-linux-freebsd' -and $scenario -eq 'active') {
+                    $previewArguments += @('-ResultPath', $managerResultPath)
+                }
+                $process = Start-Process -FilePath $engine.Host -ArgumentList $previewArguments `
+                    -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
             }
             finally {
                 $env:TAUTWEEKLY_DATA_DIR = $oldDataRoot
@@ -244,6 +250,19 @@ foreach ($engine in $engines) {
             $normalPath = Join-Path $outputRoot 'preview-all-04-normal-newsletter.html'
             Assert-True (Test-Path $indexPath) "$($engine.Name)/$scenario did not generate the preview index."
             Assert-True ((Get-ChildItem $outputRoot -Filter 'preview-all-*.html').Count -eq 7) "$($engine.Name)/$scenario did not generate all six states plus the index."
+            if ($engine.Name -eq 'nas-docker-linux-freebsd' -and $scenario -eq 'active') {
+                Assert-True (Test-Path -LiteralPath $managerResultPath) 'NAS Manager operation did not produce its structured result.'
+                $managerResultRaw = Get-Content -LiteralPath $managerResultPath -Raw -Encoding UTF8
+                $managerResult = $managerResultRaw | ConvertFrom-Json
+                Assert-True ($managerResult.schemaVersion -eq 1) 'NAS Manager result used the wrong schema version.'
+                Assert-True ($managerResult.mode -eq 'PreviewAll' -and $managerResult.outcome -eq 'succeeded') 'NAS Manager result reported the wrong operation outcome.'
+                Assert-True ($managerResult.deliveryScope -eq 'none') 'NAS Manager preview result reported a delivery scope.'
+                Assert-True ($managerResult.generatedPreviewFiles.Count -eq 7) 'NAS Manager result did not report all generated previews.'
+                Assert-True (-not $managerResultRaw.Contains('virtual-api-key')) 'NAS Manager result exposed the synthetic Tautulli API key.'
+                Assert-True (-not $managerResultRaw.Contains('virtual-plex-token')) 'NAS Manager result exposed the synthetic Plex token.'
+                Assert-True (-not $managerResultRaw.Contains($baseUrl)) 'NAS Manager result exposed a private service URL.'
+                Assert-True (-not $managerResultRaw.Contains($configPath)) 'NAS Manager result exposed its configuration path.'
+            }
             $indexHtml = Get-Content $indexPath -Raw -Encoding UTF8
             $normalHtml = Get-Content $normalPath -Raw -Encoding UTF8
             $previewThemeMarkers = @(

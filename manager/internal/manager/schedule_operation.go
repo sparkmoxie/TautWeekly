@@ -47,22 +47,34 @@ type scheduleMutationRunner interface {
 type scheduleCoordinator struct {
 	mu          sync.RWMutex
 	root        string
+	runtimeRoot string
 	currentPath string
 	now         func() time.Time
 	runner      scheduleMutationRunner
+	actions     []string
 	current     *ScheduleOperationRecord
 }
 
 func newScheduleCoordinator(options Options) (*scheduleCoordinator, error) {
+	runtimeRoot := options.RuntimeRoot
+	if strings.TrimSpace(runtimeRoot) == "" {
+		runtimeRoot = options.TautWeeklyRoot
+	}
 	runner := options.scheduleRunner
 	if runner == nil {
-		runner = platformScheduleMutationRunner{}
+		if normalizedRuntimeMode(options.RuntimeMode) == runtimeModeNAS {
+			runner = containerScheduleMutationRunner{runtimeRoot: runtimeRoot, now: options.Now}
+		} else {
+			runner = platformScheduleMutationRunner{}
+		}
 	}
 	coordinator := &scheduleCoordinator{
 		root:        options.TautWeeklyRoot,
+		runtimeRoot: runtimeRoot,
 		currentPath: filepath.Join(options.DataDir, "schedule-operation.json"),
 		now:         options.Now,
 		runner:      runner,
+		actions:     append([]string(nil), capabilitiesFor(options).ScheduleActions...),
 	}
 	if coordinator.now == nil {
 		coordinator.now = time.Now
@@ -84,13 +96,13 @@ func newScheduleCoordinator(options Options) (*scheduleCoordinator, error) {
 
 func (c *scheduleCoordinator) Start(action string, request ScheduleMutationRequest) (ScheduleOperationRecord, error) {
 	action = strings.ToLower(strings.TrimSpace(action))
-	if !validScheduleAction(action) {
+	if !validScheduleAction(action) || !containsCapabilityAction(c.actions, action) {
 		return ScheduleOperationRecord{}, ErrScheduleInvalid
 	}
 	if !request.Confirm {
 		return ScheduleOperationRecord{}, ErrScheduleConfirmation
 	}
-	values, raw, exists, state := readConfigDocument(c.root)
+	values, raw, exists, state := readConfigDocument(c.runtimeRoot)
 	if state != "ready" || !exists || len(existingConfigIssues(values)) > 0 {
 		return ScheduleOperationRecord{}, ErrScheduleNotReady
 	}
@@ -254,6 +266,10 @@ func scheduleErrorCategory(exitCode int, runErr error) string {
 		return "task-verification-failed"
 	case 32:
 		return "task-read-access-failed"
+	case 33:
+		return "container-schedule-update-failed"
+	case 34:
+		return "container-schedule-verification-failed"
 	default:
 		return "schedule-helper-failed"
 	}

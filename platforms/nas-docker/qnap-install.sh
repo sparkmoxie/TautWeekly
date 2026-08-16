@@ -84,6 +84,8 @@ UMASK=077
 PREVIEW_BIND=0.0.0.0
 PREVIEW_PORT=8787
 PREVIEW_BASE_URL=http://$NAS_IP:8787
+MANAGER_ALLOWED_HOSTS=
+MANAGER_SECURE_COOKIES=false
 EOF
   chmod 600 .env 2>/dev/null || true
   echo "Created .env. Confirm TZ and PREVIEW_BASE_URL before production use."
@@ -95,38 +97,21 @@ printf '\nPulling the current TautWeekly for Plex container image...\n'
 ./container-update.sh apply
 wait_for_container
 
-printf '\nRunning the configuration wizard...\n'
-compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Setup-First.ps1
-compose_cmd restart tautweekly
-wait_for_container
-
-cat <<'EOF'
-
-Prepare Plex and Tautulli metadata before acceptance:
-  1. Confirm Edit > Advanced > Ratings Source for each included Plex Movie library.
-  2. Run Plex Manage Library > Refresh All Metadata for every included movie/TV
-     library and wait. A full refresh can take a long time and can update
-     metadata or artwork.
-  3. In Tautulli, open each same Library > Media Info tab, select Refresh media
-     info, and wait. The current control is per library.
-EOF
-read -r -p "Complete those steps, then press Enter to run verification: "
-
-printf '\nRunning verification...\n'
-if ! compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1; then
-  echo "Verification failed. Review the messages above and run ./tautweekly.sh verify after correcting them." >&2
-  exit 1
-fi
 cat <<'EOF'
 
 Installation is complete.
 
-Recommended acceptance sequence:
-  ./tautweekly.sh verify
-  ./tautweekly.sh list-users
-  ./tautweekly.sh preview-all USER_ID
-  ./tautweekly.sh send-test-all USER_ID
-  ./tautweekly.sh schedule-status
+The authenticated Manager is available on the trusted LAN at the URL saved in
+PREVIEW_BASE_URL in .env. Retrieve the one-time pairing token explicitly in
+this administrator terminal; the token is never printed to container logs:
 
-Automatic sending remains disabled unless you explicitly enabled it in setup.
+  ./tautweekly.sh manager-bootstrap
+
+Then open the Manager URL, create the administrator password, and complete the
+guided configuration, verification, preview, and TestEmail checks. Automatic
+sending remains disabled until it is explicitly enabled in the Manager.
+
+If the hostname shown in your browser is not the NAS IP address, add that exact
+DNS name to MANAGER_ALLOWED_HOSTS in .env and restart the container. Never
+port-forward the plain-HTTP Manager directly to the public internet.
 EOF

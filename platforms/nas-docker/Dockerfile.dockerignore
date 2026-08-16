@@ -1,0 +1,7 @@
+**
+!manager
+!manager/**
+!platforms
+!platforms/nas-docker
+!platforms/nas-docker/app
+!platforms/nas-docker/app/**

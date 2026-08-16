@@ -5,26 +5,29 @@
   <Network>bridge</Network>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
+  <ExtraParams>--read-only --tmpfs /tmp:rw,noexec,nosuid,size=256m,mode=1777 --stop-timeout 1800 --security-opt no-new-privileges:true --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETGID --cap-add SETUID</ExtraParams>
   <Icon>https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/assets/branding/tautweekly-app-icon-512.png</Icon>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
-  <Overview>Generate preview-first weekly Plex activity newsletters using Tautulli. The WebUI link opens a read-only preview viewer, not an admin panel. After installation, open the container Console and run: /opt/tautweekly/bin/run-script.sh Setup-First.ps1. This launcher uses the configured non-root PUID/PGID and repairs legacy root-owned appdata entries. Unraid checks the configured stable latest image and applies updates from its Docker/Apps controls.</Overview>
-  <Description>TautWeekly for Plex generates activity, welcome, quiet-week, and milestone email newsletters. Configuration and generated output stay in appdata. Scheduling is disabled by default. Complete setup from the Console, then review browser previews and TestEmail delivery before enabling production sends. No in-container updater, Docker socket, or edge image is enabled.</Description>
+  <Overview>Generate preview-first weekly Plex activity newsletters using Tautulli. The WebUI opens the authenticated TautWeekly Manager for setup, verification, previews, test delivery, and embedded scheduling. After installation, retrieve the one-time pairing token from the container Console with: /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager. The pairing token is never written to logs. Unraid owns container lifecycle and stable image updates.</Overview>
+  <Description>TautWeekly for Plex generates activity, welcome, quiet-week, and milestone email newsletters. Configuration, Manager credentials, state, backups, and generated output stay in private appdata. Manager authentication is mandatory and scheduling is disabled by default. Review previews and controlled TestEmail delivery before enabling production sends. No in-container updater, Docker socket, privileged mode, insecure default password, or edge image is enabled.</Description>
   <Support>https://github.com/sparkmoxie/TautWeekly/issues</Support>
   <Project>https://github.com/sparkmoxie/TautWeekly</Project>
   <TemplateURL>https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/templates/tautweekly.xml</TemplateURL>
   <ReadMe>https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/docs/nas-docker/README.md</ReadMe>
   <Category>MediaApp:Other Tools:Utilities</Category>
   <ExtraSearchTerms>Tautulli Plex newsletter email activity digest</ExtraSearchTerms>
-  <Requires>A reachable Tautulli server, an SMTP STARTTLS account, and a trusted LAN port for browser previews.</Requires>
-  <Changes>2026-08-13: Applied the canonical detailed TautWeekly app icon to Community Apps and the private preview landing page while preserving Unraid platform identity. Routed Console setup and management through the configured non-root PUID/PGID and added safe recovery for legacy root-owned appdata entries. 2026-08-07: Clarified that Unraid owns stable image checks and update application; no in-container updater or edge channel is enabled. 2026-08-05: Added a first-run preview landing page, explicit setup guidance, and clearer preview-server failure reporting. 2026-08-04: Initial Community Apps template.</Changes>
-  <Date>2026-08-13</Date>
+  <Requires>A reachable Tautulli server, an SMTP STARTTLS account, and a trusted LAN port for the authenticated Manager.</Requires>
+  <Changes>2026-08-16: Replaced the read-only preview listener with the authenticated, capability-aware NAS Manager; added console-only one-time pairing, Manager access recovery, embedded schedule controls, and host-owned lifecycle language. 2026-08-13: Applied canonical branding and safe PUID/PGID recovery. 2026-08-07: Clarified stable, host-owned updates. 2026-08-04: Initial Community Apps template.</Changes>
+  <Date>2026-08-16</Date>
   <MinVer>6.12.0</MinVer>
   <License>MIT</License>
-  <Config Name="Preview Viewer" Target="8080" Default="8787" Mode="tcp" Description="Trusted-LAN HTTP port for the read-only landing page and generated previews. This is not an admin UI. Do not expose it publicly." Type="Port" Display="always" Required="true" Mask="false"/>
-  <Config Name="Appdata" Target="/data" Default="/mnt/user/appdata/tautweekly" Mode="rw" Description="Private configuration, state, logs, assets, and generated previews." Type="Path" Display="always" Required="true" Mask="false"/>
+  <Config Name="Manager Web UI" Target="8080" Default="8787" Mode="tcp" Description="Authenticated Manager for a trusted LAN. Do not expose plain HTTP publicly; use an explicitly configured TLS reverse proxy when remote access is required." Type="Port" Display="always" Required="true" Mask="false"/>
+  <Config Name="Appdata" Target="/data" Default="/mnt/user/appdata/tautweekly" Mode="rw" Description="Private configuration, Manager credentials, state, backups, logs, assets, and generated previews. Preserve this path across updates and reinstalls." Type="Path" Display="always" Required="true" Mask="false"/>
   <Config Name="Timezone" Target="TZ" Default="Etc/UTC" Description="IANA timezone used by the weekly scheduler, for example America/Phoenix." Type="Variable" Display="always" Required="true" Mask="false"/>
   <Config Name="PUID" Target="PUID" Default="99" Description="Non-root Unraid user ID used for appdata ownership." Type="Variable" Display="advanced" Required="true" Mask="false"/>
   <Config Name="PGID" Target="PGID" Default="100" Description="Non-root Unraid group ID used for appdata ownership." Type="Variable" Display="advanced" Required="true" Mask="false"/>
   <Config Name="UMASK" Target="UMASK" Default="077" Description="Restrictive file-creation mask for configuration and output." Type="Variable" Display="advanced" Required="true" Mask="false"/>
   <Config Name="Preview Base URL" Target="TAUTWEEKLY_PREVIEW_BASE_URL" Default="" Description="Optional LAN URL embedded in preview links, for example http://tower:8787. Never use a public URL." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Manager Allowed Hosts" Target="TAUTWEEKLY_MANAGER_ALLOWED_HOSTS" Default="" Description="Optional comma-separated DNS hostnames accepted by the Manager, for example tower,tautweekly.example.test. IP-literal access needs no entry. Do not include schemes, paths, ports, or wildcards." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Secure Manager Cookies" Target="TAUTWEEKLY_MANAGER_SECURE_COOKIES" Default="false" Description="Set true only when every browser connection uses HTTPS through a correctly configured TLS reverse proxy. Plain HTTP login cannot work while enabled." Type="Variable" Display="advanced" Required="true" Mask="false"/>
 </Container>

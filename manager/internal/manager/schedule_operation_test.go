@@ -127,6 +127,8 @@ func TestScheduleCoordinatorRejectsUnsafeRequestsAndMapsSanitizedFailures(t *tes
 		30: "task-mutation-failed",
 		31: "task-verification-failed",
 		32: "task-read-access-failed",
+		33: "container-schedule-update-failed",
+		34: "container-schedule-verification-failed",
 		1:  "schedule-helper-failed",
 	} {
 		t.Run(category, func(t *testing.T) {

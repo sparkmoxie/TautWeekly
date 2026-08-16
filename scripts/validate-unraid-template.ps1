@@ -58,7 +58,7 @@ if ([string]$profile.CommunityApplications.Icon -cne $expectedIcon -or [string]$
 }
 
 $configs = @($container.Config)
-$requiredTargets = @('8080','/data','TZ','PUID','PGID','UMASK','TAUTWEEKLY_PREVIEW_BASE_URL')
+$requiredTargets = @('8080','/data','TZ','PUID','PGID','UMASK','TAUTWEEKLY_PREVIEW_BASE_URL','TAUTWEEKLY_MANAGER_ALLOWED_HOSTS','TAUTWEEKLY_MANAGER_SECURE_COOKIES')
 foreach ($target in $requiredTargets) {
     if (-not ($configs | Where-Object { [string]$_.Target -ceq $target })) {
         Add-Failure "Missing Unraid Config target: $target"
@@ -73,14 +73,14 @@ $webPort = $configs | Where-Object { [string]$_.Target -ceq '8080' } | Select-Ob
 if ($null -ne $webPort -and ([string]$webPort.Default -cne '8787' -or [string]$webPort.Type -cne 'Port')) {
     Add-Failure 'Unraid WebUI must map host port 8787 to container port 8080.'
 }
-if ($null -ne $webPort -and ([string]$webPort.Name -cne 'Preview Viewer' -or [string]$webPort.Description -notmatch 'not an admin UI')) {
-    Add-Failure 'Unraid port metadata must identify the endpoint as a preview viewer rather than an admin UI.'
+if ($null -ne $webPort -and ([string]$webPort.Name -cne 'Manager Web UI' -or [string]$webPort.Description -notmatch 'Authenticated Manager')) {
+    Add-Failure 'Unraid port metadata must identify the authenticated NAS Manager.'
 }
-if ([string]$container.Overview -notmatch 'read-only preview viewer' -or [string]$container.Overview -notmatch 'Setup-First\.ps1') {
-    Add-Failure 'Unraid overview must distinguish the preview viewer from Console-based setup.'
+if ([string]$container.Overview -notmatch 'authenticated TautWeekly Manager' -or [string]$container.Overview -notmatch 'access-bootstrap') {
+    Add-Failure 'Unraid overview must describe authenticated Manager bootstrap from the container Console.'
 }
-if ([string]$container.Overview -notmatch 'Unraid checks the configured stable latest image' -or
-    [string]$container.Description -notmatch 'No in-container updater, Docker socket, or edge image is enabled') {
+if ([string]$container.Overview -notmatch 'Unraid owns container lifecycle and stable image updates' -or
+    [string]$container.Description -notmatch 'No in-container updater, Docker socket, privileged mode, insecure default password, or edge image is enabled') {
     Add-Failure 'Unraid update policy must remain host-managed, stable-only, and socket-free.'
 }
 

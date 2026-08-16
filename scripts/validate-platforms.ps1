@@ -80,23 +80,28 @@ Require-Text 'platforms/freebsd-podman/tautweekly' @(
     'run-as-user\.sh /bin/bash'
 )
 Require-Text 'platforms/nas-docker/app/run-service.sh' @(
-    'Preview server listening',
+    'Authenticated Manager listening',
+    'tautweekly-manager.*serve',
+    '--runtime-mode nas',
+    '--runtime-root',
     'curl --fail --silent --max-time 2',
     'service-heartbeat\.json',
     'write_service_heartbeat',
-    'Preview server exited unexpectedly',
+    'active newsletter operation to finish',
+    'Manager exited unexpectedly',
     'Scheduler exited unexpectedly'
 )
 Require-Text 'platforms/nas-docker/app/healthcheck.sh' @(
     'service-heartbeat\.json',
     'TAUTWEEKLY_HEALTH_HEARTBEAT_MAX_SECONDS',
     'Service supervisor heartbeat is stale',
-    '\[WARN\] Preview asset movies\.gif is unavailable'
+    'health/live',
+    'Manager liveness did not respond'
 )
 Require-Text 'platforms/nas-docker/app/Scheduler.ps1' @(
     'only reads \$configPath',
-    'run \.\/tautweekly\.sh setup',
-    'Setup-First\.ps1',
+    'authenticated Manager',
+    'saved in /data',
     'Get-TautWeeklyScheduleNow',
     'TimeZoneId = \$scheduleTimeZone\.Id'
 )
@@ -198,27 +203,42 @@ foreach ($relative in @(
         'current control is per library'
     )
 }
-foreach ($relative in @(
-    'platforms/nas-docker/qnap-install.sh',
-    'platforms/mac-docker/mac-install.sh'
-)) {
-    Require-Text $relative @(
-        'Prepare Plex and Tautulli metadata before acceptance',
-        'Refresh All Metadata',
-        'Refresh media\s+info',
-        'press Enter to run verification'
-    )
-}
+Require-Text 'platforms/nas-docker/qnap-install.sh' @(
+    'manager-bootstrap',
+    'one-time pairing token',
+    'never printed to container logs',
+    'Automatic\s+sending remains disabled',
+    'MANAGER_ALLOWED_HOSTS'
+)
+Forbid-Text 'platforms/nas-docker/qnap-install.sh' @('Setup-First\.ps1', 'press Enter to run verification')
+Require-Text 'platforms/mac-docker/mac-install.sh' @(
+    'Prepare Plex and Tautulli metadata before acceptance',
+    'Refresh All Metadata',
+    'Refresh media\s+info',
+    'press Enter to run verification'
+)
 Require-Text 'docs/nas-docker/README.md' @(
     'host-side Compose wrapper',
     'does not exist inside the Unraid Apps container',
     "Unraid's Docker controls"
 )
-Require-Text 'docs/nas-docker/index.html' @(
-    'wrapper does not exist inside the container',
-    'host-side <code>\.\/tautweekly\.sh</code> Compose wrapper is not installed inside the Unraid Apps container',
-    "Unraid's Docker controls"
+Require-Text 'docs/nas-docker/index.html' @('url=manager\.html', 'location\.replace\("manager\.html"')
+Require-Text 'docs/nas-docker/manager.html' @(
+    'Manager authentication',
+    'manager-bootstrap',
+    'manager-reset-access',
+    'MANAGER_ALLOWED_HOSTS',
+    'MANAGER_SECURE_COOKIES=true',
+    '\/health\/live',
+    'same image and Manager core',
+    'wrapper does not exist inside an Unraid Apps container',
+    'native QPKG is not part of this delivery',
+    'docker build -f platforms\/nas-docker\/Dockerfile \.',
+    'docker compose down',
+    '30 minutes',
+    'QNAP firmware\/Container Station behavior on physical hardware'
 )
+Forbid-Text 'docs/nas-docker/manager.html' @('Setup-First\.ps1', 'Windows Task Scheduler', 'preview server', 'notification area', 'tray icon')
 Require-Text 'platforms/nas-docker/app/Smtp-Transport.ps1' @(
     "Command 'AUTH LOGIN'",
     "Command 'AUTH PLAIN'",
@@ -230,6 +250,8 @@ Require-Text 'platforms/nas-docker/app/TautWeekly.ps1' @(
     'Smtp-Transport\.ps1',
     'Send-TautWeeklySmtpMessage',
     'ListUsers only displays the roster',
+    'ResultPath',
+    'Write-TautWeeklyStructuredResult',
     'Get-TautWeeklyScheduleNow -TimeZone \$deliveryTimeZone',
     'ConvertTo-TautWeeklyScheduleUtc -TimeZone \$deliveryTimeZone'
 )
@@ -329,6 +351,8 @@ Require-Text 'platforms/nas-docker/tautweekly.sh' @(
     'numeric value shown by list-users',
     'check-update',
     'container-update\.sh apply',
+    'manager-bootstrap',
+    'access-recover',
     'run-script\.sh Verify-Setup\.ps1',
     'run-as-user\.sh bash'
 )
@@ -355,8 +379,31 @@ Require-Text 'platforms/nas-docker/container-update.sh' @(
     'Restoring the previous image'
 )
 Forbid-Text 'platforms/nas-docker/compose.yaml' @('image:\s*.*:edge')
-Require-Text 'platforms/nas-docker/compose.yaml' @('ghcr\.io/sparkmoxie/tautweekly:latest')
-Require-Text 'platforms/nas-docker/compose.qnap.yaml' @('ghcr\.io/sparkmoxie/tautweekly:latest')
+foreach ($relative in @('platforms/nas-docker/compose.yaml', 'platforms/nas-docker/compose.qnap.yaml')) {
+    Require-Text $relative @(
+        'ghcr\.io/sparkmoxie/tautweekly:latest',
+        'no-new-privileges:true',
+        'read_only: true',
+        '\/tmp:rw,noexec,nosuid,size=256m,mode=1777',
+        'cap_drop:',
+        '- ALL',
+        'stop_grace_period: 30m',
+        'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
+        'TAUTWEEKLY_MANAGER_SECURE_COOKIES'
+    )
+}
+Require-Text 'platforms/nas-docker/Dockerfile' @(
+    'FROM golang:1\.26\.5-bookworm AS manager-build',
+    'GOOS=linux GOARCH="\$\{TARGETARCH:-amd64\}"',
+    'tautweekly-manager',
+    'EXPOSE 8080'
+)
+Require-Text 'templates/tautweekly.xml' @(
+    '--read-only',
+    '--stop-timeout 1800',
+    '--security-opt no-new-privileges:true',
+    '--cap-drop ALL'
+)
 
 Require-Text 'platforms/mac-docker/check-release.sh' @(
     'releases/latest',
@@ -447,16 +494,11 @@ foreach ($relative in @(
 Write-Host '[PASS] Every directly shipped runtime contains library-selection management source.'
 
 foreach ($relative in @(
-    'app/entrypoint.sh',
-    'app/healthcheck.sh',
     'app/preview-home.html',
-    'app/run-service.sh',
     'app/bin/run-as-user.sh',
     'app/bin/run-script.sh',
-    'app/bin/run-mode.sh',
     'app/Schedule-Time.ps1',
     'app/Schedule-Control.ps1',
-    'app/Scheduler.ps1',
     'app/Smtp-Transport.ps1'
 )) {
     $nas = Read-RepoFile ("platforms/nas-docker/$relative")
@@ -465,7 +507,7 @@ foreach ($relative in @(
         throw "Shared runtime wrapper drifted between NAS and macOS: $relative"
     }
 }
-Write-Host '[PASS] Shared runtime wrappers remain identical across container editions.'
+Write-Host '[PASS] Shared renderer and scheduling wrappers remain identical across container editions.'
 
 $forbiddenRuntimeNames = @('config.json', '.env', 'state.json', 'access-state.json', 'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json')
 foreach ($platform in @('linux', 'freebsd-podman')) {

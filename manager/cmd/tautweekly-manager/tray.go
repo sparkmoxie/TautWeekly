@@ -21,6 +21,10 @@ type managerTray interface {
 	Close() error
 }
 
+type disabledManagerTray struct{}
+
+func (disabledManagerTray) Close() error { return nil }
+
 func trayHealthFromOverall(overall string) trayHealth {
 	switch overall {
 	case "healthy":
