@@ -133,6 +133,10 @@ non-administrator controls:
    setting is on. It opens the default browser once, after the background
    Manager is ready.
 
+Each toggle saves immediately. The status badge changes only after Windows
+confirms the new setting; if the update fails, the toggle returns to its last
+saved state and the Manager shows a sanitized error.
+
 Setup refreshes an owned sign-in entry after update or portable migration,
 including when the private data path changes. Uninstall removes that owned
 entry while preserving private configuration and Manager data. A later fresh
