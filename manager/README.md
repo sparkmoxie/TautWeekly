@@ -6,8 +6,8 @@ Current capabilities:
 
 - loopback-only HTTP serving;
 - a Windows-native notification-area icon using the packaged TautWeekly
-  artwork, native three-state health menu, left-click Dashboard opening, and
-  graceful Manager-only exit;
+  artwork, native three-state health menu with Dashboard activation, left-click
+  Dashboard opening, and graceful Manager-only exit;
 - Windows per-installation single-instance coordination that reuses and opens
   the ready Dashboard on a repeated launch;
 - current-user sign-in startup and dependent one-time Dashboard opening with a
@@ -119,8 +119,9 @@ available but are not the primary Windows quickstart.
 The interactive Windows process owns one native notification-area icon and one
 loopback listener. Repeated normal launches wait for the existing Manager and
 bring its visible Dashboard browser window to the foreground instead of opening
-a duplicate. **Exit TautWeekly for Plex** shuts down only the HTTP control surface
-and tray process; it neither edits the weekly Task Scheduler definition nor
+a duplicate. The native status row performs the same focus-first Dashboard
+action. **Exit TautWeekly for Plex** shuts down only the HTTP control surface and
+tray process; it neither edits the weekly Task Scheduler definition nor
 terminates its newsletter process. A non-cancellable delivery started from the
 Manager is allowed to finish in its PowerShell process, and a later Manager
 start reconciles the sanitized structured result before accepting another

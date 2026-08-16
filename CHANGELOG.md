@@ -12,7 +12,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Manager. The TautWeekly artwork stays visible while the Manager is running,
   left-click opens the existing Dashboard, and the native context menu reports
   **Healthy**, **Needs attention**, or **Failed** with a colored icon plus an
-  explicit **Exit TautWeekly for Plex** action.
+  explicit **Exit TautWeekly for Plex** action. Selecting the status row also
+  focuses the existing Dashboard, opening one only when needed.
 - Added current-user **Start Manager when I sign in** and dependent **Open
   Dashboard after sign-in** controls under Settings, with sanitized status,
   diagnostics, and exact startup-entry ownership.

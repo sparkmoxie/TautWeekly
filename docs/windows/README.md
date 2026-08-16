@@ -111,9 +111,10 @@ Manager:
   opening one only when no Dashboard window is available. Opening TautWeekly
   again also reuses this same Manager; it does not create a second server, tray
   process, or visible duplicate Dashboard window.
-- Right-click to see one non-actionable native status row: **Healthy**,
-  **Needs attention**, or **Failed**. The row includes a colored native menu
-  icon, while the text keeps the state understandable without color.
+- Right-click to see one native status row: **Healthy**, **Needs attention**, or
+  **Failed**. The row includes a colored native menu icon, while the text keeps
+  the state understandable without color. Select the status row to focus the
+  existing Dashboard, opening one only when no Dashboard window is available.
 - Select **Exit TautWeekly for Plex** to remove the icon and stop the local
   Dashboard server gracefully.
 

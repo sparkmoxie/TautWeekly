@@ -9,21 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"unsafe"
 )
 
-const dashboardWindowTitle = "TautWeekly Manager"
-
-var (
-	browserUser32              = syscall.NewLazyDLL("user32.dll")
-	browserEnumWindows         = browserUser32.NewProc("EnumWindows")
-	browserIsWindowVisible     = browserUser32.NewProc("IsWindowVisible")
-	browserIsIconic            = browserUser32.NewProc("IsIconic")
-	browserGetWindowTextLength = browserUser32.NewProc("GetWindowTextLengthW")
-	browserGetWindowText       = browserUser32.NewProc("GetWindowTextW")
-	browserShowWindow          = browserUser32.NewProc("ShowWindow")
-	browserBringWindowToTop    = browserUser32.NewProc("BringWindowToTop")
-	browserSetForegroundWindow = browserUser32.NewProc("SetForegroundWindow")
+const (
+	dashboardWindowTitle  = "TautWeekly Manager"
+	windowsCreateNoWindow = 0x08000000
 )
 
 func openLocalBrowser(target string) error {
@@ -45,47 +35,39 @@ func openLocalBrowser(target string) error {
 }
 
 func activateExistingDashboardWindow() bool {
-	var found uintptr
-	callback := syscall.NewCallback(func(window, _ uintptr) uintptr {
-		if visible, _, _ := browserIsWindowVisible.Call(window); visible == 0 {
-			return 1
-		}
-		length, _, _ := browserGetWindowTextLength.Call(window)
-		if length == 0 {
-			return 1
-		}
-		if length > 2048 {
-			length = 2048
-		}
-		buffer := make([]uint16, int(length)+1)
-		copied, _, _ := browserGetWindowText.Call(window, uintptr(unsafe.Pointer(&buffer[0])), uintptr(len(buffer)))
-		if copied == 0 || !isDashboardWindowTitle(syscall.UTF16ToString(buffer)) {
-			return 1
-		}
-		found = window
-		return 0
-	})
-	browserEnumWindows.Call(callback, 0)
-	if found == 0 {
+	command, err := dashboardActivationCommand(strings.TrimSpace(os.Getenv("SystemRoot")))
+	if err != nil {
 		return false
 	}
-	if iconic, _, _ := browserIsIconic.Call(found); iconic != 0 {
-		browserShowWindow.Call(found, 9) // SW_RESTORE
-	}
-	browserBringWindowToTop.Call(found)
-	browserSetForegroundWindow.Call(found)
-	return true
+	return command.Run() == nil
 }
 
-func isDashboardWindowTitle(title string) bool {
-	title = strings.TrimSpace(title)
-	if title == dashboardWindowTitle {
-		return true
+func dashboardActivationCommand(systemRoot string) (*exec.Cmd, error) {
+	if systemRoot == "" {
+		return nil, fmt.Errorf("SystemRoot is unavailable")
 	}
-	for _, separator := range []string{" - ", " — ", " – "} {
-		if strings.HasPrefix(title, dashboardWindowTitle+separator) {
-			return true
-		}
+	powerShell := filepath.Join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+	if info, err := os.Stat(powerShell); err != nil || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("Windows PowerShell is unavailable")
 	}
-	return false
+
+	// WScript.Shell.AppActivate is the documented Windows accessibility path
+	// for focusing an application by title. It first uses an exact match and
+	// then a title prefix, which covers the suffixes added by common browsers.
+	// A non-zero exit means there is no matching Dashboard window, so the
+	// caller can open the validated loopback URL in the default browser.
+	script := `$shell=New-Object -ComObject WScript.Shell;if($shell.AppActivate('TautWeekly Manager')){exit 0};exit 1`
+	command := exec.Command(
+		powerShell,
+		"-NoLogo",
+		"-NoProfile",
+		"-NonInteractive",
+		"-WindowStyle", "Hidden",
+		"-Command", script,
+	)
+	command.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: windowsCreateNoWindow,
+	}
+	return command, nil
 }

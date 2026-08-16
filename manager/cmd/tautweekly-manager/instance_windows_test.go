@@ -3,7 +3,9 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -52,24 +54,41 @@ func TestTrayTooltipIdentifiesDashboard(t *testing.T) {
 	}
 }
 
-func TestDashboardWindowTitleMatchesSupportedBrowserCaptions(t *testing.T) {
-	for _, title := range []string{
-		"TautWeekly Manager",
-		"TautWeekly Manager - Google Chrome",
-		"TautWeekly Manager - Microsoft Edge",
-		"TautWeekly Manager — Mozilla Firefox",
-	} {
-		if !isDashboardWindowTitle(title) {
-			t.Errorf("dashboard browser title %q was not recognized", title)
+func TestTrayStatusMenuCommandOpensDashboard(t *testing.T) {
+	opened := make(chan struct{}, 1)
+	tray := &windowsManagerTray{options: trayOptions{Open: func() { opened <- struct{}{} }}}
+	tray.handleMenuCommand(trayStatusMenuID)
+	select {
+	case <-opened:
+	case <-time.After(2 * time.Second):
+		t.Fatal("status menu command did not open the Dashboard")
+	}
+}
+
+func TestDashboardActivationUsesHiddenWindowsAccessibilityCommand(t *testing.T) {
+	systemRoot := t.TempDir()
+	powerShell := filepath.Join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+	if err := os.MkdirAll(filepath.Dir(powerShell), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(powerShell, []byte("test placeholder"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	command, err := dashboardActivationCommand(systemRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if command.Path != powerShell {
+		t.Fatalf("activation executable = %q, want %q", command.Path, powerShell)
+	}
+	arguments := strings.Join(command.Args[1:], " ")
+	for _, expected := range []string{"-NoProfile", "-NonInteractive", "-WindowStyle Hidden", "WScript.Shell", "AppActivate('TautWeekly Manager')"} {
+		if !strings.Contains(arguments, expected) {
+			t.Errorf("activation arguments %q do not contain %q", arguments, expected)
 		}
 	}
-	for _, title := range []string{
-		"TautWeekly Manager notes - Notepad",
-		"Another page - Google Chrome",
-		"",
-	} {
-		if isDashboardWindowTitle(title) {
-			t.Errorf("unrelated window title %q was recognized as the Dashboard", title)
-		}
+	if command.SysProcAttr == nil || !command.SysProcAttr.HideWindow || command.SysProcAttr.CreationFlags&windowsCreateNoWindow == 0 {
+		t.Fatal("Dashboard activation command is not configured to stay hidden")
 	}
 }

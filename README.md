@@ -57,7 +57,8 @@ ready. Those four results persist and are summarized on the Dashboard.
 
 While the interactive Windows Manager is running, the TautWeekly icon remains
 in the notification area. Left-click opens the existing Dashboard; the native
-right-click menu shows current Manager health and provides a graceful Exit.
+right-click menu shows current Manager health, lets that status row open or
+focus the Dashboard, and provides a graceful Exit.
 Settings can start the Manager silently for the current user at sign-in and,
 optionally, open the Dashboard once it is ready. Exiting the Manager does not
 disable the independent weekly Scheduled Task.

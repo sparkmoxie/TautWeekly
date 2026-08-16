@@ -369,11 +369,11 @@ func (t *windowsManagerTray) showMenu() {
 		return
 	}
 	defer trayDestroyMenu.Call(menu)
-	statusLabel, _ := syscall.UTF16PtrFromString("Status: " + t.currentHealth().label())
+	statusLabel, _ := syscall.UTF16PtrFromString("Status: " + t.currentHealth().label() + " — Open Dashboard")
 	exitLabel, _ := syscall.UTF16PtrFromString("Exit TautWeekly for Plex")
-	// Windows desaturates an hbmpItem on disabled menu rows. Keep this native
-	// status row enabled so its health color remains truthful, but intentionally
-	// ignore its command below; the "Status:" label makes the no-op clear.
+	// Windows desaturates an hbmpItem on disabled menu rows. Keep the status row
+	// enabled so its health color remains truthful and make the whole native row
+	// an accessible Dashboard action.
 	trayAppendMenu.Call(menu, trayMFString, trayStatusMenuID, uintptr(unsafe.Pointer(statusLabel)))
 	trayAppendMenu.Call(menu, trayMFSeparator, 0, 0)
 	trayAppendMenu.Call(menu, trayMFString, trayExitMenuID, uintptr(unsafe.Pointer(exitLabel)))
@@ -392,7 +392,14 @@ func (t *windowsManagerTray) showMenu() {
 	traySetForegroundWindow.Call(window)
 	command, _, _ := trayTrackPopupMenu.Call(menu, trayTPMRightButton|trayTPMNonotify|trayTPMReturnCmd, uintptr(point.X), uintptr(point.Y), 0, window, 0)
 	trayPostMessage.Call(window, trayWMNull, 0, 0)
-	if command == trayExitMenuID {
+	t.handleMenuCommand(command)
+}
+
+func (t *windowsManagerTray) handleMenuCommand(command uintptr) {
+	switch command {
+	case trayStatusMenuID:
+		t.openDashboard()
+	case trayExitMenuID:
 		t.exitOnce.Do(func() {
 			if t.options.Exit != nil {
 				go t.options.Exit()
