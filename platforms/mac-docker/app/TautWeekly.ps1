@@ -543,9 +543,32 @@ function Get-ConfiguredServerName {
 function Get-ConfiguredPlexWebUrl {
     if ($null -ne $Config.PSObject.Properties["PlexWebUrl"] -and
         -not [string]::IsNullOrWhiteSpace([string]$Config.PlexWebUrl)) {
-        return [string]$Config.PlexWebUrl
+        $value = ([string]$Config.PlexWebUrl).Trim()
+        [Uri]$parsed = $null
+        if ([Uri]::TryCreate($value, [UriKind]::Absolute, [ref]$parsed) -and
+            $parsed.Scheme -in @('http', 'https') -and
+            -not [string]::IsNullOrWhiteSpace($parsed.Host)) {
+            return $value
+        }
     }
     return "https://app.plex.tv/desktop/"
+}
+
+function Get-ConfiguredPlexButtonLabel {
+    $label = if ($null -ne $Config.PSObject.Properties["PlexButtonLabel"]) {
+        [string]$Config.PlexButtonLabel
+    } else {
+        ""
+    }
+    $label = [regex]::Replace($label, '[\x00-\x1F\x7F]', '').Trim()
+    if ([string]::IsNullOrWhiteSpace($label)) {
+        return "Open Plex"
+    }
+    $textElements = [Globalization.StringInfo]::ParseCombiningCharacters($label)
+    if ($textElements.Count -gt 64) {
+        return $label.Substring(0, $textElements[64])
+    }
+    return $label
 }
 
 function Get-ConfiguredDeliveryDay {
@@ -5245,6 +5268,22 @@ function Get-PlexHostedPosterPath {
     return ""
 }
 
+function Get-FileSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $stream = $null
+    $algorithm = $null
+    try {
+        $stream = [IO.File]::OpenRead((Get-Item -LiteralPath $Path).FullName)
+        $algorithm = [Security.Cryptography.SHA256]::Create()
+        return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '')
+    }
+    finally {
+        if ($null -ne $algorithm) { $algorithm.Dispose() }
+        if ($null -ne $stream) { $stream.Dispose() }
+    }
+}
+
 function Get-TautulliDefaultPosterHash {
     if (-not [string]::IsNullOrWhiteSpace($script:TautulliDefaultPosterHash)) {
         return $script:TautulliDefaultPosterHash
@@ -5257,7 +5296,7 @@ function Get-TautulliDefaultPosterHash {
         }
         Invoke-WebRequest -Uri $uri -OutFile $probePath -TimeoutSec 60 | Out-Null
         if ((Test-Path -LiteralPath $probePath) -and (Get-Item -LiteralPath $probePath).Length -gt 0) {
-            $script:TautulliDefaultPosterHash = (Get-FileHash -LiteralPath $probePath -Algorithm SHA256).Hash
+            $script:TautulliDefaultPosterHash = Get-FileSha256 -Path $probePath
         }
     }
     catch {
@@ -5278,7 +5317,7 @@ function Test-IsTautulliDefaultPoster {
     $defaultHash = Get-TautulliDefaultPosterHash
     if ([string]::IsNullOrWhiteSpace($defaultHash)) { return $false }
 
-    return ((Get-FileHash -Path $Path -Algorithm SHA256).Hash -eq $defaultHash)
+    return ((Get-FileSha256 -Path $Path) -eq $defaultHash)
 }
 
 function Get-PosterPath {
@@ -6208,6 +6247,7 @@ $tvCards
     }
 
     $plexUrl = Get-ConfiguredPlexWebUrl
+    $plexButtonLabel = Get-ConfiguredPlexButtonLabel
 
     $serverLabel = if ($null -ne $Config.PSObject.Properties["ServerLabel"] -and -not [string]::IsNullOrWhiteSpace([string]$Config.ServerLabel)) {
         [string]$Config.ServerLabel
@@ -6905,7 +6945,7 @@ $trendingBlock
 
 <tr>
 <td class="pad" align="center" style="padding:8px 20px 18px;">
-  <a href="$(HtmlEncode $plexUrl)" style="display:inline-block;background-color:#e5a00d;color:#111111;text-decoration:none;font-size:14px;font-weight:800;padding:13px 24px;border-radius:7px;">OPEN PLEX</a>
+  <a href="$(HtmlEncode $plexUrl)" style="display:inline-block;background-color:#e5a00d;color:#111111;text-decoration:none;font-size:14px;font-weight:800;padding:13px 24px;border-radius:7px;">$(HtmlEncode $plexButtonLabel)</a>
 </td>
 </tr>
 
@@ -6937,6 +6977,7 @@ function Build-PlainText {
     $serverName = Get-ConfiguredServerName
     $deliveryDay = Get-ConfiguredDeliveryDay
     $plexWebUrl = Get-ConfiguredPlexWebUrl
+    $plexButtonLabel = Get-ConfiguredPlexButtonLabel
 
     $movieCount = @($ReleaseData.Movies).Count
     $tvCount = @($ReleaseData.TV).Count
@@ -7111,7 +7152,7 @@ $statsText
 $welcomeInfoText
 $footerFeature
 
-Open Plex: $plexWebUrl
+${plexButtonLabel}: $plexWebUrl
 "@
     }
 
@@ -7125,7 +7166,7 @@ $heroLine
 $statsText
 $footerFeature
 
-Open Plex: $plexWebUrl
+${plexButtonLabel}: $plexWebUrl
 "@
 }
 
@@ -7135,6 +7176,7 @@ function Build-WelcomeHtml {
     $friendly = HtmlEncode $User.FriendlyName
 
     $plexUrl = Get-ConfiguredPlexWebUrl
+    $plexButtonLabel = Get-ConfiguredPlexButtonLabel
     $footerServerName = Get-ConfiguredServerName
     $deliveryDay = Get-ConfiguredDeliveryDay
 
@@ -7193,7 +7235,7 @@ function Build-WelcomeHtml {
 </tr>
 <tr>
 <td align="center" style="padding:4px 20px 24px;">
-  <a href="$(HtmlEncode $plexUrl)" style="display:inline-block;background-color:#e5a00d;color:#111111;text-decoration:none;font-size:14px;font-weight:800;padding:14px 28px;border-radius:7px;">OPEN PLEX</a>
+  <a href="$(HtmlEncode $plexUrl)" style="display:inline-block;background-color:#e5a00d;color:#111111;text-decoration:none;font-size:14px;font-weight:800;padding:14px 28px;border-radius:7px;">$(HtmlEncode $plexButtonLabel)</a>
 </td>
 </tr>
 <tr>
@@ -7220,6 +7262,7 @@ function Build-WelcomePlainText {
     $serverName = Get-ConfiguredServerName
     $deliveryDay = Get-ConfiguredDeliveryDay
     $plexWebUrl = Get-ConfiguredPlexWebUrl
+    $plexButtonLabel = Get-ConfiguredPlexButtonLabel
 
     $plainPreheader = Get-DynamicPreheader -ReleaseData $ReleaseData
     $plainPreheaderBlock = if ([string]::IsNullOrWhiteSpace($plainPreheader)) {
@@ -7245,7 +7288,7 @@ episodes, and your most-watched title.
 
 Your individual viewing stats are not shared with other users.
 
-Open Plex: $plexWebUrl
+${plexButtonLabel}: $plexWebUrl
 "@
 }
 

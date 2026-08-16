@@ -26,6 +26,22 @@ function Write-TwDeletedCacheLog {
     }
 }
 
+function Get-TwDeletedCacheFileSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $stream = $null
+    $algorithm = $null
+    try {
+        $stream = [IO.File]::OpenRead((Get-Item -LiteralPath $Path).FullName)
+        $algorithm = [Security.Cryptography.SHA256]::Create()
+        return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        if ($null -ne $algorithm) { $algorithm.Dispose() }
+        if ($null -ne $stream) { $stream.Dispose() }
+    }
+}
+
 function Get-TwDeletedCacheConfigInt {
     param(
         [object]$Configuration,
@@ -390,7 +406,7 @@ function Restore-TautWeeklyDeletedItemCachePoster {
     if (-not (Test-Path -LiteralPath $source)) { return "" }
     $expectedHash = Get-OptionalStringProperty $entry.Poster "Sha256"
     try {
-        $actualHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actualHash = Get-TwDeletedCacheFileSha256 -Path $source
         if ($actualHash -ne $expectedHash.ToLowerInvariant()) {
             Write-TwDeletedCacheLog "Deleted-item cache artwork failed its SHA-256 check; ignoring the damaged entry." "WARN"
             Remove-Item -LiteralPath $source -Force -ErrorAction SilentlyContinue
@@ -439,10 +455,10 @@ function Update-TautWeeklyDeletedItemCache {
         if ($posterInfo.Length -le 512 -or $posterInfo.Length -gt $script:TwDeletedCacheMaxBytes) { return $false }
         $assetName = $id + ".jpg"
         $assetPath = Join-Path $script:TwDeletedCacheAssetRoot $assetName
-        $posterHash = (Get-FileHash -LiteralPath $PosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $posterHash = Get-TwDeletedCacheFileSha256 -Path $PosterPath
         $copyNeeded = $true
         if (Test-Path -LiteralPath $assetPath) {
-            $copyNeeded = ((Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $posterHash)
+            $copyNeeded = ((Get-TwDeletedCacheFileSha256 -Path $assetPath) -ne $posterHash)
         }
         if ($copyNeeded) {
             $assetTemp = Join-Path $script:TwDeletedCacheAssetRoot ($id + "." + [Guid]::NewGuid().ToString("N") + ".tmp")

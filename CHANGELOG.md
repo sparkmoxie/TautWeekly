@@ -17,6 +17,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added current-user **Start Manager when I sign in** and dependent **Open
   Dashboard after sign-in** controls under Settings, with sanitized status,
   diagnostics, and exact startup-entry ownership.
+- Added a configurable newsletter button label and custom HTTP/HTTPS destination
+  under the Manager's Identity settings. Existing configurations keep the Plex
+  web app destination and **Open Plex** label by default.
 
 ### Changed
 
@@ -29,6 +32,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Reconciled owned per-user startup entries across installer update, portable
   migration, and path changes, and removed them during uninstall so private
   data can remain without leaving a stale sign-in command.
+
+### Fixed
+
+- Made generic-poster and deleted-item-cache fingerprinting independent of the
+  optional PowerShell `Get-FileHash` cmdlet, preserving exact artwork recovery
+  across supported Windows and container runtimes.
 
 ## [0.12.7] - 2026-08-15
 

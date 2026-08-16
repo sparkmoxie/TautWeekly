@@ -70,7 +70,7 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True (-not $Renderer.Contains('$bingeHeadline')) "$PackageName retains the retired one-line Binge Champion metric."
     Assert-True ($Renderer.Contains('$heroLabel = if ($trendingHeroMode) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }')) "$PackageName lacks the movie-empty Trending hero fallback."
     Assert-True ($Renderer.Contains('"tautulli-default-poster-" + [Guid]::NewGuid().ToString("N") + ".png"')) "$PackageName lacks the portable generic-poster probe."
-    Assert-True ($Renderer.Contains('Get-FileHash -LiteralPath $probePath -Algorithm SHA256')) "$PackageName lacks literal-path poster fingerprinting."
+    Assert-True ($Renderer.Contains('Get-FileSha256 -Path $probePath')) "$PackageName lacks portable poster fingerprinting."
     Assert-True ($Renderer.Contains('DeletedItemCache.ps1')) "$PackageName does not load the persistent deleted-item cache."
     Assert-True ($Renderer.Contains('Restore-TautWeeklyDeletedItemCachePoster')) "$PackageName does not reuse exact cached artwork."
     Assert-True ($Renderer.Contains('Update-TautWeeklyDeletedItemCache')) "$PackageName does not capture live presentation assets."
@@ -82,6 +82,7 @@ function Assert-DeletedItemCacheContract([string]$PackageName, [string]$CacheMod
         'DeletedItemCacheRetentionDays',
         'DeletedItemCacheMaxItems',
         'DeletedItemCacheMaxBytesMB',
+        'Get-TwDeletedCacheFileSha256',
         'Move-TwDeletedCacheCorruptManifest',
         'Restore-TautWeeklyDeletedItemCachePoster',
         'Update-TautWeeklyDeletedItemCache'

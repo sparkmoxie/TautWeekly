@@ -986,6 +986,7 @@ function createConfigControl(field) {
     } else if (field.type === "string-list" || field.type === "email-list") {
       input.value = Array.isArray(field.value) ? field.value.join(", ") : "";
     } else if (field.type !== "secret") {
+      if (field.max !== undefined) input.maxLength = Number(field.max);
       input.value = field.value ?? "";
     }
     if (field.type === "secret") {

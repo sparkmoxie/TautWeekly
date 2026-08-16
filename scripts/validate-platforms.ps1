@@ -253,7 +253,7 @@ foreach ($relative in @(
         'Get-TwDeletedCacheId',
         'File\]::Replace',
         'index\.backup\.json',
-        'Get-FileHash -LiteralPath \$source -Algorithm SHA256',
+        'Get-TwDeletedCacheFileSha256 -Path \$source',
         '\$fileName -eq \(\$id \+ "\.jpg"\)'
     )
 }

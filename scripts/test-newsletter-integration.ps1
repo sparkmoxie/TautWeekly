@@ -127,6 +127,8 @@ foreach ($engine in $engines) {
                 PlexServerUrl = $baseUrl
                 PlexToken = 'virtual-plex-token'
                 FooterServerName = 'Virtual Plex'
+                PlexWebUrl = 'https://requests.example.test/'
+                PlexButtonLabel = 'View & Request <Now>'
                 IncludedLibraryIds = @('10', '20')
                 ExcludedUserIds = @()
                 ExcludedEmails = @()
@@ -259,6 +261,8 @@ foreach ($engine in $engines) {
                 foreach ($marker in $previewThemeMarkers) {
                     Assert-True ($previewHtml.Contains($marker)) "$($engine.Name)/$scenario $($previewPath.Name) lost dark-theme marker: $marker"
                 }
+                Assert-True ($previewHtml.Contains('href="https://requests.example.test/"')) "$($engine.Name)/$scenario $($previewPath.Name) lost the custom button URL."
+                Assert-True ($previewHtml.Contains('>View &amp; Request &lt;Now&gt;</a>')) "$($engine.Name)/$scenario $($previewPath.Name) did not safely render the custom button label."
                 Assert-True (-not $previewHtml.Contains('background:#0f0f0f')) "$($engine.Name)/$scenario $($previewPath.Name) retained the outer background shorthand."
                 Assert-True (-not $previewHtml.Contains('background:#181818')) "$($engine.Name)/$scenario $($previewPath.Name) retained the card background shorthand."
                 Assert-True (-not $previewHtml.Contains('color-scheme:dark only')) "$($engine.Name)/$scenario $($previewPath.Name) retained the incompatible dark-only declaration."
