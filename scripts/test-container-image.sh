@@ -43,7 +43,7 @@ security_args=()
 if [[ "$runtime_profile" == nas ]]; then
   security_args=(
     --read-only
-    --tmpfs /tmp:rw,noexec,nosuid,size=256m,mode=1777
+    --tmpfs '/tmp:rw,noexec,nosuid,size=256m,mode=1777'
     --security-opt no-new-privileges:true
     --cap-drop ALL
     --cap-add CHOWN
