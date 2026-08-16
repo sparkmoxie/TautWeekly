@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-image="${1:?Usage: test-container-image.sh IMAGE [BUILD_CONTEXT]}"
+image="${1:?Usage: test-container-image.sh IMAGE [BUILD_CONTEXT] [RUNTIME_PROFILE]}"
 build_context="${2:-}"
+runtime_profile="${3:-nas}"
 container_name="tautweekly-smoke-$RANDOM-$$"
 data_root="$(mktemp -d)"
 container_started=false
@@ -24,6 +25,11 @@ fail() {
   exit 1
 }
 
+case "$runtime_profile" in
+  nas|mac) ;;
+  *) fail "Unsupported runtime profile: $runtime_profile" ;;
+esac
+
 if [[ -n "$build_context" ]]; then
   docker build --tag "$image" "$build_context"
 fi
@@ -33,17 +39,24 @@ host_gid="$(id -g)"
 if [[ "$host_uid" -eq 0 ]]; then host_uid=1000; fi
 if [[ "$host_gid" -eq 0 ]]; then host_gid=1000; fi
 
+security_args=()
+if [[ "$runtime_profile" == nas ]]; then
+  security_args=(
+    --read-only
+    --tmpfs /tmp:rw,noexec,nosuid,size=256m,mode=1777
+    --security-opt no-new-privileges:true
+    --cap-drop ALL
+    --cap-add CHOWN
+    --cap-add DAC_OVERRIDE
+    --cap-add FOWNER
+    --cap-add SETGID
+    --cap-add SETUID
+  )
+fi
+
 docker run --detach \
   --name "$container_name" \
-  --read-only \
-  --tmpfs /tmp:rw,noexec,nosuid,size=256m,mode=1777 \
-  --security-opt no-new-privileges:true \
-  --cap-drop ALL \
-  --cap-add CHOWN \
-  --cap-add DAC_OVERRIDE \
-  --cap-add FOWNER \
-  --cap-add SETGID \
-  --cap-add SETUID \
+  "${security_args[@]}" \
   -e "PUID=$host_uid" \
   -e "PGID=$host_gid" \
   -e 'UMASK=077' \
@@ -67,17 +80,22 @@ done
 docker exec "$container_name" pwsh -NoLogo -NoProfile -NonInteractive -Command \
   'if ($PSVersionTable.PSVersion -lt [Version]"7.2") { exit 1 }' || fail 'PowerShell 7.2+ is unavailable in the runtime image.'
 docker exec "$container_name" test -s /data/config.example.json || fail 'Persistent config example was not initialized.'
+if [[ "$runtime_profile" == mac ]]; then
+  docker exec "$container_name" test -s /data/output/index.html || fail 'Preview landing page was not initialized.'
+fi
 docker exec "$container_name" test -s /data/output/product-branding/favicon.ico || fail 'Preview favicon was not initialized.'
 docker exec "$container_name" test -s /data/output/product-branding/tautweekly-app-icon-128.png || fail 'Preview product icon was not initialized.'
 docker exec "$container_name" test -s /data/service-heartbeat.json || fail 'Service supervisor heartbeat was not initialized.'
-docker exec "$container_name" test -x /opt/tautweekly/bin/tautweekly-manager || fail 'NAS Manager binary is unavailable.'
-setup_json="$(docker exec "$container_name" curl -fsS http://127.0.0.1:8080/api/v1/setup)"
-grep -Fq '"authenticationRequired":true' <<<"$setup_json" || fail 'NAS Manager authentication is not mandatory.'
-grep -Fq '"runtimeMode":"nas"' <<<"$setup_json" || fail 'NAS Manager did not report its container runtime profile.'
-bootstrap_token="$(docker exec "$container_name" /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager)"
-[[ "$bootstrap_token" =~ ^[A-Za-z0-9_-]{32,}$ ]] || fail 'Explicit bootstrap command did not return a one-time token.'
-if docker logs "$container_name" 2>&1 | grep -Fq "$bootstrap_token"; then
-  fail 'The one-time Manager bootstrap token was exposed in container logs.'
+if [[ "$runtime_profile" == nas ]]; then
+  docker exec "$container_name" test -x /opt/tautweekly/bin/tautweekly-manager || fail 'NAS Manager binary is unavailable.'
+  setup_json="$(docker exec "$container_name" curl -fsS http://127.0.0.1:8080/api/v1/setup)"
+  grep -Fq '"authenticationRequired":true' <<<"$setup_json" || fail 'NAS Manager authentication is not mandatory.'
+  grep -Fq '"runtimeMode":"nas"' <<<"$setup_json" || fail 'NAS Manager did not report its container runtime profile.'
+  bootstrap_token="$(docker exec "$container_name" /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager)"
+  [[ "$bootstrap_token" =~ ^[A-Za-z0-9_-]{32,}$ ]] || fail 'Explicit bootstrap command did not return a one-time token.'
+  if docker logs "$container_name" 2>&1 | grep -Fq "$bootstrap_token"; then
+    fail 'The one-time Manager bootstrap token was exposed in container logs.'
+  fi
 fi
 
 # A normal docker exec bypasses entrypoint.sh and therefore begins as root.
@@ -111,4 +129,4 @@ set -e
 [[ "$root_status" -eq 64 ]] || fail "Root-identity rejection exited $root_status instead of 64."
 grep -Fq 'PUID/PGID 0 is refused' <<<"$root_output" || fail 'Root-identity rejection was not actionable.'
 
-printf '[PASS] Container boot, health, runtime, persistence, and root-refusal checks: %s\n' "$image"
+printf '[PASS] Container boot, health, runtime, persistence, and root-refusal checks (%s): %s\n' "$runtime_profile" "$image"
