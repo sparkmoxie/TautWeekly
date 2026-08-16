@@ -7,10 +7,12 @@ on:
       - 'v*.*.*'
     paths:
       - 'platforms/nas-docker/**'
+      - 'manager/**'
       - '.github/workflows/container.yml'
   pull_request:
     paths:
       - 'platforms/nas-docker/**'
+      - 'manager/**'
       - 'templates/**'
       - 'ca_profile.xml'
       - '.github/workflows/container.yml'
@@ -37,7 +39,8 @@ jobs:
       - name: Build amd64 runtime smoke image
         uses: docker/build-push-action@v7
         with:
-          context: platforms/nas-docker
+          context: .
+          file: platforms/nas-docker/Dockerfile
           platforms: linux/amd64
           load: true
           tags: tautweekly-nas-ci:smoke
@@ -66,7 +69,8 @@ jobs:
       - name: Build and publish image
         uses: docker/build-push-action@v7
         with:
-          context: platforms/nas-docker
+          context: .
+          file: platforms/nas-docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}

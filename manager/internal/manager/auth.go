@@ -17,8 +17,10 @@ import (
 )
 
 const (
-	passwordIterations = 310000
-	sessionLifetime    = 8 * time.Hour
+	passwordIterations   = 310000
+	maximumIterations    = 2000000
+	maximumPasswordBytes = 256
+	sessionLifetime      = 8 * time.Hour
 )
 
 type credentialFile struct {
@@ -140,8 +142,8 @@ func (s *authStore) pair(token, password string) (session, error) {
 	if s.paired() {
 		return session{}, errors.New("manager is already paired")
 	}
-	if len(password) < 8 {
-		return session{}, errors.New("administrator password must be at least 8 characters")
+	if err := validateAdministratorPassword(password); err != nil {
+		return session{}, err
 	}
 
 	expected, err := os.ReadFile(s.bootstrapPath)
@@ -205,8 +207,8 @@ func (s *authStore) disablePasswordLock() error {
 }
 
 func (s *authStore) writePassword(password string) error {
-	if len(password) < 8 {
-		return errors.New("administrator password must be at least 8 characters")
+	if err := validateAdministratorPassword(password); err != nil {
+		return err
 	}
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
@@ -223,6 +225,9 @@ func (s *authStore) writePassword(password string) error {
 }
 
 func (s *authStore) verifyPassword(password string) bool {
+	if len(password) < 8 || len(password) > maximumPasswordBytes {
+		return false
+	}
 	credentials, err := s.readCredentials()
 	if err != nil {
 		return false
@@ -237,6 +242,16 @@ func (s *authStore) verifyPassword(password string) bool {
 	}
 	actual := pbkdf2SHA256([]byte(password), salt, credentials.Iterations, len(expected))
 	return subtle.ConstantTimeCompare(actual, expected) == 1
+}
+
+func validateAdministratorPassword(password string) error {
+	if len(password) < 8 {
+		return errors.New("administrator password must be at least 8 characters")
+	}
+	if len(password) > maximumPasswordBytes {
+		return errors.New("administrator password must be at most 256 UTF-8 bytes")
+	}
+	return nil
 }
 
 func (s *authStore) authenticate(token string) (session, bool) {
@@ -337,8 +352,19 @@ func (l *attemptLimiter) prune() {
 }
 
 func (s *authStore) loadOrCreateBootstrapToken() (string, error) {
-	if value, err := os.ReadFile(s.bootstrapPath); err == nil {
-		return string(trimSpace(value)), nil
+	if info, err := os.Lstat(s.bootstrapPath); err == nil {
+		if !info.Mode().IsRegular() {
+			return "", errors.New("pairing token path is not a regular file; run the local access recovery helper")
+		}
+		value, err := os.ReadFile(s.bootstrapPath)
+		if err != nil {
+			return "", fmt.Errorf("read pairing token: %w", err)
+		}
+		token := string(trimSpace(value))
+		if !validRandomToken(token, 24) {
+			return "", errors.New("pairing token is invalid; run the local access recovery helper")
+		}
+		return token, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("read pairing token: %w", err)
 	}
@@ -369,6 +395,60 @@ func (s *authStore) readAccessFile() (accessFile, error) {
 		return accessFile{}, errors.New("Manager access settings are invalid; run the local access reset helper")
 	}
 	return settings, nil
+}
+
+// ReadBootstrapToken returns the one-time pairing token only when an
+// administrator explicitly runs the local recovery command. Server startup
+// and normal diagnostics never print this secret.
+func ReadBootstrapToken(dataDir string) (string, error) {
+	path := filepath.Join(dataDir, "bootstrap-token.txt")
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", errors.New("a bootstrap token is not available; start the unpaired Manager first")
+	}
+	if err != nil || !info.Mode().IsRegular() {
+		return "", errors.New("the bootstrap token could not be read safely")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", errors.New("the bootstrap token could not be read")
+	}
+	token := string(trimSpace(raw))
+	if !validRandomToken(token, 24) {
+		return "", errors.New("the bootstrap token is invalid; run access-recover and restart the Manager")
+	}
+	return token, nil
+}
+
+// RecoverRequiredAccess removes only Manager authentication material so a
+// required-auth runtime can create a new one-time pairing token on restart.
+// Newsletter configuration, secrets, schedules, output, and operation history
+// are deliberately outside this recovery boundary.
+func RecoverRequiredAccess(dataDir string) error {
+	resolved, err := filepath.Abs(dataDir)
+	if err != nil {
+		return fmt.Errorf("resolve Manager data directory: %w", err)
+	}
+	if err := os.MkdirAll(resolved, 0o700); err != nil {
+		return fmt.Errorf("create Manager data directory: %w", err)
+	}
+	for _, name := range []string{"auth.json", "auth-settings.json", "bootstrap-token.txt"} {
+		path := filepath.Join(resolved, name)
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("inspect Manager authentication file: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			return errors.New("Manager authentication recovery stopped because an authentication path is not a regular file")
+		}
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("remove Manager authentication file: %w", err)
+		}
+	}
+	return nil
 }
 
 // ResetLocalAccess disables only the optional local password lock. It does not
@@ -403,8 +483,14 @@ func (s *authStore) readCredentials() (credentialFile, error) {
 	}
 	if credentials.Version != 1 ||
 		credentials.Algorithm != "PBKDF2-HMAC-SHA256" ||
-		credentials.Iterations < 100000 {
+		credentials.Iterations < 100000 ||
+		credentials.Iterations > maximumIterations {
 		return credentialFile{}, errors.New("unsupported credential format")
+	}
+	salt, saltErr := base64.RawStdEncoding.DecodeString(credentials.Salt)
+	hash, hashErr := base64.RawStdEncoding.DecodeString(credentials.Hash)
+	if saltErr != nil || hashErr != nil || len(salt) != 16 || len(hash) != 32 {
+		return credentialFile{}, errors.New("invalid credential data")
 	}
 	return credentials, nil
 }
@@ -415,6 +501,11 @@ func randomToken(size int) (string, error) {
 		return "", fmt.Errorf("generate random token: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(value), nil
+}
+
+func validRandomToken(value string, size int) bool {
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	return err == nil && len(decoded) == size
 }
 
 func writePrivateJSON(path string, value any) error {

@@ -1,6 +1,9 @@
 # TautWeekly Manager
 
-This directory contains the Windows-first local TautWeekly management WebGUI.
+This directory contains the shared TautWeekly management WebGUI core. Windows
+and NAS/container packages supply explicit runtime capabilities, lifecycle
+adapters, persistent paths, and schedule providers; the browser never guesses
+those boundaries from the operating system.
 
 Current capabilities:
 
@@ -15,7 +18,8 @@ Current capabilities:
 - trusted-local Windows access by default, with an optional persistent password
   lock under Settings;
 - password create/change/disable controls plus an OS-local recovery command;
-- mandatory pairing support reserved for future network-accessible runtime modes;
+- mandatory one-time pairing and password authentication for the
+  network-accessible NAS/container runtime;
 - server-side sessions and CSRF protection;
 - minimal unauthenticated liveness;
 - normalized Windows Task Scheduler status;
@@ -61,6 +65,29 @@ Current capabilities:
 - bounded local configuration diagnostics containing only timestamps,
   categories, outcomes, fixed summaries, and support codes; and
 - an embedded responsive dashboard with no external runtime assets.
+
+The NAS runtime binds inside the container, separates the read-only package
+root from persistent `/data`, requires authentication, accepts IP-literal LAN
+Host headers, and accepts DNS names only from the explicit allowlist. It does
+not create a tray icon, open a browser, manage sign-in startup, invoke UAC, or
+present Windows installer or Task Scheduler controls. Its capability contract
+exposes only embedded-scheduler enable/disable actions. Those actions
+revision-check `config.json`, make a private atomic backup, update the typed
+`ScheduleEnabled` boolean, and verify the postcondition. Container start,
+stop, image update, port, volume, UID/GID, TLS, and uninstall remain owned by
+the host adapter.
+
+NAS sessions are memory-only, HttpOnly, SameSite=Strict, expire after eight
+hours, and use both same-origin checks and a per-session CSRF token for
+mutations. TLS reverse-proxy deployments can force Secure cookies and HSTS;
+forwarded headers are not trusted. A bounded authentication limiter applies
+after five failed attempts in five minutes. Passwords are PBKDF2-HMAC-SHA256
+hashed with a random salt, and inputs are limited to 256 UTF-8 bytes before
+the KDF. The one-time token exists only in private Manager storage and is read
+only by the explicit console command. Recovery removes only Manager
+authentication files, after which restart creates a fresh token; newsletter
+configuration, credentials, schedules, output, history, and backups remain
+untouched.
 
 Page load and dashboard refresh never contact Tautulli, Plex, or SMTP. A
 successful **Validate, save, and verify** action automatically refreshes the

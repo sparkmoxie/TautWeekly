@@ -10,6 +10,7 @@ $pages = @(
     'index.html',
     'windows/index.html',
     'nas-docker/index.html',
+    'nas-docker/manager.html',
     'mac/index.html',
     'linux/index.html',
     'freebsd/index.html',
@@ -22,6 +23,7 @@ $renderedUrls = @{
     'index.html'                  = 'https://sparkmoxie.github.io/TautWeekly/'
     'windows/index.html'          = 'https://sparkmoxie.github.io/TautWeekly/windows/'
     'nas-docker/index.html'       = 'https://sparkmoxie.github.io/TautWeekly/nas-docker/'
+    'nas-docker/manager.html'     = 'https://sparkmoxie.github.io/TautWeekly/nas-docker/'
     'mac/index.html'              = 'https://sparkmoxie.github.io/TautWeekly/mac/'
     'linux/index.html'            = 'https://sparkmoxie.github.io/TautWeekly/linux/'
     'freebsd/index.html'          = 'https://sparkmoxie.github.io/TautWeekly/freebsd/'
@@ -32,6 +34,7 @@ $expectedTitles = @{
     'index.html'             = 'TautWeekly Quickstart | TautWeekly for Plex'
     'windows/index.html'     = 'Windows Quickstart | TautWeekly for Plex'
     'nas-docker/index.html'  = 'NAS/Docker/QNAP/Unraid Quickstart | TautWeekly for Plex'
+    'nas-docker/manager.html' = 'NAS / Docker Manager Quickstart | TautWeekly for Plex'
     'mac/index.html'         = 'macOS Quickstart | TautWeekly for Plex'
     'linux/index.html'       = 'Native Linux Quickstart | TautWeekly for Plex'
     'freebsd/index.html'     = 'FreeBSD Podman Quickstart | TautWeekly for Plex'
@@ -42,7 +45,7 @@ foreach ($relative in $pages) {
     $path = Join-Path $docs $relative
     $html = [IO.File]::ReadAllText($path)
     $combined = $html
-    if ($relative -eq 'index.html') {
+    if ($relative -in @('index.html', 'nas-docker/manager.html')) {
         $combined += [IO.File]::ReadAllText((Join-Path $docs 'assets/styles.css'))
         $combined += [IO.File]::ReadAllText((Join-Path $docs 'assets/site.js'))
     }
@@ -258,12 +261,12 @@ foreach ($relative in $metadataReadinessDocs) {
 }
 
 $nasInstall = [IO.File]::ReadAllText((Join-Path $docs 'nas-docker/README.md'))
-if ($nasInstall -match '(?m)^/opt/tautweekly/bin/run-mode\.sh PreviewAll\s*$') {
-    throw 'Unraid Console documentation contains PreviewAll without the required USER_ID.'
+if ($nasInstall -match '(?m)^\.\/tautweekly\.sh preview-all\s*$') {
+    throw 'NAS wrapper documentation contains preview-all without the required USER_ID.'
 }
 foreach ($pattern in @(
-    '/opt/tautweekly/bin/run-mode\.sh PreviewAll USER_ID',
-    'does not select or save a default user'
+    '\.\/tautweekly\.sh preview-all USER_ID',
+    'does not persist a default'
 )) {
     if ($nasInstall -notmatch $pattern) { throw "NAS user-selection guidance is missing: $pattern" }
 }

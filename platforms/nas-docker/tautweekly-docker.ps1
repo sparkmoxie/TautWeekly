@@ -4,7 +4,7 @@
         "help","build","up","down","restart","status","logs","shell",
         "setup","verify","list-users","preview","preview-all",
         "send-test","send-test-all","welcome","send-all","roster",
-        "repair-assets","schedule-status","schedule-enable",
+        "repair-assets","manager-bootstrap","manager-reset-access","schedule-status","schedule-enable",
         "schedule-disable","schedule-reset","check-update","update"
     )]
     [string]$Command = "help",
@@ -212,7 +212,9 @@ function Confirm-Action {
 }
 
 switch ($Command) {
-    "build" { Invoke-Compose @("build","--pull") }
+    "build" {
+        throw "The release Compose file pulls a published image. Source builds use: docker build -f platforms/nas-docker/Dockerfile ."
+    }
     "up" { Invoke-Compose @("up","-d") }
     "down" { Invoke-Compose @("down") }
     "restart" { Invoke-Compose @("restart","tautweekly") }
@@ -255,6 +257,17 @@ switch ($Command) {
     }
     "roster" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","View-Access-Roster.ps1") }
     "repair-assets" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","Repair-Assets.ps1") }
+    "manager-bootstrap" {
+        Invoke-Compose @("exec","-T","tautweekly","/opt/tautweekly/bin/run-as-user.sh","/opt/tautweekly/bin/tautweekly-manager","access-bootstrap","--data-dir","/data/manager")
+    }
+    "manager-reset-access" {
+        Write-Warning "This resets only the Manager password and active browser sessions. Newsletter data is preserved."
+        if (Confirm-Action "Reset Manager access and restart the container?") {
+            Invoke-Compose @("exec","-T","tautweekly","/opt/tautweekly/bin/run-as-user.sh","/opt/tautweekly/bin/tautweekly-manager","access-recover","--data-dir","/data/manager","--confirm")
+            Invoke-Compose @("restart","tautweekly")
+            Write-Host "Run .\tautweekly-docker.ps1 manager-bootstrap to retrieve the new one-time pairing token."
+        }
+    }
     "schedule-status" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","Schedule-Control.ps1","-Action","Status") }
     "schedule-enable" {
         if (Confirm-Action "Enable the configured automatic weekly send?") {
@@ -278,6 +291,8 @@ TautWeekly for Plex Docker Desktop / PowerShell commands
   .\tautweekly-docker.ps1 up
   .\tautweekly-docker.ps1 setup
   .\tautweekly-docker.ps1 verify
+  .\tautweekly-docker.ps1 manager-bootstrap
+  .\tautweekly-docker.ps1 manager-reset-access
   .\tautweekly-docker.ps1 list-users
   .\tautweekly-docker.ps1 preview-all USER_ID
   .\tautweekly-docker.ps1 send-test-all USER_ID

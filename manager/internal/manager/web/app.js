@@ -30,6 +30,8 @@ const state = {
   authAccess: null,
   about: null,
   diagnostics: { events: [], maximumEntries: 200, retentionDays: 30 },
+  capabilities: null,
+  runtimeMode: "windows",
 };
 const byId = (id) => document.getElementById(id);
 const titleCase = (value) => String(value || "unknown").replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -175,6 +177,8 @@ function pairingTokenFromFragment() {
 
 async function initialize() {
   const setup = await request("/api/v1/setup");
+  state.runtimeMode = setup.runtimeMode || "windows";
+  renderAuthenticationBoundary();
   try {
     const session = await request("/api/v1/auth/session");
     state.csrfToken = session.csrfToken;
@@ -206,7 +210,7 @@ async function enterApplication(preferredView = "") {
 async function loadAll() {
   setGlobalStatus("Refreshing local status…");
   try {
-    const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, startup, authAccess, about, diagnostics] = await Promise.all([
+    const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, startup, authAccess, about, diagnostics, capabilities] = await Promise.all([
       request("/api/v1/status"),
       request("/api/v1/config"),
       request("/api/v1/config/editor"),
@@ -222,6 +226,7 @@ async function loadAll() {
       request("/api/v1/auth/access"),
       request("/api/v1/about"),
       request("/api/v1/diagnostics"),
+      request("/api/v1/capabilities"),
     ]);
     state.status = status;
     state.config = config;
@@ -240,6 +245,9 @@ async function loadAll() {
     state.authAccess = authAccess;
     state.about = about;
     state.diagnostics = diagnostics;
+    state.capabilities = capabilities;
+    state.runtimeMode = capabilities.runtimeMode || state.runtimeMode;
+    renderCapabilities();
     renderStatus();
     renderFirstTimeSetup();
     renderConfigEditor();
@@ -261,6 +269,88 @@ async function loadAll() {
       return;
     }
     setGlobalStatus(error.message, true);
+  }
+}
+
+function isNAS() {
+  return (state.capabilities?.runtimeMode || state.runtimeMode) === "nas";
+}
+
+function renderAuthenticationBoundary() {
+  const boundary = document.querySelector(".auth-boundary p");
+  const resetHint = document.querySelector("#login-form .field-hint");
+  if (isNAS()) {
+    setText("auth-runtime-eyebrow", "Private NAS administration");
+    setText("auth-runtime-copy", "Review health, embedded scheduling, persistent configuration, and authenticated previews without exposing TautWeekly to a cloud service.");
+    boundary.innerHTML = "<strong>Private by design.</strong> This authenticated Manager is intended for a trusted LAN or a deliberately configured TLS reverse proxy. It makes no analytics or cloud-management requests.";
+    resetHint.innerHTML = "Forgot the password? Run the packaged <strong>manager-reset-access</strong> host command or the documented container Console recovery. Newsletter configuration and schedules are preserved.";
+    document.querySelector("#pair-form .form-heading p").textContent = "Retrieve the one-time token with the packaged host or container Console command, then create the administrator password. The token is never written to container logs.";
+  } else {
+    setText("auth-runtime-eyebrow", "Private local administration");
+    setText("auth-runtime-copy", "Review health, schedule state, configuration, and generated previews without exposing TautWeekly to a cloud service.");
+  }
+}
+
+function renderCapabilities() {
+  renderAuthenticationBoundary();
+  const nas = isNAS();
+  setText("mode-pill-label", nas ? "NAS / container" : "Windows setup");
+  setText("schedule-nav-copy", nas ? "Embedded scheduler" : "Windows lifecycle");
+  setText("configuration-platform-label", nas ? "Guided NAS setup" : "Guided Windows setup");
+  setText("config-nav-copy", nas ? "Guided NAS setup" : "Guided local setup");
+  setText("sidebar-connection-label", nas ? "Manager connection" : "Local connection");
+  setText("upcoming-run-label", nas ? "Upcoming scheduler run" : "Upcoming task run");
+  setText("schedule-state-label", nas ? "Scheduler state" : "Task state");
+  setText("schedule-lifecycle-copy", nas
+    ? "Disabling future starts never cancels a newsletter delivery that is already running."
+    : "Disabling or removing a schedule never cancels a newsletter process that is already running.");
+  setText("settings-page-heading", nas ? "Private access, enforced." : "Private access, your way.");
+  setText("settings-platform-copy", nas
+    ? "This container requires an administrator password. Runtime lifecycle, updates, and TLS remain under your NAS or container host."
+    : "Windows trusts this computer by default. Add a password lock when the extra boundary is useful, without making first-run setup depend on a one-time token.");
+  setText("about-access-heading", nas ? "Authenticated LAN access" : "Loopback-only access");
+  setText("about-access-copy", nas
+    ? "The Manager requires authentication, accepts IP-literal host access by default, and rejects DNS hostnames unless the container allowlist includes them."
+    : "The Manager accepts browser connections only from this computer and rejects unrecognized hostnames.");
+  setText("about-edition", nas ? "NAS / Container Manager" : "Windows Manager");
+  setText("about-secret-copy", nas
+    ? "Secrets stay hidden during normal reads. Revealing returns only the selected credential, requires administrator password re-authentication, and automatically clears from the page."
+    : "Secrets stay hidden during normal reads. Revealing returns only the selected credential, uses password re-authentication when the optional lock is enabled, and automatically clears from the page.");
+  setText("about-delivery-copy", nas
+    ? "Renderer completion, SMTP acceptance, and inbox delivery remain distinct states in both API copy and interface labels."
+    : "Task execution, SMTP acceptance, and inbox delivery remain distinct states in both API copy and interface labels.");
+  setText("preview-runner-copy", nas
+    ? "Uses the saved configuration and Tautulli user ID to create local HTML in the persistent output volume. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state."
+    : "Uses the saved configuration and Tautulli user ID to create local HTML in the package output folder. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state.");
+  setText("access-settings-eyebrow", nas ? "Required Manager authentication" : "Optional Manager lock");
+  setText("access-settings-heading", nas ? "Administrator password" : "Browser access");
+  byId("access-recovery-copy").innerHTML = nas
+    ? "<strong>Console recovery remains available.</strong> Run the packaged <code>manager-reset-access</code> command from the trusted NAS host or the documented container Console command. Recovery resets only Manager credentials and sessions; configuration, schedules, history, output, and newsletter state are preserved."
+    : "<strong>Local recovery remains available.</strong> If the password is forgotten, run <code>18-RESET-MANAGER-ACCESS.bat</code> from the TautWeekly folder. Installed copies also include <code>Reset-TautWeekly-Access.cmd</code>. Recovery disables only the Manager lock and leaves configuration, credentials, schedules, history, and previews untouched.";
+  setText("foundation-schedule-copy", nas
+    ? "A successful configuration save runs clearly labeled, non-sending checks and local discovery. Email delivery remains explicit, and schedule controls update only the embedded container scheduler; they never stop a delivery already running."
+    : "A successful configuration save runs clearly labeled, non-sending connection checks and local discovery. Email delivery remains limited to an explicit TestEmail action, and schedule changes use a fixed UAC helper that verifies task ownership.");
+  document.querySelectorAll("[data-windows-schedule-only]").forEach((element) => { element.hidden = nas; });
+  if (nas) {
+    setText("schedule-page-eyebrow", "Container delivery lifecycle");
+    setText("schedule-page-copy", "Review the configured delivery window and explicitly enable or disable future starts in the embedded scheduler.");
+    setText("schedule-boundary-eyebrow", "Narrow configuration boundary");
+    setText("schedule-boundary-heading", "The browser never supplies a command.");
+    setText("schedule-boundary-copy", "The Manager accepts only enable or disable for this package. It rechecks the saved configuration revision, writes a private backup, and changes no container, image, port, volume, UID, or host setting.");
+    setText("schedule-overview-heading", "Observed embedded scheduler state");
+    setText("schedule-enable-copy", "Allow the embedded scheduler to begin a future newsletter run in the configured weekly window.");
+    setText("schedule-disable-copy", "Prevent future scheduler starts while preserving configuration, history, output, and any delivery already running.");
+    byId("schedule-actions").setAttribute("aria-label", "Container schedule actions");
+  } else {
+    setText("schedule-page-eyebrow", "Windows delivery lifecycle");
+    setText("schedule-page-copy", "Review the configured delivery window, verify task ownership, and make one explicit elevated change at a time.");
+    setText("schedule-boundary-eyebrow", "Narrow elevation boundary");
+    setText("schedule-boundary-heading", "The browser never supplies a command.");
+    setText("schedule-boundary-copy", "The Manager accepts only install/refresh, enable, disable, or remove. Windows asks for administrator approval, and the helper rechecks configuration and task ownership.");
+    setText("schedule-overview-heading", "Observed Task Scheduler state");
+    setText("schedule-enable-copy", "Allow an installed, verified task to begin future scheduled newsletter runs.");
+    setText("schedule-disable-copy", "Prevent future task starts while preserving configuration, history, output, and the task definition.");
+    byId("schedule-actions").setAttribute("aria-label", "Windows schedule actions");
   }
 }
 
@@ -357,10 +447,13 @@ function renderStatus() {
   setText("schedule-ownership", titleCase(snapshot.schedule.ownership));
   setText("schedule-state", titleCase(snapshot.schedule.state));
   const scheduleOwned = !snapshot.schedule.installed || snapshot.schedule.owned;
-  const scheduleProbeFailed = snapshot.schedule.state === "probe-failed";
+  const containerSchedule = snapshot.schedule.provider === "embedded-container";
+  const scheduleProbeFailed = ["probe-failed", "heartbeat-stale", "starting"].includes(snapshot.schedule.state);
   const scheduleHealthy = snapshot.schedule.installed && snapshot.schedule.enabled && scheduleOwned;
   setChip("schedule-chip", scheduleProbeFailed ? "Status unavailable" : !scheduleOwned ? "Ownership warning" : scheduleHealthy ? "Active" : snapshot.schedule.installed ? "Disabled" : "Not installed", scheduleProbeFailed || !scheduleOwned ? "bad" : scheduleHealthy ? "good" : "neutral");
-  setText("schedule-copy", scheduleProbeFailed ? "Windows Task Scheduler status could not be verified." : !scheduleOwned ? "A same-named task exists but does not match this installation." : snapshot.schedule.supported ? "Read directly from Windows Task Scheduler." : "Schedule management is unavailable on this platform.");
+  setText("schedule-copy", containerSchedule
+    ? scheduleProbeFailed ? "The embedded scheduler heartbeat is unavailable or stale." : "Read from the package-managed scheduler heartbeat and persistent configuration."
+    : scheduleProbeFailed ? "Windows Task Scheduler status could not be verified." : !scheduleOwned ? "A same-named task exists but does not match this installation." : snapshot.schedule.supported ? "Read directly from Windows Task Scheduler." : "Schedule management is unavailable on this platform.");
   setText("last-attempt", formatDate(snapshot.delivery.lastAttemptUtc));
   setText("last-result", titleCase(snapshot.delivery.result));
   setText("last-success", formatDate(snapshot.delivery.lastSuccessUtc));
@@ -378,9 +471,9 @@ function renderStatus() {
   renderIntegrationStatus();
   renderDashboardConfigStatus();
   setText("next-run", formatDate(snapshot.schedule.nextRunLocal));
-  setText("next-run-utc", snapshot.schedule.nextRunUtc ? `UTC: ${formatDate(snapshot.schedule.nextRunUtc)}` : "Task Scheduler has not reported an upcoming run.");
+  setText("next-run-utc", snapshot.schedule.nextRunUtc ? `UTC: ${formatDate(snapshot.schedule.nextRunUtc)}` : containerSchedule ? "The embedded scheduler has not reported a valid upcoming run." : "Task Scheduler has not reported an upcoming run.");
   setText("preview-count", snapshot.previewSummary);
-  setText("sidebar-platform", `${titleCase(snapshot.platform)} · local only`);
+  setText("sidebar-platform", `${titleCase(snapshot.platform)} · ${isNAS() ? "trusted LAN" : "local only"}`);
   setText("about-platform", titleCase(snapshot.platform));
 }
 
@@ -411,9 +504,11 @@ function renderSchedule() {
   const operation = state.scheduleOperation;
   if (!snapshot || !editor) return;
   const schedule = snapshot.schedule;
+  const containerSchedule = schedule.provider === "embedded-container";
+  const allowedActions = new Set(state.capabilities?.scheduleActions || []);
   const ready = editor.state === "ready";
   const owned = !schedule.installed || schedule.owned;
-  const probeFailed = schedule.state === "probe-failed";
+  const probeFailed = ["probe-failed", "heartbeat-stale", "starting"].includes(schedule.state);
   const scheduleActive = scheduleOperationIsActive(operation);
   const managerActive = operationIsActive(state.operation);
   const blocked = state.scheduleStarting || scheduleActive || managerActive || !ready || !schedule.supported || !owned || probeFailed;
@@ -431,7 +526,7 @@ function renderSchedule() {
 
   const day = configEditorValue("ScheduleDay") || "Friday";
   const time = configEditorValue("ScheduleTime") || "09:30";
-  setText("schedule-configured-window", ready ? `${day} at ${time} local Windows time` : "Complete configuration first");
+  setText("schedule-configured-window", ready ? `${day} at ${time} ${containerSchedule ? "in the configured container timezone" : "local Windows time"}` : "Complete configuration first");
   setText("schedule-view-installed", yesNo(schedule.installed));
   setText("schedule-view-enabled", yesNo(schedule.enabled));
   setText("schedule-view-ownership", titleCase(schedule.ownership));
@@ -443,7 +538,9 @@ function renderSchedule() {
   warning.className = "schedule-warning";
   if (!schedule.supported) warning.textContent = "Schedule changes are unavailable on this platform.";
   else if (probeFailed) {
-    warning.textContent = "Task Scheduler status could not be verified. The Manager will not request a schedule mutation until the local probe succeeds.";
+    warning.textContent = containerSchedule
+      ? "The embedded scheduler heartbeat is unavailable or stale. Restart the container and confirm its timezone before enabling delivery."
+      : "Task Scheduler status could not be verified. The Manager will not request a schedule mutation until the local probe succeeds.";
     warning.classList.add("bad");
   }
   else if (!ready) warning.textContent = "Complete and save configuration before requesting a schedule change.";
@@ -451,7 +548,7 @@ function renderSchedule() {
     warning.textContent = "Safety stop: a same-named task exists but its action, working directory, or SYSTEM principal does not match this TautWeekly installation. The Manager will not modify it.";
     warning.classList.add("bad");
   } else if (managerActive) warning.textContent = "Wait for the active preview or test-delivery operation before changing the schedule.";
-  else if (scheduleActive) warning.textContent = "A fixed schedule operation is waiting for UAC approval or completing. No second change can start.";
+  else if (scheduleActive) warning.textContent = containerSchedule ? "A schedule configuration change is completing. No second change can start." : "A fixed schedule operation is waiting for UAC approval or completing. No second change can start.";
   else warning.textContent = "Task execution is distinct from SMTP acceptance. The dashboard reports both signals separately.";
 
   const installLabel = schedule.installed ? "Refresh" : "Install";
@@ -463,11 +560,12 @@ function renderSchedule() {
 
   for (const button of document.querySelectorAll("[data-schedule-action]")) {
     const action = button.dataset.scheduleAction;
+    button.closest("article").hidden = !allowedActions.has(action);
     let available = action === "install";
     if (action === "enable") available = schedule.installed && !schedule.enabled;
     if (action === "disable") available = schedule.installed && schedule.enabled;
     if (action === "remove") available = schedule.installed;
-    button.disabled = blocked || !available;
+    button.disabled = blocked || !allowedActions.has(action) || !available;
   }
 
   const confirmation = byId("schedule-confirmation");
@@ -481,7 +579,7 @@ function renderSchedule() {
     setText("schedule-confirm-help", copy.help);
     const confirmed = byId("schedule-confirm").checked;
     byId("schedule-confirm-run").disabled = blocked || !confirmed;
-    setSwappingButtonText("schedule-confirm-run", state.scheduleStarting ? "Starting fixed helper..." : "Request administrator approval");
+    setSwappingButtonText("schedule-confirm-run", state.scheduleStarting ? "Applying schedule change..." : containerSchedule ? "Apply schedule change" : "Request administrator approval");
   }
   renderScheduleOperation(operation);
 }
@@ -489,7 +587,7 @@ function renderSchedule() {
 function renderScheduleOperation(operation) {
   if (!operation) {
     setText("schedule-current-heading", "No schedule change recorded");
-    setText("schedule-current-copy", "No UAC request has been started by this Manager.");
+    setText("schedule-current-copy", isNAS() ? "No embedded scheduler change has been started by this Manager." : "No UAC request has been started by this Manager.");
     setText("schedule-current-time", "Not recorded");
     setChip("schedule-current-chip", "Idle", "neutral");
     return;
@@ -499,13 +597,13 @@ function renderScheduleOperation(operation) {
   let copy = "The fixed helper is waiting to report a sanitized result.";
   if (operation.state === "queued") {
     heading = `${action} schedule queued`;
-    copy = "Windows may be preparing the UAC approval prompt.";
+    copy = isNAS() ? "The revision-checked configuration change is waiting to start." : "Windows may be preparing the UAC approval prompt.";
   } else if (operation.state === "running") {
     heading = `${action} schedule in progress`;
-    copy = "Approve the Windows UAC prompt if it is visible. This operation cannot be changed from browser input.";
+    copy = isNAS() ? "The Manager is applying one package-defined schedule setting." : "Approve the Windows UAC prompt if it is visible. This operation cannot be changed from browser input.";
   } else if (operation.state === "succeeded") {
     heading = `${action} schedule completed`;
-    copy = "The helper completed and the Manager observed the expected Task Scheduler state.";
+    copy = isNAS() ? "The Manager saved and verified the embedded scheduler state." : "The helper completed and the Manager observed the expected Task Scheduler state.";
   } else if (operation.state === "failed") {
     heading = `${action} schedule was not completed`;
     copy = scheduleFailureCopy(operation.errorCategory, operation.supportCode);
@@ -526,6 +624,8 @@ function scheduleOperationIsActive(operation) {
 }
 
 function scheduleActionCopy(action, day, time, scheduleInstalled = false) {
+  if (isNAS() && action === "enable") return { heading: "Enable future scheduled delivery", copy: `Allow the embedded scheduler to start on ${day} at ${time} in the configured container timezone.`, label: "Enable this container schedule", help: "This updates persistent configuration and does not send a newsletter immediately." };
+  if (isNAS() && action === "disable") return { heading: "Disable future scheduled starts", copy: "Prevent future embedded-scheduler starts while preserving the package and its data.", label: "Disable this container schedule", help: "A newsletter delivery already running will not be cancelled." };
   switch (action) {
   case "install": return scheduleInstalled
     ? { heading: "Refresh the weekly task", copy: `Update the verified SYSTEM task for ${day} at ${time} local Windows time.`, label: "Refresh this owned TautWeekly schedule", help: "Windows will request administrator approval. An unrelated same-named task will be left untouched." }
@@ -541,18 +641,20 @@ function scheduleFailureCopy(category, supportCode) {
   const suffix = supportCode ? ` Support code: ${supportCode}.` : "";
   switch (category) {
   case "elevation-declined": return "Windows administrator approval was declined or closed." + suffix;
-  case "configuration-changed": return "Configuration changed while Windows approval was pending. Refresh and review before retrying." + suffix;
+  case "configuration-changed": return (isNAS() ? "Configuration changed before the schedule update could be applied." : "Configuration changed while Windows approval was pending. Refresh and review before retrying.") + suffix;
   case "task-not-found": return "The expected verified task was not found. Refresh local status before retrying." + suffix;
   case "task-ownership-mismatch": return "The same-named task did not match this installation and was left untouched." + suffix;
   case "schedule-invalid": return "The saved day or time could not be interpreted safely." + suffix;
   case "renderer-missing": return "The packaged newsletter renderer is unavailable, so the schedule was not enabled." + suffix;
-  case "postcondition-failed": return "The helper returned, but the expected Task Scheduler state could not be verified." + suffix;
+  case "postcondition-failed": return (isNAS() ? "The requested embedded scheduler state could not be verified." : "The helper returned, but the expected Task Scheduler state could not be verified.") + suffix;
   case "schedule-configuration-read-failed": return "Windows approval succeeded, but the helper could not validate the saved schedule configuration." + suffix;
   case "task-definition-failed": return "Windows approval succeeded, but Task Scheduler rejected the requested schedule definition." + suffix;
   case "task-mutation-failed": return "Windows approval succeeded, but Task Scheduler could not apply the requested change." + suffix;
   case "task-verification-failed": return "Task Scheduler accepted the request, but the helper could not verify the resulting owned task state." + suffix;
   case "task-read-access-failed": return "Task Scheduler accepted the request, but Windows could not grant this signed-in user read-only status access to the task." + suffix;
-  case "manager-restarted": return "The Manager restarted while elevation was pending, so the final result is unknown. Refresh Task Scheduler status." + suffix;
+  case "container-schedule-update-failed": return "The persistent embedded scheduler setting could not be updated. Existing configuration remains available for recovery." + suffix;
+  case "container-schedule-verification-failed": return "The Manager saved a scheduler change but could not verify the resulting persistent state. Review configuration and backups before retrying." + suffix;
+  case "manager-restarted": return (isNAS() ? "The Manager restarted while a schedule change was active, so the final result is unknown. Refresh the embedded scheduler status." : "The Manager restarted while elevation was pending, so the final result is unknown. Refresh Task Scheduler status.") + suffix;
   default: return "The schedule helper did not complete successfully. No raw PowerShell output was retained." + suffix;
   }
 }
@@ -1754,7 +1856,7 @@ function renderOperations() {
   let message = "Enter a numeric Tautulli user ID, then confirm this preview-only run.";
   if (!ready) message = "Complete and save configuration before generating previews.";
   else if (active) message = operation.type === "preview-all" ? (operation.state === "cancelling" ? "Stopping the local preview process safely..." : "Generating previews. You can leave this page while the Manager tracks the operation.") : "An email delivery is active. Wait for its aggregate SMTP result before starting another operation.";
-  else if (scheduleActive) message = "Wait for the active Windows schedule change before generating previews.";
+  else if (scheduleActive) message = "Wait for the active schedule change before generating previews.";
   else if (state.operationStarting) message = "Starting a fixed Manager operation...";
   else if (!userIDValid && userID) message = "Enter a numeric Tautulli user ID using no more than 20 digits.";
   else if (userIDValid && confirmed) message = "Ready to generate six local previews without sending email.";
@@ -1766,7 +1868,7 @@ function renderOperations() {
   let testMessage = "Enter a numeric Tautulli user ID, then confirm the six-message test delivery.";
   if (!ready) testMessage = "Complete and save configuration before sending a test delivery.";
   else if (active) testMessage = operation.type === "send-test-all" ? "Sending to the configured TestEmail. Cancellation is disabled because some messages may already be accepted by SMTP." : "Another Manager operation is active. Wait for it to finish before starting a test delivery.";
-  else if (scheduleActive) testMessage = "Wait for the active Windows schedule change before starting a test delivery.";
+  else if (scheduleActive) testMessage = "Wait for the active schedule change before starting a test delivery.";
   else if (state.operationStarting) testMessage = "Starting a fixed Manager operation...";
   else if (!testUserIDValid && testUserID) testMessage = "Enter a numeric Tautulli user ID using no more than 20 digits.";
   else if (testUserIDValid && testConfirmed) testMessage = "Ready to send six real messages only to the configured TestEmail.";
@@ -1779,7 +1881,7 @@ function renderOperations() {
   let manualSendMessage = manualWelcome ? "Choose a Tautulli user, then explicitly confirm the one-message Manual Welcome delivery." : "Explicitly confirm the all-recipient production delivery to enable this action.";
   if (!ready) manualSendMessage = "Complete and save configuration before sending a production newsletter.";
   else if (active) manualSendMessage = ["send-welcome", "send-all"].includes(operation.type) ? "A production delivery is running. Cancellation is disabled because a message may already be accepted by SMTP." : "Another Manager operation is active. Wait for it to finish before sending a production newsletter.";
-  else if (scheduleActive) manualSendMessage = "Wait for the active Windows schedule change before sending a production newsletter.";
+  else if (scheduleActive) manualSendMessage = "Wait for the active schedule change before sending a production newsletter.";
   else if (state.operationStarting) manualSendMessage = "Starting a fixed Manager operation...";
   else if (manualWelcome && manualSendUserID && !manualSendUserValid) manualSendMessage = "Enter a numeric Tautulli user ID using no more than 20 digits.";
   else if (manualSendConfirmed && manualSendUserValid) manualSendMessage = manualWelcome ? "Ready to send one real Manual Welcome message to the selected user." : "Ready to send real email to every currently eligible recipient.";
@@ -1949,7 +2051,7 @@ function operationSummary(operation) {
     }
   }
   switch (operation.state) {
-  case "queued": return { heading: "Preview generation queued", copy: "The fixed Windows preview operation is waiting to start." };
+  case "queued": return { heading: "Preview generation queued", copy: "The fixed package preview operation is waiting to start." };
   case "running": return { heading: "Generating newsletter previews", copy: "The package renderer is creating local HTML; no email is sent." };
   case "cancelling": return { heading: "Cancelling preview generation", copy: "The Manager is stopping the local renderer and retaining a sanitized result." };
   case "succeeded": return { heading: "Preview generation completed", copy: `${count} generated preview${count === 1 ? " is" : "s are"} available for authenticated review.` };
@@ -2141,7 +2243,7 @@ async function startScheduleOperation() {
   if (!validScheduleAction(action) || !byId("schedule-confirm").checked || state.editor?.state !== "ready") return;
   state.scheduleStarting = true;
   renderSchedule();
-  setGlobalStatus("Starting the fixed Windows schedule helper...");
+  setGlobalStatus(isNAS() ? "Applying the embedded schedule change..." : "Starting the fixed Windows schedule helper...");
   try {
     state.scheduleOperation = await request(`/api/v1/schedule/${encodeURIComponent(action)}`, {
       method: "POST",
@@ -2149,7 +2251,7 @@ async function startScheduleOperation() {
     });
     state.schedulePendingAction = "";
     byId("schedule-confirm").checked = false;
-    setGlobalStatus("Schedule operation started. Review the Windows UAC prompt.", true);
+    setGlobalStatus(isNAS() ? "Schedule operation started." : "Schedule operation started. Review the Windows UAC prompt.", true);
   } catch (error) {
     setGlobalStatus(error.message, true);
   } finally {
@@ -2161,7 +2263,7 @@ async function startScheduleOperation() {
 }
 
 function validScheduleAction(action) {
-  return ["install", "enable", "disable", "remove"].includes(action);
+  return (state.capabilities?.scheduleActions || ["install", "enable", "disable", "remove"]).includes(action);
 }
 
 let schedulePollTimer;
@@ -2203,8 +2305,8 @@ async function pollScheduleOperation() {
 function renderStartupSettings() {
   const startup = state.startup || { supported: false, state: "unsupported" };
   const panel = byId("startup-settings-panel");
-  panel.hidden = !startup.supported;
-  if (!startup.supported) return;
+  panel.hidden = !startup.supported || !state.capabilities?.supportsStartup;
+  if (panel.hidden) return;
   const managerToggle = byId("startup-manager");
   const dashboardToggle = byId("startup-dashboard");
   const unavailable = ["conflict", "unavailable"].includes(startup.state);
@@ -2291,6 +2393,7 @@ function renderAccessSettings() {
 }
 
 function accessSurfaceLabel() {
+  if (state.capabilities?.accessLabel) return state.capabilities.accessLabel;
   const platform = String(state.status?.platform || "").toLowerCase();
   if (platform === "windows") return "Browser access";
   if (platform === "linux" || platform === "freebsd") return "Container access";

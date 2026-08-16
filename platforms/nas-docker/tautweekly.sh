@@ -24,7 +24,11 @@ confirm() {
 cmd="${1:-help}"; shift || true
 case "$cmd" in
   install) exec ./qnap-install.sh ;;
-  build) compose_cmd build --pull ;;
+  build)
+    echo "The release Compose file pulls the published image and has no local build definition." >&2
+    echo "Source builds use the repository root: docker build -f platforms/nas-docker/Dockerfile ." >&2
+    exit 64
+    ;;
   up|start) compose_cmd up -d ;;
   down|stop) compose_cmd down ;;
   restart) compose_cmd restart tautweekly ;;
@@ -67,6 +71,19 @@ case "$cmd" in
     ;;
   roster) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh View-Access-Roster.ps1 ;;
   repair-assets) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Repair-Assets.ps1 ;;
+  manager-bootstrap)
+    compose_cmd exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
+      /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager
+    ;;
+  manager-reset-access)
+    echo "This resets only the Manager administrator password and active browser sessions."
+    echo "Newsletter configuration, schedules, output, and delivery state are preserved."
+    confirm "Reset Manager access and restart the container?" || exit 0
+    compose_cmd exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
+      /opt/tautweekly/bin/tautweekly-manager access-recover --data-dir /data/manager --confirm
+    compose_cmd restart tautweekly
+    echo "Run ./tautweekly.sh manager-bootstrap to retrieve the new one-time pairing token."
+    ;;
   schedule-status) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Schedule-Control.ps1 -Action Status ;;
   schedule-enable)
     confirm "Enable the configured automatic weekly send?" || exit 0
@@ -103,6 +120,9 @@ TautWeekly for Plex NAS Portable commands
   ./tautweekly.sh welcome USER_ID
   ./tautweekly.sh send-all
   ./tautweekly.sh roster
+  ./tautweekly.sh repair-assets
+  ./tautweekly.sh manager-bootstrap
+  ./tautweekly.sh manager-reset-access
   ./tautweekly.sh schedule-status
   ./tautweekly.sh schedule-enable
   ./tautweekly.sh schedule-disable

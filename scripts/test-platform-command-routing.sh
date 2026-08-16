@@ -38,7 +38,7 @@ STUB
   chmod +x "$stub_bin/$name"
 }
 
-for command_name in docker docker-compose runuser systemctl journalctl service podman pwsh open; do
+for command_name in docker docker-compose runuser systemctl journalctl service podman pwsh open flock; do
   make_stub "$command_name"
 done
 
@@ -136,6 +136,36 @@ if command -v flock >/dev/null 2>&1; then
   TAUTWEEKLY_CONFIG="$test_root/data/config.json" \
     bash "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" Preview 'Viewer With Spaces'
   assert_call "pwsh -NoLogo -NoProfile -NonInteractive -File /virtual/app/TautWeekly.ps1 -Mode Preview -ConfigPath $test_root/data/config.json -UserId Viewer With Spaces"
+
+  mkdir -p "$test_root/data/manager"
+  manager_id='fixture123456789'
+  manager_config="$test_root/data/manager/operation-$manager_id.config.json"
+  manager_result="$test_root/data/manager/operation-$manager_id.result.json"
+  printf '%s\n' '{}' >"$manager_config"
+  reset_calls
+  TAUTWEEKLY_APP_DIR=/virtual/app \
+  TAUTWEEKLY_DATA_DIR="$test_root/data" \
+  TAUTWEEKLY_CONFIG="$test_root/data/config.json" \
+    bash "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" PreviewAll 17 \
+      --manager-config "$manager_config" --manager-result "$manager_result" --no-open
+  assert_call "pwsh -NoLogo -NoProfile -NonInteractive -File /virtual/app/TautWeekly.ps1 -Mode PreviewAll -ConfigPath $manager_config -UserId 17 -ResultPath $manager_result -NoOpen"
+
+  if TAUTWEEKLY_APP_DIR=/virtual/app TAUTWEEKLY_DATA_DIR="$test_root/data" \
+      bash "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" PreviewAll 17 \
+        --manager-config "$test_root/data/config.json" --manager-result "$manager_result" --no-open \
+        >/dev/null 2>&1; then
+    fail 'run-mode accepted a Manager snapshot outside the private Manager directory'
+  fi
+
+  mkdir -p "$test_root/data/manager/operation-fixture123456789"
+  printf '%s\n' '{}' >"$test_root/data/config.json"
+  if TAUTWEEKLY_APP_DIR=/virtual/app TAUTWEEKLY_DATA_DIR="$test_root/data" \
+      bash "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" PreviewAll 17 \
+        --manager-config "$test_root/data/manager/operation-fixture123456789/../../config.json" \
+        --manager-result "$test_root/data/manager/operation-fixture123456789/../../escaped.result.json" --no-open \
+        >/dev/null 2>&1; then
+    fail 'run-mode accepted traversal components in Manager operation paths'
+  fi
 
   if TAUTWEEKLY_APP_DIR=/virtual/app TAUTWEEKLY_DATA_DIR="$test_root/data" \
       bash "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" Preview one two >/dev/null 2>&1; then

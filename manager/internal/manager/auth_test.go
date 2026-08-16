@@ -74,6 +74,9 @@ func TestTrustedLocalAccessIsDefaultAndPasswordLockPersists(t *testing.T) {
 	if err := store.setPasswordLock("1234567"); err == nil || !strings.Contains(err.Error(), "at least 8 characters") {
 		t.Fatalf("seven-character password was not rejected with the expected message: %v", err)
 	}
+	if err := store.setPasswordLock(strings.Repeat("x", maximumPasswordBytes+1)); err == nil || !strings.Contains(err.Error(), "at most 256") {
+		t.Fatalf("oversized password was not rejected before hashing: %v", err)
+	}
 	const password = "lock8888"
 	if err := store.setPasswordLock(password); err != nil {
 		t.Fatal(err)
@@ -141,5 +144,89 @@ func TestAttemptLimiterExpiresFailures(t *testing.T) {
 	current = current.Add(limiter.window + time.Second)
 	if !limiter.allow() {
 		t.Fatal("limiter did not expire old failures")
+	}
+}
+
+func TestRequiredAccessRecoveryRemovesOnlyAuthenticationMaterial(t *testing.T) {
+	t.Parallel()
+	dataDir := t.TempDir()
+	store, err := newAuthStore(dataDir, time.Now, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.pair(store.bootstrapToken, "fixture recovery password"); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{
+		"operation.json":            `{"state":"preserve"}`,
+		"configuration-status.json": `{"state":"preserve"}`,
+	} {
+		if err := os.WriteFile(filepath.Join(dataDir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := RecoverRequiredAccess(dataDir); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"auth.json", "auth-settings.json", "bootstrap-token.txt"} {
+		if _, err := os.Stat(filepath.Join(dataDir, name)); !os.IsNotExist(err) {
+			t.Fatalf("authentication material %q remains after recovery: %v", name, err)
+		}
+	}
+	for name, content := range map[string]string{
+		"operation.json":            `{"state":"preserve"}`,
+		"configuration-status.json": `{"state":"preserve"}`,
+	} {
+		raw, err := os.ReadFile(filepath.Join(dataDir, name))
+		if err != nil || string(raw) != content {
+			t.Fatalf("recovery changed unrelated state %q: content=%q err=%v", name, raw, err)
+		}
+	}
+	restarted, err := newAuthStore(dataDir, time.Now, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restarted.bootstrapToken == "" {
+		t.Fatal("required-auth restart did not create a fresh one-time pairing token")
+	}
+	if token, err := ReadBootstrapToken(dataDir); err != nil || token != restarted.bootstrapToken {
+		t.Fatalf("explicit bootstrap retrieval failed: tokenMatch=%v err=%v", token == restarted.bootstrapToken, err)
+	}
+}
+
+func TestRequiredAuthRejectsInvalidBootstrapTokenFile(t *testing.T) {
+	t.Parallel()
+	dataDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dataDir, "bootstrap-token.txt"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := newAuthStore(dataDir, time.Now, true); err == nil || !strings.Contains(err.Error(), "pairing token is invalid") {
+		t.Fatalf("empty bootstrap token was not rejected safely: %v", err)
+	}
+	if _, err := ReadBootstrapToken(dataDir); err == nil || !strings.Contains(err.Error(), "bootstrap token is invalid") {
+		t.Fatalf("explicit retrieval accepted an invalid bootstrap token: %v", err)
+	}
+}
+
+func TestLoginRejectsUnboundedCredentialWorkFactor(t *testing.T) {
+	t.Parallel()
+	dataDir := t.TempDir()
+	store, err := newAuthStore(dataDir, time.Now, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.pair(store.bootstrapToken, "bounded credential password"); err != nil {
+		t.Fatal(err)
+	}
+	credentials, err := store.readCredentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentials.Iterations = maximumIterations + 1
+	if err := writePrivateJSON(store.credentialPath, credentials); err != nil {
+		t.Fatal(err)
+	}
+	if store.verifyPassword("bounded credential password") {
+		t.Fatal("credential metadata above the bounded work factor was accepted")
 	}
 }

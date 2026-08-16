@@ -14,12 +14,8 @@ fail() {
 [[ "$heartbeat_max_age" =~ ^[0-9]+$ ]] || fail 'TAUTWEEKLY_HEALTH_HEARTBEAT_MAX_SECONDS must be a positive integer.'
 (( heartbeat_max_age > 0 )) || fail 'TAUTWEEKLY_HEALTH_HEARTBEAT_MAX_SECONDS must be greater than zero.'
 
-if ! curl -fsS --max-time 3 "${health_base_url%/}/" >/dev/null; then
-  fail "Preview root did not respond at ${health_base_url%/}/."
-fi
-
-if ! curl -fsS --max-time 3 "${health_base_url%/}/assets/movies.gif" >/dev/null; then
-  printf '[WARN] Preview asset movies.gif is unavailable; run the packaged repair-assets command.\n' >&2
+if ! curl -fsS --max-time 3 "${health_base_url%/}/health/live" >/dev/null; then
+  fail "Manager liveness did not respond at ${health_base_url%/}/health/live."
 fi
 
 [[ -f "$heartbeat_path" ]] || fail "Service supervisor heartbeat is missing: $heartbeat_path"

@@ -84,15 +84,16 @@ type operationStore struct {
 }
 
 type operationCoordinator struct {
-	mu         sync.RWMutex
-	root       string
-	dataDir    string
-	now        func() time.Time
-	runner     operationRunner
-	store      operationStore
-	current    *OperationRecord
-	cancel     context.CancelFunc
-	onComplete func(OperationRecord, string)
+	mu          sync.RWMutex
+	root        string
+	runtimeRoot string
+	dataDir     string
+	now         func() time.Time
+	runner      operationRunner
+	store       operationStore
+	current     *OperationRecord
+	cancel      context.CancelFunc
+	onComplete  func(OperationRecord, string)
 }
 
 func newOperationCoordinator(options Options) (*operationCoordinator, error) {
@@ -100,12 +101,17 @@ func newOperationCoordinator(options Options) (*operationCoordinator, error) {
 	if runner == nil {
 		runner = platformPreviewOperationRunner{}
 	}
+	runtimeRoot := options.RuntimeRoot
+	if strings.TrimSpace(runtimeRoot) == "" {
+		runtimeRoot = options.TautWeeklyRoot
+	}
 	coordinator := &operationCoordinator{
-		root:       options.TautWeeklyRoot,
-		dataDir:    options.DataDir,
-		now:        options.Now,
-		runner:     runner,
-		onComplete: options.operationCompleted,
+		root:        options.TautWeeklyRoot,
+		runtimeRoot: runtimeRoot,
+		dataDir:     options.DataDir,
+		now:         options.Now,
+		runner:      runner,
+		onComplete:  options.operationCompleted,
 		store: operationStore{
 			currentPath: filepath.Join(options.DataDir, "operation-current.json"),
 			historyPath: filepath.Join(options.DataDir, "operation-history.jsonl"),
@@ -162,7 +168,7 @@ func (c *operationCoordinator) Start(request CreateOperationRequest) (OperationR
 	if (request.Type != "send-all" && !validTautulliUserID(userID)) || (request.Type == "send-all" && userID != "") {
 		return OperationRecord{}, ErrOperationInvalid
 	}
-	values, raw, exists, state := readConfigDocument(c.root)
+	values, raw, exists, state := readConfigDocument(c.runtimeRoot)
 	if state != "ready" || !exists || len(existingConfigIssues(values)) > 0 {
 		return OperationRecord{}, ErrOperationNotReady
 	}
@@ -187,7 +193,7 @@ func (c *operationCoordinator) Start(request CreateOperationRequest) (OperationR
 	now := c.now().UTC()
 	previewBaseline := map[string]previewFingerprint{}
 	if request.Type == "preview-all" {
-		previewBaseline = previewFingerprints(c.root)
+		previewBaseline = previewFingerprints(c.runtimeRoot)
 	}
 	resultPath := c.resultPath(id)
 	record := OperationRecord{
@@ -237,7 +243,7 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 	record.Cancellable = false
 	record.ExitCode = &exitCode
 	if record.Type == "preview-all" {
-		record.GeneratedPreviewIDs = changedPreviewIDs(c.root, previewBaseline)
+		record.GeneratedPreviewIDs = changedPreviewIDs(c.runtimeRoot, previewBaseline)
 	}
 	if resultErr == nil {
 		record.DurationMS = structuredResult.DurationMS
@@ -245,6 +251,9 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 		record.SMTPAcceptedCount = structuredResult.SMTPAcceptedCount
 		record.SkippedCount = structuredResult.SkippedCount
 		record.FailedCount = structuredResult.FailedCount
+		if record.Type == "send-all" {
+			_ = writePrivateJSON(filepath.Join(c.runtimeRoot, "last-run.json"), structuredResult)
+		}
 	}
 	switch {
 	case errors.Is(ctx.Err(), context.Canceled), errors.Is(runErr, context.Canceled):

@@ -36,10 +36,10 @@ foreach ($cmd in @("identify","convert","python3","flock")) {
         exit 1
     }
 }
-OK "ImageMagick, Python preview server, and file locking are available"
+OK "ImageMagick, Python support, and file locking are available"
 
 if (-not (Test-Path $configPath)) {
-    FAIL "config.json is missing. From an Unraid Console run /opt/tautweekly/bin/run-script.sh Setup-First.ps1; from the Compose host project directory run ./tautweekly.sh setup."
+    FAIL "Persistent config.json is missing. Pair with the authenticated Manager and complete guided setup first."
     exit 1
 }
 OK "config.json exists"

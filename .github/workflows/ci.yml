@@ -58,7 +58,7 @@ jobs:
       - name: Validate macOS Compose configuration
         run: docker compose -f platforms/mac-docker/compose.yaml config --quiet
       - name: Build and boot-test the macOS Docker image
-        run: ./scripts/test-container-image.sh tautweekly-mac-ci platforms/mac-docker
+        run: ./scripts/test-container-image.sh tautweekly-mac-ci platforms/mac-docker mac
 
   powershell-syntax:
     name: PowerShell syntax

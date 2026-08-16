@@ -6,6 +6,32 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Added an authenticated, capability-aware NAS Manager for Unraid Apps, QNAP
+  Container Station, Linux NAS appliances, and compatible Docker hosts, with
+  persistent bootstrap/recovery state, embedded schedule controls, and
+  sanitized operation results.
+- Added hardened generic and QNAP Compose definitions, an updated Unraid
+  Community Apps template, multi-architecture Manager image builds, and an
+  exact NAS lifecycle and recovery guide.
+
+### Changed
+
+- Replaced the unauthenticated NAS preview server and console-first setup with
+  the shared Manager core, while suppressing Windows tray, sign-in startup,
+  Scheduled Task, browser-launch, and installer/update language on NAS.
+- Made the NAS container use an immutable root filesystem, an explicit
+  persistent `/data` boundary, numeric UID/GID execution, minimal capabilities,
+  authenticated LAN access, and graceful delivery-aware shutdown.
+
+### Security
+
+- Required a one-time pairing token and user-chosen Manager password on NAS,
+  with PBKDF2 credential storage, bounded sessions, CSRF protection, login
+  throttling, Host-header validation, secure-proxy cookie mode, and narrow
+  access recovery that preserves newsletter data.
+
 ## [0.13.0] - 2026-08-16
 
 ### Added

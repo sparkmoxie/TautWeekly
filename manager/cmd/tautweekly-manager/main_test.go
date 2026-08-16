@@ -41,3 +41,24 @@ func TestValidateLocalBrowserURLRejectsExternalOrCredentialedTargets(t *testing.
 		}
 	}
 }
+
+func TestValidateAllowedHostsAcceptsOnlyBareDNSNames(t *testing.T) {
+	t.Parallel()
+	for _, value := range []string{"nas.example.test", "nas.example.test,weekly.internal", "NAS-01.local"} {
+		if err := validateAllowedHosts(value); err != nil {
+			t.Errorf("validateAllowedHosts(%q): %v", value, err)
+		}
+	}
+	for _, value := range []string{
+		"https://nas.example.test",
+		"nas.example.test:8787",
+		"192.0.2.10",
+		"nas.example.test/path",
+		"*.example.test",
+		"user@nas.example.test",
+	} {
+		if err := validateAllowedHosts(value); err == nil {
+			t.Errorf("validateAllowedHosts(%q) unexpectedly succeeded", value)
+		}
+	}
+}

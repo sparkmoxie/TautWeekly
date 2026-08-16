@@ -29,6 +29,16 @@ type startupSettingsController interface {
 	Update(startManager, openDashboard bool) (StartupSettings, error)
 }
 
+type disabledStartupController struct{}
+
+func (disabledStartupController) Status() StartupSettings {
+	return StartupSettings{Supported: false, State: "unsupported", ErrorCode: "platform-unsupported"}
+}
+
+func (disabledStartupController) Update(_, _ bool) (StartupSettings, error) {
+	return StartupSettings{Supported: false, State: "unsupported", ErrorCode: "platform-unsupported"}, ErrStartupUnsupported
+}
+
 func (s *Server) handleStartupSettings(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.startup.Status())
 }

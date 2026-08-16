@@ -82,10 +82,10 @@ while ($true) {
             if (([DateTimeOffset]::UtcNow - $lastMissingConfigWarningUtc).TotalMinutes -ge 5) {
                 $misplacedConfig = Join-Path $appRoot "config.json"
                 if (Test-Path $misplacedConfig) {
-                    Log "Found a non-persistent config at $misplacedConfig, but the scheduler only reads $configPath. Run ./tautweekly.sh setup from the Compose directory or Setup-First.ps1 from the container Console." "WARN"
+                    Log "Found a non-persistent config at $misplacedConfig, but the scheduler only reads $configPath. Move or re-enter the configuration through the authenticated Manager so it is saved in /data." "WARN"
                 }
                 else {
-                    Log "Waiting for $configPath. From the Compose directory run ./tautweekly.sh setup; from an Unraid container Console run /opt/tautweekly/bin/run-script.sh Setup-First.ps1." "WARN"
+                    Log "Waiting for $configPath. Pair with the authenticated Manager and complete guided setup; the Manager saves persistent configuration in /data." "WARN"
                 }
                 $lastMissingConfigWarningUtc = [DateTimeOffset]::UtcNow
             }
