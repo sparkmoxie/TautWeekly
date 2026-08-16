@@ -78,7 +78,8 @@ task and never follows GitHub `main` or a container `edge` tag.
 
 The Windows Manager binds to `127.0.0.1:8788` and opens directly for the current
 Windows account. Windows trusted-local mode does **not** require a pairing token
-or a password on first run.
+or a password on first run. The packaged TautWeekly logo also appears in the
+Windows notification area for as long as the interactive Manager is running.
 
 - A new installation opens the Dashboard with a blue **First time setup** card.
   Select **Setup** to open **Config**.
@@ -99,6 +100,50 @@ private backup of the original file.
 
 Opening or refreshing the Dashboard does not contact Tautulli, Plex, or SMTP and
 does not change configuration.
+
+## Notification area and sign-in startup
+
+The notification-area icon is the persistent Windows control for the local
+Manager:
+
+- Hover over the TautWeekly icon to see **TautWeekly Dashboard**. Left-click it
+  to bring an existing visible Dashboard browser window to the foreground,
+  opening one only when no Dashboard window is available. Opening TautWeekly
+  again also reuses this same Manager; it does not create a second server, tray
+  process, or visible duplicate Dashboard window.
+- Right-click to see one native status row: **Healthy**, **Needs attention**, or
+  **Failed**. The row includes a colored native menu icon, while the text keeps
+  the state understandable without color. Select the status row to focus the
+  existing Dashboard, opening one only when no Dashboard window is available.
+- Select **Exit TautWeekly for Plex** to remove the icon and stop the local
+  Dashboard server gracefully.
+
+Closing a browser tab does not exit the background Manager. Conversely, Exit
+stops only the Manager/control surface. It does not disable or remove the
+weekly Windows Scheduled Task, and it does not cancel a newsletter delivery
+already running. The task remains able to start future newsletters without the
+Manager open.
+
+Under **Settings > Manager startup**, Windows provides two current-user,
+non-administrator controls:
+
+1. **Start Manager when I sign in** starts the Manager silently in the
+   notification area for the signed-in Windows user.
+2. **Open Dashboard after sign-in** becomes available only when the first
+   setting is on. It opens the default browser once, after the background
+   Manager is ready.
+
+Each toggle saves immediately. The status badge changes only after Windows
+confirms the new setting; if the update fails, the toggle returns to its last
+saved state and the Manager shows a sanitized error.
+
+Setup refreshes an owned sign-in entry after update or portable migration,
+including when the private data path changes. Uninstall removes that owned
+entry while preserving private configuration and Manager data. A later fresh
+install starts with sign-in startup off unless a recognized older TautWeekly
+entry is being repaired. Password-access reset does not change either startup
+choice or the newsletter schedule. If Settings reports an entry conflict, the
+same-named unrecognized Windows entry is left untouched for safety.
 
 ## Configure in the Manager
 
@@ -222,7 +267,8 @@ enable the optional browser password lock.
 If the password is forgotten, use the Start Menu **Reset TautWeekly Manager
 Access** shortcut or `Reset-TautWeekly-Access.cmd` from the installed folder.
 Recovery disables only the Manager lock and restarts local access. It does not
-delete configuration, service credentials, schedules, history, or previews.
+delete configuration, service credentials, startup choices, schedules,
+history, or previews.
 
 ## Metadata readiness before acceptance
 
@@ -287,6 +333,10 @@ For a no-install portable or recovery workflow, download and verify
 [`TautWeekly-windows.zip`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-windows.zip),
 extract it to a permanent writable folder, and run `00-OPEN-MANAGER.bat`.
 Portable Manager state lives in `.manager-data\` beside the application.
+It is intentionally separate from an installed Manager's private data. Use
+`TautWeekly-Setup.exe` and keep the installer-selected existing application
+folder when validating an update against installed configuration; Setup reuses
+the private data directory recorded by that installation.
 
 The numbered BAT and PowerShell launchers remain available for break/fix
 recovery, terminal automation, and detailed troubleshooting. Common fallbacks
@@ -328,6 +378,12 @@ can contain private names and email addresses; do not publish it.
   again.
 - If a schedule action is declined or interrupted at UAC, refresh the Schedule
   page and review the observed Windows state before retrying.
+- If the notification-area icon is hidden by Windows, open the notification
+  overflow area and pin TautWeekly. Opening the Start Menu shortcut again
+  reuses the running Manager and opens its Dashboard.
+- If Manager startup reports **Needs review**, inspect the current user's
+  Windows startup apps for an older or modified TautWeekly entry. The Manager
+  will not overwrite an entry it cannot identify as its own.
 
 See the full [configuration reference](../CONFIGURATION.md),
 [security guidance](../SECURITY.md), and

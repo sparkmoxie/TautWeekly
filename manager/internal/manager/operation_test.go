@@ -505,6 +505,71 @@ func TestPreviewOperationValidationAndRestartRecovery(t *testing.T) {
 	}
 }
 
+func TestNonCancellableDeliverySurvivesManagerRestartAndReconcilesResult(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	data := t.TempDir()
+	started := time.Now().Add(-time.Minute).UTC()
+	record := OperationRecord{
+		SchemaVersion:       operationSchemaVersion,
+		ID:                  "delivery-restart-fixture",
+		Type:                "send-all",
+		Trigger:             "gui",
+		State:               "running",
+		StartedAtUTC:        started.Format(time.RFC3339),
+		GeneratedPreviewIDs: []string{},
+	}
+	store := operationStore{currentPath: filepath.Join(data, "operation-current.json"), historyPath: filepath.Join(data, "operation-history.jsonl"), now: time.Now}
+	if err := store.saveCurrent(record); err != nil {
+		t.Fatal(err)
+	}
+	config, err := os.ReadFile(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshotPath := filepath.Join(data, "operation-"+record.ID+".config.json")
+	if err := os.WriteFile(snapshotPath, config, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	coordinator, err := newOperationCoordinator(Options{DataDir: data, TautWeeklyRoot: root, Now: time.Now, operationRunner: &fixturePreviewRunner{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current := coordinator.Current(); current == nil || current.State != "running" {
+		t.Fatalf("delivery was not preserved across restart: %+v", current)
+	}
+	if _, err := os.Stat(snapshotPath); err != nil {
+		t.Fatalf("active delivery snapshot was removed: %v", err)
+	}
+	result := rendererResult{
+		SchemaVersion:     1,
+		Mode:              "SendAll",
+		Outcome:           "succeeded",
+		DeliveryScope:     "production",
+		StartedAtUTC:      started.Format(time.RFC3339Nano),
+		FinishedAtUTC:     started.Add(2 * time.Minute).Format(time.RFC3339Nano),
+		DurationMS:        120000,
+		SMTPAcceptedCount: 3,
+		SkippedCount:      1,
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resultPath := filepath.Join(data, "operation-"+record.ID+".result.json")
+	if err := os.WriteFile(resultPath, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	finished := waitForOperationState(t, coordinator, "succeeded")
+	if finished.Outcome != "success" || finished.SMTPAcceptedCount != 3 || finished.SkippedCount != 1 || finished.ExitCode != nil {
+		t.Fatalf("reconciled delivery result: %+v", finished)
+	}
+	for _, path := range []string{snapshotPath, resultPath} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("reconciled private runtime file was not removed: %s (%v)", path, err)
+		}
+	}
+}
+
 func TestTautulliUserIDValidationIncludesLocalOwner(t *testing.T) {
 	for _, value := range []string{"0", "1", "18446744073709551615"} {
 		if !validTautulliUserID(value) {

@@ -37,9 +37,12 @@ Assert-True ($testRoot.StartsWith($tempParent, [StringComparison]::OrdinalIgnore
 $installRoot = Join-Path $testRoot 'program'
 $dataRoot = Join-Path $testRoot 'private-data'
 $logPath = Join-Path $testRoot 'installer.log'
+$originalLocalAppData = $env:LOCALAPPDATA
+$env:LOCALAPPDATA = Join-Path $testRoot 'isolated-local-app-data'
 
-function Invoke-TestInstaller([switch]$Uninstall, [string]$ExitMarker = '') {
-    $arguments = @('--test-mode', '--install-dir', $installRoot, '--data-dir', $dataRoot, '--log', $logPath)
+function Invoke-TestInstaller([switch]$Uninstall, [switch]$UseRecordedData, [string]$ExitMarker = '') {
+    $arguments = @('--test-mode', '--install-dir', $installRoot, '--log', $logPath)
+    if (-not $UseRecordedData) { $arguments += @('--data-dir', $dataRoot) }
     if ([string]::IsNullOrWhiteSpace($ExitMarker)) { $arguments += '--no-launch' } else { $arguments += @('--test-exit-marker', $ExitMarker) }
     if ($Uninstall) { $arguments = @('--uninstall') + $arguments }
     $process = Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
@@ -99,6 +102,12 @@ try {
     Assert-True ($metadata.Contains("DataDirectory=$dataRoot")) 'Installer metadata does not bind the external private data directory.'
     $launcher = Get-Content -LiteralPath (Join-Path $installRoot 'Open-TautWeekly.cmd') -Raw
     Assert-True ($launcher.Contains('-DataRoot')) 'Installed launcher does not pass the external Manager data directory.'
+    $managerLauncher = Get-Content -LiteralPath (Join-Path $installRoot 'START-MANAGER.ps1') -Raw
+    Assert-True ($managerLauncher.Contains('[switch]$Startup')) 'Installed Manager launcher has no silent sign-in mode.'
+    Assert-True ($managerLauncher.Contains('[switch]$OpenDashboard')) 'Installed Manager launcher has no dependent sign-in Dashboard mode.'
+    Assert-True ($managerLauncher.Contains('-not $Startup -or $OpenDashboard')) 'Installed Manager launcher does not keep browser opening dependent on the sign-in setting.'
+    Assert-True ($managerLauncher.Contains("& `$manager open '--listen=127.0.0.1:8788'")) 'Installed Manager launcher does not delegate repeated opens to Dashboard activation.'
+    Assert-True (-not $managerLauncher.Contains('Start-Process -FilePath $baseUri')) 'Installed Manager launcher still creates a new browser window for every repeated open.'
     $resetLauncher = Get-Content -LiteralPath (Join-Path $installRoot 'Reset-TautWeekly-Access.cmd') -Raw
     Assert-True ($resetLauncher.Contains('-DataRoot')) 'Installed access reset launcher does not pass the external Manager data directory.'
 
@@ -129,6 +138,22 @@ try {
         Assert-True (-not [bool]$setupState.authenticationRequired) 'Fresh Windows Manager unexpectedly requires authentication.'
         Assert-True (-not [bool]$setupState.pairingRequired) 'Fresh Windows Manager unexpectedly requires a pairing token.'
         Assert-True (-not (Test-Path -LiteralPath (Join-Path $dataRoot 'bootstrap-token.txt'))) 'Fresh Windows Manager wrote an obsolete pairing token.'
+        $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+        Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/api/v1/auth/session" -WebSession $session -TimeoutSec 2 | Out-Null
+        $startupState = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/api/v1/startup" -WebSession $session -TimeoutSec 2
+        Assert-True ([bool]$startupState.supported) 'Installed Windows Manager did not report sign-in startup capability.'
+        $startupJson = $startupState | ConvertTo-Json -Compress
+        Assert-True (-not $startupJson.Contains($installRoot) -and -not $startupJson.Contains($dataRoot)) 'Startup status leaked an application or private-data path.'
+        $shutdown = Start-Process `
+            -FilePath $managerExecutable `
+            -ArgumentList @('shutdown', "--listen=127.0.0.1:$port", "--tautweekly-root=$installRoot") `
+            -WorkingDirectory $installRoot `
+            -Wait `
+            -PassThru `
+            -WindowStyle Hidden
+        Assert-True ($shutdown.ExitCode -eq 0) 'Installed Manager rejected its named graceful-shutdown request.'
+        $shutdown.Dispose()
+        Assert-True ($manager.WaitForExit(10000)) 'Installed Manager did not release its tray, listener, and executable promptly.'
     }
     finally {
         if (-not $manager.HasExited) {
@@ -144,11 +169,17 @@ try {
     New-Item -ItemType Directory -Path $legacyData | Out-Null
     [IO.File]::WriteAllText((Join-Path $legacyData 'legacy-state.json'), '{"legacy":"migrate"}', [Text.UTF8Encoding]::new($false))
 
-    Invoke-TestInstaller
+    # Do not pass --data-dir on update: a production update must retain the
+    # private path already recorded in INSTALL-METADATA.txt.
+    Invoke-TestInstaller -UseRecordedData
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'config.json') -Raw) -eq '{"private":"preserve"}') 'Upgrade replaced private config.json.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $dataRoot 'access-state.json') -Raw) -eq '{"session":"preserve"}') 'Upgrade replaced external Manager data.'
     Assert-True (Test-Path -LiteralPath (Join-Path $dataRoot 'legacy-state.json') -PathType Leaf) 'Upgrade did not migrate legacy .manager-data state.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $installRoot '.manager-data'))) 'Upgrade retained a duplicate legacy .manager-data directory.'
+    $updatedMetadata = Get-Content -LiteralPath (Join-Path $installRoot 'INSTALL-METADATA.txt') -Raw
+    Assert-True ($updatedMetadata.Contains("DataDirectory=$dataRoot")) 'Upgrade replaced the recorded private data directory.'
+    $updatedLauncher = Get-Content -LiteralPath (Join-Path $installRoot 'Open-TautWeekly.cmd') -Raw
+    Assert-True ($updatedLauncher.Contains($dataRoot)) 'Upgrade rewrote the Manager launcher to a different private data directory.'
     $rollbackBackups = @(Get-ChildItem -LiteralPath $testRoot -Directory -Filter 'program.backup-v*')
     Assert-True ($rollbackBackups.Count -eq 1) "Upgrade created $($rollbackBackups.Count) rollback backups instead of exactly one."
     Assert-True ((Get-Content -LiteralPath (Join-Path $rollbackBackups[0].FullName 'config.json') -Raw) -eq '{"private":"preserve"}') 'Upgrade rollback backup did not preserve private config.json.'
@@ -220,6 +251,7 @@ try {
     Write-Host '[PASS] Windows installer fresh install, process-lock release, verified upgrade, portable migration, icon, and privacy-preserving uninstall lifecycle.' -ForegroundColor Green
 }
 finally {
+    $env:LOCALAPPDATA = $originalLocalAppData
     if (Test-Path -LiteralPath $testRoot) {
         $resolved = [IO.Path]::GetFullPath($testRoot)
         if ($resolved.StartsWith($tempParent, [StringComparison]::OrdinalIgnoreCase) -and (Split-Path -Leaf $resolved).StartsWith('tautweekly-installer-test-', [StringComparison]::Ordinal)) {

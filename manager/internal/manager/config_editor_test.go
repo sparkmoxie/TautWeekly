@@ -28,6 +28,14 @@ func TestReadConfigEditorUsesSafeDefaultsWithoutSecrets(t *testing.T) {
 	if value := editorField(t, view, "SmtpPort").Value; value != int64(587) {
 		t.Fatalf("SMTP port default: got %#v", value)
 	}
+	plexURL := editorField(t, view, "PlexWebUrl")
+	if plexURL.Label != "Open Plex button URL or custom link" || plexURL.Value != "https://app.plex.tv/desktop/" {
+		t.Fatalf("unexpected custom-link field: %+v", plexURL)
+	}
+	buttonLabel := editorField(t, view, "PlexButtonLabel")
+	if buttonLabel.Label != "Button label" || buttonLabel.Value != "Open Plex" || buttonLabel.Max == nil || *buttonLabel.Max != 64 {
+		t.Fatalf("unexpected button-label default: %+v", buttonLabel)
+	}
 }
 
 func TestReadConfigEditorNeverReturnsStoredSecrets(t *testing.T) {
@@ -99,6 +107,9 @@ func TestLegacyDirectPlexFieldsAreExplainedAndNormalizedWithoutCopyingRuntimeTok
 	}
 	if !strings.Contains(string(raw), `"PlexServerUrl": ""`) || !strings.Contains(string(raw), `"PlexToken": ""`) {
 		t.Fatalf("normalized direct Plex fields are missing: %s", raw)
+	}
+	if !strings.Contains(string(raw), `"PlexButtonLabel": "Open Plex"`) {
+		t.Fatalf("default button label was not added to the legacy config: %s", raw)
 	}
 }
 
@@ -250,6 +261,17 @@ func TestSaveConfigRejectsSMTPURLInsteadOfReportingUnsafeDNS(t *testing.T) {
 	_, message := parseAndValidateConfigValue(json.RawMessage(`"smtp://smtp.gmail.com:587"`), definition)
 	if !strings.Contains(message, "hostname only") {
 		t.Fatalf("SMTP URL validation message: %q", message)
+	}
+}
+
+func TestSaveConfigRejectsUnsafeOrOversizedButtonLabels(t *testing.T) {
+	maximum := int64(64)
+	definition := configDefinition{Name: "PlexButtonLabel", Type: "text", Required: true, Max: &maximum}
+	if _, message := parseAndValidateConfigValue(json.RawMessage(`"Open\nRequests"`), definition); !strings.Contains(message, "single line") {
+		t.Fatalf("control-character validation message: %q", message)
+	}
+	if _, message := parseAndValidateConfigValue(json.RawMessage(`"`+strings.Repeat("x", 65)+`"`), definition); !strings.Contains(message, "64 characters") {
+		t.Fatalf("length validation message: %q", message)
 	}
 }
 

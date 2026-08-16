@@ -6,6 +6,41 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-16
+
+### Added
+
+- Added a native Windows notification-area experience for the interactive
+  Manager. The TautWeekly artwork stays visible while the Manager is running,
+  left-click opens the existing Dashboard, and the native context menu reports
+  **Healthy**, **Needs attention**, or **Failed** with a colored icon plus an
+  explicit **Exit TautWeekly for Plex** action. Selecting the status row also
+  focuses the existing Dashboard, opening one only when needed.
+- Added current-user **Start Manager when I sign in** and dependent **Open
+  Dashboard after sign-in** controls under Settings, with sanitized status,
+  diagnostics, and exact startup-entry ownership.
+- Added a configurable newsletter button label and custom HTTP/HTTPS destination
+  under the Manager's Identity settings. Existing configurations keep the Plex
+  web app destination and **Open Plex** label by default.
+
+### Changed
+
+- Enforced one Windows Manager per installation and local address. A repeated
+  launch reuses the ready Manager and opens its Dashboard instead of starting a
+  second server or tray process.
+- Made Manager exit and installer upgrades request graceful control-surface
+  shutdown, while preserving the independent weekly Scheduled Task and
+  restart-safe reconciliation for an already-running non-cancellable delivery.
+- Reconciled owned per-user startup entries across installer update, portable
+  migration, and path changes, and removed them during uninstall so private
+  data can remain without leaving a stale sign-in command.
+
+### Fixed
+
+- Made generic-poster and deleted-item-cache fingerprinting independent of the
+  optional PowerShell `Get-FileHash` cmdlet, preserving exact artwork recovery
+  across supported Windows and container runtimes.
+
 ## [0.12.7] - 2026-08-15
 
 ### Fixed

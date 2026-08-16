@@ -253,6 +253,15 @@
 
       <section class="view" id="view-about" data-panel="about" hidden>
         <div class="page-heading"><div><span class="eyebrow">Manager settings</span><h1>Local access, your way.</h1><p>Windows trusts this computer by default. Add a password lock when the extra boundary is useful, without making first-run setup depend on a one-time token.</p></div></div>
+        <section class="startup-settings-panel" id="startup-settings-panel" aria-labelledby="startup-settings-heading" hidden>
+          <div class="access-settings-heading"><div><span class="eyebrow">Windows sign-in</span><h2 id="startup-settings-heading">Manager startup</h2><p>Keep the local Manager available from the notification area without changing the independent newsletter schedule.</p></div><span class="state-chip pending" id="startup-settings-chip">Checking</span></div>
+          <div class="startup-settings-controls" id="startup-settings-controls">
+            <label class="startup-setting" for="startup-manager"><span><strong>Start Manager when I sign in</strong><small>Starts silently for this Windows user and keeps the TautWeekly icon in the notification area.</small></span><span class="config-toggle"><input id="startup-manager" name="startManager" type="checkbox"><span aria-hidden="true"></span><em>Off</em></span></label>
+            <label class="startup-setting dependent" for="startup-dashboard"><span><strong>Open Dashboard after sign-in</strong><small id="startup-dashboard-help">Available after Manager startup is turned on. Opens the default browser once the background Manager is ready.</small></span><span class="config-toggle"><input id="startup-dashboard" name="openDashboard" type="checkbox" disabled aria-describedby="startup-dashboard-help"><span aria-hidden="true"></span><em>Off</em></span></label>
+            <div class="startup-settings-actions"><p class="verification-message" id="startup-settings-message" role="status" aria-live="polite"></p></div>
+          </div>
+          <p class="startup-boundary"><strong>Closing the Manager is separate from newsletter delivery.</strong> Exit TautWeekly for Plex removes only the tray icon and local Dashboard server. It does not disable the weekly Windows Scheduled Task or cancel a newsletter delivery already running.</p>
+        </section>
         <section class="access-settings-panel" id="access-settings-panel" aria-labelledby="access-settings-heading">
           <div class="access-settings-heading"><div><span class="eyebrow">Optional Manager lock</span><h2 id="access-settings-heading">Browser access</h2><p id="access-settings-copy">Checking the local access policy.</p></div><span class="state-chip pending" id="access-settings-chip">Checking</span></div>
           <form class="access-password-form" id="access-password-form">

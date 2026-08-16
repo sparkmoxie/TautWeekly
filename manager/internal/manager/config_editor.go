@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 const missingConfigRevision = "missing"
@@ -99,6 +101,7 @@ func integerBounds(minimum, maximum int64) (*int64, *int64) {
 func configDefinitions() []configDefinition {
 	portMin, portMax := integerBounds(1, 65535)
 	_, shortMax := integerBounds(0, 300)
+	_, buttonLabelMax := integerBounds(0, 64)
 	_, daysMax := integerBounds(1, 3650)
 	percentMin, percentMax := integerBounds(1, 100)
 	episodeMin, episodeMax := integerBounds(0, 86400)
@@ -111,7 +114,8 @@ func configDefinitions() []configDefinition {
 		{Name: "ApiKey", Label: "Tautulli API key", Group: "Connections", Type: "secret", Required: true, Help: "Leave blank to preserve the stored key. Revealing it requires your Manager password and clears automatically."},
 		{Name: "PlexServerUrl", Label: "Direct Plex server URL", Group: "Connections", Type: "url", Help: "Recommended for complete ratings, exact-episode metadata, backgrounds, and selected logos. Must be reachable from this Windows host.", Placeholder: "http://plex.example.test:32400", Default: ""},
 		{Name: "PlexToken", Label: "Plex token", Group: "Connections", Type: "secret", Help: "Recommended with the direct Plex URL. Leave blank to preserve it. On a same-PC Windows Plex installation, the runtime token can be used without copying it into config.json."},
-		{Name: "PlexWebUrl", Label: "Open Plex button URL", Group: "Identity", Type: "url", Required: true, Default: "https://app.plex.tv/desktop/"},
+		{Name: "PlexWebUrl", Label: "Open Plex button URL or custom link", Group: "Identity", Type: "url", Required: true, Default: "https://app.plex.tv/desktop/"},
+		{Name: "PlexButtonLabel", Label: "Button label", Group: "Identity", Type: "text", Required: true, Default: "Open Plex", Max: buttonLabelMax},
 		{Name: "ServerLabel", Label: "Header label", Group: "Identity", Type: "text", Required: true, Default: "PLEX"},
 		{Name: "FooterServerName", Label: "Server display name", Group: "Identity", Type: "text", Required: true, Default: "My Plex"},
 		{Name: "FromName", Label: "From display name", Group: "Email", Type: "text", Required: true, Default: "TautWeekly for Plex"},
@@ -459,6 +463,14 @@ func parseAndValidateConfigValue(raw json.RawMessage, definition configDefinitio
 		}
 		if definition.Type == "url" && text != "" && !validHTTPURL(text) {
 			return nil, "Enter a complete http:// or https:// URL."
+		}
+		if definition.Name == "PlexButtonLabel" {
+			if strings.IndexFunc(text, unicode.IsControl) >= 0 {
+				return nil, "Use a single line without control characters."
+			}
+			if definition.Max != nil && int64(utf8.RuneCountInString(text)) > *definition.Max {
+				return nil, fmt.Sprintf("Use %d characters or fewer.", *definition.Max)
+			}
 		}
 		if definition.Name == "SmtpHost" && text != "" && !validSMTPHost(text) {
 			return nil, "Enter a hostname only, such as smtp.gmail.com; do not include smtp:// or a port."

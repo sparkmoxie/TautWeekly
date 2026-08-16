@@ -48,6 +48,17 @@ function Write-UpdateResult {
     [IO.File]::WriteAllText($resolvedResultPath, $json, [Text.UTF8Encoding]::new($false))
 }
 
+# Preflight failures happen before the mutation/rollback try block below. Keep
+# those failures machine-readable so Setup can report the actual guarded reason
+# instead of a generic child-process exit.
+trap {
+    $script:Result.Status = 'failed'
+    $script:Result.Message = $_.Exception.Message
+    try { Write-UpdateResult } catch { }
+    Write-Error $_
+    exit 1
+}
+
 function Get-SafeRelativePath {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -70,6 +81,19 @@ function Get-SafeRelativePath {
         throw "Release path escapes the installation directory: $RelativePath"
     }
     return $full
+}
+
+function Get-Sha256Hex {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $stream = [IO.File]::OpenRead($Path)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+        $stream.Dispose()
+    }
 }
 
 function Assert-PackageOwnedPath {
@@ -144,7 +168,7 @@ function Assert-ManifestFiles {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
             throw "Release file is missing: $($entry.RelativePath)"
         }
-        $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actual = Get-Sha256Hex -Path $path
         if ($actual -ne $entry.Hash) {
             throw "Release file hash mismatch: $($entry.RelativePath)"
         }
@@ -270,6 +294,33 @@ function Get-InstalledManagerProcesses {
         try { [IO.Path]::GetFullPath([string]$_.Path) -ieq $expected }
         catch { $false }
     })
+}
+
+function Stop-InstalledManager {
+    $managerProcesses = @(Get-InstalledManagerProcesses)
+    if ($managerProcesses.Count -eq 0) { return $false }
+    $managerPath = Join-Path $InstallRoot 'tautweekly-manager.exe'
+    try {
+        & $managerPath shutdown --listen=127.0.0.1:8788 "--tautweekly-root=$InstallRoot" 2>$null
+    }
+    catch { }
+    $deadline = (Get-Date).AddSeconds(10)
+    foreach ($managerProcess in $managerProcesses) {
+        $remaining = [Math]::Max(0, [int]($deadline - (Get-Date)).TotalMilliseconds)
+        if (-not $managerProcess.HasExited -and $remaining -gt 0) {
+            [void]$managerProcess.WaitForExit($remaining)
+        }
+    }
+    $remainingProcesses = @(Get-InstalledManagerProcesses)
+    foreach ($managerProcess in $remainingProcesses) {
+        Stop-Process -Id $managerProcess.Id -Force -ErrorAction Stop
+    }
+    foreach ($managerProcess in $remainingProcesses) {
+        if (-not $managerProcess.WaitForExit(10000)) {
+            throw 'The exact packaged Manager process did not stop for the update.'
+        }
+    }
+    return $true
 }
 
 function Start-InstalledManager {
@@ -398,18 +449,7 @@ $managerRestarted = $false
 try {
     $operationLock = Enter-TautWeeklyOperationLock -Root $InstallRoot -Purpose "update to $TargetVersion"
 
-    $managerProcesses = @(Get-InstalledManagerProcesses)
-    if ($managerProcesses.Count -gt 0) {
-        $managerWasRunning = $true
-        foreach ($managerProcess in $managerProcesses) {
-            Stop-Process -Id $managerProcess.Id -Force
-        }
-        foreach ($managerProcess in $managerProcesses) {
-            if (-not $managerProcess.WaitForExit(10000)) {
-                throw 'The exact packaged Manager process did not stop for the update.'
-            }
-        }
-    }
+    $managerWasRunning = Stop-InstalledManager
 
     $task = if ($InstallerTestMode) { $null } else { Get-ScheduledNewsletterTask }
     if ($null -ne $task) {
@@ -446,7 +486,7 @@ try {
             if ($candidateManifest.Contains($entry.RelativePath.ToLowerInvariant())) { return $false }
             $existingPath = Get-SafeRelativePath -Root $InstallRoot -RelativePath $entry.RelativePath
             if (-not (Test-Path -LiteralPath $existingPath -PathType Leaf)) { return $false }
-            $existingHash = (Get-FileHash -LiteralPath $existingPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $existingHash = Get-Sha256Hex -Path $existingPath
             return $existingHash -eq $entry.Hash
         } | ForEach-Object { $_.RelativePath })
         Remove-OwnedFiles -RelativePaths $deprecated -Root $InstallRoot

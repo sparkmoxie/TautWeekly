@@ -23,6 +23,10 @@ const state = {
   scheduleOperation: null,
   schedulePendingAction: "",
   scheduleStarting: false,
+  startup: null,
+  startupDraft: null,
+  startupSaving: false,
+  startupError: "",
   authAccess: null,
   about: null,
   diagnostics: { events: [], maximumEntries: 200, retentionDays: 30 },
@@ -202,7 +206,7 @@ async function enterApplication(preferredView = "") {
 async function loadAll() {
   setGlobalStatus("Refreshing local status…");
   try {
-    const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, authAccess, about, diagnostics] = await Promise.all([
+    const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, startup, authAccess, about, diagnostics] = await Promise.all([
       request("/api/v1/status"),
       request("/api/v1/config"),
       request("/api/v1/config/editor"),
@@ -214,6 +218,7 @@ async function loadAll() {
       request("/api/v1/operations/current"),
       request("/api/v1/history"),
       request("/api/v1/schedule/operation"),
+      request("/api/v1/startup"),
       request("/api/v1/auth/access"),
       request("/api/v1/about"),
       request("/api/v1/diagnostics"),
@@ -229,6 +234,9 @@ async function loadAll() {
     state.operation = operation.current || null;
     state.history = history.operations || [];
     state.scheduleOperation = scheduleOperation.current || null;
+    state.startup = startup;
+    state.startupDraft = null;
+    state.startupError = "";
     state.authAccess = authAccess;
     state.about = about;
     state.diagnostics = diagnostics;
@@ -241,6 +249,7 @@ async function loadAll() {
     renderPreviews();
     renderOperations();
     renderSchedule();
+    renderStartupSettings();
     renderAccessSettings();
     renderAbout();
     manageOperationPolling();
@@ -977,6 +986,7 @@ function createConfigControl(field) {
     } else if (field.type === "string-list" || field.type === "email-list") {
       input.value = Array.isArray(field.value) ? field.value.join(", ") : "";
     } else if (field.type !== "secret") {
+      if (field.max !== undefined) input.maxLength = Number(field.max);
       input.value = field.value ?? "";
     }
     if (field.type === "secret") {
@@ -2190,6 +2200,66 @@ async function pollScheduleOperation() {
   }
 }
 
+function renderStartupSettings() {
+  const startup = state.startup || { supported: false, state: "unsupported" };
+  const panel = byId("startup-settings-panel");
+  panel.hidden = !startup.supported;
+  if (!startup.supported) return;
+  const managerToggle = byId("startup-manager");
+  const dashboardToggle = byId("startup-dashboard");
+  const unavailable = ["conflict", "unavailable"].includes(startup.state);
+  const selection = state.startupDraft || startup;
+  managerToggle.checked = Boolean(selection.startManager);
+  dashboardToggle.checked = Boolean(selection.openDashboard && selection.startManager);
+  if (!managerToggle.checked) dashboardToggle.checked = false;
+  managerToggle.disabled = state.startupSaving || unavailable;
+  dashboardToggle.disabled = state.startupSaving || unavailable || !managerToggle.checked;
+  panel.setAttribute("aria-busy", String(state.startupSaving));
+  managerToggle.closest(".config-toggle").querySelector("em").textContent = managerToggle.checked ? "On" : "Off";
+  dashboardToggle.closest(".config-toggle").querySelector("em").textContent = dashboardToggle.checked ? "On" : "Off";
+  const dependent = dashboardToggle.closest(".startup-setting");
+  dependent.classList.toggle("disabled", unavailable || !managerToggle.checked);
+  const savedManagerEnabled = Boolean(startup.startManager);
+  const label = startup.state === "conflict" ? "Needs review" : startup.state === "unavailable" ? "Unavailable" : savedManagerEnabled ? "Enabled" : "Disabled";
+  const tone = startup.state === "conflict" || startup.state === "unavailable" ? "bad" : savedManagerEnabled ? "good" : "neutral";
+  setChip("startup-settings-chip", label, tone);
+  const message = byId("startup-settings-message");
+  if (state.startupError) message.textContent = state.startupError;
+  else if (startup.state === "conflict") message.textContent = "A same-named Windows sign-in entry does not match this installation. It was left unchanged.";
+  else if (startup.state === "unavailable") message.textContent = "Windows sign-in startup status could not be read safely.";
+  else if (startup.startManager && startup.openDashboard) message.textContent = "The Manager starts silently at sign-in, then opens the Dashboard once it is ready.";
+  else if (startup.startManager) message.textContent = "The Manager starts silently in the notification area at sign-in.";
+  else message.textContent = "The Manager starts only when you open it.";
+}
+
+async function startupSettingsChanged() {
+  if (state.startupSaving) return;
+  const managerToggle = byId("startup-manager");
+  const dashboardToggle = byId("startup-dashboard");
+  if (!managerToggle.checked) dashboardToggle.checked = false;
+  const requested = {
+    startManager: managerToggle.checked,
+    openDashboard: dashboardToggle.checked,
+  };
+  state.startupDraft = requested;
+  state.startupSaving = true;
+  state.startupError = "";
+  renderStartupSettings();
+  try {
+    state.startup = await request("/api/v1/startup", {
+      method: "PUT",
+      body: JSON.stringify(requested),
+    });
+    setGlobalStatus("Windows sign-in settings saved.", true);
+  } catch (error) {
+    state.startupError = error.message;
+  } finally {
+    state.startupDraft = null;
+    state.startupSaving = false;
+    renderStartupSettings();
+  }
+}
+
 function renderAccessSettings() {
   const access = state.authAccess || {};
   const locked = Boolean(access.authenticationRequired);
@@ -2444,8 +2514,23 @@ function createMaterialIcon(name) {
 function setChip(id, text, tone, iconName = "") {
   const chip = byId(id);
   const resolvedTone = tone || "neutral";
-  if (iconName) chip.replaceChildren(createMaterialIcon(iconName), document.createTextNode(text));
-  else chip.textContent = text;
+  let label = chip.querySelector(".state-chip-label");
+  if (!label) {
+    label = document.createElement("span");
+    label.className = "state-chip-label";
+    label.textContent = chip.textContent;
+    chip.replaceChildren(label);
+  }
+  const currentIcon = chip.querySelector(":scope > .ui-icon");
+  if (iconName && (!currentIcon || chip.dataset.iconName !== iconName)) {
+    const nextIcon = createMaterialIcon(iconName);
+    if (currentIcon) currentIcon.replaceWith(nextIcon);
+    else chip.insertBefore(nextIcon, label);
+  } else if (!iconName && currentIcon) {
+    currentIcon.remove();
+  }
+  chip.dataset.iconName = iconName;
+  setSwappingElementText(label, text);
   chip.className = `state-chip ${resolvedTone}`;
   const card = chip.closest(".health-card,.operation-strip,.current-operation,.setup-workflow-steps article,.setup-workflow");
   if (card) {
@@ -2580,6 +2665,8 @@ byId("schedule-confirm").addEventListener("change", renderSchedule);
 byId("schedule-confirm-cancel").addEventListener("click", cancelScheduleConfirmation);
 byId("schedule-confirm-run").addEventListener("click", startScheduleOperation);
 document.querySelectorAll("[data-schedule-action]").forEach((button) => button.addEventListener("click", () => chooseScheduleAction(button.dataset.scheduleAction)));
+byId("startup-manager").addEventListener("change", startupSettingsChanged);
+byId("startup-dashboard").addEventListener("change", startupSettingsChanged);
 byId("logout-button").addEventListener("click", logout);
 byId("refresh-button").addEventListener("click", loadAll);
 byId("access-status-button").addEventListener("click", openAccessSettings);

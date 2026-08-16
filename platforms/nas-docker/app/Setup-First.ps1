@@ -201,7 +201,8 @@ catch {
 
 $serverName = Read-Default "Plex server/newsletter display name" "My Plex"
 $serverLabel = Read-Default "Small header label" "PLEX"
-$plexWebUrl = Read-Default "Open Plex button URL" "https://app.plex.tv/desktop/"
+$plexWebUrl = Read-Default "Open Plex button URL or custom link" "https://app.plex.tv/desktop/"
+$plexButtonLabel = Read-Default "Button label" "Open Plex"
 
 Write-Host ""
 Write-Host "Recommended direct Plex connection" -ForegroundColor Cyan
@@ -267,6 +268,7 @@ $config = [ordered]@{
     ServerLabel = $serverLabel
     FooterServerName = $serverName
     PlexWebUrl = $plexWebUrl
+    PlexButtonLabel = $plexButtonLabel
     PlexServerUrl = $plexServerUrl
     PlexToken = $plexToken
     FromName = $fromName

@@ -12,7 +12,8 @@ setup is preferred.
 |---|---:|---|
 | `TautulliUrl` | Yes | Base URL reachable from the TautWeekly for Plex runtime, such as `http://media.example.test:8181` |
 | `ApiKey` | Yes | Tautulli API key; treat as a secret |
-| `PlexWebUrl` | Yes | Destination for “Open Plex” links; defaults to the Plex web app |
+| `PlexWebUrl` | Yes | Destination for the newsletter button; defaults to the Plex web app and may point to a custom service such as Seer |
+| `PlexButtonLabel` | No | Newsletter button text; missing or blank values safely default to `Open Plex` |
 | `PlexServerUrl` | No; recommended | Direct Plex base URL reachable from the TautWeekly runtime for the complete alternate rating set, exact-episode metadata, backgrounds, and selected logos; a separate container must not use its own localhost |
 | `PlexToken` | No; recommended | Administrator/server Plex token for direct Plex access and exact-GUID deleted-item recovery; treat as a secret |
 

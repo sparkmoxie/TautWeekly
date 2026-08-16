@@ -35,6 +35,7 @@ type options struct {
 	installDir         string
 	installDirExplicit bool
 	dataDir            string
+	dataDirExplicit    bool
 	logPath            string
 }
 
@@ -69,6 +70,13 @@ func run(args []string) error {
 			return nil
 		}
 		opts.installDir = selected
+		if !opts.dataDirExplicit {
+			dataDir, err := automaticDataDirectory(opts.installDir)
+			if err != nil {
+				return err
+			}
+			opts.dataDir = dataDir
+		}
 		if err := normalizeAndValidatePaths(&opts); err != nil {
 			return err
 		}
@@ -146,6 +154,7 @@ func hasArgument(args []string, wanted string) bool {
 func parseOptions(args []string) (options, error) {
 	var opts options
 	opts.installDirExplicit = hasOption(args, "--install-dir")
+	opts.dataDirExplicit = hasOption(args, "--data-dir")
 	flags := flag.NewFlagSet("TautWeekly-Setup", flag.ContinueOnError)
 	flags.BoolVar(&opts.uninstall, "uninstall", false, "remove installed application files and shortcuts")
 	flags.BoolVar(&opts.testMode, "test-mode", false, "skip registry, shortcuts, and process launch")
@@ -184,16 +193,11 @@ func parseOptions(args []string) (options, error) {
 		}
 	}
 	if opts.dataDir == "" {
-		if uninstallerOnly {
-			storedDataDir, err := installedDataDirectory(opts.installDir)
-			if err != nil {
-				return options{}, err
-			}
-			opts.dataDir = storedDataDir
+		resolvedDataDir, err := automaticDataDirectory(opts.installDir)
+		if err != nil {
+			return options{}, err
 		}
-		if opts.dataDir == "" {
-			opts.dataDir = filepath.Join(localAppData, installFolderName, "data")
-		}
+		opts.dataDir = resolvedDataDir
 	}
 	if opts.logPath == "" {
 		opts.logPath = filepath.Join(localAppData, installFolderName, "installer.log")
@@ -209,6 +213,27 @@ func parseOptions(args []string) (options, error) {
 		return options{}, err
 	}
 	return opts, nil
+}
+
+func automaticDataDirectory(installDir string) (string, error) {
+	storedDataDir, err := installedDataDirectory(installDir)
+	if err != nil {
+		return "", err
+	}
+	if storedDataDir != "" {
+		if !filepath.IsAbs(storedDataDir) {
+			return "", errors.New("installed private data-directory metadata must be an absolute path")
+		}
+		return storedDataDir, nil
+	}
+	localAppData := os.Getenv("LOCALAPPDATA")
+	if localAppData == "" {
+		localAppData, err = os.UserConfigDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve local application data: %w", err)
+		}
+	}
+	return filepath.Join(localAppData, installFolderName, "data"), nil
 }
 
 func hasOption(args []string, wanted string) bool {
@@ -275,6 +300,10 @@ func newLogger(path string) (*log.Logger, func(), error) {
 
 func install(opts options, logger *log.Logger) error {
 	logger.Printf("install start version=%s test=%t", version, opts.testMode)
+	startupPreference, err := captureManagerStartup(opts.testMode)
+	if err != nil {
+		return err
+	}
 	if err := verifyPayload(); err != nil {
 		return err
 	}
@@ -355,6 +384,9 @@ func install(opts options, logger *log.Logger) error {
 			return err
 		}
 	}
+	if err := reconcileManagerStartup(startupPreference, opts, opts.testMode); err != nil {
+		return err
+	}
 	logger.Printf("install complete version=%s", version)
 	if managerWasRunning && opts.noLaunch && !opts.testMode {
 		if err := startDetached(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir); err != nil {
@@ -415,6 +447,10 @@ func verifiedPortableApplication(root string) bool {
 
 func uninstall(opts options, logger *log.Logger) error {
 	logger.Printf("uninstall start test=%t", opts.testMode)
+	startupPreference, err := captureManagerStartup(opts.testMode)
+	if err != nil {
+		return err
+	}
 	if err := removeInstalledSchedule(opts.installDir, opts.testMode); err != nil {
 		return err
 	}
@@ -422,11 +458,17 @@ func uninstall(opts options, logger *log.Logger) error {
 	if err != nil {
 		return err
 	}
+	if err := removeManagerStartup(opts.installDir, opts.testMode); err != nil {
+		return err
+	}
 	if !opts.testMode {
 		_ = removeShortcuts()
 		_ = unregisterUninstaller()
 	}
 	if err := removeOwnedInstall(opts.installDir); err != nil {
+		if startupPreference.Enabled && samePath(startupPreference.InstallRoot, opts.installDir) {
+			_ = reconcileManagerStartup(startupPreference, opts, opts.testMode)
+		}
 		if managerWasRunning {
 			_ = startDetached(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir)
 		}

@@ -515,9 +515,9 @@ func stopInstalledManager(root string, testMode bool) (bool, error) {
 		}
 		return false, err
 	}
-	script := `$expected=[IO.Path]::GetFullPath($env:TAUTWEEKLY_MANAGER_PATH);$found=@(Get-Process -Name 'tautweekly-manager' -ErrorAction SilentlyContinue|Where-Object{try{[IO.Path]::GetFullPath([string]$_.Path)-ieq $expected}catch{$false}});foreach($process in $found){Stop-Process -Id $process.Id -Force -ErrorAction Stop};if($found.Count -gt 0){'stopped'}`
+	script := `$expected=[IO.Path]::GetFullPath($env:TAUTWEEKLY_MANAGER_PATH);$root=[IO.Path]::GetFullPath($env:TAUTWEEKLY_MANAGER_ROOT);$find={@(Get-Process -Name 'tautweekly-manager' -ErrorAction SilentlyContinue|Where-Object{try{[IO.Path]::GetFullPath([string]$_.Path)-ieq $expected}catch{$false}})};$found=@(&$find);if($found.Count-gt 0){try{& $expected shutdown --listen=127.0.0.1:8788 "--tautweekly-root=$root" 2>$null}catch{};$deadline=(Get-Date).AddSeconds(10);foreach($process in $found){$remaining=[Math]::Max(0,[int]($deadline-(Get-Date)).TotalMilliseconds);if((-not $process.HasExited)-and($remaining-gt 0)){[void]$process.WaitForExit($remaining)}};$remaining=@(&$find);foreach($process in $remaining){Stop-Process -Id $process.Id -Force -ErrorAction Stop};foreach($process in $remaining){if(-not $process.WaitForExit(10000)){throw 'Manager did not exit'}};'stopped'}`
 	command := hiddenCommand("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
-	command.Env = append(os.Environ(), "TAUTWEEKLY_MANAGER_PATH="+manager)
+	command.Env = append(os.Environ(), "TAUTWEEKLY_MANAGER_PATH="+manager, "TAUTWEEKLY_MANAGER_ROOT="+root)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return false, fmt.Errorf("stop the installed Manager before upgrade: %w: %s", err, output)

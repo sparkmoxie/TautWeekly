@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sparkmoxie/TautWeekly/manager/internal/manager"
@@ -37,16 +39,32 @@ func run(args []string) error {
 	switch command {
 	case "serve":
 		return serve(args)
+	case "open":
+		return openManager(args)
 	case "access-reset":
 		return resetAccess(args)
 	case "status":
 		return printStatus(args)
+	case "shutdown":
+		return shutdownManager(args)
 	case "version":
 		fmt.Printf("TautWeekly Manager %s\n", version)
 		return nil
 	default:
-		return fmt.Errorf("unknown command %q; use serve, access-reset, status, or version", command)
+		return fmt.Errorf("unknown command %q; use serve, open, access-reset, status, shutdown, or version", command)
 	}
+}
+
+func openManager(args []string) error {
+	flags := flag.NewFlagSet("open", flag.ContinueOnError)
+	listen := flags.String("listen", "127.0.0.1:8788", "loopback address for the local manager")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if err := requireLoopback(*listen); err != nil {
+		return err
+	}
+	return waitForExistingManager(*listen)
 }
 
 func serve(args []string) error {
@@ -67,6 +85,14 @@ func serve(args []string) error {
 	if err := requireLoopback(*listen); err != nil {
 		return err
 	}
+	instance, primary, err := acquireManagerInstance(*listen, *rootDir)
+	if err != nil {
+		return err
+	}
+	if !primary {
+		return waitForExistingManager(*listen)
+	}
+	defer instance.Close()
 	listener, err := net.Listen("tcp", *listen)
 	if err != nil {
 		return fmt.Errorf("listen on local Manager address: %w", err)
@@ -91,11 +117,6 @@ func serve(args []string) error {
 		log.Printf("The pairing token is local, one-time, and invalidated after setup.")
 	}
 	log.Printf("TautWeekly Manager %s listening on http://%s", version, *listen)
-	if *openBrowserOnStart {
-		if err := openLocalBrowser(startURL); err != nil {
-			log.Printf("WARNING: the local browser could not be opened automatically: %v", err)
-		}
-	}
 
 	httpServer := &http.Server{
 		Addr:              *listen,
@@ -105,11 +126,124 @@ func serve(args []string) error {
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	err = httpServer.Serve(listener)
+	var shutdownOnce sync.Once
+	requestShutdown := func() {
+		shutdownOnce.Do(func() {
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := httpServer.Shutdown(ctx); err != nil {
+					_ = httpServer.Close()
+				}
+			}()
+		})
+	}
+	if shutdownRequested := instance.ShutdownRequested(); shutdownRequested != nil {
+		go func() {
+			<-shutdownRequested
+			requestShutdown()
+		}()
+	}
+	tray, err := startManagerTray(trayOptions{
+		IconPath: filepath.Join(*rootDir, "TautWeekly.ico"),
+		Status: func(ctx context.Context) trayHealth {
+			snapshot := manager.CollectStatus(ctx, manager.Options{
+				TautWeeklyRoot: *rootDir,
+				DataDir:        *dataDir,
+				Version:        version,
+			})
+			return trayHealthFromOverall(snapshot.Overall)
+		},
+		Open: func() {
+			if err := openLocalBrowser(startURL); err != nil {
+				log.Printf("WARNING: the local browser could not be opened from the notification area: %v", err)
+			}
+		},
+		Exit: requestShutdown,
+	})
+	if err != nil {
+		_ = listener.Close()
+		return err
+	}
+	defer func() {
+		if err := tray.Close(); err != nil {
+			log.Printf("WARNING: %v", err)
+		}
+	}()
+	if *openBrowserOnStart {
+		serveResult := make(chan error, 1)
+		go func() { serveResult <- httpServer.Serve(listener) }()
+		if err := waitForManagerLiveness(*listen, 10*time.Second); err != nil {
+			requestShutdown()
+			<-serveResult
+			return err
+		}
+		if err := openLocalBrowser(startURL); err != nil {
+			log.Printf("WARNING: the local browser could not be opened automatically: %v", err)
+		}
+		err = <-serveResult
+	} else {
+		err = httpServer.Serve(listener)
+	}
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
 	return err
+}
+
+func waitForExistingManager(address string) error {
+	if err := waitForManagerLiveness(address, 10*time.Second); err != nil {
+		return errors.New("the existing TautWeekly Manager did not become ready within 10 seconds")
+	}
+	return openLocalBrowser(localManagerURL(address, ""))
+}
+
+func waitForManagerLiveness(address string, wait time.Duration) error {
+	target := url.URL{Scheme: "http", Host: address, Path: "/health/live"}
+	transport := &http.Transport{Proxy: nil}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{
+		Timeout:   2 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return errors.New("local Manager liveness redirected unexpectedly")
+		},
+	}
+	deadline := time.Now().Add(wait)
+	for {
+		response, err := client.Get(target.String())
+		if err == nil {
+			var health struct {
+				Status string `json:"status"`
+			}
+			decodeErr := json.NewDecoder(io.LimitReader(response.Body, 4096)).Decode(&health)
+			_ = response.Body.Close()
+			if response.StatusCode == http.StatusOK && decodeErr == nil && health.Status == "alive" {
+				return nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return errors.New("the TautWeekly Manager did not become ready before the local startup deadline")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+func shutdownManager(args []string) error {
+	root, err := defaultTautWeeklyRoot()
+	if err != nil {
+		return err
+	}
+	flags := flag.NewFlagSet("shutdown", flag.ContinueOnError)
+	listen := flags.String("listen", "127.0.0.1:8788", "loopback address for the local manager")
+	rootDir := flags.String("tautweekly-root", root, "TautWeekly Windows package directory")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if err := requireLoopback(*listen); err != nil {
+		return err
+	}
+	return signalManagerShutdown(*listen, *rootDir)
 }
 
 func resetAccess(args []string) error {

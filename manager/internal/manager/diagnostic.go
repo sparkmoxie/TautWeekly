@@ -60,6 +60,13 @@ var diagnosticSummaries = map[string]string{
 	"discovery-config-changed":         "Configuration changed while Tautulli choices were loading.",
 	"discovery-cache-failed":           "Tautulli choices loaded, but their local cache could not be updated.",
 	"discovery-completed":              "Tautulli library and user choices were loaded and retained locally.",
+	"startup-request-invalid":          "The Manager rejected an invalid sign-in startup request.",
+	"startup-unsupported":              "Manager sign-in startup is unavailable on this platform.",
+	"startup-entry-conflict":           "A same-named Windows sign-in entry was not owned by this TautWeekly installation and was left unchanged.",
+	"startup-update-failed":            "Windows could not save the requested Manager sign-in settings.",
+	"startup-disabled":                 "Manager sign-in startup was disabled for the current Windows user.",
+	"startup-enabled":                  "Manager sign-in startup was enabled for the current Windows user.",
+	"startup-enabled-dashboard":        "Manager sign-in startup and one-time Dashboard opening were enabled for the current Windows user.",
 }
 
 type DiagnosticEvent struct {
@@ -191,7 +198,7 @@ func validDiagnosticEvent(event DiagnosticEvent) bool {
 
 func validDiagnosticArea(area string) bool {
 	switch area {
-	case "configuration", "recovery", "lan-verification", "smtp-preflight", "tautulli-discovery":
+	case "configuration", "recovery", "lan-verification", "smtp-preflight", "tautulli-discovery", "startup":
 		return true
 	default:
 		return false

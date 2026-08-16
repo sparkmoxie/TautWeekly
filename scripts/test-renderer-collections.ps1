@@ -50,6 +50,7 @@ $requiredFunctions = @(
     'Get-PlexWatchBaseUrl',
     'Get-PlexWatchRatings',
     'Get-TautulliDefaultPosterHash',
+    'Get-FileSha256',
     'Get-TautulliUser',
     'Get-TautulliUsers',
     'Safe-Int',
@@ -59,6 +60,7 @@ $requiredFunctions = @(
     'Format-WatchTime',
     'Get-ConfiguredServerName',
     'Get-ConfiguredPlexWebUrl',
+    'Get-ConfiguredPlexButtonLabel',
     'Get-ConfiguredDeliveryDay',
     'Get-UserStats',
     'Add-UserStatsMediaMetadata',
@@ -106,6 +108,8 @@ foreach ($relativePath in $rendererPaths) {
 
         Invoke-Expression $definition.Extent.Text
     }
+
+    Assert-True ((Get-FileSha256 -Path $path) -eq (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash) "$relativePath portable SHA-256 helper disagrees with the platform cmdlet"
 
     # Plex's published metadata contract treats Rating[] as optional. Model a
     # server that returns only the selected IMDb fields by default, but returns
@@ -396,8 +400,19 @@ foreach ($relativePath in $rendererPaths) {
         MinimumEpisodeSeconds = 120
         FooterServerName     = 'Test Plex'
         PlexWebUrl           = 'https://app.plex.tv/'
+        PlexButtonLabel      = 'View & Request'
         ScheduleDay          = 'Friday'
     }
+
+    Assert-True ((Get-ConfiguredPlexButtonLabel) -eq 'View & Request') "$relativePath did not return the configured button label"
+    $configuredValues = $script:Config
+    $script:Config = [PSCustomObject]@{ PlexWebUrl = 'javascript:alert(1)' }
+    Assert-True ((Get-ConfiguredPlexWebUrl) -eq 'https://app.plex.tv/desktop/') "$relativePath accepted a non-HTTP custom button URL"
+    $script:Config = [PSCustomObject]@{ PlexButtonLabel = "  View`r`nRequests  " }
+    Assert-True ((Get-ConfiguredPlexButtonLabel) -eq 'ViewRequests') "$relativePath did not remove control characters from a legacy button label"
+    $script:Config = [PSCustomObject]@{}
+    Assert-True ((Get-ConfiguredPlexButtonLabel) -eq 'Open Plex') "$relativePath did not default a missing button label"
+    $script:Config = $configuredValues
 
     $script:tautulliUserCalls = New-Object System.Collections.Generic.List[string]
     function Invoke-TautulliApi {
@@ -979,6 +994,7 @@ foreach ($relativePath in $rendererPaths) {
         -StartLabel 'August 1' `
         -EndLabel 'August 7'
     Assert-True ($samplePlainText.Contains('movies watched')) "$relativePath could not render empty-history sample movie stats as plain text"
+    Assert-True ($samplePlainText.Contains('View & Request: https://app.plex.tv/')) "$relativePath did not render the custom button label and URL in plain text"
 
     $threeMovies = Get-UserStats -History @(
         $movie,
@@ -1047,6 +1063,8 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($source -match '\$assetUri\.Scheme -ieq \$providerUri\.Scheme') "$relativePath can forward a Plex token across an artwork scheme change"
     Assert-True ($source.Contains('The real email layout, across every state.')) "$relativePath lost the Preview All headline"
     Assert-True ($source.Contains('Go ahead, shrink my window.')) "$relativePath lost the responsive Preview All subtitle"
+    Assert-True ($source.Contains('$(HtmlEncode $plexButtonLabel)</a>')) "$relativePath does not HTML-encode the configured button label"
+    Assert-True ($source -notmatch '>OPEN PLEX</a>') "$relativePath retains a hard-coded HTML button label"
 
     Write-Host "[PASS] Renderer collection edges: $relativePath"
 }
