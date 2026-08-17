@@ -18,11 +18,19 @@ fi
 
 source_root="$(cd "$(dirname "$0")" && pwd)"
 app_source="$source_root/app"
+package_update_source="$source_root/package-update.sh"
 if [[ ! -f "$app_source/TautWeekly.ps1" ]]; then
   app_source="$source_root/../nas-docker/app"
 fi
+if [[ ! -f "$package_update_source" ]]; then
+  package_update_source="$source_root/../shared/package-update.sh"
+fi
 if [[ ! -f "$source_root/check-release.sh" ]]; then
   echo "Release checker not found. Use an official Linux release archive or a complete repository checkout." >&2
+  exit 66
+fi
+if [[ ! -f "$package_update_source" ]]; then
+  echo "Package updater not found. Use an official Linux release archive or a complete repository checkout." >&2
   exit 66
 fi
 if [[ ! -f "$app_source/TautWeekly.ps1" ]]; then
@@ -112,6 +120,7 @@ fi
 
 install -m 0755 -o root -g root "$source_root/tautweekly" /usr/local/bin/tautweekly
 install -m 0755 -o root -g root "$source_root/check-release.sh" /usr/local/libexec/tautweekly-check-release
+install -m 0755 -o root -g root "$package_update_source" /usr/local/libexec/tautweekly-package-update
 install -m 0644 -o root -g root "$source_root/systemd/tautweekly.service" /etc/systemd/system/tautweekly.service
 if [[ ! -f /etc/tautweekly/tautweekly.env ]]; then
   install -m 0600 -o root -g root "$source_root/tautweekly.env.example" /etc/tautweekly/tautweekly.env
@@ -175,3 +184,12 @@ The authenticated Manager service is enabled. Automatic sending remains disabled
 until you explicitly enable it in the Manager. CLI commands remain available as
 documented recovery and expert fallbacks.
 EOF
+
+if [[ -n "${TAUTWEEKLY_PACKAGE_UPDATE_WORK_ROOT:-}" ]]; then
+  work_root="$TAUTWEEKLY_PACKAGE_UPDATE_WORK_ROOT"
+  if [[ -d "$work_root" && "$(basename "$work_root")" == tautweekly-package-update.* ]]; then
+    rm -rf "$work_root"
+  else
+    echo "Refusing to remove an unexpected package staging directory: $work_root" >&2
+  fi
+fi

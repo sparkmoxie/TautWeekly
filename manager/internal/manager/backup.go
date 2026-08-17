@@ -41,6 +41,11 @@ type ConfigRestoreResult struct {
 	Editor       ConfigEditorView `json:"editor"`
 }
 
+type ConfigBackupDeleteResult struct {
+	Deleted bool   `json:"deleted"`
+	ID      string `json:"id"`
+}
+
 func ListConfigBackups(root string) ConfigBackupList {
 	result := ConfigBackupList{Backups: []ConfigBackup{}}
 	entries, err := os.ReadDir(root)
@@ -120,4 +125,24 @@ func RestoreConfigBackup(root, id, expectedRevision string, now func() time.Time
 		SafetyBackup: safetyBackup,
 		Editor:       ReadConfigEditor(root),
 	}, nil, nil
+}
+
+func DeleteConfigBackup(root, id string) (ConfigBackupDeleteResult, error) {
+	if !backupNamePattern.MatchString(id) {
+		return ConfigBackupDeleteResult{}, ErrBackupNotFound
+	}
+	path := filepath.Join(root, id)
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) || err == nil && (!info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0) {
+		return ConfigBackupDeleteResult{}, ErrBackupNotFound
+	}
+	if err != nil {
+		return ConfigBackupDeleteResult{}, fmt.Errorf("inspect configuration backup before delete: %w", err)
+	}
+	if err := os.Remove(path); errors.Is(err, os.ErrNotExist) {
+		return ConfigBackupDeleteResult{}, ErrBackupNotFound
+	} else if err != nil {
+		return ConfigBackupDeleteResult{}, fmt.Errorf("delete configuration backup: %w", err)
+	}
+	return ConfigBackupDeleteResult{Deleted: true, ID: id}, nil
 }

@@ -8,6 +8,11 @@ Manager **Config** is the setup source on Windows, NAS/Docker, macOS Docker
 Desktop, native Linux, and FreeBSD Podman. Terminal setup scripts remain
 expert/recovery fallbacks on those packages.
 
+Manager **Config > Configuration backups** lists private backup metadata, can
+validate/restore one selected backup while first saving the current config, and
+can permanently delete one selected backup only after **Confirm delete**.
+Deletion leaves the live `config.json` unchanged and cannot be undone.
+
 ## Tautulli and Plex
 
 | Key | Required | Purpose |

@@ -5,6 +5,8 @@ cd "$(dirname "$0")"
 image_ref="tautweekly-mac:stable"
 lock_marker="/data/.tautweekly-update-holder"
 lock_container_id=""
+package_backup=""
+package_work_root=""
 
 print_metadata_readiness_note() {
   cat <<'EOF'
@@ -64,6 +66,30 @@ release_operation_lock() {
   lock_container_id=""
 }
 
+safe_remove_package_work_root() {
+  [[ -n "$package_work_root" && -d "$package_work_root" ]] || return 0
+  [[ "$(basename "$package_work_root")" == tautweekly-package-update.* ]] || {
+    echo "Refusing to remove an unexpected package staging directory: $package_work_root" >&2
+    return 1
+  }
+  rm -rf "$package_work_root"
+}
+
+update_exit_handler() {
+  local status=$?
+  release_operation_lock
+  return "$status"
+}
+
+complete_package_update() {
+  if [[ -n "$package_backup" ]]; then
+    safe_remove_package_work_root
+    package_backup=""
+    package_work_root=""
+    echo "macOS package and runtime update committed."
+  fi
+}
+
 acquire_operation_lock() {
   local id
   id="$(container_id)"
@@ -74,7 +100,6 @@ acquire_operation_lock() {
     'echo $$ > /data/.tautweekly-update-holder; trap "rm -f /data/.tautweekly-update-holder" EXIT HUP INT TERM; while :; do sleep 60; done'
   for _ in $(seq 1 20); do
     if compose_cmd exec -T tautweekly test -s "$lock_marker" >/dev/null 2>&1; then
-      trap release_operation_lock EXIT
       return 0
     fi
     sleep 1
@@ -117,12 +142,16 @@ apply_package() {
   candidate_id="$(docker image inspect --format '{{.Id}}' "$candidate")"
   docker image tag "$candidate" "$image_ref"
 
-  if compose_cmd up -d --no-build tautweekly && wait_for_health; then
+  compose_args=(up -d --no-build)
+  [[ -z "$package_backup" ]] || compose_args+=(--force-recreate)
+  compose_args+=(tautweekly)
+  if compose_cmd "${compose_args[@]}" && wait_for_health; then
     running_after="$(running_image_id)"
     after_version="$(image_version "$running_after")"
     if [[ "$running_after" == "$candidate_id" && "$after_version" == "$version" ]]; then
       echo "Applied macOS package version $version; .env and data were preserved."
       print_metadata_readiness_note
+      complete_package_update
       return
     fi
     echo "The running image reports $after_version ($running_after), expected $version ($candidate_id)." >&2
@@ -143,8 +172,22 @@ apply_package() {
   exit 70
 }
 
-case "${1:-apply}" in
-  apply) apply_package ;;
-  check) exec ./check-release.sh "${2:-./RELEASE-METADATA.txt}" ;;
+mode="${1:-apply}"
+shift || true
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --package-backup) package_backup="${2:-}"; shift 2 ;;
+    --package-work-root) package_work_root="${2:-}"; shift 2 ;;
+    *) echo "Unknown update option: $1" >&2; exit 64 ;;
+  esac
+done
+if [[ -n "$package_backup" && -z "$package_work_root" ]] || [[ -z "$package_backup" && -n "$package_work_root" ]]; then
+  echo "Package backup and staging roots must be supplied together." >&2
+  exit 64
+fi
+
+case "$mode" in
+  apply) trap update_exit_handler EXIT; apply_package ;;
+  check) exec ./check-release.sh "${1:-./RELEASE-METADATA.txt}" ;;
   *) echo "Usage: ./mac-update.sh check|apply" >&2; exit 64 ;;
 esac

@@ -75,6 +75,34 @@ func TestRestoreConfigBackupRejectsUnsafeInputs(t *testing.T) {
 	}
 }
 
+func TestDeleteConfigBackupRemovesOnlyValidatedBackupFiles(t *testing.T) {
+	root := t.TempDir()
+	backupID := "config.backup.20310418-163000.000000000Z.json"
+	backupPath := filepath.Join(root, backupID)
+	if err := os.WriteFile(backupPath, []byte(`{"FooterServerName":"Fictional"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := DeleteConfigBackup(root, backupID)
+	if err != nil || !result.Deleted || result.ID != backupID {
+		t.Fatalf("delete backup: result=%+v err=%v", result, err)
+	}
+	if _, err := os.Stat(backupPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("deleted backup is still present: %v", err)
+	}
+	for _, unsafe := range []string{"config.json", `..\config.json`, "config.backup.invalid.json"} {
+		if _, err := DeleteConfigBackup(root, unsafe); !errors.Is(err, ErrBackupNotFound) {
+			t.Fatalf("unsafe delete %q: got %v", unsafe, err)
+		}
+	}
+	directoryID := "config.backup.20310418-163001.000000000Z.json"
+	if err := os.Mkdir(filepath.Join(root, directoryID), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DeleteConfigBackup(root, directoryID); !errors.Is(err, ErrBackupNotFound) {
+		t.Fatalf("directory-shaped backup delete: got %v", err)
+	}
+}
+
 func TestRestoreConfigBackupCanRecoverInvalidCurrentJSON(t *testing.T) {
 	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
 	valid, err := os.ReadFile(filepath.Join(root, "config.json"))

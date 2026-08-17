@@ -1,6 +1,13 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.4.2 Portable
+---------------
+- restores Manager bootstrap and access-recovery commands to the external NAS host wrapper
+- updates the verified release-owned host package and container image together with coordinated rollback
+- marks Unraid host-adapter compatibility so saved templates can be refreshed explicitly
+- adds confirmed per-file deletion for obsolete Manager configuration backups
+
 v1.4.1 Portable
 ---------------
 - makes the authenticated Manager the sole normal setup, verification, preview, TestEmail, and scheduling surface

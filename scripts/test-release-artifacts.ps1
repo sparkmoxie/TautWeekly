@@ -18,6 +18,15 @@ function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 
+function Test-UnixTextReleasePath {
+    param([Parameter(Mandatory = $true)][string]$RelativePath)
+    $normalized = $RelativePath.Replace('\','/')
+    $name = [IO.Path]::GetFileName($normalized)
+    $extension = [IO.Path]::GetExtension($name).ToLowerInvariant()
+    return $extension -in @('.sh','.command','.ps1','.psm1','.yml','.yaml','.json','.md','.html','.css','.js','.py','.txt','.xml','.service','.example') -or
+        $name -in @('Dockerfile','.dockerignore','LICENSE','tautweekly')
+}
+
 function Get-ZipEntrySha256([IO.Compression.ZipArchiveEntry]$Entry) {
     $stream = $Entry.Open()
     $sha = [Security.Cryptography.SHA256]::Create()
@@ -143,6 +152,7 @@ $expected = [ordered]@{
         'TautWeekly-nas-docker/app/product-branding/favicon.ico',
         'TautWeekly-nas-docker/app/product-branding/tautweekly-app-icon-128.png',
         'TautWeekly-nas-docker/tautweekly.sh',
+        'TautWeekly-nas-docker/package-update.sh',
         'TautWeekly-nas-docker/container-update.sh',
         'TautWeekly-nas-docker/compose.yaml',
         'TautWeekly-nas-docker/RELEASE-FILES.txt',
@@ -162,6 +172,7 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/tautweekly.sh',
         'TautWeekly-mac-docker/check-release.sh',
         'TautWeekly-mac-docker/mac-update.sh',
+        'TautWeekly-mac-docker/package-update.sh',
         'TautWeekly-mac-docker/INSTALL-MAC.command',
         'TautWeekly-mac-docker/RELEASE-FILES.txt',
         'TautWeekly-mac-docker/README.md'
@@ -179,6 +190,7 @@ $expected = [ordered]@{
         'TautWeekly-linux/systemd/tautweekly.service',
         'TautWeekly-linux/tautweekly',
         'TautWeekly-linux/check-release.sh',
+        'TautWeekly-linux/package-update.sh',
         'TautWeekly-linux/manager/tautweekly-manager-linux-amd64',
         'TautWeekly-linux/manager/tautweekly-manager-linux-arm64',
         'TautWeekly-linux/RELEASE-METADATA.txt',
@@ -197,6 +209,7 @@ $expected = [ordered]@{
         'TautWeekly-freebsd-podman/install-freebsd.sh',
         'TautWeekly-freebsd-podman/rc.d/tautweekly',
         'TautWeekly-freebsd-podman/tautweekly',
+        'TautWeekly-freebsd-podman/package-update.sh',
         'TautWeekly-freebsd-podman/RELEASE-FILES.txt',
         'TautWeekly-freebsd-podman/README.md'
     )
@@ -521,6 +534,22 @@ foreach ($tarArchive in $tarArchives) {
         $relativeFiles = @($files | ForEach-Object {
             $_.FullName.Substring($packageRoot.Length).TrimStart('\', '/').Replace('\', '/')
         })
+        $unixScripts = @($files | Where-Object {
+            $relativePath = $_.FullName.Substring($packageRoot.Length).TrimStart('\', '/').Replace('\', '/')
+            $relativePath -match '\.sh$' -or $relativePath -match '^(?:rc\.d/)?tautweekly$'
+        })
+        foreach ($unixScript in $unixScripts) {
+            $relativePath = $unixScript.FullName.Substring($packageRoot.Length).TrimStart('\', '/').Replace('\', '/')
+            $scriptBytes = [IO.File]::ReadAllBytes($unixScript.FullName)
+            Assert-True ($scriptBytes.Length -ge 2 -and $scriptBytes[0] -eq 0x23 -and $scriptBytes[1] -eq 0x21) "$($tarArchive.Name) has no shebang for executable script $relativePath."
+            Assert-True (-not ($scriptBytes -contains [byte]0x0d)) "$($tarArchive.Name) contains CRLF bytes in executable script $relativePath."
+        }
+        foreach ($unixTextFile in $files) {
+            $relativePath = $unixTextFile.FullName.Substring($packageRoot.Length).TrimStart('\', '/').Replace('\', '/')
+            if (-not (Test-UnixTextReleasePath -RelativePath $relativePath)) { continue }
+            $textBytes = [IO.File]::ReadAllBytes($unixTextFile.FullName)
+            Assert-True (-not ($textBytes -contains [byte]0x0d)) "$($tarArchive.Name) contains CR bytes in Unix text file $relativePath."
+        }
         $forbidden = @($relativeFiles | Where-Object {
             $name = ($_ -split '/')[-1]
             $name -in $forbiddenNames -or $_ -match '(^|/)(logs|output|cache)/'

@@ -3,6 +3,7 @@ package manager
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -583,6 +584,18 @@ func TestBackupAndRealCheckAPIsAreGuardedAndSanitized(t *testing.T) {
 	}
 	if strings.Contains(restored.Body.String(), "api-secret-never-return") {
 		t.Fatal("backup restore returned a stored API key")
+	}
+
+	deleteWithoutCSRF := requestForTest(server, http.MethodDelete, "/api/v1/config/backups/"+backupID, nil, cookie)
+	if deleteWithoutCSRF.Code != http.StatusForbidden {
+		t.Fatalf("backup delete without CSRF: got %d, want 403", deleteWithoutCSRF.Code)
+	}
+	deleted := mutationRequestForTest(server, http.MethodDelete, "/api/v1/config/backups/"+backupID, nil, cookie, current.CSRFToken)
+	if deleted.Code != http.StatusOK || !strings.Contains(deleted.Body.String(), `"deleted":true`) || !strings.Contains(deleted.Body.String(), backupID) {
+		t.Fatalf("backup delete: got %d, body %s", deleted.Code, deleted.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, backupID)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("backup API did not remove selected file: %v", err)
 	}
 }
 

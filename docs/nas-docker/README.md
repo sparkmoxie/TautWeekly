@@ -116,7 +116,7 @@ then extract one format:
 ```bash
 tar -xzf TautWeekly-nas-docker.tar.gz
 cd TautWeekly-nas-docker
-chmod +x qnap-install.sh tautweekly.sh container-update.sh app/*.sh app/bin/*.sh
+chmod +x qnap-install.sh tautweekly.sh container-update.sh package-update.sh app/*.sh app/bin/*.sh
 ```
 
 For a general Docker host, use the portable Compose workflow:
@@ -393,15 +393,24 @@ For release-archive Compose and QNAP installations, checking and applying are
 separate host actions:
 
 ```bash
-./tautweekly.sh check-update  # pull/stage stable latest; do not restart
+./tautweekly.sh check-update  # compare verified host package and image; do not restart
 ./tautweekly.sh backup        # optional private data backup
-./tautweekly.sh update        # recreate, health/version check, auto-rollback
+./tautweekly.sh update        # verify/sync host package, recreate, health-check, rollback
 ```
+
+`check-update` reads the installed release metadata, checks the latest stable
+GitHub release, validates current release-owned files, and performs only the
+image pull used for a read-only digest comparison. `update` downloads the
+matching TAR package and `SHA256SUMS.txt`, verifies the published SHA-256 and the
+archive's `RELEASE-FILES.txt`, replaces only release-owned host files, and
+preserves `.env`, `data/`, named volumes, and unrelated administrator files.
+It also removes only retired files owned by the prior release manifest.
 
 The update command refuses to start while the application operation lock is
 busy, never deletes `data/`, forces Compose to use the pulled image instead of
-rebuilding bundled source, and restores the prior image automatically when the
-new container fails health verification. The supplied Compose file grants a
+rebuilding bundled source, and restores both the prior host package and image
+automatically when copying, recreation, version, or health verification fails.
+The supplied Compose file grants a
 29-minute delivery drain inside a 30-minute stop grace period: Manager HTTP
 access closes first, then shutdown waits on the shared newsletter operation
 lock before stopping the independent scheduler. A NAS UI or engine that forces
@@ -417,7 +426,19 @@ updates, but unattended application is opt-in. Leave the template on `latest`,
 not `edge`, unless deliberately testing unreleased code. After any update, run
 the Manager verification and controlled preview/TestEmail sequence again. If
 the update addresses missing ratings/artwork or output remains stale, complete
-metadata readiness before those checks.
+metadata readiness before those checks. For an installation saved from an older
+template, open **Docker > TautWeekly for Plex > Edit**, compare/apply the current
+Community Apps template, and confirm its stop timeout, security options, and
+advanced `Host Adapter API` value are present before applying the image update.
+Keep the existing appdata path, port, PUID, PGID, timezone, and Manager policy;
+do not delete or replace appdata during this migration. A startup warning that
+the host adapter is `legacy` means the saved template still needs this refresh.
+
+Manager **Config > Configuration backups** lists metadata only. Every package
+GUI can restore a selected backup or permanently delete one individual backup
+after a separate **Confirm delete** action. Deletion does not change the current
+`config.json`, is authenticated and CSRF-protected, and cannot be undone; keep
+any required private retention copy first.
 
 ### Password recovery
 

@@ -232,7 +232,7 @@ case "$cmd" in
     $was_running && service tautweekly start
     echo "Created private backup: $archive"
     ;;
-  check-update)
+  check-image)
     require_root
     before="$(running_image_id)"
     before_version="$(image_version "$before")"
@@ -251,7 +251,7 @@ case "$cmd" in
       echo "An update is staged. Run sudo tautweekly update to recreate the service."
     fi
     ;;
-  update)
+  update-image)
     require_root
     acquire_operation_lock
     before="$(running_image_id)"
@@ -290,6 +290,17 @@ case "$cmd" in
       echo "Rollback also failed health verification. Previous image ID: $before" >&2
     fi
     exit 70
+    ;;
+  check-update)
+    TAUTWEEKLY_PACKAGE_KIND=freebsd-podman \
+      TAUTWEEKLY_PACKAGE_ROOT=/usr/local/share/tautweekly \
+      exec /usr/local/libexec/tautweekly-package-update check
+    ;;
+  update)
+    require_root
+    TAUTWEEKLY_PACKAGE_KIND=freebsd-podman \
+      TAUTWEEKLY_PACKAGE_ROOT=/usr/local/share/tautweekly \
+      exec /usr/local/libexec/tautweekly-package-update apply
     ;;
   help|*)
     cat <<'EOF'

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
+package_root="$(pwd -P)"
 
 compose_cmd() {
   if docker compose version >/dev/null 2>&1; then docker compose "$@"; return; fi
@@ -19,6 +20,18 @@ confirm() {
   local prompt="$1" answer
   read -r -p "$prompt [y/N]: " answer
   [[ "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]
+}
+
+package_update() {
+  local updater="$package_root/package-update.sh"
+  [[ -f "$updater" ]] || updater="$package_root/../shared/package-update.sh"
+  [[ -f "$updater" ]] || {
+    echo "The host-package updater is missing. Extract a complete verified release archive." >&2
+    exit 66
+  }
+  export TAUTWEEKLY_PACKAGE_KIND=mac-docker
+  export TAUTWEEKLY_PACKAGE_ROOT="$package_root"
+  exec bash "$updater" "$@"
 }
 
 cmd="${1:-help}"; shift || true
@@ -95,8 +108,8 @@ case "$cmd" in
     tar -czf "tautweekly-data-backup-$stamp.tar.gz" data
     echo "Created tautweekly-data-backup-$stamp.tar.gz"
     ;;
-  check-update) exec ./mac-update.sh check ;;
-  update) exec ./mac-update.sh apply ;;
+  check-update) package_update check ;;
+  update) package_update apply ;;
   open-manager|open-preview)
     base_url="http://localhost:8787"
     if [[ -f .env ]]; then

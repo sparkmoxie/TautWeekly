@@ -1,5 +1,10 @@
 TautWeekly for Plex native Linux platform changelog
 
+v1.2.2
+- Adds a verified stable-package updater to the native tautweekly wrapper while preserving /var/lib/tautweekly.
+- Makes the Manager GUI the documented setup source and records the exact check, backup, upgrade, and acceptance flow.
+- Adds confirmed per-file deletion for obsolete Manager configuration backups.
+
 v1.2.1
 - makes the authenticated Manager endpoint and Config workflow explicit in the shipped Linux landing page
 - returns expert setup and verification fallbacks to Manager for normal verification, previews, TestEmail, and scheduling

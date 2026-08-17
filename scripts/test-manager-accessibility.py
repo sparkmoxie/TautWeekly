@@ -284,6 +284,14 @@ def main() -> int:
         failures.append("Manual Welcome lacks selected-user input or shared sanitized status")
     if 'id="direct-plex-notice"' not in combined or "legacyFieldsMissing" not in javascript:
         failures.append("legacy direct Plex omissions have no guided completion message")
+    for marker in (
+        'method: "DELETE"',
+        'setSwappingButtonElementText(deleteButton, "Confirm delete")',
+        'Permanently delete configuration backup from',
+        'Deletion is manual, confirmed, and permanent.',
+    ):
+        if marker not in combined:
+            failures.append(f"configuration backup deletion contract is missing: {marker}")
     if "legacyRuleExcluded" not in javascript or "Excluded by existing config" not in javascript:
         failures.append("legacy email exclusions are not represented in guided delivery choices")
     if 'status.className = changed ? "discovery-selected-count" : "discovery-excluded-count"' not in javascript or "rgba(255,122,114,.48)" not in css:

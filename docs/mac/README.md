@@ -29,7 +29,7 @@ Current source baseline: **1.3.0**.
 4. Open Terminal in the extracted directory and run:
 
 ```bash
-chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh mac-update.sh check-release.sh app/*.sh app/bin/*.sh
+chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh mac-update.sh check-release.sh package-update.sh app/*.sh app/bin/*.sh
 ./mac-install.sh
 ```
 
@@ -159,27 +159,40 @@ filesystem-level backup, stop the service and copy both `.env` and `data/`.
 
 ## Stable update and rollback
 
-`./tautweekly.sh check-update` compares the packaged release metadata with the
-latest stable GitHub release and never applies an update. macOS does not enable
-unattended updates.
+`./tautweekly.sh check-update` compares and verifies the installed package
+against the latest stable GitHub release and never applies or schedules an
+update. macOS does not enable unattended updates.
 
 To upgrade:
 
 1. Run `./tautweekly.sh backup` and keep the previous verified archive.
-2. Download the newer Mac archive and `SHA256SUMS.txt` from the same stable
-   release and verify the checksum.
-3. Extract the new archive over the existing package directory without deleting
-   or replacing `.env` or `data/`.
-4. Run `./tautweekly.sh update`.
-5. Open Manager, sign in again if the service restart invalidated the session,
+2. Run `./tautweekly.sh update`. It downloads the matching stable TAR archive
+   and `SHA256SUMS.txt`, verifies the published checksum and internal
+   `RELEASE-FILES.txt`, and replaces only release-owned files.
+3. Open Manager, sign in again if the service restart invalidated the session,
    and verify the reported version, Manager/scheduler health, Config status,
    all six previews, and controlled TestEmail result.
 
-The updater builds only the verified package on disk, takes the same operation
-lock as the renderer, preserves `.env` and `data/`, verifies the running image
-version and health, and retags/restarts the previous local image automatically
-if the candidate fails. Keep the prior archive and private backup for complete
-file-level rollback.
+The updater takes the same operation lock as the renderer, preserves `.env`,
+`data/`, and unrelated administrator files, removes only retired files owned by
+the previous release manifest, verifies the running image version and health,
+and restores both prior package files and the previous local image automatically
+if the candidate fails. Keep the private data backup for independent recovery.
+
+### One-time update from an image-only host wrapper
+
+Packages at or before v0.14.0 can update the image without replacing the Mac
+host wrapper. If container startup warns that the host adapter is `legacy`,
+download the current stable **Mac Docker** archive and `SHA256SUMS.txt`, verify
+the published checksum, and extract the archive over the existing package
+directory. Do not delete or replace `.env` or `data/`. Then run
+`./tautweekly.sh update`. This one-time overlay installs the verified shared
+package updater; later update commands advance the host files and image
+together and roll both back on a failed health check.
+
+Manager **Config > Configuration backups** can permanently delete one selected
+configuration backup only after **Confirm delete**. This leaves the live
+configuration unchanged and cannot be undone.
 
 ## Password recovery, reinstall, and uninstall
 

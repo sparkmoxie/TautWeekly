@@ -58,7 +58,7 @@ if ([string]$profile.CommunityApplications.Icon -cne $expectedIcon -or [string]$
 }
 
 $configs = @($container.Config)
-$requiredTargets = @('8080','/data','TZ','PUID','PGID','UMASK','TAUTWEEKLY_PREVIEW_BASE_URL','TAUTWEEKLY_MANAGER_ALLOWED_HOSTS','TAUTWEEKLY_MANAGER_SECURE_COOKIES')
+$requiredTargets = @('8080','/data','TZ','PUID','PGID','UMASK','TAUTWEEKLY_PREVIEW_BASE_URL','TAUTWEEKLY_MANAGER_ALLOWED_HOSTS','TAUTWEEKLY_MANAGER_SECURE_COOKIES','TAUTWEEKLY_HOST_ADAPTER_API')
 foreach ($target in $requiredTargets) {
     if (-not ($configs | Where-Object { [string]$_.Target -ceq $target })) {
         Add-Failure "Missing Unraid Config target: $target"

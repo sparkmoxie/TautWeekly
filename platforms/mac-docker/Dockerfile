@@ -5,7 +5,8 @@ ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="TautWeekly for Plex Mac Portable" \
       org.opencontainers.image.version="$BUILD_VERSION" \
-      org.opencontainers.image.description="TautWeekly for Plex newsletter service for Docker Desktop on macOS"
+      org.opencontainers.image.description="TautWeekly for Plex newsletter service for Docker Desktop on macOS" \
+      io.tautweekly.host-adapter-api="2"
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \

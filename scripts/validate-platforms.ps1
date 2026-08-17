@@ -54,6 +54,7 @@ Require-Text 'platforms/linux/install-linux.sh' @(
     '\.tautweekly-operation\.lock',
     'RELEASE-METADATA\.txt',
     'tautweekly-check-release',
+    'tautweekly-package-update',
     'systemctl is-active --quiet tautweekly\.service',
     'tautweekly-manager-linux-\$manager_arch',
     'manager-bootstrap',
@@ -67,7 +68,7 @@ Require-Text 'platforms/linux/check-release.sh' @(
 )
 Require-Text 'platforms/linux/tautweekly' @(
     'check-update',
-    'tautweekly-check-release',
+    'tautweekly-package-update',
     'manager-bootstrap',
     'manager-reset-access',
     'access-recover',
@@ -98,7 +99,8 @@ Require-Text 'platforms/freebsd-podman/rc.d/tautweekly' @(
 )
 Require-Text 'platforms/freebsd-podman/install-freebsd.sh' @(
     'sysrc linux_enable=YES',
-    '/usr/local/sbin/tautweekly update',
+    '/usr/local/sbin/tautweekly update-image',
+    'tautweekly-package-update',
     'Preserved existing /usr/local/etc/tautweekly/tautweekly\.env',
     'manager-bootstrap',
     'one-time pairing token',
@@ -120,6 +122,7 @@ Require-Text 'platforms/freebsd-podman/tautweekly' @(
     'flock -n /data/\.tautweekly-operation\.lock',
     '\.tautweekly-update-holder',
     'pull --os=linux',
+    'TAUTWEEKLY_PACKAGE_KIND=freebsd-podman',
     'Rollback to image version',
     'health verification',
     'run-script\.sh',
@@ -422,7 +425,7 @@ Require-Text 'platforms/nas-docker/tautweekly.sh' @(
     'preview-all USER_ID',
     'numeric value shown by list-users',
     'check-update',
-    'container-update\.sh apply',
+    'package-update\.sh',
     'manager-bootstrap',
     'access-recover',
     'run-script\.sh Verify-Setup\.ps1',
@@ -448,7 +451,8 @@ Require-Text 'platforms/nas-docker/container-update.sh' @(
     'up -d --no-build',
     'wait_for_health',
     'no repository version label',
-    'Restoring the previous image'
+    'Restoring the previous image',
+    'package-backup'
 )
 Forbid-Text 'platforms/nas-docker/compose.yaml' @('image:\s*.*:edge')
 foreach ($relative in @('platforms/nas-docker/compose.yaml', 'platforms/nas-docker/compose.qnap.yaml')) {
@@ -461,7 +465,8 @@ foreach ($relative in @('platforms/nas-docker/compose.yaml', 'platforms/nas-dock
         '- ALL',
         'stop_grace_period: 30m',
         'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
-        'TAUTWEEKLY_MANAGER_SECURE_COOKIES'
+        'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
+        'TAUTWEEKLY_HOST_ADAPTER_API'
     )
 }
 Require-Text 'platforms/nas-docker/Dockerfile' @(
@@ -470,15 +475,18 @@ Require-Text 'platforms/nas-docker/Dockerfile' @(
     'tautweekly-manager',
     'HOME=/tmp/tautweekly/home',
     'XDG_DATA_HOME=/tmp/tautweekly/share',
-    'EXPOSE 8080'
+    'EXPOSE 8080',
+    'io\.tautweekly\.host-adapter-api="2"'
 )
 Require-Text 'platforms/nas-docker/app/entrypoint.sh' @(
     '/tmp/tautweekly/home',
-    '/tmp/tautweekly/share'
+    '/tmp/tautweekly/share',
+    'host adapter API'
 )
 Require-Text 'templates/tautweekly.xml' @(
     '--read-only',
     '--stop-timeout 1800',
+    'TAUTWEEKLY_HOST_ADAPTER_API',
     '--security-opt no-new-privileges:true',
     '--cap-drop ALL'
 )
@@ -494,7 +502,8 @@ Require-Text 'platforms/mac-docker/mac-update.sh' @(
     '\.tautweekly-update-holder',
     'wait_for_health',
     'verified stable release package',
-    'Rollback to macOS image version'
+    'Rollback to macOS image version',
+    'package-backup'
 )
 Require-Text 'platforms/mac-docker/Dockerfile' @(
     'ARG BUILD_VERSION=dev',
@@ -512,7 +521,8 @@ Require-Text 'platforms/mac-docker/compose.yaml' @(
     'no-new-privileges:true',
     'cap_drop:',
     'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
-    'TAUTWEEKLY_MANAGER_SECURE_COOKIES'
+    'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
+    'TAUTWEEKLY_HOST_ADAPTER_API'
 )
 Forbid-Text 'platforms/mac-docker/compose.yaml' @('(?m)^\s*build:')
 Forbid-Text 'platforms/mac-docker/tautweekly.sh' @('docker compose build --pull', 'docker-compose build --pull')
@@ -522,7 +532,16 @@ Require-Text 'platforms/mac-docker/tautweekly.sh' @(
     'manager-bootstrap',
     'manager-reset-access',
     'access-recover',
-    'open-manager'
+    'open-manager',
+    'package-update\.sh'
+)
+Require-Text 'platforms/shared/package-update.sh' @(
+    'SHA256SUMS\.txt',
+    'RELEASE-FILES\.txt',
+    'verify_archive_listing',
+    'protected_runtime_path',
+    'restore_backup',
+    'TAUTWEEKLY_RELEASE_ASSET_DIR'
 )
 Require-Text 'platforms/mac-docker/app/run-service.sh' @(
     '--runtime-mode mac',

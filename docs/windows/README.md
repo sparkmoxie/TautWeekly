@@ -164,6 +164,11 @@ secret blank preserves it; use the explicit reveal, replace, or clear controls
 when needed. Every successful save creates a private timestamped backup before
 `config.json` is replaced.
 
+Under **Config > Configuration backups**, Restore validates the chosen backup
+and first saves the current configuration. Delete requires **Confirm delete**,
+permanently removes only that selected backup, and leaves the live configuration
+unchanged.
+
 ### Validate, save, and verify
 
 Select **Validate, save, and verify** after reviewing the form. One safe,

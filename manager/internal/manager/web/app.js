@@ -369,11 +369,11 @@ function renderCapabilities() {
     ? "Renderer completion, SMTP acceptance, and inbox delivery remain distinct states in both API copy and interface labels."
     : "Task execution, SMTP acceptance, and inbox delivery remain distinct states in both API copy and interface labels.");
   setText("about-lifecycle-copy", nas
-    ? "Back up the persistent volume, pull a verified stable image, and recreate this service from the NAS or container host. Image changes preserve /data; rollback pins the prior verified tag or digest."
+    ? "For packaged Compose or QNAP installs, run ./tautweekly.sh check-update and ./tautweekly.sh update. The host verifies the stable release package and its internal manifest, refreshes release-owned Compose and wrapper files, preserves .env and /data, then health-checks the image with automatic package-and-image rollback. Unraid retains its Apps-owned update flow."
     : linux
-      ? "Run tautweekly check-update, download the stable Linux archive and SHA256SUMS.txt, verify the checksum, then run sudo ./install-linux.sh --upgrade. The installer backs up /opt, preserves /var/lib/tautweekly, and restores a previously active systemd service."
+      ? "Run tautweekly check-update, back up private data, then run sudo tautweekly update. The host downloads and verifies the stable Linux archive plus its internal file manifest, backs up /opt, preserves /var/lib/tautweekly, and restores a previously active systemd service."
     : mac
-      ? "Back up the package data directory, verify and extract the stable Mac archive over the existing package, then run ./tautweekly.sh update. The updater preserves .env and data, verifies container health and version, and retags the prior local image on rollback."
+      ? "Back up the package data directory, then run ./tautweekly.sh update. The host downloads and verifies the stable Mac archive plus its internal file manifest, preserves .env and data, verifies container health and version, and restores prior package files and the prior local image on rollback."
     : "Use the signed-in Windows installer workflow for verified update, migration, rollback, and removal while private Manager and newsletter data remain outside the replaceable application directory.");
   setText("preview-runner-copy", nas
     ? "Uses the saved configuration and Tautulli user ID to create local HTML in the persistent output volume. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state."
@@ -1621,11 +1621,16 @@ function renderBackups() {
     const detail = document.createElement("small");
     detail.textContent = `${formatBytes(backup.sizeBytes)} · revision ${String(backup.revision || "").slice(0, 10)}`;
     copy.append(title, detail);
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "button button-secondary";
-    button.textContent = "Restore";
-    button.setAttribute("aria-label", `Restore configuration backup from ${formatDate(backup.createdAtUtc)}`);
+    const restoreButton = document.createElement("button");
+    restoreButton.type = "button";
+    restoreButton.className = "button button-secondary";
+    restoreButton.textContent = "Restore";
+    restoreButton.setAttribute("aria-label", `Restore configuration backup from ${formatDate(backup.createdAtUtc)}`);
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "button button-danger";
+    deleteButton.textContent = "Delete";
+    deleteButton.setAttribute("aria-label", `Delete configuration backup from ${formatDate(backup.createdAtUtc)}`);
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "button button-secondary";
@@ -1634,29 +1639,66 @@ function renderBackups() {
     const actions = document.createElement("div");
     actions.className = "backup-actions";
     const resetConfirmation = () => {
-      delete row.dataset.restoreArmed;
+      delete row.dataset.backupAction;
       row.classList.remove("armed");
-      button.className = "button button-secondary";
-      setSwappingButtonElementText(button, "Restore");
-      button.setAttribute("aria-label", `Restore configuration backup from ${formatDate(backup.createdAtUtc)}`);
+      restoreButton.hidden = false;
+      restoreButton.className = "button button-secondary";
+      setSwappingButtonElementText(restoreButton, "Restore");
+      restoreButton.setAttribute("aria-label", `Restore configuration backup from ${formatDate(backup.createdAtUtc)}`);
+      deleteButton.hidden = false;
+      deleteButton.className = "button button-danger";
+      setSwappingButtonElementText(deleteButton, "Delete");
+      deleteButton.setAttribute("aria-label", `Delete configuration backup from ${formatDate(backup.createdAtUtc)}`);
       cancel.hidden = true;
     };
-    button.addEventListener("click", () => {
-      if (row.dataset.restoreArmed === "true") {
-        restoreBackup(backup, button, cancel);
+    restoreButton.addEventListener("click", () => {
+      if (row.dataset.backupAction === "restore") {
+        restoreBackup(backup, restoreButton, cancel);
         return;
       }
-      row.dataset.restoreArmed = "true";
+      row.dataset.backupAction = "restore";
       row.classList.add("armed");
-      button.className = "button button-danger";
-      setSwappingButtonElementText(button, "Confirm restore");
-      button.setAttribute("aria-label", `Confirm restore of configuration backup from ${formatDate(backup.createdAtUtc)}`);
+      deleteButton.hidden = true;
+      restoreButton.className = "button button-danger";
+      setSwappingButtonElementText(restoreButton, "Confirm restore");
+      restoreButton.setAttribute("aria-label", `Confirm restore of configuration backup from ${formatDate(backup.createdAtUtc)}`);
+      cancel.hidden = false;
+    });
+    deleteButton.addEventListener("click", () => {
+      if (row.dataset.backupAction === "delete") {
+        deleteBackup(backup, deleteButton, cancel);
+        return;
+      }
+      row.dataset.backupAction = "delete";
+      row.classList.add("armed");
+      restoreButton.hidden = true;
+      setSwappingButtonElementText(deleteButton, "Confirm delete");
+      deleteButton.setAttribute("aria-label", `Permanently delete configuration backup from ${formatDate(backup.createdAtUtc)}`);
       cancel.hidden = false;
     });
     cancel.addEventListener("click", resetConfirmation);
-    actions.append(cancel, button);
+    actions.append(cancel, restoreButton, deleteButton);
     row.append(copy, actions);
     list.append(row);
+  }
+}
+
+async function deleteBackup(backup, button, cancel) {
+  button.disabled = true;
+  cancel.disabled = true;
+  setSwappingButtonElementText(button, "Deleting...");
+  setGlobalStatus("Deleting the selected local configuration backup...");
+  try {
+    await request(`/api/v1/config/backups/${encodeURIComponent(backup.id)}`, { method: "DELETE" });
+    const result = await request("/api/v1/config/backups");
+    state.backups = result.backups || [];
+    renderBackups();
+    setGlobalStatus("Configuration backup deleted permanently.", true);
+  } catch (error) {
+    setGlobalStatus(error.message, true);
+    button.disabled = false;
+    cancel.disabled = false;
+    setSwappingButtonElementText(button, "Confirm delete");
   }
 }
 
