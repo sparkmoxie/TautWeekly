@@ -383,7 +383,7 @@ apply_update() {
 }
 
 install_candidate() {
-  local target_root="$1" work_root="$2" candidate_root backup_root
+  local target_root="$1" work_root="$2" candidate_root backup_root runtime_status
   candidate_root="$script_root"
   package_root="$(cd "$target_root" && pwd -P)"
   verify_release_manifest "$candidate_root" false || {
@@ -396,9 +396,24 @@ install_candidate() {
     exit 70
   }
   echo "Updated release-owned host files; .env and data/ were preserved."
-  exec "$package_root/$runtime_updater" apply \
-    --package-backup "$backup_root" \
-    --package-work-root "$work_root"
+  if "$package_root/$runtime_updater" apply \
+      --package-backup "$backup_root" \
+      --package-work-root "$work_root"; then
+    return 0
+  else
+    runtime_status=$?
+  fi
+  echo "Restoring the previous release-owned host package files..." >&2
+  if ! restore_backup "$backup_root" "$package_root"; then
+    echo "Host package restoration needs administrator attention. Backup: $backup_root" >&2
+    exit 70
+  fi
+  echo "Previous host package files were restored; .env and data/ were unchanged." >&2
+  case "$(basename "$work_root")" in
+    tautweekly-package-update.*) rm -rf "$work_root" ;;
+    *) echo "Refusing to remove an unexpected package staging directory: $work_root" >&2 ;;
+  esac
+  exit "$runtime_status"
 }
 
 case "${1:-check}" in

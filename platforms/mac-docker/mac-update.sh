@@ -7,7 +7,6 @@ lock_marker="/data/.tautweekly-update-holder"
 lock_container_id=""
 package_backup=""
 package_work_root=""
-package_update_completed=false
 
 print_metadata_readiness_note() {
   cat <<'EOF'
@@ -67,12 +66,6 @@ release_operation_lock() {
   lock_container_id=""
 }
 
-package_updater_path() {
-  if [[ -f ./package-update.sh ]]; then printf '%s' ./package-update.sh; return; fi
-  if [[ -f ../shared/package-update.sh ]]; then printf '%s' ../shared/package-update.sh; return; fi
-  return 1
-}
-
 safe_remove_package_work_root() {
   [[ -n "$package_work_root" && -d "$package_work_root" ]] || return 0
   [[ "$(basename "$package_work_root")" == tautweekly-package-update.* ]] || {
@@ -83,25 +76,13 @@ safe_remove_package_work_root() {
 }
 
 update_exit_handler() {
-  local status=$? updater
+  local status=$?
   release_operation_lock
-  if [[ -n "$package_backup" && "$package_update_completed" != true ]]; then
-    echo "Restoring the previous release-owned macOS package files..." >&2
-    updater="$(package_updater_path || true)"
-    if [[ -z "$updater" ]] || ! TAUTWEEKLY_PACKAGE_KIND=mac-docker TAUTWEEKLY_PACKAGE_ROOT="$(pwd -P)" \
-        bash "$updater" restore-backup "$package_backup" "$(pwd -P)"; then
-      echo "macOS package restoration needs administrator attention. Backup: $package_backup" >&2
-    else
-      echo "Previous macOS package files were restored; .env and data/ were unchanged." >&2
-      safe_remove_package_work_root || true
-    fi
-  fi
   return "$status"
 }
 
 complete_package_update() {
   if [[ -n "$package_backup" ]]; then
-    package_update_completed=true
     safe_remove_package_work_root
     package_backup=""
     package_work_root=""

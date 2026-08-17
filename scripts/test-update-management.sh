@@ -61,7 +61,12 @@ if [[ "$1" == compose ]]; then
       if [[ "$*" == *' sh -c if [ -s /data/.tautweekly-update-holder'* ]]; then rm -f "$TAUTWEEKLY_TEST_HOLDER"; exit 0; fi
       ;;
     pull) : ;;
-    up) printf '%s\n' new >"$TAUTWEEKLY_TEST_STATE" ;;
+    up)
+      printf '%s\n' new >"$TAUTWEEKLY_TEST_STATE"
+      if [[ "${TAUTWEEKLY_TEST_UPDATE_BAD:-0}" == 1 && -n "${TAUTWEEKLY_TEST_PACKAGE_ROOT:-}" ]]; then
+        printf '%s\n' '#!/usr/bin/env bash' 'exit 99' >"$TAUTWEEKLY_TEST_PACKAGE_ROOT/package-update.sh"
+      fi
+      ;;
     logs) : ;;
   esac
   exit 0
@@ -205,6 +210,7 @@ set +e
 (
   cd "$rollback_root"
   TAUTWEEKLY_TEST_UPDATE_BAD=1 \
+    TAUTWEEKLY_TEST_PACKAGE_ROOT="$rollback_root" \
     TAUTWEEKLY_PACKAGE_KIND=nas-docker \
     TAUTWEEKLY_PACKAGE_ROOT="$rollback_root" \
     TAUTWEEKLY_LATEST_RELEASE_VERSION=0.5.5 \
