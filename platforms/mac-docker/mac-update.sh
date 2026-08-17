@@ -8,6 +8,9 @@ lock_container_id=""
 
 print_metadata_readiness_note() {
   cat <<'EOF'
+Open the authenticated Manager after the update, sign in, and confirm the
+reported version, Manager/scheduler health, configuration status, all six
+previews, and the explicit TestEmail result before relying on the next schedule.
 If this update addresses missing ratings/artwork or results still appear stale,
 complete metadata readiness before testing: confirm the Plex Movie Ratings
 Source; run Plex Refresh All Metadata for each included movie/TV library; then

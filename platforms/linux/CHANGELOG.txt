@@ -1,5 +1,9 @@
 TautWeekly for Plex native Linux platform changelog
 
+v1.2.1
+- makes the authenticated Manager endpoint and Config workflow explicit in the shipped Linux landing page
+- returns expert setup and verification fallbacks to Manager for normal verification, previews, TestEmail, and scheduling
+
 v1.2.0
 - Adds amd64 and arm64 native Manager binaries and selects the matching payload during install or upgrade.
 - Makes the authenticated, capability-aware Manager the primary setup, verification, preview, TestEmail, scheduling, and administration surface.

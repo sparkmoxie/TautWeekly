@@ -284,8 +284,16 @@ function isLinuxService() {
   return runtimeMode() === "linux";
 }
 
+function isMacDocker() {
+  return runtimeMode() === "mac";
+}
+
 function isServiceRuntime() {
-  return isNAS() || isLinuxService();
+  return isNAS() || isLinuxService() || isMacDocker();
+}
+
+function embeddedRuntimeLabel() {
+  return isLinuxService() ? "Linux service" : isMacDocker() ? "Mac container" : "container";
 }
 
 function configFieldIsHidden(field) {
@@ -297,17 +305,24 @@ function renderAuthenticationBoundary() {
   const resetHint = document.querySelector("#login-form .field-hint");
   if (isServiceRuntime()) {
     const linux = isLinuxService();
-    setText("auth-runtime-eyebrow", linux ? "Private Linux administration" : "Private NAS administration");
+    const mac = isMacDocker();
+    setText("auth-runtime-eyebrow", linux ? "Private Linux administration" : mac ? "Private macOS administration" : "Private NAS administration");
     setText("auth-runtime-copy", "Review health, embedded scheduling, persistent configuration, and authenticated previews without exposing TautWeekly to a cloud service.");
     boundary.innerHTML = linux
       ? "<strong>Private by design.</strong> This authenticated Manager listens on the Linux host loopback interface by default. Reach it through an SSH tunnel or a deliberately configured TLS reverse proxy. It makes no analytics or cloud-management requests."
-      : "<strong>Private by design.</strong> This authenticated Manager is intended for a trusted LAN or a deliberately configured TLS reverse proxy. It makes no analytics or cloud-management requests.";
+      : mac
+        ? "<strong>Private by design.</strong> Docker Desktop publishes this authenticated Manager only to the Mac loopback interface by default. Deliberate LAN or TLS reverse-proxy access requires an explicit package setting. It makes no analytics or cloud-management requests."
+        : "<strong>Private by design.</strong> This authenticated Manager is intended for a trusted LAN or a deliberately configured TLS reverse proxy. It makes no analytics or cloud-management requests.";
     resetHint.innerHTML = linux
       ? "Forgot the password? Run <strong>sudo tautweekly manager-reset-access</strong> on the Linux host. Newsletter configuration and schedules are preserved."
-      : "Forgot the password? Run the packaged <strong>manager-reset-access</strong> host command or the documented container Console recovery. Newsletter configuration and schedules are preserved.";
+      : mac
+        ? "Forgot the password? Run <strong>./tautweekly.sh manager-reset-access</strong> in the Mac package directory. Newsletter configuration and schedules are preserved."
+        : "Forgot the password? Run the packaged <strong>manager-reset-access</strong> host command or the documented container Console recovery. Newsletter configuration and schedules are preserved.";
     document.querySelector("#pair-form .form-heading p").textContent = linux
       ? "Retrieve the one-time token with sudo tautweekly manager-bootstrap, then create the administrator password. The token is returned only to that explicit terminal command and is never written to service logs."
-      : "Retrieve the one-time token with the packaged host or container Console command, then create the administrator password. The token is never written to container logs.";
+      : mac
+        ? "Retrieve the one-time token with ./tautweekly.sh manager-bootstrap in the Mac package directory, then create the administrator password. The token is never written to Docker logs."
+        : "Retrieve the one-time token with the packaged host or container Console command, then create the administrator password. The token is never written to container logs.";
   } else {
     setText("auth-runtime-eyebrow", "Private local administration");
     setText("auth-runtime-copy", "Review health, schedule state, configuration, and generated previews without exposing TautWeekly to a cloud service.");
@@ -318,11 +333,12 @@ function renderCapabilities() {
   renderAuthenticationBoundary();
   const nas = isNAS();
   const linux = isLinuxService();
+  const mac = isMacDocker();
   const service = isServiceRuntime();
-  setText("mode-pill-label", nas ? "NAS / container" : linux ? "Native Linux" : "Windows setup");
+  setText("mode-pill-label", nas ? "NAS / container" : linux ? "Native Linux" : mac ? "macOS Docker Desktop" : "Windows setup");
   setText("schedule-nav-copy", service ? "Embedded scheduler" : "Windows lifecycle");
-  setText("configuration-platform-label", nas ? "Guided NAS setup" : linux ? "Guided Linux setup" : "Guided Windows setup");
-  setText("config-nav-copy", nas ? "Guided NAS setup" : linux ? "Guided Linux setup" : "Guided local setup");
+  setText("configuration-platform-label", nas ? "Guided NAS setup" : linux ? "Guided Linux setup" : mac ? "Guided Mac setup" : "Guided Windows setup");
+  setText("config-nav-copy", nas ? "Guided NAS setup" : linux ? "Guided Linux setup" : mac ? "Guided Mac setup" : "Guided local setup");
   setText("sidebar-connection-label", service ? "Manager connection" : "Local connection");
   setText("upcoming-run-label", service ? "Upcoming scheduler run" : "Upcoming task run");
   setText("schedule-state-label", service ? "Scheduler state" : "Task state");
@@ -334,14 +350,18 @@ function renderCapabilities() {
     ? "This container requires an administrator password. Runtime lifecycle, updates, and TLS remain under your NAS or container host."
     : linux
       ? "This systemd service requires an administrator password and listens on host loopback by default. Updates remain an explicit, checksum-verified Linux package operation."
+    : mac
+      ? "This Docker Desktop service requires an administrator password and publishes only to Mac loopback by default. Updates remain an explicit, checksum-verified Mac package operation."
     : "Windows trusts this computer by default. Add a password lock when the extra boundary is useful, without making first-run setup depend on a one-time token.");
-  setText("about-access-heading", nas ? "Authenticated LAN access" : linux ? "Authenticated host access" : "Loopback-only access");
+  setText("about-access-heading", nas ? "Authenticated LAN access" : linux ? "Authenticated host access" : mac ? "Authenticated Mac access" : "Loopback-only access");
   setText("about-access-copy", nas
     ? "The Manager requires authentication, accepts IP-literal host access by default, and rejects DNS hostnames unless the container allowlist includes them."
     : linux
       ? "The Manager requires authentication and listens on 127.0.0.1 by default. Use an SSH tunnel or an allowlisted TLS reverse proxy instead of exposing the port casually."
+    : mac
+      ? "Docker Desktop publishes the Manager on 127.0.0.1 by default. Changing the bind address for trusted-LAN access still requires authentication; DNS hostnames must be allowlisted and TLS is expected beyond a trusted local network."
     : "The Manager accepts browser connections only from this computer and rejects unrecognized hostnames.");
-  setText("about-edition", nas ? "NAS / Container Manager" : linux ? "Native Linux Manager" : "Windows Manager");
+  setText("about-edition", nas ? "NAS / Container Manager" : linux ? "Native Linux Manager" : mac ? "macOS Docker Desktop Manager" : "Windows Manager");
   setText("about-secret-copy", service
     ? "Secrets stay hidden during normal reads. Revealing returns only the selected credential, requires administrator password re-authentication, and automatically clears from the page."
     : "Secrets stay hidden during normal reads. Revealing returns only the selected credential, uses password re-authentication when the optional lock is enabled, and automatically clears from the page.");
@@ -352,11 +372,15 @@ function renderCapabilities() {
     ? "Back up the persistent volume, pull a verified stable image, and recreate this service from the NAS or container host. Image changes preserve /data; rollback pins the prior verified tag or digest."
     : linux
       ? "Run tautweekly check-update, download the stable Linux archive and SHA256SUMS.txt, verify the checksum, then run sudo ./install-linux.sh --upgrade. The installer backs up /opt, preserves /var/lib/tautweekly, and restores a previously active systemd service."
-      : "Use the signed-in Windows installer workflow for verified update, migration, rollback, and removal while private Manager and newsletter data remain outside the replaceable application directory.");
+    : mac
+      ? "Back up the package data directory, verify and extract the stable Mac archive over the existing package, then run ./tautweekly.sh update. The updater preserves .env and data, verifies container health and version, and retags the prior local image on rollback."
+    : "Use the signed-in Windows installer workflow for verified update, migration, rollback, and removal while private Manager and newsletter data remain outside the replaceable application directory.");
   setText("preview-runner-copy", nas
     ? "Uses the saved configuration and Tautulli user ID to create local HTML in the persistent output volume. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state."
     : linux
       ? "Uses the saved configuration and Tautulli user ID to create local HTML under the protected Linux data directory. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state."
+    : mac
+      ? "Uses the saved configuration and Tautulli user ID to create local HTML under the package's persistent Mac data directory. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state."
     : "Uses the saved configuration and Tautulli user ID to create local HTML in the package output folder. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state.");
   setText("access-settings-eyebrow", service ? "Required Manager authentication" : "Optional Manager lock");
   setText("access-settings-heading", service ? "Administrator password" : "Browser access");
@@ -364,13 +388,15 @@ function renderCapabilities() {
     ? "<strong>Console recovery remains available.</strong> Run the packaged <code>manager-reset-access</code> command from the trusted NAS host or the documented container Console command. Recovery resets only Manager credentials and sessions; configuration, schedules, history, output, and newsletter state are preserved."
     : linux
       ? "<strong>Host recovery remains available.</strong> Run <code>sudo tautweekly manager-reset-access</code>. Recovery stops and restarts only the systemd control service, resets Manager credentials and sessions, and preserves configuration, schedules, history, output, and newsletter state."
+    : mac
+      ? "<strong>Mac package recovery remains available.</strong> Run <code>./tautweekly.sh manager-reset-access</code> in the extracted package directory. Recovery resets only Manager credentials and sessions, restarts the Docker Desktop service, and preserves configuration, schedules, history, output, and newsletter state."
     : "<strong>Local recovery remains available.</strong> If the password is forgotten, run <code>18-RESET-MANAGER-ACCESS.bat</code> from the TautWeekly folder. Installed copies also include <code>Reset-TautWeekly-Access.cmd</code>. Recovery disables only the Manager lock and leaves configuration, credentials, schedules, history, and previews untouched.";
   setText("foundation-schedule-copy", service
-    ? `A successful configuration save runs clearly labeled, non-sending checks and local discovery. Email delivery remains explicit, and schedule controls update only the embedded ${linux ? "Linux service" : "container"} scheduler; they never stop a delivery already running.`
+    ? `A successful configuration save runs clearly labeled, non-sending checks and local discovery. Email delivery remains explicit, and schedule controls update only the embedded ${embeddedRuntimeLabel()} scheduler; they never stop a delivery already running.`
     : "A successful configuration save runs clearly labeled, non-sending connection checks and local discovery. Email delivery remains limited to an explicit TestEmail action, and schedule changes use a fixed UAC helper that verifies task ownership.");
   document.querySelectorAll("[data-windows-schedule-only]").forEach((element) => { element.hidden = service; });
   if (service) {
-    setText("schedule-page-eyebrow", linux ? "Linux service delivery lifecycle" : "Container delivery lifecycle");
+    setText("schedule-page-eyebrow", linux ? "Linux service delivery lifecycle" : mac ? "Mac Docker delivery lifecycle" : "Container delivery lifecycle");
     setText("schedule-page-copy", "Review the configured delivery window and explicitly enable or disable future starts in the embedded scheduler.");
     setText("schedule-boundary-eyebrow", "Narrow configuration boundary");
     setText("schedule-boundary-heading", "The browser never supplies a command.");
@@ -380,7 +406,7 @@ function renderCapabilities() {
     setText("schedule-overview-heading", "Observed embedded scheduler state");
     setText("schedule-enable-copy", "Allow the embedded scheduler to begin a future newsletter run in the configured weekly window.");
     setText("schedule-disable-copy", "Prevent future scheduler starts while preserving configuration, history, output, and any delivery already running.");
-    byId("schedule-actions").setAttribute("aria-label", linux ? "Linux service schedule actions" : "Container schedule actions");
+    byId("schedule-actions").setAttribute("aria-label", linux ? "Linux service schedule actions" : mac ? "Mac Docker schedule actions" : "Container schedule actions");
   } else {
     setText("schedule-page-eyebrow", "Windows delivery lifecycle");
     setText("schedule-page-copy", "Review the configured delivery window, verify task ownership, and make one explicit elevated change at a time.");
@@ -513,7 +539,7 @@ function renderStatus() {
   setText("next-run", formatDate(snapshot.schedule.nextRunLocal));
   setText("next-run-utc", snapshot.schedule.nextRunUtc ? `UTC: ${formatDate(snapshot.schedule.nextRunUtc)}` : embeddedSchedule ? "The embedded scheduler has not reported a valid upcoming run." : "Task Scheduler has not reported an upcoming run.");
   setText("preview-count", snapshot.previewSummary);
-  setText("sidebar-platform", `${titleCase(snapshot.platform)} · ${isNAS() ? "trusted LAN" : isLinuxService() ? "host loopback" : "local only"}`);
+  setText("sidebar-platform", `${titleCase(snapshot.platform)} · ${isNAS() ? "trusted LAN" : isLinuxService() ? "host loopback" : isMacDocker() ? "Mac loopback" : "local only"}`);
   setText("about-platform", titleCase(snapshot.platform));
 }
 
@@ -566,7 +592,7 @@ function renderSchedule() {
 
   const day = configEditorValue("ScheduleDay") || "Friday";
   const time = configEditorValue("ScheduleTime") || "09:30";
-  setText("schedule-configured-window", ready ? `${day} at ${time} ${embeddedSchedule ? `in the configured ${isLinuxService() ? "Linux service" : "container"} timezone` : "local Windows time"}` : "Complete configuration first");
+  setText("schedule-configured-window", ready ? `${day} at ${time} ${embeddedSchedule ? `in the configured ${embeddedRuntimeLabel()} timezone` : "local Windows time"}` : "Complete configuration first");
   setText("schedule-view-installed", yesNo(schedule.installed));
   setText("schedule-view-enabled", yesNo(schedule.enabled));
   setText("schedule-view-ownership", titleCase(schedule.ownership));
@@ -579,7 +605,7 @@ function renderSchedule() {
   if (!schedule.supported) warning.textContent = "Schedule changes are unavailable on this platform.";
   else if (probeFailed) {
     warning.textContent = embeddedSchedule
-      ? `The embedded scheduler heartbeat is unavailable or stale. Restart the ${isLinuxService() ? "systemd service" : "container"} and confirm its timezone before enabling delivery.`
+      ? `The embedded scheduler heartbeat is unavailable or stale. Restart the ${isLinuxService() ? "systemd service" : isMacDocker() ? "Docker Desktop service" : "container"} and confirm its timezone before enabling delivery.`
       : "Task Scheduler status could not be verified. The Manager will not request a schedule mutation until the local probe succeeds.";
     warning.classList.add("bad");
   }
@@ -664,8 +690,8 @@ function scheduleOperationIsActive(operation) {
 }
 
 function scheduleActionCopy(action, day, time, scheduleInstalled = false) {
-  if (isServiceRuntime() && action === "enable") return { heading: "Enable future scheduled delivery", copy: `Allow the embedded scheduler to start on ${day} at ${time} in the configured ${isLinuxService() ? "Linux service" : "container"} timezone.`, label: `Enable this ${isLinuxService() ? "Linux service" : "container"} schedule`, help: "This updates persistent configuration and does not send a newsletter immediately." };
-  if (isServiceRuntime() && action === "disable") return { heading: "Disable future scheduled starts", copy: "Prevent future embedded-scheduler starts while preserving the package and its data.", label: `Disable this ${isLinuxService() ? "Linux service" : "container"} schedule`, help: "A newsletter delivery already running will not be cancelled." };
+  if (isServiceRuntime() && action === "enable") return { heading: "Enable future scheduled delivery", copy: `Allow the embedded scheduler to start on ${day} at ${time} in the configured ${embeddedRuntimeLabel()} timezone.`, label: `Enable this ${embeddedRuntimeLabel()} schedule`, help: "This updates persistent configuration and does not send a newsletter immediately." };
+  if (isServiceRuntime() && action === "disable") return { heading: "Disable future scheduled starts", copy: "Prevent future embedded-scheduler starts while preserving the package and its data.", label: `Disable this ${embeddedRuntimeLabel()} schedule`, help: "A newsletter delivery already running will not be cancelled." };
   switch (action) {
   case "install": return scheduleInstalled
     ? { heading: "Refresh the weekly task", copy: `Update the verified SYSTEM task for ${day} at ${time} local Windows time.`, label: "Refresh this owned TautWeekly schedule", help: "Windows will request administrator approval. An unrelated same-named task will be left untouched." }

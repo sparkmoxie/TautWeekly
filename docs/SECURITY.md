@@ -37,9 +37,27 @@ Disabling the feature stops access but does not erase the existing cache.
 
 ## Network boundaries
 
-- Keep preview port 8787 off the public internet.
-- Prefer localhost binding when previews are consumed on the same host.
-- If LAN binding is required, restrict inbound access with the host firewall.
+- NAS/Docker, macOS Docker Desktop, native Linux, and FreeBSD Podman require
+  Manager authentication.
+  There is no default password. Retrieve a random first-run token only through
+  the platform's explicit `manager-bootstrap` command; it is intentionally
+  absent from normal logs and diagnostics.
+- The Manager uses HttpOnly SameSite cookies, per-session CSRF tokens,
+  same-origin mutation checks, bounded sessions, and login throttling. A
+  service restart invalidates sessions without changing newsletter delivery
+  state. Access recovery resets only Manager authentication material.
+- Keep NAS/FreeBSD/macOS Manager port 8787 and native Linux Manager port 8788
+  off the public internet. Prefer the documented localhost bind or a trusted
+  LAN bind restricted by the host firewall. macOS binds to Mac loopback by
+  default; changing that bind requires the same explicit allowed-host and TLS
+  review as any other network-reachable Manager.
+- For a trusted TLS reverse proxy, allow only its exact DNS host, preserve the
+  original Host header, and enable secure Manager cookies. Do not trust broad
+  wildcards or publish the plain HTTP backend. The Manager does not infer TLS
+  or client identity from forwarded headers.
+- Unauthenticated health endpoints expose liveness only. They do not return
+  configuration, credentials, sessions, paths, diagnostics, or newsletter
+  state.
 - Use HTTPS for remote Tautulli/Plex endpoints when your environment provides a
   trusted TLS reverse proxy.
 - Best-effort hosted deleted-item recovery sends only Tautulli's retained exact media GUID and the

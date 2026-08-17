@@ -124,6 +124,57 @@ func TestLinuxCapabilitiesRequireAuthenticationAndDescribeNativeService(t *testi
 	}
 }
 
+func TestMacCapabilitiesRequireAuthenticationAndDescribeDockerDesktop(t *testing.T) {
+	t.Parallel()
+	capabilities := capabilitiesFor(Options{RuntimeMode: runtimeModeMac, SecureCookies: true})
+	if capabilities.RuntimeMode != runtimeModeMac || capabilities.Platform != "macos-docker" ||
+		capabilities.Authentication != "required" || capabilities.ScheduleProvider != "embedded-container" ||
+		capabilities.LifecycleProvider != "docker-desktop" || capabilities.UpdateProvider != "mac-package" ||
+		capabilities.PathStyle != "mac-bind-mount" || capabilities.NetworkScope != "host-loopback" ||
+		capabilities.SupportsStartup || capabilities.SupportsTray || capabilities.OpensBrowser ||
+		strings.Join(capabilities.ScheduleActions, ",") != "enable,disable" || !capabilities.SecureCookies {
+		t.Fatalf("unexpected macOS capability boundary: %+v", capabilities)
+	}
+
+	server, err := New(Options{
+		DataDir:        t.TempDir(),
+		TautWeeklyRoot: t.TempDir(),
+		RuntimeRoot:    t.TempDir(),
+		RuntimeMode:    runtimeModeMac,
+		AllowedHosts:   []string{"weekly.mac.example"},
+		Version:        "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unauthorized := requestForTest(server, http.MethodGet, "/api/v1/capabilities", nil, nil)
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated macOS capabilities status: got %d, want 401", unauthorized.Code)
+	}
+	if _, ok := server.schedule.runner.(containerScheduleMutationRunner); !ok {
+		t.Fatalf("macOS Manager did not use the embedded container schedule runner: %T", server.schedule.runner)
+	}
+	current, err := server.auth.newSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{Name: sessionCookieName, Value: current.Token}
+	editorResponse := requestForTest(server, http.MethodGet, "/api/v1/config/editor", nil, cookie)
+	if editorResponse.Code != http.StatusOK || !strings.Contains(editorResponse.Body.String(), `"value":"http://host.docker.internal:8181"`) ||
+		!strings.Contains(editorResponse.Body.String(), `"placeholder":"http://host.docker.internal:8181"`) {
+		t.Fatalf("macOS first-run editor did not use the Docker Desktop host address: status=%d body=%s", editorResponse.Code, editorResponse.Body.String())
+	}
+	for _, host := range []string{"127.0.0.1:8787", "192.0.2.55:8787", "weekly.mac.example:8787"} {
+		request := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+		request.Host = host
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("allowed macOS Host %q: got %d, body %s", host, recorder.Code, recorder.Body.String())
+		}
+	}
+}
+
 func TestNASManagerReadsPersistentRuntimeRootNotReadOnlyPackageRoot(t *testing.T) {
 	t.Parallel()
 	packageRoot := t.TempDir()

@@ -2,8 +2,9 @@
 
 The FreeBSD distribution runs the maintained TautWeekly Linux OCI image through
 FreeBSD's Podman Linux-container support. It integrates with the native `rc.d`
-service system and keeps configuration, state, generated output, and backups in
-`/var/db/tautweekly`.
+service system, exposes the authenticated Manager on host loopback by default,
+and keeps configuration, Manager credentials, state, generated output, and
+backups in `/var/db/tautweekly`.
 
 [Open the FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/)
 
@@ -50,24 +51,27 @@ chmod +x install-freebsd.sh tautweekly rc.d/tautweekly app/*.sh app/bin/*.sh
 
 ```sh
 sudo ./install-freebsd.sh
-sudo tautweekly setup
-# Complete the metadata-readiness checklist below, then:
-sudo tautweekly verify
+sudo tautweekly manager-bootstrap
+ssh -L 8787:127.0.0.1:8787 YOUR_FREEBSD_ADMIN@YOUR_FREEBSD_HOST
 ```
 
 The installer performs explicit host changes: it installs Podman with `pkg` if
 needed, enables and starts FreeBSD Linux emulation and the Podman service,
 creates an unprivileged numeric data owner, installs the `rc.d` integration,
 pulls the public GHCR image, and starts the container. It preserves an existing
-settings file and private data directory.
+settings file and private data directory. Open `http://127.0.0.1:8787/` through
+the tunnel, enter the one-time token, create a unique administrator password,
+and complete **Config** in the Manager. The token is returned only by the
+explicit `manager-bootstrap` command and is never printed in installer,
+container, or rc.d logs.
 
-Setup asks for a direct Plex URL and administrator token. They remain optional
+Manager Config asks for a direct Plex URL and administrator token. They remain optional
 for the core Tautulli activity flow, but are recommended for complete movie RT
 critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and selected
 logos. The URL must work from the Podman Linux container; its localhost is not
-the FreeBSD host or a separate Plex service. `sudo tautweekly verify` checks
-Plex `/identity` plus authenticated `/library/sections` without printing the
-token. A resolved but unusable connection fails verification; an unresolved
+the FreeBSD host or a separate Plex service. **Validate, save, and verify**
+checks Plex `/identity` plus authenticated `/library/sections` without printing
+the token. A resolved but unusable connection fails verification; an unresolved
 pair emits a Tautulli-only fallback warning.
 Verification proves reachability and authentication, not that every item has
 every provider score. The renderer explicitly requests Plex's optional
@@ -92,8 +96,8 @@ after a ratings/artwork recovery update when upstream data may be stale:
 3. In Tautulli, open each same **Library → Media Info** tab, select
    **Refresh media info**, and wait. The current control is per library, so
    repeat it for every included section.
-4. Run `sudo tautweekly verify`, PreviewAll, and TestEmail only after both
-   refresh stages complete.
+4. Return to Manager **Verify**, generate PreviewAll, and use TestEmail only
+   after both refresh stages complete.
 
 [Plex documents](https://support.plex.tv/articles/200289306-scanning-vs-refreshing-a-library/)
 that a full refresh can take significant time and can update existing metadata
@@ -103,21 +107,11 @@ updates its table after Plex; it does not replace Plex's refresh or choose a
 ratings provider. Routine TautWeekly updates do not require a full refresh when
 current output already renders correctly.
 
-Review the roster and every mail state before enabling automatic sends:
-
-```sh
-sudo tautweekly list-users
-sudo tautweekly exclude-users
-sudo tautweekly list-libraries
-sudo tautweekly manage-libraries
-sudo tautweekly preview-all USER_ID
-sudo tautweekly send-test-all USER_ID
-sudo tautweekly schedule-status
-sudo tautweekly schedule-enable
-```
-
-Replace `USER_ID` with a numeric value printed by `list-users`. The roster is
-informational and does not select or save a default user.
+In Manager **Config**, review the active movie/TV library scope and delivery
+exclusions. Then use **Verify**, generate all six previews, send only to
+TestEmail, and inspect **Schedule**. Enable automatic sends only after those
+checks pass. The CLI roster and selection commands remain expert/recovery
+fallbacks and never save a default preview user.
 
 Before enabling delivery, confirm `Configured TZ`, `Control zone`, and
 `Scheduler TZ` agree and that `Scheduler now` has the expected local time and
@@ -128,15 +122,17 @@ UTC offset. Restart the `tautweekly` service after changing
 
 | Path | Purpose |
 |---|---|
-| `/var/db/tautweekly` | Private `config.json`, state, logs, previews, custom assets, bounded deleted-item cache, and backups |
+| `/var/db/tautweekly` | Private `config.json`, Manager password hash/pairing state, schedule state, logs, previews, custom assets, bounded deleted-item cache, and backups |
 | `/usr/local/etc/tautweekly/tautweekly.env` | Root-owned image, timezone, identity, bind, port, and URL settings |
 | `/usr/local/etc/rc.d/tautweekly` | Native FreeBSD service lifecycle |
 | `/usr/local/sbin/tautweekly` | Administrative command wrapper |
 | `ghcr.io/sparkmoxie/tautweekly` | Multi-architecture Linux OCI application image |
 
 The settings file contains no SMTP or API credential. Those secrets remain in
-`/var/db/tautweekly/config.json`, which must never be committed or shared.
-Backups, logs, and previews are also private.
+`/var/db/tautweekly/config.json`; Manager access state remains under
+`/var/db/tautweekly/manager`. Neither path may be committed or shared. Backups,
+logs, and previews are also private, and diagnostics never include bootstrap
+tokens or raw credentials.
 
 The cache is `/var/db/tautweekly/cache/deleted-items`. It protects future items
 observed while live and cannot reconstruct assets already discarded before
@@ -145,19 +141,29 @@ stop the rc.d service and remove only that directory. During full uninstall,
 retain the data root unless configuration, state, output, cache entries, and
 backups are all intentionally being removed.
 
-Port 8787 binds to `127.0.0.1` by default. Use an SSH tunnel for remote preview:
+Port 8787 binds to `127.0.0.1` by default. Use an SSH tunnel for Manager access:
 
 ```sh
 ssh -L 8787:127.0.0.1:8787 admin@example.com
 ```
 
-Open `http://127.0.0.1:8787/` locally. Do not publish the unauthenticated
-preview server directly to the internet.
+Open `http://127.0.0.1:8787/` locally. There is no default password. Sessions
+are HttpOnly/SameSite, state changes require CSRF protection, and repeated
+failed logins are throttled. Do not publish plain HTTP to the internet. For a
+trusted TLS reverse proxy, retain a narrow host bind, set the exact DNS name in
+`TAUTWEEKLY_MANAGER_ALLOWED_HOSTS`, set
+`TAUTWEEKLY_MANAGER_SECURE_COOKIES=true`, and restart the service.
 
 ## Operations
 
+Use the Manager GUI for normal configuration, verification, library/user
+selection, previews, TestEmail, scheduling, status, and sanitized diagnostics.
+These commands are host lifecycle, bootstrap, or expert/recovery fallbacks:
+
 ```text
-sudo tautweekly setup                 create or replace private configuration
+sudo tautweekly manager-bootstrap      retrieve the one-time pairing token
+sudo tautweekly manager-reset-access   reset only Manager authentication
+sudo tautweekly setup                 expert fallback: replace private configuration
 sudo tautweekly verify                validate API, mail, storage, and schedule
 sudo tautweekly list-users            inspect Tautulli recipients
 sudo tautweekly exclude-users         revise stable user exclusions
@@ -178,8 +184,8 @@ The wrapper always requires an explicit confirmation for real welcome or
 production delivery. Excluded users remain available to preview and TestEmail
 modes but are omitted from scheduled and confirmed `SendAll` delivery.
 
-The setup and `manage-libraries` commands query active movie/TV libraries and
-save stable section IDs in `IncludedLibraryIds`. This global scope is applied
+Manager Config (or the `manage-libraries` expert fallback) queries active
+movie/TV libraries and saves stable section IDs in `IncludedLibraryIds`. This global scope is applied
 before releases, quiet mode, Trending, Binge Champion, and personal statistics
 are calculated. The manager backs up private configuration before writing;
 empty/absent IDs retain legacy all-library behavior.
@@ -208,14 +214,15 @@ sudo tautweekly backup
 sudo podman image inspect ghcr.io/sparkmoxie/tautweekly:latest --format '{{.Id}}'
 sudo tautweekly check-update
 sudo tautweekly update
-sudo tautweekly verify
-sudo tautweekly send-test-all USER_ID
+# sign back in to Manager, then run Verify, PreviewAll, and TestEmail
 ```
 
 The apply command refuses a busy TautWeekly operation, recreates the rc.d
 service, verifies the in-container health probe and version label, and retags
 and restarts the prior image automatically if the new container fails. Private
-data under `/var/db/tautweekly` is never replaced.
+data under `/var/db/tautweekly` is never replaced. Normal stop/restart gives
+the shared service up to 30 minutes to let an already-running newsletter
+delivery finish after Manager HTTP access closes.
 
 If the update addresses missing ratings/artwork or output remains stale,
 complete metadata readiness before the listed verify/TestEmail checks.
@@ -241,6 +248,16 @@ The package defaults to `/usr/local/bin/podman`. If Podman is installed in a
 different administrator-managed location, set `TAUTWEEKLY_PODMAN_BIN` in the
 same root-owned environment file before restarting the service.
 
+## Manager access recovery
+
+Run `sudo tautweekly manager-reset-access` only when the administrator password
+is lost. It removes Manager credentials, pairing material, and active sessions,
+then restarts the rc.d service and preserves `config.json`, Tautulli/Plex/SMTP
+secrets, newsletter scheduling and delivery state, output, cache, and backups.
+Retrieve the replacement one-time token with
+`sudo tautweekly manager-bootstrap`. Never delete `/var/db/tautweekly` merely
+to recover Manager access.
+
 ## Troubleshooting
 
 - `cannot clone: Operation not supported`: confirm FreeBSD 15.1+, run
@@ -249,8 +266,10 @@ same root-owned environment file before restarting the service.
   to isolate Linux-container support from TautWeekly.
 - Service remains stopped: run `sudo service tautweekly status` and
   `sudo podman logs tautweekly`.
-- Preview is unreachable: retain the localhost bind and use the SSH tunnel
+- Manager is unreachable: retain the localhost bind and use the SSH tunnel
   above; confirm `sockstat -4 -l | grep 8787`.
+- Pairing is requested after an update or browser reset: run
+  `sudo tautweekly manager-bootstrap`; do not search logs for the token.
 - Permission error: restore the numeric owner with
   `sudo chown -R 8787:8787 /var/db/tautweekly` and keep directory mode `0700`.
 

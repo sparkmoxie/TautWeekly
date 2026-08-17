@@ -7,6 +7,17 @@ $ErrorActionPreference = "Stop"
 $configPath = Join-Path $DataRoot "config.json"
 $assetsDir = Join-Path $DataRoot "assets"
 $previewAssetsDir = Join-Path (Join-Path $DataRoot "output") "assets"
+$runtimeName = "macOS Docker Desktop container"
+$managerListen = if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_MANAGER_LISTEN)) {
+    ([string]$env:TAUTWEEKLY_MANAGER_LISTEN).Trim()
+}
+else { "0.0.0.0:8080" }
+$managerPortText = ($managerListen -split ':')[-1]
+$managerPort = 0
+if (-not [int]::TryParse($managerPortText, [ref]$managerPort) -or $managerPort -lt 1 -or $managerPort -gt 65535) {
+    throw "TAUTWEEKLY_MANAGER_LISTEN must contain a valid TCP port."
+}
+$managerHealthUrl = "http://127.0.0.1:$managerPort/health/live"
 . (Join-Path $PSScriptRoot "Library-Selection.ps1")
 . (Join-Path $PSScriptRoot "Schedule-Time.ps1")
 
@@ -36,10 +47,10 @@ foreach ($cmd in @("identify","convert","python3","flock")) {
         exit 1
     }
 }
-OK "ImageMagick, Python preview server, and file locking are available"
+OK "ImageMagick, Python support, and file locking are available"
 
 if (-not (Test-Path $configPath)) {
-    FAIL "config.json is missing. Run ./tautweekly.sh setup."
+    FAIL "Persistent config.json is missing. Pair with the authenticated Manager and complete guided setup first."
     exit 1
 }
 OK "config.json exists"
@@ -130,7 +141,7 @@ try {
         $availableIds = @($selectableLibraries | ForEach-Object { $_.SectionId })
         $matchedIds = @($configuredLibraryIds | Where-Object { $availableIds -contains $_ })
         $staleIds = @($configuredLibraryIds | Where-Object { $availableIds -notcontains $_ })
-        if ($matchedIds.Count -eq 0) { throw "None of the configured IncludedLibraryIds match an active movie or TV library. Run ./tautweekly.sh manage-libraries." }
+        if ($matchedIds.Count -eq 0) { throw "None of the configured IncludedLibraryIds match an active movie or TV library. Return to Manager Config; the manage-libraries command is an expert fallback." }
         OK "Global library scope matches $($matchedIds.Count) active movie/TV libraries"
         if ($staleIds.Count -gt 0) { WARN ("Configured library IDs no longer available: " + ($staleIds -join ", ")) }
     }
@@ -248,26 +259,28 @@ foreach ($name in ($animated + @("rt_ripe.png","rt_rotten.png","rt_upright.png",
     }
 }
 if ($mirrorFailure) {
-    WARN "Run ./tautweekly.sh repair-assets, then verify again."
+    WARN "Run ./tautweekly.sh repair-assets, then return to Manager verification."
     exit 1
 }
 
 try {
-    $response = Invoke-WebRequest -Uri "http://127.0.0.1:8080/assets/movies.gif" -Method Head -TimeoutSec 5
+    # Preview HTML and assets require a Manager session. Verification probes
+    # only the deliberately narrow, credential-free liveness endpoint.
+    $response = Invoke-WebRequest -Uri $managerHealthUrl -Method Get -TimeoutSec 5
     if ([int]$response.StatusCode -ne 200) {
         throw "HTTP status $([int]$response.StatusCode)"
     }
-    OK "preview web server serves /assets/movies.gif"
+    OK "authenticated Mac Manager liveness responds on its local listener"
 }
 catch {
-    FAIL "preview asset web check failed: $($_.Exception.Message)"
-    WARN "Inspect ./tautweekly.sh logs and confirm the container was recreated from v1.2.4."
+    FAIL "Manager liveness check failed: $($_.Exception.Message)"
+    WARN "Inspect ./tautweekly.sh logs and confirm the Mac container was recreated from the current stable package."
     exit 1
 }
 
 Write-Host ""
-OK "TautWeekly for Plex Mac Portable is ready for preview and test email."
+OK "TautWeekly for Plex $runtimeName is ready for preview and test email."
 Write-Host "SAFE NEXT STEPS:" -ForegroundColor Cyan
-Write-Host "  ./tautweekly.sh list-users"
-Write-Host "  ./tautweekly.sh preview-all"
-Write-Host "  ./tautweekly.sh send-test-all"
+Write-Host "  Return to the authenticated Manager at the Mac host URL."
+Write-Host "  Use Config for the delivery roster, then PreviewAll, TestEmail, and Schedule."
+Write-Host "  Terminal list-users/preview-all/send-test-all commands are expert fallbacks."

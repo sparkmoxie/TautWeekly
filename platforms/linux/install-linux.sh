@@ -115,7 +115,7 @@ install -m 0755 -o root -g root "$source_root/check-release.sh" /usr/local/libex
 install -m 0644 -o root -g root "$source_root/systemd/tautweekly.service" /etc/systemd/system/tautweekly.service
 if [[ ! -f /etc/tautweekly/tautweekly.env ]]; then
   install -m 0600 -o root -g root "$source_root/tautweekly.env.example" /etc/tautweekly/tautweekly.env
-  echo "Created /etc/tautweekly/tautweekly.env with localhost-only preview defaults."
+  echo "Created /etc/tautweekly/tautweekly.env with localhost-only Manager defaults."
 else
   echo "Preserved existing /etc/tautweekly/tautweekly.env."
 fi

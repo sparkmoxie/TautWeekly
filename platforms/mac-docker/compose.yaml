@@ -3,6 +3,7 @@ services:
     image: tautweekly-mac:stable
     container_name: tautweekly
     restart: unless-stopped
+    read_only: true
     environment:
       TZ: ${TZ:-Etc/UTC}
       PUID: ${PUID:-1000}
@@ -11,6 +12,8 @@ services:
       TAUTWEEKLY_DATA_DIR: /data
       TAUTWEEKLY_CONFIG: /data/config.json
       TAUTWEEKLY_PREVIEW_BASE_URL: ${PREVIEW_BASE_URL:-}
+      TAUTWEEKLY_MANAGER_ALLOWED_HOSTS: ${MANAGER_ALLOWED_HOSTS:-}
+      TAUTWEEKLY_MANAGER_SECURE_COOKIES: ${MANAGER_SECURE_COOKIES:-false}
     volumes:
       - ./data:/data
     ports:
@@ -21,4 +24,16 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
-    stop_grace_period: 30s
+    stop_grace_period: 30m
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID

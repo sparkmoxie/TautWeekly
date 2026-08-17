@@ -86,6 +86,24 @@ Compose packages provide guarded update/rollback commands; Unraid owns its app
 update lifecycle. Reinstall, rollback, or Manager access recovery preserves the
 persistent volume unless the administrator separately chooses to delete it.
 
+### macOS Manager: Docker Desktop, tailored for Mac
+
+The Intel and Apple-silicon Mac archive includes the same authenticated Manager
+core with a distinct macOS Docker Desktop capability profile. The installer
+detects the current Mac UID/GID, keeps the Manager on `127.0.0.1:8787` by
+default, and preserves `.env`, `data/config.json`, schedules, output, and Manager
+access state. Run `./tautweekly.sh manager-bootstrap`, open the Manager, create a
+unique administrator password, then complete Config, verification, six previews,
+TestEmail, and Schedule in the GUI. No tray icon, Windows startup/task controls,
+or NAS lifecycle language is exposed.
+
+Mac updates remain host-owned: back up `data/`, verify and extract the newer
+stable Mac archive over the existing package without deleting `.env` or `data/`,
+then run `./tautweekly.sh update`. The updater builds the correct amd64 or arm64
+Manager image, refuses a busy renderer operation, verifies version and health,
+and retags the prior image on rollback. Sign back in and repeat the Manager
+health, Config, preview, and TestEmail acceptance checks.
+
 ### Native Linux Manager: GUI-first systemd service
 
 The native Linux archive now includes amd64 and arm64 Manager binaries. The
@@ -101,6 +119,18 @@ verify the downloaded archive with `SHA256SUMS.txt`, and run
 preserves `/var/lib/tautweekly`, waits for an active delivery during graceful
 service shutdown, and verifies service recovery. Sign back into the Manager
 and rerun verification, previews, and TestEmail after upgrading.
+
+### FreeBSD Podman Manager: beta host adapter
+
+The FreeBSD package runs the same authenticated OCI Manager through Podman and
+keeps its rc.d-owned port on `127.0.0.1:8787` by default. After installation,
+run `sudo tautweekly manager-bootstrap`, use the documented SSH tunnel, and
+complete Config, Verify, PreviewAll, TestEmail, and Schedule in the GUI. The
+wrapper also provides narrow Manager access recovery, staged image updates,
+health-checked rollback, and private backups. Normal rc.d stop/restart grants
+an already-running newsletter delivery up to 30 minutes to drain. Physical
+FreeBSD/Podman behavior remains a beta acceptance gap because hosted CI cannot
+boot that host combination.
 
 ## Current newsletter behavior
 

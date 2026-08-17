@@ -9,7 +9,7 @@
 # rc.subr consumes these assignments dynamically.
 name="tautweekly"
 rcvar="tautweekly_enable"
-desc="TautWeekly for Plex newsletter scheduler and preview service"
+desc="TautWeekly for Plex authenticated Manager and newsletter scheduler"
 start_cmd="tautweekly_start"
 stop_cmd="tautweekly_stop"
 status_cmd="tautweekly_status"
@@ -37,6 +37,8 @@ tautweekly_load_env()
     : "${TAUTWEEKLY_PREVIEW_BIND:=127.0.0.1}"
     : "${TAUTWEEKLY_PREVIEW_PORT:=8787}"
     : "${TAUTWEEKLY_PREVIEW_BASE_URL:=http://127.0.0.1:8787}"
+    : "${TAUTWEEKLY_MANAGER_ALLOWED_HOSTS:=}"
+    : "${TAUTWEEKLY_MANAGER_SECURE_COOKIES:=false}"
     : "${TAUTWEEKLY_PODMAN_BIN:=/usr/local/bin/podman}"
     PODMAN="$TAUTWEEKLY_PODMAN_BIN"
 }
@@ -54,7 +56,14 @@ tautweekly_start()
         --name "$TAUTWEEKLY_CONTAINER" \
         --os=linux \
         --pull=never \
-        --stop-timeout=30 \
+        --stop-timeout=1800 \
+        --read-only \
+        --tmpfs /tmp:rw,noexec,nosuid,size=256m \
+        --security-opt no-new-privileges \
+        --cap-drop ALL \
+        --cap-add CHOWN \
+        --cap-add SETUID \
+        --cap-add SETGID \
         -e "TZ=$TAUTWEEKLY_TIMEZONE" \
         -e "PUID=$TAUTWEEKLY_PUID" \
         -e "PGID=$TAUTWEEKLY_PGID" \
@@ -62,6 +71,10 @@ tautweekly_start()
         -e "TAUTWEEKLY_DATA_DIR=/data" \
         -e "TAUTWEEKLY_CONFIG=/data/config.json" \
         -e "TAUTWEEKLY_PREVIEW_BASE_URL=$TAUTWEEKLY_PREVIEW_BASE_URL" \
+        -e "TAUTWEEKLY_MANAGER_RUNTIME_MODE=nas" \
+        -e "TAUTWEEKLY_MANAGER_LISTEN=0.0.0.0:8080" \
+        -e "TAUTWEEKLY_MANAGER_ALLOWED_HOSTS=$TAUTWEEKLY_MANAGER_ALLOWED_HOSTS" \
+        -e "TAUTWEEKLY_MANAGER_SECURE_COOKIES=$TAUTWEEKLY_MANAGER_SECURE_COOKIES" \
         -p "$TAUTWEEKLY_PREVIEW_BIND:$TAUTWEEKLY_PREVIEW_PORT:8080/tcp" \
         -v "$TAUTWEEKLY_DATA_DIR:/data:rw" \
         "$TAUTWEEKLY_IMAGE"
@@ -70,7 +83,7 @@ tautweekly_start()
 tautweekly_stop()
 {
     tautweekly_load_env || return 1
-    "$PODMAN" stop --time 30 "$TAUTWEEKLY_CONTAINER" >/dev/null 2>&1 || true
+    "$PODMAN" stop --time 1800 "$TAUTWEEKLY_CONTAINER" >/dev/null 2>&1 || true
 }
 
 tautweekly_status()

@@ -67,7 +67,7 @@ fi
 if [[ ! -f .env ]]; then
   say "Docker Desktop settings"
   timezone="$(prompt_default "IANA timezone" "$timezone_default")"
-  preview_port="$(prompt_default "Local preview port" "8787")"
+  manager_port="$(prompt_default "Local Manager port" "8787")"
   cat > .env <<EOF
 COMPOSE_PROJECT_NAME=tautweekly
 TZ=$timezone
@@ -75,8 +75,10 @@ PUID=$uid_value
 PGID=$gid_value
 UMASK=077
 PREVIEW_BIND=127.0.0.1
-PREVIEW_PORT=$preview_port
-PREVIEW_BASE_URL=http://localhost:$preview_port
+PREVIEW_PORT=$manager_port
+PREVIEW_BASE_URL=http://localhost:$manager_port
+MANAGER_ALLOWED_HOSTS=
+MANAGER_SECURE_COOKIES=false
 EOF
   chmod 600 .env 2>/dev/null || true
   ok ".env created with macOS UID $uid_value and GID $gid_value"
@@ -90,54 +92,33 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 compose_cmd exec -T tautweekly true >/dev/null 2>&1 || fail "The TautWeekly for Plex container did not become ready. Run docker compose logs tautweekly."
-ok "TautWeekly for Plex container is running"
+ok "The authenticated Manager is running"
 
-if [[ -f data/config.json ]]; then
-  if confirm "A TautWeekly for Plex config already exists. Run setup again?" n; then
-    compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Setup-First.ps1
-  else
-    ok "Existing data/config.json preserved"
-  fi
-else
-  say "Interactive TautWeekly for Plex setup"
-  compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Setup-First.ps1
-fi
-
-compose_cmd restart tautweekly >/dev/null
-sleep 5
-
-say "Prepare Plex and Tautulli metadata before acceptance"
-cat <<'EOF'
-1. In Plex Web, confirm Edit > Advanced > Ratings Source for each included Plex
-   Movie library.
-2. Run Manage Library > Refresh All Metadata for every included movie/TV
-   library and wait. A full refresh can take a long time and can update
-   metadata or artwork.
-3. In Tautulli, open each same Library > Media Info tab, select Refresh media
-   info, and wait. The current control is per library.
-EOF
-read -r -p "Complete those steps, then press Enter to run verification: "
-
-say "Verification"
-if ! compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1; then
-  fail "Verification failed. Correct the reported issue, then run ./tautweekly.sh verify."
-fi
-
-preview_url="$(awk -F= '$1=="PREVIEW_BASE_URL"{print substr($0,index($0,"=")+1)}' .env | tail -1)"
-preview_url="${preview_url:-http://localhost:8787}"
+manager_url="$(awk -F= '$1=="PREVIEW_BASE_URL"{print substr($0,index($0,"=")+1)}' .env | tail -1)"
+manager_url="${manager_url:-http://localhost:8787}"
 
 cat <<EOF
 
-TautWeekly for Plex Mac Portable is installed.
+TautWeekly for Plex Mac Portable is installed. The authenticated Manager is
+the source of truth for normal setup, verification, previews, test delivery,
+schedule controls, and status.
 
-Next safe checks:
-  ./tautweekly.sh list-users
-  ./tautweekly.sh preview-all USER_ID
-  ./tautweekly.sh send-test-all USER_ID
-  ./tautweekly.sh schedule-status
+First run:
+  1. Run ./tautweekly.sh manager-bootstrap to display the one-time pairing token.
+  2. Open $manager_url/
+  3. Create the administrator password, complete Config, and select Save and verify.
+  4. Review all six authenticated previews and run the explicit TestEmail check.
+  5. Enable the embedded schedule only after status and timezone are correct.
 
-Preview site:
-  $preview_url/
+The pairing token is returned only by the explicit bootstrap command and is
+never written to Docker logs. Existing configuration and Manager access state
+were preserved when present.
 
-Automatic sending remains disabled unless you enabled it during setup.
+After changing Plex ratings sources or metadata agents, finish the documented
+Plex and Tautulli per-library refresh before the Manager acceptance checks.
+Automatic sending remains disabled unless it is explicitly enabled in Manager.
 EOF
+
+if confirm "Open the authenticated Manager in your default Mac browser now?" y; then
+  open "$manager_url/"
+fi

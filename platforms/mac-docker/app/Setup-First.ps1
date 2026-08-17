@@ -110,6 +110,7 @@ Write-Host "============================================================" -Foreg
 Write-Host ""
 Write-Host "This wizard writes /data/config.json in the persistent Docker Desktop volume."
 Write-Host "It does not send email. Automatic scheduling defaults to disabled."
+Write-Host "Manager Config is the normal Mac setup source; this terminal wizard is an expert recovery fallback."
 Write-Host ""
 
 New-Item -ItemType Directory -Force -Path $DataRoot | Out-Null
@@ -129,7 +130,8 @@ if (Test-Path $configPath) {
         Write-Host "Existing config preserved." -ForegroundColor Green
         Write-MetadataReadinessChecklist
         Write-Host ""
-        Write-Host "NEXT: ./tautweekly.sh verify"
+        Write-Host "NEXT: return to the authenticated Manager at http://localhost:8787/."
+        Write-Host "Expert verification fallback: ./tautweekly.sh verify"
         exit 0
     }
     try {
@@ -312,4 +314,5 @@ Write-Host ""
 Write-Host "IMPORTANT: config.json contains credentials. Never publish or share it."
 Write-MetadataReadinessChecklist
 Write-Host ""
-Write-Host "NEXT: ./tautweekly.sh verify"
+Write-Host "NEXT: return to the authenticated Manager at http://localhost:8787/."
+Write-Host "Expert verification fallback: ./tautweekly.sh verify"

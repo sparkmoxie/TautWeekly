@@ -74,7 +74,8 @@ Require-Text 'platforms/linux/tautweekly' @(
     'http://127\.0\.0\.1:8788'
 )
 Require-Text 'platforms/linux/preview-home.html' @(
-    'native Linux newsletter preview service',
+    'authenticated native Linux Manager endpoint',
+    'The Manager is the setup source',
     'manager-bootstrap',
     'http://127\.0\.0\.1:8788',
     'Routine TautWeekly updates do not require'
@@ -85,16 +86,37 @@ Require-Text 'platforms/freebsd-podman/rc.d/tautweekly' @(
     '--os=linux',
     'TAUTWEEKLY_PREVIEW_BIND:=127\.0\.0\.1',
     'TAUTWEEKLY_PODMAN_BIN:=/usr/local/bin/podman',
-    '/var/db/tautweekly'
+    '/var/db/tautweekly',
+    'TAUTWEEKLY_MANAGER_RUNTIME_MODE=nas',
+    'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
+    'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
+    '--read-only',
+    '--security-opt no-new-privileges',
+    '--cap-drop ALL',
+    '--stop-timeout=1800',
+    'stop --time 1800'
 )
 Require-Text 'platforms/freebsd-podman/install-freebsd.sh' @(
     'sysrc linux_enable=YES',
     '/usr/local/sbin/tautweekly update',
-    'Preserved existing /usr/local/etc/tautweekly/tautweekly\.env'
+    'Preserved existing /usr/local/etc/tautweekly/tautweekly\.env',
+    'manager-bootstrap',
+    'one-time pairing token',
+    'never\s+written to the installer or service logs',
+    'Automatic\s+sending remains disabled'
+)
+Require-Text 'platforms/freebsd-podman/tautweekly.env.example' @(
+    'TAUTWEEKLY_PREVIEW_BIND=127\.0\.0\.1',
+    'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS=',
+    'TAUTWEEKLY_MANAGER_SECURE_COOKIES=false'
 )
 Forbid-Text 'platforms/freebsd-podman/rc.d/tautweekly' @('io\.containers\.autoupdate')
 Require-Text 'platforms/freebsd-podman/tautweekly' @(
     'check-update',
+    'manager-bootstrap',
+    'manager-reset-access',
+    'access-bootstrap',
+    'access-recover',
     'flock -n /data/\.tautweekly-operation\.lock',
     '\.tautweekly-update-holder',
     'pull --os=linux',
@@ -137,18 +159,25 @@ Require-Text 'platforms/nas-docker/app/Schedule-Time.ps1' @(
     'refusing to fall back to UTC'
 )
 Require-Text 'platforms/nas-docker/app/preview-home.html' @(
-    'Preview server online',
-    'not an admin Web UI',
+    'Manager online',
+    'The Manager is the setup source',
+    'manager-bootstrap',
     '\/data\/config\.json',
-    'preview-all-00-INDEX\.html',
-    'run-mode\.sh PreviewAll USER_ID',
-    'does not select or save a default user',
-    'host-side Compose wrapper',
-    'not installed inside the container'
+    'Validate, save, and verify',
+    'six previews',
+    'Update and recovery',
+    'Terminal helpers are expert and recovery fallbacks'
+)
+Forbid-Text 'platforms/nas-docker/app/preview-home.html' @(
+    'Setup-First\.ps1',
+    '\.\/tautweekly\.sh setup',
+    'not an admin Web UI',
+    'Unraid container Console'
 )
 Require-Text 'platforms/nas-docker/app/Setup-First.ps1' @(
-    'NEXT \(Unraid Console\): \/opt\/tautweekly\/bin\/run-script\.sh Verify-Setup\.ps1',
-    'NEXT \(Compose host project directory\): \.\/tautweekly\.sh verify',
+    'return to the authenticated Manager',
+    'Pairing fallback:',
+    'Expert verification fallback:',
     'Metadata readiness before Verify, Preview, or TestEmail',
     'Refresh All Metadata',
     'Library > Media Info > Refresh media info',
@@ -156,14 +185,16 @@ Require-Text 'platforms/nas-docker/app/Setup-First.ps1' @(
     'Routine TautWeekly updates do'
 )
 Require-Text 'platforms/nas-docker/app/Verify-Setup.ps1' @(
-    'Unraid Console:',
-    '\/opt\/tautweekly\/bin\/run-mode\.sh ListUsers',
-    'Compose host project directory:',
-    '\.\/tautweekly\.sh list-users',
+    'Return to the authenticated Manager',
+    'Terminal list-users/preview-all/send-test-all commands are expert fallbacks',
+    '\/health\/live',
+    'authenticated Manager liveness responds',
+    'Preview HTML and assets require a Manager session',
     'prove metadata freshness',
     'Refresh All Metadata',
     'Library > Media Info > Refresh media info'
 )
+Forbid-Text 'platforms/nas-docker/app/Verify-Setup.ps1' @('assets\/movies\.gif', 'preview asset web check')
 Require-Text 'platforms/windows/SETUP-FIRST.ps1' @(
     'Metadata readiness before Verify, Preview, or TestEmail',
     'Refresh All Metadata',
@@ -237,17 +268,24 @@ Require-Text 'platforms/nas-docker/qnap-install.sh' @(
 )
 Forbid-Text 'platforms/nas-docker/qnap-install.sh' @('Setup-First\.ps1', 'press Enter to run verification')
 Require-Text 'platforms/mac-docker/mac-install.sh' @(
-    'Prepare Plex and Tautulli metadata before acceptance',
-    'Refresh All Metadata',
-    'Refresh media\s+info',
-    'press Enter to run verification'
+    'authenticated Manager is running',
+    'manager-bootstrap',
+    'one-time pairing token',
+    'create the administrator password',
+    'Save and verify',
+    'all six authenticated previews',
+    'TestEmail',
+    'MANAGER_ALLOWED_HOSTS'
 )
+Forbid-Text 'platforms/mac-docker/mac-install.sh' @('Setup-First\.ps1', 'press Enter to run verification')
 Require-Text 'docs/nas-docker/README.md' @(
     'host-side Compose wrapper',
     'does not exist inside the Unraid Apps container',
     "Unraid's Docker controls"
 )
 Require-Text 'docs/nas-docker/index.html' @('url=manager\.html', 'location\.replace\("manager\.html"')
+Require-Text 'docs/nas-docker/index.html' @('authenticated Manager is the setup source', 'controlled TestEmail delivery, scheduling, updates, recovery')
+Forbid-Text 'docs/nas-docker/index.html' @('Setup-First\.ps1', '\.\/tautweekly\.sh setup', 'read-only preview viewer')
 Require-Text 'docs/nas-docker/manager.html' @(
     'Manager authentication',
     'manager-bootstrap',
@@ -264,6 +302,15 @@ Require-Text 'docs/nas-docker/manager.html' @(
     'QNAP firmware\/Container Station behavior on physical hardware'
 )
 Forbid-Text 'docs/nas-docker/manager.html' @('Setup-First\.ps1', 'Windows Task Scheduler', 'preview server', 'notification area', 'tray icon')
+Require-Text 'docs/freebsd/README.md' @(
+    'manager-bootstrap',
+    'manager-reset-access',
+    'Manager Config',
+    'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
+    'TAUTWEEKLY_MANAGER_SECURE_COOKIES=true',
+    'up to 30 minutes'
+)
+Forbid-Text 'docs/freebsd/README.md' @('unauthenticated\s+preview server', 'sudo tautweekly setup\s*# Complete')
 Require-Text 'platforms/nas-docker/app/Smtp-Transport.ps1' @(
     "Command 'AUTH LOGIN'",
     "Command 'AUTH PLAIN'",
@@ -443,14 +490,41 @@ Require-Text 'platforms/mac-docker/mac-update.sh' @(
     'verified stable release package',
     'Rollback to macOS image version'
 )
-Require-Text 'platforms/mac-docker/Dockerfile' @('ARG BUILD_VERSION=dev', 'org\.opencontainers\.image\.version="\$BUILD_VERSION"')
-Require-Text 'platforms/mac-docker/compose.yaml' @('image:\s*tautweekly-mac:stable')
+Require-Text 'platforms/mac-docker/Dockerfile' @(
+    'ARG BUILD_VERSION=dev',
+    'ARG TARGETARCH',
+    'org\.opencontainers\.image\.version="\$BUILD_VERSION"',
+    'tautweekly-manager-linux-\$manager_arch',
+    'TAUTWEEKLY_MANAGER_LISTEN=0\.0\.0\.0:8080'
+)
+Require-Text 'platforms/mac-docker/compose.yaml' @(
+    'image:\s*tautweekly-mac:stable',
+    'read_only:\s*true',
+    'stop_grace_period:\s*30m',
+    'no-new-privileges:true',
+    'cap_drop:',
+    'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
+    'TAUTWEEKLY_MANAGER_SECURE_COOKIES'
+)
 Forbid-Text 'platforms/mac-docker/compose.yaml' @('(?m)^\s*build:')
 Forbid-Text 'platforms/mac-docker/tautweekly.sh' @('docker compose build --pull', 'docker-compose build --pull')
 Require-Text 'platforms/mac-docker/tautweekly.sh' @(
     'run-script\.sh Verify-Setup\.ps1',
-    'run-as-user\.sh bash'
+    'run-as-user\.sh bash',
+    'manager-bootstrap',
+    'manager-reset-access',
+    'access-recover',
+    'open-manager'
 )
+Require-Text 'platforms/mac-docker/app/run-service.sh' @(
+    '--runtime-mode mac',
+    'health/live',
+    'wait_for_delivery',
+    'SHUTDOWN_DELIVERY_GRACE_SECONDS',
+    'ManagerProcessId'
+)
+Require-Text 'platforms/mac-docker/app/healthcheck.sh' @('health/live', 'service-heartbeat\.json')
+Forbid-Text 'platforms/mac-docker/app/preview-home.html' @('not an admin Web UI', 'Unraid container Console', 'preview-all-00-INDEX\.html')
 
 Require-Text 'platforms/windows/Check-Update.ps1' @(
     'releases/latest',
@@ -519,11 +593,9 @@ foreach ($relative in @(
 Write-Host '[PASS] Every directly shipped runtime contains library-selection management source.'
 
 foreach ($relative in @(
-    'app/preview-home.html',
     'app/bin/run-as-user.sh',
     'app/bin/run-script.sh',
     'app/Schedule-Time.ps1',
-    'app/Schedule-Control.ps1',
     'app/Smtp-Transport.ps1'
 )) {
     $nas = Read-RepoFile ("platforms/nas-docker/$relative")
@@ -532,7 +604,7 @@ foreach ($relative in @(
         throw "Shared runtime wrapper drifted between NAS and macOS: $relative"
     }
 }
-Write-Host '[PASS] Shared renderer and scheduling wrappers remain identical across container editions.'
+Write-Host '[PASS] Capability-neutral renderer and scheduling wrappers remain identical across container editions.'
 
 $forbiddenRuntimeNames = @('config.json', '.env', 'state.json', 'access-state.json', 'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json')
 foreach ($platform in @('linux', 'freebsd-podman')) {

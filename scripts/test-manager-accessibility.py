@@ -176,6 +176,15 @@ def main() -> int:
         failures.append("dashboard integration details have no shared verification renderer")
     if "function configFieldIsHidden(field)" not in javascript or 'isServiceRuntime() && field.name === "ScheduledTaskName"' not in javascript:
         failures.append("service Manager modes do not suppress the Windows Scheduled Task configuration field")
+    for marker in (
+        'function isMacDocker()',
+        'runtimeMode() === "mac"',
+        'macOS Docker Desktop',
+        './tautweekly.sh manager-bootstrap',
+        './tautweekly.sh manager-reset-access',
+    ):
+        if marker not in javascript:
+            failures.append(f"macOS Manager capability copy is missing: {marker}")
     if "function retainedSetupCheckState(" not in javascript or 'last?.overall || retainedLANState' not in javascript:
         failures.append("dashboard integrations do not fall back to retained save-verification state")
     if javascript.count("renderIntegrationStatus();") < 2:

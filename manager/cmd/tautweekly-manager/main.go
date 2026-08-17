@@ -28,6 +28,7 @@ const (
 	runtimeModeWindows = "windows"
 	runtimeModeNAS     = "nas"
 	runtimeModeLinux   = "linux"
+	runtimeModeMac     = "mac"
 )
 
 func main() {
@@ -92,15 +93,15 @@ func serve(args []string) error {
 	dataDir := flags.String("data-dir", filepath.Join(root, ".manager-data"), "private manager state directory")
 	openBrowserOnStart := flags.Bool("open-browser", false, "open the local Manager after the listener is ready")
 	requireAuthentication := flags.Bool("require-auth", false, "require password authentication and pairing for this runtime mode")
-	runtimeMode := flags.String("runtime-mode", "windows", "package runtime profile: windows, nas, or linux")
+	runtimeMode := flags.String("runtime-mode", "windows", "package runtime profile: windows, nas, linux, or mac")
 	allowedHosts := flags.String("allowed-hosts", os.Getenv("TAUTWEEKLY_MANAGER_ALLOWED_HOSTS"), "comma-separated DNS hostnames accepted by a network-reachable Manager")
 	secureCookies := flags.Bool("secure-cookies", envBoolean("TAUTWEEKLY_MANAGER_SECURE_COOKIES"), "require HTTPS-secure session cookies behind a TLS reverse proxy")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	mode := strings.ToLower(strings.TrimSpace(*runtimeMode))
-	if mode != runtimeModeWindows && mode != runtimeModeNAS && mode != runtimeModeLinux {
-		return errors.New("runtime mode must be windows, nas, or linux")
+	if mode != runtimeModeWindows && mode != runtimeModeNAS && mode != runtimeModeLinux && mode != runtimeModeMac {
+		return errors.New("runtime mode must be windows, nas, linux, or mac")
 	}
 	if mode == runtimeModeWindows {
 		if err := requireLoopback(*listen); err != nil {

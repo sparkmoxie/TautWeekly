@@ -182,6 +182,19 @@ case "$cmd" in
     ;;
   roster) run_script View-Access-Roster.ps1 ;;
   repair-assets) run_script Repair-Assets.ps1 ;;
+  manager-bootstrap)
+    container_exec /opt/tautweekly/bin/run-as-user.sh \
+      /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager
+    ;;
+  manager-reset-access)
+    echo "This resets only the Manager administrator password and active browser sessions."
+    echo "Newsletter configuration, schedules, output, and delivery state are preserved."
+    confirm "Reset Manager access and restart the rc.d service?" || exit 0
+    container_exec /opt/tautweekly/bin/run-as-user.sh \
+      /opt/tautweekly/bin/tautweekly-manager access-recover --data-dir /data/manager --confirm
+    service tautweekly restart
+    echo "Run sudo tautweekly manager-bootstrap to retrieve the new one-time pairing token."
+    ;;
   schedule-status) run_script Schedule-Control.ps1 -Action Status ;;
   schedule-enable)
     confirm "Enable the configured automatic weekly send?" || exit 0
@@ -282,6 +295,8 @@ case "$cmd" in
     cat <<'EOF'
 TautWeekly for Plex FreeBSD Podman commands
 
+  sudo tautweekly manager-bootstrap
+  sudo tautweekly manager-reset-access
   sudo tautweekly setup
   sudo tautweekly verify
   sudo tautweekly list-users

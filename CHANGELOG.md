@@ -6,6 +6,35 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Added a distinct authenticated macOS Docker Desktop Manager profile and
+  GUI-first installer flow, with Mac-specific setup, schedule, lifecycle,
+  update, recovery, and loopback-access language.
+- Added amd64 and arm64 Manager binaries to the Mac archive, a hardened
+  read-only container contract, authenticated liveness checks, and a 30-minute
+  graceful delivery drain during Docker Desktop stop/restart.
+- Made the authenticated Manager the explicit setup source across the NAS,
+  Docker, native Linux, and FreeBSD Podman documentation and shipped fallback
+  landing pages; terminal configuration tools are now labelled as expert or
+  recovery paths.
+- Added a FreeBSD Podman Manager adapter with explicit bootstrap and narrow
+  access recovery commands, loopback/reverse-proxy settings, hardened
+  container flags, and a 30-minute graceful delivery drain for rc.d stops.
+- Replaced the retired console-first NAS Quickstart body with a canonical,
+  accessible redirect to the current Manager installation, update, backup,
+  rollback, recovery, and uninstall guide.
+
+### Fixed
+
+- Removed stale NAS and FreeBSD text that described the v0.14 container
+  endpoint as an unauthenticated or read-only preview server.
+- Made shared setup and verification fallbacks return administrators to the
+  Manager instead of printing Unraid-specific next steps on other hosts.
+- Preserved explicit Unix executable modes in NAS, macOS Docker, Linux, and
+  FreeBSD ZIP/TAR packages even when artifacts are built on Windows, with
+  release contracts covering every launcher and packaged Manager binary.
+
 ## [0.14.0] - 2026-08-16
 
 ### Added

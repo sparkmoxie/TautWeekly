@@ -22,7 +22,9 @@ else
 fi
 usermod -o -u "$PUID" tautweekly
 
-mkdir -p /data/assets /data/logs /data/output/posters /data/output/media
+mkdir -p /tmp/tautweekly/config /tmp/tautweekly/cache /tmp/tautweekly/dotnet
+chown -R "$PUID:$PGID" /tmp/tautweekly
+mkdir -p /data/assets /data/logs /data/manager /data/output/posters /data/output/media
 cp -an /opt/tautweekly/assets-default/. /data/assets/ 2>/dev/null || true
 
 # Browser previews are served from /data/output. Remove the old community
@@ -34,7 +36,6 @@ mkdir -p /data/output/assets
 cp -af /data/assets/. /data/output/assets/
 mkdir -p /data/output/product-branding
 cp -af /opt/tautweekly/product-branding/. /data/output/product-branding/
-cp -f /opt/tautweekly/preview-home.html /data/output/index.html
 
 if [[ ! -f /data/config.example.json ]]; then
   cp /opt/tautweekly/config.example.json /data/config.example.json

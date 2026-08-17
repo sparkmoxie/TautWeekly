@@ -53,21 +53,19 @@
           <span>Windows</span><span>NAS / Docker</span><span>macOS</span><span>Linux</span><span>FreeBSD</span>
         </div>
       </div>
-      <div class="terminal" aria-label="Example safe setup workflow">
-        <div class="terminal-head"><span></span><span></span><span></span><b>tautweekly — safe launch</b></div>
-        <pre><span class="muted">$</span> ./tautweekly.sh verify
-<span class="ok">✓</span> Tautulli connection
-<span class="ok">✓</span> SMTP TCP reachability (authentication pending)
-<span class="ok">✓</span> Private runtime storage
+      <div class="terminal" aria-label="Example authenticated Manager setup workflow">
+        <div class="terminal-head"><span></span><span></span><span></span><b>nas manager - safe launch</b></div>
+        <pre><span class="muted">$</span> docker compose up -d
+<span class="ok">✓</span> Replaceable service; persistent /data
 
-<span class="muted">$</span> ./tautweekly.sh list-users
-<span class="gold">→</span> Copy a numeric USER_ID; no default is saved
+<span class="muted">$</span> ./tautweekly.sh manager-bootstrap
+<span class="ok">✓</span> One-time token returned only here
 
-<span class="muted">$</span> ./tautweekly.sh preview-all USER_ID
-<span class="gold">→</span> Six browser previews created
+<span class="muted">$</span> Open http://NAS_IP:8787/
+<span class="gold">→</span> Config · Verify · PreviewAll · TestEmail
 
-<span class="muted">$</span> ./tautweekly.sh send-test-all USER_ID
-<span class="gold">→</span> TestEmail only <span class="cursor">▋</span></pre>
+<span class="muted">$</span> Enable Schedule only after review
+<span class="gold">→</span> Future delivery opt-in <span class="cursor">▋</span></pre>
       </div>
     </section>
 
@@ -145,7 +143,7 @@
           <h3>NAS / Docker</h3>
           <p>A dedicated service with persistent data and an internal scheduler
             for QNAP, Unraid, and general Linux hosts.</p>
-          <ul><li>Source baseline 1.4.0</li><li>Authenticated Manager + Unraid Apps + GHCR</li><li>x86-64 and ARM64</li></ul>
+          <ul><li>Source baseline 1.4.1</li><li>Authenticated Manager + Unraid Apps + GHCR</li><li>x86-64 and ARM64</li></ul>
           <div class="card-actions"><a href="nas-docker/">NAS/Docker/QNAP/Unraid Quickstart</a><a href="nas-docker/README.md">Documentation</a></div>
         </article>
         <article class="card">
@@ -154,7 +152,7 @@
           <h3>macOS</h3>
           <p>Intel and Apple silicon setup with host UID/GID discovery and
             localhost-only previews by default.</p>
-          <ul><li>Source baseline 1.2.4</li><li>Guided Terminal installer</li><li>Mac preview helper</li></ul>
+          <ul><li>Source baseline 1.3.0</li><li>Authenticated Mac Manager</li><li>Intel + Apple silicon</li></ul>
           <div class="card-actions"><a href="mac/">macOS Quickstart</a><a href="mac/README.md">Documentation</a></div>
         </article>
         <article class="card">
@@ -162,17 +160,17 @@
           <span class="tag">Native PowerShell</span>
           <h3>Linux</h3>
           <p>A Docker-free systemd service with protected private storage and a
-            localhost-only preview listener.</p>
-          <ul><li>Source baseline 1.2.0</li><li>Authenticated Manager + PowerShell 7.2+</li><li>Ubuntu, Debian, and RHEL</li></ul>
+            localhost-only authenticated Manager.</p>
+          <ul><li>Source baseline 1.2.1</li><li>Authenticated Manager + PowerShell 7.2+</li><li>Ubuntu, Debian, and RHEL</li></ul>
           <div class="card-actions"><a href="linux/">Native Linux Quickstart</a><a href="linux/README.md">Documentation</a></div>
         </article>
         <article class="card">
           <div class="platform-logo-card"><img class="freebsd-logo" src="assets/platforms/freebsd.png" alt="" width="570" height="164"></div>
           <span class="tag">Podman · Beta</span>
           <h3>FreeBSD</h3>
-          <p>The maintained Linux OCI renderer under FreeBSD Podman, controlled
-            by rc.d with private host storage.</p>
-          <ul><li>Source baseline 1.1.6</li><li>FreeBSD 15.1+ amd64</li><li>Linux-container support</li></ul>
+          <p>The maintained Linux OCI Manager and renderer under FreeBSD Podman,
+            controlled by rc.d with private host storage.</p>
+          <ul><li>Source baseline 1.1.7</li><li>Authenticated Manager on loopback</li><li>FreeBSD 15.1+ amd64 beta</li></ul>
           <div class="card-actions"><a href="freebsd/">FreeBSD Podman Quickstart</a><a href="freebsd/README.md">Documentation</a></div>
         </article>
       </div>

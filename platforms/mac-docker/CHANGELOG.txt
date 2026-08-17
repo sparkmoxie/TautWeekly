@@ -1,6 +1,16 @@
 TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 ================================
 
+v1.3.0 Portable
+---------------
+- adds the authenticated Manager as the normal Mac setup, status, preview, TestEmail, and schedule interface
+- tailors capability and lifecycle language to macOS Docker Desktop without Windows or NAS-only controls
+- packages amd64 and arm64 Manager binaries for Intel and Apple-silicon image builds
+- hardens the container as read-only with a private data bind mount and bounded temporary filesystem
+- adds explicit bootstrap and narrow access-recovery commands without logging tokens or default passwords
+- grants an active newsletter up to 30 minutes to finish during Docker Desktop stop, restart, update, or recovery
+- documents exact backup, verified update, health acceptance, rollback, reinstall, recovery, and uninstall behavior
+
 v1.2.4 Portable
 ---------------
 - keeps personal TV statistics grouped by show with aggregate watch duration

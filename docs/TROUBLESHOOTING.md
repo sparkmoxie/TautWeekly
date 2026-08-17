@@ -1,6 +1,9 @@
 # Troubleshooting
 
-Start with the platform verifier and correct the first reported failure.
+On Windows, NAS/Docker, macOS Docker Desktop, native Linux, and FreeBSD Podman,
+start with the
+authenticated Manager's Dashboard and **Verify** page and correct the first
+reported failure. Use the terminal verifier as a recovery/expert fallback.
 
 ## Container command reports `/data` access denied
 
@@ -53,13 +56,13 @@ re-enter the token if the error remains.
 
 ## User exclusions cannot be loaded
 
-Primary setup continues when the Tautulli roster is temporarily unavailable;
-it preserves exclusions from an existing configuration and prints the
-standalone command to retry. First run the platform verifier, then use
-`14-MANAGE-USER-EXCLUSIONS.bat` on Windows,
-`./tautweekly.sh exclude-users` on Docker, or
-`sudo tautweekly exclude-users` on Linux and FreeBSD. Update to v0.5.2 or
-newer if every row reports that its user is unavailable. That release replaces
+Manager Config preserves exclusions from an existing configuration when the
+Tautulli roster is temporarily unavailable. Correct the integration failure on
+**Verify**, then reopen Config and retry the roster. Recovery/expert fallbacks
+are `14-MANAGE-USER-EXCLUSIONS.bat` on Windows,
+`./tautweekly.sh exclude-users` on Docker, and
+`sudo tautweekly exclude-users` on Linux or FreeBSD. Update to v0.5.2 or newer
+if every row reports that its user is unavailable. That release replaces
 the fragile per-user lookup loop with a two-call merge of `get_user_names` and
 `get_users`, keyed by stable user ID. Confirm the Tautulli API key can run both
 bulk commands and that the runtime can reach the exact configured URL. A row
@@ -73,7 +76,7 @@ Earlier releases used scheduler progress as container liveness, so a normal
 scheduled `SendAll` lasting several minutes could age out the heartbeat even
 while delivery and previews continued working. Current releases use a separate
 five-second service-supervisor heartbeat. The supervisor already exits the
-container if either the scheduler or preview process terminates.
+container if either the scheduler or Manager process terminates.
 
 Inspect the recorded reason with:
 
@@ -81,26 +84,29 @@ Inspect the recorded reason with:
 docker inspect tautweekly --format '{{range .State.Health.Log}}{{.End}} exit={{.ExitCode}} {{printf "%q" .Output}}{{println}}{{end}}'
 ```
 
-An unavailable preview root or a missing, unreadable, or stale
-`service-heartbeat.json` remains a real liveness failure. A missing
-`movies.gif` now prints a repair warning without declaring the service dead;
-run `./tautweekly.sh repair-assets` and `./tautweekly.sh verify`. Scheduler
-progress remains visible through `./tautweekly.sh schedule-status` and
+An unavailable `/health/live` endpoint or a missing, unreadable, or stale
+`service-heartbeat.json` remains a real liveness failure. Artwork repair is
+separate from Manager liveness; run `./tautweekly.sh repair-assets` only when
+generated output reports missing packaged assets. Scheduler progress remains
+visible through Manager, `./tautweekly.sh schedule-status`, and
 `scheduler-heartbeat.json`, but it no longer controls Docker health.
 
-## Preview does not open
+## Manager or preview does not open
 
-Windows writes previews under `output/`. Docker, Linux, and FreeBSD editions
-serve previews on the configured bind and port. Use the platform `status` and
-`logs` commands, then confirm the preview base URL matches the URL the browser
-should use. Native Linux and FreeBSD default to localhost; use the documented
-SSH tunnel for remote access.
+Windows, NAS/Docker, macOS Docker Desktop, native Linux, and FreeBSD serve previews through the
+authenticated Manager. NAS/Docker normally maps host port 8787 to container
+port 8080; macOS publishes container port 8080 at `http://localhost:8787/` by
+default; native Linux uses loopback port 8788; FreeBSD uses loopback port 8787.
+Use the platform `status` and `logs` commands, then confirm the mapped, local,
+or tunneled URL is the one the browser opens.
 
-For Docker Compose, port 8787 is a read-only preview viewer rather than an
-administration Web UI. Open the mapped host name or address, not the `*:8787`
-notation shown by some Docker status tools. The server root displays setup
-guidance even before a newsletter is generated; `preview-all` then creates
-`/preview-all-00-INDEX.html`.
+The Manager requires pairing on service/container packages and never has a
+default password. On macOS run `./tautweekly.sh manager-bootstrap`; on other
+service packages run the platform's explicit `manager-bootstrap` command. The token is never in
+installer, container, systemd, or rc.d logs. Complete Config to create the
+persistent `config.json`, then use **Validate, save, and verify**, PreviewAll,
+and TestEmail in the GUI. Terminal setup and preview commands are recovery or
+expert fallbacks on Manager-capable packages.
 
 If the browser reports **connection refused**, run:
 
@@ -108,14 +114,19 @@ If the browser reports **connection refused**, run:
 ./tautweekly.sh status
 ./tautweekly.sh logs
 docker compose port tautweekly 8080
-docker compose exec tautweekly tail -n 40 /data/logs/preview-server.log
+docker compose exec tautweekly tail -n 40 /data/logs/manager.log
 ```
 
-The scheduler reads only `/data/config.json`, mapped from the distribution's
-`./data/config.json` or the configured Unraid appdata directory. If logs keep
-waiting for that file, run `./tautweekly.sh setup` or run `Setup-First.ps1`
-from the Unraid container Console. Do not place configuration under
-`/opt/tautweekly`; that is the disposable application layer.
+The container scheduler reads only `/data/config.json`, mapped from the
+distribution's `./data/config.json`, configured Unraid appdata directory, or
+FreeBSD `/var/db/tautweekly`. If logs keep waiting for that file, sign in and
+complete Manager Config. Do not place configuration under `/opt/tautweekly`;
+that is the disposable application layer.
+
+For LAN or reverse-proxy access, verify the exact DNS name is listed in the
+platform's Manager allowed-host setting. Terminate TLS at a trusted reverse
+proxy, enable secure cookies, preserve the original Host header, and do not
+publish the plain HTTP backend. IP-literal access needs no DNS allowlist entry.
 
 ## Container permission errors
 

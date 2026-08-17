@@ -1,6 +1,11 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Exposes the shared authenticated Manager as the FreeBSD setup and administration source through a loopback-first rc.d adapter.
+- Adds explicit one-time bootstrap and narrow access recovery commands without placing generated tokens in logs.
+- Passes exact-host and secure-cookie proxy policy into the container and hardens the root filesystem, temporary storage, privileges, and capabilities.
+- Grants an already-running newsletter delivery up to 30 minutes to drain during normal rc.d stop or restart.
+- Updates install, acceptance, update, recovery, and troubleshooting guidance for the Manager workflow.
 - Keeps personal TV statistics grouped by show with aggregate watch duration while preferring show-level IMDb, then RT critic, then RT audience.
 - Omits absent personal movie/TV rating lines instead of rendering an unavailable placeholder.
 - Prints the ordered Plex and Tautulli metadata-readiness checklist after first setup and relevant package updates.

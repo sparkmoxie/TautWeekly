@@ -155,6 +155,8 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/app/Schedule-Time.ps1',
         'TautWeekly-mac-docker/app/bin/run-as-user.sh',
         'TautWeekly-mac-docker/app/bin/run-script.sh',
+        'TautWeekly-mac-docker/manager/tautweekly-manager-linux-amd64',
+        'TautWeekly-mac-docker/manager/tautweekly-manager-linux-arm64',
         'TautWeekly-mac-docker/app/product-branding/favicon.ico',
         'TautWeekly-mac-docker/app/product-branding/tautweekly-app-icon-128.png',
         'TautWeekly-mac-docker/tautweekly.sh',
@@ -265,6 +267,20 @@ foreach ($archiveName in $expected.Keys) {
             Assert-True ($entryNames -ccontains $requiredEntry) "$archiveName is missing $requiredEntry"
         }
 
+        if ($archiveName -ne 'TautWeekly-windows.zip') {
+            foreach ($entry in $archive.Entries) {
+                if ([string]::IsNullOrEmpty($entry.Name)) { continue }
+                $entryPath = $entry.FullName.Replace('\', '/')
+                $isExecutable = $entryPath -match '\.sh$' -or
+                    $entryPath -match '/manager/tautweekly-manager-linux-(?:amd64|arm64)$' -or
+                    $entryPath -match '/(?:rc\.d/)?tautweekly$'
+                $rawAttributes = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$entry.ExternalAttributes), 0)
+                $unixMode = ($rawAttributes -shr 16) -band 0xffff
+                $expectedMode = if ($isExecutable) { 0x81ed } else { 0x81a4 }
+                Assert-True ($unixMode -eq $expectedMode) "$archiveName has unsafe or missing Unix ZIP mode metadata for $entryPath (expected $($expectedMode.ToString('x4')), found $($unixMode.ToString('x4')))."
+            }
+        }
+
         if ($archiveName -eq 'TautWeekly-windows.zip') {
             $managerEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-windows/tautweekly-manager.exe' })
             Assert-True ($managerEntry.Count -eq 1) 'Windows archive has no unique Manager executable.'
@@ -299,7 +315,7 @@ foreach ($archiveName in $expected.Keys) {
             Assert-True ($previewEntry.Count -eq 1) 'Linux archive has no unique preview landing page.'
             $previewReader = New-Object IO.StreamReader($previewEntry[0].Open())
             try { $previewText = $previewReader.ReadToEnd() } finally { $previewReader.Dispose() }
-            Assert-True ($previewText -match 'native Linux newsletter preview service') 'Linux archive does not contain the native Linux preview adapter.'
+            Assert-True ($previewText -match 'authenticated native Linux Manager endpoint') 'Linux archive does not contain the native Linux Manager adapter.'
             Assert-True ($previewText -notmatch 'Docker Compose|Unraid container Console') 'Linux archive retained container-only preview setup language.'
             foreach ($architecture in @('amd64', 'arm64')) {
                 $path = "TautWeekly-linux/manager/tautweekly-manager-linux-$architecture"
@@ -313,6 +329,47 @@ foreach ($archiveName in $expected.Keys) {
                 }
                 finally { $managerStream.Dispose() }
             }
+        }
+
+        if ($archiveName -eq 'TautWeekly-mac-docker.zip') {
+            $wrapperEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-mac-docker/tautweekly.sh' })
+            $serviceEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-mac-docker/app/run-service.sh' })
+            $composeEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-mac-docker/compose.yaml' })
+            Assert-True ($wrapperEntry.Count -eq 1 -and $serviceEntry.Count -eq 1 -and $composeEntry.Count -eq 1) 'Mac archive is missing its Manager host adapter.'
+            $wrapperReader = New-Object IO.StreamReader($wrapperEntry[0].Open())
+            try { $wrapperText = $wrapperReader.ReadToEnd() } finally { $wrapperReader.Dispose() }
+            $serviceReader = New-Object IO.StreamReader($serviceEntry[0].Open())
+            try { $serviceText = $serviceReader.ReadToEnd() } finally { $serviceReader.Dispose() }
+            $composeReader = New-Object IO.StreamReader($composeEntry[0].Open())
+            try { $composeText = $composeReader.ReadToEnd() } finally { $composeReader.Dispose() }
+            Assert-True ($wrapperText -match 'manager-bootstrap' -and $wrapperText -match 'manager-reset-access' -and $wrapperText -match 'open-manager') 'Mac archive omits Manager bootstrap, recovery, or browser launch.'
+            Assert-True ($serviceText -match '--runtime-mode mac' -and $serviceText -match 'health/live' -and $serviceText -match 'wait_for_delivery') 'Mac archive omits the tailored Manager runtime or graceful delivery drain.'
+            Assert-True ($composeText -match 'read_only:\s*true' -and $composeText -match 'stop_grace_period:\s*30m' -and $composeText -match 'no-new-privileges:true') 'Mac archive omits container hardening or graceful stop configuration.'
+            foreach ($architecture in @('amd64', 'arm64')) {
+                $path = "TautWeekly-mac-docker/manager/tautweekly-manager-linux-$architecture"
+                $managerEntry = @($archive.Entries | Where-Object { $_.FullName -ceq $path })
+                Assert-True ($managerEntry.Count -eq 1) "Mac archive has no unique $architecture Manager executable."
+                $managerStream = $managerEntry[0].Open()
+                try {
+                    $signature = New-Object byte[] 4
+                    Assert-True ($managerStream.Read($signature, 0, 4) -eq 4) "Mac $architecture Manager executable is empty."
+                    Assert-True ($signature[0] -eq 0x7f -and $signature[1] -eq 0x45 -and $signature[2] -eq 0x4c -and $signature[3] -eq 0x46) "Mac $architecture Manager is not an ELF executable."
+                }
+                finally { $managerStream.Dispose() }
+            }
+        }
+
+        if ($archiveName -eq 'TautWeekly-freebsd-podman.zip') {
+            $wrapperEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-freebsd-podman/tautweekly' })
+            $rcEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-freebsd-podman/rc.d/tautweekly' })
+            Assert-True ($wrapperEntry.Count -eq 1 -and $rcEntry.Count -eq 1) 'FreeBSD archive is missing its Manager host adapter.'
+            $wrapperReader = New-Object IO.StreamReader($wrapperEntry[0].Open())
+            try { $wrapperText = $wrapperReader.ReadToEnd() } finally { $wrapperReader.Dispose() }
+            $rcReader = New-Object IO.StreamReader($rcEntry[0].Open())
+            try { $rcText = $rcReader.ReadToEnd() } finally { $rcReader.Dispose() }
+            Assert-True ($wrapperText -match 'manager-bootstrap' -and $wrapperText -match 'manager-reset-access' -and $wrapperText -match 'access-recover') 'FreeBSD archive omits Manager bootstrap or narrow recovery.'
+            Assert-True ($rcText -match '--stop-timeout=1800' -and $rcText -match 'stop --time 1800') 'FreeBSD archive omits the graceful delivery drain.'
+            Assert-True ($rcText -match '--read-only' -and $rcText -match '--security-opt no-new-privileges' -and $rcText -match '--cap-drop ALL') 'FreeBSD archive omits container hardening.'
         }
 
         $forbidden = @($entryNames | Where-Object {
@@ -426,6 +483,25 @@ foreach ($tarArchive in $tarArchives) {
         $entry = ([string]$_).Replace('\', '/')
         if ($entry.StartsWith('./', [StringComparison]::Ordinal)) { $entry.Substring(2) } else { $entry }
     })
+    $rawTarDetails = @(& tar -tvzf $tarArchive.FullName)
+    Assert-True ($LASTEXITCODE -eq 0) "Could not inspect modes in $($tarArchive.Name)."
+    $tarModes = @{}
+    foreach ($detail in $rawTarDetails) {
+        $line = [string]$detail
+        $pathOffset = $line.IndexOf("$packageName/", [StringComparison]::Ordinal)
+        if ($pathOffset -ge 0 -and $line.Length -ge 10) {
+            $tarModes[$line.Substring($pathOffset).TrimEnd('/')] = $line.Substring(0, 10)
+        }
+    }
+    $requiredExecutables = @($tarEntries | Where-Object {
+        $_ -match '\.sh$' -or
+        $_ -match '/manager/tautweekly-manager-linux-(?:amd64|arm64)$' -or
+        $_ -match '/(?:rc\.d/)?tautweekly$'
+    })
+    foreach ($requiredExecutable in $requiredExecutables) {
+        Assert-True ($tarModes.ContainsKey($requiredExecutable)) "$($tarArchive.Name) has no mode metadata for $requiredExecutable."
+        Assert-True ($tarModes[$requiredExecutable] -match '^-rwxr-xr-x$') "$($tarArchive.Name) does not mark $requiredExecutable executable (mode $($tarModes[$requiredExecutable]))."
+    }
     foreach ($requiredEntry in $expected[$zipName]) {
         Assert-True ($tarEntries -ccontains $requiredEntry) "$($tarArchive.Name) is missing $requiredEntry"
     }

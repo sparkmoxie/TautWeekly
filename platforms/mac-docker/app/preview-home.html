@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#010101">
-  <title>TautWeekly for Plex preview server</title>
+  <title>TautWeekly for Plex Mac Manager</title>
   <link rel="icon" href="product-branding/favicon.ico" sizes="any">
   <style>
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -38,13 +38,13 @@
     <header>
       <img class="mark" src="product-branding/tautweekly-app-icon-128.png" alt="" width="128" height="128">
       <h1>TautWeekly for Plex</h1>
-      <p class="lede">The private newsletter preview service is running.</p>
-      <div class="online">Preview server online</div>
+      <p class="lede">The authenticated Mac Manager is the source of truth for setup, status, previews, test delivery, and embedded scheduling.</p>
+      <div class="online">Docker Desktop service online</div>
     </header>
 
     <section class="notice">
-      <h2>This is a preview viewer, not an admin Web UI</h2>
-      <p>Configuration and sending remain command-line operations so SMTP credentials and Tautulli access are never exposed through a browser control panel. Keep this port on a trusted network and do not publish it to the internet.</p>
+      <h2>This static page is only a recovery fallback</h2>
+      <p>The current Mac package serves an authenticated Manager at this URL. If this page appears after an update, rebuild and restart the verified package, then confirm <code>/health/live</code>. Do not expose the port publicly.</p>
     </section>
 
     <section>
@@ -58,39 +58,23 @@
     </section>
 
     <section>
-      <h2>First run with Docker Compose</h2>
+      <h2>First run on macOS</h2>
       <ol>
-        <li>From the extracted TautWeekly directory on the Docker host, run setup and verification.</li>
-        <li>Generate the complete safe preview set.</li>
-        <li>Return here and open the generated index.</li>
+        <li>From the extracted Mac package directory, retrieve the one-time pairing token.</li>
+        <li>Open the Manager, create the administrator password, and complete Config.</li>
+        <li>Select Save and verify, review all six authenticated previews, run TestEmail, then explicitly enable the schedule.</li>
       </ol>
-      <pre><code>./tautweekly.sh setup
-./tautweekly.sh verify
-./tautweekly.sh list-users
-./tautweekly.sh preview-all USER_ID</code></pre>
-      <p><code>./tautweekly.sh</code> is the host-side Compose wrapper from the release archive. It is not installed inside the container.</p>
-      <p>Replace <code>USER_ID</code> with a numeric value printed by <code>list-users</code>. Listing users does not select or save a default user.</p>
+      <pre><code>./tautweekly.sh manager-bootstrap
+./tautweekly.sh open-manager</code></pre>
+      <p>The token is returned only by the explicit bootstrap command and is never written to Docker logs. The terminal setup and verify commands remain expert/recovery fallbacks, not the normal setup path.</p>
     </section>
 
     <section>
-      <h2>First run from an Unraid container Console</h2>
-      <p>Do not use the host-side <code>./tautweekly.sh</code> wrapper here. Run these container-native commands instead:</p>
-      <pre><code>/opt/tautweekly/bin/run-script.sh Setup-First.ps1
-/opt/tautweekly/bin/run-script.sh Verify-Setup.ps1
-/opt/tautweekly/bin/run-mode.sh ListUsers
-/opt/tautweekly/bin/run-mode.sh PreviewAll USER_ID
-/opt/tautweekly/bin/run-mode.sh SendTest USER_ID</code></pre>
-      <p>Replace <code>USER_ID</code> with a numeric value printed by <code>ListUsers</code>. Listing users does not select or save a default user.</p>
-      <p>The required persistent configuration path is <code>/data/config.json</code>. Automatic weekly delivery stays disabled until you explicitly enable it after preview and TestEmail review.</p>
+      <h2>Update and recovery</h2>
+      <p>Back up <code>data/</code>, verify and extract the newer stable Mac archive over this package without deleting <code>.env</code> or <code>data/</code>, then run <code>./tautweekly.sh update</code>. Sign back in and verify version, health, Config, previews, and TestEmail in Manager. Use <code>./tautweekly.sh manager-reset-access</code> only for credential recovery.</p>
     </section>
 
-    <section>
-      <h2>Generated previews</h2>
-      <p>If <code>preview-all</code> has completed, use the link below. A not-found response means the previews have not been generated yet.</p>
-      <a class="preview-link" href="preview-all-00-INDEX.html">Open the email preview index</a>
-    </section>
-
-    <footer><a href="https://sparkmoxie.github.io/TautWeekly/nas-docker/">Installation and troubleshooting documentation</a></footer>
+    <footer><a href="https://sparkmoxie.github.io/TautWeekly/mac/">Mac installation and troubleshooting documentation</a></footer>
   </main>
 </body>
 </html>

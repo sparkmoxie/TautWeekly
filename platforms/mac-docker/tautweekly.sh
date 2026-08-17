@@ -66,6 +66,19 @@ case "$cmd" in
     ;;
   roster) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh View-Access-Roster.ps1 ;;
   repair-assets) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Repair-Assets.ps1 ;;
+  manager-bootstrap)
+    compose_cmd exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
+      /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager
+    ;;
+  manager-reset-access)
+    echo "This resets only the Manager administrator password and active browser sessions."
+    echo "Newsletter configuration, schedules, output, and delivery state are preserved."
+    confirm "Reset Manager access and restart the Docker Desktop service?" || exit 0
+    compose_cmd exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
+      /opt/tautweekly/bin/tautweekly-manager access-recover --data-dir /data/manager --confirm
+    compose_cmd restart tautweekly
+    echo "Run ./tautweekly.sh manager-bootstrap to retrieve the new one-time pairing token."
+    ;;
   schedule-status) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Schedule-Control.ps1 -Action Status ;;
   schedule-enable)
     confirm "Enable the configured automatic weekly send?" || exit 0
@@ -84,7 +97,7 @@ case "$cmd" in
     ;;
   check-update) exec ./mac-update.sh check ;;
   update) exec ./mac-update.sh apply ;;
-  open-preview)
+  open-manager|open-preview)
     base_url="http://localhost:8787"
     if [[ -f .env ]]; then
       configured="$(awk -F= '$1=="PREVIEW_BASE_URL"{print substr($0,index($0,"=")+1)}' .env | tail -1)"
@@ -97,9 +110,11 @@ case "$cmd" in
 TautWeekly for Plex Mac Portable commands
 
   ./tautweekly.sh install
-  ./tautweekly.sh setup
-  ./tautweekly.sh open-preview
-  ./tautweekly.sh verify
+  ./tautweekly.sh open-manager
+  ./tautweekly.sh manager-bootstrap
+  ./tautweekly.sh manager-reset-access
+  ./tautweekly.sh setup                 # expert/recovery fallback
+  ./tautweekly.sh verify                # expert/recovery fallback
   ./tautweekly.sh list-users
   ./tautweekly.sh exclude-users
   ./tautweekly.sh list-libraries
