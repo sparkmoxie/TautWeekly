@@ -1,211 +1,226 @@
-# macOS Docker Desktop installation
+# macOS Docker Desktop Manager
 
 [Open the macOS Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/)
 
-The macOS distribution runs the PowerShell newsletter engine in Docker Desktop
-and provides Mac-native setup and preview helpers.
+The Mac archive provides a GUI-first TautWeekly package in Docker Desktop on Intel and Apple-silicon
+Macs. It ships the same authenticated Manager core as the other maintained GUI
+packages with a macOS-specific capability profile. Manager **Config** is the
+source of truth for normal setup, verification, previews, controlled TestEmail
+delivery, embedded scheduling, and status. Terminal setup commands are retained
+only for expert recovery.
 
-Current source baseline: **1.2.4**.
+Current source baseline: **1.3.0**.
 
 ## Requirements
 
-- An Intel or Apple silicon Mac.
-- Docker Desktop with Docker Compose available in Terminal.
-- Network access from Docker to Tautulli and an SMTP STARTTLS endpoint.
-- Network access from Docker to Plex is recommended for complete movie RT
-  critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and
-  selected logos.
-- A Tautulli API key.
-- A permanent project directory writable by the current macOS user.
+- Intel (`x86_64`) or Apple silicon (`arm64`) macOS host.
+- Current Docker Desktop with Docker Compose available in Terminal.
+- A permanent extracted package directory writable by the current Mac user.
+- Network access from the container to Tautulli, Plex, and an SMTP STARTTLS
+  endpoint. No real service is contacted during package validation.
 
 ## Install
 
-1. Download and extract
-   [`TautWeekly-mac-docker.tar.gz`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.tar.gz)
-   or the equivalent [ZIP archive](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.zip).
-2. Open Terminal in the extracted directory.
-3. Make the launchers executable and start the guided installer:
+1. Download `TautWeekly-mac-docker.tar.gz` or the matching ZIP and
+   `SHA256SUMS.txt` from the same stable GitHub release.
+2. Verify the archive SHA-256 checksum before extracting it.
+3. Extract it to a permanent directory. Do not run it from Downloads and later
+   move the directory; the bind-mounted `data/` path belongs to this package.
+4. Open Terminal in the extracted directory and run:
 
 ```bash
 chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh mac-update.sh check-release.sh app/*.sh app/bin/*.sh
 ./mac-install.sh
 ```
 
-Alternatively, double-click `INSTALL-MAC.command` after granting it execute
-permission.
+The installer verifies Docker Desktop, detects the Mac UID/GID, creates a
+mode-0600 `.env`, builds the correct amd64 or arm64 image, starts it, and checks
+authenticated Manager liveness. Existing `.env`, `data/`, configuration,
+schedules, output, and Manager credentials are preserved. The installer does
+not generate or print a default password.
 
-The installer detects the current UID/GID, creates a private `.env`, builds the
-container, and runs interactive setup. It then pauses for the metadata-readiness
-checklist below before verification. Existing `.env` and `data/config.json`
-files are preserved unless you explicitly replace them.
+## First-run Manager setup
 
-## Service connectivity
+The Manager is published only at `http://localhost:8787/` by default.
 
-For software running directly on the Mac, Docker Desktop exposes the host as
+1. Retrieve the one-time pairing token from the package directory:
+
+   ```bash
+   ./tautweekly.sh manager-bootstrap
+   ```
+
+2. Run `./tautweekly.sh open-manager` or open
+   `http://localhost:8787/` in a Mac browser.
+3. Enter the token and create a unique administrator password. The token is
+   read only by that explicit command, never written to Docker logs or
+   diagnostics, and invalidated after pairing.
+4. Open **Config**, enter the Tautulli, Plex, SMTP, content, and schedule
+   settings, then select **Validate, save, and verify**.
+5. Confirm the saved setup results for libraries/users, Tautulli and Plex,
+   non-sending SMTP preflight, and local previews.
+6. In **Previews**, review all six newsletter states. In **Operations**, send
+   the explicit controlled TestEmail check. Enable **Schedule** only after the
+   configured timezone, next run, previews, and SMTP result are correct.
+
+Pairing, login, CSRF protection, session expiry, throttling, credential reveal,
+and diagnostics use the shared Manager security contracts. Browser reads never
+return stored secrets. A service restart invalidates active browser sessions
+without disabling the newsletter schedule.
+
+## Connect to Mac-hosted Plex and Tautulli
+
+Docker Desktop exposes software running directly on the Mac through
 `host.docker.internal`:
 
 ```text
-http://host.docker.internal:8181   # Tautulli
-http://host.docker.internal:32400  # recommended direct Plex URL
+http://host.docker.internal:8181   # example Tautulli URL
+http://host.docker.internal:32400  # example direct Plex URL
 ```
 
-For another server, use a resolvable hostname such as
-`http://media.example.test:8181`. For a Tautulli container on the same
-user-defined Docker network, use its service name.
+For another server, use a name or address reachable from the container. For a
+service on the same user-defined Docker network, use its container service
+name. Container `127.0.0.1` refers to TautWeekly itself, not the Mac.
 
-Direct Plex is optional only for the core Tautulli activity flow. Enter its URL
-and administrator token during setup for full newsletter fidelity. The URL must
-work from Docker, not only from macOS. `verify` checks Plex `/identity` and
-authenticated `/library/sections` with the token kept in a request header. A
-resolved but unusable connection fails verification; if no URL/token pair can
-be resolved, verification warns that selected/flattened Tautulli ratings and
-other fallbacks will be used.
-Verification proves reachability and authentication, not that every item has
-every provider score. The renderer explicitly requests Plex's optional
-`Rating` element so available movie RT pairs and exact-episode IMDb/RT values are not
-hidden by a selected IMDb/TMDB fallback. If JSON lacks movie RT or
-exact-episode provider entries, the renderer retries the same authenticated local
-item as XML and reads only provider-labelled `Rating` elements.
-For intended movie RT output, set every applicable Plex Movie library's
-**Edit → Advanced → Ratings Source** to **Rotten Tomatoes**. This is a
-library-wide Plex choice, not a TautWeekly setting; leave IMDb/TMDB selected if
-that fallback is intentional.
+Direct Plex access is recommended for full provider ratings, exact-episode
+metadata, backgrounds, and selected logos. Manager verification sends the Plex
+token in the `X-Plex-Token` header and tests `/identity` plus authenticated
+`/library/sections`; it does not put the token in a URL or browser response.
 
 ## Metadata readiness before acceptance
 
-After first setup, after changing a Plex metadata agent or Ratings Source, and
-after a ratings/artwork recovery update when upstream data may be stale:
+After first setup, after changing a Plex metadata agent or **Ratings Source**,
+or after a ratings/artwork recovery update when upstream data may be stale:
 
-1. Confirm **Edit → Advanced → Ratings Source** in every included Plex Movie
+1. Confirm **Edit > Advanced > Ratings Source** for every included Plex Movie
    library.
-2. Run Plex **Manage Library → Refresh All Metadata** for every included movie
-   and TV library, then wait for all refreshes to finish.
-3. In Tautulli, open each same **Library → Media Info** tab, select
-   **Refresh media info**, and wait. The current control is per library, so
+2. Run Plex **Manage Library > Refresh All Metadata** for every included movie
+   and TV library, and wait for completion.
+3. In Tautulli, open each same **Library > Media Info** tab, select
+   **Refresh media info**, and wait. The current control is per-library, so
    repeat it for every included section.
-4. Run `verify`, PreviewAll, and TestEmail only after both refresh stages
-   complete.
+4. Return to Manager **Verify**, regenerate PreviewAll, and repeat the
+   controlled TestEmail acceptance check.
 
-[Plex documents](https://support.plex.tv/articles/200289306-scanning-vs-refreshing-a-library/)
-that a full refresh can take significant time and can update existing metadata
-and artwork. Do not refresh unrelated music/photo libraries for TautWeekly.
-Tautulli's [section-specific media-info refresh](https://github.com/Tautulli/Tautulli/wiki/Tautulli-API-Reference#get_library_media_info)
-updates its table after Plex; it does not replace Plex's refresh or choose a
-ratings provider. Routine TautWeekly updates do not require a full refresh when
-current output already renders correctly.
+A full Plex refresh may take substantial time and change artwork. Routine TautWeekly updates do not require a full refresh when current output already
+renders correctly.
 
-## Safe acceptance sequence
+## Scheduling and graceful lifecycle
 
-```bash
-./tautweekly.sh verify
-./tautweekly.sh list-libraries
-./tautweekly.sh manage-libraries
-./tautweekly.sh list-users
-./tautweekly.sh exclude-users
-./tautweekly.sh preview-all USER_ID
-./tautweekly.sh open-preview
-./tautweekly.sh send-test-all USER_ID
-./tautweekly.sh schedule-status
-```
+The newsletter scheduler is independent from the browser session. Manager
+Schedule changes only the typed persistent enable/disable setting; it cannot
+alter Docker Desktop, ports, volumes, UID/GID, or host startup settings.
+Disabling a future schedule does not cancel a newsletter already running.
 
-Replace `USER_ID` with a numeric value printed by `list-users`. The roster is
-informational and does not select or save a default user.
+Docker Compose grants stop/restart up to 30 minutes. On shutdown, the Manager
+stops accepting new work, the supervisor waits for an active newsletter
+operation to finish, and only then stops the scheduler. The bounded grace
+prevents an ordinary Docker Desktop restart from silently cancelling delivery.
 
-Before enabling delivery, confirm `Configured TZ`, `Control zone`, and
-`Scheduler TZ` agree and that `Scheduler now` has the expected local time and
-UTC offset. Recreate or restart the container after changing `TZ`.
-
-During preview review, confirm the supplied animated movie/TV icons,
-up-to-four most-watched movie and TV-show rows, duration-only Total Watched
-card, anonymous Binge Champion duration plus nonzero movie/TV-show counts, gold winner
-treatment, and Trending hero fallback. The TV stats card is absent when no
-show was watched; TV-only release weeks retain their TV cards below the hero.
-
-Enable automation only after reviewing browser previews and TestEmail messages:
+Use the Mac wrapper for lifecycle status:
 
 ```bash
-./tautweekly.sh schedule-enable
+./tautweekly.sh status
+./tautweekly.sh logs
+./tautweekly.sh start
+./tautweekly.sh stop
+./tautweekly.sh restart
 ```
 
-The macOS Compose default binds previews to `127.0.0.1`. Keep that default
-unless trusted-LAN access is intentional.
+## Network, reverse proxy, and TLS
 
-Opening `http://localhost:8787/` shows a read-only preview landing page with
-first-run commands. It is not an administration Web UI and does not expose
-configuration or send controls. After `preview-all` completes, the generated
-index is available at `http://localhost:8787/preview-all-00-INDEX.html`.
+The generated `.env` keeps `PREVIEW_BIND=127.0.0.1`; that compatibility name
+now controls the authenticated Manager host port. Keep loopback unless trusted
+LAN access is intentional. The Manager always requires authentication.
 
-## Manage user exclusions
+For a deliberate DNS name, add only exact names to `MANAGER_ALLOWED_HOSTS`.
+For HTTPS behind a trusted reverse proxy, preserve the original Host header,
+set `MANAGER_SECURE_COOKIES=true`, terminate TLS at the proxy, and do not
+publish the plain HTTP backend. Wildcard hosts and forwarded identity headers
+are not trusted. `GET /health/live` is unauthenticated and exposes only
+liveness; configuration, paths, versions, credentials, and newsletter state
+remain authenticated.
 
-During primary setup, the wizard queries Tautulli and lets you select numbered
-users or ranges such as `2,4-6`. Press Enter to keep the current selection or
-type `none` to clear it. Run `./tautweekly.sh exclude-users` later to update
-only the stable IDs in `ExcludedUserIds`; existing `ExcludedEmails` values are
-left unchanged.
+## Persistent data, permissions, and backup
 
-The selector merges the bulk `get_user_names` and `get_users` responses by
-stable ID. It does not call `get_user` once per row, and users present only in
-the name roster remain available for selection.
+The image is read-only. Writable runtime state is limited to the bind-mounted
+package `data/` directory and a bounded in-memory `/tmp`. The entrypoint maps
+the non-root container account to the Mac user's `PUID`/`PGID`, creates private
+paths, and repairs only legacy ownership within `/data`.
 
-Excluded users are skipped by automatic delivery and SendAll. Preview and
-TestEmail modes can still use them for safe rendering checks, and the one-off
-welcome remains a separately confirmed administrator action. Do not share the
-selector's names or email addresses publicly.
-
-## Manage newsletter libraries
-
-Primary setup discovers active movie and TV libraries through Tautulli and
-saves selected section IDs in `IncludedLibraryIds`. This single scope filters
-releases, quiet detection, Trending, Binge Champion, and personal statistics
-before the normal calculations. Empty or absent IDs preserve legacy
-all-library behavior.
-
-Run `./tautweekly.sh list-libraries` to inspect the scope or
-`./tautweekly.sh manage-libraries` to replace it. The manager accepts rows,
-ranges, `all`, or Enter to keep the current choice; it backs up the private
-config before writing and does not change SMTP, recipients, or scheduling.
-
-## Data and updates
-
-Private runtime data lives in `data/`. Back it up with
-`./tautweekly.sh backup` and keep the archive private.
-
-The future-deletion cache lives at `data/cache/deleted-items`, defaults to 365
-days/1,000 items/256 MiB, and is preserved with the rest of `data/` during
-updates. It can reuse only items observed live after v0.9.0; it cannot restore
-assets Plex/Tautulli had already discarded. To purge it, stop the container and
-remove only that directory. Delete all of `data/` during uninstall only when
-configuration, state, output, cache entries, and backups are no longer needed.
-
-`./tautweekly.sh check-update` compares `RELEASE-METADATA.txt` with GitHub's
-latest stable release. It never applies an update and never follows `main` or
-the container `edge` tag. macOS does not schedule unattended updates.
-
-To apply a newer release, download the Mac archive and `SHA256SUMS.txt`, verify
-the checksum, and extract the archive over the existing project folder without
-deleting `.env` or `data/`. Then run:
+Back up before updates or recovery:
 
 ```bash
-./tautweekly.sh update
-./tautweekly.sh verify
-./tautweekly.sh preview-all USER_ID
-./tautweekly.sh send-test-all USER_ID
+./tautweekly.sh backup
 ```
 
-The update command builds the verified package currently on disk; it no longer
-pretends that refreshing the Docker base image installs a newer TautWeekly
-release. It refuses a busy application operation, preserves `.env` and `data/`,
-checks the running image version and container health, and automatically retags
-and restarts the previous image if validation fails. Keep the prior verified
-archive and private backup for file-level recovery.
+The archive contains configuration, credentials, Manager authentication state,
+schedules, output, and the bounded deleted-item cache; keep it private. For a
+filesystem-level backup, stop the service and copy both `.env` and `data/`.
 
-If the update addresses missing ratings/artwork or output remains stale,
-complete metadata readiness before the listed verify/preview/TestEmail checks.
+## Stable update and rollback
 
-Docker health uses a service-supervisor heartbeat that continues throughout
-long scheduled sends. A stopped preview listener or stalled supervisor remains
-unhealthy; missing decorative artwork produces a repair warning and can be
-restored with `./tautweekly.sh repair-assets`.
+`./tautweekly.sh check-update` compares the packaged release metadata with the
+latest stable GitHub release and never applies an update. macOS does not enable
+unattended updates.
+
+To upgrade:
+
+1. Run `./tautweekly.sh backup` and keep the previous verified archive.
+2. Download the newer Mac archive and `SHA256SUMS.txt` from the same stable
+   release and verify the checksum.
+3. Extract the new archive over the existing package directory without deleting
+   or replacing `.env` or `data/`.
+4. Run `./tautweekly.sh update`.
+5. Open Manager, sign in again if the service restart invalidated the session,
+   and verify the reported version, Manager/scheduler health, Config status,
+   all six previews, and controlled TestEmail result.
+
+The updater builds only the verified package on disk, takes the same operation
+lock as the renderer, preserves `.env` and `data/`, verifies the running image
+version and health, and retags/restarts the previous local image automatically
+if the candidate fails. Keep the prior archive and private backup for complete
+file-level rollback.
+
+## Password recovery, reinstall, and uninstall
+
+If the Manager password is lost:
+
+```bash
+./tautweekly.sh manager-reset-access
+./tautweekly.sh manager-bootstrap
+```
+
+Recovery resets only the administrator password and active sessions, waits for
+any active newsletter during the controlled restart, and preserves
+configuration, schedules, history, output, and delivery state.
+
+For repair/reinstall, verify and extract the same stable archive over the
+package, preserve `.env` and `data/`, then run `./tautweekly.sh update`. To
+uninstall the application but retain data, run `./tautweekly.sh stop` and keep
+the package's `.env` and `data/` in a private backup. Delete the local
+`tautweekly-mac:stable` image only after confirming no other project uses it.
+Delete `.env`, `data/`, and private backups only when the user explicitly wants
+all configuration, credentials, schedules, history, output, and cache removed;
+the package never deletes them implicitly.
+
+## Expert/recovery commands
+
+`./tautweekly.sh setup`, `verify`, `preview-all USER_ID`, `send-test-all
+USER_ID`, library/user selectors, and schedule commands remain available for
+recovery or scripted administration. They are not the normal Mac setup source.
+Real-recipient `welcome` and `send-all` commands retain explicit confirmation.
+
+## Limitations
+
+- Docker Desktop must be installed, running, and allowed to keep the service
+  active; this package does not add a macOS Login Item or background agent.
+- It does not ship a native `.app`, menu-bar item, or Apple-notarized installer.
+- The Manager is containerized Linux with a truthful `macOS Docker Desktop`
+  capability profile; it does not pretend to control native macOS services.
+- Automated validation covers shell contracts, amd64/arm64 Manager builds,
+  archive contents, security/accessibility behavior, synthetic integrations,
+  and Docker-compatible lifecycle rules. A physical Intel/Apple-silicon Mac
+  and Docker Desktop remain release acceptance gaps when unavailable in CI.
 
 See [configuration](../CONFIGURATION.md), [security](../SECURITY.md), and
 [troubleshooting](../TROUBLESHOOTING.md).

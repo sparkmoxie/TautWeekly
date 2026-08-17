@@ -4,8 +4,10 @@ set -euo pipefail
 image="${1:?Usage: test-container-image.sh IMAGE [BUILD_CONTEXT] [RUNTIME_PROFILE]}"
 build_context="${2:-}"
 runtime_profile="${3:-nas}"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 container_name="tautweekly-smoke-$RANDOM-$$"
 data_root="$(mktemp -d)"
+generated_context=""
 container_started=false
 
 cleanup() {
@@ -13,6 +15,9 @@ cleanup() {
     docker rm -f "$container_name" >/dev/null 2>&1 || true
   fi
   rm -rf "$data_root"
+  if [[ -n "$generated_context" ]]; then
+    rm -rf "$generated_context"
+  fi
 }
 trap cleanup EXIT
 
@@ -31,6 +36,22 @@ case "$runtime_profile" in
 esac
 
 if [[ -n "$build_context" ]]; then
+  if [[ "$runtime_profile" == mac && ! -d "$build_context/manager" ]]; then
+    command -v go >/dev/null 2>&1 || fail 'Go is required to stage the Mac Manager build context.'
+    case "$(uname -m)" in
+      x86_64|amd64) manager_arch=amd64 ;;
+      aarch64|arm64) manager_arch=arm64 ;;
+      *) fail 'Mac image smoke staging requires a supported 64-bit host architecture.' ;;
+    esac
+    generated_context="$(mktemp -d)"
+    cp -a "$build_context/." "$generated_context/"
+    mkdir -p "$generated_context/manager"
+    (
+      cd "$repo_root/manager"
+      CGO_ENABLED=0 GOOS=linux GOARCH="$manager_arch" go build -trimpath -buildvcs=false -ldflags '-s -w -X main.version=ci' -o "$generated_context/manager/tautweekly-manager-linux-$manager_arch" ./cmd/tautweekly-manager
+    )
+    build_context="$generated_context"
+  fi
   docker build --tag "$image" "$build_context"
 fi
 
@@ -39,20 +60,17 @@ host_gid="$(id -g)"
 if [[ "$host_uid" -eq 0 ]]; then host_uid=1000; fi
 if [[ "$host_gid" -eq 0 ]]; then host_gid=1000; fi
 
-security_args=()
-if [[ "$runtime_profile" == nas ]]; then
-  security_args=(
-    --read-only
-    --tmpfs '/tmp:rw,noexec,nosuid,size=256m,mode=1777'
-    --security-opt no-new-privileges:true
-    --cap-drop ALL
-    --cap-add CHOWN
-    --cap-add DAC_OVERRIDE
-    --cap-add FOWNER
-    --cap-add SETGID
-    --cap-add SETUID
-  )
-fi
+security_args=(
+  --read-only
+  --tmpfs '/tmp:rw,noexec,nosuid,size=256m,mode=1777'
+  --security-opt no-new-privileges:true
+  --cap-drop ALL
+  --cap-add CHOWN
+  --cap-add DAC_OVERRIDE
+  --cap-add FOWNER
+  --cap-add SETGID
+  --cap-add SETUID
+)
 
 docker run --detach \
   --name "$container_name" \
@@ -77,20 +95,20 @@ for _ in {1..100}; do
 done
 [[ "$healthy" == true ]] || fail 'Container never passed its production healthcheck.'
 
-docker exec "$container_name" pwsh -NoLogo -NoProfile -NonInteractive -Command \
+docker exec "$container_name" /opt/tautweekly/bin/run-as-user.sh pwsh -NoLogo -NoProfile -NonInteractive -Command \
   'if ($PSVersionTable.PSVersion -lt [Version]"7.2") { exit 1 }' || fail 'PowerShell 7.2+ is unavailable in the runtime image.'
 docker exec "$container_name" test -s /data/config.example.json || fail 'Persistent config example was not initialized.'
 if [[ "$runtime_profile" == mac ]]; then
-  docker exec "$container_name" test -s /data/output/index.html || fail 'Preview landing page was not initialized.'
+  docker exec "$container_name" test ! -e /data/output/index.html || fail 'Mac first run created a stale static output index instead of using Manager.'
 fi
 docker exec "$container_name" test -s /data/output/product-branding/favicon.ico || fail 'Preview favicon was not initialized.'
 docker exec "$container_name" test -s /data/output/product-branding/tautweekly-app-icon-128.png || fail 'Preview product icon was not initialized.'
 docker exec "$container_name" test -s /data/service-heartbeat.json || fail 'Service supervisor heartbeat was not initialized.'
-if [[ "$runtime_profile" == nas ]]; then
-  docker exec "$container_name" test -x /opt/tautweekly/bin/tautweekly-manager || fail 'NAS Manager binary is unavailable.'
+if [[ "$runtime_profile" == nas || "$runtime_profile" == mac ]]; then
+  docker exec "$container_name" test -x /opt/tautweekly/bin/tautweekly-manager || fail "$runtime_profile Manager binary is unavailable."
   setup_json="$(docker exec "$container_name" curl -fsS http://127.0.0.1:8080/api/v1/setup)"
-  grep -Fq '"authenticationRequired":true' <<<"$setup_json" || fail 'NAS Manager authentication is not mandatory.'
-  grep -Fq '"runtimeMode":"nas"' <<<"$setup_json" || fail 'NAS Manager did not report its container runtime profile.'
+  grep -Fq '"authenticationRequired":true' <<<"$setup_json" || fail "$runtime_profile Manager authentication is not mandatory."
+  grep -Fq "\"runtimeMode\":\"$runtime_profile\"" <<<"$setup_json" || fail "$runtime_profile Manager did not report its container runtime profile."
   bootstrap_token="$(docker exec "$container_name" /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager)"
   [[ "$bootstrap_token" =~ ^[A-Za-z0-9_-]{32,}$ ]] || fail 'Explicit bootstrap command did not return a one-time token.'
   if docker logs "$container_name" 2>&1 | grep -Fq "$bootstrap_token"; then

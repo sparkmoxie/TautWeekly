@@ -33,7 +33,7 @@ esac
 manager="$package_root/manager/tautweekly-manager-linux-$manager_arch"
 [[ -x "$manager" ]] || fail "Packaged $manager_arch Manager is not executable"
 "$manager" version | grep -Eq '^TautWeekly Manager (ci|[0-9]+\.[0-9]+\.[0-9]+)$' || fail 'Packaged Manager version is missing or malformed'
-grep -Fq 'native Linux newsletter preview service' "$package_root/app/preview-home.html" || fail 'Linux-specific preview landing page is missing'
+grep -Fq 'authenticated native Linux Manager endpoint' "$package_root/app/preview-home.html" || fail 'Linux-specific Manager landing page is missing'
 if grep -Eq 'Docker Compose|Unraid container Console' "$package_root/app/preview-home.html"; then
   fail 'Linux preview landing page contains container-only setup language'
 fi

@@ -1,6 +1,13 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.4.1 Portable
+---------------
+- makes the authenticated Manager the sole normal setup, verification, preview, TestEmail, and scheduling surface
+- replaces stale preview/console-first fallback language with bootstrap, GUI acceptance, update, and recovery guidance
+- returns expert setup and verification users to Manager instead of printing platform-specific command sequences
+- keeps numeric-user PowerShell home and XDG state in the bounded temporary filesystem for read-only operation
+
 v1.4.0 Portable
 ---------------
 - adds the authenticated, capability-aware Manager as the primary setup and administration surface

@@ -135,7 +135,7 @@ func New(options Options) (*Server, error) {
 	options.RuntimeRoot = filepath.Clean(runtimeRoot)
 	options.DataDir = filepath.Clean(dataDir)
 	options.RuntimeMode = normalizedRuntimeMode(options.RuntimeMode)
-	if options.RuntimeMode == runtimeModeNAS {
+	if isManagedServiceRuntimeMode(options.RuntimeMode) {
 		options.RequireAuthentication = true
 	}
 	store, err := newAuthStore(options.DataDir, options.Now, options.RequireAuthentication)
@@ -171,7 +171,7 @@ func New(options Options) (*Server, error) {
 		return nil, err
 	}
 	startup := options.startupController
-	if options.RuntimeMode == runtimeModeNAS {
+	if isManagedServiceRuntimeMode(options.RuntimeMode) {
 		startup = disabledStartupController{}
 	} else if startup == nil {
 		startup = newPlatformStartupController(options.TautWeeklyRoot, options.DataDir)
@@ -297,9 +297,9 @@ func (s *Server) allowedHost(value string) bool {
 	}
 	ip := net.ParseIP(host)
 	if ip != nil {
-		return ip.IsLoopback() || s.capabilities.RuntimeMode == runtimeModeNAS
+		return ip.IsLoopback() || isContainerRuntimeMode(s.capabilities.RuntimeMode)
 	}
-	if s.capabilities.RuntimeMode != runtimeModeNAS {
+	if !isContainerRuntimeMode(s.capabilities.RuntimeMode) {
 		return false
 	}
 	for _, allowed := range s.options.AllowedHosts {
@@ -513,8 +513,26 @@ func (s *Server) handleConfig(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, ReadRedactedConfig(s.options.RuntimeRoot))
 }
 
+func (s *Server) configEditorView() ConfigEditorView {
+	editor := ReadConfigEditor(s.options.RuntimeRoot)
+	if editor.State != "unconfigured" || s.capabilities.RuntimeMode != runtimeModeMac {
+		return editor
+	}
+	for index := range editor.Fields {
+		field := &editor.Fields[index]
+		if field.Name != "TautulliUrl" {
+			continue
+		}
+		field.Value = "http://host.docker.internal:8181"
+		field.Placeholder = "http://host.docker.internal:8181"
+		field.Help = "For Tautulli running on this Mac, use host.docker.internal. Another server must use an address reachable from Docker Desktop. Verification runs after a successful save."
+		break
+	}
+	return editor
+}
+
 func (s *Server) handleConfigEditor(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, ReadConfigEditor(s.options.RuntimeRoot))
+	writeJSON(w, http.StatusOK, s.configEditorView())
 }
 
 func (s *Server) handleConfigurationStatus(w http.ResponseWriter, _ *http.Request) {
@@ -1040,14 +1058,14 @@ func (s *Server) handleScheduleMutation(w http.ResponseWriter, r *http.Request) 
 	switch {
 	case errors.Is(err, ErrScheduleConfirmation):
 		message := "Confirm the selected Windows Task Scheduler change."
-		if s.capabilities.RuntimeMode == runtimeModeNAS {
+		if isManagedServiceRuntimeMode(s.capabilities.RuntimeMode) {
 			message = "Confirm the selected embedded scheduler change."
 		}
 		writeAPIError(w, http.StatusUnprocessableEntity, "schedule-confirmation-required", message)
 		return
 	case errors.Is(err, ErrScheduleInvalid):
 		message := "Choose install, enable, disable, or remove."
-		if s.capabilities.RuntimeMode == runtimeModeNAS {
+		if isManagedServiceRuntimeMode(s.capabilities.RuntimeMode) {
 			message = "Choose enable or disable for the embedded scheduler."
 		}
 		writeAPIError(w, http.StatusUnprocessableEntity, "schedule-action-invalid", message)
@@ -1057,7 +1075,7 @@ func (s *Server) handleScheduleMutation(w http.ResponseWriter, r *http.Request) 
 		return
 	case errors.Is(err, ErrScheduleBusy):
 		message := "Another schedule change is waiting for elevation or still running."
-		if s.capabilities.RuntimeMode == runtimeModeNAS {
+		if isManagedServiceRuntimeMode(s.capabilities.RuntimeMode) {
 			message = "Another embedded scheduler change is still running."
 		}
 		writeAPIError(w, http.StatusConflict, "schedule-busy", message)

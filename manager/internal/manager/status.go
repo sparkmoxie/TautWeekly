@@ -99,7 +99,7 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 		SchemaVersion: 1,
 		ObservedAtUTC: observed.Format(time.RFC3339),
 		Overall:       "healthy",
-		Platform:      runtime.GOOS,
+		Platform:      capabilities.Platform,
 		Version:       options.Version,
 		Runtime: RuntimeStatus{
 			Manager:   "healthy",
@@ -176,7 +176,7 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 			}
 		}
 	}
-	if capabilities.RuntimeMode == runtimeModeNAS || capabilities.RuntimeMode == runtimeModeLinux {
+	if isManagedServiceRuntimeMode(capabilities.RuntimeMode) {
 		applyEmbeddedScheduleStatus(&snapshot, runtimeRoot, observed, capabilities.ScheduleProvider)
 	}
 	applyLatestRendererDelivery(&snapshot, runtimeRoot)

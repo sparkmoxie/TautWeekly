@@ -104,6 +104,19 @@ function Write-MetadataReadinessChecklist {
     Write-Host "not require a full library refresh when current metadata already renders correctly."
 }
 
+function Write-ManagerNextSteps {
+    Write-Host "NEXT: return to the authenticated Manager and use Config or Dashboard verification," -ForegroundColor Cyan
+    Write-Host "then generate PreviewAll and send only to TestEmail before enabling the schedule."
+    if ($isNativeLinux) {
+        Write-Host "Pairing fallback: sudo tautweekly manager-bootstrap"
+        Write-Host "Expert verification fallback: sudo tautweekly verify"
+    }
+    else {
+        Write-Host "Pairing fallback: use the installed host wrapper's manager-bootstrap command."
+        Write-Host "Expert verification fallback: use the installed host wrapper's verify command."
+    }
+}
+
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor DarkYellow
 Write-Host $(if ($isNativeLinux) { "TAUTWEEKLY FOR PLEX NATIVE LINUX SETUP" } else { "TAUTWEEKLY FOR PLEX NAS PORTABLE SETUP" }) -ForegroundColor Yellow
@@ -130,11 +143,7 @@ if (Test-Path $configPath) {
         Write-Host "Existing config preserved." -ForegroundColor Green
         Write-MetadataReadinessChecklist
         Write-Host ""
-        if ($isNativeLinux) { Write-Host "NEXT: sudo tautweekly verify" }
-        else {
-            Write-Host "NEXT (Unraid Console): /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1"
-            Write-Host "NEXT (Compose host project directory): ./tautweekly.sh verify"
-        }
+        Write-ManagerNextSteps
         exit 0
     }
     try {
@@ -183,11 +192,8 @@ catch {
     if ($existingIncludedLibraryIds.Count -gt 0) {
         Write-Host "WARNING: $($_.Exception.Message)" -ForegroundColor Yellow
         Write-Host "Existing newsletter library selection will be preserved." -ForegroundColor Yellow
-        if ($isNativeLinux) { Write-Host "Run sudo tautweekly manage-libraries." -ForegroundColor Yellow }
-        else {
-            Write-Host "Unraid Console: /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1" -ForegroundColor Yellow
-            Write-Host "Compose host project directory: ./tautweekly.sh manage-libraries" -ForegroundColor Yellow
-        }
+        Write-Host "After connectivity is restored, return to Manager Config." -ForegroundColor Yellow
+        Write-Host "Expert fallback: use the platform wrapper's manage-libraries command." -ForegroundColor Yellow
     }
     else {
         throw "Newsletter libraries could not be selected: $($_.Exception.Message)"
@@ -207,11 +213,8 @@ try {
 catch {
     Write-Host "WARNING: $($_.Exception.Message)" -ForegroundColor Yellow
     Write-Host "Setup will continue." -ForegroundColor Yellow
-    if ($isNativeLinux) { Write-Host "Run sudo tautweekly exclude-users." -ForegroundColor Yellow }
-    else {
-        Write-Host "Unraid Console: /opt/tautweekly/bin/run-script.sh Manage-User-Exclusions.ps1" -ForegroundColor Yellow
-        Write-Host "Compose host project directory: ./tautweekly.sh exclude-users" -ForegroundColor Yellow
-    }
+    Write-Host "After connectivity is restored, return to Manager Config." -ForegroundColor Yellow
+    Write-Host "Expert fallback: use the platform wrapper's exclude-users command." -ForegroundColor Yellow
 }
 
 $serverName = Read-Default "Plex server/newsletter display name" "My Plex"
@@ -332,8 +335,4 @@ Write-Host ""
 Write-Host "IMPORTANT: config.json contains credentials. Never publish or share it."
 Write-MetadataReadinessChecklist
 Write-Host ""
-if ($isNativeLinux) { Write-Host "NEXT: sudo tautweekly verify" }
-else {
-    Write-Host "NEXT (Unraid Console): /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1"
-    Write-Host "NEXT (Compose host project directory): ./tautweekly.sh verify"
-}
+Write-ManagerNextSteps

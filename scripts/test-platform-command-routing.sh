@@ -64,7 +64,11 @@ bash "$repo_root/platforms/mac-docker/tautweekly.sh" manage-libraries
 assert_call 'docker compose exec tautweekly /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1'
 
 reset_calls
-bash "$repo_root/platforms/mac-docker/tautweekly.sh" open-preview
+bash "$repo_root/platforms/mac-docker/tautweekly.sh" manager-bootstrap
+assert_call 'docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager'
+
+reset_calls
+bash "$repo_root/platforms/mac-docker/tautweekly.sh" open-manager
 assert_call 'open http://localhost:8787/'
 
 # Native Linux and FreeBSD control paths require root by design. Run their
@@ -125,6 +129,16 @@ else
   status=$?
   [[ "$status" -eq 77 ]] || fail "FreeBSD routing exited $status"
   printf '[WARN] FreeBSD root-only routing skipped because sudo is unavailable.\n'
+fi
+
+reset_calls
+if run_privileged \
+    "PATH=$PATH" \
+    "TAUTWEEKLY_TEST_CALL_LOG=$call_log" \
+    "TAUTWEEKLY_ENV_FILE=$freebsd_env" \
+    "TAUTWEEKLY_PODMAN_BIN=$stub_bin/podman" \
+    sh "$repo_root/platforms/freebsd-podman/tautweekly" manager-bootstrap; then
+  assert_call 'podman exec -i virtual-tautweekly /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager'
 fi
 
 reset_calls

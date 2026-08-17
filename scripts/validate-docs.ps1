@@ -62,7 +62,7 @@ foreach ($relative in $pages) {
         '(?i)<meta[^>]+name=["'']viewport["'']',
         '(?i)@media'
     )
-    if ($relative -notin @('examples/preview-all-00-INDEX.html', 'gui-preview/index.html')) {
+    if ($relative -notin @('examples/preview-all-00-INDEX.html', 'gui-preview/index.html', 'nas-docker/index.html')) {
         $requiredPatterns += @(
             '(?i)search',
             '(?i)progress',
@@ -238,7 +238,7 @@ $metadataReadinessDocs = @(
     'docs/freebsd/README.md',
     'docs/index.html',
     'docs/windows/index.html',
-    'docs/nas-docker/index.html',
+    'docs/nas-docker/manager.html',
     'docs/mac/index.html',
     'docs/linux/index.html',
     'docs/freebsd/index.html'
@@ -271,7 +271,7 @@ foreach ($pattern in @(
     if ($nasInstall -notmatch $pattern) { throw "NAS user-selection guidance is missing: $pattern" }
 }
 
-foreach ($relative in @('nas-docker/index.html', 'mac/index.html', 'freebsd/index.html')) {
+foreach ($relative in @('mac/index.html', 'freebsd/index.html')) {
     $html = [IO.File]::ReadAllText((Join-Path $docs $relative))
     if ($html -notmatch 'USER_ID') { throw "Numeric USER_ID guidance is missing from $relative" }
 }
@@ -290,6 +290,53 @@ foreach ($pattern in @(
 )) {
     if ($linuxQuickstart -notmatch $pattern) {
         throw "Native Linux GUI/update guidance is missing: $pattern"
+    }
+}
+
+$macQuickstart = [IO.File]::ReadAllText((Join-Path $docs 'mac/index.html'))
+$macReadme = [IO.File]::ReadAllText((Join-Path $docs 'mac/README.md'))
+foreach ($source in @($macQuickstart, $macReadme)) {
+    foreach ($pattern in @(
+        'GUI-first|Manager is the setup source',
+        'manager-bootstrap',
+        'manager-reset-access',
+        'http://localhost:8787/',
+        'Validate, save, and verify',
+        'all six',
+        'TestEmail',
+        'SHA256SUMS\.txt',
+        '\.env',
+        'data/',
+        '30 minutes'
+    )) {
+        if ($source -notmatch $pattern) {
+            throw "macOS Manager/update guidance is missing: $pattern"
+        }
+    }
+    if ($source -match 'read-only preview landing page|not an administration Web UI|terminal-based') {
+        throw 'macOS documentation retained pre-Manager setup language.'
+    }
+}
+
+$nasRedirect = [IO.File]::ReadAllText((Join-Path $docs 'nas-docker/index.html'))
+foreach ($pattern in @(
+    'url=manager\.html',
+    'location\.replace\("manager\.html"',
+    'authenticated Manager is the setup source',
+    'Config, verification, six previews, controlled TestEmail delivery, scheduling, updates, recovery'
+)) {
+    if ($nasRedirect -notmatch $pattern) {
+        throw "NAS canonical redirect is missing Manager source-of-truth guidance: $pattern"
+    }
+}
+foreach ($pattern in @(
+    'Setup-First\.ps1',
+    '\.\/tautweekly\.sh setup',
+    'read-only preview viewer',
+    'not an administration Web UI'
+)) {
+    if ($nasRedirect -match $pattern) {
+        throw "NAS canonical redirect retained stale console-first guidance: $pattern"
     }
 }
 
@@ -361,6 +408,56 @@ if ($configuration -notmatch 'SmtpAuthenticationMethod' -or $configuration -notm
 }
 if ($troubleshooting -notmatch 'smtp\.protonmail\.ch' -or $troubleshooting -notmatch 'Sender address rejected: not logged in') {
     throw 'Proton SMTP troubleshooting guidance is missing.'
+}
+foreach ($pattern in @(
+    'Manager \*\*Config\*\* is the setup source on Windows, NAS/Docker, macOS Docker\s+Desktop, native Linux, and FreeBSD Podman',
+    'Terminal setup scripts remain\s+expert/recovery fallbacks',
+    'Normally revise this scope in Manager Config',
+    'Normally revise exclusions in Manager Config'
+)) {
+    if ($configuration -notmatch $pattern) {
+        throw "Configuration reference is missing a GUI capability boundary: $pattern"
+    }
+}
+foreach ($pattern in @(
+    'Windows, NAS/Docker, macOS Docker Desktop, native Linux, and FreeBSD serve previews through the\s+authenticated Manager',
+    'manager-bootstrap',
+    'Complete Config to create the\s+persistent `config\.json`',
+    'http://localhost:8787/'
+)) {
+    if ($troubleshooting -notmatch $pattern) {
+        throw "Troubleshooting is missing Manager source-of-truth guidance: $pattern"
+    }
+}
+foreach ($pattern in @(
+    'read-only preview viewer',
+    'run `\.\/tautweekly\.sh setup` or run `Setup-First\.ps1`'
+)) {
+    if ($troubleshooting -match $pattern) {
+        throw "Troubleshooting retained stale NAS setup guidance: $pattern"
+    }
+}
+
+$freeBsdQuickstart = [IO.File]::ReadAllText((Join-Path $docs 'freebsd/index.html'))
+$freeBsdReadme = [IO.File]::ReadAllText((Join-Path $docs 'freebsd/README.md'))
+foreach ($source in @($freeBsdQuickstart, $freeBsdReadme)) {
+    foreach ($pattern in @(
+        'manager-bootstrap',
+        'manager-reset-access',
+        'http://127\.0\.0\.1:8787',
+        'Manager Config',
+        'Verify',
+        'PreviewAll',
+        'TestEmail',
+        '30 minutes'
+    )) {
+        if ($source -notmatch $pattern) {
+            throw "FreeBSD Manager/update guidance is missing: $pattern"
+        }
+    }
+    if ($source -match 'unauthenticated\s+preview server|preview service has no built-in authentication') {
+        throw 'FreeBSD documentation retained pre-Manager authentication language.'
+    }
 }
 foreach ($relative in $pages) {
     $url = $renderedUrls[$relative]

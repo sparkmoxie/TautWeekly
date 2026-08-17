@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#010101">
-  <title>TautWeekly for Plex native Linux preview server</title>
+  <title>TautWeekly for Plex native Linux Manager</title>
   <link rel="icon" href="product-branding/favicon.ico" sizes="any">
   <style>
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -38,13 +38,13 @@
     <header>
       <img class="mark" src="product-branding/tautweekly-app-icon-128.png" alt="" width="128" height="128">
       <h1>TautWeekly for Plex</h1>
-      <p class="lede">The private native Linux newsletter preview service is running.</p>
-      <div class="online">Preview server online</div>
+      <p class="lede">The authenticated native Linux Manager endpoint is running.</p>
+      <div class="online">Manager online</div>
     </header>
 
     <section class="notice">
-      <h2>Use the authenticated Manager for administration</h2>
-      <p>This loopback preview listener serves generated newsletter files only. Keep it private. Reach the Manager through the documented SSH tunnel at <code>http://127.0.0.1:8788</code>; never expose either listener directly to the internet.</p>
+      <h2>The Manager is the setup source</h2>
+      <p>Keep this loopback endpoint private. Reach the Manager through the documented SSH tunnel at <code>http://127.0.0.1:8788</code>; never expose it directly to the internet.</p>
       <pre><code>ssh -L 8788:127.0.0.1:8788 YOUR_LINUX_ADMIN@YOUR_LINUX_HOST
 sudo tautweekly manager-bootstrap</code></pre>
     </section>
@@ -53,7 +53,7 @@ sudo tautweekly manager-bootstrap</code></pre>
       <h2>Finish setup in the Manager</h2>
       <ol>
         <li>Pair with the one-time token and create a unique administrator password.</li>
-        <li>Complete guided Config, then validate and save.</li>
+        <li>Complete guided Config, then choose <strong>Validate, save, and verify</strong>.</li>
         <li>Generate all six preview states and send only to TestEmail.</li>
         <li>Enable the independent weekly schedule only after acceptance passes.</li>
       </ol>

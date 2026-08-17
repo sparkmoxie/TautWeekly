@@ -9,7 +9,14 @@ general Linux Docker hosts, and Docker Desktop on x86-64 or ARM64. Docker
 Compose is the deployment mechanism for manual installations, not a separate
 edition or package.
 
-Current source baseline: **1.3.4**.
+Current source baseline: **1.4.1**.
+
+> [!IMPORTANT]
+> The authenticated Manager is the setup source for every target in this
+> distribution. Use its **Config**, **Verify**, **Previews**, **Operations**,
+> and **Schedule** pages for normal administration. Host/container commands
+> are limited to install, bootstrap, lifecycle, update, backup, recovery, and
+> explicit expert fallbacks.
 
 ## Requirements
 
@@ -176,8 +183,14 @@ current output already renders correctly.
 
 ## Safe acceptance sequence
 
-For release-archive and manual Compose installations, run this sequence from
-the extracted project directory on the Docker host, not inside the container:
+In the Manager, complete Config and choose **Validate, save, and verify**.
+Review the library scope and delivery exclusions, generate all six previews,
+send only to TestEmail, and inspect **Schedule**. Before enabling delivery,
+confirm the configured timezone, scheduler timezone, and scheduler-local time
+agree. Recreate or restart the container after changing its timezone.
+
+The following release-archive commands are expert/recovery fallbacks. Run them
+from the extracted project directory on the Docker host, not in the container:
 
 ```bash
 ./tautweekly.sh verify
@@ -193,18 +206,14 @@ the extracted project directory on the Docker host, not inside the container:
 Replace `USER_ID` with a numeric value printed by `list-users`. The wrapper
 can prompt when run interactively, but `list-users` does not persist a default.
 
-Before enabling delivery, confirm `Configured TZ`, `Control zone`, and
-`Scheduler TZ` agree and that `Scheduler now` has the expected local time and
-UTC offset. If the container timezone was changed, recreate or restart the
-container before trusting the status.
-
 During preview review, confirm the supplied animated movie/TV icons,
 up-to-four most-watched movie and TV-show rows, duration-only Total Watched
 card, anonymous Binge Champion duration plus nonzero movie/TV-show counts, gold winner
 treatment, and Trending hero fallback. The TV stats card is absent when no
 show was watched; TV-only release weeks retain their TV cards below the hero.
 
-Only after the previews and controlled TestEmail messages are approved:
+Only after the previews and controlled TestEmail messages are approved, enable
+future delivery on Manager **Schedule**. The expert fallback is:
 
 ```bash
 ./tautweekly.sh schedule-enable
@@ -215,17 +224,17 @@ confirmation.
 
 ## Manage user exclusions
 
-Primary setup queries Tautulli after the URL and API key are entered. Select
-comma-separated rows or ranges such as `2,4-6`; press Enter to keep the current
-selection or type `none` to clear it. The stable IDs are saved in
-`ExcludedUserIds`.
+Manager Config queries Tautulli after the URL and API key are entered and
+presents the delivery exclusions without exposing email addresses in browser
+diagnostics. Stable IDs are saved in `ExcludedUserIds`.
 
 The selector joins Tautulli's bulk `get_user_names` and `get_users` responses
 by stable ID instead of making one `get_user` request per row. A name-only row
 remains selectable if its detailed bulk record is unavailable.
 
-Run `./tautweekly.sh exclude-users` whenever the recipient policy changes.
-Unraid Apps users can instead run this from the container Console:
+Normally change the recipient policy in Manager Config. The
+`./tautweekly.sh exclude-users` command is an expert/recovery fallback. Unraid
+Apps users can invoke the equivalent fallback from the container Console:
 
 ```bash
 /opt/tautweekly/bin/run-script.sh Manage-User-Exclusions.ps1
@@ -239,15 +248,15 @@ names and email addresses as private recipient data.
 
 ## Manage newsletter libraries
 
-Primary setup discovers active Tautulli movie/TV libraries and stores the
+Manager Config discovers active Tautulli movie/TV libraries and stores the
 chosen stable section IDs in `IncludedLibraryIds`. The scope is global and is
 applied before releases, quiet mode, Trending, Binge Champion, and personal
 statistics are calculated. Empty or absent IDs retain legacy all-library
 behavior.
 
-Run `./tautweekly.sh list-libraries` to inspect the scope and
-`./tautweekly.sh manage-libraries` to replace it. Unraid Apps users can run the
-same manager directly in the container Console:
+Normally inspect and replace this scope in Manager Config. The
+`list-libraries` and `manage-libraries` commands are expert/recovery fallbacks.
+Unraid Apps users can invoke the equivalent fallback in the container Console:
 
 ```bash
 /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1

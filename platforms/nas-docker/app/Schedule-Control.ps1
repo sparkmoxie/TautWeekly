@@ -27,7 +27,7 @@ function Ensure-Property {
     }
 }
 
-if (-not (Test-Path $configPath)) { throw "config.json is missing. Run setup first." }
+if (-not (Test-Path $configPath)) { throw "config.json is missing. Complete Config in the authenticated Manager; terminal setup is an expert recovery fallback." }
 $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $configuredTimeZoneId = if ([string]::IsNullOrWhiteSpace([string]$env:TZ)) { 'Etc/UTC' } else { [string]$env:TZ }
 $scheduleTimeZone = $null

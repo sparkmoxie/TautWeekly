@@ -9,6 +9,7 @@ const (
 	runtimeModeWindows = "windows"
 	runtimeModeNAS     = "nas"
 	runtimeModeLinux   = "linux"
+	runtimeModeMac     = "mac"
 )
 
 // Capabilities describes the package that owns the shared Manager core. The
@@ -33,7 +34,7 @@ type Capabilities struct {
 
 func normalizedRuntimeMode(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
-	if value == runtimeModeNAS || value == runtimeModeLinux {
+	if value == runtimeModeNAS || value == runtimeModeLinux || value == runtimeModeMac {
 		return value
 	}
 	return runtimeModeWindows
@@ -71,6 +72,21 @@ func capabilitiesFor(options Options) Capabilities {
 			SecureCookies:     options.SecureCookies,
 		}
 	}
+	if mode == runtimeModeMac {
+		return Capabilities{
+			RuntimeMode:       runtimeModeMac,
+			Platform:          "macos-docker",
+			AccessLabel:       "macOS Docker Desktop access",
+			NetworkScope:      "host-loopback",
+			Authentication:    "required",
+			ScheduleProvider:  "embedded-container",
+			ScheduleActions:   []string{"enable", "disable"},
+			LifecycleProvider: "docker-desktop",
+			UpdateProvider:    "mac-package",
+			PathStyle:         "mac-bind-mount",
+			SecureCookies:     options.SecureCookies,
+		}
+	}
 	return Capabilities{
 		RuntimeMode:       runtimeModeWindows,
 		Platform:          runtime.GOOS,
@@ -87,6 +103,16 @@ func capabilitiesFor(options Options) Capabilities {
 		OpensBrowser:      runtime.GOOS == "windows",
 		SecureCookies:     options.SecureCookies,
 	}
+}
+
+func isManagedServiceRuntimeMode(mode string) bool {
+	mode = normalizedRuntimeMode(mode)
+	return mode == runtimeModeNAS || mode == runtimeModeLinux || mode == runtimeModeMac
+}
+
+func isContainerRuntimeMode(mode string) bool {
+	mode = normalizedRuntimeMode(mode)
+	return mode == runtimeModeNAS || mode == runtimeModeMac
 }
 
 func containsCapabilityAction(actions []string, action string) bool {

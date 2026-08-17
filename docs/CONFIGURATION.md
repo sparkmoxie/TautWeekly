@@ -3,8 +3,10 @@
 TautWeekly for Plex writes live settings to `config.json`. Docker editions keep
 it under `data/`; Windows keeps it beside the application; native Linux uses
 `/var/lib/tautweekly`; and FreeBSD uses `/var/db/tautweekly`. Start from the
-platform's `config.example.json` only when manual setup is required—the guided
-setup is preferred.
+platform's `config.example.json` only for recovery or an expert manual setup.
+Manager **Config** is the setup source on Windows, NAS/Docker, macOS Docker
+Desktop, native Linux, and FreeBSD Podman. Terminal setup scripts remain
+expert/recovery fallbacks on those packages.
 
 ## Tautulli and Plex
 
@@ -32,11 +34,12 @@ request receives no Plex token. Neither path searches by title or sends
 recipient identity or watch-history values. An absolute artwork URL on another
 host is also fetched without the Plex token.
 
-Setup stores the private URL/token in `config.json`; container networking is a
-separate runtime boundary. The URL must work from the TautWeekly process, not
-merely from a desktop browser or the Tautulli container. Platform verification
-uses the same discovery path as newsletter generation, sends the token only in
-the `X-Plex-Token` header, and tests `/identity` plus authenticated
+Manager Config (or the platform's documented terminal fallback) stores the
+private URL/token in `config.json`; container networking is a separate runtime
+boundary. The URL must work from the TautWeekly process, not merely from a
+desktop browser or the Tautulli container. **Validate, save, and verify** uses
+the same discovery path as newsletter generation, sends the token only in the
+`X-Plex-Token` header, and tests `/identity` plus authenticated
 `/library/sections`. A resolved but unreachable or unauthorized connection is
 a verification failure. If no URL/token pair can be resolved, verification
 warns and preserves the supported Tautulli-only fallback.
@@ -66,7 +69,8 @@ may be stale, complete these steps before PreviewAll or TestEmail:
 3. In Tautulli, open each same **Library → Media Info** tab, choose
    **Refresh media info**, and wait. The control is per library; repeat it for
    every included section.
-4. Run the TautWeekly verifier, PreviewAll, and a controlled TestEmail.
+4. In Manager, open **Verify**, generate PreviewAll, and send a controlled
+   TestEmail. Use the documented terminal verifier only as a recovery fallback.
 
 Plex documents that a full refresh can take significant time and can update
 existing metadata and artwork. Scope it to TautWeekly's included movie/TV
@@ -183,10 +187,11 @@ authorization.
 
 ### Global library selection
 
-After setup receives the Tautulli URL and API key, it calls `get_libraries`
-and lists active movie and TV libraries. Enter rows or ranges such as `1,3-4`,
-type `all`, or press Enter to keep the displayed scope. At least one active
-movie or TV library is required for a newly saved selection.
+Manager Config calls `get_libraries` after the Tautulli URL and API key are
+entered and presents active movie and TV libraries for selection. The terminal
+fallback accepts rows or ranges such as `1,3-4`, `all`, or Enter to keep the
+displayed scope. At least one active movie or TV library is required for a
+newly saved selection.
 
 `IncludedLibraryIds` is applied to raw Tautulli history and recently-added
 rows before any newsletter calculations. New/latest releases, quiet detection,
@@ -194,22 +199,22 @@ Trending, the hero, Binge Champion, and each user's personal totals therefore
 share the selected scope. Per-user Plex sharing rules are not queried or
 intersected; this is a single administrator-controlled scope.
 
-Run `15-MANAGE-LIBRARIES.bat` on Windows,
-`./tautweekly.sh manage-libraries` on Docker editions, or
-`sudo tautweekly manage-libraries` on Linux and FreeBSD to change only this
-scope. The manager backs up `config.json` first. The corresponding
-`list-libraries` command (or `16-LIST-LIBRARIES.bat`) is read-only. Verification
-warns about stale IDs and fails when no configured ID matches an active video
-library.
+Normally revise this scope in Manager Config. Recovery/expert fallbacks are
+`15-MANAGE-LIBRARIES.bat` on Windows,
+`./tautweekly.sh manage-libraries` on Docker editions, and
+`sudo tautweekly manage-libraries` on Linux or FreeBSD. The write path backs up
+`config.json` first. The corresponding `list-libraries` command (or
+`16-LIST-LIBRARIES.bat`) is read-only. Verification warns about stale IDs and
+fails when no configured ID matches an active video library.
 
 ### Interactive user exclusions
 
-The guided setup queries Tautulli after `TautulliUrl` and `ApiKey` are entered,
-then shows a numbered roster. Enter rows or ranges such as `2,4-6`, press Enter
-to keep the current list, or type `none` to clear every exclusion. Unknown IDs
-already in the configuration are preserved when a new known-user selection is
-saved, which avoids dropping an exclusion merely because a user is temporarily
-absent from the current Tautulli response.
+Manager Config queries Tautulli after `TautulliUrl` and `ApiKey` are entered,
+then presents the delivery roster. The terminal fallback accepts rows or ranges
+such as `2,4-6`, Enter to keep the current list, or `none` to clear every
+exclusion. Unknown IDs already in the configuration are preserved when a new
+known-user selection is saved, which avoids dropping an exclusion merely
+because a user is temporarily absent from the current Tautulli response.
 
 Roster loading makes two bulk requests: `get_user_names` supplies stable IDs
 and display names, while `get_users` supplies delivery details. The results are
@@ -217,14 +222,14 @@ merged by ID. TautWeekly for Plex does not call `get_user` once per roster row;
 if the detailed bulk request fails, name-only rows remain selectable but are
 not marked delivery-eligible in the selector.
 
-Use `14-MANAGE-USER-EXCLUSIONS.bat` on Windows,
-`./tautweekly.sh exclude-users` on either Docker edition, or
-`sudo tautweekly exclude-users` on Linux and FreeBSD to revise
-`ExcludedUserIds` independently. The standalone command does not change
-`ExcludedEmails`, SMTP values, or scheduling. Both lists affect scheduled and
-confirmed SendAll delivery. Preview and TestEmail modes remain available for
-rendering checks, while a one-off welcome is a separate, explicitly confirmed
-administrator action.
+Normally revise exclusions in Manager Config. Recovery/expert fallbacks are
+`14-MANAGE-USER-EXCLUSIONS.bat` on Windows,
+`./tautweekly.sh exclude-users` on either Docker edition, and
+`sudo tautweekly exclude-users` on Linux or FreeBSD. The standalone command
+does not change `ExcludedEmails`, SMTP values, or scheduling. Both lists affect
+scheduled and confirmed SendAll delivery. Preview and TestEmail modes remain
+available for rendering checks, while a one-off welcome is a separate,
+explicitly confirmed administrator action.
 
 ## Scheduling
 
@@ -255,9 +260,11 @@ before enabling delivery.
 | `TZ` | IANA timezone, such as `Etc/UTC` |
 | `PUID`, `PGID` | Non-root runtime identity with write access to `data/` |
 | `UMASK` | File-creation mask; `077` is the secure default |
-| `PREVIEW_BIND` | Host interface for preview publication |
-| `PREVIEW_PORT` | Host preview port |
-| `PREVIEW_BASE_URL` | URL printed in preview instructions |
+| `PREVIEW_BIND` | Compatibility name for the host interface that publishes the authenticated Manager; Mac defaults to `127.0.0.1` |
+| `PREVIEW_PORT` | Compatibility name for the host Manager port, normally `8787` |
+| `PREVIEW_BASE_URL` | Public/local Manager base URL used for authenticated preview links |
+| `MANAGER_ALLOWED_HOSTS` | Comma-separated exact DNS names accepted in addition to IP literals/localhost; no wildcards or ports |
+| `MANAGER_SECURE_COOKIES` | Set `true` only when the Manager is reached through a trusted HTTPS reverse proxy |
 
 Never paste live values into an issue, pull request, repository file, or public
 release archive.
@@ -267,6 +274,6 @@ release archive.
 Native Linux reads root-owned non-secret service values from
 `/etc/tautweekly/tautweekly.env`. FreeBSD reads them from
 `/usr/local/etc/tautweekly/tautweekly.env`. These files define the timezone,
-data path, preview bind/port, and—on FreeBSD—the OCI image reference. Keep SMTP,
+data path, Manager bind/port, and-on FreeBSD-the OCI image reference. Keep SMTP,
 Tautulli, and Plex secrets in the private `config.json`, not in service
 environment files.

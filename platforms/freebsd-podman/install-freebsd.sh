@@ -48,7 +48,7 @@ install -m 0755 "$source_root/tautweekly" /usr/local/sbin/tautweekly
 install -m 0555 "$source_root/rc.d/tautweekly" /usr/local/etc/rc.d/tautweekly
 if [ ! -f /usr/local/etc/tautweekly/tautweekly.env ]; then
   install -m 0600 "$source_root/tautweekly.env.example" /usr/local/etc/tautweekly/tautweekly.env
-  echo "Created /usr/local/etc/tautweekly/tautweekly.env with localhost-only preview defaults."
+  echo "Created /usr/local/etc/tautweekly/tautweekly.env with localhost-only Manager defaults."
 else
   echo "Preserved existing /usr/local/etc/tautweekly/tautweekly.env."
 fi
@@ -63,10 +63,11 @@ Private data: /var/db/tautweekly
 Service settings: /usr/local/etc/tautweekly/tautweekly.env
 
 Next:
-  sudo tautweekly setup
-  sudo tautweekly verify
-  sudo tautweekly preview-all USER_ID
-  sudo tautweekly send-test-all USER_ID
+  sudo tautweekly manager-bootstrap
+  ssh -L 8787:127.0.0.1:8787 YOUR_FREEBSD_ADMIN@YOUR_FREEBSD_HOST
+  Open http://127.0.0.1:8787/ and complete Config, Verify, Previews, and TestEmail.
 
-The service is enabled but automatic sending remains disabled until you opt in.
+The one-time pairing token is returned only by manager-bootstrap and is never
+written to the installer or service logs. The service is enabled, but automatic
+sending remains disabled until you opt in through the authenticated Manager.
 EOF

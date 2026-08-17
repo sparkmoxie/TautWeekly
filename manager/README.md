@@ -1,7 +1,7 @@
 # TautWeekly Manager
 
-This directory contains the shared TautWeekly management WebGUI core. Windows
-and NAS/container packages supply explicit runtime capabilities, lifecycle
+This directory contains the shared TautWeekly management WebGUI core. Windows,
+NAS/container, macOS Docker Desktop, and native service packages supply explicit runtime capabilities, lifecycle
 adapters, persistent paths, and schedule providers; the browser never guesses
 those boundaries from the operating system.
 
@@ -88,6 +88,13 @@ only by the explicit console command. Recovery removes only Manager
 authentication files, after which restart creates a fresh token; newsletter
 configuration, credentials, schedules, output, history, and backups remain
 untouched.
+
+The macOS runtime is a distinct capability profile over the same container
+service core. It requires authentication, publishes to Mac loopback by default,
+uses the embedded scheduler, and labels lifecycle and updates as Docker
+Desktop/Mac package operations. It suppresses Windows tray, sign-in startup,
+Task Scheduler, and installer language. Its host wrapper is the normal source
+of pairing-token retrieval and narrow access recovery.
 
 Page load and dashboard refresh never contact Tautulli, Plex, or SMTP. A
 successful **Validate, save, and verify** action automatically refreshes the

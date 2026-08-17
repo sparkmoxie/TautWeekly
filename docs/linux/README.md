@@ -2,7 +2,7 @@
 
 The native Linux distribution runs TautWeekly for Plex directly with
 PowerShell 7. It does not require Docker. A hardened systemd service keeps the
-authenticated Manager, preview server, and guarded scheduler alive. The shared
+authenticated Manager and guarded scheduler alive. The shared
 Manager GUI is the primary setup, verification, preview, TestEmail, scheduling,
 and administration surface; `tautweekly` remains the host recovery and expert
 command wrapper.
@@ -153,7 +153,7 @@ sudo tautweekly schedule-enable
 |---|---|---|
 | `/opt/tautweekly` | Replaceable application code and bundled default assets | `root:root`, read-only to the service |
 | `/var/lib/tautweekly` | Configuration, state, logs, previews, custom assets, bounded deleted-item cache, and private backups | `tautweekly:tautweekly`, mode `0700` |
-| `/etc/tautweekly/tautweekly.env` | Non-secret service paths, timezone, and preview listener | `root:root`, mode `0600` |
+| `/etc/tautweekly/tautweekly.env` | Non-secret service paths, timezone, Manager listener, and renderer preview URL | `root:root`, mode `0600` |
 | `/etc/systemd/system/tautweekly.service` | Hardened service definition | `root:root` |
 | `/usr/local/bin/tautweekly` | Administrative command wrapper | `root:root` |
 
@@ -168,9 +168,9 @@ the service and remove only that directory. A full uninstall should retain the
 data root until configuration, state, output, cache entries, and backups are no
 longer required.
 
-The authenticated Manager defaults to `127.0.0.1:8788`; its preview listener
-remains on `127.0.0.1:8787`. For remote administration, keep both on loopback
-and tunnel the Manager port:
+The authenticated Manager defaults to `127.0.0.1:8788` and serves protected
+preview content inside the same session. For remote administration, keep it on
+loopback and tunnel the Manager port:
 
 ```bash
 ssh -L 8788:127.0.0.1:8788 admin@example.com
@@ -180,7 +180,7 @@ Then open `http://127.0.0.1:8788/` locally. If a reverse proxy is required,
 keep the backend on loopback, set its exact DNS name in
 `TAUTWEEKLY_MANAGER_ALLOWED_HOSTS`, set
 `TAUTWEEKLY_MANAGER_SECURE_COOKIES=true`, terminate TLS at the proxy, and
-restart the service. Do not publish either loopback listener directly.
+restart the service. Do not publish the loopback listener directly.
 
 ## Operations
 
@@ -211,8 +211,9 @@ and restores its previous running state afterward.
 
 Preview and TestEmail commands may use an excluded user as sample data.
 
-Primary setup and `manage-libraries` discover active movie/TV libraries through
-Tautulli and save stable section IDs in `IncludedLibraryIds`. That scope is
+Manager Config (or the `manage-libraries` expert fallback) discovers active
+movie/TV libraries through Tautulli and saves stable section IDs in
+`IncludedLibraryIds`. That scope is
 applied before releases, quiet mode, Trending, Binge Champion, and personal
 statistics are calculated. The manager backs up the private config before
 writing; empty/absent IDs retain legacy all-library behavior.

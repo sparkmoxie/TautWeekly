@@ -32,8 +32,8 @@
       <div class="hero-copy">
         <div class="platform-identity"><img class="freebsd-logo" src="../assets/platforms/freebsd.png" alt="" width="570" height="164"><div class="eyebrow">Podman · rc.d</div></div>
         <h1>Native lifecycle.<br><span>Maintained container.</span></h1>
-        <p>Run the published TautWeekly OCI application through FreeBSD's documented Linux-container support, control it with <code>service(8)</code>, keep private state under <code>/var/db</code>, and expose previews only through localhost.</p>
-        <div class="pills"><span>FreeBSD 15.1+</span><span>amd64</span><span>Podman</span><span>Linux emulation</span><span>Beta</span></div>
+        <p>Run the published TautWeekly OCI application through FreeBSD's documented Linux-container support, control it with <code>service(8)</code>, keep private state under <code>/var/db</code>, and use the authenticated Manager through host loopback.</p>
+        <div class="pills"><span>FreeBSD 15.1+</span><span>amd64</span><span>Podman</span><span>authenticated Manager</span><span>Beta</span></div>
         <div class="actions"><a class="button primary" href="#install">Start installation</a><a class="button" href="https://github.com/sparkmoxie/TautWeekly/releases/latest">Download release</a></div>
       </div>
       <div class="terminal freebsd-terminal" aria-label="FreeBSD controlled setup demonstration">
@@ -43,15 +43,15 @@
 <span class="ok">✓</span> Podman service ready
 <span class="ok">✓</span> rc.d integration installed
 
-<span class="muted">$</span> sudo tautweekly verify
-<span class="ok">✓</span> Tautulli · SMTP · storage
+<span class="muted">$</span> sudo tautweekly manager-bootstrap
+<span class="ok">✓</span> one-time token returned only here
 
-<span class="muted">$</span> sudo tautweekly send-test-all USER_ID
-<span class="gold">→</span> TestEmail only <span class="cursor">▋</span></pre>
+<span class="muted">$</span> ssh -L 8787:127.0.0.1:8787 admin@freebsd-host
+<span class="gold">→</span> Manager Config · Verify · PreviewAll · TestEmail <span class="cursor">▋</span></pre>
       </div>
     </section>
 
-    <section class="metrics searchable" data-search="platform facts beta secrets preview"><div><strong>rc.d</strong><span>FreeBSD service lifecycle</span></div><div><strong>OCI</strong><span>same maintained renderer</span></div><div><strong>127.0.0.1</strong><span>default preview bind</span></div><div><strong>0</strong><span>credentials in image or environment</span></div></section>
+    <section class="metrics searchable" data-search="platform facts beta secrets manager"><div><strong>rc.d</strong><span>FreeBSD service lifecycle</span></div><div><strong>OCI</strong><span>shared Manager and renderer</span></div><div><strong>127.0.0.1</strong><span>default Manager bind</span></div><div><strong>0</strong><span>credentials in image or service logs</span></div></section>
 
     <section id="requirements" class="section searchable" data-search="requirements freebsd version amd64 pkg root podman linux emulation ghcr">
       <div class="section-heading"><div><div class="eyebrow">Before installation</div><h2>A clear compatibility boundary</h2></div><p>This first FreeBSD track targets the host combination documented and testable today. It does not claim native PowerShell support.</p></div>
@@ -73,10 +73,10 @@ sha256 -r TautWeekly-freebsd-podman.tar.gz<button data-copy="#verify-command">Co
         <div class="command-block" id="install-command">tar -xzf TautWeekly-freebsd-podman.tar.gz
 cd TautWeekly-freebsd-podman
 sudo ./install-freebsd.sh
-sudo tautweekly setup
-# complete metadata readiness below, then:
-sudo tautweekly verify<button data-copy="#install-command">Copy</button></div>
-        <div class="callout info"><div class="callout-icon">PMS</div><div><h3>Direct Plex is recommended for full newsletter fidelity</h3><p>Tautulli supplies core activity and selected/flattened rating fallbacks. Enter a Plex URL and administrator token reachable from the Podman container for complete movie RT critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and selected logos. Verification checks Plex identity and authenticated library access without printing the token; a resolved but unusable connection fails before preview or TestEmail.</p></div></div>
+sudo tautweekly manager-bootstrap
+ssh -L 8787:127.0.0.1:8787 admin@freebsd-host
+# open http://127.0.0.1:8787/<button data-copy="#install-command">Copy</button></div>
+        <div class="callout info"><div class="callout-icon">GUI</div><div><h3>Manager Config is the setup source</h3><p>Enter the one-time token, create a unique administrator password, and complete Config. Tautulli supplies core activity and selected/flattened rating fallbacks. A direct Plex URL and administrator token reachable from the Podman container are recommended for complete provider ratings and artwork. <strong>Validate, save, and verify</strong> checks Plex identity and authenticated library access without printing the token.</p></div></div>
       </article>
     </section>
 
@@ -87,9 +87,10 @@ sudo tautweekly verify<button data-copy="#install-command">Copy</button></div>
     </section>
 
     <section id="acceptance" class="section searchable" data-search="acceptance workflow libraries scope users exclusions preview test schedule send production metadata refresh">
-      <div class="section-heading"><div><div class="eyebrow">Acceptance gate</div><h2>Observe before delivery</h2></div><p>Excluded users remain usable as sample data for previews and TestEmail, but scheduled and confirmed production delivery omits them. Replace <code>USER_ID</code> with a numeric value from <code>list-users</code>; listing users does not save a default.</p></div>
+      <div class="section-heading"><div><div class="eyebrow">Acceptance gate</div><h2>Observe before delivery</h2></div><p>Use Manager Config for library scope and delivery exclusions, then Verify, PreviewAll, TestEmail, and Schedule. Excluded users remain usable as sample data for safe testing, but scheduled and confirmed production delivery omits them.</p></div>
       <div class="timeline"><div><b>01</b><h3>Configure</h3><p>Write Tautulli, recommended direct Plex, and mail secrets only inside private container data.</p></div><div><b>02</b><h3>Verify</h3><p>Check Tautulli, direct Plex identity/authenticated library access, SMTP TCP reachability, files, timezone, and schedule.</p></div><div><b>03</b><h3>Preview</h3><p>Render all deterministic states without mail.</p></div><div><b>04</b><h3>TestEmail</h3><p>Validate SMTP authentication, sender permission, MIME, and the actual mail client.</p></div><div><b>05</b><h3>Opt in</h3><p>Enable the scheduler after roster review.</p></div></div>
-      <div class="command-block" id="acceptance-command">sudo tautweekly list-libraries
+      <div class="command-block" id="acceptance-command"># Expert/recovery fallbacks only:
+sudo tautweekly list-libraries
 sudo tautweekly manage-libraries
 sudo tautweekly list-users
 sudo tautweekly exclude-users
@@ -103,10 +104,11 @@ sudo tautweekly schedule-enable<button data-copy="#acceptance-command">Copy</but
     </section>
 
     <section id="security" class="section searchable" data-search="security credentials config private data localhost ssh tunnel paths permissions">
-      <div class="section-heading"><div><div class="eyebrow">Security boundary</div><h2>Image public. Runtime private.</h2></div><p>SMTP and API secrets never enter the image or service environment. They remain in a host-mounted mode-0700 data directory.</p></div>
-      <table class="path-table"><thead><tr><th>Path</th><th>Purpose</th><th>Treatment</th></tr></thead><tbody><tr><td><code>/var/db/tautweekly</code></td><td>Configuration, state, logs, output, assets, backups</td><td>Private; never attach publicly</td></tr><tr><td><code>/usr/local/etc/tautweekly/tautweekly.env</code></td><td>Image tag, timezone, identity, preview bind</td><td>Root-owned mode 0600; no SMTP/API secrets</td></tr><tr><td><code>/usr/local/etc/rc.d/tautweekly</code></td><td>Service lifecycle</td><td>Root-owned executable</td></tr></tbody></table>
+      <div class="section-heading"><div><div class="eyebrow">Security boundary</div><h2>Image public. Runtime private.</h2></div><p>SMTP and API secrets never enter the image or service environment. Manager authentication is required and persistent state remains in a host-mounted mode-0700 data directory.</p></div>
+      <table class="path-table"><thead><tr><th>Path</th><th>Purpose</th><th>Treatment</th></tr></thead><tbody><tr><td><code>/var/db/tautweekly</code></td><td>Configuration, Manager access, state, logs, output, assets, backups</td><td>Private; never attach publicly</td></tr><tr><td><code>/usr/local/etc/tautweekly/tautweekly.env</code></td><td>Image tag, timezone, identity, Manager bind and proxy policy</td><td>Root-owned mode 0600; no SMTP/API secrets</td></tr><tr><td><code>/usr/local/etc/rc.d/tautweekly</code></td><td>Service lifecycle</td><td>Root-owned executable</td></tr></tbody></table>
       <div class="command-block" id="tunnel-command">ssh -L 8787:127.0.0.1:8787 admin@example.com
 # open http://127.0.0.1:8787 locally<button data-copy="#tunnel-command">Copy</button></div>
+      <div class="callout info"><div class="callout-icon">AUTH</div><div><h3>No default password and no token in logs</h3><p>Retrieve the one-time token only with <code>sudo tautweekly manager-bootstrap</code>. For loss of access, <code>manager-reset-access</code> resets only authentication and preserves newsletter configuration, secrets, schedules, output, and backups.</p></div></div>
     </section>
 
     <section id="updates" class="section searchable" data-search="update backup pin image tag rollback local build troubleshoot logs">
@@ -115,14 +117,14 @@ sudo tautweekly schedule-enable<button data-copy="#acceptance-command">Copy</but
         <article class="guide-card"><h3>Private backup</h3><div class="command-block" id="backup-command">sudo tautweekly backup<button data-copy="#backup-command">Copy</button></div><p>The wrapper stops the container briefly so state and configuration are captured consistently.</p></article>
         <article class="guide-card"><h3>Stage without restarting</h3><div class="command-block" id="check-update-command">sudo tautweekly check-update<button data-copy="#check-update-command">Copy</button></div><p>The candidate image is pulled and compared with the running image; no service state changes.</p></article>
         <article class="guide-card"><h3>Apply and validate</h3><div class="command-block" id="update-command">sudo tautweekly update
-sudo tautweekly verify
-sudo tautweekly send-test-all USER_ID<button data-copy="#update-command">Copy</button></div></article>
+# sign in to Manager
+# run Verify, PreviewAll, and TestEmail<button data-copy="#update-command">Copy</button></div></article>
         <article class="guide-card"><h3>Observe</h3><div class="command-block" id="logs-command">sudo service tautweekly status
 sudo podman logs --tail 200 tautweekly<button data-copy="#logs-command">Copy</button></div></article>
       </div>
       <div class="callout info"><div class="callout-icon">RC</div><div><h3>Why the wrapper applies updates</h3><p>Podman registry auto-update expects systemd-managed units. FreeBSD uses rc.d, so the package does not add the otherwise inert auto-update label or a hidden timer. The wrapper refuses concurrent sends, checks container health and version, and restores the previous image when the candidate fails.</p></div></div>
       <div class="callout info"><div class="callout-icon">BIN</div><div><h3>Custom Podman location</h3><p>The default is <code>/usr/local/bin/podman</code>. Set <code>TAUTWEEKLY_PODMAN_BIN</code> in the root-owned environment file only when an administrator-managed installation uses another path.</p></div></div>
-      <div class="warning"><i>!</i><div><h3>Do not use a public preview bind casually.</h3><p>The preview service has no built-in authentication. Keep <code>127.0.0.1</code> and use SSH, or place an authenticated TLS reverse proxy in front of it.</p></div></div>
+      <div class="warning"><i>!</i><div><h3>Do not publish plain HTTP Manager access.</h3><p>Keep <code>127.0.0.1</code> and use SSH. A trusted TLS reverse proxy must use an exact allowed DNS host and secure cookies. The rc.d stop path gives an already-running newsletter delivery up to 30 minutes to drain after Manager access closes.</p></div></div>
     </section>
 
     <div class="no-results" id="no-results" hidden>No sections matched. Try “Podman,” “install,” “preview,” “security,” or “update.”</div>

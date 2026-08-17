@@ -341,6 +341,14 @@ function Write-ReleaseManifest {
     [IO.File]::WriteAllLines((Join-Path $Destination 'RELEASE-FILES.txt'), $releaseFiles, [Text.UTF8Encoding]::new($false))
 }
 
+function Test-ReleaseExecutable {
+    param([Parameter(Mandatory = $true)][string]$RelativePath)
+    $normalized = $RelativePath.Replace('\','/')
+    return $normalized.EndsWith('.sh', [StringComparison]::OrdinalIgnoreCase) -or
+        $normalized -match '(?:^|/)manager/tautweekly-manager-linux-(?:amd64|arm64)$' -or
+        $normalized -match '(?:^|/)(?:rc\.d/)?tautweekly$'
+}
+
 function New-Zip {
     param([string]$FolderName, [string]$ArchiveName)
     $archive = Join-Path $dist $ArchiveName
@@ -358,12 +366,22 @@ function New-Zip {
         foreach ($file in (Get-ChildItem -LiteralPath $source -Force -Recurse -File)) {
             $relative = $file.FullName.Substring($source.Length).TrimStart('\','/').Replace('\','/')
             $entryName = "$FolderName/$relative"
-            [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $entry = [IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
                 $zip,
                 $file.FullName,
                 $entryName,
                 [IO.Compression.CompressionLevel]::Optimal
             )
+            if ($FolderName -ne 'TautWeekly-windows') {
+                # ZIP permissions live in the high 16 bits of ExternalAttributes.
+                # Set the regular-file type plus a deliberate 0755/0644 mode so a
+                # Unix-aware extractor does not inherit Windows staging ACLs.
+                $unixMode = if (Test-ReleaseExecutable -RelativePath $relative) { 0x81ed } else { 0x81a4 }
+                $entry.ExternalAttributes = [BitConverter]::ToInt32(
+                    [byte[]]@(0, 0, ($unixMode -band 0xff), (($unixMode -shr 8) -band 0xff)),
+                    0
+                )
+            }
         }
     }
     finally {
@@ -391,8 +409,101 @@ function New-Zip {
 function New-TarGz {
     param([string]$FolderName, [string]$ArchiveName)
     $archive = Join-Path $dist $ArchiveName
-    & tar -czf $archive -C $staging $FolderName
-    if ($LASTEXITCODE -ne 0) { throw "tar failed while creating $ArchiveName" }
+    $isWindowsHost = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
+    if (-not $isWindowsHost) {
+        & tar -czf $archive -C $staging $FolderName
+        if ($LASTEXITCODE -ne 0) { throw "tar failed while creating $ArchiveName" }
+    }
+    else {
+        # Windows bsdtar derives 0666 from NTFS ACLs, which makes native Linux
+        # launchers and generated ELF Manager binaries unusable after extraction.
+        # Git for Windows ships GNU tar; build the tar in mode-specific passes so
+        # local/CI artifacts preserve the same Unix contract as an Ubuntu build.
+        $gitPath = Get-Command git -CommandType Application -ErrorAction Stop |
+            Select-Object -First 1 -ExpandProperty Source
+        $gitRoot = Split-Path -Parent (Split-Path -Parent $gitPath)
+        $tarPath = Join-Path $gitRoot 'usr/bin/tar.exe'
+        $cygpathPath = Join-Path $gitRoot 'usr/bin/cygpath.exe'
+        if (-not (Test-Path -LiteralPath $tarPath -PathType Leaf)) {
+            throw "Git for Windows GNU tar was not found: $tarPath"
+        }
+        if (-not (Test-Path -LiteralPath $cygpathPath -PathType Leaf)) {
+            throw "Git for Windows cygpath was not found: $cygpathPath"
+        }
+
+        $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+        $tempRoot = Join-Path $tempParent ('tautweekly-release-tar-' + [Guid]::NewGuid().ToString('N'))
+        $tempRoot = [IO.Path]::GetFullPath($tempRoot)
+        if (-not $tempRoot.StartsWith($tempParent, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Unsafe temporary tar root: $tempRoot"
+        }
+        New-Item -ItemType Directory -Path $tempRoot | Out-Null
+        $rawTar = Join-Path $tempRoot 'payload.tar'
+        $directoryList = Join-Path $tempRoot 'directories.txt'
+        $regularList = Join-Path $tempRoot 'regular-files.txt'
+        $executableList = Join-Path $tempRoot 'executable-files.txt'
+        $source = Join-Path $staging $FolderName
+        try {
+            $directories = @($source) + @(Get-ChildItem -LiteralPath $source -Force -Recurse -Directory | ForEach-Object { $_.FullName })
+            $directoryEntries = @($directories | ForEach-Object {
+                $_.Substring($staging.Length).TrimStart('\','/').Replace('\','/')
+            }) | Sort-Object -Unique
+            $regularEntries = [Collections.Generic.List[string]]::new()
+            $executableEntries = [Collections.Generic.List[string]]::new()
+            foreach ($file in (Get-ChildItem -LiteralPath $source -Force -Recurse -File)) {
+                $entry = $file.FullName.Substring($staging.Length).TrimStart('\','/').Replace('\','/')
+                $relative = $file.FullName.Substring($source.Length).TrimStart('\','/').Replace('\','/')
+                if (Test-ReleaseExecutable -RelativePath $relative) { $executableEntries.Add($entry) }
+                else { $regularEntries.Add($entry) }
+            }
+            $utf8NoBom = [Text.UTF8Encoding]::new($false)
+            [IO.File]::WriteAllText($directoryList, (@($directoryEntries) -join "`n") + "`n", $utf8NoBom)
+            [IO.File]::WriteAllText($regularList, (@($regularEntries | Sort-Object) -join "`n") + "`n", $utf8NoBom)
+            [IO.File]::WriteAllText($executableList, (@($executableEntries | Sort-Object) -join "`n") + "`n", $utf8NoBom)
+
+            $previousPath = $env:PATH
+            try {
+                $env:PATH = (Split-Path -Parent $tarPath) + [IO.Path]::PathSeparator + $env:PATH
+                $rawTarForTar = ([string](& $cygpathPath -u $rawTar)).Trim()
+                $stagingForTar = ([string](& $cygpathPath -u $staging)).Trim()
+                $directoryListForTar = ([string](& $cygpathPath -u $directoryList)).Trim()
+                $regularListForTar = ([string](& $cygpathPath -u $regularList)).Trim()
+                $executableListForTar = ([string](& $cygpathPath -u $executableList)).Trim()
+                if ($LASTEXITCODE -ne 0) { throw "cygpath failed while preparing $ArchiveName" }
+                $common = @('--owner=0', '--group=0', '--numeric-owner', '--no-recursion')
+                & $tarPath '--force-local' '-cf' $rawTarForTar @common '--mode=0755' '-C' $stagingForTar '-T' $directoryListForTar
+                if ($LASTEXITCODE -ne 0) { throw "GNU tar failed while creating directories for $ArchiveName" }
+                if ($regularEntries.Count -gt 0) {
+                    & $tarPath '--force-local' '-rf' $rawTarForTar @common '--mode=0644' '-C' $stagingForTar '-T' $regularListForTar
+                    if ($LASTEXITCODE -ne 0) { throw "GNU tar failed while adding regular files to $ArchiveName" }
+                }
+                if ($executableEntries.Count -gt 0) {
+                    & $tarPath '--force-local' '-rf' $rawTarForTar @common '--mode=0755' '-C' $stagingForTar '-T' $executableListForTar
+                    if ($LASTEXITCODE -ne 0) { throw "GNU tar failed while adding executable files to $ArchiveName" }
+                }
+            }
+            finally { $env:PATH = $previousPath }
+
+            $input = [IO.File]::OpenRead($rawTar)
+            $output = [IO.File]::Open($archive, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            $gzipStream = [IO.Compression.GZipStream]::new($output, [IO.Compression.CompressionLevel]::Optimal, $true)
+            try { $input.CopyTo($gzipStream) }
+            finally {
+                $gzipStream.Dispose()
+                $output.Dispose()
+                $input.Dispose()
+            }
+        }
+        finally {
+            if (Test-Path -LiteralPath $tempRoot) {
+                $resolved = [IO.Path]::GetFullPath($tempRoot)
+                if ($resolved.StartsWith($tempParent, [StringComparison]::OrdinalIgnoreCase) -and
+                    (Split-Path -Leaf $resolved).StartsWith('tautweekly-release-tar-', [StringComparison]::Ordinal)) {
+                    Remove-Item -LiteralPath $resolved -Recurse -Force
+                }
+            }
+        }
+    }
     # gzip bytes 4-7 encode the compressor's wall-clock timestamp. It is not
     # covered by the compressed payload CRC, so normalize it to the standard
     # reproducible-build value of zero after tar succeeds.
@@ -412,7 +523,8 @@ try {
     Build-WindowsManager -Destination $windowsDestination
     Build-WindowsUninstaller -Destination $windowsDestination
     [void](Copy-Platform -SourceName 'nas-docker' -FolderName 'TautWeekly-nas-docker' -GuidePath 'docs/nas-docker/README.md')
-    [void](Copy-Platform -SourceName 'mac-docker' -FolderName 'TautWeekly-mac-docker' -GuidePath 'docs/mac/README.md')
+    $macDestination = Copy-Platform -SourceName 'mac-docker' -FolderName 'TautWeekly-mac-docker' -GuidePath 'docs/mac/README.md'
+    Build-LinuxManagers -Destination $macDestination
 
     $linuxDestination = Copy-Platform -SourceName 'linux' -FolderName 'TautWeekly-linux' -GuidePath 'docs/linux/README.md'
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/app') -Destination (Join-Path $linuxDestination 'app') -Recurse -Force
