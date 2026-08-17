@@ -41,8 +41,10 @@ RUN chmod +x /opt/tautweekly/entrypoint.sh \
 ENV TAUTWEEKLY_DATA_DIR=/data \
     TAUTWEEKLY_CONFIG=/data/config.json \
     TAUTWEEKLY_MANAGER_LISTEN=0.0.0.0:8080 \
+    HOME=/tmp/tautweekly/home \
     XDG_CONFIG_HOME=/tmp/tautweekly/config \
     XDG_CACHE_HOME=/tmp/tautweekly/cache \
+    XDG_DATA_HOME=/tmp/tautweekly/share \
     DOTNET_BUNDLE_EXTRACT_BASE_DIR=/tmp/tautweekly/dotnet \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     POWERSHELL_TELEMETRY_OPTOUT=1

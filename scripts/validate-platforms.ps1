@@ -495,7 +495,9 @@ Require-Text 'platforms/mac-docker/Dockerfile' @(
     'ARG TARGETARCH',
     'org\.opencontainers\.image\.version="\$BUILD_VERSION"',
     'tautweekly-manager-linux-\$manager_arch',
-    'TAUTWEEKLY_MANAGER_LISTEN=0\.0\.0\.0:8080'
+    'TAUTWEEKLY_MANAGER_LISTEN=0\.0\.0\.0:8080',
+    'HOME=/tmp/tautweekly/home',
+    'XDG_DATA_HOME=/tmp/tautweekly/share'
 )
 Require-Text 'platforms/mac-docker/compose.yaml' @(
     'image:\s*tautweekly-mac:stable',
@@ -526,7 +528,9 @@ Require-Text 'platforms/mac-docker/app/run-service.sh' @(
 Require-Text 'platforms/mac-docker/app/healthcheck.sh' @('health/live', 'service-heartbeat\.json')
 Require-Text 'platforms/mac-docker/app/entrypoint.sh' @(
     'exec gosu "\$PUID:\$PGID"',
-    'chown -R "\$PUID:\$PGID" /data'
+    'chown -R "\$PUID:\$PGID" /data',
+    '/tmp/tautweekly/home',
+    '/tmp/tautweekly/share'
 )
 Forbid-Text 'platforms/mac-docker/app/entrypoint.sh' @('groupmod', 'usermod')
 Forbid-Text 'platforms/mac-docker/app/preview-home.html' @('not an admin Web UI', 'Unraid container Console', 'preview-all-00-INDEX\.html')

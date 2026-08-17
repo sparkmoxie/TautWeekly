@@ -95,7 +95,7 @@ for _ in {1..100}; do
 done
 [[ "$healthy" == true ]] || fail 'Container never passed its production healthcheck.'
 
-docker exec "$container_name" pwsh -NoLogo -NoProfile -NonInteractive -Command \
+docker exec "$container_name" /opt/tautweekly/bin/run-as-user.sh pwsh -NoLogo -NoProfile -NonInteractive -Command \
   'if ($PSVersionTable.PSVersion -lt [Version]"7.2") { exit 1 }' || fail 'PowerShell 7.2+ is unavailable in the runtime image.'
 docker exec "$container_name" test -s /data/config.example.json || fail 'Persistent config example was not initialized.'
 if [[ "$runtime_profile" == mac ]]; then

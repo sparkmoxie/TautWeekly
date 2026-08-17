@@ -37,6 +37,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Made macOS Docker UID/GID remapping compatible with its read-only image by
   dropping directly to the configured numeric identity instead of mutating
   the container account database during startup.
+- Routed macOS Docker PowerShell home and XDG state into the bounded temporary
+  filesystem so scheduler and recovery commands remain operable without
+  writing to the immutable image.
 
 ## [0.14.0] - 2026-08-16
 
