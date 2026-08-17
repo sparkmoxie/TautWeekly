@@ -524,6 +524,11 @@ Require-Text 'platforms/mac-docker/app/run-service.sh' @(
     'ManagerProcessId'
 )
 Require-Text 'platforms/mac-docker/app/healthcheck.sh' @('health/live', 'service-heartbeat\.json')
+Require-Text 'platforms/mac-docker/app/entrypoint.sh' @(
+    'exec gosu "\$PUID:\$PGID"',
+    'chown -R "\$PUID:\$PGID" /data'
+)
+Forbid-Text 'platforms/mac-docker/app/entrypoint.sh' @('groupmod', 'usermod')
 Forbid-Text 'platforms/mac-docker/app/preview-home.html' @('not an admin Web UI', 'Unraid container Console', 'preview-all-00-INDEX\.html')
 
 Require-Text 'platforms/windows/Check-Update.ps1' @(

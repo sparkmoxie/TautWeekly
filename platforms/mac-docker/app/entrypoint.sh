@@ -14,14 +14,6 @@ if [[ "$PUID" == "0" || "$PGID" == "0" ]]; then
   exit 64
 fi
 
-if ! getent group "$PGID" >/dev/null 2>&1; then
-  groupmod -o -g "$PGID" tautweekly
-else
-  existing_group="$(getent group "$PGID" | cut -d: -f1)"
-  usermod -g "$existing_group" tautweekly
-fi
-usermod -o -u "$PUID" tautweekly
-
 mkdir -p /tmp/tautweekly/config /tmp/tautweekly/cache /tmp/tautweekly/dotnet
 chown -R "$PUID:$PGID" /tmp/tautweekly
 mkdir -p /data/assets /data/logs /data/manager /data/output/posters /data/output/media

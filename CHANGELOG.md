@@ -34,6 +34,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Preserved explicit Unix executable modes in NAS, macOS Docker, Linux, and
   FreeBSD ZIP/TAR packages even when artifacts are built on Windows, with
   release contracts covering every launcher and packaged Manager binary.
+- Made macOS Docker UID/GID remapping compatible with its read-only image by
+  dropping directly to the configured numeric identity instead of mutating
+  the container account database during startup.
 
 ## [0.14.0] - 2026-08-16
 

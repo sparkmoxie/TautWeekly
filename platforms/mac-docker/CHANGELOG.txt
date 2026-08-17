@@ -7,6 +7,7 @@ v1.3.0 Portable
 - tailors capability and lifecycle language to macOS Docker Desktop without Windows or NAS-only controls
 - packages amd64 and arm64 Manager binaries for Intel and Apple-silicon image builds
 - hardens the container as read-only with a private data bind mount and bounded temporary filesystem
+- uses numeric UID/GID privilege dropping without mutating the read-only container account database
 - adds explicit bootstrap and narrow access-recovery commands without logging tokens or default passwords
 - grants an active newsletter up to 30 minutes to finish during Docker Desktop stop, restart, update, or recovery
 - documents exact backup, verified update, health acceptance, rollback, reinstall, recovery, and uninstall behavior
