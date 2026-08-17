@@ -1,6 +1,15 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.4.0 Portable
+---------------
+- adds the authenticated, capability-aware Manager as the primary setup and administration surface
+- supports QNAP Container Station, Unraid Apps, generic Compose, and compatible amd64/arm64 Docker hosts through one shared core
+- requires one-time pairing and a user-chosen password with persistent recovery state, CSRF protection, throttling, Host validation, and secure-proxy cookies
+- makes the scheduler, paths, lifecycle, update, restart, and shutdown language truthful for container and NAS packages
+- preserves /data across image replacement, rollback, reinstall, and access recovery while refusing accidental in-container updates or data deletion
+- waits for an active newsletter delivery during graceful container shutdown within the documented host timeout
+
 v1.3.4 Portable
 ---------------
 - keeps personal TV statistics grouped by show with aggregate watch duration

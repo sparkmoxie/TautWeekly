@@ -30,6 +30,17 @@ function Test-Target {
         return
     }
 
+    # The native Linux preview adapter is copied over the shared app landing
+    # page during release staging. Product-branding siblings come from that
+    # shared app payload and are verified by the packaged-artifact contract.
+    $linuxPreview = Join-Path $Root 'platforms/linux/preview-home.html'
+    if ($Source.FullName -ceq $linuxPreview -and $clean -in @(
+        'product-branding/favicon.ico',
+        'product-branding/tautweekly-app-icon-128.png'
+    )) {
+        return
+    }
+
     $pathPart = ($clean -split '#',2)[0] -split '\?',2 | Select-Object -First 1
     if ([string]::IsNullOrWhiteSpace($pathPart)) { return }
     $pathPart = [Uri]::UnescapeDataString($pathPart)

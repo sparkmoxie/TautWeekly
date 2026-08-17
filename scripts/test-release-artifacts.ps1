@@ -177,6 +177,8 @@ $expected = [ordered]@{
         'TautWeekly-linux/systemd/tautweekly.service',
         'TautWeekly-linux/tautweekly',
         'TautWeekly-linux/check-release.sh',
+        'TautWeekly-linux/manager/tautweekly-manager-linux-amd64',
+        'TautWeekly-linux/manager/tautweekly-manager-linux-arm64',
         'TautWeekly-linux/RELEASE-METADATA.txt',
         'TautWeekly-linux/RELEASE-FILES.txt',
         'TautWeekly-linux/README.md'
@@ -290,6 +292,27 @@ foreach ($archiveName in $expected.Keys) {
             try { $noticeText = $noticeReader.ReadToEnd() }
             finally { $noticeReader.Dispose() }
             Assert-True ($noticeText -match 'Copyright 2009 The Go Authors') 'Windows archive omits the Go binary redistribution notice.'
+        }
+
+        if ($archiveName -eq 'TautWeekly-linux.zip') {
+            $previewEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-linux/app/preview-home.html' })
+            Assert-True ($previewEntry.Count -eq 1) 'Linux archive has no unique preview landing page.'
+            $previewReader = New-Object IO.StreamReader($previewEntry[0].Open())
+            try { $previewText = $previewReader.ReadToEnd() } finally { $previewReader.Dispose() }
+            Assert-True ($previewText -match 'native Linux newsletter preview service') 'Linux archive does not contain the native Linux preview adapter.'
+            Assert-True ($previewText -notmatch 'Docker Compose|Unraid container Console') 'Linux archive retained container-only preview setup language.'
+            foreach ($architecture in @('amd64', 'arm64')) {
+                $path = "TautWeekly-linux/manager/tautweekly-manager-linux-$architecture"
+                $managerEntry = @($archive.Entries | Where-Object { $_.FullName -ceq $path })
+                Assert-True ($managerEntry.Count -eq 1) "Linux archive has no unique $architecture Manager executable."
+                $managerStream = $managerEntry[0].Open()
+                try {
+                    $signature = New-Object byte[] 4
+                    Assert-True ($managerStream.Read($signature, 0, 4) -eq 4) "Linux $architecture Manager executable is empty."
+                    Assert-True ($signature[0] -eq 0x7f -and $signature[1] -eq 0x45 -and $signature[2] -eq 0x4c -and $signature[3] -eq 0x46) "Linux $architecture Manager is not an ELF executable."
+                }
+                finally { $managerStream.Dispose() }
+            }
         }
 
         $forbidden = @($entryNames | Where-Object {

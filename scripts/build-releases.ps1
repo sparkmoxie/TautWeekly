@@ -182,6 +182,50 @@ function Build-WindowsManager {
     }
 }
 
+function Build-LinuxManagers {
+    param([Parameter(Mandatory = $true)][string]$Destination)
+
+    $goPath = if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_GO)) {
+        [IO.Path]::GetFullPath([string]$env:TAUTWEEKLY_GO)
+    }
+    else {
+        Get-Command go -CommandType Application -ErrorAction Stop |
+            Select-Object -First 1 -ExpandProperty Source
+    }
+    if (-not (Test-Path -LiteralPath $goPath -PathType Leaf)) {
+        throw "Go executable was not found: $goPath"
+    }
+    $managerRoot = Join-Path $Root 'manager'
+    $outputRoot = Join-Path $Destination 'manager'
+    New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
+    $previousGoOS = $env:GOOS
+    $previousGoArch = $env:GOARCH
+    $previousCGO = $env:CGO_ENABLED
+    try {
+        $env:GOOS = 'linux'
+        $env:CGO_ENABLED = '0'
+        foreach ($architecture in @('amd64', 'arm64')) {
+            $env:GOARCH = $architecture
+            $output = Join-Path $outputRoot "tautweekly-manager-linux-$architecture"
+            Push-Location $managerRoot
+            try {
+                & $goPath build -trimpath -buildvcs=false -ldflags "-s -w -X main.version=$Version" -o $output ./cmd/tautweekly-manager
+                if ($LASTEXITCODE -ne 0) { throw "Go failed to build the Linux $architecture Manager." }
+            }
+            finally { Pop-Location }
+            $header = [IO.File]::ReadAllBytes($output)
+            if ($header.Length -lt 4 -or $header[0] -ne 0x7f -or $header[1] -ne 0x45 -or $header[2] -ne 0x4c -or $header[3] -ne 0x46) {
+                throw "The Linux $architecture Manager output is not an ELF executable."
+            }
+        }
+    }
+    finally {
+        if ($null -eq $previousGoOS) { Remove-Item Env:GOOS -ErrorAction SilentlyContinue } else { $env:GOOS = $previousGoOS }
+        if ($null -eq $previousGoArch) { Remove-Item Env:GOARCH -ErrorAction SilentlyContinue } else { $env:GOARCH = $previousGoArch }
+        if ($null -eq $previousCGO) { Remove-Item Env:CGO_ENABLED -ErrorAction SilentlyContinue } else { $env:CGO_ENABLED = $previousCGO }
+    }
+}
+
 function Build-WindowsInstaller {
     param([Parameter(Mandatory = $true)][string]$WindowsArchive)
 
@@ -372,6 +416,9 @@ try {
 
     $linuxDestination = Copy-Platform -SourceName 'linux' -FolderName 'TautWeekly-linux' -GuidePath 'docs/linux/README.md'
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/app') -Destination (Join-Path $linuxDestination 'app') -Recurse -Force
+    Copy-Item -LiteralPath (Join-Path $Root 'platforms/linux/preview-home.html') -Destination (Join-Path $linuxDestination 'app/preview-home.html') -Force
+    Remove-Item -LiteralPath (Join-Path $linuxDestination 'preview-home.html') -Force
+    Build-LinuxManagers -Destination $linuxDestination
 
     $freeBsdDestination = Copy-Platform -SourceName 'freebsd-podman' -FolderName 'TautWeekly-freebsd-podman' -GuidePath 'docs/freebsd/README.md'
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/app') -Destination (Join-Path $freeBsdDestination 'app') -Recurse -Force

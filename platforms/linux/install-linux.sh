@@ -30,7 +30,21 @@ if [[ ! -f "$app_source/TautWeekly.ps1" ]]; then
   exit 66
 fi
 
-for command_name in curl flock pwsh python3 systemctl runuser install tar; do
+case "$(uname -m)" in
+  x86_64|amd64) manager_arch=amd64 ;;
+  aarch64|arm64) manager_arch=arm64 ;;
+  *)
+    echo "The native Linux Manager supports only 64-bit x86_64/amd64 and aarch64/arm64 hosts." >&2
+    exit 69
+    ;;
+esac
+manager_source="$source_root/manager/tautweekly-manager-linux-$manager_arch"
+if [[ ! -f "$manager_source" ]]; then
+  echo "Linux $manager_arch Manager payload not found. Use an official Linux release archive." >&2
+  exit 66
+fi
+
+for command_name in convert curl flock identify pwsh python3 systemctl runuser install tar; do
   command -v "$command_name" >/dev/null 2>&1 || {
     echo "Required command not found: $command_name" >&2
     exit 69
@@ -60,6 +74,8 @@ install -d -m 0700 -o tautweekly -g tautweekly /var/lib/tautweekly
 install -d -m 0700 -o tautweekly -g tautweekly /var/lib/tautweekly/backups
 
 was_active=false
+fresh_install=true
+[[ ! -f /opt/tautweekly/TautWeekly.ps1 ]] || fresh_install=false
 if [[ "$mode" == "--upgrade" ]]; then
   exec 9>"/var/lib/tautweekly/.tautweekly-operation.lock"
   if ! flock -n 9; then
@@ -85,6 +101,7 @@ chown -R root:root /opt/tautweekly
 find /opt/tautweekly -type d -exec chmod 0755 {} +
 find /opt/tautweekly -type f -exec chmod 0644 {} +
 chmod 0755 /opt/tautweekly/*.sh /opt/tautweekly/bin/*.sh
+install -m 0755 -o root -g root "$manager_source" /opt/tautweekly/bin/tautweekly-manager
 
 if [[ -f "$source_root/RELEASE-METADATA.txt" ]]; then
   install -m 0644 -o root -g root "$source_root/RELEASE-METADATA.txt" /opt/tautweekly/RELEASE-METADATA.txt
@@ -108,14 +125,16 @@ fi
 
 systemctl daemon-reload
 systemctl enable tautweekly.service >/dev/null
-$was_active && systemctl start tautweekly.service
+if [[ "$fresh_install" == true || "$was_active" == true ]]; then
+  systemctl start tautweekly.service
+fi
 
 installed_version="$(sed -n 's/^Repository version:[[:space:]]*//p' /opt/tautweekly/RELEASE-METADATA.txt | head -n 1)"
 if [[ -z "$installed_version" ]]; then
   echo "Installed release metadata could not be verified." >&2
   exit 70
 fi
-if [[ "$was_active" == true ]]; then
+if [[ "$fresh_install" == true || "$was_active" == true ]]; then
   for _ in {1..15}; do
     systemctl is-active --quiet tautweekly.service && break
     sleep 2
@@ -143,11 +162,16 @@ recovery update when metadata may be stale. A routine update does not require a
 full refresh when current metadata already renders correctly.
 
 Next:
-  sudo tautweekly setup
-  Complete the metadata-readiness sequence above after setup, then:
-  sudo tautweekly verify
-  sudo tautweekly preview-all USER_ID
-  sudo tautweekly send-test-all USER_ID
+  1. From your workstation, open a protected tunnel:
+       ssh -L 8788:127.0.0.1:8788 YOUR_LINUX_ADMIN@THIS_HOST
+  2. On the Linux host, retrieve the one-time pairing token explicitly:
+       sudo tautweekly manager-bootstrap
+  3. Open http://127.0.0.1:8788, pair, create the administrator password,
+     and complete guided Setup in the Manager.
+  4. Complete the metadata-readiness sequence above, then use the Manager to
+     verify, preview all six states, send TestEmail, and enable the schedule.
 
-The service is enabled but automatic sending remains disabled until you opt in.
+The authenticated Manager service is enabled. Automatic sending remains disabled
+until you explicitly enable it in the Manager. CLI commands remain available as
+documented recovery and expert fallbacks.
 EOF

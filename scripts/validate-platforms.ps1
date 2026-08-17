@@ -34,20 +34,30 @@ Require-Text 'platforms/linux/systemd/tautweekly.service' @(
     'User=tautweekly',
     'ProtectSystem=strict',
     'ReadWritePaths=/var/lib/tautweekly',
-    'NoNewPrivileges=true'
+    'NoNewPrivileges=true',
+    'TAUTWEEKLY_MANAGER_RUNTIME_MODE=linux',
+    'TAUTWEEKLY_MANAGER_LISTEN=127\.0\.0\.1:8788',
+    'TimeoutStopSec=30min'
 )
 Require-Text 'platforms/linux/tautweekly.env.example' @(
     'TAUTWEEKLY_PREVIEW_BIND=127\.0\.0\.1',
-    'TAUTWEEKLY_DATA_DIR=/var/lib/tautweekly'
+    'TAUTWEEKLY_DATA_DIR=/var/lib/tautweekly',
+    'TAUTWEEKLY_MANAGER_RUNTIME_MODE=linux',
+    'TAUTWEEKLY_MANAGER_LISTEN=127\.0\.0\.1:8788',
+    'TAUTWEEKLY_MANAGER_SECURE_COOKIES=false'
 )
 Require-Text 'platforms/linux/install-linux.sh' @(
     'PowerShell 7\.2 or newer',
+    'convert curl flock identify',
     'program-\$stamp\.tar\.gz',
     'Preserved existing /etc/tautweekly/tautweekly\.env',
     '\.tautweekly-operation\.lock',
     'RELEASE-METADATA\.txt',
     'tautweekly-check-release',
-    'systemctl is-active --quiet tautweekly\.service'
+    'systemctl is-active --quiet tautweekly\.service',
+    'tautweekly-manager-linux-\$manager_arch',
+    'manager-bootstrap',
+    'http://127\.0\.0\.1:8788'
 )
 Require-Text 'platforms/linux/check-release.sh' @(
     'releases/latest',
@@ -55,7 +65,21 @@ Require-Text 'platforms/linux/check-release.sh' @(
     'Latest stable release',
     'A stable update is available'
 )
-Require-Text 'platforms/linux/tautweekly' @('check-update', 'tautweekly-check-release')
+Require-Text 'platforms/linux/tautweekly' @(
+    'check-update',
+    'tautweekly-check-release',
+    'manager-bootstrap',
+    'manager-reset-access',
+    'access-recover',
+    'http://127\.0\.0\.1:8788'
+)
+Require-Text 'platforms/linux/preview-home.html' @(
+    'native Linux newsletter preview service',
+    'manager-bootstrap',
+    'http://127\.0\.0\.1:8788',
+    'Routine TautWeekly updates do not require'
+)
+Forbid-Text 'platforms/linux/preview-home.html' @('Docker Compose', 'Unraid container Console')
 Require-Text 'platforms/freebsd-podman/rc.d/tautweekly' @(
     'REQUIRE: NETWORKING linux podman',
     '--os=linux',
@@ -82,7 +106,8 @@ Require-Text 'platforms/freebsd-podman/tautweekly' @(
 Require-Text 'platforms/nas-docker/app/run-service.sh' @(
     'Authenticated Manager listening',
     'tautweekly-manager.*serve',
-    '--runtime-mode nas',
+    '--runtime-mode "\$manager_runtime_mode"',
+    'TAUTWEEKLY_MANAGER_RUNTIME_MODE',
     '--runtime-root',
     'curl --fail --silent --max-time 2',
     'service-heartbeat\.json',
@@ -101,7 +126,7 @@ Require-Text 'platforms/nas-docker/app/healthcheck.sh' @(
 Require-Text 'platforms/nas-docker/app/Scheduler.ps1' @(
     'only reads \$configPath',
     'authenticated Manager',
-    'saved in /data',
+    'persistent storage',
     'Get-TautWeeklyScheduleNow',
     'TimeZoneId = \$scheduleTimeZone\.Id'
 )

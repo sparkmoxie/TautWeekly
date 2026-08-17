@@ -62,7 +62,8 @@ func newScheduleCoordinator(options Options) (*scheduleCoordinator, error) {
 	}
 	runner := options.scheduleRunner
 	if runner == nil {
-		if normalizedRuntimeMode(options.RuntimeMode) == runtimeModeNAS {
+		mode := normalizedRuntimeMode(options.RuntimeMode)
+		if mode == runtimeModeNAS || mode == runtimeModeLinux {
 			runner = containerScheduleMutationRunner{runtimeRoot: runtimeRoot, now: options.Now}
 		} else {
 			runner = platformScheduleMutationRunner{}

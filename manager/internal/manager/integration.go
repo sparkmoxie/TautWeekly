@@ -502,7 +502,7 @@ func verifyPlex(ctx context.Context, client *http.Client, values map[string]any,
 		if serverURL == "" && token != "" {
 			summary = "Direct Plex was not tested because no server URL was configured or reported by Tautulli; a runtime token is available."
 		} else if serverURL != "" && token == "" {
-			summary = "Direct Plex was not tested because no stored, environment, or same-PC Windows Plex token is available."
+			summary = "Direct Plex was not tested because no stored or supported runtime Plex token is available."
 		}
 		return IntegrationCheckStep{
 			Service: "plex",
@@ -729,7 +729,7 @@ func plexMediaContainer(body []byte) (string, bool) {
 }
 
 func failedIntegrationStep(service string, err error) IntegrationCheckStep {
-	summary := "The configured service could not be verified. Confirm its address, credentials, and availability from this Windows host."
+	summary := "The configured service could not be verified. Confirm its address, credentials, and availability from this Manager runtime."
 	switch {
 	case errors.Is(err, errLANOnlyDestination):
 		summary = "The configured destination was blocked because it did not resolve exclusively to private or loopback addresses."

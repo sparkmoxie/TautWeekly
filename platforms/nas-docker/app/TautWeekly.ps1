@@ -15,13 +15,13 @@
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex NAS Portable v1.3.4 - Linux container production newsletter engine.
+# TautWeekly for Plex shared Linux service/container production newsletter engine.
 # Uses the current six-state portable production renderer with regression
 # previews, latest TV episode backfill, IMDb enrichment, and RT audience %.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
-    throw "TautWeekly for Plex NAS Portable requires PowerShell 7.2 or newer. Found $($PSVersionTable.PSVersion)."
+    throw "TautWeekly for Plex requires PowerShell 7.2 or newer. Found $($PSVersionTable.PSVersion)."
 }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -544,7 +544,7 @@ function Mark-UserWelcomed {
 }
 
 if (-not (Test-Path $ConfigPath)) {
-    throw "Persistent configuration is not ready. Pair with the authenticated Manager and complete guided setup; the Manager saves config.json in /data."
+    throw "Persistent configuration is not ready at $ConfigPath. Pair with the authenticated Manager and complete guided setup."
 }
 
 $Config = Get-Content -Path $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -772,10 +772,10 @@ function Resolve-TautulliUserId {
     }
 
     if ($matches.Count -gt 1) {
-        throw "More than one Tautulli user matched '$Identifier'. Use the numeric UserId from ListUsers (Unraid Console: /opt/tautweekly/bin/run-mode.sh ListUsers; Compose host project directory: ./tautweekly.sh list-users)."
+        throw "More than one Tautulli user matched '$Identifier'. Use the Manager delivery roster or the numeric UserId from the package's ListUsers command."
     }
 
-    throw "No Tautulli user matched '$Identifier'. Run ListUsers (Unraid Console: /opt/tautweekly/bin/run-mode.sh ListUsers; Compose host project directory: ./tautweekly.sh list-users), then enter the numeric UserId, username, friendly name, or email."
+    throw "No Tautulli user matched '$Identifier'. Use the Manager delivery roster or run the package's ListUsers command, then enter the numeric UserId, username, friendly name, or email."
 }
 
 function Get-History {
@@ -2364,7 +2364,7 @@ function Test-TautWeeklyDirectPlexConnection {
             -not [string]::IsNullOrWhiteSpace($serverUri.Fragment)) {
             throw "PlexServerUrl must not contain credentials, a query string, or a fragment."
         }
-        if ($serverUri.IsLoopback) {
+        if ($serverUri.IsLoopback -and [string]$env:TAUTWEEKLY_MANAGER_RUNTIME_MODE -ne "linux") {
             Write-Log "PlexServerUrl resolves to this container's loopback. Use a shared-network Plex service name or another trusted LAN URL when Plex runs outside TautWeekly." "WARN"
         }
 

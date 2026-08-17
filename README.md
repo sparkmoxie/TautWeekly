@@ -70,6 +70,38 @@ weekly Windows task from **Schedule** only after reviewing local previews and a
 controlled six-message `TestEmail` delivery. The numbered BAT launchers remain
 available only for portable recovery and advanced troubleshooting.
 
+### NAS / Docker Manager: one secure core
+
+QNAP Container Station, Unraid Apps, generic Compose, and compatible Docker
+hosts use the same authenticated Manager and persistent `/data` boundary. Start
+the host-owned container, run the documented `manager-bootstrap` command, open
+the mapped Manager URL, pair once, and create a unique administrator password.
+There is no default password, and the one-time token is never printed in normal
+container logs. Complete Config, verification, six previews, and TestEmail in
+the GUI before enabling the embedded schedule.
+
+For updates, back up `/data`, use the host's stable image update path, recreate
+the service, then sign in and repeat verification, previews, and TestEmail.
+Compose packages provide guarded update/rollback commands; Unraid owns its app
+update lifecycle. Reinstall, rollback, or Manager access recovery preserves the
+persistent volume unless the administrator separately chooses to delete it.
+
+### Native Linux Manager: GUI-first systemd service
+
+The native Linux archive now includes amd64 and arm64 Manager binaries. The
+installer selects the host architecture, starts an authenticated loopback-only
+systemd service, and keeps private state under `/var/lib/tautweekly`. Use an SSH
+tunnel to port 8788, run `sudo tautweekly manager-bootstrap`, then complete the
+same guided GUI workflow. The `tautweekly` command remains available for
+recovery and expert operations.
+
+Linux updates are explicit: check for a stable release, back up private data,
+verify the downloaded archive with `SHA256SUMS.txt`, and run
+`sudo ./install-linux.sh --upgrade`. The installer backs up `/opt/tautweekly`,
+preserves `/var/lib/tautweekly`, waits for an active delivery during graceful
+service shutdown, and verifies service recovery. Sign back into the Manager
+and rerun verification, previews, and TestEmail after upgrading.
+
 ## Current newsletter behavior
 
 - New movie and TV additions with artwork, summaries, genres, ratings, and
