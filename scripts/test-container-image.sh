@@ -99,7 +99,7 @@ docker exec "$container_name" /opt/tautweekly/bin/run-as-user.sh pwsh -NoLogo -N
   'if ($PSVersionTable.PSVersion -lt [Version]"7.2") { exit 1 }' || fail 'PowerShell 7.2+ is unavailable in the runtime image.'
 docker exec "$container_name" test -s /data/config.example.json || fail 'Persistent config example was not initialized.'
 if [[ "$runtime_profile" == mac ]]; then
-  docker exec "$container_name" test -s /data/output/index.html || fail 'Preview landing page was not initialized.'
+  docker exec "$container_name" test ! -e /data/output/index.html || fail 'Mac first run created a stale static output index instead of using Manager.'
 fi
 docker exec "$container_name" test -s /data/output/product-branding/favicon.ico || fail 'Preview favicon was not initialized.'
 docker exec "$container_name" test -s /data/output/product-branding/tautweekly-app-icon-128.png || fail 'Preview product icon was not initialized.'

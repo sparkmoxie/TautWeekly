@@ -468,7 +468,13 @@ Require-Text 'platforms/nas-docker/Dockerfile' @(
     'FROM golang:1\.26\.5-bookworm AS manager-build',
     'GOOS=linux GOARCH="\$\{TARGETARCH:-amd64\}"',
     'tautweekly-manager',
+    'HOME=/tmp/tautweekly/home',
+    'XDG_DATA_HOME=/tmp/tautweekly/share',
     'EXPOSE 8080'
+)
+Require-Text 'platforms/nas-docker/app/entrypoint.sh' @(
+    '/tmp/tautweekly/home',
+    '/tmp/tautweekly/share'
 )
 Require-Text 'templates/tautweekly.xml' @(
     '--read-only',

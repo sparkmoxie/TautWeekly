@@ -14,7 +14,7 @@ if [[ "$PUID" == "0" || "$PGID" == "0" ]]; then
   exit 64
 fi
 
-mkdir -p /tmp/tautweekly/config /tmp/tautweekly/cache /tmp/tautweekly/dotnet
+mkdir -p /tmp/tautweekly/home /tmp/tautweekly/config /tmp/tautweekly/cache /tmp/tautweekly/share /tmp/tautweekly/dotnet
 chown -R "$PUID:$PGID" /tmp/tautweekly
 mkdir -p /data/assets /data/logs /data/manager /data/output/posters /data/output/media
 cp -an /opt/tautweekly/assets-default/. /data/assets/ 2>/dev/null || true
