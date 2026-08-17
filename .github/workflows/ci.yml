@@ -13,6 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: manager/go.mod
+          cache-dependency-path: manager/go.mod
       - name: Validate repository hygiene and JSON
         shell: pwsh
         run: |
