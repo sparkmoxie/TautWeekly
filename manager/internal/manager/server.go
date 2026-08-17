@@ -226,6 +226,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/config/secrets/{name}/reveal", s.protected(s.handleRevealConfigSecret, true))
 	mux.HandleFunc("GET /api/v1/config/backups", s.protected(s.handleConfigBackups, false))
 	mux.HandleFunc("POST /api/v1/config/backups/{id}/restore", s.protected(s.handleRestoreConfig, true))
+	mux.HandleFunc("DELETE /api/v1/config/backups/{id}", s.protected(s.handleDeleteConfigBackup, true))
 	mux.HandleFunc("GET /api/v1/checks/integrations", s.protected(s.handleIntegrationCheckState, false))
 	mux.HandleFunc("POST /api/v1/checks/integrations", s.protected(s.handleRunIntegrationCheck, true))
 	mux.HandleFunc("POST /api/v1/checks/smtp-network", s.protected(s.handleRunSMTPNetworkCheck, true))
@@ -705,6 +706,24 @@ func (s *Server) handleRestoreConfig(w http.ResponseWriter, r *http.Request) {
 		s.recordDiagnostic("configuration", "warning", "config-status-write-failed")
 	}
 	s.recordDiagnostic("recovery", "passed", "backup-restored")
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleDeleteConfigBackup(w http.ResponseWriter, r *http.Request) {
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+	result, err := DeleteConfigBackup(s.options.RuntimeRoot, r.PathValue("id"))
+	switch {
+	case errors.Is(err, ErrBackupNotFound):
+		s.recordDiagnostic("recovery", "warning", "backup-not-found")
+		writeAPIError(w, http.StatusNotFound, "backup-not-found", "The selected configuration backup is unavailable.")
+		return
+	case err != nil:
+		s.recordDiagnostic("recovery", "failed", "backup-delete-failed")
+		writeAPIError(w, http.StatusInternalServerError, "backup-delete-failed", "The backup could not be deleted safely.")
+		return
+	}
+	s.recordDiagnostic("recovery", "passed", "backup-deleted")
 	writeJSON(w, http.StatusOK, result)
 }
 

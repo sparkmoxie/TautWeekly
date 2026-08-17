@@ -284,7 +284,7 @@ foreach ($pattern in @(
     'Config.*Validate, save, and verify',
     'Previews.*Generate six previews',
     'Operations.*Send TestEmail',
-    'install-linux\.sh --upgrade',
+    'sudo tautweekly update',
     'SHA256SUMS\.txt',
     'manager-reset-access'
 )) {

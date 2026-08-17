@@ -32,6 +32,8 @@ var diagnosticSummaries = map[string]string{
 	"backup-invalid":                   "The selected backup was not a valid configuration document.",
 	"backup-restore-failed":            "The selected backup could not be restored safely.",
 	"backup-restored":                  "A configuration backup was validated and restored.",
+	"backup-delete-failed":             "The selected configuration backup could not be deleted safely.",
+	"backup-deleted":                   "A selected configuration backup was deleted permanently.",
 	"verification-request-invalid":     "The Manager rejected an invalid connection-verification request.",
 	"verification-not-ready":           "Connection verification could not start because configuration is incomplete.",
 	"verification-conflict":            "Configuration changed before connection verification could start.",

@@ -108,6 +108,36 @@ persistent `config.json`, then use **Validate, save, and verify**, PreviewAll,
 and TestEmail in the GUI. Terminal setup and preview commands are recovery or
 expert fallbacks on Manager-capable packages.
 
+If a NAS user updated the image but `./tautweekly.sh help` does not list
+`manager-bootstrap`, the external host wrapper is older than the running image.
+The container still supports the GUI. Retrieve the token from the trusted host
+without searching logs:
+
+```bash
+docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
+  /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager
+```
+
+For Unraid, run the same command in the container Console without the
+`docker compose exec -T tautweekly` prefix. For a release-archive Compose/QNAP
+install, download the current stable NAS archive and `SHA256SUMS.txt`, verify
+the checksum, and extract it over the same package directory while preserving
+`.env` and `data/`. Future `./tautweekly.sh update` runs verify and advance host
+files and the image together. For Unraid, edit the app and compare/apply the
+current Community Apps template while keeping the existing appdata path and
+identity settings; a `legacy` host-adapter startup warning means this template
+refresh is still required.
+
+The same one-time host-package bridge applies to older Mac Docker packages that
+updated only the image: verify and extract the current stable Mac archive over
+the same package directory while preserving `.env` and `data/`, then run
+`./tautweekly.sh update`. On FreeBSD, verify and extract the current stable
+FreeBSD Podman archive to a temporary directory and run
+`sudo ./install-freebsd.sh --upgrade-and-update`; this preserves
+`/var/db/tautweekly` and its root-owned environment file. Native Linux releases
+were already package-based: verify the current Linux archive and run
+`sudo ./install-linux.sh --upgrade`.
+
 If the browser reports **connection refused**, run:
 
 ```bash

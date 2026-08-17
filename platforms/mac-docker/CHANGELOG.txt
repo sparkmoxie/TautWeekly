@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 ================================
 
+v1.3.1 Portable
+---------------
+- replaces image-only updates with verified host-package and image updates plus coordinated rollback
+- preserves .env and data while removing only retired release-owned package files
+- adds confirmed per-file deletion for obsolete Manager configuration backups
+
 v1.3.0 Portable
 ---------------
 - adds the authenticated Manager as the normal Mac setup, status, preview, TestEmail, and schedule interface

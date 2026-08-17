@@ -338,7 +338,11 @@ function Write-ReleaseManifest {
             "$hash  $relative"
         }
     ) | Sort-Object
-    [IO.File]::WriteAllLines((Join-Path $Destination 'RELEASE-FILES.txt'), $releaseFiles, [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText(
+        (Join-Path $Destination 'RELEASE-FILES.txt'),
+        (($releaseFiles -join "`n") + "`n"),
+        [Text.UTF8Encoding]::new($false)
+    )
 }
 
 function Test-ReleaseExecutable {
@@ -347,6 +351,30 @@ function Test-ReleaseExecutable {
     return $normalized.EndsWith('.sh', [StringComparison]::OrdinalIgnoreCase) -or
         $normalized -match '(?:^|/)manager/tautweekly-manager-linux-(?:amd64|arm64)$' -or
         $normalized -match '(?:^|/)(?:rc\.d/)?tautweekly$'
+}
+
+function Test-UnixTextReleaseFile {
+    param([Parameter(Mandatory = $true)][string]$RelativePath)
+    $normalized = $RelativePath.Replace('\','/')
+    $name = [IO.Path]::GetFileName($normalized)
+    $extension = [IO.Path]::GetExtension($name).ToLowerInvariant()
+    return $extension -in @('.sh','.command','.ps1','.psm1','.yml','.yaml','.json','.md','.html','.css','.js','.py','.txt','.xml','.service','.example') -or
+        $name -in @('Dockerfile','.dockerignore','LICENSE','tautweekly')
+}
+
+function Convert-ToUnixLineEndings {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $normalized = [Collections.Generic.List[byte]]::new($bytes.Length)
+    for ($index = 0; $index -lt $bytes.Length; $index++) {
+        if ($bytes[$index] -eq 0x0d) {
+            if ($index + 1 -lt $bytes.Length -and $bytes[$index + 1] -eq 0x0a) { continue }
+            $normalized.Add(0x0a)
+            continue
+        }
+        $normalized.Add($bytes[$index])
+    }
+    [IO.File]::WriteAllBytes($Path, $normalized.ToArray())
 }
 
 function New-Zip {
@@ -522,22 +550,34 @@ try {
     $windowsDestination = Copy-Platform -SourceName 'windows' -FolderName 'TautWeekly-windows' -GuidePath 'docs/windows/README.md'
     Build-WindowsManager -Destination $windowsDestination
     Build-WindowsUninstaller -Destination $windowsDestination
-    [void](Copy-Platform -SourceName 'nas-docker' -FolderName 'TautWeekly-nas-docker' -GuidePath 'docs/nas-docker/README.md')
+    $nasDestination = Copy-Platform -SourceName 'nas-docker' -FolderName 'TautWeekly-nas-docker' -GuidePath 'docs/nas-docker/README.md'
+    Copy-Item -LiteralPath (Join-Path $Root 'platforms/shared/package-update.sh') -Destination (Join-Path $nasDestination 'package-update.sh') -Force
     $macDestination = Copy-Platform -SourceName 'mac-docker' -FolderName 'TautWeekly-mac-docker' -GuidePath 'docs/mac/README.md'
+    Copy-Item -LiteralPath (Join-Path $Root 'platforms/shared/package-update.sh') -Destination (Join-Path $macDestination 'package-update.sh') -Force
     Build-LinuxManagers -Destination $macDestination
 
     $linuxDestination = Copy-Platform -SourceName 'linux' -FolderName 'TautWeekly-linux' -GuidePath 'docs/linux/README.md'
+    Copy-Item -LiteralPath (Join-Path $Root 'platforms/shared/package-update.sh') -Destination (Join-Path $linuxDestination 'package-update.sh') -Force
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/app') -Destination (Join-Path $linuxDestination 'app') -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/linux/preview-home.html') -Destination (Join-Path $linuxDestination 'app/preview-home.html') -Force
     Remove-Item -LiteralPath (Join-Path $linuxDestination 'preview-home.html') -Force
     Build-LinuxManagers -Destination $linuxDestination
 
     $freeBsdDestination = Copy-Platform -SourceName 'freebsd-podman' -FolderName 'TautWeekly-freebsd-podman' -GuidePath 'docs/freebsd/README.md'
+    Copy-Item -LiteralPath (Join-Path $Root 'platforms/shared/package-update.sh') -Destination (Join-Path $freeBsdDestination 'package-update.sh') -Force
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/app') -Destination (Join-Path $freeBsdDestination 'app') -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/Dockerfile') -Destination $freeBsdDestination -Force
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/.dockerignore') -Destination $freeBsdDestination -Force
 
     foreach ($destination in (Get-ChildItem -LiteralPath $staging -Directory)) {
+        if ($destination.Name -ne 'TautWeekly-windows') {
+            foreach ($file in Get-ChildItem -LiteralPath $destination.FullName -Force -Recurse -File) {
+                $relative = $file.FullName.Substring($destination.FullName.Length).TrimStart('\','/').Replace('\','/')
+                if (Test-UnixTextReleaseFile -RelativePath $relative) {
+                    Convert-ToUnixLineEndings -Path $file.FullName
+                }
+            }
+        }
         Write-ReleaseManifest -Destination $destination.FullName
     }
 

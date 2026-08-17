@@ -44,7 +44,7 @@ The ZIP contains the same payload for administrators who transfer packages
 from Windows. Preserve the executable bits or restore them with:
 
 ```bash
-chmod +x install-linux.sh tautweekly check-release.sh app/*.sh app/bin/*.sh
+chmod +x install-linux.sh tautweekly check-release.sh package-update.sh app/*.sh app/bin/*.sh
 ```
 
 ## Install
@@ -204,6 +204,7 @@ sudo tautweekly schedule-status       inspect scheduler state and heartbeat
 sudo tautweekly logs                  follow the systemd journal
 sudo tautweekly backup                create a private data archive
 sudo tautweekly check-update          compare with the latest stable release
+sudo tautweekly update                verify and install the latest stable package
 ```
 
 The backup command briefly stops an active service for a consistent snapshot
@@ -231,19 +232,18 @@ normal Trending result while retaining new TV releases below the hero.
 
 Run `tautweekly check-update` for a read-only comparison between the installed
 `RELEASE-METADATA.txt` and GitHub's latest stable release. This check never
-downloads or installs code, has no periodic timer, and never follows `main` or
-the container `edge` tag.
-
-Download and verify the newer Linux archive, extract it into a temporary
-directory, then run:
+installs code, has no periodic timer, and never follows `main` or the container
+`edge` tag. To upgrade, run:
 
 ```bash
 sudo tautweekly backup
-sha256sum --check SHA256SUMS.txt --ignore-missing
-sudo ./install-linux.sh --upgrade
+sudo tautweekly update
 ```
 
-An upgrade stores the previous application payload under
+The update downloads the matching stable TAR archive and `SHA256SUMS.txt`,
+verifies the published SHA-256 plus the archive's internal
+`RELEASE-FILES.txt`, and only then runs the packaged upgrade installer. An
+upgrade stores the previous application payload under
 `/var/lib/tautweekly/backups/program-<timestamp>.tar.gz`, replaces only
 `/opt/tautweekly`, and restarts an already configured service. It does not
 replace `config.json`, state, output, logs, the deleted-item cache, custom assets, or the environment
@@ -255,6 +255,10 @@ then leave the schedule enabled for the next production delivery.
 
 If the upgrade addresses missing ratings/artwork or output remains stale,
 complete metadata readiness before those checks.
+
+Manager **Config > Configuration backups** can permanently delete one selected
+configuration backup only after **Confirm delete**. The current configuration
+is not modified; deletion cannot be undone.
 
 To roll back, stop the service, restore the recorded program archive into
 `/opt`, and start the service:
@@ -274,7 +278,7 @@ directory until its backup is verified and deletion is explicitly intended:
 ```bash
 sudo systemctl disable --now tautweekly.service
 sudo rm -rf /opt/tautweekly
-sudo rm -f /etc/systemd/system/tautweekly.service /usr/local/bin/tautweekly /usr/local/libexec/tautweekly-check-release
+sudo rm -f /etc/systemd/system/tautweekly.service /usr/local/bin/tautweekly /usr/local/libexec/tautweekly-check-release /usr/local/libexec/tautweekly-package-update
 sudo systemctl daemon-reload
 # Preserve /var/lib/tautweekly and /etc/tautweekly until intentionally purged.
 ```

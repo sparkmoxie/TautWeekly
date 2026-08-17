@@ -16,6 +16,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
+$script:PackageRoot = [IO.Path]::GetFullPath($PSScriptRoot)
 
 $script:ComposeExe = ""
 $script:ComposePrefix = @()
@@ -73,6 +74,207 @@ function Get-ImageVersion {
     return $value
 }
 
+function Get-PackageVersion {
+    $metadata = Join-Path $script:PackageRoot 'RELEASE-METADATA.txt'
+    if (-not (Test-Path -LiteralPath $metadata -PathType Leaf)) { return 'unknown' }
+    $match = [regex]::Match((Get-Content -LiteralPath $metadata -Raw), '(?m)^Repository version:\s*v?(?<version>\d+\.\d+\.\d+)\s*$')
+    if (-not $match.Success) { return 'unknown' }
+    return $match.Groups['version'].Value
+}
+
+function Get-LatestPackageVersion {
+    if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_LATEST_RELEASE_VERSION)) {
+        $version = ([string]$env:TAUTWEEKLY_LATEST_RELEASE_VERSION).TrimStart('v')
+    }
+    else {
+        $api = if ([string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_RELEASE_API_URL)) {
+            'https://api.github.com/repos/sparkmoxie/TautWeekly/releases/latest'
+        } else { [string]$env:TAUTWEEKLY_RELEASE_API_URL }
+        $response = Invoke-RestMethod -Uri $api -Headers @{
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+        }
+        $version = ([string]$response.tag_name).TrimStart('v')
+    }
+    if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'GitHub did not return a valid stable release version.' }
+    return $version
+}
+
+function Test-SafePackagePath {
+    param([Parameter(Mandatory=$true)][string]$RelativePath)
+    if ([string]::IsNullOrWhiteSpace($RelativePath) -or [IO.Path]::IsPathRooted($RelativePath)) { return $false }
+    $parts = $RelativePath.Replace('\','/').Split('/')
+    return (@($parts | Where-Object {
+        [string]::IsNullOrWhiteSpace($_) -or $_ -in @('.','..') -or $_ -match '[\x00-\x1f:]'
+    }).Count -eq 0)
+}
+
+function Test-ProtectedPackagePath {
+    param([Parameter(Mandatory=$true)][string]$RelativePath)
+    $value = $RelativePath.Replace('\','/')
+    return ($value -eq '.env' -or $value -eq 'data' -or $value.StartsWith('data/', [StringComparison]::OrdinalIgnoreCase))
+}
+
+function Read-ReleaseManifest {
+    param([Parameter(Mandatory=$true)][string]$Root)
+    $path = Join-Path $Root 'RELEASE-FILES.txt'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Release file manifest not found: $path" }
+    $entries = [Collections.Generic.List[object]]::new()
+    foreach ($line in Get-Content -LiteralPath $path) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        if ($line -notmatch '^(?<hash>[0-9a-f]{64})\s{2}(?<path>.+)$') { throw "Invalid release manifest line: $line" }
+        $relative = $Matches['path'].Replace('\','/')
+        if (-not (Test-SafePackagePath $relative)) { throw "Unsafe release manifest path: $relative" }
+        $entries.Add([pscustomobject]@{ Hash=$Matches['hash']; Path=$relative })
+    }
+    return $entries.ToArray()
+}
+
+function Test-InstalledPackageManifest {
+    try {
+        foreach ($entry in Read-ReleaseManifest $script:PackageRoot) {
+            if (Test-ProtectedPackagePath $entry.Path) { continue }
+            $path = Join-Path $script:PackageRoot $entry.Path
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
+            if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $entry.Hash) { return $false }
+        }
+        return $true
+    }
+    catch { return $false }
+}
+
+function Get-VerifiedPackageCandidate {
+    param([Parameter(Mandatory=$true)][string]$Version)
+    $work = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-package-update-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $work | Out-Null
+    try {
+        $archiveName = 'TautWeekly-nas-docker.zip'
+        $sums = Join-Path $work 'SHA256SUMS.txt'
+        $archive = Join-Path $work $archiveName
+        if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_RELEASE_ASSET_DIR)) {
+            Copy-Item -LiteralPath (Join-Path $env:TAUTWEEKLY_RELEASE_ASSET_DIR 'SHA256SUMS.txt') -Destination $sums
+            Copy-Item -LiteralPath (Join-Path $env:TAUTWEEKLY_RELEASE_ASSET_DIR $archiveName) -Destination $archive
+        }
+        else {
+            $downloadRoot = if ([string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_RELEASE_DOWNLOAD_ROOT)) {
+                'https://github.com/sparkmoxie/TautWeekly/releases/download'
+            } else { [string]$env:TAUTWEEKLY_RELEASE_DOWNLOAD_ROOT }
+            Invoke-WebRequest -UseBasicParsing -Uri "$downloadRoot/v$Version/SHA256SUMS.txt" -OutFile $sums
+            Invoke-WebRequest -UseBasicParsing -Uri "$downloadRoot/v$Version/$archiveName" -OutFile $archive
+        }
+        $checksumMatches = @(Get-Content -LiteralPath $sums | Where-Object { $_ -match ('^(?<hash>[0-9a-fA-F]{64})\s{2}' + [regex]::Escape($archiveName) + '$') })
+        if ($checksumMatches.Count -ne 1) { throw "SHA256SUMS.txt has no unique entry for $archiveName." }
+        [void]($checksumMatches[0] -match '^(?<hash>[0-9a-fA-F]{64})')
+        if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $Matches['hash']) { throw "SHA-256 verification failed for $archiveName." }
+
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+        try {
+            foreach ($entry in $zip.Entries) {
+                $path = $entry.FullName.TrimEnd('/').Replace('\','/')
+                if (-not [string]::IsNullOrWhiteSpace($path) -and -not (Test-SafePackagePath $path)) {
+                    throw "Unsafe ZIP entry: $path"
+                }
+            }
+        }
+        finally { $zip.Dispose() }
+        Expand-Archive -LiteralPath $archive -DestinationPath $work
+        $candidate = Join-Path $work 'TautWeekly-nas-docker'
+        $candidateVersionMatch = [regex]::Match((Get-Content -LiteralPath (Join-Path $candidate 'RELEASE-METADATA.txt') -Raw), '(?m)^Repository version:\s*v?(?<version>\d+\.\d+\.\d+)\s*$')
+        if (-not $candidateVersionMatch.Success -or $candidateVersionMatch.Groups['version'].Value -ne $Version) {
+            throw 'The verified archive reports an unexpected package version.'
+        }
+        foreach ($entry in Read-ReleaseManifest $candidate) {
+            $path = Join-Path $candidate $entry.Path
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Release manifest file is missing: $($entry.Path)" }
+            if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $entry.Hash) {
+                throw "Release manifest hash failed: $($entry.Path)"
+            }
+        }
+        return [pscustomobject]@{ Work=$work; Candidate=$candidate }
+    }
+    catch {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+        throw
+    }
+}
+
+function Install-PackageCandidate {
+    param([Parameter(Mandatory=$true)]$Staged)
+    $backup = Join-Path $Staged.Work 'package-backup'
+    New-Item -ItemType Directory -Path $backup | Out-Null
+    $records = [Collections.Generic.List[object]]::new()
+    $candidateEntries = @(Read-ReleaseManifest $Staged.Candidate)
+    $candidatePaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($entry in $candidateEntries) { [void]$candidatePaths.Add($entry.Path) }
+    $manifestPath = Join-Path $script:PackageRoot 'RELEASE-FILES.txt'
+    $manifestBackup = Join-Path $backup 'RELEASE-FILES.txt'
+    $manifestExisted = Test-Path -LiteralPath $manifestPath -PathType Leaf
+    if ($manifestExisted) { Copy-Item -LiteralPath $manifestPath -Destination $manifestBackup -Force }
+    $installed = [pscustomobject]@{
+        Work=$Staged.Work
+        Backup=$backup
+        Records=$records
+        ManifestExisted=$manifestExisted
+    }
+    try {
+        $oldEntries = try { @(Read-ReleaseManifest $script:PackageRoot) } catch { @() }
+        foreach ($entry in $oldEntries) {
+            if (Test-ProtectedPackagePath $entry.Path) { continue }
+            if ($candidatePaths.Contains($entry.Path)) { continue }
+            $destination = Join-Path $script:PackageRoot $entry.Path
+            if (-not (Test-Path -LiteralPath $destination)) { continue }
+            if (-not (Test-Path -LiteralPath $destination -PathType Leaf)) {
+                throw "Refusing to remove a non-file retired package path: $($entry.Path)"
+            }
+            $backupPath = Join-Path $backup $entry.Path
+            New-Item -ItemType Directory -Path (Split-Path -Parent $backupPath) -Force | Out-Null
+            Copy-Item -LiteralPath $destination -Destination $backupPath -Force
+            $records.Add([pscustomobject]@{ Path=$entry.Path; Existed=$true })
+            Remove-Item -LiteralPath $destination -Force
+        }
+        foreach ($entry in $candidateEntries) {
+            if (Test-ProtectedPackagePath $entry.Path) { continue }
+            $source = Join-Path $Staged.Candidate $entry.Path
+            $destination = Join-Path $script:PackageRoot $entry.Path
+            $backupPath = Join-Path $backup $entry.Path
+            $exists = Test-Path -LiteralPath $destination -PathType Leaf
+            if ($exists) {
+                New-Item -ItemType Directory -Path (Split-Path -Parent $backupPath) -Force | Out-Null
+                Copy-Item -LiteralPath $destination -Destination $backupPath -Force
+            }
+            elseif (Test-Path -LiteralPath $destination) { throw "Refusing to replace a non-file package path: $($entry.Path)" }
+            $records.Add([pscustomobject]@{ Path=$entry.Path; Existed=$exists })
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath $source -Destination $destination -Force
+        }
+        Copy-Item -LiteralPath (Join-Path $Staged.Candidate 'RELEASE-FILES.txt') -Destination $manifestPath -Force
+        return $installed
+    }
+    catch {
+        Restore-PackageCandidate $installed
+        throw
+    }
+}
+
+function Restore-PackageCandidate {
+    param([Parameter(Mandatory=$true)]$Installed)
+    foreach ($record in $Installed.Records) {
+        $destination = Join-Path $script:PackageRoot $record.Path
+        if ($record.Existed) { Copy-Item -LiteralPath (Join-Path $Installed.Backup $record.Path) -Destination $destination -Force }
+        else { Remove-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue }
+    }
+    $manifest = Join-Path $script:PackageRoot 'RELEASE-FILES.txt'
+    if ($Installed.ManifestExisted) { Copy-Item -LiteralPath (Join-Path $Installed.Backup 'RELEASE-FILES.txt') -Destination $manifest -Force }
+    else { Remove-Item -LiteralPath $manifest -Force -ErrorAction SilentlyContinue }
+}
+
+function Remove-PackageWork {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    if ((Split-Path -Leaf $Path) -notlike 'tautweekly-package-update-*') { throw "Refusing to remove unexpected package staging path: $Path" }
+    Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 function Wait-ContainerHealthy {
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
         $id = Get-ContainerId
@@ -127,7 +329,7 @@ function Stop-ContainerOperationLock {
 }
 
 function Invoke-ContainerUpdate {
-    param([switch]$Apply)
+    param([switch]$Apply, [switch]$ForceRecreate)
 
     $imageRef = ((Invoke-ComposeCapture @('config','--images')) -split "`r?`n" | Select-Object -First 1).Trim()
     if ([string]::IsNullOrWhiteSpace($imageRef)) { throw 'The configured Compose image could not be resolved.' }
@@ -159,14 +361,17 @@ function Invoke-ContainerUpdate {
             return
         }
 
-        if (-not [string]::IsNullOrWhiteSpace($before) -and $before -eq $after) {
+        if (-not $ForceRecreate -and -not [string]::IsNullOrWhiteSpace($before) -and $before -eq $after) {
             if (-not (Wait-ContainerHealthy)) { throw 'The current container failed health verification.' }
             Write-Host "The running container is already on stable image version $afterVersion." -ForegroundColor Green
             return
         }
 
         try {
-            Invoke-Compose @('up','-d','--no-build','tautweekly')
+            $upArguments = @('up','-d','--no-build')
+            if ($ForceRecreate) { $upArguments += '--force-recreate' }
+            $upArguments += 'tautweekly'
+            Invoke-Compose $upArguments
             if (-not (Wait-ContainerHealthy)) { throw 'The updated container failed health verification.' }
             $runningContainer = Get-ContainerId
             $runningAfter = Invoke-DockerCapture @('inspect','--format','{{.Image}}',$runningContainer)
@@ -191,6 +396,55 @@ function Invoke-ContainerUpdate {
     }
     finally {
         if ($lockHeld) { Stop-ContainerOperationLock $containerId }
+    }
+}
+
+function Invoke-PackageAwareUpdate {
+    param([switch]$Apply)
+
+    $current = Get-PackageVersion
+    if ($current -eq 'unknown') {
+        Write-Warning 'Host-package release metadata is unavailable; only the container image can be checked from this development or legacy directory.'
+        Invoke-ContainerUpdate -Apply:$Apply
+        return
+    }
+    $latest = Get-LatestPackageVersion
+    $verified = Test-InstalledPackageManifest
+    Write-Host "Installed host package: $current ($(if ($verified) { 'verified' } else { 'repair-required' }))"
+    Write-Host "Latest stable package: $latest"
+    if (-not $Apply) {
+        if (-not $verified) { Write-Warning 'The next update will repair release-owned package files without replacing .env or data.' }
+        elseif ([version]$current -lt [version]$latest) { Write-Host "A host-package update is available: $current -> $latest" -ForegroundColor Yellow }
+        elseif ([version]$current -gt [version]$latest) { Write-Warning "Installed package $current is newer than stable $latest; it will not be downgraded." }
+        else { Write-Host 'The host package is up to date.' -ForegroundColor Green }
+        Invoke-ContainerUpdate
+        return
+    }
+
+    $needsPackage = (-not $verified -or [version]$current -lt [version]$latest)
+    if (-not $needsPackage -or [version]$current -gt [version]$latest) {
+        if ([version]$current -gt [version]$latest) { Write-Warning "Installed package $current is newer than stable $latest; it was not downgraded." }
+        Invoke-ContainerUpdate -Apply
+        return
+    }
+
+    $staged = Get-VerifiedPackageCandidate $latest
+    $installed = $null
+    try {
+        $installed = Install-PackageCandidate $staged
+        Write-Host "Verified and installed stable host package $latest; .env and data were preserved." -ForegroundColor Green
+        Invoke-ContainerUpdate -Apply -ForceRecreate
+        Write-Host 'Host package and runtime update committed.' -ForegroundColor Green
+    }
+    catch {
+        if ($null -ne $installed) {
+            Restore-PackageCandidate $installed
+            Write-Warning 'The previous release-owned host package files were restored; .env and data were unchanged.'
+        }
+        throw
+    }
+    finally {
+        Remove-PackageWork $staged.Work
     }
 }
 
@@ -281,8 +535,8 @@ switch ($Command) {
             Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","Schedule-Control.ps1","-Action","ResetToday")
         }
     }
-    "check-update" { Invoke-ContainerUpdate }
-    "update" { Invoke-ContainerUpdate -Apply }
+    "check-update" { Invoke-PackageAwareUpdate }
+    "update" { Invoke-PackageAwareUpdate -Apply }
     default {
         @"
 TautWeekly for Plex Docker Desktop / PowerShell commands

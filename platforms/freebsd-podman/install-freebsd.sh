@@ -1,6 +1,12 @@
 #!/bin/sh
 set -eu
 
+mode="${1:-install}"
+if [ "$mode" != install ] && [ "$mode" != --upgrade-and-update ]; then
+  echo "Usage: sudo ./install-freebsd.sh [--upgrade-and-update]" >&2
+  exit 64
+fi
+
 if [ "$(id -u)" -ne 0 ]; then
   echo "This installer must run as root. Use sudo or doas." >&2
   exit 77
@@ -18,7 +24,11 @@ case "$(uname -m)" in
 esac
 
 source_root="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
-for file in "$source_root/tautweekly" "$source_root/rc.d/tautweekly" "$source_root/tautweekly.env.example"; do
+package_update_source="$source_root/package-update.sh"
+if [ ! -f "$package_update_source" ]; then
+  package_update_source="$source_root/../shared/package-update.sh"
+fi
+for file in "$source_root/tautweekly" "$source_root/rc.d/tautweekly" "$source_root/tautweekly.env.example" "$package_update_source"; do
   if [ ! -f "$file" ]; then
     echo "Incomplete package; missing $file" >&2
     exit 66
@@ -28,6 +38,10 @@ done
 if ! command -v podman >/dev/null 2>&1; then
   echo "Installing Podman from the configured FreeBSD package repository..."
   pkg install -y podman
+fi
+if ! command -v bash >/dev/null 2>&1; then
+  echo "Installing Bash for verified release-package updates..."
+  pkg install -y bash
 fi
 
 sysrc linux_enable=YES >/dev/null
@@ -42,10 +56,17 @@ if ! pw usershow tautweekly >/dev/null 2>&1; then
   pw useradd tautweekly -u 8787 -g tautweekly -d /var/db/tautweekly -s /usr/sbin/nologin -c "TautWeekly for Plex service"
 fi
 
-install -d -m 0755 /usr/local/etc/tautweekly /usr/local/etc/rc.d /usr/local/sbin
-install -d -m 0700 -o tautweekly -g tautweekly /var/db/tautweekly
+install -d -m 0755 /usr/local/etc/tautweekly /usr/local/etc/rc.d /usr/local/sbin /usr/local/libexec /usr/local/share/tautweekly
+install -d -m 0700 -o tautweekly -g tautweekly /var/db/tautweekly /var/db/tautweekly/backups
 install -m 0755 "$source_root/tautweekly" /usr/local/sbin/tautweekly
 install -m 0555 "$source_root/rc.d/tautweekly" /usr/local/etc/rc.d/tautweekly
+install -m 0555 "$package_update_source" /usr/local/libexec/tautweekly-package-update
+if [ -f "$source_root/RELEASE-METADATA.txt" ]; then
+  install -m 0444 "$source_root/RELEASE-METADATA.txt" /usr/local/share/tautweekly/RELEASE-METADATA.txt
+else
+  printf '%s\n' 'TautWeekly for Plex development checkout' 'Repository version: dev' > /usr/local/share/tautweekly/RELEASE-METADATA.txt
+  chmod 0444 /usr/local/share/tautweekly/RELEASE-METADATA.txt
+fi
 if [ ! -f /usr/local/etc/tautweekly/tautweekly.env ]; then
   install -m 0600 "$source_root/tautweekly.env.example" /usr/local/etc/tautweekly/tautweekly.env
   echo "Created /usr/local/etc/tautweekly/tautweekly.env with localhost-only Manager defaults."
@@ -54,7 +75,7 @@ else
 fi
 
 sysrc tautweekly_enable=YES >/dev/null
-/usr/local/sbin/tautweekly update
+/usr/local/sbin/tautweekly update-image
 
 cat <<'EOF'
 
@@ -71,3 +92,11 @@ The one-time pairing token is returned only by manager-bootstrap and is never
 written to the installer or service logs. The service is enabled, but automatic
 sending remains disabled until you opt in through the authenticated Manager.
 EOF
+
+if [ -n "${TAUTWEEKLY_PACKAGE_UPDATE_WORK_ROOT:-}" ]; then
+  work_root="$TAUTWEEKLY_PACKAGE_UPDATE_WORK_ROOT"
+  case "$(basename "$work_root")" in
+    tautweekly-package-update.*) [ ! -d "$work_root" ] || rm -rf "$work_root" ;;
+    *) echo "Refusing to remove an unexpected package staging directory: $work_root" >&2 ;;
+  esac
+fi

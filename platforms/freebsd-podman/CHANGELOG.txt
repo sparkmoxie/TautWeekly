@@ -1,6 +1,9 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
 Unreleased
+- Adds the missing Manager bootstrap and narrow access-recovery commands to the installed rc.d host wrapper.
+- Replaces image-only updates with a verified stable host-package and image update path that preserves /var/db/tautweekly.
+- Adds confirmed per-file deletion for obsolete Manager configuration backups.
 - Exposes the shared authenticated Manager as the FreeBSD setup and administration source through a loopback-first rc.d adapter.
 - Adds explicit one-time bootstrap and narrow access recovery commands without placing generated tokens in logs.
 - Passes exact-host and secure-cookie proxy policy into the container and hardens the root filesystem, temporary storage, privileges, and capabilities.

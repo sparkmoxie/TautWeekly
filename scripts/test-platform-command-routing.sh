@@ -147,7 +147,7 @@ if run_privileged \
     "TAUTWEEKLY_TEST_CALL_LOG=$call_log" \
     "TAUTWEEKLY_ENV_FILE=$freebsd_env" \
     "TAUTWEEKLY_PODMAN_BIN=$stub_bin/podman" \
-    sh "$repo_root/platforms/freebsd-podman/tautweekly" update; then
+    sh "$repo_root/platforms/freebsd-podman/tautweekly" update-image; then
   assert_call 'podman pull --os=linux ghcr.io/example/virtual:latest'
   assert_call 'service tautweekly restart'
 fi

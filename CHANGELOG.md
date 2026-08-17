@@ -8,6 +8,18 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Made NAS/QNAP Compose, macOS Docker Desktop, native Linux, and FreeBSD Podman
+  update commands download and verify the matching stable host package and its
+  internal release-file manifest before advancing package adapters and runtime;
+  private configuration/data are preserved and container packages restore host
+  files together with the prior image on failure.
+- Added an Unraid host-adapter compatibility marker and documented saved-template
+  migration so current hardening, stop timeout, and Manager settings advance
+  with Apps-owned image updates.
+- Added authenticated, CSRF-protected, individually confirmed permanent deletion
+  for Manager configuration backups across all GUI-capable packages, while
+  keeping the live configuration untouched.
+
 - Added a distinct authenticated macOS Docker Desktop Manager profile and
   GUI-first installer flow, with Mac-specific setup, schedule, lifecycle,
   update, recovery, and loopback-access language.
@@ -27,6 +39,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Fixed v0.14-era NAS and FreeBSD host wrappers that could omit
+  `manager-bootstrap`, and prevented image-only updates from leaving supported
+  release-archive host adapters behind the running Manager.
 - Removed stale NAS and FreeBSD text that described the v0.14 container
   endpoint as an unauthenticated or read-only preview server.
 - Made shared setup and verification fallbacks return administrators to the

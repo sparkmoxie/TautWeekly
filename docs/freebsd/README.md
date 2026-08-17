@@ -44,7 +44,7 @@ Restore launcher permissions when transferring the ZIP through a filesystem
 that does not preserve them:
 
 ```sh
-chmod +x install-freebsd.sh tautweekly rc.d/tautweekly app/*.sh app/bin/*.sh
+chmod +x install-freebsd.sh tautweekly package-update.sh rc.d/tautweekly app/*.sh app/bin/*.sh
 ```
 
 ## Install
@@ -176,8 +176,8 @@ sudo tautweekly schedule-status       inspect scheduler state
 sudo tautweekly status                inspect the rc.d service
 sudo tautweekly logs                  follow container logs
 sudo tautweekly backup                stop briefly and archive private data
-sudo tautweekly check-update          stage/check the configured image only
-sudo tautweekly update                pull the configured image and restart
+sudo tautweekly check-update          compare verified host package and image
+sudo tautweekly update                verify package, install adapter, update image
 ```
 
 The wrapper always requires an explicit confirmation for real welcome or
@@ -204,10 +204,10 @@ authority. Podman's `io.containers.autoupdate=registry` mechanism requires a
 systemd-managed container, so the rc.d service deliberately has no auto-update
 label or timer. No update is applied periodically by default.
 
-`check-update` asks Podman to pull the configured image into local storage and
-compares it with the running container; it does not restart or replace that
-container. Before applying, create a private backup and record the current
-image ID:
+`check-update` compares installed release metadata with the latest stable
+package and asks Podman to pull the configured image for a read-only comparison;
+it does not restart or replace the container. Before applying, create a private
+backup and record the current image ID:
 
 ```sh
 sudo tautweekly backup
@@ -217,15 +217,39 @@ sudo tautweekly update
 # sign back in to Manager, then run Verify, PreviewAll, and TestEmail
 ```
 
-The apply command refuses a busy TautWeekly operation, recreates the rc.d
-service, verifies the in-container health probe and version label, and retags
-and restarts the prior image automatically if the new container fails. Private
-data under `/var/db/tautweekly` is never replaced. Normal stop/restart gives
+The apply command downloads the matching stable TAR archive and checksum file,
+verifies both the published SHA-256 and internal `RELEASE-FILES.txt`, installs
+the current wrapper/rc.d adapter, and then updates the image. It refuses a busy
+TautWeekly operation, verifies the in-container health probe and version label,
+and retags/restarts the prior image automatically if the new container fails.
+Private data under `/var/db/tautweekly` and the existing root-owned environment
+file are never replaced. Normal stop/restart gives
 the shared service up to 30 minutes to let an already-running newsletter
 delivery finish after Manager HTTP access closes.
 
+### One-time update from v0.14.0 or an older image-only wrapper
+
+If `sudo tautweekly help` does not list `manager-bootstrap`, the installed rc.d
+host package is older than the Manager inside the image. Download the current
+stable **FreeBSD Podman** TAR archive and `SHA256SUMS.txt`, verify the published
+checksum, extract it to a temporary directory, and run:
+
+```sh
+sudo ./install-freebsd.sh --upgrade-and-update
+```
+
+The current installer replaces release-owned application, wrapper, and rc.d
+files, preserves `/var/db/tautweekly` and the existing root-owned environment
+file, then verifies the updated image. Future `sudo tautweekly update` commands
+advance the verified host package and image together. Do not copy individual
+wrapper files from an unreleased branch.
+
 If the update addresses missing ratings/artwork or output remains stale,
 complete metadata readiness before the listed verify/TestEmail checks.
+
+Manager **Config > Configuration backups** can permanently delete one selected
+configuration backup only after **Confirm delete**. The current configuration
+is unchanged and the deleted backup cannot be recovered.
 
 For deterministic production updates, set `TAUTWEEKLY_IMAGE` in
 `/usr/local/etc/tautweekly/tautweekly.env` to a version tag rather than

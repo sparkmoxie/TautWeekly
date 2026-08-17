@@ -80,11 +80,15 @@ There is no default password, and the one-time token is never printed in normal
 container logs. Complete Config, verification, six previews, and TestEmail in
 the GUI before enabling the embedded schedule.
 
-For updates, back up `/data`, use the host's stable image update path, recreate
-the service, then sign in and repeat verification, previews, and TestEmail.
-Compose packages provide guarded update/rollback commands; Unraid owns its app
-update lifecycle. Reinstall, rollback, or Manager access recovery preserves the
-persistent volume unless the administrator separately chooses to delete it.
+For release-archive Compose and QNAP installs, back up `/data`, then run
+`./tautweekly.sh check-update` and `./tautweekly.sh update`. The wrapper verifies
+the stable archive checksum and its internal file manifest, refreshes the host
+Compose/wrapper package, preserves `.env` and `/data`, recreates the service,
+checks health/version, and restores both host files and the prior image on
+failure. Unraid keeps its Apps-owned update lifecycle; existing installs should
+compare/apply the current template so host hardening and compatibility variables
+advance with the image. Reinstall, rollback, or Manager access recovery preserves
+the persistent volume unless the administrator separately chooses to delete it.
 
 ### macOS Manager: Docker Desktop, tailored for Mac
 
@@ -97,12 +101,13 @@ unique administrator password, then complete Config, verification, six previews,
 TestEmail, and Schedule in the GUI. No tray icon, Windows startup/task controls,
 or NAS lifecycle language is exposed.
 
-Mac updates remain host-owned: back up `data/`, verify and extract the newer
-stable Mac archive over the existing package without deleting `.env` or `data/`,
-then run `./tautweekly.sh update`. The updater builds the correct amd64 or arm64
-Manager image, refuses a busy renderer operation, verifies version and health,
-and retags the prior image on rollback. Sign back in and repeat the Manager
-health, Config, preview, and TestEmail acceptance checks.
+Mac updates remain host-owned: back up `data/`, then run
+`./tautweekly.sh update`. The wrapper downloads and verifies the newer stable
+Mac archive and internal manifest, preserves `.env` and `data/`, builds the
+correct amd64 or arm64 Manager image, refuses a busy renderer operation,
+verifies version and health, and restores prior package files and image on
+rollback. Sign back in and repeat the Manager health, Config, preview, and
+TestEmail acceptance checks.
 
 ### Native Linux Manager: GUI-first systemd service
 
@@ -113,12 +118,12 @@ tunnel to port 8788, run `sudo tautweekly manager-bootstrap`, then complete the
 same guided GUI workflow. The `tautweekly` command remains available for
 recovery and expert operations.
 
-Linux updates are explicit: check for a stable release, back up private data,
-verify the downloaded archive with `SHA256SUMS.txt`, and run
-`sudo ./install-linux.sh --upgrade`. The installer backs up `/opt/tautweekly`,
-preserves `/var/lib/tautweekly`, waits for an active delivery during graceful
-service shutdown, and verifies service recovery. Sign back into the Manager
-and rerun verification, previews, and TestEmail after upgrading.
+Linux updates are explicit: run `tautweekly check-update`, back up private data,
+then run `sudo tautweekly update`. The host downloads and verifies the stable
+archive plus its internal manifest before the installer backs up
+`/opt/tautweekly`, preserves `/var/lib/tautweekly`, waits for an active delivery
+during graceful service shutdown, and verifies service recovery. Sign back into
+the Manager and rerun verification, previews, and TestEmail after upgrading.
 
 ### FreeBSD Podman Manager: beta host adapter
 
@@ -126,7 +131,7 @@ The FreeBSD package runs the same authenticated OCI Manager through Podman and
 keeps its rc.d-owned port on `127.0.0.1:8787` by default. After installation,
 run `sudo tautweekly manager-bootstrap`, use the documented SSH tunnel, and
 complete Config, Verify, PreviewAll, TestEmail, and Schedule in the GUI. The
-wrapper also provides narrow Manager access recovery, staged image updates,
+wrapper also provides narrow Manager access recovery, verified host-package and image updates,
 health-checked rollback, and private backups. Normal rc.d stop/restart grants
 an already-running newsletter delivery up to 30 minutes to drain. Physical
 FreeBSD/Podman behavior remains a beta acceptance gap because hosted CI cannot

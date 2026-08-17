@@ -157,15 +157,13 @@ case "$cmd" in
     echo "Created private backup: $archive"
     ;;
   check-update)
-    exec /usr/local/libexec/tautweekly-check-release "$app_root/RELEASE-METADATA.txt"
+    TAUTWEEKLY_PACKAGE_KIND=linux TAUTWEEKLY_PACKAGE_ROOT="$app_root" \
+      exec /usr/local/libexec/tautweekly-package-update check
     ;;
   update)
-    /usr/local/libexec/tautweekly-check-release "$app_root/RELEASE-METADATA.txt"
-    cat <<'EOF'
-Native Linux updates are package based. Download and extract the newer Linux
-release, verify SHA256SUMS.txt, then run: sudo ./install-linux.sh --upgrade
-The installer replaces application files and preserves /var/lib/tautweekly.
-EOF
+    require_root
+    TAUTWEEKLY_PACKAGE_KIND=linux TAUTWEEKLY_PACKAGE_ROOT="$app_root" \
+      exec /usr/local/libexec/tautweekly-package-update apply
     ;;
   help|*)
     cat <<'EOF'
@@ -194,7 +192,7 @@ TautWeekly for Plex native Linux commands
   sudo tautweekly logs
   sudo tautweekly backup
   tautweekly check-update
-  tautweekly update
+  sudo tautweekly update
 
 USER_ID is the numeric value shown by list-users. Omit it only in an
 interactive terminal when you want the wrapper to prompt for it.

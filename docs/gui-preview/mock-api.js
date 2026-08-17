@@ -3,6 +3,7 @@
 (() => {
   const now = () => new Date().toISOString();
   const revision = "demo-revision-2026";
+  let backupList = [{ id: "demo-backup", createdAtUtc: new Date(Date.now() - 86400000).toISOString(), sizeBytes: 4812, revision: "demo-backup-revision" }];
   const previewDefinitions = [
     ["demo-index", "preview-all-00-INDEX", 42800],
     ["demo-welcome", "preview-all-01-manual-welcome", 96400],
@@ -290,8 +291,13 @@
     }
     if (path === "/api/v1/config/editor") return json(editor());
     if (path === "/api/v1/config/status" || path === "/api/v1/config/status/previews/skipped") return json(setupStatus);
-    if (path === "/api/v1/config/backups") return json({ backups: [{ id: "demo-backup", createdAtUtc: new Date(Date.now() - 86400000).toISOString(), sizeBytes: 4812, revision: "demo-backup-revision" }] });
+    if (path === "/api/v1/config/backups") return json({ backups: backupList });
     if (/^\/api\/v1\/config\/backups\/[^/]+\/restore$/.test(path)) return json({ restored: true, sourceId: "demo-backup", safetyBackup: "synthetic-safety-backup", editor: editor() });
+    if (/^\/api\/v1\/config\/backups\/[^/]+$/.test(path) && method === "DELETE") {
+      const id = decodeURIComponent(path.split("/").at(-1));
+      backupList = backupList.filter((backup) => backup.id !== id);
+      return json({ deleted: true, id });
+    }
     if (/^\/api\/v1\/config\/secrets\/[^/]+\/reveal$/.test(path)) return json({ name: decodeURIComponent(path.split("/").at(-2)), value: "FICTIONAL-DEMO-VALUE" });
     if (path === "/api/v1/checks/integrations") return json(integration);
     if (path === "/api/v1/checks/smtp-network") return json(smtp);

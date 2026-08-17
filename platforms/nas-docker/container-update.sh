@@ -5,6 +5,9 @@ cd "$(dirname "$0")"
 image_ref="${TAUTWEEKLY_IMAGE:-ghcr.io/sparkmoxie/tautweekly:latest}"
 lock_marker="/data/.tautweekly-update-holder"
 lock_container_id=""
+package_backup=""
+package_work_root=""
+package_update_completed=false
 
 print_metadata_readiness_note() {
   cat <<'EOF'
@@ -57,6 +60,48 @@ release_operation_lock() {
   lock_container_id=""
 }
 
+package_updater_path() {
+  if [[ -f ./package-update.sh ]]; then printf '%s' ./package-update.sh; return; fi
+  if [[ -f ../shared/package-update.sh ]]; then printf '%s' ../shared/package-update.sh; return; fi
+  return 1
+}
+
+safe_remove_package_work_root() {
+  [[ -n "$package_work_root" && -d "$package_work_root" ]] || return 0
+  [[ "$(basename "$package_work_root")" == tautweekly-package-update.* ]] || {
+    echo "Refusing to remove an unexpected package staging directory: $package_work_root" >&2
+    return 1
+  }
+  rm -rf "$package_work_root"
+}
+
+update_exit_handler() {
+  local status=$? updater
+  release_operation_lock
+  if [[ -n "$package_backup" && "$package_update_completed" != true ]]; then
+    echo "Restoring the previous release-owned host package files..." >&2
+    updater="$(package_updater_path || true)"
+    if [[ -z "$updater" ]] || ! TAUTWEEKLY_PACKAGE_KIND=nas-docker TAUTWEEKLY_PACKAGE_ROOT="$(pwd -P)" \
+        bash "$updater" restore-backup "$package_backup" "$(pwd -P)"; then
+      echo "Host package restoration needs administrator attention. Backup: $package_backup" >&2
+    else
+      echo "Previous host package files were restored; .env and data/ were unchanged." >&2
+      safe_remove_package_work_root || true
+    fi
+  fi
+  return "$status"
+}
+
+complete_package_update() {
+  if [[ -n "$package_backup" ]]; then
+    package_update_completed=true
+    safe_remove_package_work_root
+    package_backup=""
+    package_work_root=""
+    echo "Host package and runtime update committed."
+  fi
+}
+
 acquire_operation_lock() {
   local id
   id="$(container_id)"
@@ -67,7 +112,6 @@ acquire_operation_lock() {
     'echo $$ > /data/.tautweekly-update-holder; trap "rm -f /data/.tautweekly-update-holder" EXIT HUP INT TERM; while :; do sleep 60; done'
   for _ in $(seq 1 20); do
     if compose_cmd exec -T tautweekly test -s "$lock_marker" >/dev/null 2>&1; then
-      trap release_operation_lock EXIT
       return 0
     fi
     sleep 1
@@ -134,19 +178,24 @@ apply_update() {
   after_version="$(image_version "$after")"
   [[ "$after_version" != unknown ]] || { echo "The staged image has no repository version label; refusing to apply it." >&2; exit 65; }
 
-  if [[ -n "$before" && "$before" == "$after" ]]; then
+  if [[ -z "$package_backup" && -n "$before" && "$before" == "$after" ]]; then
     wait_for_health
     echo "The running container is already on stable image version $after_version."
     print_metadata_readiness_note
+    complete_package_update
     return
   fi
 
-  if compose_cmd up -d --no-build tautweekly && wait_for_health; then
+  compose_args=(up -d --no-build)
+  [[ -z "$package_backup" ]] || compose_args+=(--force-recreate)
+  compose_args+=(tautweekly)
+  if compose_cmd "${compose_args[@]}" && wait_for_health; then
     running_after="$(running_image_id)"
     running_after_version="$(image_version "$running_after")"
     if [[ "$running_after" == "$after" && "$running_after_version" == "$after_version" ]]; then
       echo "Updated TautWeekly from $before_version to $running_after_version; persistent data was not replaced."
       print_metadata_readiness_note
+      complete_package_update
       return
     fi
     echo "The recreated service reports image $running_after_version ($running_after), expected $after_version ($after)." >&2
@@ -171,8 +220,22 @@ apply_update() {
   exit 70
 }
 
-case "${1:-check}" in
+mode="${1:-check}"
+shift || true
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --package-backup) package_backup="${2:-}"; shift 2 ;;
+    --package-work-root) package_work_root="${2:-}"; shift 2 ;;
+    *) echo "Unknown update option: $1" >&2; exit 64 ;;
+  esac
+done
+if [[ -n "$package_backup" && -z "$package_work_root" ]] || [[ -z "$package_backup" && -n "$package_work_root" ]]; then
+  echo "Package backup and staging roots must be supplied together." >&2
+  exit 64
+fi
+
+case "$mode" in
   check) check_update ;;
-  apply) apply_update ;;
+  apply) trap update_exit_handler EXIT; apply_update ;;
   *) echo "Usage: ./container-update.sh check|apply" >&2; exit 64 ;;
 esac

@@ -30,8 +30,9 @@ Current capabilities:
 - four revision-scoped setup results that persist across refreshes and Manager
   restarts, remain visible on Config, and roll up into a Dashboard Config
   status card;
-- metadata-only backup listing and revision-checked restore with a pre-restore
-  safety backup;
+- metadata-only backup listing, revision-checked restore with a pre-restore
+  safety backup, and authenticated per-backup permanent deletion behind
+  same-origin and CSRF checks plus a separate GUI confirmation;
 - explicit preserve, replace, or clear semantics for write-only secrets;
 - automatic post-save and manually repeatable Tautulli/direct Plex compatibility
   checks restricted to private or loopback destinations, with proxies and
