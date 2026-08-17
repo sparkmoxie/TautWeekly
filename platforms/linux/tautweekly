@@ -114,6 +114,23 @@ case "$cmd" in
     confirm "Clear the guard?" || exit 0
     run_ps Schedule-Control.ps1 -Action ResetToday -DataRoot "$data_root"
     ;;
+  manager-bootstrap)
+    run_as_service_user "$app_root/bin/tautweekly-manager" access-bootstrap --data-dir "$data_root/manager"
+    ;;
+  manager-reset-access)
+    require_root
+    was_active=false
+    if systemctl is-active --quiet tautweekly.service; then
+      systemctl stop tautweekly.service
+      was_active=true
+    fi
+    if ! run_as_service_user "$app_root/bin/tautweekly-manager" access-recover --data-dir "$data_root/manager" --confirm; then
+      $was_active && systemctl start tautweekly.service
+      exit 1
+    fi
+    systemctl start tautweekly.service
+    echo "Run sudo tautweekly manager-bootstrap to retrieve the new one-time pairing token."
+    ;;
   start|stop|restart|status)
     require_root
     systemctl "$cmd" tautweekly.service
@@ -154,6 +171,8 @@ EOF
     cat <<'EOF'
 TautWeekly for Plex native Linux commands
 
+  sudo tautweekly manager-bootstrap
+  sudo tautweekly manager-reset-access
   sudo tautweekly setup
   sudo tautweekly verify
   sudo tautweekly list-users
@@ -179,6 +198,10 @@ TautWeekly for Plex native Linux commands
 
 USER_ID is the numeric value shown by list-users. Omit it only in an
 interactive terminal when you want the wrapper to prompt for it.
+
+The authenticated Manager at http://127.0.0.1:8788 is the primary setup and
+daily administration surface. Reach it through an SSH tunnel or a deliberately
+configured TLS reverse proxy. These CLI commands remain recovery/expert paths.
 EOF
     ;;
 esac

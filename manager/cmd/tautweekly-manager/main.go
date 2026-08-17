@@ -24,6 +24,12 @@ import (
 
 var version = "local"
 
+const (
+	runtimeModeWindows = "windows"
+	runtimeModeNAS     = "nas"
+	runtimeModeLinux   = "linux"
+)
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		log.Printf("ERROR: %v", err)
@@ -81,35 +87,35 @@ func serve(args []string) error {
 
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
 	listen := flags.String("listen", "127.0.0.1:8788", "loopback address for the local manager")
-	rootDir := flags.String("tautweekly-root", root, "TautWeekly Windows package directory")
+	rootDir := flags.String("tautweekly-root", root, "TautWeekly package directory")
 	runtimeRoot := flags.String("runtime-root", "", "persistent configuration, output, and scheduler data root; defaults to the package directory")
 	dataDir := flags.String("data-dir", filepath.Join(root, ".manager-data"), "private manager state directory")
 	openBrowserOnStart := flags.Bool("open-browser", false, "open the local Manager after the listener is ready")
 	requireAuthentication := flags.Bool("require-auth", false, "require password authentication and pairing for this runtime mode")
-	runtimeMode := flags.String("runtime-mode", "windows", "package runtime profile: windows or nas")
-	allowedHosts := flags.String("allowed-hosts", os.Getenv("TAUTWEEKLY_MANAGER_ALLOWED_HOSTS"), "comma-separated DNS hostnames accepted by a NAS Manager")
+	runtimeMode := flags.String("runtime-mode", "windows", "package runtime profile: windows, nas, or linux")
+	allowedHosts := flags.String("allowed-hosts", os.Getenv("TAUTWEEKLY_MANAGER_ALLOWED_HOSTS"), "comma-separated DNS hostnames accepted by a network-reachable Manager")
 	secureCookies := flags.Bool("secure-cookies", envBoolean("TAUTWEEKLY_MANAGER_SECURE_COOKIES"), "require HTTPS-secure session cookies behind a TLS reverse proxy")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	mode := strings.ToLower(strings.TrimSpace(*runtimeMode))
-	if mode != "windows" && mode != "nas" {
-		return errors.New("runtime mode must be windows or nas")
+	if mode != runtimeModeWindows && mode != runtimeModeNAS && mode != runtimeModeLinux {
+		return errors.New("runtime mode must be windows, nas, or linux")
 	}
-	if mode == "windows" {
+	if mode == runtimeModeWindows {
 		if err := requireLoopback(*listen); err != nil {
 			return err
 		}
 	} else if *openBrowserOnStart {
-		return errors.New("automatic browser opening is unavailable in NAS mode")
+		return errors.New("automatic browser opening is unavailable in managed service modes")
 	}
-	if *secureCookies && mode != "nas" {
-		return errors.New("forced secure cookies are supported only in NAS mode")
+	if *secureCookies && mode == runtimeModeWindows {
+		return errors.New("forced secure cookies are supported only in managed service modes")
 	}
-	if mode == "nas" {
+	if mode != runtimeModeWindows {
 		*requireAuthentication = true
 	}
-	if mode == "nas" {
+	if mode != runtimeModeWindows {
 		if err := validateAllowedHosts(*allowedHosts); err != nil {
 			return err
 		}
@@ -187,7 +193,7 @@ func serve(args []string) error {
 		}()
 	}
 	var tray managerTray = disabledManagerTray{}
-	if mode == "windows" {
+	if mode == runtimeModeWindows {
 		tray, err = startManagerTray(trayOptions{
 			IconPath: filepath.Join(*rootDir, "TautWeekly.ico"),
 			Status: func(ctx context.Context) trayHealth {
@@ -281,7 +287,7 @@ func shutdownManager(args []string) error {
 	}
 	flags := flag.NewFlagSet("shutdown", flag.ContinueOnError)
 	listen := flags.String("listen", "127.0.0.1:8788", "loopback address for the local manager")
-	rootDir := flags.String("tautweekly-root", root, "TautWeekly Windows package directory")
+	rootDir := flags.String("tautweekly-root", root, "TautWeekly package directory")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -335,7 +341,7 @@ func recoverRequiredAccess(args []string) error {
 	if err := manager.RecoverRequiredAccess(*dataDir); err != nil {
 		return err
 	}
-	fmt.Println("Manager authentication was reset. Restart the NAS Manager, then run access-bootstrap to retrieve the new one-time pairing token.")
+	fmt.Println("Manager authentication was reset. Restart the Manager service, then run access-bootstrap to retrieve the new one-time pairing token.")
 	return nil
 }
 
@@ -363,7 +369,7 @@ func validateAllowedHosts(value string) error {
 			return fmt.Errorf("allowed hosts must not include ports: %q", host)
 		}
 		if net.ParseIP(strings.Trim(host, "[]")) != nil {
-			return fmt.Errorf("IP literals are already accepted in NAS mode and must not be listed: %q", host)
+			return fmt.Errorf("IP literals are already accepted in managed service modes and must not be listed: %q", host)
 		}
 		if !validDNSHost(host) {
 			return fmt.Errorf("allowed host must be an exact DNS hostname: %q", host)
@@ -406,7 +412,7 @@ func printStatus(args []string) error {
 	}
 
 	flags := flag.NewFlagSet("status", flag.ContinueOnError)
-	rootDir := flags.String("tautweekly-root", root, "TautWeekly Windows package directory")
+	rootDir := flags.String("tautweekly-root", root, "TautWeekly package directory")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}

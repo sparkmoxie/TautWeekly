@@ -7,6 +7,13 @@ $ErrorActionPreference = "Stop"
 $configPath = Join-Path $DataRoot "config.json"
 $assetsDir = Join-Path $DataRoot "assets"
 $previewAssetsDir = Join-Path (Join-Path $DataRoot "output") "assets"
+$isNativeLinux = [string]$env:TAUTWEEKLY_MANAGER_RUNTIME_MODE -eq "linux"
+$runtimeName = if ($isNativeLinux) { "native Linux service" } else { "NAS container" }
+$previewBaseUrl = if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_PREVIEW_BASE_URL)) {
+    ([string]$env:TAUTWEEKLY_PREVIEW_BASE_URL).TrimEnd('/')
+}
+elseif ($isNativeLinux) { "http://127.0.0.1:8787" }
+else { "http://127.0.0.1:8080" }
 . (Join-Path $PSScriptRoot "Library-Selection.ps1")
 . (Join-Path $PSScriptRoot "Schedule-Time.ps1")
 
@@ -15,7 +22,7 @@ function WARN([string]$Text) { Write-Host "[WARN] $Text" -ForegroundColor Yellow
 function FAIL([string]$Text) { Write-Host "[FAIL] $Text" -ForegroundColor Red }
 
 Write-Host ""
-Write-Host "TAUTWEEKLY FOR PLEX NAS SETUP VERIFICATION" -ForegroundColor Cyan
+Write-Host $(if ($isNativeLinux) { "TAUTWEEKLY FOR PLEX NATIVE LINUX VERIFICATION" } else { "TAUTWEEKLY FOR PLEX NAS SETUP VERIFICATION" }) -ForegroundColor Cyan
 Write-Host "================================="
 
 if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
@@ -25,14 +32,14 @@ if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
 OK "PowerShell $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))"
 
 if (-not $IsLinux) {
-    FAIL "This package is designed for a Linux container."
+    FAIL "This package is designed for Linux."
     exit 1
 }
-OK "Linux container detected ($([Runtime.InteropServices.RuntimeInformation]::OSArchitecture))"
+OK "$runtimeName detected ($([Runtime.InteropServices.RuntimeInformation]::OSArchitecture))"
 
 foreach ($cmd in @("identify","convert","python3","flock")) {
     if ($null -eq (Get-Command $cmd -ErrorAction SilentlyContinue)) {
-        FAIL "$cmd is missing from the container image."
+        FAIL "$cmd is missing from the installed runtime."
         exit 1
     }
 }
@@ -55,7 +62,7 @@ try {
         [System.IO.UnixFileMode]::OtherRead -bor [System.IO.UnixFileMode]::OtherWrite -bor [System.IO.UnixFileMode]::OtherExecute
     )
     if ($groupOrOther -eq 0) { OK "config.json permissions are private" }
-    else { WARN "config.json is accessible to group/other users. Run: chmod 600 data/config.json" }
+    else { WARN "config.json is accessible to group/other users. Run: chmod 600 $configPath" }
 }
 catch { WARN "Could not inspect Unix permissions for config.json." }
 
@@ -102,7 +109,7 @@ else { OK "SMTP authentication is disabled" }
 
 try {
     $base = ([string]$config.TautulliUrl).TrimEnd('/')
-    if ($base -match '127\.0\.0\.1|localhost') {
+    if (-not $isNativeLinux -and $base -match '127\.0\.0\.1|localhost') {
         WARN "TautulliUrl points to localhost. In a separate container, use the QNAP LAN IP, a shared-network service name, or another reachable address."
     }
     $key = [Uri]::EscapeDataString([string]$config.ApiKey)
@@ -130,7 +137,10 @@ try {
         $availableIds = @($selectableLibraries | ForEach-Object { $_.SectionId })
         $matchedIds = @($configuredLibraryIds | Where-Object { $availableIds -contains $_ })
         $staleIds = @($configuredLibraryIds | Where-Object { $availableIds -notcontains $_ })
-        if ($matchedIds.Count -eq 0) { throw "None of the configured IncludedLibraryIds match an active movie or TV library. From an Unraid Console run /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1; from the Compose host project directory run ./tautweekly.sh manage-libraries." }
+        if ($matchedIds.Count -eq 0) {
+            $hint = if ($isNativeLinux) { "Run sudo tautweekly manage-libraries." } else { "From an Unraid Console run /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1; from the Compose host project directory run ./tautweekly.sh manage-libraries." }
+            throw "None of the configured IncludedLibraryIds match an active movie or TV library. $hint"
+        }
         OK "Global library scope matches $($matchedIds.Count) active movie/TV libraries"
         if ($staleIds.Count -gt 0) { WARN ("Configured library IDs no longer available: " + ($staleIds -join ", ")) }
     }
@@ -148,7 +158,7 @@ if ($directPlexExit -eq 3) {
     WARN "Direct Plex is not configured or discoverable. Core Tautulli operation remains available, but complete movie RT critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and selected logos may be unavailable."
 }
 elseif ($directPlexExit -ne 0) {
-    FAIL "Direct Plex verification failed. Correct the private Plex URL/token or container routing, DNS, TLS, and firewall access before Preview or SendTest."
+    FAIL "Direct Plex verification failed. Correct the private Plex URL/token or $runtimeName routing, DNS, TLS, and firewall access before Preview or SendTest."
     exit 1
 }
 else {
@@ -248,12 +258,17 @@ foreach ($name in ($animated + @("rt_ripe.png","rt_rotten.png","rt_upright.png",
     }
 }
 if ($mirrorFailure) {
-    WARN "From an Unraid Console run /opt/tautweekly/bin/run-script.sh Repair-Assets.ps1; from the Compose host project directory run ./tautweekly.sh repair-assets. Then verify again."
+    if ($isNativeLinux) {
+        WARN "Run sudo tautweekly repair-assets, then verify again."
+    }
+    else {
+        WARN "From an Unraid Console run /opt/tautweekly/bin/run-script.sh Repair-Assets.ps1; from the Compose host project directory run ./tautweekly.sh repair-assets. Then verify again."
+    }
     exit 1
 }
 
 try {
-    $response = Invoke-WebRequest -Uri "http://127.0.0.1:8080/assets/movies.gif" -Method Head -TimeoutSec 5
+    $response = Invoke-WebRequest -Uri "$previewBaseUrl/assets/movies.gif" -Method Head -TimeoutSec 5
     if ([int]$response.StatusCode -ne 200) {
         throw "HTTP status $([int]$response.StatusCode)"
     }
@@ -261,18 +276,25 @@ try {
 }
 catch {
     FAIL "preview asset web check failed: $($_.Exception.Message)"
-    WARN "Inspect the container logs in Unraid or on the Docker host and confirm the container was recreated from v1.3.4."
+    WARN $(if ($isNativeLinux) { "Inspect sudo systemctl status tautweekly and the systemd journal, then confirm the verified Linux package is current." } else { "Inspect the container logs in Unraid or on the Docker host and confirm the container was recreated from the current stable image." })
     exit 1
 }
 
 Write-Host ""
-OK "TautWeekly for Plex NAS Portable is ready for preview and test email."
+OK "TautWeekly for Plex $runtimeName is ready for preview and test email."
 Write-Host "SAFE NEXT STEPS:" -ForegroundColor Cyan
-Write-Host "Unraid Console:"
-Write-Host "  /opt/tautweekly/bin/run-mode.sh ListUsers"
-Write-Host "  /opt/tautweekly/bin/run-mode.sh PreviewAll USER_ID"
-Write-Host "  /opt/tautweekly/bin/run-mode.sh SendTestAll USER_ID"
-Write-Host "Compose host project directory:"
-Write-Host "  ./tautweekly.sh list-users"
-Write-Host "  ./tautweekly.sh preview-all USER_ID"
-Write-Host "  ./tautweekly.sh send-test-all USER_ID"
+if ($isNativeLinux) {
+    Write-Host "  Open the authenticated Manager through the documented SSH tunnel."
+    Write-Host "  Use the Manager for the delivery roster, PreviewAll, TestEmail, and schedule controls."
+    Write-Host "  Expert fallback: sudo tautweekly list-users"
+}
+else {
+    Write-Host "Unraid Console:"
+    Write-Host "  /opt/tautweekly/bin/run-mode.sh ListUsers"
+    Write-Host "  /opt/tautweekly/bin/run-mode.sh PreviewAll USER_ID"
+    Write-Host "  /opt/tautweekly/bin/run-mode.sh SendTestAll USER_ID"
+    Write-Host "Compose host project directory:"
+    Write-Host "  ./tautweekly.sh list-users"
+    Write-Host "  ./tautweekly.sh preview-all USER_ID"
+    Write-Host "  ./tautweekly.sh send-test-all USER_ID"
+}

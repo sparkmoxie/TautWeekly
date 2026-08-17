@@ -1,7 +1,7 @@
 ﻿param([string]$DataRoot = $(if ($env:TAUTWEEKLY_DATA_DIR) { $env:TAUTWEEKLY_DATA_DIR } else { "/data" }))
 $path = Join-Path $DataRoot "access-state.json"
 if (-not (Test-Path $path)) {
-    Write-Host "No access roster exists yet. From an Unraid Console run /opt/tautweekly/bin/run-mode.sh ListUsers; from the Compose host project directory run ./tautweekly.sh list-users."
+    Write-Host "No access roster exists yet. Use the Manager delivery roster or run the package's documented list-users expert command."
     exit 0
 }
 $state = Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json

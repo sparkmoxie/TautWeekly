@@ -1,6 +1,15 @@
 TautWeekly for Plex native Linux platform changelog
 
-Unreleased
+v1.2.0
+- Adds amd64 and arm64 native Manager binaries and selects the matching payload during install or upgrade.
+- Makes the authenticated, capability-aware Manager the primary setup, verification, preview, TestEmail, scheduling, and administration surface.
+- Defaults Manager access to host loopback with documented SSH-tunnel and explicit TLS reverse-proxy policies.
+- Adds explicit one-time bootstrap and narrow access-recovery commands without exposing generated tokens in logs.
+- Preserves independent newsletter scheduling and grants an active delivery up to the documented systemd shutdown grace.
+- Adds a native Linux preview landing page instead of inheriting Docker/Unraid setup language.
+- Documents checksum verification, backup, upgrade, post-upgrade GUI checks, rollback, reinstall, and data-preserving uninstall.
+- Makes expert setup and verification helpers use Linux service language, host-local service routing, and the configured preview listener.
+- Requires ImageMagick explicitly because verification and newsletter asset handling depend on it.
 - Keeps personal TV statistics grouped by show with aggregate watch duration while preferring show-level IMDb, then RT critic, then RT audience.
 - Omits absent personal movie/TV rating lines instead of rendering an unavailable placeholder.
 - Prints the ordered Plex and Tautulli metadata-readiness checklist after first setup and relevant package updates.

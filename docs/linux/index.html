@@ -27,7 +27,7 @@
   <div class="progress" id="progress" aria-hidden="true"></div>
   <header>
     <a class="brand" href="../"><img class="mark" src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38"><span>Taut<em>Weekly</em> for Plex</span></a>
-<nav aria-label="Quickstart navigation"><a href="#requirements">Requirements</a><a href="#install">Install</a><a href="#acceptance">Acceptance</a><a href="#security">Security</a><a href="#upgrade">Upgrade</a></nav>
+<nav aria-label="Quickstart navigation"><a href="#requirements">Requirements</a><a href="#install">GUI setup</a><a href="#acceptance">Acceptance</a><a href="#security">Security</a><a href="#upgrade">Update</a></nav>
     <label class="search"><span hidden>Search the Native Linux Quickstart</span><input id="search" type="search" placeholder="Search Linux Quickstart…" autocomplete="off"></label>
   </header>
   <main>
@@ -35,36 +35,36 @@
       <div>
         <div class="eyebrow"><img src="../assets/platforms/linux-tux.png" alt="" width="104" height="120"><span>Native Linux · no Docker required</span></div>
         <h1>A quiet service.<br><span>A deliberate send.</span></h1>
-        <p class="lead">Run the same maintained renderer directly on PowerShell 7, isolate its private state, preview every mail state, and let systemd keep only the scheduler and localhost preview service alive.</p>
-        <div class="badges"><span class="badge">PowerShell 7.2+</span><span class="badge">systemd</span><span class="badge">localhost preview</span><span class="badge">upgrade-safe data</span></div>
+        <p class="lead">Use the authenticated Manager GUI for setup, verification, previews, TestEmail, and scheduling while systemd isolates private state and keeps the independent newsletter service alive.</p>
+        <div class="badges"><span class="badge">PowerShell 7.2+</span><span class="badge">systemd</span><span class="badge">authenticated GUI</span><span class="badge">upgrade-safe data</span></div>
         <div class="actions"><a class="button primary" href="#install">Start installation</a><a class="button" href="https://github.com/sparkmoxie/TautWeekly/releases/latest">Download release</a></div>
       </div>
       <div class="terminal" aria-label="Native Linux acceptance sequence"><div class="terminal-head"><i></i><i></i><i></i><b>linux — controlled launch</b></div><pre><span class="prompt">$</span> sudo ./install-linux.sh
 <span class="ok">✓</span> protected service account
 <span class="ok">✓</span> application separated from data
 
-<span class="prompt">$</span> sudo tautweekly verify
-<span class="ok">✓</span> Tautulli · SMTP · storage
+<span class="prompt">$</span> sudo tautweekly manager-bootstrap
+<span class="ok">✓</span> one-time token, terminal only
 
-<span class="prompt">$</span> sudo tautweekly send-test-all USER_ID
-<span class="gold">→</span> TestEmail only</pre></div>
+<span class="prompt">$</span> ssh -L 8788:127.0.0.1:8788 HOST
+<span class="gold">→</span> GUI setup · verify · TestEmail</pre></div>
     </section>
 
-    <section class="metrics searchable" data-search="facts directories secrets ports"><div><strong>0</strong><span>credentials in application files</span></div><div><strong>0700</strong><span>private data directory mode</span></div><div><strong>127.0.0.1</strong><span>default preview bind</span></div><div><strong>opt-in</strong><span>automatic production delivery</span></div></section>
+    <section class="metrics searchable" data-search="facts directories secrets ports"><div><strong>0</strong><span>default passwords</span></div><div><strong>0700</strong><span>private data directory mode</span></div><div><strong>127.0.0.1</strong><span>default Manager bind</span></div><div><strong>opt-in</strong><span>automatic production delivery</span></div></section>
 
     <section id="requirements" class="section searchable" data-search="requirements ubuntu debian rhel pwsh powershell python systemd dependencies">
-      <div class="section-head"><div><div class="eyebrow">Before installation</div><h2>Use a supported runtime.</h2></div><p>The package refuses a partial install. PowerShell comes from Microsoft's supported distribution repository; TautWeekly does not add repositories as root.</p></div>
+      <div class="section-head"><div><div class="eyebrow">Before installation</div><h2>Use a supported runtime.</h2></div><p>The package requires PowerShell 7.2+, systemd, Python 3, ImageMagick, tar, and util-linux. PowerShell comes from Microsoft's supported distribution repository; TautWeekly does not add repositories as root.</p></div>
       <div class="grid"><article class="card"><b class="step">01</b><h3>Current Linux</h3><p>Use a current 64-bit Ubuntu, Debian, or RHEL release with systemd. Systems without systemd should use the NAS/Docker package.</p></article><article class="card"><b class="step">02</b><h3>PowerShell 7</h3><p>Install <code>pwsh</code> 7.2 or newer. A current LTS is recommended. Confirm with <code>pwsh --version</code>.</p></article><article class="card"><b class="step">03</b><h3>Host tools</h3><p>Provide Python 3, tar, and util-linux tools including <code>runuser</code> and <code>flock</code>.</p></article></div>
     </section>
 
     <section id="install" class="section searchable" data-search="download checksum sha256 extract install setup commands">
-      <div class="section-head"><div><div class="eyebrow">Installation</div><h2>Verify, install, configure.</h2></div><p>The application is replaceable. Your credentials, scheduler guard, logs, previews, and custom assets live outside it.</p></div>
+      <div class="section-head"><div><div class="eyebrow">GUI-first installation</div><h2>Verify, install, pair.</h2></div><p>The application is replaceable. Your Manager credentials, newsletter configuration, scheduler guard, logs, previews, and custom assets live outside it.</p></div>
       <div class="card"><h3>1. Verify and extract the release</h3><div class="command" id="download">sha256sum --check SHA256SUMS.txt --ignore-missing
 tar -xzf TautWeekly-linux.tar.gz
-cd TautWeekly-linux<button class="copy" data-copy="#download">Copy</button></div><h3>2. Install and run guided setup</h3><div class="command" id="setup">sudo ./install-linux.sh
-sudo tautweekly setup
-# complete metadata readiness below, then:
-sudo tautweekly verify<button class="copy" data-copy="#setup">Copy</button></div></div>
+cd TautWeekly-linux<button class="copy" data-copy="#download">Copy</button></div><h3>2. Install and open guided GUI setup</h3><div class="command" id="setup">sudo ./install-linux.sh
+ssh -L 8788:127.0.0.1:8788 YOUR_ADMIN@YOUR_HOST
+sudo tautweekly manager-bootstrap
+# open http://127.0.0.1:8788, pair, and complete Config<button class="copy" data-copy="#setup">Copy</button></div><p>The one-time token is returned only by the explicit bootstrap command and never appears in installer or service logs. Choose a unique administrator password; there is no insecure default.</p></div>
       <div class="callout info"><div class="icon">PMS</div><div><h3>Direct Plex is recommended for full newsletter fidelity</h3><p>Tautulli supplies core activity and selected/flattened rating fallbacks. During setup, enter a Plex URL and administrator token reachable from the service runtime for complete movie RT critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and selected logos. Verification checks Plex identity and authenticated library access without printing the token; a resolved but unusable connection fails before preview or TestEmail.</p></div></div>
     </section>
 
@@ -75,38 +75,37 @@ sudo tautweekly verify<button class="copy" data-copy="#setup">Copy</button></div
     </section>
 
     <section id="acceptance" class="section searchable" data-search="acceptance libraries scope list users exclusions preview test schedule send metadata refresh">
-      <div class="section-head"><div><div class="eyebrow">Acceptance gate</div><h2>Production comes fifth.</h2></div><p>Each step proves a narrower boundary before any real recipient is eligible. Replace <code>USER_ID</code> with a numeric value from <code>list-users</code>; listing users does not save a default.</p></div>
-      <div class="sequence"><div><b>01 Configure</b><p>Enter Tautulli, recommended direct Plex, SMTP, branding, and schedule locally.</p></div><div><b>02 Verify</b><p>Test Tautulli, direct Plex identity/authenticated library access, files, SMTP TCP reachability, and time zone.</p></div><div><b>03 Preview</b><p>Render six deterministic browser states without email.</p></div><div><b>04 TestEmail</b><p>Validate SMTP authentication, sender permission, MIME, and mail-client rendering.</p></div><div><b>05 Schedule</b><p>Enable only after roster and exclusions are reviewed.</p></div></div>
-      <div class="command" id="accept">sudo tautweekly list-libraries
-sudo tautweekly manage-libraries
-sudo tautweekly list-users
-sudo tautweekly exclude-users
-sudo tautweekly preview-all USER_ID
-sudo tautweekly send-test-all USER_ID
-sudo tautweekly schedule-status
-# only after review:
-sudo tautweekly schedule-enable<button class="copy" data-copy="#accept">Copy</button></div>
+      <div class="section-head"><div><div class="eyebrow">Acceptance gate</div><h2>Production comes fifth.</h2></div><p>Each GUI step proves a narrower boundary before any real recipient is eligible. The Manager loads libraries and the bounded user roster without exposing credentials or email addresses.</p></div>
+      <div class="sequence"><div><b>01 Config</b><p>Use the Manager to enter Tautulli, recommended direct Plex, SMTP, branding, libraries, exclusions, and schedule.</p></div><div><b>02 Verify</b><p>Run the GUI checks for Tautulli, direct Plex identity/authenticated library access, files, SMTP reachability, and time zone.</p></div><div><b>03 Preview</b><p>Render six deterministic browser states without email.</p></div><div><b>04 TestEmail</b><p>Validate SMTP authentication, sender permission, MIME, and mail-client rendering.</p></div><div><b>05 Schedule</b><p>Enable in the GUI only after roster and exclusions are reviewed.</p></div></div>
+      <div class="command" id="accept"># In the Manager at http://127.0.0.1:8788:
+Config → Validate, save, and verify
+Previews → Generate six previews
+Operations → Send TestEmail
+Schedule → Enable schedule<button class="copy" data-copy="#accept">Copy</button></div>
       <div class="callout info"><div class="icon">LIB</div><div><h3>One upstream content scope</h3><p><code>manage-libraries</code> saves stable Tautulli section IDs and backs up private configuration. The renderer queries selected sections independently, rejects mismatched rows, and applies the resulting scope before quiet mode, Trending, Binge Champion, and personal statistics are calculated.</p></div></div>
       <div class="callout info"><div class="icon">MAIL</div><div><h3>Current newsletter presentation</h3><p>The inherited payload lists up to four most-watched movies and TV shows, omits an empty TV card, keeps Total Watched duration-only, and reports Binge Champion as bold watch duration plus smaller nonzero unique movie/TV-show counts. HOT NEW RELEASE is movie-only; a movie-empty week uses the Trending hero and retains new TV cards below it.</p></div></div>
     </section>
 
     <section id="security" class="section searchable" data-search="security secrets config credentials localhost ssh tunnel permissions paths">
       <div class="callout"><div class="icon">!</div><div><h3>Keep `/var/lib/tautweekly` private.</h3><p><code>config.json</code> contains an SMTP credential and Tautulli API key and may contain a Plex token. Logs, previews, and backups can reveal recipients and viewing activity. Never upload them to an issue or release.</p></div></div>
-      <table class="paths"><thead><tr><th>Path</th><th>Role</th><th>Boundary</th></tr></thead><tbody><tr><td><code>/opt/tautweekly</code></td><td>Application and defaults</td><td>Root-owned, read-only to service</td></tr><tr><td><code>/var/lib/tautweekly</code></td><td>All private runtime material</td><td>Service-owned, mode 0700</td></tr><tr><td><code>/etc/tautweekly/tautweekly.env</code></td><td>Timezone, paths, preview listener</td><td>Root-owned, mode 0600</td></tr></tbody></table>
-      <div class="command" id="tunnel">ssh -L 8787:127.0.0.1:8787 admin@example.com
-# open http://127.0.0.1:8787 locally<button class="copy" data-copy="#tunnel">Copy</button></div>
+      <table class="paths"><thead><tr><th>Path</th><th>Role</th><th>Boundary</th></tr></thead><tbody><tr><td><code>/opt/tautweekly</code></td><td>Application and defaults</td><td>Root-owned, read-only to service</td></tr><tr><td><code>/var/lib/tautweekly</code></td><td>All private runtime material</td><td>Service-owned, mode 0700</td></tr><tr><td><code>/etc/tautweekly/tautweekly.env</code></td><td>Timezone, paths, Manager and preview listeners</td><td>Root-owned, mode 0600</td></tr></tbody></table>
+      <div class="command" id="tunnel">ssh -L 8788:127.0.0.1:8788 admin@example.com
+# open http://127.0.0.1:8788 locally<button class="copy" data-copy="#tunnel">Copy</button></div>
+      <div class="callout"><div><strong>TLS reverse proxies require an explicit host policy.</strong><p>Keep the backend on loopback, add the exact external DNS name to <code>TAUTWEEKLY_MANAGER_ALLOWED_HOSTS</code>, set <code>TAUTWEEKLY_MANAGER_SECURE_COOKIES=true</code>, terminate TLS at the proxy, and restart the service. Do not publish either loopback listener directly.</p></div></div>
+      <div class="callout"><div><strong>Forgot the Manager password?</strong><p>Run <code>sudo tautweekly manager-reset-access</code>, then <code>sudo tautweekly manager-bootstrap</code>. This resets only Manager authentication and browser sessions; configuration, schedules, output, history, and backups remain intact.</p></div></div>
     </section>
 
     <section id="upgrade" class="section searchable" data-search="upgrade update backup rollback restore troubleshooting logs systemctl">
-      <div class="section-head"><div><div class="eyebrow">Lifecycle</div><h2>Check first; apply verified stable files manually.</h2></div><p>The check command reports the latest stable GitHub release without changing the host. Upgrade mode takes the operation lock, creates a timestamped program backup, replaces `/opt/tautweekly`, preserves private data, records release metadata, and verifies that a previously active service returns.</p></div>
+      <div class="section-head"><div><div class="eyebrow">Update lifecycle</div><h2>Check, back up, verify, upgrade.</h2></div><p>The GUI explains the package boundary but never downloads or executes an update. The host check reports the latest stable GitHub release without changing the system. Upgrade mode holds the operation lock, waits for any active newsletter delivery during service shutdown, creates a timestamped program backup, replaces <code>/opt/tautweekly</code>, preserves private data, and verifies that a previously active service returns.</p></div>
       <div class="grid"><article class="card"><h3>Check and upgrade</h3><div class="command" id="upgrade-cmd">tautweekly check-update
-# download the stable linux archive and verify SHA256SUMS.txt
+# download the stable Linux archive and SHA256SUMS.txt
+sudo tautweekly backup
+sha256sum --check SHA256SUMS.txt --ignore-missing
 sudo ./install-linux.sh --upgrade
-sudo tautweekly verify
-sudo tautweekly send-test-all USER_ID<button class="copy" data-copy="#upgrade-cmd">Copy</button></div></article><article class="card"><h3>Observe</h3><div class="command" id="logs">sudo systemctl status tautweekly
+# sign back into the GUI, verify, preview, and TestEmail<button class="copy" data-copy="#upgrade-cmd">Copy</button></div></article><article class="card"><h3>Observe</h3><div class="command" id="logs">sudo systemctl status tautweekly
 sudo journalctl -u tautweekly -n 200 --no-pager<button class="copy" data-copy="#logs">Copy</button></div></article><article class="card"><h3>Private backup</h3><div class="command" id="backup">sudo tautweekly backup
 # briefly stops an active service for consistency<button class="copy" data-copy="#backup">Copy</button></div></article></div>
-      <div class="callout"><div><strong>Unattended upgrades are not enabled.</strong><p>If acceptance fails, reinstall the previous verified archive or restore the timestamped program backup; private state remains under <code>/var/lib/tautweekly</code>.</p></div></div>
+      <div class="callout"><div><strong>Unattended upgrades are not enabled.</strong><p>If acceptance fails, reinstall the previous verified archive or restore the timestamped program backup; private state remains under <code>/var/lib/tautweekly</code>. Reinstall preserves that directory. Uninstall removes the service and replaceable application but should retain private data until its backup is verified and deletion is explicitly intended.</p></div></div>
     </section>
     <div class="no-results" id="no-results" hidden>No sections matched. Try “PowerShell,” “install,” “preview,” “security,” or “upgrade.”</div>
   </main>

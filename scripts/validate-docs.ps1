@@ -271,9 +271,26 @@ foreach ($pattern in @(
     if ($nasInstall -notmatch $pattern) { throw "NAS user-selection guidance is missing: $pattern" }
 }
 
-foreach ($relative in @('nas-docker/index.html', 'mac/index.html', 'linux/index.html', 'freebsd/index.html')) {
+foreach ($relative in @('nas-docker/index.html', 'mac/index.html', 'freebsd/index.html')) {
     $html = [IO.File]::ReadAllText((Join-Path $docs $relative))
     if ($html -notmatch 'USER_ID') { throw "Numeric USER_ID guidance is missing from $relative" }
+}
+
+$linuxQuickstart = [IO.File]::ReadAllText((Join-Path $docs 'linux/index.html'))
+foreach ($pattern in @(
+    'GUI-first installation',
+    'manager-bootstrap',
+    'http://127\.0\.0\.1:8788',
+    'Config.*Validate, save, and verify',
+    'Previews.*Generate six previews',
+    'Operations.*Send TestEmail',
+    'install-linux\.sh --upgrade',
+    'SHA256SUMS\.txt',
+    'manager-reset-access'
+)) {
+    if ($linuxQuickstart -notmatch $pattern) {
+        throw "Native Linux GUI/update guidance is missing: $pattern"
+    }
 }
 
 $windowsQuickstart = [IO.File]::ReadAllText((Join-Path $docs 'windows/index.html'))

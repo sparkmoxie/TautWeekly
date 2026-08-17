@@ -176,8 +176,8 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 			}
 		}
 	}
-	if capabilities.RuntimeMode == runtimeModeNAS {
-		applyContainerScheduleStatus(&snapshot, runtimeRoot, observed)
+	if capabilities.RuntimeMode == runtimeModeNAS || capabilities.RuntimeMode == runtimeModeLinux {
+		applyEmbeddedScheduleStatus(&snapshot, runtimeRoot, observed, capabilities.ScheduleProvider)
 	}
 	applyLatestRendererDelivery(&snapshot, runtimeRoot)
 	return snapshot
@@ -196,12 +196,12 @@ type containerSchedulerState struct {
 	LastExitCode   *int64 `json:"LastExitCode"`
 }
 
-func applyContainerScheduleStatus(snapshot *StatusSnapshot, runtimeRoot string, observed time.Time) {
+func applyEmbeddedScheduleStatus(snapshot *StatusSnapshot, runtimeRoot string, observed time.Time, provider string) {
 	values, _, exists, state := readConfigDocument(runtimeRoot)
 	enabled := exists && state == "ready" && configMapBool(values, "ScheduleEnabled", false)
 	snapshot.Schedule = ScheduleStatus{
 		Supported: true,
-		Provider:  "embedded-container",
+		Provider:  provider,
 		Installed: true,
 		Enabled:   enabled,
 		Owned:     true,

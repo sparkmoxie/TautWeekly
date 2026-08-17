@@ -110,10 +110,10 @@ func configDefinitions() []configDefinition {
 	bytesMin, bytesMax := integerBounds(16, 2048)
 	delayMin, delayMax := integerBounds(0, 3600)
 	return []configDefinition{
-		{Name: "TautulliUrl", Label: "Tautulli URL", Group: "Connections", Type: "url", Required: true, Help: "Base URL reachable from this Windows host. Verification runs after a successful save and is restricted to private or loopback destinations.", Placeholder: "http://127.0.0.1:8181", Default: "http://127.0.0.1:8181"},
+		{Name: "TautulliUrl", Label: "Tautulli URL", Group: "Connections", Type: "url", Required: true, Help: "Base URL reachable from this Manager runtime. Verification runs after a successful save and is restricted to private or loopback destinations.", Placeholder: "http://127.0.0.1:8181", Default: "http://127.0.0.1:8181"},
 		{Name: "ApiKey", Label: "Tautulli API key", Group: "Connections", Type: "secret", Required: true, Help: "Leave blank to preserve the stored key. Revealing it requires your Manager password and clears automatically."},
-		{Name: "PlexServerUrl", Label: "Direct Plex server URL", Group: "Connections", Type: "url", Help: "Recommended for complete ratings, exact-episode metadata, backgrounds, and selected logos. Must be reachable from this Windows host.", Placeholder: "http://plex.example.test:32400", Default: ""},
-		{Name: "PlexToken", Label: "Plex token", Group: "Connections", Type: "secret", Help: "Recommended with the direct Plex URL. Leave blank to preserve it. On a same-PC Windows Plex installation, the runtime token can be used without copying it into config.json."},
+		{Name: "PlexServerUrl", Label: "Direct Plex server URL", Group: "Connections", Type: "url", Help: "Recommended for complete ratings, exact-episode metadata, backgrounds, and selected logos. Must be reachable from this Manager runtime.", Placeholder: "http://plex.example.test:32400", Default: ""},
+		{Name: "PlexToken", Label: "Plex token", Group: "Connections", Type: "secret", Help: "Recommended with the direct Plex URL. Leave blank to preserve it. A supported runtime token can be used without copying it into config.json."},
 		{Name: "PlexWebUrl", Label: "Open Plex button URL or custom link", Group: "Identity", Type: "url", Required: true, Default: "https://app.plex.tv/desktop/"},
 		{Name: "PlexButtonLabel", Label: "Button label", Group: "Identity", Type: "text", Required: true, Default: "Open Plex", Max: buttonLabelMax},
 		{Name: "ServerLabel", Label: "Header label", Group: "Identity", Type: "text", Required: true, Default: "PLEX"},

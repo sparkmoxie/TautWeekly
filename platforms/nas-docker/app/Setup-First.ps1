@@ -11,6 +11,7 @@ if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
 
 $configPath = Join-Path $DataRoot "config.json"
 $examplePath = "/opt/tautweekly/config.example.json"
+$isNativeLinux = [string]$env:TAUTWEEKLY_MANAGER_RUNTIME_MODE -eq "linux"
 . (Join-Path $PSScriptRoot "User-Exclusions.ps1")
 . (Join-Path $PSScriptRoot "Library-Selection.ps1")
 
@@ -105,10 +106,10 @@ function Write-MetadataReadinessChecklist {
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor DarkYellow
-Write-Host "TAUTWEEKLY FOR PLEX NAS PORTABLE SETUP" -ForegroundColor Yellow
+Write-Host $(if ($isNativeLinux) { "TAUTWEEKLY FOR PLEX NATIVE LINUX SETUP" } else { "TAUTWEEKLY FOR PLEX NAS PORTABLE SETUP" }) -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor DarkYellow
 Write-Host ""
-Write-Host "This wizard writes /data/config.json in the persistent NAS volume."
+Write-Host "This expert fallback writes $configPath in protected persistent storage."
 Write-Host "It does not send email. Automatic scheduling defaults to disabled."
 Write-Host ""
 
@@ -129,8 +130,11 @@ if (Test-Path $configPath) {
         Write-Host "Existing config preserved." -ForegroundColor Green
         Write-MetadataReadinessChecklist
         Write-Host ""
-        Write-Host "NEXT (Unraid Console): /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1"
-        Write-Host "NEXT (Compose host project directory): ./tautweekly.sh verify"
+        if ($isNativeLinux) { Write-Host "NEXT: sudo tautweekly verify" }
+        else {
+            Write-Host "NEXT (Unraid Console): /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1"
+            Write-Host "NEXT (Compose host project directory): ./tautweekly.sh verify"
+        }
         exit 0
     }
     try {
@@ -159,8 +163,13 @@ if (Test-Path $configPath) {
 
 Write-Host ""
 Write-Host "Tautulli connection" -ForegroundColor Cyan
-Write-Host "For a Tautulli container with port 8181 published, use the QNAP LAN IP,"
-Write-Host "for example http://media.example.test:8181. Do not use 127.0.0.1."
+if ($isNativeLinux) {
+    Write-Host "Use a URL reachable from the tautweekly systemd service, for example http://127.0.0.1:8181 for a host-local Tautulli service."
+}
+else {
+    Write-Host "For a Tautulli container with port 8181 published, use the QNAP LAN IP,"
+    Write-Host "for example http://media.example.test:8181. Do not use 127.0.0.1."
+}
 $tautulliUrl = Read-Default "Tautulli URL" ([string]$defaults.TautulliUrl)
 $apiKey = Read-Default "Tautulli API key"
 if ([string]::IsNullOrWhiteSpace($apiKey)) { throw "Tautulli API key is required." }
@@ -174,8 +183,11 @@ catch {
     if ($existingIncludedLibraryIds.Count -gt 0) {
         Write-Host "WARNING: $($_.Exception.Message)" -ForegroundColor Yellow
         Write-Host "Existing newsletter library selection will be preserved." -ForegroundColor Yellow
-        Write-Host "Unraid Console: /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1" -ForegroundColor Yellow
-        Write-Host "Compose host project directory: ./tautweekly.sh manage-libraries" -ForegroundColor Yellow
+        if ($isNativeLinux) { Write-Host "Run sudo tautweekly manage-libraries." -ForegroundColor Yellow }
+        else {
+            Write-Host "Unraid Console: /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1" -ForegroundColor Yellow
+            Write-Host "Compose host project directory: ./tautweekly.sh manage-libraries" -ForegroundColor Yellow
+        }
     }
     else {
         throw "Newsletter libraries could not be selected: $($_.Exception.Message)"
@@ -195,8 +207,11 @@ try {
 catch {
     Write-Host "WARNING: $($_.Exception.Message)" -ForegroundColor Yellow
     Write-Host "Setup will continue." -ForegroundColor Yellow
-    Write-Host "Unraid Console: /opt/tautweekly/bin/run-script.sh Manage-User-Exclusions.ps1" -ForegroundColor Yellow
-    Write-Host "Compose host project directory: ./tautweekly.sh exclude-users" -ForegroundColor Yellow
+    if ($isNativeLinux) { Write-Host "Run sudo tautweekly exclude-users." -ForegroundColor Yellow }
+    else {
+        Write-Host "Unraid Console: /opt/tautweekly/bin/run-script.sh Manage-User-Exclusions.ps1" -ForegroundColor Yellow
+        Write-Host "Compose host project directory: ./tautweekly.sh exclude-users" -ForegroundColor Yellow
+    }
 }
 
 $serverName = Read-Default "Plex server/newsletter display name" "My Plex"
@@ -210,8 +225,9 @@ Write-Host "Tautulli supplies core activity and fallback metadata. Direct Plex c
 Write-Host "labelled movie ratings retained by Plex, exact-episode IMDb/RT, backgrounds, and selected"
 Write-Host "logos. For movie RT output, set each Plex Movie library's Advanced > Ratings Source to"
 Write-Host "Rotten Tomatoes, then refresh affected metadata. This is library-wide."
-Write-Host "The URL must be reachable from inside"
-Write-Host "this runtime; localhost points to TautWeekly, not a separate Plex server/container."
+Write-Host "The URL must be reachable from inside this runtime."
+if ($isNativeLinux) { Write-Host "A host-local Plex service may use loopback when its listener permits it." }
+else { Write-Host "Localhost points to TautWeekly, not a separate Plex server/container." }
 Write-Host "Leaving either value unresolved uses flattened Tautulli fallbacks and may omit richer"
 Write-Host "metadata. Verification tests the resolved connection without printing the token."
 $plexServerUrl = Read-Default "Direct Plex URL, e.g. http://media.example.test:32400"
@@ -253,7 +269,7 @@ $canonicalDay = $validDays | Where-Object { $_ -ieq $scheduleDay } | Select-Obje
 if ([string]::IsNullOrWhiteSpace($canonicalDay)) {
     throw "Schedule day is invalid."
 }
-$scheduleTime = Read-Default "Local container send time (24-hour HH:mm)" "09:30"
+$scheduleTime = Read-Default $(if ($isNativeLinux) { "Local Linux service send time (24-hour HH:mm)" } else { "Local container send time (24-hour HH:mm)" }) "09:30"
 $tempTime = [DateTime]::MinValue
 if (-not [DateTime]::TryParseExact($scheduleTime, "HH:mm", [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$tempTime)) {
     throw "ScheduleTime must use HH:mm, for example 09:30."
@@ -316,5 +332,8 @@ Write-Host ""
 Write-Host "IMPORTANT: config.json contains credentials. Never publish or share it."
 Write-MetadataReadinessChecklist
 Write-Host ""
-Write-Host "NEXT (Unraid Console): /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1"
-Write-Host "NEXT (Compose host project directory): ./tautweekly.sh verify"
+if ($isNativeLinux) { Write-Host "NEXT: sudo tautweekly verify" }
+else {
+    Write-Host "NEXT (Unraid Console): /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1"
+    Write-Host "NEXT (Compose host project directory): ./tautweekly.sh verify"
+}

@@ -70,6 +70,8 @@ jobs:
       - name: Test packaged runtime contracts and checksums
         shell: pwsh
         run: ./scripts/test-release-artifacts.ps1
+      - name: Boot-test the packaged native Linux Manager
+        run: ./scripts/test-linux-manager-package.sh
       - name: Verify release archive reproducibility
         shell: pwsh
         run: ./scripts/test-release-reproducibility.ps1 -Version ($env:GITHUB_REF_NAME -replace '^v','')
@@ -89,6 +91,8 @@ jobs:
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/check-release.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/app/bin/run-as-user.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/app/bin/run-script.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/manager/tautweekly-manager-linux-amd64 | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/manager/tautweekly-manager-linux-arm64 | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/install-freebsd.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/rc.d/tautweekly | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/app/bin/run-as-user.sh | grep -q '^-rwx'

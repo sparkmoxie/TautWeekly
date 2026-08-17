@@ -174,6 +174,8 @@ def main() -> int:
 
     if "function renderIntegrationStatus()" not in javascript:
         failures.append("dashboard integration details have no shared verification renderer")
+    if "function configFieldIsHidden(field)" not in javascript or 'isServiceRuntime() && field.name === "ScheduledTaskName"' not in javascript:
+        failures.append("service Manager modes do not suppress the Windows Scheduled Task configuration field")
     if "function retainedSetupCheckState(" not in javascript or 'last?.overall || retainedLANState' not in javascript:
         failures.append("dashboard integrations do not fall back to retained save-verification state")
     if javascript.count("renderIntegrationStatus();") < 2:

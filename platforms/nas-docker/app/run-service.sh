@@ -3,12 +3,18 @@ set -euo pipefail
 data_root="${TAUTWEEKLY_DATA_DIR:-/data}"
 app_root="${TAUTWEEKLY_APP_DIR:-/opt/tautweekly}"
 manager_listen="${TAUTWEEKLY_MANAGER_LISTEN:-0.0.0.0:8080}"
+manager_runtime_mode="${TAUTWEEKLY_MANAGER_RUNTIME_MODE:-nas}"
 service_heartbeat="$data_root/service-heartbeat.json"
 shutdown_grace="${TAUTWEEKLY_SHUTDOWN_DELIVERY_GRACE_SECONDS:-1740}"
 mkdir -p "$data_root/logs" "$data_root/manager" "$data_root/output"
 MANAGER_PID=""
 SCHED_PID=""
 SHUTTING_DOWN=false
+
+if [[ "$manager_runtime_mode" != nas && "$manager_runtime_mode" != linux ]]; then
+  echo "[ERROR] TAUTWEEKLY_MANAGER_RUNTIME_MODE must be nas or linux." >&2
+  exit 64
+fi
 
 if ! [[ "$manager_listen" =~ ^[^:]+:[0-9]+$ ]]; then
   echo "[ERROR] TAUTWEEKLY_MANAGER_LISTEN must be an address and port, for example 0.0.0.0:8080." >&2
@@ -48,7 +54,7 @@ wait_for_delivery() {
   local waited=0
   while operation_is_active && (( waited < shutdown_grace )); do
     if (( waited == 0 )); then
-      echo "[INFO] Container shutdown is waiting for the active newsletter operation to finish."
+      echo "[INFO] Service shutdown is waiting for the active newsletter operation to finish."
     fi
     sleep 1
     waited=$((waited + 1))
@@ -58,7 +64,7 @@ wait_for_delivery() {
     return 1
   fi
   if (( waited > 0 )); then
-    echo "[INFO] Active newsletter operation finished after ${waited} second(s); container shutdown may continue."
+    echo "[INFO] Active newsletter operation finished after ${waited} second(s); service shutdown may continue."
   fi
   return 0
 }
@@ -74,7 +80,7 @@ term() {
 trap term TERM INT EXIT
 
 "$app_root/bin/tautweekly-manager" serve \
-  --runtime-mode nas \
+  --runtime-mode "$manager_runtime_mode" \
   --listen "$manager_listen" \
   --tautweekly-root "$app_root" \
   --runtime-root "$data_root" \
@@ -99,7 +105,11 @@ if [[ "$manager_ready" != true ]]; then
   [[ ! -f "$data_root/logs/manager.log" ]] || tail -n 40 "$data_root/logs/manager.log" >&2
   exit 70
 fi
-echo "[INFO] Authenticated Manager listening on ${manager_listen}; use the mapped trusted-LAN host port."
+if [[ "$manager_runtime_mode" == linux ]]; then
+  echo "[INFO] Authenticated Linux Manager listening on ${manager_listen}; use the documented SSH tunnel or TLS reverse proxy."
+else
+  echo "[INFO] Authenticated Manager listening on ${manager_listen}; use the mapped trusted-LAN host port."
+fi
 
 pwsh -NoLogo -NoProfile -NonInteractive -File "$app_root/Scheduler.ps1" -DataRoot "$data_root" &
 SCHED_PID=$!

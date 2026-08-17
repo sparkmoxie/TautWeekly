@@ -2,9 +2,10 @@
 
 The native Linux distribution runs TautWeekly for Plex directly with
 PowerShell 7. It does not require Docker. A hardened systemd service keeps the
-preview server and guarded scheduler alive, while the `tautweekly` command
-provides the same setup, exclusion, preview, test, and delivery workflow as the
-other editions.
+authenticated Manager, preview server, and guarded scheduler alive. The shared
+Manager GUI is the primary setup, verification, preview, TestEmail, scheduling,
+and administration surface; `tautweekly` remains the host recovery and expert
+command wrapper.
 
 [Open the Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/)
 
@@ -12,7 +13,8 @@ other editions.
 
 - A current 64-bit Ubuntu, Debian, or RHEL release supported by PowerShell 7.
 - PowerShell 7.2 or newer (`pwsh`), with a current LTS release recommended.
-- systemd, Python 3, `tar`, and util-linux (`runuser` and `flock`).
+- systemd, Python 3, ImageMagick (`identify` and `convert`), `tar`, and
+  util-linux (`runuser` and `flock`).
 - Network access to Tautulli, the configured SMTP STARTTLS endpoint, GitHub
   Releases for updates, and recommended direct Plex metadata endpoints for
   complete ratings, backgrounds, and selected logos.
@@ -49,20 +51,38 @@ chmod +x install-linux.sh tautweekly check-release.sh app/*.sh app/bin/*.sh
 
 ```bash
 sudo ./install-linux.sh
-sudo tautweekly setup
-# Complete the metadata-readiness checklist below, then:
-sudo tautweekly verify
 ```
 
 The installer validates dependencies, creates the locked `tautweekly` service
-account, installs application files, enables the service, and preserves any
-existing environment and private data. Setup writes the live configuration only
-under `/var/lib/tautweekly`.
+account, selects the packaged amd64 or arm64 Manager for the host, installs
+application files, starts the loopback-only service, and preserves any existing
+environment and private data. The GUI writes live configuration only under
+`/var/lib/tautweekly`.
+
+From an administrator workstation, keep the Manager on host loopback and open
+an SSH tunnel:
+
+```bash
+ssh -L 8788:127.0.0.1:8788 YOUR_LINUX_ADMIN@YOUR_LINUX_HOST
+```
+
+In that host session, retrieve the first-run token explicitly:
+
+```bash
+sudo tautweekly manager-bootstrap
+```
+
+Open `http://127.0.0.1:8788`, enter the one-time token, and create a unique
+administrator password. The token is returned only to this explicit command;
+it is never printed by the installer or written to systemd/Manager logs. In the
+GUI, open **Config**, complete guided setup, and choose **Validate, save, and
+verify**. Automatic sending remains disabled until it is explicitly enabled on
+the GUI **Schedule** page.
 
 Setup asks for a direct Plex URL and administrator token. They remain optional
 for the core Tautulli activity flow, but are recommended for complete movie RT
 critic/audience ratings, exact-episode IMDb/RT ratings, backgrounds, and selected
-logos. `sudo tautweekly verify` uses the same resolved connection as newsletter
+logos. The GUI verification uses the same resolved connection as newsletter
 generation and checks Plex `/identity` plus authenticated `/library/sections`
 without printing the token. A resolved but unusable connection fails
 verification; an unresolved pair emits a Tautulli-only fallback warning.
@@ -89,8 +109,8 @@ after a ratings/artwork recovery update when upstream data may be stale:
 3. In Tautulli, open each same **Library → Media Info** tab, select
    **Refresh media info**, and wait. The current control is per library, so
    repeat it for every included section.
-4. Run `sudo tautweekly verify`, PreviewAll, and TestEmail only after both
-   refresh stages complete.
+4. In the Manager, run connection verification, PreviewAll, and TestEmail only
+   after both refresh stages complete.
 
 [Plex documents](https://support.plex.tv/articles/200289306-scanning-vs-refreshing-a-library/)
 that a full refresh can take significant time and can update existing metadata
@@ -148,20 +168,29 @@ the service and remove only that directory. A full uninstall should retain the
 data root until configuration, state, output, cache entries, and backups are no
 longer required.
 
-The preview listener defaults to `127.0.0.1:8787`. For remote administration,
-keep that bind and use an SSH tunnel:
+The authenticated Manager defaults to `127.0.0.1:8788`; its preview listener
+remains on `127.0.0.1:8787`. For remote administration, keep both on loopback
+and tunnel the Manager port:
 
 ```bash
-ssh -L 8787:127.0.0.1:8787 admin@example.com
+ssh -L 8788:127.0.0.1:8788 admin@example.com
 ```
 
-Then open `http://127.0.0.1:8787/` locally. If a reverse proxy is required,
-protect it with authentication and TLS; do not expose the preview server
-directly to the internet.
+Then open `http://127.0.0.1:8788/` locally. If a reverse proxy is required,
+keep the backend on loopback, set its exact DNS name in
+`TAUTWEEKLY_MANAGER_ALLOWED_HOSTS`, set
+`TAUTWEEKLY_MANAGER_SECURE_COOKIES=true`, terminate TLS at the proxy, and
+restart the service. Do not publish either loopback listener directly.
 
 ## Operations
 
+Use the Manager GUI for routine configuration, connection checks, library and
+exclusion choices, previews, TestEmail, schedule enable/disable, status, and
+sanitized diagnostics. The commands below are recovery and expert fallbacks:
+
 ```text
+sudo tautweekly manager-bootstrap      retrieve the one-time pairing token
+sudo tautweekly manager-reset-access   reset only Manager authentication
 sudo tautweekly setup                 create or replace private configuration
 sudo tautweekly verify                validate files, API, SMTP, and schedule
 sudo tautweekly list-users            inspect Tautulli recipients
@@ -208,10 +237,9 @@ Download and verify the newer Linux archive, extract it into a temporary
 directory, then run:
 
 ```bash
+sudo tautweekly backup
+sha256sum --check SHA256SUMS.txt --ignore-missing
 sudo ./install-linux.sh --upgrade
-sudo tautweekly verify
-sudo tautweekly preview-all USER_ID
-sudo tautweekly send-test-all USER_ID
 ```
 
 An upgrade stores the previous application payload under
@@ -220,8 +248,9 @@ An upgrade stores the previous application payload under
 replace `config.json`, state, output, logs, the deleted-item cache, custom assets, or the environment
 file. The installer holds the same operation lock used by preview and send
 commands, records and verifies the repository release metadata, and confirms a
-previously active service becomes active again. Run the explicit `verify`,
-preview, and TestEmail commands before the next production delivery.
+previously active service becomes active again. Sign back into the Manager,
+review **Dashboard**, rerun verification, PreviewAll, and TestEmail, and only
+then leave the schedule enabled for the next production delivery.
 
 If the upgrade addresses missing ratings/artwork or output remains stale,
 complete metadata readiness before those checks.
@@ -236,13 +265,29 @@ sudo chown -R root:root /opt/tautweekly
 sudo systemctl start tautweekly
 ```
 
+Reinstall uses the same installer and preserves `/var/lib/tautweekly`. For an
+uninstall, stop and disable the service, remove only the replaceable application,
+unit, environment, and wrapper files, then reload systemd. Keep the private data
+directory until its backup is verified and deletion is explicitly intended:
+
+```bash
+sudo systemctl disable --now tautweekly.service
+sudo rm -rf /opt/tautweekly
+sudo rm -f /etc/systemd/system/tautweekly.service /usr/local/bin/tautweekly /usr/local/libexec/tautweekly-check-release
+sudo systemctl daemon-reload
+# Preserve /var/lib/tautweekly and /etc/tautweekly until intentionally purged.
+```
+
 ## Troubleshooting
 
 - `PowerShell 7.2 or newer is required`: install a supported `pwsh` package and
   rerun the installer.
 - `systemd is required`: use the NAS/Docker edition on that host.
-- Preview works locally but not remotely: keep the localhost bind and use the
+- Manager works locally but not remotely: keep the localhost bind and use the
   SSH tunnel above.
+- Forgotten Manager password: run `sudo tautweekly manager-reset-access`, then
+  `sudo tautweekly manager-bootstrap`; this preserves configuration, schedules,
+  output, delivery history, and newsletter state.
 - Service exits: run `sudo systemctl status tautweekly` and
   `sudo journalctl -u tautweekly -n 200 --no-pager`.
 - Permission error under `/var/lib/tautweekly`: restore ownership with

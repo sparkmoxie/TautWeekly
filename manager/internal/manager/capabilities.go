@@ -8,6 +8,7 @@ import (
 const (
 	runtimeModeWindows = "windows"
 	runtimeModeNAS     = "nas"
+	runtimeModeLinux   = "linux"
 )
 
 // Capabilities describes the package that owns the shared Manager core. The
@@ -32,8 +33,8 @@ type Capabilities struct {
 
 func normalizedRuntimeMode(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
-	if value == runtimeModeNAS {
-		return runtimeModeNAS
+	if value == runtimeModeNAS || value == runtimeModeLinux {
+		return value
 	}
 	return runtimeModeWindows
 }
@@ -52,6 +53,21 @@ func capabilitiesFor(options Options) Capabilities {
 			LifecycleProvider: "container-host",
 			UpdateProvider:    "container-host",
 			PathStyle:         "container-volume",
+			SecureCookies:     options.SecureCookies,
+		}
+	}
+	if mode == runtimeModeLinux {
+		return Capabilities{
+			RuntimeMode:       runtimeModeLinux,
+			Platform:          runtime.GOOS,
+			AccessLabel:       "Linux service access",
+			NetworkScope:      "host-loopback",
+			Authentication:    "required",
+			ScheduleProvider:  "embedded-service",
+			ScheduleActions:   []string{"enable", "disable"},
+			LifecycleProvider: "systemd",
+			UpdateProvider:    "linux-package",
+			PathStyle:         "linux-service",
 			SecureCookies:     options.SecureCookies,
 		}
 	}

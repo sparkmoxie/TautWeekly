@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-16
+
 ### Added
 
 - Added an authenticated, capability-aware NAS Manager for Unraid Apps, QNAP
@@ -15,6 +17,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added hardened generic and QNAP Compose definitions, an updated Unraid
   Community Apps template, multi-architecture Manager image builds, and an
   exact NAS lifecycle and recovery guide.
+- Added authenticated native Linux Manager binaries for amd64 and arm64,
+  architecture-aware installation, loopback-first systemd service access,
+  explicit bootstrap/recovery commands, and a Linux-specific preview adapter.
 
 ### Changed
 
@@ -24,6 +29,17 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Made the NAS container use an immutable root filesystem, an explicit
   persistent `/data` boundary, numeric UID/GID execution, minimal capabilities,
   authenticated LAN access, and graceful delivery-aware shutdown.
+- Made native Linux setup GUI-first while preserving the `tautweekly` wrapper
+  as an expert/recovery path, and documented checksum-verified updates, backup,
+  rollback, reinstall, recovery, and data-preserving uninstall behavior.
+
+### Fixed
+
+- Included the Manager executable required by the native Linux systemd service
+  and selected the correct packaged architecture during install and upgrade.
+- Made shared verification and setup helpers distinguish a native Linux service
+  from a container, accept host-local Plex/Tautulli endpoints, and probe the
+  configured Linux preview listener instead of the container-only port.
 
 ### Security
 
@@ -31,6 +47,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with PBKDF2 credential storage, bounded sessions, CSRF protection, login
   throttling, Host-header validation, secure-proxy cookie mode, and narrow
   access recovery that preserves newsletter data.
+- Required the same protected first-run and session boundary on native Linux,
+  with a loopback default, explicit reverse-proxy host policy, secure-cookie
+  mode, and bootstrap-token redaction from installer and service logs.
 
 ## [0.13.0] - 2026-08-16
 

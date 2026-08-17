@@ -82,6 +82,48 @@ func TestNASCapabilitiesRequireAuthenticationAndEnforceHostPolicy(t *testing.T) 
 	}
 }
 
+func TestLinuxCapabilitiesRequireAuthenticationAndDescribeNativeService(t *testing.T) {
+	t.Parallel()
+	capabilities := capabilitiesFor(Options{RuntimeMode: runtimeModeLinux, SecureCookies: true})
+	if capabilities.RuntimeMode != runtimeModeLinux || capabilities.Authentication != "required" ||
+		capabilities.ScheduleProvider != "embedded-service" ||
+		capabilities.LifecycleProvider != "systemd" || capabilities.UpdateProvider != "linux-package" ||
+		capabilities.PathStyle != "linux-service" || capabilities.NetworkScope != "host-loopback" ||
+		capabilities.SupportsStartup || capabilities.SupportsTray || capabilities.OpensBrowser ||
+		strings.Join(capabilities.ScheduleActions, ",") != "enable,disable" || !capabilities.SecureCookies {
+		t.Fatalf("unexpected Linux capability boundary: %+v", capabilities)
+	}
+
+	runtimeRoot := integrationConfigRoot(t, "http://127.0.0.1:8181", "fixture-api-key", "", "")
+	server, err := New(Options{
+		DataDir:        t.TempDir(),
+		TautWeeklyRoot: t.TempDir(),
+		RuntimeRoot:    runtimeRoot,
+		RuntimeMode:    runtimeModeLinux,
+		Version:        "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unauthorized := requestForTest(server, http.MethodGet, "/api/v1/capabilities", nil, nil)
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated Linux capabilities status: got %d, want 401", unauthorized.Code)
+	}
+	if _, ok := server.schedule.runner.(containerScheduleMutationRunner); !ok {
+		t.Fatalf("Linux Manager did not use the embedded service schedule runner: %T", server.schedule.runner)
+	}
+	snapshot := CollectStatus(t.Context(), Options{
+		DataDir:        t.TempDir(),
+		TautWeeklyRoot: t.TempDir(),
+		RuntimeRoot:    runtimeRoot,
+		RuntimeMode:    runtimeModeLinux,
+		Version:        "test",
+	})
+	if snapshot.Schedule.Provider != "embedded-service" || !snapshot.Schedule.Supported || !snapshot.Schedule.Installed || !snapshot.Schedule.Owned {
+		t.Fatalf("Linux embedded-service schedule status is not truthful: %+v", snapshot.Schedule)
+	}
+}
+
 func TestNASManagerReadsPersistentRuntimeRootNotReadOnlyPackageRoot(t *testing.T) {
 	t.Parallel()
 	packageRoot := t.TempDir()

@@ -82,10 +82,10 @@ while ($true) {
             if (([DateTimeOffset]::UtcNow - $lastMissingConfigWarningUtc).TotalMinutes -ge 5) {
                 $misplacedConfig = Join-Path $appRoot "config.json"
                 if (Test-Path $misplacedConfig) {
-                    Log "Found a non-persistent config at $misplacedConfig, but the scheduler only reads $configPath. Move or re-enter the configuration through the authenticated Manager so it is saved in /data." "WARN"
+                    Log "Found a config outside the persistent runtime root at $misplacedConfig, but the scheduler only reads $configPath. Move or re-enter the configuration through the authenticated Manager." "WARN"
                 }
                 else {
-                    Log "Waiting for $configPath. Pair with the authenticated Manager and complete guided setup; the Manager saves persistent configuration in /data." "WARN"
+                    Log "Waiting for $configPath. Pair with the authenticated Manager and complete guided setup in persistent storage." "WARN"
                 }
                 $lastMissingConfigWarningUtc = [DateTimeOffset]::UtcNow
             }
