@@ -102,7 +102,7 @@ if run_privileged \
     "TAUTWEEKLY_DATA_DIR=$test_root/data" \
     "TAUTWEEKLY_CONFIG=$test_root/data/config.json" \
     bash "$repo_root/platforms/linux/tautweekly" manager-bootstrap; then
-  assert_call "runuser -u tautweekly -- /virtual/app/bin/tautweekly-manager access-bootstrap --data-dir $test_root/data/manager"
+  assert_call "runuser -u tautweekly -- env TZ=Etc/UTC TAUTWEEKLY_APP_DIR=/virtual/app TAUTWEEKLY_DATA_DIR=$test_root/data TAUTWEEKLY_CONFIG=$test_root/data/config.json TAUTWEEKLY_PREVIEW_BASE_URL= /virtual/app/bin/tautweekly-manager access-bootstrap --data-dir $test_root/data/manager"
 fi
 
 freebsd_env="$test_root/freebsd.env"
