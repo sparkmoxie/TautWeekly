@@ -385,6 +385,36 @@ progress. NAS, QNAP, and general Compose deployments share this behavior.
 
 ## Updates and recovery
 
+Manager **Settings > Updates** is the primary container update-status source.
+It distinguishes the running application/image from the release host package,
+reports the stable channel, latest verified release, last successful check,
+last sanitized failure, release notes, and whether the saved host adapter is
+current, legacy, or mismatched. **Check now** is manual, bounded, cached, and
+backed off after failures; ordinary Manager/Dashboard health never requires the
+Internet. The Manager remains non-root and has no Docker socket or host helper,
+so it never offers an install button for Docker/NAS packages.
+
+The guidance is package-specific: Unraid points to Docker/Apps and its current
+Community Apps template; QNAP points to Container Station plus the verified
+release wrapper over trusted SSH; release-archive Compose/NAS installs show the
+copyable `./tautweekly.sh update`; and an otherwise compatible Docker host is
+directed to pull and recreate through the same deployment tool that created
+the service. Do not add a Docker socket, privileged container, or root web
+process to turn those instructions into a GUI update.
+
+For a compatible Compose deployment that did not use the release wrapper, run
+from the directory containing the original Compose definition:
+
+```bash
+docker compose pull tautweekly
+docker compose up -d --no-build --force-recreate tautweekly
+```
+
+Preserve the existing `/data` mount and all host environment/port settings.
+If the deployment tool uses another service name or is not Compose, use that
+tool's equivalent pull-and-recreate operation; do not copy a command into an
+unrelated stack.
+
 `ghcr.io/sparkmoxie/tautweekly:latest` advances only when a stable repository
 release is tagged. The `edge` tag follows `main`; no packaged Compose or Unraid
 default uses it.
@@ -423,8 +453,9 @@ in-container updater. Unraid's Apps Action Center reports an available update
 when the configured `latest` digest changes; apply it from Unraid's Docker/Apps
 controls. An optional automatic-update plugin may apply administrator-selected
 updates, but unattended application is opt-in. Leave the template on `latest`,
-not `edge`, unless deliberately testing unreleased code. After any update, run
-the Manager verification and controlled preview/TestEmail sequence again. If
+not `edge`, unless deliberately testing unreleased code. After any update,
+confirm **Settings > Updates**, then run the Manager verification and controlled
+preview/TestEmail sequence again. If
 the update addresses missing ratings/artwork or output remains stale, complete
 metadata readiness before those checks. For an installation saved from an older
 template, open **Docker > TautWeekly for Plex > Edit**, compare/apply the current

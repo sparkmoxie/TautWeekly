@@ -58,7 +58,7 @@ if ([string]$profile.CommunityApplications.Icon -cne $expectedIcon -or [string]$
 }
 
 $configs = @($container.Config)
-$requiredTargets = @('8080','/data','TZ','PUID','PGID','UMASK','TAUTWEEKLY_PREVIEW_BASE_URL','TAUTWEEKLY_MANAGER_ALLOWED_HOSTS','TAUTWEEKLY_MANAGER_SECURE_COOKIES','TAUTWEEKLY_HOST_ADAPTER_API')
+$requiredTargets = @('8080','/data','TZ','PUID','PGID','UMASK','TAUTWEEKLY_PREVIEW_BASE_URL','TAUTWEEKLY_MANAGER_ALLOWED_HOSTS','TAUTWEEKLY_MANAGER_SECURE_COOKIES','TAUTWEEKLY_PACKAGE_KIND','TAUTWEEKLY_HOST_ADAPTER_API')
 foreach ($target in $requiredTargets) {
     if (-not ($configs | Where-Object { [string]$_.Target -ceq $target })) {
         Add-Failure "Missing Unraid Config target: $target"
@@ -75,6 +75,14 @@ if ($null -ne $webPort -and ([string]$webPort.Default -cne '8787' -or [string]$w
 }
 if ($null -ne $webPort -and ([string]$webPort.Name -cne 'Manager Web UI' -or [string]$webPort.Description -notmatch 'Authenticated Manager')) {
     Add-Failure 'Unraid port metadata must identify the authenticated NAS Manager.'
+}
+$packageKind = $configs | Where-Object { [string]$_.Target -ceq 'TAUTWEEKLY_PACKAGE_KIND' } | Select-Object -First 1
+if ($null -ne $packageKind -and [string]$packageKind.Default -cne 'unraid') {
+    Add-Failure 'Unraid package identity must remain unraid.'
+}
+$hostAdapter = $configs | Where-Object { [string]$_.Target -ceq 'TAUTWEEKLY_HOST_ADAPTER_API' } | Select-Object -First 1
+if ($null -ne $hostAdapter -and [string]$hostAdapter.Default -cne '3') {
+    Add-Failure 'Unraid host-adapter API must match the current Manager contract.'
 }
 if ([string]$container.Overview -notmatch 'authenticated TautWeekly Manager' -or [string]$container.Overview -notmatch 'access-bootstrap') {
     Add-Failure 'Unraid overview must describe authenticated Manager bootstrap from the container Console.'

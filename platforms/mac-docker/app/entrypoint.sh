@@ -6,8 +6,8 @@ UMASK_VALUE="${UMASK:-077}"
 HOST_ADAPTER_API="${TAUTWEEKLY_HOST_ADAPTER_API:-legacy}"
 umask "$UMASK_VALUE"
 
-if [[ "$HOST_ADAPTER_API" != 2 ]]; then
-  echo "[WARN] Host adapter API ${HOST_ADAPTER_API} is older than image API 2. The Manager can start, but update the host package or saved container template to restore current lifecycle and hardening settings." >&2
+if [[ "$HOST_ADAPTER_API" != 3 ]]; then
+  echo "[WARN] Host adapter API ${HOST_ADAPTER_API} is older than image API 3. The Manager can start, but Settings > Updates will report the legacy adapter until the host package or saved container template is current." >&2
 fi
 
 if ! [[ "$PUID" =~ ^[0-9]+$ && "$PGID" =~ ^[0-9]+$ ]]; then

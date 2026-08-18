@@ -616,8 +616,13 @@ Destructive or externally visible operations require confirmation:
   aggregate results.
 - Schedule enable: confirm timezone, next run, and successful test prerequisite.
 - Backup restore: show configuration revision and create a pre-restore backup.
-- Update: remain deferred until the existing guarded updater has a typed
-  management contract.
+- Update check: authenticated and explicit, with a fixed stable endpoint,
+  bounded timeout/body, strict metadata verification, sanitized cache/backoff,
+  and no network dependency in normal health or page load.
+- Update install: Windows only, after a fresh verified check and a separate
+  confirmation, through the fixed existing guarded updater. Host-managed
+  packages show exact platform guidance and never receive web-process host
+  mutation authority.
 
 ## 12. Screens and user flows
 

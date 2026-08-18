@@ -6,6 +6,25 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Added a capability-aware **Settings > Updates** card and authenticated update
+  API across Windows, native Linux, macOS Docker Desktop, FreeBSD Podman,
+  Compose/NAS, QNAP, Unraid, and compatible Docker hosts. It distinguishes
+  application, package, image, and host-adapter versions, performs explicit
+  bounded stable-release checks with sanitized persistent results and backoff,
+  and keeps ordinary Manager health offline-capable.
+- Integrated Windows-only confirmed installation with the existing verified,
+  elevated updater. Every host-managed package instead reports exact native
+  guidance without a Docker socket, root web process, privileged helper, or
+  browser-controlled command.
+
+### Changed
+
+- Advanced container host-adapter identity to API 3, embedded release package
+  versions in staged Compose manifests, and documented Settings as the primary
+  update-status source while retaining each platform's existing update owner.
+
 ## [0.14.1] - 2026-08-17
 
 ### Changed

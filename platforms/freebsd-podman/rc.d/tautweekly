@@ -40,6 +40,7 @@ tautweekly_load_env()
     : "${TAUTWEEKLY_MANAGER_ALLOWED_HOSTS:=}"
     : "${TAUTWEEKLY_MANAGER_SECURE_COOKIES:=false}"
     : "${TAUTWEEKLY_PODMAN_BIN:=/usr/local/bin/podman}"
+    TAUTWEEKLY_PACKAGE_VERSION="$(sed -n 's/^Repository version:[[:space:]]*v\{0,1\}\([0-9][0-9A-Za-z._-]*\)$/\1/p' /usr/local/share/tautweekly/RELEASE-METADATA.txt 2>/dev/null | sed -n '1p')"
     PODMAN="$TAUTWEEKLY_PODMAN_BIN"
 }
 
@@ -75,7 +76,9 @@ tautweekly_start()
         -e "TAUTWEEKLY_MANAGER_LISTEN=0.0.0.0:8080" \
         -e "TAUTWEEKLY_MANAGER_ALLOWED_HOSTS=$TAUTWEEKLY_MANAGER_ALLOWED_HOSTS" \
         -e "TAUTWEEKLY_MANAGER_SECURE_COOKIES=$TAUTWEEKLY_MANAGER_SECURE_COOKIES" \
-        -e "TAUTWEEKLY_HOST_ADAPTER_API=2" \
+        -e "TAUTWEEKLY_PACKAGE_KIND=freebsd-podman" \
+        -e "TAUTWEEKLY_PACKAGE_VERSION=$TAUTWEEKLY_PACKAGE_VERSION" \
+        -e "TAUTWEEKLY_HOST_ADAPTER_API=3" \
         -p "$TAUTWEEKLY_PREVIEW_BIND:$TAUTWEEKLY_PREVIEW_PORT:8080/tcp" \
         -v "$TAUTWEEKLY_DATA_DIR:/data:rw" \
         "$TAUTWEEKLY_IMAGE"

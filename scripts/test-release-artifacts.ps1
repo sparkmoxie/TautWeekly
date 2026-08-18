@@ -276,6 +276,14 @@ foreach ($archiveName in $expected.Keys) {
             $_ -match '^(?:/|[A-Za-z]:)' -or @($_ -split '/' | Where-Object { $_ -eq '..' }).Count -gt 0
         })
         Assert-True ($unsafeEntries.Count -eq 0) "$archiveName contains unsafe archive paths: $($unsafeEntries -join ', ')"
+        $composeEntries = @($archive.Entries | Where-Object { $_.FullName -match '/compose(?:\.qnap)?\.yaml$' })
+        foreach ($composeEntry in $composeEntries) {
+            $composeReader = New-Object IO.StreamReader($composeEntry.Open())
+            try { $identityText = $composeReader.ReadToEnd() } finally { $composeReader.Dispose() }
+            Assert-True ($identityText -notmatch '__TAUTWEEKLY_RELEASE_VERSION__') "$archiveName retains an unresolved release-version token in $($composeEntry.FullName)."
+            Assert-True ($identityText -match 'TAUTWEEKLY_PACKAGE_KIND' -and $identityText -match 'TAUTWEEKLY_PACKAGE_VERSION') "$archiveName omits package identity from $($composeEntry.FullName)."
+            Assert-True ($identityText -match 'TAUTWEEKLY_HOST_ADAPTER_API:\s*"3"') "$archiveName has a stale host-adapter API in $($composeEntry.FullName)."
+        }
         foreach ($requiredEntry in $expected[$archiveName]) {
             Assert-True ($entryNames -ccontains $requiredEntry) "$archiveName is missing $requiredEntry"
         }
@@ -430,7 +438,14 @@ foreach ($archiveName in $expected.Keys) {
         try { $metadata = $metadataReader.ReadToEnd() }
         finally { $metadataReader.Dispose() }
         Assert-True ($metadata -match '(?m)^Repository version:\s*(?<version>\S+)\s*$') "$archiveName does not identify its repository version."
-        $releaseVersions.Add($Matches['version'])
+        $packageReleaseVersion = $Matches['version']
+        $releaseVersions.Add($packageReleaseVersion)
+        foreach ($composeEntry in $composeEntries) {
+            $composeReader = New-Object IO.StreamReader($composeEntry.Open())
+            try { $identityText = $composeReader.ReadToEnd() } finally { $composeReader.Dispose() }
+            $versionPattern = 'TAUTWEEKLY_PACKAGE_VERSION[^\r\n]*' + [regex]::Escape($packageReleaseVersion)
+            Assert-True ($identityText -match $versionPattern) "$archiveName does not embed repository version $packageReleaseVersion in $($composeEntry.FullName)."
+        }
 
         $rendererEntry = @($archive.Entries | Where-Object { $_.FullName -match '/(?:app/)?TautWeekly\.ps1$' } | Select-Object -First 1)
         Assert-True ($rendererEntry.Count -eq 1) "$archiveName has no production renderer."

@@ -94,6 +94,10 @@ func serve(args []string) error {
 	openBrowserOnStart := flags.Bool("open-browser", false, "open the local Manager after the listener is ready")
 	requireAuthentication := flags.Bool("require-auth", false, "require password authentication and pairing for this runtime mode")
 	runtimeMode := flags.String("runtime-mode", "windows", "package runtime profile: windows, nas, linux, or mac")
+	packageKind := flags.String("package-kind", os.Getenv("TAUTWEEKLY_PACKAGE_KIND"), "package identity supplied by the trusted host wrapper")
+	packageVersion := flags.String("package-version", os.Getenv("TAUTWEEKLY_PACKAGE_VERSION"), "host package release version supplied by the trusted wrapper")
+	hostAdapterVersion := flags.String("host-adapter-version", os.Getenv("TAUTWEEKLY_HOST_ADAPTER_API"), "host adapter compatibility version")
+	updateChannel := flags.String("update-channel", os.Getenv("TAUTWEEKLY_UPDATE_CHANNEL"), "release update channel (stable)")
 	allowedHosts := flags.String("allowed-hosts", os.Getenv("TAUTWEEKLY_MANAGER_ALLOWED_HOSTS"), "comma-separated DNS hostnames accepted by a network-reachable Manager")
 	secureCookies := flags.Bool("secure-cookies", envBoolean("TAUTWEEKLY_MANAGER_SECURE_COOKIES"), "require HTTPS-secure session cookies behind a TLS reverse proxy")
 	if err := flags.Parse(args); err != nil {
@@ -141,6 +145,10 @@ func serve(args []string) error {
 		RuntimeRoot:           *runtimeRoot,
 		Version:               version,
 		RuntimeMode:           mode,
+		PackageKind:           *packageKind,
+		PackageVersion:        *packageVersion,
+		HostAdapterVersion:    *hostAdapterVersion,
+		UpdateChannel:         *updateChannel,
 		RequireAuthentication: *requireAuthentication,
 		AllowedHosts:          splitAllowedHosts(*allowedHosts),
 		SecureCookies:         *secureCookies,

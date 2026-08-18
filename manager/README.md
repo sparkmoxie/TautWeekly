@@ -63,6 +63,15 @@ Current capabilities:
 - ownership-aware Windows Task Scheduler status plus typed install/refresh,
   enable, disable, and remove operations through a narrowly scoped packaged
   UAC helper;
+- a capability-aware Settings update view with application, package, image,
+  channel, stable-release, check-history, failure, host-adapter, release-note,
+  and platform-owner fields;
+- explicit bounded stable-release checks with a sanitized private cache,
+  exponential failure backoff, strict GitHub URL/asset metadata validation,
+  and no network dependency in ordinary page loads or health checks;
+- an explicitly confirmed Windows-only install action that invokes the fixed
+  packaged updater, while native Linux, macOS, FreeBSD, NAS, QNAP, Unraid, and
+  compatible Docker modes return guidance without host mutation authority;
 - bounded local configuration diagnostics containing only timestamps,
   categories, outcomes, fixed summaries, and support codes; and
 - an embedded responsive dashboard with no external runtime assets.
@@ -134,11 +143,22 @@ Tautulli, Plex, or SMTP configuration. Separate, explicit live-host acceptance
 has verified Tautulli, direct Plex, SMTP preflight, preview generation, and
 TestEmail delivery. Manual production delivery uses the same packaged renderer
 contract as the scheduled task but is not exercised by automated live
-acceptance because it sends to real recipients. Manager-initiated package
-updating and arbitrary command execution remain unavailable. Package installation,
-verified updates, and old-portable-folder migration are owned by the separate
-`TautWeekly-Setup.exe`; the explicitly confirmed stable-update BAT workflow
-remains an expert fallback.
+acceptance because it sends to real recipients. Arbitrary command execution
+remains unavailable. On Windows, the Manager can start only the existing fixed,
+verified `Check-Update.ps1` application path after a fresh successful release
+check and explicit confirmation; elevation and file changes remain in the
+packaged updater. Other packages expose only their fixed host-side guidance and
+cannot invoke Docker, Podman, systemd, rc.d, or package replacement.
+
+The update endpoints use the same session, authorization, allowed-host,
+same-origin, CSRF, secure-cookie, HSTS, and rate-limit boundaries as the rest of
+the Manager. `GET /api/v1/updates` is local-only and never performs a network
+request. `POST /api/v1/updates/check` accepts no release URL and requests only
+the fixed stable GitHub API endpoint with redirects rejected, an eight-second
+timeout, a bounded response body, strict content type, exact release/tag URL,
+and exact platform asset plus checksum URLs. `POST /api/v1/updates/install`
+accepts no caller-controlled update arguments. Cached failures contain only
+fixed public messages and support codes.
 
 The Windows release build cross-compiles this module as
 `tautweekly-manager.exe`, packages it into the portable Windows ZIP, and embeds

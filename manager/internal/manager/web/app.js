@@ -31,6 +31,9 @@ const state = {
   about: null,
   diagnostics: { events: [], maximumEntries: 200, retentionDays: 30 },
   capabilities: null,
+  updates: null,
+  updateChecking: false,
+  updateInstalling: false,
   runtimeMode: "windows",
 };
 const byId = (id) => document.getElementById(id);
@@ -210,7 +213,7 @@ async function enterApplication(preferredView = "") {
 async function loadAll() {
   setGlobalStatus("Refreshing local status…");
   try {
-    const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, startup, authAccess, about, diagnostics, capabilities] = await Promise.all([
+    const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, startup, authAccess, about, diagnostics, capabilities, updates] = await Promise.all([
       request("/api/v1/status"),
       request("/api/v1/config"),
       request("/api/v1/config/editor"),
@@ -227,6 +230,7 @@ async function loadAll() {
       request("/api/v1/about"),
       request("/api/v1/diagnostics"),
       request("/api/v1/capabilities"),
+      request("/api/v1/updates"),
     ]);
     state.status = status;
     state.config = config;
@@ -246,6 +250,7 @@ async function loadAll() {
     state.about = about;
     state.diagnostics = diagnostics;
     state.capabilities = capabilities;
+    state.updates = updates;
     state.runtimeMode = capabilities.runtimeMode || state.runtimeMode;
     renderCapabilities();
     renderStatus();
@@ -259,6 +264,7 @@ async function loadAll() {
     renderSchedule();
     renderStartupSettings();
     renderAccessSettings();
+    renderUpdates();
     renderAbout();
     manageOperationPolling();
     manageSchedulePolling();
@@ -345,14 +351,14 @@ function renderCapabilities() {
   setText("schedule-lifecycle-copy", service
     ? "Disabling future starts never cancels a newsletter delivery that is already running."
     : "Disabling or removing a schedule never cancels a newsletter process that is already running.");
-  setText("settings-page-heading", service ? "Private access, enforced." : "Private access, your way.");
+  setText("settings-page-heading", service ? "Private access and truthful updates." : "Local access and truthful updates.");
   setText("settings-platform-copy", nas
-    ? "This container requires an administrator password. Runtime lifecycle, updates, and TLS remain under your NAS or container host."
+    ? "This container requires an administrator password. Settings reports update status; runtime lifecycle, installation, and TLS remain under your NAS or container host."
     : linux
-      ? "This systemd service requires an administrator password and listens on host loopback by default. Updates remain an explicit, checksum-verified Linux package operation."
+      ? "This systemd service requires an administrator password and listens on host loopback by default. Settings reports update status; installation remains an explicit, checksum-verified Linux package operation."
     : mac
-      ? "This Docker Desktop service requires an administrator password and publishes only to Mac loopback by default. Updates remain an explicit, checksum-verified Mac package operation."
-    : "Windows trusts this computer by default. Add a password lock when the extra boundary is useful, without making first-run setup depend on a one-time token.");
+      ? "This Docker Desktop service requires an administrator password and publishes only to Mac loopback by default. Settings reports update status; installation remains an explicit, checksum-verified Mac package operation."
+    : "Windows trusts this computer by default. Settings reports update status and can start only the existing verified updater; add a password lock when the extra access boundary is useful.");
   setText("about-access-heading", nas ? "Authenticated LAN access" : linux ? "Authenticated host access" : mac ? "Authenticated Mac access" : "Loopback-only access");
   setText("about-access-copy", nas
     ? "The Manager requires authentication, accepts IP-literal host access by default, and rejects DNS hostnames unless the container allowlist includes them."
@@ -2567,6 +2573,147 @@ async function disableAccessPassword() {
   }
 }
 
+function updateStatePresentation(update = state.updates || {}) {
+  switch (update.state) {
+  case "current": return { label: "Current", tone: "good", summary: "The running application and every reported package layer match the latest stable release." };
+  case "update-available": return { label: "Update available", tone: "pending", summary: "A newer verified stable release is available. Follow the update owner and package-specific steps below." };
+  case "legacy": return { label: "Legacy wrapper", tone: "bad", summary: "The running image reports an older or missing host-adapter contract. Update the host package or saved platform template through its owner." };
+  case "mismatched": return { label: "Version mismatch", tone: "bad", summary: "The reported application/image and host package versions do not match. Use the platform recovery/update path to advance them together." };
+  case "newer": return { label: "Newer than stable", tone: "neutral", summary: "This application is newer than the latest stable release. The Manager will not offer a rollback or downgrade." };
+  default: return { label: "Unknown", tone: "neutral", summary: "No verified stable comparison is available yet. Normal Manager and newsletter health remain local and independent." };
+  }
+}
+
+function displayUpdateVersion(value, unavailable = "Not reported") {
+  return value ? `v${value}` : unavailable;
+}
+
+function renderUpdates() {
+  const update = state.updates || {};
+  const presentation = updateStatePresentation(update);
+  setChip("update-settings-chip", state.updateChecking || update.checkInProgress ? "Checking" : presentation.label, state.updateChecking || update.checkInProgress ? "pending" : presentation.tone);
+  setText("update-settings-summary", presentation.summary);
+  setText("update-manager-version", displayUpdateVersion(update.managerVersion));
+  setText("update-application-version", displayUpdateVersion(update.applicationVersion));
+  setText("update-package-label", update.packageLabel || "Host package");
+  setText("update-package-version", displayUpdateVersion(update.packageVersion, "Not reported by this host package"));
+  const imageRow = byId("update-image-version-row");
+  imageRow.hidden = !update.imageVersion;
+  setText("update-image-version", displayUpdateVersion(update.imageVersion, "Not applicable"));
+  setText("update-host-adapter", update.hostAdapterState === "not-applicable"
+    ? "Not applicable"
+    : `${update.hostAdapterVersion ? `API ${update.hostAdapterVersion}` : "Not reported"} · ${titleCase(update.hostAdapterState)}`);
+  setText("update-channel", titleCase(update.updateChannel || "stable"));
+  setText("update-latest-version", displayUpdateVersion(update.latestStableVersion, "Not checked"));
+  setText("update-last-success", formatDate(update.lastSuccessfulCheckUtc));
+
+  const failure = byId("update-failure");
+  failure.hidden = !update.lastFailure;
+  if (update.lastFailure) {
+    setText("update-failure-message", update.lastFailure.message);
+    setText("update-failure-time", `${titleCase(update.lastFailure.action)} · ${formatDate(update.lastFailure.occurredAtUtc)}`);
+  }
+
+  const guidance = update.guidance || {};
+  setText("update-owner", guidance.owner || "Host administrator");
+  setText("update-guidance-summary", guidance.summary || "Use the platform-owned update path for this package.");
+  const steps = byId("update-guidance-steps");
+  steps.replaceChildren();
+  for (const value of guidance.steps || []) {
+    const item = document.createElement("li");
+    item.textContent = value;
+    steps.append(item);
+  }
+  const commandPanel = byId("update-command-panel");
+  commandPanel.hidden = !guidance.command;
+  setText("update-command", guidance.command || "No universal host command");
+  const docsLink = byId("update-docs-link");
+  if (guidance.docsUrl) docsLink.href = guidance.docsUrl;
+
+  const notes = byId("update-release-notes");
+  notes.hidden = !update.releaseNotesUrl;
+  if (update.releaseNotesUrl) notes.href = update.releaseNotesUrl;
+
+  const retryAt = update.nextCheckAllowedAtUtc ? new Date(update.nextCheckAllowedAtUtc) : null;
+  const backoffActive = retryAt && !Number.isNaN(retryAt.getTime()) && retryAt.getTime() > Date.now();
+  const checkButton = byId("update-check-button");
+  checkButton.disabled = state.updateChecking || Boolean(update.checkInProgress) || Boolean(backoffActive);
+  setSwappingButtonText("update-check-button", state.updateChecking || update.checkInProgress ? "Checking..." : backoffActive ? "Check available shortly" : "Check now");
+
+  const installAvailable = Boolean(update.installSupported);
+  const installRow = byId("update-install-confirm-row");
+  const installButton = byId("update-install-button");
+  if (!installAvailable) byId("update-install-confirm").checked = false;
+  installRow.hidden = !installAvailable;
+  installButton.hidden = !installAvailable;
+  installButton.disabled = !installAvailable || !byId("update-install-confirm").checked || state.updateInstalling || ["starting", "running"].includes(update.installState);
+  setSwappingButtonText("update-install-button", state.updateInstalling || ["starting", "running"].includes(update.installState) ? "Starting verified updater..." : "Install update");
+
+  const message = byId("update-settings-message");
+  if (state.updateChecking) message.textContent = "Contacting the fixed stable-release endpoint with an eight-second deadline. No application or package file is being changed.";
+  else if (state.updateInstalling || ["starting", "running"].includes(update.installState)) message.textContent = "The existing verified Windows updater is running. Approve the Windows administrator prompt if it appears; the Manager may restart after verification.";
+  else if (backoffActive) message.textContent = `The next manual check is available after ${formatDate(update.nextCheckAllowedAtUtc)}. This bounded delay prevents repeated upstream requests.`;
+  else if (update.lastFailure?.action === "check") message.textContent = "The last check failed safely. Cached local status remains available, and newsletter delivery is unaffected.";
+  else message.textContent = "Normal Manager and dashboard health never depend on Internet availability. Only Check now contacts the stable release service.";
+}
+
+async function checkForUpdates() {
+  if (state.updateChecking) return;
+  state.updateChecking = true;
+  renderUpdates();
+  try {
+    state.updates = await request("/api/v1/updates/check", { method: "POST", body: "{}" });
+    setGlobalStatus(state.updates.state === "update-available" ? "Stable update found." : "Stable update check completed.", true);
+  } catch (error) {
+    byId("update-settings-message").textContent = error.message;
+    setGlobalStatus(error.message, true);
+  } finally {
+    state.updateChecking = false;
+    renderUpdates();
+  }
+}
+
+async function installUpdate() {
+  if (state.updateInstalling || !byId("update-install-confirm").checked) return;
+  state.updateInstalling = true;
+  renderUpdates();
+  try {
+    state.updates = await request("/api/v1/updates/install", { method: "POST", body: "{}" });
+    setGlobalStatus("Verified Windows updater started.", true);
+  } catch (error) {
+    byId("update-settings-message").textContent = error.message;
+    setGlobalStatus(error.message, true);
+  } finally {
+    state.updateInstalling = false;
+    renderUpdates();
+  }
+}
+
+async function copyUpdateCommand() {
+  const command = state.updates?.guidance?.command || "";
+  if (!command) return;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+    await navigator.clipboard.writeText(command);
+  } catch (_) {
+    const fallback = document.createElement("textarea");
+    fallback.value = command;
+    fallback.setAttribute("readonly", "");
+    fallback.style.position = "fixed";
+    fallback.style.opacity = "0";
+    document.body.append(fallback);
+    fallback.select();
+    const copied = document.execCommand("copy");
+    fallback.remove();
+    if (!copied) {
+      byId("update-settings-message").textContent = "The browser could not copy the command. Select the displayed command manually.";
+      return;
+    }
+  }
+  setSwappingButtonText("update-copy-command", "Copied");
+  setTimeout(() => setSwappingButtonText("update-copy-command", "Copy command"), 1600);
+}
+
 function renderAbout() {
   setText("about-version", state.about.version || "Version unavailable");
   setText("about-package", state.about.packageVersion || "Package version unavailable");
@@ -2880,6 +3027,10 @@ byId("schedule-confirm-run").addEventListener("click", startScheduleOperation);
 document.querySelectorAll("[data-schedule-action]").forEach((button) => button.addEventListener("click", () => chooseScheduleAction(button.dataset.scheduleAction)));
 byId("startup-manager").addEventListener("change", startupSettingsChanged);
 byId("startup-dashboard").addEventListener("change", startupSettingsChanged);
+byId("update-check-button").addEventListener("click", checkForUpdates);
+byId("update-install-confirm").addEventListener("change", renderUpdates);
+byId("update-install-button").addEventListener("click", installUpdate);
+byId("update-copy-command").addEventListener("click", copyUpdateCommand);
 byId("logout-button").addEventListener("click", logout);
 byId("refresh-button").addEventListener("click", loadAll);
 byId("access-status-button").addEventListener("click", openAccessSettings);

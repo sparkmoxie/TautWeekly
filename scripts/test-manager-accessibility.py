@@ -276,6 +276,29 @@ def main() -> int:
         failures.append("protected access-policy requests are incorrectly excluded from session recovery")
     if 'id="manual-send-runner-heading"' not in combined or 'id="manual-send-status"' not in combined:
         failures.append("Preview center has no guarded production delivery and retained status cards")
+    for control in (
+        "update-settings-panel",
+        "update-settings-chip",
+        "update-check-button",
+        "update-guidance-summary",
+        "update-copy-command",
+        "update-install-confirm",
+        "update-install-button",
+        "update-settings-message",
+    ):
+        if f'id="{control}"' not in combined:
+            failures.append(f"Settings update card omits accessible control: {control}")
+    for marker in (
+        'request("/api/v1/updates")',
+        'request("/api/v1/updates/check", { method: "POST", body: "{}" })',
+        'request("/api/v1/updates/install", { method: "POST", body: "{}" })',
+        'navigator.clipboard.writeText(command)',
+        '!byId("update-install-confirm").checked',
+    ):
+        if marker not in javascript:
+            failures.append(f"Settings update interaction contract is missing: {marker}")
+    if '.update-settings-panel' not in css or '.update-command' not in css or '.update-install-confirm' not in css:
+        failures.append("Settings update card lacks its responsive and accessible visual treatment")
     if 'value="send-all"' not in combined or 'value="send-welcome"' not in combined:
         failures.append("manual production delivery does not expose both all-recipient and Manual Welcome scopes")
     if 'type === "send-welcome"' not in javascript or "confirmProductionSend: true" not in javascript:

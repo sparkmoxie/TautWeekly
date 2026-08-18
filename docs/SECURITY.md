@@ -63,6 +63,18 @@ Disabling the feature stops access but does not erase the existing cache.
 - Unauthenticated health endpoints expose liveness only. They do not return
   configuration, credentials, sessions, paths, diagnostics, or newsletter
   state.
+- Normal Manager/Dashboard health and `GET /api/v1/updates` are offline-only.
+  An authenticated **Check now** is the only GUI action that requests release
+  metadata. It uses a fixed HTTPS GitHub endpoint, rejects redirects and
+  unexpected hosts/assets, bounds time and response size, caches only public
+  release fields plus fixed sanitized failures, and backs off repeated checks.
+  Update mutations require the same session, same-origin, CSRF, Host, proxy,
+  and secure-cookie controls as every other protected Manager action.
+- Only Windows exposes a GUI install action, and it can start only the fixed
+  packaged checksum/manifest-verified updater behind explicit confirmation and
+  Windows elevation. Container/native service Managers never receive a Docker
+  socket, privileged helper, root identity, `sudo`, Podman, systemd, or rc.d
+  authority; Settings reports the exact host-owned next step instead.
 - Use HTTPS for remote Tautulli/Plex endpoints when your environment provides a
   trusted TLS reverse proxy.
 - Best-effort hosted deleted-item recovery sends only Tautulli's retained exact media GUID and the

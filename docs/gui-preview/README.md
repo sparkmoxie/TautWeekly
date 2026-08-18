@@ -6,6 +6,12 @@ synthetic in-memory API. Users, libraries, endpoints, email addresses,
 schedules, viewer activity, counts, diagnostics, and operation results are
 fictional.
 
+Settings also includes the production-shaped capability-aware update card. Its
+Windows example uses bundled fictional application/package/release metadata and
+simulates both **Check now** and the confirmed updater state entirely in memory.
+It does not contact GitHub, launch a process, request elevation, or change a
+file; reload resets the demonstration.
+
 The newsletter frames intentionally mirror the production email presentation.
 They bundle local copies of public media artwork and title logos plus dated
 Rotten Tomatoes and IMDb visual-score snapshots. Those media fixtures remain

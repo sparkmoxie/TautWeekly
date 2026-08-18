@@ -25,20 +25,28 @@ const sessionCookieName = "tautweekly_manager_session"
 var embeddedWeb embed.FS
 
 type Options struct {
-	ListenAddress         string
-	DataDir               string
-	TautWeeklyRoot        string
-	RuntimeRoot           string
-	Version               string
-	RuntimeMode           string
-	RequireAuthentication bool
-	AllowedHosts          []string
-	SecureCookies         bool
-	Now                   func() time.Time
-	operationRunner       operationRunner
-	operationCompleted    func(OperationRecord, string)
-	scheduleRunner        scheduleMutationRunner
-	startupController     startupSettingsController
+	ListenAddress             string
+	DataDir                   string
+	TautWeeklyRoot            string
+	RuntimeRoot               string
+	Version                   string
+	RuntimeMode               string
+	PackageKind               string
+	PackageVersion            string
+	HostAdapterVersion        string
+	UpdateChannel             string
+	RequireAuthentication     bool
+	AllowedHosts              []string
+	SecureCookies             bool
+	Now                       func() time.Time
+	operationRunner           operationRunner
+	operationCompleted        func(OperationRecord, string)
+	scheduleRunner            scheduleMutationRunner
+	startupController         startupSettingsController
+	updateChecker             updateReleaseChecker
+	updateInstaller           updateInstallController
+	updateMinimumCheckDelay   time.Duration
+	updateMaximumFailureDelay time.Duration
 }
 
 type Server struct {
@@ -54,6 +62,7 @@ type Server struct {
 	operations        *operationCoordinator
 	schedule          *scheduleCoordinator
 	startup           startupSettingsController
+	updates           *updateCoordinator
 	capabilities      Capabilities
 	handler           http.Handler
 	bootstrapToken    string
@@ -186,6 +195,7 @@ func New(options Options) (*Server, error) {
 		operations:     operations,
 		schedule:       schedule,
 		startup:        startup,
+		updates:        newUpdateCoordinator(options),
 		capabilities:   capabilitiesFor(options),
 		bootstrapToken: store.bootstrapToken,
 	}
@@ -216,6 +226,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/capabilities", s.protected(s.handleCapabilities, false))
 	mux.HandleFunc("GET /api/v1/diagnostics", s.protected(s.handleDiagnostics, false))
 	mux.HandleFunc("GET /api/v1/status", s.protected(s.handleStatus, false))
+	mux.HandleFunc("GET /api/v1/updates", s.protected(s.handleUpdateStatus, false))
+	mux.HandleFunc("POST /api/v1/updates/check", s.protected(s.handleUpdateCheck, true))
+	mux.HandleFunc("POST /api/v1/updates/install", s.protected(s.handleUpdateInstall, true))
 	mux.HandleFunc("GET /api/v1/startup", s.protected(s.handleStartupSettings, false))
 	mux.HandleFunc("PUT /api/v1/startup", s.protected(s.handleUpdateStartupSettings, true))
 	mux.HandleFunc("GET /api/v1/config", s.protected(s.handleConfig, false))

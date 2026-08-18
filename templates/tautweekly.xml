@@ -17,8 +17,8 @@
   <Category>MediaApp:Other Tools:Utilities</Category>
   <ExtraSearchTerms>Tautulli Plex newsletter email activity digest</ExtraSearchTerms>
   <Requires>A reachable Tautulli server, an SMTP STARTTLS account, and a trusted LAN port for the authenticated Manager.</Requires>
-  <Changes>2026-08-16: Replaced the read-only preview listener with the authenticated, capability-aware NAS Manager; added console-only one-time pairing, Manager access recovery, embedded schedule controls, and host-owned lifecycle language. 2026-08-13: Applied canonical branding and safe PUID/PGID recovery. 2026-08-07: Clarified stable, host-owned updates. 2026-08-04: Initial Community Apps template.</Changes>
-  <Date>2026-08-16</Date>
+  <Changes>2026-08-18: Added capability-aware Manager update status with Unraid-owned Docker/Apps guidance and host-adapter compatibility detection. 2026-08-16: Replaced the read-only preview listener with the authenticated NAS Manager and embedded schedule controls. 2026-08-13: Applied canonical branding and safe PUID/PGID recovery.</Changes>
+  <Date>2026-08-18</Date>
   <MinVer>6.12.0</MinVer>
   <License>MIT</License>
   <Config Name="Manager Web UI" Target="8080" Default="8787" Mode="tcp" Description="Authenticated Manager for a trusted LAN. Do not expose plain HTTP publicly; use an explicitly configured TLS reverse proxy when remote access is required." Type="Port" Display="always" Required="true" Mask="false"/>
@@ -30,5 +30,6 @@
   <Config Name="Preview Base URL" Target="TAUTWEEKLY_PREVIEW_BASE_URL" Default="" Description="Optional LAN URL embedded in preview links, for example http://tower:8787. Never use a public URL." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Manager Allowed Hosts" Target="TAUTWEEKLY_MANAGER_ALLOWED_HOSTS" Default="" Description="Optional comma-separated DNS hostnames accepted by the Manager, for example tower,tautweekly.example.test. IP-literal access needs no entry. Do not include schemes, paths, ports, or wildcards." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Secure Manager Cookies" Target="TAUTWEEKLY_MANAGER_SECURE_COOKIES" Default="false" Description="Set true only when every browser connection uses HTTPS through a correctly configured TLS reverse proxy. Plain HTTP login cannot work while enabled." Type="Variable" Display="advanced" Required="true" Mask="false"/>
-  <Config Name="Host Adapter API" Target="TAUTWEEKLY_HOST_ADAPTER_API" Default="2" Description="Package compatibility marker used to detect an older saved Unraid template. Keep this at the value supplied by the current Community Apps template." Type="Variable" Display="advanced" Required="true" Mask="false"/>
+  <Config Name="Package Kind" Target="TAUTWEEKLY_PACKAGE_KIND" Default="unraid" Description="Identifies the Unraid-owned update path to the Manager. Keep this at the value supplied by Community Apps." Type="Variable" Display="advanced" Required="true" Mask="false"/>
+  <Config Name="Host Adapter API" Target="TAUTWEEKLY_HOST_ADAPTER_API" Default="3" Description="Package compatibility marker used to detect an older saved Unraid template. Keep this at the value supplied by the current Community Apps template." Type="Variable" Display="advanced" Required="true" Mask="false"/>
 </Container>

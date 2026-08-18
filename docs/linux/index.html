@@ -96,7 +96,7 @@ Schedule → Enable schedule<button class="copy" data-copy="#accept">Copy</butto
     </section>
 
     <section id="upgrade" class="section searchable" data-search="upgrade update backup rollback restore troubleshooting logs systemctl">
-      <div class="section-head"><div><div class="eyebrow">Update lifecycle</div><h2>Check, back up, verify, upgrade.</h2></div><p>The GUI explains the package boundary but never executes an update. The host wrapper downloads the matching stable archive and <code>SHA256SUMS.txt</code>, verifies its published checksum and internal manifest, then upgrade mode holds the operation lock, waits for any active newsletter delivery during service shutdown, creates a timestamped program backup, replaces <code>/opt/tautweekly</code>, preserves private data, and verifies that a previously active service returns.</p></div>
+      <div class="section-head"><div><div class="eyebrow">Settings status, host-owned update</div><h2>Check, back up, verify, upgrade.</h2></div><p><strong>Settings &gt; Updates</strong> is the primary status source for the running application, native package, stable release, check history, sanitized failures, and release notes. <strong>Check now</strong> is bounded and manual; normal health stays offline-capable. The GUI never invokes sudo or systemd and instead provides <code>sudo tautweekly update</code>. The host wrapper verifies the matching archive, checksum, and internal manifest, waits for an active delivery, preserves private data, and verifies service recovery.</p></div>
       <div class="grid"><article class="card"><h3>Check and upgrade</h3><div class="command" id="upgrade-cmd">tautweekly check-update
 sudo tautweekly backup
 sudo tautweekly update
