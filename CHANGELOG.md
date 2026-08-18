@@ -6,6 +6,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored macOS Docker Desktop Manager previews, test delivery, and manual
+  delivery by honoring the Manager's private operation snapshot and structured
+  result contract in the Mac runtime package.
+
 ## [0.15.0] - 2026-08-18
 
 ### Added

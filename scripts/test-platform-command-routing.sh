@@ -167,13 +167,18 @@ if command -v flock >/dev/null 2>&1; then
   manager_config="$test_root/data/manager/operation-$manager_id.config.json"
   manager_result="$test_root/data/manager/operation-$manager_id.result.json"
   printf '%s\n' '{}' >"$manager_config"
-  reset_calls
-  TAUTWEEKLY_APP_DIR=/virtual/app \
-  TAUTWEEKLY_DATA_DIR="$test_root/data" \
-  TAUTWEEKLY_CONFIG="$test_root/data/config.json" \
-    bash "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" PreviewAll 17 \
-      --manager-config "$manager_config" --manager-result "$manager_result" --no-open
-  assert_call "pwsh -NoLogo -NoProfile -NonInteractive -File /virtual/app/TautWeekly.ps1 -Mode PreviewAll -ConfigPath $manager_config -UserId 17 -ResultPath $manager_result -NoOpen"
+  for manager_runtime_wrapper in \
+      "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" \
+      "$repo_root/platforms/mac-docker/app/bin/run-mode.sh"; do
+    reset_calls
+    rm -f "$manager_result"
+    TAUTWEEKLY_APP_DIR=/virtual/app \
+    TAUTWEEKLY_DATA_DIR="$test_root/data" \
+    TAUTWEEKLY_CONFIG="$test_root/data/config.json" \
+      bash "$manager_runtime_wrapper" PreviewAll 17 \
+        --manager-config "$manager_config" --manager-result "$manager_result" --no-open
+    assert_call "pwsh -NoLogo -NoProfile -NonInteractive -File /virtual/app/TautWeekly.ps1 -Mode PreviewAll -ConfigPath $manager_config -UserId 17 -ResultPath $manager_result -NoOpen"
+  done
 
   if TAUTWEEKLY_APP_DIR=/virtual/app TAUTWEEKLY_DATA_DIR="$test_root/data" \
       bash "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" PreviewAll 17 \
