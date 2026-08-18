@@ -63,6 +63,9 @@
 .choice-row.legacy-exclusion input:disabled{cursor:not-allowed;opacity:1}
 .discovery-selected-count{color:var(--gold-bright);font-weight:750}.discovery-excluded-count{color:rgba(255,122,114,.48);font-weight:750}
 
+/* Generated boolean switches use a real label so their full visible surface is clickable. */
+.config-control-boolean .config-toggle{width:max-content;cursor:pointer;user-select:none}
+
 /* Capability-aware update status keeps Internet checks explicit and host ownership visible. */
 .update-settings-panel{margin-bottom:1rem;padding:1.4rem;border:1px solid rgba(173,140,255,.36);border-radius:var(--radius);background:linear-gradient(145deg,rgba(173,140,255,.075),var(--surface))}
 .update-settings-panel .eyebrow{color:#c7b3ff}.update-settings-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:1.5rem}.update-settings-heading>div{min-width:0}.update-settings-heading h2{margin:.45rem 0;font-size:1.25rem}.update-settings-heading p{margin:0;max-width:760px;color:var(--muted);font-size:.76rem;line-height:1.55}

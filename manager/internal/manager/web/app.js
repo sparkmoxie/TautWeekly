@@ -42,6 +42,10 @@ const guidedConfigFields = new Set(["IncludedLibraryIds", "ExcludedUserIds"]);
 const activeSecretReveals = new Map();
 let pendingSecretReveal = null;
 let sessionRecoveryPromise = null;
+let updateInstallPollTimer;
+let updateInstallExpectedVersion = "";
+let updateInstallSawDisconnect = false;
+let updateInstallPollDeadline = 0;
 
 function materializeMaterialIcon(svg) {
   const use = svg?.querySelector("use");
@@ -367,7 +371,7 @@ function renderCapabilities() {
     : mac
       ? "Docker Desktop publishes the Manager on 127.0.0.1 by default. Changing the bind address for trusted-LAN access still requires authentication; DNS hostnames must be allowlisted and TLS is expected beyond a trusted local network."
     : "The Manager accepts browser connections only from this computer and rejects unrecognized hostnames.");
-  setText("about-edition", nas ? "NAS / Container Manager" : linux ? "Native Linux Manager" : mac ? "macOS Docker Desktop Manager" : "Windows Manager");
+  setText("update-edition", nas ? "NAS / Container Manager" : linux ? "Native Linux Manager" : mac ? "macOS Docker Desktop Manager" : "Windows Manager");
   setText("about-secret-copy", service
     ? "Secrets stay hidden during normal reads. Revealing returns only the selected credential, requires administrator password re-authentication, and automatically clears from the page."
     : "Secrets stay hidden during normal reads. Revealing returns only the selected credential, uses password re-authentication when the optional lock is enabled, and automatically clears from the page.");
@@ -546,7 +550,7 @@ function renderStatus() {
   setText("next-run-utc", snapshot.schedule.nextRunUtc ? `UTC: ${formatDate(snapshot.schedule.nextRunUtc)}` : embeddedSchedule ? "The embedded scheduler has not reported a valid upcoming run." : "Task Scheduler has not reported an upcoming run.");
   setText("preview-count", snapshot.previewSummary);
   setText("sidebar-platform", `${titleCase(snapshot.platform)} · ${isNAS() ? "trusted LAN" : isLinuxService() ? "host loopback" : isMacDocker() ? "Mac loopback" : "local only"}`);
-  setText("about-platform", titleCase(snapshot.platform));
+  setText("update-platform", titleCase(snapshot.platform));
 }
 
 function renderDashboardGreeting(observedAtUtc) {
@@ -1127,8 +1131,9 @@ function createConfigControl(field) {
     input = document.createElement("input");
     input.type = "checkbox";
     input.checked = Boolean(field.value);
-    const toggle = document.createElement("span");
+    const toggle = document.createElement("label");
     toggle.className = "config-toggle";
+    toggle.htmlFor = id;
     toggle.append(input, document.createElement("span"));
     const stateLabel = document.createElement("em");
     stateLabel.textContent = input.checked ? "Enabled" : "Disabled";
@@ -2588,18 +2593,37 @@ function displayUpdateVersion(value, unavailable = "Not reported") {
   return value ? `v${value}` : unavailable;
 }
 
+function readableList(values) {
+  if (values.length < 2) return values[0] || "";
+  if (values.length === 2) return `${values[0]} and ${values[1]}`;
+  return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
+}
+
+function releaseLayerSummary(update) {
+  const managerVersion = update.managerVersion || state.about?.version || "";
+  const layers = [
+    ["Application", update.applicationVersion],
+    ...(update.imageVersion ? [["Container image", update.imageVersion]] : []),
+    [update.packageLabel || "Host package", update.packageVersion],
+  ];
+  const matching = layers.filter(([, version]) => managerVersion && version === managerVersion).map(([label]) => label);
+  const different = layers.filter(([, version]) => version && version !== managerVersion).map(([label, version]) => `${label} ${displayUpdateVersion(version)}`);
+  const missing = layers.filter(([, version]) => !version).map(([label]) => `${label} not reported`);
+  const parts = [];
+  if (matching.length) parts.push(`${readableList(matching)} ${matching.length === 1 ? "matches" : "match"} Manager build`);
+  parts.push(...different, ...missing);
+  return parts.join(" · ") || "No release layers reported";
+}
+
 function renderUpdates() {
   const update = state.updates || {};
   const presentation = updateStatePresentation(update);
   setChip("update-settings-chip", state.updateChecking || update.checkInProgress ? "Checking" : presentation.label, state.updateChecking || update.checkInProgress ? "pending" : presentation.tone);
   setText("update-settings-summary", presentation.summary);
-  setText("update-manager-version", displayUpdateVersion(update.managerVersion));
-  setText("update-application-version", displayUpdateVersion(update.applicationVersion));
-  setText("update-package-label", update.packageLabel || "Host package");
-  setText("update-package-version", displayUpdateVersion(update.packageVersion, "Not reported by this host package"));
-  const imageRow = byId("update-image-version-row");
-  imageRow.hidden = !update.imageVersion;
-  setText("update-image-version", displayUpdateVersion(update.imageVersion, "Not applicable"));
+  setText("update-manager-version", displayUpdateVersion(update.managerVersion || state.about?.version));
+  setText("update-package-baseline", state.about?.packageVersion || "Package baseline unavailable");
+  setText("update-platform", titleCase(state.status?.platform));
+  setText("update-release-layers", releaseLayerSummary(update));
   setText("update-host-adapter", update.hostAdapterState === "not-applicable"
     ? "Not applicable"
     : `${update.hostAdapterVersion ? `API ${update.hostAdapterVersion}` : "Not reported"} · ${titleCase(update.hostAdapterState)}`);
@@ -2647,11 +2671,14 @@ function renderUpdates() {
   installRow.hidden = !installAvailable;
   installButton.hidden = !installAvailable;
   installButton.disabled = !installAvailable || !byId("update-install-confirm").checked || state.updateInstalling || ["starting", "running"].includes(update.installState);
-  setSwappingButtonText("update-install-button", state.updateInstalling || ["starting", "running"].includes(update.installState) ? "Starting verified updater..." : "Install update");
+  setSwappingButtonText("update-install-button", state.updateInstalling ? "Starting verified updater..." : ["starting", "running"].includes(update.installState) ? "Verified updater running..." : "Install update");
 
   const message = byId("update-settings-message");
   if (state.updateChecking) message.textContent = "Contacting the fixed stable-release endpoint with an eight-second deadline. No application or package file is being changed.";
-  else if (state.updateInstalling || ["starting", "running"].includes(update.installState)) message.textContent = "The existing verified Windows updater is running. Approve the Windows administrator prompt if it appears; the Manager may restart after verification.";
+  else if (state.updateInstalling) message.textContent = "Starting the existing verified Windows updater. Approve the Windows administrator prompt if it appears.";
+  else if (["starting", "running"].includes(update.installState)) message.textContent = "The verified Windows updater is running. This page will reconnect and refresh automatically after the Manager restarts.";
+  else if (update.installState === "failed") message.textContent = "The verified Windows updater stopped before completing. Review the sanitized failure above, then check again before retrying.";
+  else if (update.installState === "completed") message.textContent = "The verified Windows updater completed. Refreshing local package status.";
   else if (backoffActive) message.textContent = `The next manual check is available after ${formatDate(update.nextCheckAllowedAtUtc)}. This bounded delay prevents repeated upstream requests.`;
   else if (update.lastFailure?.action === "check") message.textContent = "The last check failed safely. Cached local status remains available, and newsletter delivery is unaffected.";
   else message.textContent = "Normal Manager and dashboard health never depend on Internet availability. Only Check now contacts the stable release service.";
@@ -2680,6 +2707,7 @@ async function installUpdate() {
   try {
     state.updates = await request("/api/v1/updates/install", { method: "POST", body: "{}" });
     setGlobalStatus("Verified Windows updater started.", true);
+    beginUpdateInstallPolling(state.updates.latestStableVersion);
   } catch (error) {
     byId("update-settings-message").textContent = error.message;
     setGlobalStatus(error.message, true);
@@ -2687,6 +2715,57 @@ async function installUpdate() {
     state.updateInstalling = false;
     renderUpdates();
   }
+}
+
+function stopUpdateInstallPolling() {
+  clearTimeout(updateInstallPollTimer);
+  updateInstallPollTimer = undefined;
+  updateInstallExpectedVersion = "";
+  updateInstallSawDisconnect = false;
+  updateInstallPollDeadline = 0;
+}
+
+function beginUpdateInstallPolling(expectedVersion) {
+  stopUpdateInstallPolling();
+  updateInstallExpectedVersion = expectedVersion || "";
+  updateInstallPollDeadline = Date.now() + 15 * 60 * 1000;
+  updateInstallPollTimer = setTimeout(pollUpdateInstall, 1000);
+}
+
+async function pollUpdateInstall() {
+  if (!updateInstallExpectedVersion) return;
+  try {
+    const update = await request("/api/v1/updates");
+    state.updates = update;
+    const active = ["starting", "running"].includes(update.installState);
+    if (update.managerVersion === updateInstallExpectedVersion || (updateInstallSawDisconnect && !active)) {
+      stopUpdateInstallPolling();
+      setGlobalStatus("Manager update finished. Loading the updated application...");
+      window.location.reload();
+      return;
+    }
+    renderUpdates();
+    if (!active) {
+      stopUpdateInstallPolling();
+      setGlobalStatus(update.installState === "failed" ? "Verified updater did not complete." : "Verified updater finished without a Manager restart.", true);
+      return;
+    }
+  } catch (error) {
+    if (error.status === 401) {
+      stopUpdateInstallPolling();
+      window.location.reload();
+      return;
+    }
+    updateInstallSawDisconnect = true;
+    byId("update-settings-message").textContent = "The Manager is restarting for the verified update. Reconnecting automatically...";
+    setGlobalStatus("Reconnecting to the updated Manager...");
+  }
+  if (Date.now() >= updateInstallPollDeadline) {
+    stopUpdateInstallPolling();
+    byId("update-settings-message").textContent = "Automatic reconnection timed out. The updater may still be awaiting Windows approval; review the prompt, then use Refresh if needed.";
+    return;
+  }
+  updateInstallPollTimer = setTimeout(pollUpdateInstall, 1500);
 }
 
 async function copyUpdateCommand() {
@@ -2715,8 +2794,6 @@ async function copyUpdateCommand() {
 }
 
 function renderAbout() {
-  setText("about-version", state.about.version || "Version unavailable");
-  setText("about-package", state.about.packageVersion || "Package version unavailable");
   const events = state.diagnostics?.events || [];
   setText("diagnostics-count", events.length ? `${events.length} retained` : "No events");
   setText("diagnostics-retention", `Up to ${state.diagnostics?.maximumEntries || 200} events for ${state.diagnostics?.retentionDays || 30} days.`);
@@ -2844,6 +2921,7 @@ async function logout() {
 }
 
 function showAuthentication() {
+  stopUpdateInstallPolling();
   clearAllRevealedSecrets();
   closeSecretRevealDialog();
   concealMaskedInputs(byId("auth-shell"));

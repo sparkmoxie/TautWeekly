@@ -36,6 +36,7 @@ const guidedConfigFields = new Set(["IncludedLibraryIds", "ExcludedUserIds"]);
 const activeSecretReveals = new Map();
 let pendingSecretReveal = null;
 let sessionRecoveryPromise = null;
+let updateInstallPollTimer;
 
 function materializeMaterialIcon(svg) {
   const use = svg?.querySelector("use");
@@ -378,7 +379,7 @@ function renderStatus() {
   setText("next-run-utc", snapshot.schedule.nextRunUtc ? `Fictional UTC: ${formatDate(snapshot.schedule.nextRunUtc)}` : "The synthetic scheduler has no upcoming run.");
   setText("preview-count", snapshot.previewSummary);
   setText("sidebar-platform", `${titleCase(snapshot.platform)} · static preview`);
-  setText("about-platform", titleCase(snapshot.platform));
+  setText("update-platform", titleCase(snapshot.platform));
 }
 
 function renderDashboardGreeting(observedAtUtc) {
@@ -928,8 +929,9 @@ function createConfigControl(field) {
     input = document.createElement("input");
     input.type = "checkbox";
     input.checked = Boolean(field.value);
-    const toggle = document.createElement("span");
+    const toggle = document.createElement("label");
     toggle.className = "config-toggle";
+    toggle.htmlFor = id;
     toggle.append(input, document.createElement("span"));
     const stateLabel = document.createElement("em");
     stateLabel.textContent = input.checked ? "Enabled" : "Disabled";
@@ -2317,17 +2319,37 @@ function displayUpdateVersion(value, unavailable = "Not reported") {
   return value ? `v${value}` : unavailable;
 }
 
+function readableList(values) {
+  if (values.length < 2) return values[0] || "";
+  if (values.length === 2) return `${values[0]} and ${values[1]}`;
+  return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
+}
+
+function releaseLayerSummary(update) {
+  const managerVersion = update.managerVersion || "";
+  const layers = [
+    ["Application", update.applicationVersion],
+    ...(update.imageVersion ? [["Container image", update.imageVersion]] : []),
+    [update.packageLabel || "Host package", update.packageVersion],
+  ];
+  const matching = layers.filter(([, version]) => managerVersion && version === managerVersion).map(([label]) => label);
+  const different = layers.filter(([, version]) => version && version !== managerVersion).map(([label, version]) => `${label} ${displayUpdateVersion(version)}`);
+  const missing = layers.filter(([, version]) => !version).map(([label]) => `${label} not reported`);
+  const parts = [];
+  if (matching.length) parts.push(`${readableList(matching)} ${matching.length === 1 ? "matches" : "match"} Manager build`);
+  parts.push(...different, ...missing);
+  return parts.join(" · ") || "No release layers reported";
+}
+
 function renderUpdates() {
   const update = state.updates || {};
   const presentation = updateStatePresentation(update);
   setChip("update-settings-chip", state.updateChecking ? "Checking" : presentation.label, state.updateChecking ? "pending" : presentation.tone);
   setText("update-settings-summary", presentation.summary);
   setText("update-manager-version", displayUpdateVersion(update.managerVersion));
-  setText("update-application-version", displayUpdateVersion(update.applicationVersion));
-  setText("update-package-label", update.packageLabel || "Host package");
-  setText("update-package-version", displayUpdateVersion(update.packageVersion));
-  byId("update-image-version-row").hidden = !update.imageVersion;
-  setText("update-image-version", displayUpdateVersion(update.imageVersion, "Not applicable"));
+  setText("update-package-baseline", state.about?.packageVersion || "Synthetic baseline unavailable");
+  setText("update-platform", titleCase(state.status?.platform));
+  setText("update-release-layers", releaseLayerSummary(update));
   setText("update-host-adapter", update.hostAdapterState === "not-applicable" ? "Not applicable" : `${update.hostAdapterVersion ? `API ${update.hostAdapterVersion}` : "Not reported"} - ${titleCase(update.hostAdapterState)}`);
   setText("update-channel", titleCase(update.updateChannel || "stable"));
   setText("update-latest-version", displayUpdateVersion(update.latestStableVersion, "Not checked"));
@@ -2363,10 +2385,12 @@ function renderUpdates() {
   byId("update-install-confirm-row").hidden = !installAvailable;
   const installButton = byId("update-install-button");
   installButton.hidden = !installAvailable;
-  installButton.disabled = !installAvailable || !byId("update-install-confirm").checked || state.updateInstalling || update.installState === "running";
-  setSwappingButtonText("update-install-button", state.updateInstalling || update.installState === "running" ? "Simulated updater running" : "Simulate install");
-  byId("update-settings-message").textContent = update.installState === "running"
-    ? "The in-memory demo reports a running updater. No process, elevation prompt, or file change occurred. Reload to reset."
+  installButton.disabled = !installAvailable || !byId("update-install-confirm").checked || state.updateInstalling || ["starting", "running"].includes(update.installState);
+  setSwappingButtonText("update-install-button", state.updateInstalling || ["starting", "running"].includes(update.installState) ? "Simulated updater running" : "Simulate install");
+  byId("update-settings-message").textContent = ["starting", "running"].includes(update.installState)
+    ? "The in-memory demo is transitioning to the updated Manager automatically. No process, elevation prompt, or file change occurs."
+    : update.installState === "completed"
+      ? "The simulated Manager update completed and the combined package status refreshed automatically."
     : state.updateChecking
       ? "Refreshing bundled fictional release metadata. No network request is made."
       : "This static preview uses bundled fictional release metadata. Production normal health also performs no update-network request.";
@@ -2394,12 +2418,25 @@ async function installUpdate() {
   try {
     state.updates = await request("/api/v1/updates/install", { method: "POST", body: "{}" });
     setGlobalStatus("Verified updater simulation started.", true);
+    clearTimeout(updateInstallPollTimer);
+    updateInstallPollTimer = setTimeout(pollUpdateInstall, 250);
   } catch (error) {
     byId("update-settings-message").textContent = error.message;
   } finally {
     state.updateInstalling = false;
     renderUpdates();
   }
+}
+
+async function pollUpdateInstall() {
+  state.updates = await request("/api/v1/updates");
+  renderUpdates();
+  if (["starting", "running"].includes(state.updates.installState)) {
+    updateInstallPollTimer = setTimeout(pollUpdateInstall, 250);
+    return;
+  }
+  byId("update-install-confirm").checked = false;
+  setGlobalStatus("Simulated Manager update completed automatically.", true);
 }
 
 async function copyUpdateCommand() {
@@ -2411,8 +2448,6 @@ async function copyUpdateCommand() {
 }
 
 function renderAbout() {
-  setText("about-version", state.about.version || "Version unavailable");
-  setText("about-package", state.about.packageVersion || "Package version unavailable");
   const events = state.diagnostics?.events || [];
   setText("diagnostics-count", events.length ? `${events.length} fictional` : "No events");
   setText("diagnostics-retention", "Bundled demo events; reset on reload.");
