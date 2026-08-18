@@ -74,6 +74,24 @@ Changing the installed folder requires uninstalling the application first;
 normal uninstall preserves private data. Setup never installs a periodic update
 task and never follows GitHub `main` or a container `edge` tag.
 
+### Check and install from Settings
+
+Manager **Settings > Updates** is the primary Windows version and update-status
+view. It shows the running Manager/application version, installed package
+version, stable channel, latest stable release, comparison state, last
+successful check, last sanitized failure, and release-notes link. Opening or
+refreshing the Dashboard does not contact GitHub; choose **Check now** for the
+bounded, rate-limited metadata request.
+
+When a newer verified stable release is available, Windows alone shows
+**Install update** behind a separate confirmation. That action starts the
+existing fixed `Check-Update.ps1` workflow; it accepts no browser-supplied URL,
+path, version, command, or arguments, and Windows still requests administrator
+approval before files or Scheduled Task state can change. The updater verifies
+the official release URL, published checksum, archive layout, and internal
+release manifest, preserves private data, checks post-update health, and rolls
+back release-owned files on failure. There is no unattended update task.
+
 ## First launch
 
 The Windows Manager binds to `127.0.0.1:8788` and opens directly for the current

@@ -199,6 +199,15 @@ normal Trending result while retaining new TV releases below the hero.
 
 ## Update and pinning
 
+Manager **Settings > Updates** is the primary FreeBSD status source. It
+distinguishes the running container application/image from the installed
+FreeBSD Podman package, reports host-adapter compatibility, stable channel,
+latest stable release, check history, sanitized failure, and release notes.
+**Check now** uses a bounded request and never makes routine Manager health
+Internet-dependent. The web process cannot run `sudo`, Podman, or rc.d; the
+card provides the copyable host command `sudo tautweekly update` but no install
+button.
+
 The FreeBSD package uses its rc.d-aware TautWeekly wrapper as the update
 authority. Podman's `io.containers.autoupdate=registry` mechanism requires a
 systemd-managed container, so the rc.d service deliberately has no auto-update
@@ -214,7 +223,7 @@ sudo tautweekly backup
 sudo podman image inspect ghcr.io/sparkmoxie/tautweekly:latest --format '{{.Id}}'
 sudo tautweekly check-update
 sudo tautweekly update
-# sign back in to Manager, then run Verify, PreviewAll, and TestEmail
+# sign back in; verify Settings > Updates, then Verify, PreviewAll, and TestEmail
 ```
 
 The apply command downloads the matching stable TAR archive and checksum file,

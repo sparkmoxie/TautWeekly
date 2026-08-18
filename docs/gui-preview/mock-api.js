@@ -143,6 +143,31 @@
     scheduleOperation: null,
     scheduleStartedMS: 0,
     lockEnabled: false,
+    update: {
+      schemaVersion: 1,
+      observedAtUtc: now(),
+      state: "update-available",
+      managerVersion: "0.14.1",
+      applicationVersion: "0.14.1",
+      packageVersion: "0.14.1",
+      packageKind: "supported-host-updater",
+      packageLabel: "Synthetic supported package",
+      hostAdapterState: "not-applicable",
+      updateChannel: "stable",
+      latestStableVersion: "0.15.0",
+      updateAvailable: true,
+      installSupported: true,
+      installState: "idle",
+      checkInProgress: false,
+      lastSuccessfulCheckUtc: now(),
+      releaseNotesUrl: "",
+      guidance: {
+        owner: "TautWeekly verified updater (simulated)",
+        summary: "Production can start an install only through an existing fixed, checksum- and manifest-verified updater. This preview only demonstrates that capability boundary.",
+        steps: ["Review the fictional stable release notes.", "Confirm the simulated install action.", "Observe that no host process or file is changed."],
+        docsUrl: "../",
+      },
+    },
   };
 
   function editor() {
@@ -310,6 +335,17 @@
     if (path === "/api/v1/history") return json({ operations: model.history });
     if (path === "/api/v1/schedule/operation") return json({ current: model.scheduleOperation });
     if (/^\/api\/v1\/schedule\/(install|enable|disable|remove)$/.test(path) && method === "POST") return json(startSchedule(path.split("/").at(-1)), 202);
+    if (path === "/api/v1/updates" && method === "GET") return json({ ...model.update, observedAtUtc: now() });
+    if (path === "/api/v1/updates/check" && method === "POST") {
+      model.update.lastSuccessfulCheckUtc = now();
+      model.update.observedAtUtc = now();
+      return json(model.update);
+    }
+    if (path === "/api/v1/updates/install" && method === "POST") {
+      model.update.installState = "running";
+      model.update.observedAtUtc = now();
+      return json(model.update, 202);
+    }
     if (path === "/api/v1/about") return json({ version: "GUI Preview", packageVersion: "Synthetic demonstration" });
     if (path === "/api/v1/diagnostics") return json({ events: [
       { schemaVersion: 1, recordedAtUtc: now(), area: "configuration", outcome: "passed", code: "config-saved", summary: "Synthetic configuration validation completed." },

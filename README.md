@@ -44,6 +44,17 @@ and milestone emails. Preview locally, send controlled tests, then schedule deli
 | Native Linux | Current Ubuntu, Debian, or RHEL host with systemd | [Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-linux.tar.gz) |
 | FreeBSD / Podman **beta** | FreeBSD 15.1+ amd64 host | [FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-freebsd-podman.tar.gz) |
 
+Every maintained Manager uses **Settings > Updates** as the primary status
+source. It distinguishes the running application/Manager, release package, and
+container image where those versions are knowable; reports the stable channel,
+latest verified release, last successful check, last sanitized failure, and
+legacy or mismatched host adapters; and links to the release notes. **Check
+now** is manual and bounded, and normal Dashboard health remains completely
+offline-capable. Only Windows can start an installation from the GUI, using the
+existing verified updater and Windows elevation. All other platforms show the
+exact host-owned command or native update flow without giving the web process
+Docker, root, Podman, systemd, rc.d, or package-file authority.
+
 ### Windows Manager: the normal setup path
 
 Windows users should download and run
@@ -89,6 +100,9 @@ failure. Unraid keeps its Apps-owned update lifecycle; existing installs should
 compare/apply the current template so host hardening and compatibility variables
 advance with the image. Reinstall, rollback, or Manager access recovery preserves
 the persistent volume unless the administrator separately chooses to delete it.
+Use **Settings > Updates** before and after that host action; Unraid directs to
+Docker/Apps, QNAP to Container Station plus the verified SSH wrapper, and other
+compatible Docker hosts to their original Compose/deployment tool.
 
 ### macOS Manager: Docker Desktop, tailored for Mac
 

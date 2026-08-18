@@ -115,6 +115,25 @@ function Copy-Platform {
     return $destination
 }
 
+function Set-ReleaseVersionTokens {
+    param([Parameter(Mandatory = $true)][string]$Destination)
+
+    $token = '__TAUTWEEKLY_RELEASE_VERSION__'
+    foreach ($file in Get-ChildItem -LiteralPath $Destination -Recurse -File -Include '*.yaml','*.yml') {
+        $text = [IO.File]::ReadAllText($file.FullName)
+        if ($text.Contains($token)) {
+            $text = $text.Replace($token, $Version)
+            [IO.File]::WriteAllText($file.FullName, $text, [Text.UTF8Encoding]::new($false))
+        }
+    }
+    $remaining = Get-ChildItem -LiteralPath $Destination -Recurse -File -Include '*.yaml','*.yml' | Where-Object {
+        [IO.File]::ReadAllText($_.FullName).Contains($token)
+    }
+    if ($remaining) {
+        throw "Release package version token was not replaced: $($remaining.FullName -join ', ')"
+    }
+}
+
 function Build-WindowsManager {
     param([Parameter(Mandatory = $true)][string]$Destination)
 
@@ -570,6 +589,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/.dockerignore') -Destination $freeBsdDestination -Force
 
     foreach ($destination in (Get-ChildItem -LiteralPath $staging -Directory)) {
+        Set-ReleaseVersionTokens -Destination $destination.FullName
         if ($destination.Name -ne 'TautWeekly-windows') {
             foreach ($file in Get-ChildItem -LiteralPath $destination.FullName -Force -Recurse -File) {
                 $relative = $file.FullName.Substring($destination.FullName.Length).TrimStart('\','/').Replace('\','/')

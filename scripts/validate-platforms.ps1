@@ -37,6 +37,7 @@ Require-Text 'platforms/linux/systemd/tautweekly.service' @(
     'NoNewPrivileges=true',
     'TAUTWEEKLY_MANAGER_RUNTIME_MODE=linux',
     'TAUTWEEKLY_MANAGER_LISTEN=127\.0\.0\.1:8788',
+    'TAUTWEEKLY_PACKAGE_KIND=linux-native',
     'TimeoutStopSec=30min'
 )
 Require-Text 'platforms/linux/tautweekly.env.example' @(
@@ -91,6 +92,9 @@ Require-Text 'platforms/freebsd-podman/rc.d/tautweekly' @(
     'TAUTWEEKLY_MANAGER_RUNTIME_MODE=nas',
     'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
     'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
+    'TAUTWEEKLY_PACKAGE_KIND=freebsd-podman',
+    'TAUTWEEKLY_PACKAGE_VERSION=',
+    'TAUTWEEKLY_HOST_ADAPTER_API=3',
     '--read-only',
     '--security-opt no-new-privileges',
     '--cap-drop ALL',
@@ -466,6 +470,8 @@ foreach ($relative in @('platforms/nas-docker/compose.yaml', 'platforms/nas-dock
         'stop_grace_period: 30m',
         'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
         'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
+        'TAUTWEEKLY_PACKAGE_KIND',
+        'TAUTWEEKLY_PACKAGE_VERSION.*__TAUTWEEKLY_RELEASE_VERSION__',
         'TAUTWEEKLY_HOST_ADAPTER_API'
     )
 }
@@ -476,7 +482,7 @@ Require-Text 'platforms/nas-docker/Dockerfile' @(
     'HOME=/tmp/tautweekly/home',
     'XDG_DATA_HOME=/tmp/tautweekly/share',
     'EXPOSE 8080',
-    'io\.tautweekly\.host-adapter-api="2"'
+    'io\.tautweekly\.host-adapter-api="3"'
 )
 Require-Text 'platforms/nas-docker/app/entrypoint.sh' @(
     '/tmp/tautweekly/home',
@@ -486,6 +492,7 @@ Require-Text 'platforms/nas-docker/app/entrypoint.sh' @(
 Require-Text 'templates/tautweekly.xml' @(
     '--read-only',
     '--stop-timeout 1800',
+    'TAUTWEEKLY_PACKAGE_KIND',
     'TAUTWEEKLY_HOST_ADAPTER_API',
     '--security-opt no-new-privileges:true',
     '--cap-drop ALL'
@@ -522,6 +529,9 @@ Require-Text 'platforms/mac-docker/compose.yaml' @(
     'cap_drop:',
     'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
     'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
+    'TAUTWEEKLY_PACKAGE_KIND:\s*"mac-docker"',
+    'TAUTWEEKLY_PACKAGE_VERSION.*__TAUTWEEKLY_RELEASE_VERSION__',
+    'TAUTWEEKLY_HOST_ADAPTER_API:\s*"3"',
     'TAUTWEEKLY_HOST_ADAPTER_API'
 )
 Forbid-Text 'platforms/mac-docker/compose.yaml' @('(?m)^\s*build:')

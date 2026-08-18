@@ -26,6 +26,9 @@ const state = {
   authAccess: null,
   about: null,
   diagnostics: { events: [], maximumEntries: 200, retentionDays: 30 },
+  updates: null,
+  updateChecking: false,
+  updateInstalling: false,
 };
 const byId = (id) => document.getElementById(id);
 const titleCase = (value) => String(value || "unknown").replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -202,7 +205,7 @@ async function enterApplication(preferredView = "") {
 async function loadAll() {
   setGlobalStatus("Refreshing synthetic status…");
   try {
-    const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, authAccess, about, diagnostics] = await Promise.all([
+    const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, authAccess, about, diagnostics, updates] = await Promise.all([
       request("/api/v1/status"),
       request("/api/v1/config"),
       request("/api/v1/config/editor"),
@@ -217,6 +220,7 @@ async function loadAll() {
       request("/api/v1/auth/access"),
       request("/api/v1/about"),
       request("/api/v1/diagnostics"),
+      request("/api/v1/updates"),
     ]);
     state.status = status;
     state.config = config;
@@ -232,6 +236,7 @@ async function loadAll() {
     state.authAccess = authAccess;
     state.about = about;
     state.diagnostics = diagnostics;
+    state.updates = updates;
     renderStatus();
     renderFirstTimeSetup();
     renderConfigEditor();
@@ -242,6 +247,7 @@ async function loadAll() {
     renderOperations();
     renderSchedule();
     renderAccessSettings();
+    renderUpdates();
     renderAbout();
     manageOperationPolling();
     manageSchedulePolling();
@@ -2296,6 +2302,114 @@ async function disableAccessPassword() {
   }
 }
 
+function updateStatePresentation(update = state.updates || {}) {
+  switch (update.state) {
+  case "current": return { label: "Current", tone: "good", summary: "The fictional application and package match the simulated stable release." };
+  case "update-available": return { label: "Update available", tone: "pending", summary: "A fictional newer stable release demonstrates the package-specific update action." };
+  case "legacy": return { label: "Legacy wrapper", tone: "bad", summary: "The host-adapter example is older than the running image contract." };
+  case "mismatched": return { label: "Version mismatch", tone: "bad", summary: "The fictional application/image and package versions do not match." };
+  case "newer": return { label: "Newer than stable", tone: "neutral", summary: "The fictional application is ahead of stable; no downgrade is offered." };
+  default: return { label: "Unknown", tone: "neutral", summary: "No fictional stable comparison is available yet." };
+  }
+}
+
+function displayUpdateVersion(value, unavailable = "Not reported") {
+  return value ? `v${value}` : unavailable;
+}
+
+function renderUpdates() {
+  const update = state.updates || {};
+  const presentation = updateStatePresentation(update);
+  setChip("update-settings-chip", state.updateChecking ? "Checking" : presentation.label, state.updateChecking ? "pending" : presentation.tone);
+  setText("update-settings-summary", presentation.summary);
+  setText("update-manager-version", displayUpdateVersion(update.managerVersion));
+  setText("update-application-version", displayUpdateVersion(update.applicationVersion));
+  setText("update-package-label", update.packageLabel || "Host package");
+  setText("update-package-version", displayUpdateVersion(update.packageVersion));
+  byId("update-image-version-row").hidden = !update.imageVersion;
+  setText("update-image-version", displayUpdateVersion(update.imageVersion, "Not applicable"));
+  setText("update-host-adapter", update.hostAdapterState === "not-applicable" ? "Not applicable" : `${update.hostAdapterVersion ? `API ${update.hostAdapterVersion}` : "Not reported"} - ${titleCase(update.hostAdapterState)}`);
+  setText("update-channel", titleCase(update.updateChannel || "stable"));
+  setText("update-latest-version", displayUpdateVersion(update.latestStableVersion, "Not checked"));
+  setText("update-last-success", formatDate(update.lastSuccessfulCheckUtc));
+
+  const failure = byId("update-failure");
+  failure.hidden = !update.lastFailure;
+  if (update.lastFailure) {
+    setText("update-failure-message", update.lastFailure.message);
+    setText("update-failure-time", `${titleCase(update.lastFailure.action)} - ${formatDate(update.lastFailure.occurredAtUtc)}`);
+  }
+
+  const guidance = update.guidance || {};
+  setText("update-owner", guidance.owner || "Host administrator");
+  setText("update-guidance-summary", guidance.summary || "This preview demonstrates the platform-owned update boundary.");
+  const steps = byId("update-guidance-steps");
+  steps.replaceChildren();
+  for (const value of guidance.steps || []) {
+    const item = document.createElement("li");
+    item.textContent = value;
+    steps.append(item);
+  }
+  byId("update-command-panel").hidden = !guidance.command;
+  setText("update-command", guidance.command || "No host command in this supported-updater example");
+  if (guidance.docsUrl) byId("update-docs-link").href = guidance.docsUrl;
+  byId("update-release-notes").hidden = !update.releaseNotesUrl;
+  if (update.releaseNotesUrl) byId("update-release-notes").href = update.releaseNotesUrl;
+
+  const checkButton = byId("update-check-button");
+  checkButton.disabled = state.updateChecking;
+  setSwappingButtonText("update-check-button", state.updateChecking ? "Simulating check..." : "Check now");
+  const installAvailable = Boolean(update.installSupported);
+  byId("update-install-confirm-row").hidden = !installAvailable;
+  const installButton = byId("update-install-button");
+  installButton.hidden = !installAvailable;
+  installButton.disabled = !installAvailable || !byId("update-install-confirm").checked || state.updateInstalling || update.installState === "running";
+  setSwappingButtonText("update-install-button", state.updateInstalling || update.installState === "running" ? "Simulated updater running" : "Simulate install");
+  byId("update-settings-message").textContent = update.installState === "running"
+    ? "The in-memory demo reports a running updater. No process, elevation prompt, or file change occurred. Reload to reset."
+    : state.updateChecking
+      ? "Refreshing bundled fictional release metadata. No network request is made."
+      : "This static preview uses bundled fictional release metadata. Production normal health also performs no update-network request.";
+}
+
+async function checkForUpdates() {
+  if (state.updateChecking) return;
+  state.updateChecking = true;
+  renderUpdates();
+  try {
+    state.updates = await request("/api/v1/updates/check", { method: "POST", body: "{}" });
+    setGlobalStatus("Synthetic stable update check completed.", true);
+  } catch (error) {
+    byId("update-settings-message").textContent = error.message;
+  } finally {
+    state.updateChecking = false;
+    renderUpdates();
+  }
+}
+
+async function installUpdate() {
+  if (state.updateInstalling || !byId("update-install-confirm").checked) return;
+  state.updateInstalling = true;
+  renderUpdates();
+  try {
+    state.updates = await request("/api/v1/updates/install", { method: "POST", body: "{}" });
+    setGlobalStatus("Verified updater simulation started.", true);
+  } catch (error) {
+    byId("update-settings-message").textContent = error.message;
+  } finally {
+    state.updateInstalling = false;
+    renderUpdates();
+  }
+}
+
+async function copyUpdateCommand() {
+  const command = state.updates?.guidance?.command || "";
+  if (!command) return;
+  await navigator.clipboard.writeText(command);
+  setSwappingButtonText("update-copy-command", "Copied");
+  setTimeout(() => setSwappingButtonText("update-copy-command", "Copy command"), 1200);
+}
+
 function renderAbout() {
   setText("about-version", state.about.version || "Version unavailable");
   setText("about-package", state.about.packageVersion || "Package version unavailable");
@@ -2594,6 +2708,10 @@ byId("schedule-confirm").addEventListener("change", renderSchedule);
 byId("schedule-confirm-cancel").addEventListener("click", cancelScheduleConfirmation);
 byId("schedule-confirm-run").addEventListener("click", startScheduleOperation);
 document.querySelectorAll("[data-schedule-action]").forEach((button) => button.addEventListener("click", () => chooseScheduleAction(button.dataset.scheduleAction)));
+byId("update-check-button").addEventListener("click", checkForUpdates);
+byId("update-install-confirm").addEventListener("change", renderUpdates);
+byId("update-install-button").addEventListener("click", installUpdate);
+byId("update-copy-command").addEventListener("click", copyUpdateCommand);
 byId("logout-button").addEventListener("click", logout);
 byId("refresh-button").addEventListener("click", loadAll);
 byId("access-status-button").addEventListener("click", openAccessSettings);

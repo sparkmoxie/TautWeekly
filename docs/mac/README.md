@@ -159,7 +159,15 @@ filesystem-level backup, stop the service and copy both `.env` and `data/`.
 
 ## Stable update and rollback
 
-`./tautweekly.sh check-update` compares and verifies the installed package
+Manager **Settings > Updates** is the primary Mac status source. It separately
+reports the container application/image, extracted Mac package, host-adapter
+compatibility, stable channel, latest stable release, check history, sanitized
+failure, and release notes. **Check now** is a bounded manual request; routine
+Manager health does not need Internet access. The containerized web process
+cannot invoke Docker Desktop or change host package files, so the card exposes
+the copyable `./tautweekly.sh update` host command but no install button.
+
+`./tautweekly.sh check-update` remains a terminal-only comparison of the installed package
 against the latest stable GitHub release and never applies or schedules an
 update. macOS does not enable unattended updates.
 
@@ -170,7 +178,7 @@ To upgrade:
    and `SHA256SUMS.txt`, verifies the published checksum and internal
    `RELEASE-FILES.txt`, and replaces only release-owned files.
 3. Open Manager, sign in again if the service restart invalidated the session,
-   and verify the reported version, Manager/scheduler health, Config status,
+   and verify **Settings > Updates**, Manager/scheduler health, Config status,
    all six previews, and controlled TestEmail result.
 
 The updater takes the same operation lock as the renderer, preserves `.env`,

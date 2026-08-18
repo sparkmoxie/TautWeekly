@@ -75,7 +75,7 @@
         <button class="nav-button" type="button" data-view="schedule"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-calendar-clock"></use></svg></span><span><strong>Schedule</strong><small id="schedule-nav-copy">Delivery lifecycle</small></span></button>
         <button class="nav-button" type="button" data-view="verification"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-verified"></use></svg></span><span><strong>Verify</strong><small>Connection checks</small></span></button>
         <button class="nav-button" type="button" data-view="previews"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-preview"></use></svg></span><span><strong>Previews</strong><small>Generated newsletters</small></span></button>
-        <button class="nav-button" type="button" data-view="about"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-settings"></use></svg></span><span><strong>Settings</strong><small>Access and diagnostics</small></span></button>
+        <button class="nav-button" type="button" data-view="about"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-settings"></use></svg></span><span><strong>Settings</strong><small>Access, updates, diagnostics</small></span></button>
       </nav>
       <div class="sidebar-note"><span class="status-beacon"></span><div><strong id="sidebar-connection-label">Local connection</strong><small id="sidebar-platform">Checking platform...</small></div></div>
     </aside>
@@ -271,6 +271,30 @@
           </form>
           <p class="verification-message" id="access-settings-message" role="status" aria-live="polite"></p>
           <div class="access-recovery-note"><span aria-hidden="true">&#9671;</span><p id="access-recovery-copy"><strong>Local recovery remains available.</strong> If the password is forgotten, run <code>18-RESET-MANAGER-ACCESS.bat</code> from the TautWeekly folder. Installed copies also include <code>Reset-TautWeekly-Access.cmd</code>. Recovery disables only the Manager lock and leaves configuration, credentials, schedules, history, and previews untouched.</p></div>
+        </section>
+        <section class="update-settings-panel" id="update-settings-panel" aria-labelledby="update-settings-heading">
+          <div class="update-settings-heading"><div><span class="eyebrow">Capability-aware updates</span><h2 id="update-settings-heading">Application and package status</h2><p id="update-settings-summary">Reading the last local update result. No Internet request is made during normal refresh.</p></div><span class="state-chip pending" id="update-settings-chip">Unknown</span></div>
+          <dl class="update-version-grid">
+            <div><dt>Running Manager</dt><dd id="update-manager-version">Not reported</dd></div>
+            <div><dt>Application</dt><dd id="update-application-version">Not reported</dd></div>
+            <div><dt id="update-package-label">Host package</dt><dd id="update-package-version">Not reported</dd></div>
+            <div id="update-image-version-row"><dt>Container image application</dt><dd id="update-image-version">Not applicable</dd></div>
+            <div><dt>Host adapter</dt><dd id="update-host-adapter">Not applicable</dd></div>
+            <div><dt>Update channel</dt><dd id="update-channel">Stable</dd></div>
+            <div><dt>Latest stable</dt><dd id="update-latest-version">Not checked</dd></div>
+            <div><dt>Last successful check</dt><dd id="update-last-success">Not recorded</dd></div>
+          </dl>
+          <div class="update-failure" id="update-failure" role="status" aria-live="polite" hidden><strong>Last update action failure</strong><p id="update-failure-message"></p><small id="update-failure-time"></small></div>
+          <div class="update-guidance">
+            <div><span class="eyebrow">Platform owner</span><h3 id="update-owner">Host administrator</h3><p id="update-guidance-summary">The package reports the safe update boundary for this platform.</p></div>
+            <ol id="update-guidance-steps"></ol>
+            <div class="update-command" id="update-command-panel" hidden><div><span>Host command</span><code id="update-command"></code></div><button class="button button-secondary" id="update-copy-command" type="button">Copy command</button></div>
+            <a class="update-docs-link" id="update-docs-link" href="https://sparkmoxie.github.io/TautWeekly/" target="_blank" rel="noopener noreferrer">Open platform update guide</a>
+          </div>
+          <label class="update-install-confirm" id="update-install-confirm-row" for="update-install-confirm" hidden><input id="update-install-confirm" type="checkbox"><span><strong>Install the verified stable Windows update</strong><small>Windows will request administrator approval. The existing updater verifies release URLs, archive checksums, internal manifests, rollback, and post-update health.</small></span></label>
+          <div class="update-settings-actions"><button class="button button-secondary" id="update-check-button" type="button">Check now</button><button class="button button-primary" id="update-install-button" type="button" hidden disabled>Install update</button><a id="update-release-notes" href="https://github.com/sparkmoxie/TautWeekly/releases" target="_blank" rel="noopener noreferrer" hidden>Read stable release notes</a></div>
+          <p class="verification-message" id="update-settings-message" role="status" aria-live="polite">Normal Manager and dashboard health never depend on Internet availability.</p>
+          <p class="update-security-boundary"><strong>The Manager never gains host control.</strong> Docker and NAS packages do not mount the Docker socket, add a privileged helper, run the web process as root, or mutate the host. Native Unix packages keep installation in their existing host wrappers.</p>
         </section>
         <div class="about-grid">
           <article><span class="about-number">01</span><h2>Typed operations</h2><p>Preview and schedule actions are allowlisted. Browser input cannot choose an executable, script path, or command string.</p></article>

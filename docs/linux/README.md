@@ -230,7 +230,14 @@ normal Trending result while retaining new TV releases below the hero.
 
 ## Upgrade and rollback
 
-Run `tautweekly check-update` for a read-only comparison between the installed
+Start with Manager **Settings > Updates**. It is the primary view of the running
+application, native package, stable channel, latest stable release, check time,
+sanitized failure, and release notes. **Check now** contacts only the fixed
+stable-release endpoint with a bounded timeout; ordinary Manager and Dashboard
+health remain offline-capable. The card never invokes `sudo`, systemd, or the
+package updater and provides the copyable host command `sudo tautweekly update`.
+
+For a terminal-only comparison, run `tautweekly check-update` between the installed
 `RELEASE-METADATA.txt` and GitHub's latest stable release. This check never
 installs code, has no periodic timer, and never follows `main` or the container
 `edge` tag. To upgrade, run:
@@ -250,7 +257,7 @@ replace `config.json`, state, output, logs, the deleted-item cache, custom asset
 file. The installer holds the same operation lock used by preview and send
 commands, records and verifies the repository release metadata, and confirms a
 previously active service becomes active again. Sign back into the Manager,
-review **Dashboard**, rerun verification, PreviewAll, and TestEmail, and only
+review **Settings > Updates** and **Dashboard**, rerun verification, PreviewAll, and TestEmail, and only
 then leave the schedule enabled for the next production delivery.
 
 If the upgrade addresses missing ratings/artwork or output remains stale,

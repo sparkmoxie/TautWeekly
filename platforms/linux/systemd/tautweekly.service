@@ -14,6 +14,7 @@ Environment=TAUTWEEKLY_DATA_DIR=/var/lib/tautweekly
 Environment=TAUTWEEKLY_CONFIG=/var/lib/tautweekly/config.json
 Environment=TAUTWEEKLY_MANAGER_RUNTIME_MODE=linux
 Environment=TAUTWEEKLY_MANAGER_LISTEN=127.0.0.1:8788
+Environment=TAUTWEEKLY_PACKAGE_KIND=linux-native
 ExecStart=/opt/tautweekly/run-service.sh
 Restart=on-failure
 RestartSec=10s

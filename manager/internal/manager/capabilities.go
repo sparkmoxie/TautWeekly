@@ -17,6 +17,7 @@ const (
 // presenting controls that cannot work in the current package.
 type Capabilities struct {
 	RuntimeMode       string   `json:"runtimeMode"`
+	PackageKind       string   `json:"packageKind"`
 	Platform          string   `json:"platform"`
 	AccessLabel       string   `json:"accessLabel"`
 	NetworkScope      string   `json:"networkScope"`
@@ -42,9 +43,11 @@ func normalizedRuntimeMode(value string) string {
 
 func capabilitiesFor(options Options) Capabilities {
 	mode := normalizedRuntimeMode(options.RuntimeMode)
+	packageKind := normalizedPackageKind(options.PackageKind, mode)
 	if mode == runtimeModeNAS {
 		return Capabilities{
 			RuntimeMode:       runtimeModeNAS,
+			PackageKind:       packageKind,
 			Platform:          runtime.GOOS,
 			AccessLabel:       "Container access",
 			NetworkScope:      "trusted-lan",
@@ -52,7 +55,7 @@ func capabilitiesFor(options Options) Capabilities {
 			ScheduleProvider:  "embedded-container",
 			ScheduleActions:   []string{"enable", "disable"},
 			LifecycleProvider: "container-host",
-			UpdateProvider:    "container-host",
+			UpdateProvider:    packageKind,
 			PathStyle:         "container-volume",
 			SecureCookies:     options.SecureCookies,
 		}
@@ -60,6 +63,7 @@ func capabilitiesFor(options Options) Capabilities {
 	if mode == runtimeModeLinux {
 		return Capabilities{
 			RuntimeMode:       runtimeModeLinux,
+			PackageKind:       packageKind,
 			Platform:          runtime.GOOS,
 			AccessLabel:       "Linux service access",
 			NetworkScope:      "host-loopback",
@@ -75,6 +79,7 @@ func capabilitiesFor(options Options) Capabilities {
 	if mode == runtimeModeMac {
 		return Capabilities{
 			RuntimeMode:       runtimeModeMac,
+			PackageKind:       packageKind,
 			Platform:          "macos-docker",
 			AccessLabel:       "macOS Docker Desktop access",
 			NetworkScope:      "host-loopback",
@@ -89,6 +94,7 @@ func capabilitiesFor(options Options) Capabilities {
 	}
 	return Capabilities{
 		RuntimeMode:       runtimeModeWindows,
+		PackageKind:       packageKind,
 		Platform:          runtime.GOOS,
 		AccessLabel:       "Browser access",
 		NetworkScope:      "loopback",

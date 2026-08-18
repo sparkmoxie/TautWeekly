@@ -37,6 +37,12 @@ formatting. No Plex token or private server data is embedded.
 - [Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/)
 - [FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/)
 
+Across these packages, Manager **Settings > Updates** is the primary source for
+application, package/image, host-adapter, stable-release, and check status.
+Only Windows can start its existing verified updater from the GUI; every other
+guide names the exact host-owned command or platform-native flow and its
+limitations.
+
 ## Documentation
 
 - [Windows installation](windows/README.md)

@@ -14,7 +14,9 @@ services:
       TAUTWEEKLY_PREVIEW_BASE_URL: ""
       TAUTWEEKLY_MANAGER_ALLOWED_HOSTS: ""
       TAUTWEEKLY_MANAGER_SECURE_COOKIES: "false"
-      TAUTWEEKLY_HOST_ADAPTER_API: "2"
+      TAUTWEEKLY_PACKAGE_KIND: "qnap-container-station"
+      TAUTWEEKLY_PACKAGE_VERSION: "__TAUTWEEKLY_RELEASE_VERSION__"
+      TAUTWEEKLY_HOST_ADAPTER_API: "3"
     volumes:
       - /share/Container/tautweekly/data:/data
     ports:

@@ -108,6 +108,24 @@ persistent `config.json`, then use **Validate, save, and verify**, PreviewAll,
 and TestEmail in the GUI. Terminal setup and preview commands are recovery or
 expert fallbacks on Manager-capable packages.
 
+Use **Settings > Updates** as the first update diagnostic. **Unknown** means no
+successful stable check is available, the local version is not a release
+version, or the configured channel is unsupported; use **Check now** and read
+the sanitized failure. **Legacy** means the external wrapper/template predates
+the running Manager contract. **Mismatched** means the application/image and
+host package report different releases, commonly after an image-only update.
+**Newer** means the local application is ahead of the latest stable release and
+must not be downgraded automatically. A timeout/offline result does not make
+Manager health or newsletter delivery unhealthy, and rapid retries are
+temporarily backed off.
+
+The card's update owner is authoritative for the next step: Windows can show a
+confirmed install button; Linux, Mac, FreeBSD, Compose/NAS, and QNAP show their
+host command; Unraid directs to Docker/Apps and template comparison; generic
+Docker directs to the original deployment tool. Never solve a legacy or
+mismatched state by mounting the Docker socket, running the Manager as root, or
+adding a privileged web helper.
+
 If a NAS user updated the image but `./tautweekly.sh help` does not list
 `manager-bootstrap`, the external host wrapper is older than the running image.
 The container still supports the GUI. Retrieve the token from the trusted host
