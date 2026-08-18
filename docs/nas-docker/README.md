@@ -389,9 +389,12 @@ Manager **Settings > Updates** is the primary container update-status source.
 It distinguishes the running application/image from the release host package,
 reports the stable channel, latest verified release, last successful check,
 last sanitized failure, release notes, and whether the saved host adapter is
-current, legacy, or mismatched. **Check now** is manual, bounded, cached, and
-backed off after failures; ordinary Manager/Dashboard health never requires the
-Internet. The Manager remains non-root and has no Docker socket or host helper,
+current, legacy, or mismatched. Authenticated entry renders cached status first
+and makes one non-blocking bounded check only when the last success is missing
+or at least 24 hours old and backoff permits; **Check now** explicitly refreshes
+the same endpoint. Navigation, Dashboard rendering, and health remain
+offline-capable. A passive purple header notification only links here and never
+claims package ownership. The Manager remains non-root and has no Docker socket or host helper,
 so it never offers an install button for Docker/NAS packages.
 
 The guidance is package-specific: Unraid points to Docker/Apps and its current

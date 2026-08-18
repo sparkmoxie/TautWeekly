@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	updateStatusSchemaVersion = 1
+	updateStatusSchemaVersion = 2
 	updateCacheSchemaVersion  = 1
 	maximumUpdateCacheBytes   = 16 << 10
 	maximumReleaseBytes       = 256 << 10
@@ -27,6 +27,7 @@ const (
 	stableReleaseDownloadURL  = "https://github.com/sparkmoxie/TautWeekly/releases/download/v"
 	updateCheckMinimumDelay   = 30 * time.Second
 	updateFailureMaximumDelay = 10 * time.Minute
+	updateBackgroundMaxAge    = 24 * time.Hour
 )
 
 const (
@@ -69,28 +70,29 @@ type UpdateGuidance struct {
 }
 
 type UpdateStatus struct {
-	SchemaVersion          int            `json:"schemaVersion"`
-	ObservedAtUTC          string         `json:"observedAtUtc"`
-	State                  string         `json:"state"`
-	ManagerVersion         string         `json:"managerVersion,omitempty"`
-	ApplicationVersion     string         `json:"applicationVersion,omitempty"`
-	PackageVersion         string         `json:"packageVersion,omitempty"`
-	ImageVersion           string         `json:"imageVersion,omitempty"`
-	PackageKind            string         `json:"packageKind"`
-	PackageLabel           string         `json:"packageLabel"`
-	HostAdapterVersion     string         `json:"hostAdapterVersion,omitempty"`
-	HostAdapterState       string         `json:"hostAdapterState"`
-	UpdateChannel          string         `json:"updateChannel"`
-	LatestStableVersion    string         `json:"latestStableVersion,omitempty"`
-	UpdateAvailable        bool           `json:"updateAvailable"`
-	InstallSupported       bool           `json:"installSupported"`
-	InstallState           string         `json:"installState"`
-	CheckInProgress        bool           `json:"checkInProgress"`
-	LastSuccessfulCheckUTC string         `json:"lastSuccessfulCheckUtc,omitempty"`
-	LastFailure            *UpdateFailure `json:"lastFailure,omitempty"`
-	ReleaseNotesURL        string         `json:"releaseNotesUrl,omitempty"`
-	NextCheckAllowedAtUTC  string         `json:"nextCheckAllowedAtUtc,omitempty"`
-	Guidance               UpdateGuidance `json:"guidance"`
+	SchemaVersion              int            `json:"schemaVersion"`
+	ObservedAtUTC              string         `json:"observedAtUtc"`
+	State                      string         `json:"state"`
+	ManagerVersion             string         `json:"managerVersion,omitempty"`
+	ApplicationVersion         string         `json:"applicationVersion,omitempty"`
+	PackageVersion             string         `json:"packageVersion,omitempty"`
+	ImageVersion               string         `json:"imageVersion,omitempty"`
+	PackageKind                string         `json:"packageKind"`
+	PackageLabel               string         `json:"packageLabel"`
+	HostAdapterVersion         string         `json:"hostAdapterVersion,omitempty"`
+	HostAdapterState           string         `json:"hostAdapterState"`
+	UpdateChannel              string         `json:"updateChannel"`
+	LatestStableVersion        string         `json:"latestStableVersion,omitempty"`
+	UpdateAvailable            bool           `json:"updateAvailable"`
+	InstallSupported           bool           `json:"installSupported"`
+	InstallState               string         `json:"installState"`
+	CheckInProgress            bool           `json:"checkInProgress"`
+	BackgroundCheckRecommended bool           `json:"backgroundCheckRecommended"`
+	LastSuccessfulCheckUTC     string         `json:"lastSuccessfulCheckUtc,omitempty"`
+	LastFailure                *UpdateFailure `json:"lastFailure,omitempty"`
+	ReleaseNotesURL            string         `json:"releaseNotesUrl,omitempty"`
+	NextCheckAllowedAtUTC      string         `json:"nextCheckAllowedAtUtc,omitempty"`
+	Guidance                   UpdateGuidance `json:"guidance"`
 }
 
 type updateCache struct {
@@ -302,25 +304,26 @@ func (c *updateCoordinator) statusLocked(now time.Time) UpdateStatus {
 		}
 	}
 	status := UpdateStatus{
-		SchemaVersion:          updateStatusSchemaVersion,
-		ObservedAtUTC:          now.UTC().Format(time.RFC3339),
-		State:                  "unknown",
-		ManagerVersion:         applicationVersion,
-		ApplicationVersion:     applicationVersion,
-		PackageVersion:         packageVersion,
-		PackageKind:            packageKind,
-		PackageLabel:           packageLabel(packageKind),
-		HostAdapterVersion:     hostAdapter,
-		HostAdapterState:       hostAdapterState,
-		UpdateChannel:          channel,
-		LatestStableVersion:    c.cache.LatestStableVersion,
-		InstallSupported:       packageKind == packageKindWindows && c.installer.Supported(),
-		InstallState:           c.installState,
-		CheckInProgress:        c.checking,
-		LastSuccessfulCheckUTC: c.cache.LastSuccessfulCheckUTC,
-		LastFailure:            cloneUpdateFailure(c.cache.LastFailure),
-		ReleaseNotesURL:        c.cache.ReleaseNotesURL,
-		Guidance:               updateGuidance(packageKind),
+		SchemaVersion:              updateStatusSchemaVersion,
+		ObservedAtUTC:              now.UTC().Format(time.RFC3339),
+		State:                      "unknown",
+		ManagerVersion:             applicationVersion,
+		ApplicationVersion:         applicationVersion,
+		PackageVersion:             packageVersion,
+		PackageKind:                packageKind,
+		PackageLabel:               packageLabel(packageKind),
+		HostAdapterVersion:         hostAdapter,
+		HostAdapterState:           hostAdapterState,
+		UpdateChannel:              channel,
+		LatestStableVersion:        c.cache.LatestStableVersion,
+		InstallSupported:           packageKind == packageKindWindows && c.installer.Supported(),
+		InstallState:               c.installState,
+		CheckInProgress:            c.checking,
+		BackgroundCheckRecommended: c.backgroundCheckRecommendedLocked(now, channel),
+		LastSuccessfulCheckUTC:     c.cache.LastSuccessfulCheckUTC,
+		LastFailure:                cloneUpdateFailure(c.cache.LastFailure),
+		ReleaseNotesURL:            c.cache.ReleaseNotesURL,
+		Guidance:                   updateGuidance(packageKind),
 	}
 	if isContainerPackage(packageKind) {
 		status.ImageVersion = applicationVersion
@@ -333,6 +336,20 @@ func (c *updateCoordinator) statusLocked(now time.Time) UpdateStatus {
 		status.InstallSupported = false
 	}
 	return status
+}
+
+func (c *updateCoordinator) backgroundCheckRecommendedLocked(now time.Time, channel string) bool {
+	if c.checking || channel != "stable" || now.Before(c.nextCheckAllowed) {
+		return false
+	}
+	if c.cache.LastSuccessfulCheckUTC == "" {
+		return true
+	}
+	checkedAt, err := time.Parse(time.RFC3339, c.cache.LastSuccessfulCheckUTC)
+	if err != nil || checkedAt.After(now.Add(time.Minute)) {
+		return true
+	}
+	return !now.Before(checkedAt.Add(updateBackgroundMaxAge))
 }
 
 func classifyUpdateStatus(status UpdateStatus) (string, bool) {

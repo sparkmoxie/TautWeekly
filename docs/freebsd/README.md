@@ -203,8 +203,11 @@ Manager **Settings > Updates** is the primary FreeBSD status source. It
 distinguishes the running container application/image from the installed
 FreeBSD Podman package, reports host-adapter compatibility, stable channel,
 latest stable release, check history, sanitized failure, and release notes.
-**Check now** uses a bounded request and never makes routine Manager health
-Internet-dependent. The web process cannot run `sudo`, Podman, or rc.d; the
+Authenticated entry renders cached status first and makes one non-blocking
+bounded check only when the last success is missing or at least 24 hours old
+and backoff permits; **Check now** explicitly refreshes the same endpoint.
+Navigation, Dashboard rendering, and Manager health stay offline-capable. The
+passive purple header notification only links here. The web process cannot run `sudo`, Podman, or rc.d; the
 card provides the copyable host command `sudo tautweekly update` but no install
 button.
 

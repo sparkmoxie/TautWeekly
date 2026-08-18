@@ -64,12 +64,16 @@ Disabling the feature stops access but does not erase the existing cache.
   configuration, credentials, sessions, paths, diagnostics, or newsletter
   state.
 - Normal Manager/Dashboard health and `GET /api/v1/updates` are offline-only.
-  An authenticated **Check now** is the only GUI action that requests release
-  metadata. It uses a fixed HTTPS GitHub endpoint, rejects redirects and
-  unexpected hosts/assets, bounds time and response size, caches only public
-  release fields plus fixed sanitized failures, and backs off repeated checks.
-  Update mutations require the same session, same-origin, CSRF, Host, proxy,
-  and secure-cookie controls as every other protected Manager action.
+  After authenticated application entry renders that cached result, the GUI
+  makes one non-blocking check only when no successful result exists or it is at
+  least 24 hours old and retry backoff permits. **Check now** uses the same
+  endpoint for an explicit refresh. Both paths use a fixed HTTPS GitHub
+  endpoint, reject redirects and unexpected hosts/assets, bound time and
+  response size, cache only public release fields plus fixed sanitized
+  failures, and back off repeated checks. The login/bootstrap page, navigation,
+  and health endpoints never initiate a check. Update mutations require the
+  same session, same-origin, CSRF, Host, proxy, and secure-cookie controls as
+  every other protected Manager action.
 - Only Windows exposes a GUI install action, and it can start only the fixed
   packaged checksum/manifest-verified updater behind explicit confirmation and
   Windows elevation. Container/native service Managers never receive a Docker

@@ -205,8 +205,8 @@ def main() -> int:
         failures.append("automatic preview generation is still blocked by a separate readiness gate")
     if 'runPostSaveSetup(result.editor.revision);' not in javascript or 'type: "preview-all"' not in javascript:
         failures.append("validated configuration saves do not automatically start local previews")
-    if 'selectView(preferredView || "dashboard");' not in javascript:
-        failures.append("Manager does not consistently land on Dashboard after authentication")
+    if "window.TautWeeklyUpdateUI.routeFromHash(window.location.hash)" not in javascript or "updateHistory: false" not in javascript:
+        failures.append("Manager does not restore a local route safely after authentication")
     if 'id="first-time-setup"' not in combined or 'data-open-view="configuration"' not in combined:
         failures.append("Dashboard has no direct first-time setup route to Config")
     if 'state.editor?.state === "unconfigured"' not in javascript or 'prompt.hidden = !firstRun;' not in javascript:
@@ -261,7 +261,7 @@ def main() -> int:
             failures.append(f"Dashboard Config status omits step: {step}")
         if f'id="setup-{step}-step"' not in combined:
             failures.append(f"Config setup workflow omits permanent step card: {step}")
-    for symbol in ("dashboard", "tune", "calendar-clock", "verified", "preview", "settings", "lock", "lock-open", "visibility"):
+    for symbol in ("dashboard", "tune", "calendar-clock", "verified", "preview", "settings", "lock", "lock-open", "deployed-code-update", "visibility"):
         if f'id="icon-{symbol}"' not in combined:
             failures.append(f"local Material Symbol missing: {symbol}")
     if "function initializeMaskedInputToggles(" not in javascript or "initializeMaskedInputToggles();" not in javascript:
@@ -278,6 +278,7 @@ def main() -> int:
         failures.append("Preview center has no guarded production delivery and retained status cards")
     for control in (
         "update-settings-panel",
+        "update-status-button",
         "update-settings-chip",
         "update-manager-version",
         "update-package-baseline",
@@ -308,6 +309,26 @@ def main() -> int:
             failures.append(f"Settings update interaction contract is missing: {marker}")
     if "function pollUpdateInstall()" not in javascript or "updateInstallPollTimer = setTimeout(pollUpdateInstall" not in javascript:
         failures.append("verified update installation has no automatic status transition")
+    if 'id="update-status-button"' not in combined or 'aria-controls="update-settings-panel"' not in combined:
+        failures.append("header update notification does not expose its Settings target")
+    if 'id="update-settings-heading" tabindex="-1"' not in combined or 'byId("update-settings-heading").focus' not in javascript:
+        failures.append("header update notification does not move focus to the status heading")
+    if 'addEventListener("click", openUpdateSettings)' not in javascript or 'selectView("about", { section: "updates" });' not in javascript:
+        failures.append("header update notification does not route to the consolidated status section")
+    if 'addEventListener("popstate", applyLocationRoute)' not in javascript or 'addEventListener("hashchange", applyLocationRoute)' not in javascript:
+        failures.append("Manager update route does not preserve browser back and forward navigation")
+    if "function checkForUpdatesInBackground()" not in javascript or "backgroundUpdateCheckAttempted" not in javascript:
+        failures.append("authenticated Manager entry does not bound background checks to one attempt")
+    if 'state.updates?.backgroundCheckRecommended' not in javascript or 'void runUpdateCheck(true);' not in javascript:
+        failures.append("background update refresh is not gated by server cache freshness and backoff")
+    if 'Update available — Version' in args.html.read_text(encoding="utf-8"):
+        failures.append("static header markup exposes a stale update version before validated state is rendered")
+    if ".update-status-button" not in css or "color:var(--violet)" not in css or "animation:hero-pulse" not in css:
+        failures.append("header update notification does not reuse the violet badge and established halo pulse")
+    if "forced-colors:active" not in css or ".update-status-halo{animation:none!important" not in css:
+        failures.append("header update notification does not preserve forced-colors and reduced-motion behavior")
+    if ".topbar .brand-lockup>div{display:none}" not in css:
+        failures.append("narrow mobile header does not preserve space for lock and update controls")
     if '.update-settings-panel' not in css or '.update-command' not in css or '.update-install-confirm' not in css:
         failures.append("Settings update card lacks its responsive and accessible visual treatment")
     if 'const toggle = document.createElement("label");' not in javascript or "toggle.htmlFor = id;" not in javascript:

@@ -656,7 +656,8 @@ steps. Automatic delivery remains disabled until explicitly enabled.
 - Active operation and progress
 - Configuration warnings
 - Recent sanitized operation history
-- Current release and manual update check
+- Current release, cached update state, passive header notification, and bounded
+  authenticated-entry refresh when status is missing or stale
 - Direct links to preview, schedule, configuration, and diagnostics
 
 ### 12.3 Preview center

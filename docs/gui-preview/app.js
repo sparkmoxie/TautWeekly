@@ -28,6 +28,7 @@ const state = {
   diagnostics: { events: [], maximumEntries: 200, retentionDays: 30 },
   updates: null,
   updateChecking: false,
+  updateCheckBackground: false,
   updateInstalling: false,
 };
 const byId = (id) => document.getElementById(id);
@@ -37,6 +38,8 @@ const activeSecretReveals = new Map();
 let pendingSecretReveal = null;
 let sessionRecoveryPromise = null;
 let updateInstallPollTimer;
+let backgroundUpdateCheckAttempted = false;
+let lastRoutedURL = "";
 
 function materializeMaterialIcon(svg) {
   const use = svg?.querySelector("use");
@@ -199,8 +202,10 @@ async function enterApplication(preferredView = "") {
   byId("auth-shell").hidden = true;
   byId("app-shell").hidden = false;
   await loadAll();
-  selectView(preferredView || "dashboard");
-  byId("main-content").focus({ preventScroll: true });
+  const route = preferredView ? { view: preferredView, section: "" } : window.TautWeeklyUpdateUI.routeFromHash(window.location.hash);
+  lastRoutedURL = window.location.href;
+  selectView(route.view, { section: route.section, updateHistory: false });
+  checkForUpdatesInBackground();
 }
 
 async function loadAll() {
@@ -2343,6 +2348,7 @@ function releaseLayerSummary(update) {
 
 function renderUpdates() {
   const update = state.updates || {};
+  renderUpdateStatusButton(update);
   const presentation = updateStatePresentation(update);
   setChip("update-settings-chip", state.updateChecking ? "Checking" : presentation.label, state.updateChecking ? "pending" : presentation.tone);
   setText("update-settings-summary", presentation.summary);
@@ -2392,23 +2398,46 @@ function renderUpdates() {
     : update.installState === "completed"
       ? "The simulated Manager update completed and the combined package status refreshed automatically."
     : state.updateChecking
-      ? "Refreshing bundled fictional release metadata. No network request is made."
+      ? state.updateCheckBackground
+        ? "Simulating the authenticated background refresh with bundled fictional metadata. No network request is made."
+        : "Refreshing bundled fictional release metadata. No network request is made."
       : "This static preview uses bundled fictional release metadata. Production normal health also performs no update-network request.";
 }
 
-async function checkForUpdates() {
+function renderUpdateStatusButton(update) {
+  const indicator = window.TautWeeklyUpdateUI.updateIndicator(update);
+  const button = byId("update-status-button");
+  button.hidden = !indicator.visible;
+  if (!indicator.visible) return;
+  button.setAttribute("aria-label", indicator.label);
+  button.dataset.tooltip = indicator.label;
+}
+
+async function runUpdateCheck(background = false) {
   if (state.updateChecking) return;
   state.updateChecking = true;
+  state.updateCheckBackground = background;
   renderUpdates();
   try {
     state.updates = await request("/api/v1/updates/check", { method: "POST", body: "{}" });
-    setGlobalStatus("Synthetic stable update check completed.", true);
+    if (!background) setGlobalStatus("Synthetic stable update check completed.", true);
   } catch (error) {
     byId("update-settings-message").textContent = error.message;
   } finally {
     state.updateChecking = false;
+    state.updateCheckBackground = false;
     renderUpdates();
   }
+}
+
+function checkForUpdates() {
+  return runUpdateCheck(false);
+}
+
+function checkForUpdatesInBackground() {
+  if (backgroundUpdateCheckAttempted || !state.updates?.backgroundCheckRecommended) return;
+  backgroundUpdateCheckAttempted = true;
+  void runUpdateCheck(true);
 }
 
 async function installUpdate() {
@@ -2524,7 +2553,15 @@ function initializePreviewIndexNavigation() {
   });
 }
 
-function selectView(name) {
+function selectView(name, options = {}) {
+  const section = options.section || "";
+  if (options.updateHistory !== false) {
+    const hash = window.TautWeeklyUpdateUI.hashForRoute(name, section);
+    if (window.location.hash !== hash) {
+      history.pushState({ managerView: name, managerSection: section }, "", `${window.location.pathname}${window.location.search}${hash}`);
+      lastRoutedURL = window.location.href;
+    }
+  }
   if (name !== "configuration") clearAllRevealedSecrets();
   document.querySelectorAll("[data-user-combobox].open").forEach((container) => setUserComboboxOpen(container, false));
   document.querySelectorAll("[data-panel]").forEach((panel) => { panel.hidden = panel.dataset.panel !== name; });
@@ -2535,7 +2572,25 @@ function selectView(name) {
     else button.removeAttribute("aria-current");
   });
   window.scrollTo({ top: 0, behavior: "auto" });
-  byId("main-content").focus({ preventScroll: true });
+  if (section === "updates" && name === "about") {
+    requestAnimationFrame(() => {
+      byId("update-settings-panel").scrollIntoView({ block: "start", behavior: "smooth" });
+      byId("update-settings-heading").focus({ preventScroll: true });
+    });
+  } else {
+    byId("main-content").focus({ preventScroll: true });
+  }
+}
+
+function applyLocationRoute() {
+  if (byId("app-shell").hidden || lastRoutedURL === window.location.href) return;
+  lastRoutedURL = window.location.href;
+  const route = window.TautWeeklyUpdateUI.routeFromHash(window.location.hash);
+  selectView(route.view, { section: route.section, updateHistory: false });
+}
+
+function openUpdateSettings() {
+  selectView("about", { section: "updates" });
 }
 
 async function submitPair(event) {
@@ -2577,6 +2632,7 @@ async function logout() {
 }
 
 function showAuthentication() {
+  backgroundUpdateCheckAttempted = false;
   clearAllRevealedSecrets();
   closeSecretRevealDialog();
   concealMaskedInputs(byId("auth-shell"));
@@ -2750,6 +2806,9 @@ byId("update-copy-command").addEventListener("click", copyUpdateCommand);
 byId("logout-button").addEventListener("click", logout);
 byId("refresh-button").addEventListener("click", loadAll);
 byId("access-status-button").addEventListener("click", openAccessSettings);
+byId("update-status-button").addEventListener("click", openUpdateSettings);
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => selectView(button.dataset.view)));
 document.querySelectorAll("[data-open-view]").forEach((button) => button.addEventListener("click", () => selectView(button.dataset.openView)));
+window.addEventListener("popstate", applyLocationRoute);
+window.addEventListener("hashchange", applyLocationRoute);
 initialize().catch((error) => setAuthMessage(`Manager initialization failed: ${error.message}`));

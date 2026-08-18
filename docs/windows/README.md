@@ -79,9 +79,13 @@ task and never follows GitHub `main` or a container `edge` tag.
 Manager **Settings > Updates** is the primary Windows version and update-status
 view. It shows the running Manager/application version, installed package
 version, stable channel, latest stable release, comparison state, last
-successful check, last sanitized failure, and release-notes link. Opening or
-refreshing the Dashboard does not contact GitHub; choose **Check now** for the
-bounded, rate-limited metadata request.
+successful check, last sanitized failure, and release-notes link. Authenticated
+entry renders cached status first and makes one non-blocking bounded request
+only when the last success is missing or at least 24 hours old and backoff
+permits. Opening or refreshing the Dashboard does not itself contact GitHub;
+choose **Check now** for an explicit refresh. A purple header notification
+appears only for a validated newer running application and links to this view;
+it does not start installation.
 
 When a newer verified stable release is available, Windows alone shows
 **Install update** behind a separate confirmation. That action starts the
