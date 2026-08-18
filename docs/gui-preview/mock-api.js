@@ -143,6 +143,7 @@
     scheduleOperation: null,
     scheduleStartedMS: 0,
     lockEnabled: false,
+    updateStartedMS: 0,
     update: {
       schemaVersion: 1,
       observedAtUtc: now(),
@@ -279,6 +280,22 @@
     return model.scheduleOperation;
   }
 
+  function finishUpdateIfReady() {
+    if (!model.updateStartedMS || model.update.installState !== "running") return;
+    if (Date.now() - model.updateStartedMS < 900) return;
+    const version = model.update.latestStableVersion;
+    Object.assign(model.update, {
+      observedAtUtc: now(),
+      state: "current",
+      managerVersion: version,
+      applicationVersion: version,
+      packageVersion: version,
+      updateAvailable: false,
+      installSupported: false,
+      installState: "completed",
+    });
+  }
+
   function json(payload, statusCode = 200) {
     return Promise.resolve(new Response(JSON.stringify(payload), { status: statusCode, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } }));
   }
@@ -296,6 +313,7 @@
     const body = bodyOf(init);
     finishOperationIfReady();
     finishScheduleIfReady();
+    finishUpdateIfReady();
 
     if (path === "/api/v1/setup") return json({ paired: true, authenticationRequired: false, pairingRequired: false });
     if (path === "/api/v1/auth/session" || path === "/api/v1/auth/login" || path === "/api/v1/auth/pair") return json({ authenticated: true, csrfToken: "synthetic-demo-token", expiresAtUtc: new Date(Date.now() + 86400000).toISOString() });
@@ -342,6 +360,7 @@
       return json(model.update);
     }
     if (path === "/api/v1/updates/install" && method === "POST") {
+      model.updateStartedMS = Date.now();
       model.update.installState = "running";
       model.update.observedAtUtc = now();
       return json(model.update, 202);

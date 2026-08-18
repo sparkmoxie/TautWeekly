@@ -386,11 +386,13 @@ func TestUpdateEndpointsRequireAuthenticationCSRFOriginAndAllowedHost(t *testing
 func TestWindowsInstallActionUsesOnlyInjectedVerifiedUpdaterWhenReady(t *testing.T) {
 	now := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
 	currentNow := now
+	data := t.TempDir()
+	root := t.TempDir()
 	checker := &fixtureUpdateChecker{release: updateRelease{Version: "1.1.0", ReleaseNotesURL: stableReleaseBaseURL + "1.1.0"}}
 	installer := &fixtureUpdateInstaller{supported: true, result: make(chan error, 1)}
 	server, err := New(Options{
-		DataDir:                 t.TempDir(),
-		TautWeeklyRoot:          t.TempDir(),
+		DataDir:                 data,
+		TautWeeklyRoot:          root,
 		Version:                 "1.0.0",
 		RuntimeMode:             runtimeModeWindows,
 		PackageKind:             packageKindWindows,
@@ -425,6 +427,28 @@ func TestWindowsInstallActionUsesOnlyInjectedVerifiedUpdaterWhenReady(t *testing
 	}
 	installer.result <- nil
 	close(installer.result)
+	deadline := time.Now().Add(time.Second)
+	for server.updates.Status().InstallState != "completed" && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if state := server.updates.Status().InstallState; state != "completed" {
+		t.Fatalf("completed installer state: got %q", state)
+	}
+
+	restarted := newUpdateCoordinator(Options{
+		DataDir:        data,
+		TautWeeklyRoot: root,
+		Version:        "1.1.0",
+		RuntimeMode:    runtimeModeWindows,
+		PackageKind:    packageKindWindows,
+		PackageVersion: "1.1.0",
+		Now:            func() time.Time { return currentNow },
+		updateChecker:  checker,
+	})
+	afterRestart := restarted.Status()
+	if afterRestart.State != "current" || afterRestart.InstallState != "idle" || afterRestart.UpdateAvailable {
+		t.Fatalf("post-update restart status: %+v", afterRestart)
+	}
 }
 
 func TestUpdateCacheRejectsTamperedPrivateContent(t *testing.T) {

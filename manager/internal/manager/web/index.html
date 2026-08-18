@@ -275,10 +275,11 @@
         <section class="update-settings-panel" id="update-settings-panel" aria-labelledby="update-settings-heading">
           <div class="update-settings-heading"><div><span class="eyebrow">Capability-aware updates</span><h2 id="update-settings-heading">Application and package status</h2><p id="update-settings-summary">Reading the last local update result. No Internet request is made during normal refresh.</p></div><span class="state-chip pending" id="update-settings-chip">Unknown</span></div>
           <dl class="update-version-grid">
-            <div><dt>Running Manager</dt><dd id="update-manager-version">Not reported</dd></div>
-            <div><dt>Application</dt><dd id="update-application-version">Not reported</dd></div>
-            <div><dt id="update-package-label">Host package</dt><dd id="update-package-version">Not reported</dd></div>
-            <div id="update-image-version-row"><dt>Container image application</dt><dd id="update-image-version">Not applicable</dd></div>
+            <div><dt>Manager build</dt><dd id="update-manager-version">Not reported</dd></div>
+            <div><dt>Package baseline</dt><dd id="update-package-baseline">Not reported</dd></div>
+            <div><dt>Platform</dt><dd id="update-platform">Not reported</dd></div>
+            <div><dt>Edition</dt><dd id="update-edition">Manager</dd></div>
+            <div><dt>Release layers</dt><dd id="update-release-layers">Not reported</dd></div>
             <div><dt>Host adapter</dt><dd id="update-host-adapter">Not applicable</dd></div>
             <div><dt>Update channel</dt><dd id="update-channel">Stable</dd></div>
             <div><dt>Latest stable</dt><dd id="update-latest-version">Not checked</dd></div>
@@ -303,7 +304,6 @@
           <article><span class="about-number">04</span><h2>Delivery truthfulness</h2><p id="about-delivery-copy">Task execution, SMTP acceptance, and inbox delivery remain distinct states in both API copy and interface labels.</p></article>
           <article><span class="about-number">05</span><h2>Package lifecycle</h2><p id="about-lifecycle-copy">Updates and rollback follow the package boundary reported by this Manager.</p></article>
         </div>
-        <dl class="build-details"><div><dt>Manager build</dt><dd id="about-version">Checking...</dd></div><div><dt>Package baseline</dt><dd id="about-package">Checking...</dd></div><div><dt>Platform</dt><dd id="about-platform">Checking...</dd></div><div><dt>Edition</dt><dd id="about-edition">Manager</dd></div></dl>
         <div class="section-heading"><div><span class="eyebrow">Private local record</span><h2>Configuration diagnostics</h2></div><p>Useful setup evidence is retained without storing configuration values or raw service responses.</p></div>
         <section class="diagnostics-panel" aria-labelledby="diagnostics-heading">
           <div class="panel-heading"><h2 id="diagnostics-heading">Setup and verification events</h2><small id="diagnostics-count">Checking</small></div>

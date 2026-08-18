@@ -279,6 +279,11 @@ def main() -> int:
     for control in (
         "update-settings-panel",
         "update-settings-chip",
+        "update-manager-version",
+        "update-package-baseline",
+        "update-platform",
+        "update-edition",
+        "update-release-layers",
         "update-check-button",
         "update-guidance-summary",
         "update-copy-command",
@@ -288,6 +293,10 @@ def main() -> int:
     ):
         if f'id="{control}"' not in combined:
             failures.append(f"Settings update card omits accessible control: {control}")
+    if 'class="build-details"' in combined or 'id="update-application-version"' in combined or 'id="update-package-version"' in combined:
+        failures.append("Manager and package identity is still duplicated outside the consolidated update status surface")
+    if "function releaseLayerSummary(" not in javascript or 'matching.length === 1 ? "matches" : "match"' not in javascript:
+        failures.append("application and package release layers are not summarized without duplicate version values")
     for marker in (
         'request("/api/v1/updates")',
         'request("/api/v1/updates/check", { method: "POST", body: "{}" })',
@@ -297,8 +306,14 @@ def main() -> int:
     ):
         if marker not in javascript:
             failures.append(f"Settings update interaction contract is missing: {marker}")
+    if "function pollUpdateInstall()" not in javascript or "updateInstallPollTimer = setTimeout(pollUpdateInstall" not in javascript:
+        failures.append("verified update installation has no automatic status transition")
     if '.update-settings-panel' not in css or '.update-command' not in css or '.update-install-confirm' not in css:
         failures.append("Settings update card lacks its responsive and accessible visual treatment")
+    if 'const toggle = document.createElement("label");' not in javascript or "toggle.htmlFor = id;" not in javascript:
+        failures.append("generated boolean switches do not associate their full visible surface with the checkbox")
+    if ".config-control-boolean .config-toggle{width:max-content;cursor:pointer" not in css:
+        failures.append("generated boolean switches do not expose a full clickable pointer surface")
     if 'value="send-all"' not in combined or 'value="send-welcome"' not in combined:
         failures.append("manual production delivery does not expose both all-recipient and Manual Welcome scopes")
     if 'type === "send-welcome"' not in javascript or "confirmProductionSend: true" not in javascript:

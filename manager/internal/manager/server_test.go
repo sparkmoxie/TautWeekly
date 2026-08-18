@@ -91,6 +91,63 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 	}
 }
 
+func TestBooleanConfigurationTogglesPersistAcrossPackageVariants(t *testing.T) {
+	tests := []struct {
+		kind string
+		mode string
+	}{
+		{packageKindWindows, runtimeModeWindows},
+		{packageKindMac, runtimeModeMac},
+		{packageKindNAS, runtimeModeNAS},
+		{packageKindQNAP, runtimeModeNAS},
+		{packageKindUnraid, runtimeModeNAS},
+		{packageKindCompatibleDocker, runtimeModeNAS},
+		{packageKindLinux, runtimeModeLinux},
+		{packageKindFreeBSD, runtimeModeNAS},
+	}
+	for _, test := range tests {
+		t.Run(test.kind, func(t *testing.T) {
+			root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+			server, err := New(Options{
+				DataDir:        t.TempDir(),
+				TautWeeklyRoot: root,
+				RuntimeRoot:    root,
+				Version:        "test",
+				RuntimeMode:    test.mode,
+				PackageKind:    test.kind,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			session, err := server.auth.newSession()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cookie := &http.Cookie{Name: sessionCookieName, Value: session.Token}
+			mutation := validConfigSaveRequest(t, ReadConfigEditor(root))
+			for _, name := range []string{"SmtpEnableSsl", "SmtpUseAuthentication", "DeletedItemCacheEnabled"} {
+				mutation.Values[name] = json.RawMessage(`false`)
+			}
+			body, err := json.Marshal(mutation)
+			if err != nil {
+				t.Fatal(err)
+			}
+			saved := mutationRequestForTest(server, http.MethodPut, "/api/v1/config", body, cookie, session.CSRFToken)
+			if saved.Code != http.StatusOK {
+				t.Fatalf("configuration save: got %d, body %s", saved.Code, saved.Body.String())
+			}
+			persisted := ReadConfigEditor(root)
+			for _, name := range []string{"SmtpEnableSsl", "SmtpUseAuthentication", "DeletedItemCacheEnabled"} {
+				field := editorField(t, persisted, name)
+				value, ok := field.Value.(bool)
+				if !ok || value {
+					t.Fatalf("%s did not persist false for %s: %#v", name, test.kind, field.Value)
+				}
+			}
+		})
+	}
+}
+
 func TestServerNormalizesRelativeRuntimePaths(t *testing.T) {
 	base := t.TempDir()
 	t.Chdir(base)

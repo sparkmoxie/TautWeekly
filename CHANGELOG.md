@@ -6,6 +6,19 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Consolidated Manager build, package baseline, platform, edition, and release
+  layer health into the existing application and package status surface without
+  repeating identical release versions.
+
+### Fixed
+
+- Made the Windows verified-update view reconnect to the restarted Manager and
+  advance to current automatically instead of waiting for a manual refresh.
+- Made generated configuration switches fully clickable and preserved explicit
+  `false` values through the shared Manager API on every shipped package type.
+
 ## [0.15.1] - 2026-08-18
 
 ### Fixed
