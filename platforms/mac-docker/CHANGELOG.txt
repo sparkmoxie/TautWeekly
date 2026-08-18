@@ -1,6 +1,10 @@
 TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 ================================
 
+v1.3.2 Portable
+---------------
+- restores Manager previews, test delivery, and manual delivery by honoring private operation snapshots and structured results
+
 v1.3.1 Portable
 ---------------
 - replaces image-only updates with verified host-package and image updates plus coordinated rollback

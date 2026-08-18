@@ -40,6 +40,9 @@ function Get-ZipEntrySha256([IO.Compression.ZipArchiveEntry]$Entry) {
 }
 
 function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
+    Assert-True ($Renderer.Contains('[string]$ResultPath = ""')) "$PackageName lacks the Manager structured-result path."
+    Assert-True ($Renderer.Contains('function Write-TautWeeklyStructuredResult')) "$PackageName lacks the Manager structured-result writer."
+    Assert-True ($Renderer.Contains('generatedPreviewFiles = $safePreviewFiles')) "$PackageName lacks sanitized Manager preview results."
     Assert-True ($Renderer.Contains('Get-OptionalStringProperty -InputObject $Row -Name "section_id"')) "$PackageName lacks the executable library predicate fix."
     Assert-True ($Renderer.Contains('$params.section_id = $sectionId')) "$PackageName lacks server-side selected-library scoping."
     Assert-True ($Renderer.Contains('$expectedSectionId = ([string]$ExpectedSectionId).Trim()')) "$PackageName lacks scoped recently-added row handling."
@@ -148,6 +151,7 @@ $expected = [ordered]@{
         'TautWeekly-nas-docker/app/Schedule-Time.ps1',
         'TautWeekly-nas-docker/app/healthcheck.sh',
         'TautWeekly-nas-docker/app/bin/run-as-user.sh',
+        'TautWeekly-nas-docker/app/bin/run-mode.sh',
         'TautWeekly-nas-docker/app/bin/run-script.sh',
         'TautWeekly-nas-docker/app/product-branding/favicon.ico',
         'TautWeekly-nas-docker/app/product-branding/tautweekly-app-icon-128.png',
@@ -164,6 +168,7 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/app/Smtp-Transport.ps1',
         'TautWeekly-mac-docker/app/Schedule-Time.ps1',
         'TautWeekly-mac-docker/app/bin/run-as-user.sh',
+        'TautWeekly-mac-docker/app/bin/run-mode.sh',
         'TautWeekly-mac-docker/app/bin/run-script.sh',
         'TautWeekly-mac-docker/manager/tautweekly-manager-linux-amd64',
         'TautWeekly-mac-docker/manager/tautweekly-manager-linux-arm64',
@@ -183,6 +188,7 @@ $expected = [ordered]@{
         'TautWeekly-linux/app/Smtp-Transport.ps1',
         'TautWeekly-linux/app/Schedule-Time.ps1',
         'TautWeekly-linux/app/bin/run-as-user.sh',
+        'TautWeekly-linux/app/bin/run-mode.sh',
         'TautWeekly-linux/app/bin/run-script.sh',
         'TautWeekly-linux/app/product-branding/favicon.ico',
         'TautWeekly-linux/app/product-branding/tautweekly-app-icon-128.png',
@@ -203,6 +209,7 @@ $expected = [ordered]@{
         'TautWeekly-freebsd-podman/app/Smtp-Transport.ps1',
         'TautWeekly-freebsd-podman/app/Schedule-Time.ps1',
         'TautWeekly-freebsd-podman/app/bin/run-as-user.sh',
+        'TautWeekly-freebsd-podman/app/bin/run-mode.sh',
         'TautWeekly-freebsd-podman/app/bin/run-script.sh',
         'TautWeekly-freebsd-podman/app/product-branding/favicon.ico',
         'TautWeekly-freebsd-podman/app/product-branding/tautweekly-app-icon-128.png',
