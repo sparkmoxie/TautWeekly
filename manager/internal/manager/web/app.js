@@ -2804,7 +2804,7 @@ async function disableAccessPassword() {
 function updateStatePresentation(update = state.updates || {}) {
   switch (update.state) {
   case "current": return { label: "Current", tone: "good", summary: "The running application and every reported package layer match the latest stable release." };
-  case "update-available": return { label: "Update available", tone: "pending", summary: "A newer verified stable release is available. Follow the update owner and package-specific steps below." };
+  case "update-available": return { label: "Update available", tone: "update-available", summary: "A newer verified stable release is available. Follow the update owner and package-specific steps below." };
   case "legacy": return { label: "Legacy wrapper", tone: "bad", summary: "The running image reports an older or missing host-adapter contract. Update the host package or saved platform template through its owner." };
   case "mismatched": return { label: "Version mismatch", tone: "bad", summary: "The reported application/image and host package versions do not match. Use the platform recovery/update path to advance them together." };
   case "newer": return { label: "Newer than stable", tone: "neutral", summary: "This application is newer than the latest stable release. The Manager will not offer a rollback or downgrade." };
