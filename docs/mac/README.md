@@ -154,7 +154,9 @@ only** and turn **Funnel off**. Copy the resulting exact `https://...ts.net`
 address into Manager **Settings > Tailscale**, confirm private Serve/Funnel-off,
 and enable it. Manager stores only that exact hostname; it receives no
 Tailscale credential or Docker control. The Manager password remains required,
-and remote sessions have full administration.
+and remote sessions have full administration. For optional mobile access,
+install and sign in to Tailscale on the phone or tablet, then open the private
+address shown by Manager.
 
 For Docker-only hosts that cannot install the native client, the archive also
 includes an optional `compose.tailscale.yaml` userspace sidecar. Follow the

@@ -65,7 +65,9 @@ HTTPS remote administration. Windows and native Linux can create and verify a
 fixed loopback Serve route through narrow package helpers; macOS, FreeBSD,
 QNAP, Unraid, and compatible Docker/NAS hosts create the private route through
 their host client or the shipped optional userspace sidecar, then save only its
-exact `.ts.net` address. Funnel is never required or enabled by TautWeekly.
+exact `.ts.net` address. For optional mobile use, install and sign in to
+Tailscale on the phone or tablet, then open that private address; it is not a
+clientless public URL. Funnel is never required or enabled by TautWeekly.
 Non-Windows Manager passwords remain required, the Windows lock remains
 optional, and every remote login has full administration rather than a
 read-only role.

@@ -48,8 +48,9 @@ private-access card. Windows and native Linux have narrow, package-owned
 adapters; macOS, FreeBSD, QNAP, Unraid, and other Docker/NAS packages accept
 only a separately created exact private Serve hostname. TautWeekly never
 enables Funnel or treats tailnet membership as a replacement for the Manager
-login. An active card uses a motion-safe full-card glow so the additional
-remote administration boundary remains visible.
+login. Optional mobile access requires the Tailscale app signed in on the phone
+or tablet before opening the private address. An active card uses a motion-safe
+full-card glow so the additional remote administration boundary remains visible.
 
 ## Documentation
 
