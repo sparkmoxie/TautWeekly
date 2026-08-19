@@ -6,6 +6,23 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-08-18
+
+### Added
+
+- Added an accessible, passive update-available indicator beside the Manager
+  access lock across every supported package. It appears only after a validated
+  stable release is unequivocally newer than the running application and links
+  directly to **Settings > Application and package status**.
+
+### Changed
+
+- Authenticated Manager entry now renders cached update state immediately and
+  performs one non-blocking refresh only when the cache is absent or at least
+  24 hours stale and the existing retry backoff permits it. Login, health,
+  ordinary navigation, and offline operation remain independent of release
+  checks.
+
 ## [0.15.2] - 2026-08-18
 
 ### Changed
