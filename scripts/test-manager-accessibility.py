@@ -367,6 +367,8 @@ def main() -> int:
         failures.append("static header markup exposes a stale update version before validated state is rendered")
     if ".update-status-button" not in css or "color:var(--violet)" not in css or "animation:hero-pulse" not in css:
         failures.append("header update notification does not reuse the violet badge and established halo pulse")
+    if 'case "update-available": return { label: "Update available", tone: "update-available"' not in javascript or ".state-chip.update-available" not in css or "animation:state-pulse-update" not in css:
+        failures.append("update-available status chip does not use the dedicated violet pulse")
     if "forced-colors:active" not in css or ".update-status-halo{animation:none!important" not in css:
         failures.append("header update notification does not preserve forced-colors and reduced-motion behavior")
     if ".topbar .brand-lockup>div{display:none}" not in css:

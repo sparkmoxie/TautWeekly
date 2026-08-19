@@ -68,12 +68,20 @@ assert.equal(updateUI.hashForRoute("about"), "#settings");
 const productionHTML = fs.readFileSync(path.join(repositoryRoot, "manager", "internal", "manager", "web", "index.html"), "utf8");
 const productionCSS = fs.readFileSync(path.join(repositoryRoot, "manager", "internal", "manager", "web", "app.css"), "utf8");
 const productionJS = fs.readFileSync(path.join(repositoryRoot, "manager", "internal", "manager", "web", "app.js"), "utf8");
+const previewCSS = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "app.css"), "utf8");
+const previewJS = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "app.js"), "utf8");
 const previewMock = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "mock-api.js"), "utf8");
 assert.match(productionHTML, /id="icon-deployed-code-update"/);
 assert.match(productionHTML, /id="update-status-button"[^>]+aria-controls="update-settings-panel"[^>]+hidden/);
 assert.match(productionHTML, /id="update-settings-heading" tabindex="-1"/);
 assert.match(productionCSS, /color:var\(--violet\)/);
 assert.match(productionCSS, /animation:hero-pulse 2\.9s ease-out infinite/);
+for (const [name, css, javascript] of [["production", productionCSS, productionJS], ["preview", previewCSS, previewJS]]) {
+  assert.match(javascript, /case "update-available": return \{ label: "Update available", tone: "update-available"/, `${name} update state does not select the dedicated purple tone`);
+  assert.match(css, /\.state-chip\.update-available\{[^}]*color:var\(--violet\)[^}]*animation:state-pulse-update 2\.9s ease-in-out infinite/, `${name} update chip is not purple with a pulse`);
+  assert.match(css, /@keyframes state-pulse-update\{[^}]+rgba\(173,140,255/, `${name} update chip pulse is not purple`);
+  assert.match(css, /forced-colors:active[^}]+\.state-chip\.update-available/, `${name} update chip lacks forced-colors support`);
+}
 assert.match(productionCSS, /prefers-reduced-motion:reduce[^}]+update-status-halo/s);
 assert.match(productionCSS, /forced-colors:active/);
 assert.match(productionCSS, /max-width:420px[^}]+topbar \.brand-lockup>div/s);
