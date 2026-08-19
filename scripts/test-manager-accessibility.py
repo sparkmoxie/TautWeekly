@@ -246,6 +246,48 @@ def main() -> int:
         failures.append("Manager startup controls do not expose their brief busy state accessibly")
     if '.startup-setting{display:flex' not in css or 'cursor:pointer;transition:opacity .18s ease}' not in css:
         failures.append("Manager startup toggle availability does not transition smoothly")
+    for control in (
+        "tailscale-settings-panel",
+        "tailscale-settings-chip",
+        "tailscale-enabled",
+        "tailscale-host-authorization",
+        "tailscale-copy-authorization",
+        "tailscale-external-setup",
+        "tailscale-external-url",
+        "tailscale-private-confirm",
+        "tailscale-external-guide",
+        "tailscale-serve-status",
+        "tailscale-url",
+        "tailscale-password-status",
+        "tailscale-refresh-button",
+        "tailscale-setup-link",
+        "tailscale-provider-warning",
+        "tailscale-copy-button",
+        "tailscale-settings-message",
+    ):
+        if f'id="{control}"' not in combined:
+            failures.append(f"Tailscale remote access card omits accessible control: {control}")
+    for marker in (
+        'request("/api/v1/remote-access/tailscale")',
+        'method: "PUT"',
+        'confirmedPrivate: external ? byId("tailscale-private-confirm").checked : false',
+        'navigator.clipboard.writeText(state.tailscale.url)',
+        'panel.setAttribute("aria-busy", String(state.tailscaleSaving));',
+    ):
+        if marker not in javascript:
+            failures.append(f"Tailscale remote access interaction contract is missing: {marker}")
+    if "Enable HTTPS certificates only." not in combined or "Turn Funnel off before continuing" not in combined:
+        failures.append("Tailscale provider approval does not explicitly require HTTPS-only consent with Funnel off")
+    if "No credentials belong here." not in combined or "remote.hostAuthorizationCommand === \"sudo tautweekly remote-access-authorize\"" not in javascript:
+        failures.append("Tailscale adapters do not keep credentials out of Manager or pin Linux host authorization to the packaged command")
+    if 'remote.management === "external"' not in javascript or 'remote.management' not in javascript:
+        failures.append("Tailscale card does not distinguish integrated and host-managed package adapters")
+    if 'panel.classList.toggle("enabled-glow", Boolean(remote.enabled && remote.active));' not in javascript:
+        failures.append("Active Tailscale state does not drive the full-card glow")
+    if ".tailscale-settings-panel.enabled-glow" not in css or "prefers-reduced-motion:reduce" not in css:
+        failures.append("Active Tailscale card glow lacks its motion-safe styling contract")
+    if '.tailscale-settings-panel' not in css or '.tailscale-status-grid' not in css or '.tailscale-security-boundary' not in css:
+        failures.append("Tailscale remote access card lacks its responsive security treatment")
     if "function materializeMaterialIcons(" not in javascript or "materializeMaterialIcons();" not in javascript:
         failures.append("local Material Symbols are not materialized for embedded-webview compatibility")
     if 'accessButton.replaceChildren(createMaterialIcon(locked ? "lock" : "lock-open"));' not in javascript:

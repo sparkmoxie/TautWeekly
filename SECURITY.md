@@ -28,6 +28,9 @@ requires host acceptance testing before scheduled use.
 - Bind the preview service to localhost unless LAN access is intentional and
   protected by host firewall rules.
 - Never expose preview port 8787 directly to the public internet.
+- For optional remote Manager administration, use private Tailscale Serve with
+  Funnel off or a deliberately hardened HTTPS proxy. Tailnet access does not
+  replace the Manager login, and every remote session has full administration.
 - Preview and test with a controlled recipient before enabling scheduled sends.
 - Revoke and replace any credential that may have entered a commit, log, issue,
   or release archive.

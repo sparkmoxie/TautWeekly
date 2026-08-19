@@ -609,14 +609,15 @@ try {
     }
 
     $forbiddenPrivateNames = @(
-        'config.json', '.env', 'state.json', 'access-state.json',
+        'config.json', '.env', 'state.json', 'access-state.json', 'remote-access.json',
         'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json',
         'configuration-status.json', 'last-run.json', 'deleted-item-cache.json',
-        '.tautweekly-operation.lock'
+        '.tautweekly-operation.lock', 'authkey.local'
     )
     $forbidden = Get-ChildItem -LiteralPath $staging -Force -Recurse | Where-Object {
         ($_.PSIsContainer -and $_.Name -in @('logs','output','cache','.manager-data')) -or
         (-not $_.PSIsContainer -and $_.Name -in $forbiddenPrivateNames) -or
+        (-not $_.PSIsContainer -and $_.FullName -match '[\\/]tailscale[\\/]state[\\/](?!\.keep$)') -or
         (-not $_.PSIsContainer -and $_.Name -like 'config.backup.*.json') -or
         (-not $_.PSIsContainer -and ($_.Name -like '*.log' -or $_.Name -like '*.log.*'))
     }

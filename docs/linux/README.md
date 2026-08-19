@@ -182,6 +182,32 @@ keep the backend on loopback, set its exact DNS name in
 `TAUTWEEKLY_MANAGER_SECURE_COOKIES=true`, terminate TLS at the proxy, and
 restart the service. Do not publish the loopback listener directly.
 
+### Optional private Tailscale access
+
+The lowest-intervention remote path keeps the Manager on loopback and uses
+private HTTPS Tailscale Serve. Install the official Tailscale Linux package,
+sign this host into the intended tailnet, then run the one-time fixed host
+authorization:
+
+```bash
+sudo tautweekly remote-access-authorize
+```
+
+In authenticated Manager **Settings > Tailscale**, turn on **Allow private
+tailnet access**. The root-owned, socket-activated helper accepts only Inspect,
+Enable, or Disable for `http://127.0.0.1:8788`; it verifies the `tautweekly`
+service UID and the exact owned Serve route. Manager remains unprivileged and
+never receives general Tailscale, systemd, sudo, or root access. If Tailscale
+opens its provider consent page, enable **HTTPS certificates only** and turn
+**Funnel off**.
+
+Every remote computer or mobile device must be signed in to an identity and
+device allowed by the same tailnet. The independent Manager password remains
+required, and every successful remote login has full administration because
+there is no read-only role. Local access remains the recovery path. Disable the
+route in Manager before running `sudo tautweekly remote-access-revoke`; the
+wrapper refuses revocation while the saved private route is enabled.
+
 ## Operations
 
 Use the Manager GUI for routine configuration, connection checks, library and
@@ -191,6 +217,9 @@ sanitized diagnostics. The commands below are recovery and expert fallbacks:
 ```text
 sudo tautweekly manager-bootstrap      retrieve the one-time pairing token
 sudo tautweekly manager-reset-access   reset only Manager authentication
+sudo tautweekly remote-access-authorize authorize the fixed Tailscale adapter
+sudo tautweekly remote-access-revoke   revoke it after disabling private access
+tautweekly remote-access-status        inspect adapter authorization
 sudo tautweekly setup                 create or replace private configuration
 sudo tautweekly verify                validate files, API, SMTP, and schedule
 sudo tautweekly list-users            inspect Tautulli recipients

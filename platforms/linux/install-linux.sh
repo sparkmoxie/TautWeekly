@@ -122,6 +122,8 @@ install -m 0755 -o root -g root "$source_root/tautweekly" /usr/local/bin/tautwee
 install -m 0755 -o root -g root "$source_root/check-release.sh" /usr/local/libexec/tautweekly-check-release
 install -m 0755 -o root -g root "$package_update_source" /usr/local/libexec/tautweekly-package-update
 install -m 0644 -o root -g root "$source_root/systemd/tautweekly.service" /etc/systemd/system/tautweekly.service
+install -m 0644 -o root -g root "$source_root/systemd/tautweekly-remote-access.socket" /etc/systemd/system/tautweekly-remote-access.socket
+install -m 0644 -o root -g root "$source_root/systemd/tautweekly-remote-access@.service" /etc/systemd/system/tautweekly-remote-access@.service
 if [[ ! -f /etc/tautweekly/tautweekly.env ]]; then
   install -m 0600 -o root -g root "$source_root/tautweekly.env.example" /etc/tautweekly/tautweekly.env
   echo "Created /etc/tautweekly/tautweekly.env with localhost-only Manager defaults."
@@ -183,6 +185,12 @@ Next:
 The authenticated Manager service is enabled. Automatic sending remains disabled
 until you explicitly enable it in the Manager. CLI commands remain available as
 documented recovery and expert fallbacks.
+
+Optional private Tailscale access remains disabled. After Tailscale is installed
+and signed in on this host, authorize only TautWeekly's fixed one-shot adapter:
+  sudo tautweekly remote-access-authorize
+Then use Settings > Tailscale in the authenticated Manager. This does not make
+the Manager public and never enables Tailscale Funnel.
 EOF
 
 if [[ -n "${TAUTWEEKLY_PACKAGE_UPDATE_WORK_ROOT:-}" ]]; then

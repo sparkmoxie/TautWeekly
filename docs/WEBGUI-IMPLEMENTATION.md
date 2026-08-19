@@ -977,6 +977,19 @@ acceptance, and the absence of a multi-run production delivery journal. Static
 accessibility structure, keyboard focus, reduced-motion CSS, and desktop/mobile
 browser checks are automated or completed with fictional fixtures.
 
+The shared Settings surface now adds optional private Tailscale access below
+the existing browser/access card. Windows uses a fixed UAC helper and native
+Linux uses a root-owned socket-activated one-shot helper; both inspect exact
+Serve ownership and refuse unrelated configuration. Container, macOS,
+FreeBSD, QNAP, Unraid, and compatible Docker modes use a host-managed contract:
+the browser submits only an exact HTTPS `.ts.net` URL plus an explicit
+private-Serve/Funnel-off confirmation. The backend persists only the hostname,
+accepts it as an exact Host value, and applies HTTPS origin semantics, Secure
+cookies, and HSTS. It never trusts forwarded identity/TLS headers or accepts a
+provider credential. The complete card pulses only while an owned integrated
+route is verified or an external hostname is enabled; reduced-motion users get
+a static glow.
+
 ## 20. Decision gates
 
 Review and approve these before implementation expands:

@@ -31,6 +31,7 @@ $required = @(
     'platforms/windows/Windows-Update.ps1',
     'platforms/windows/Operation-Lock.ps1',
     'platforms/windows/SCHEDULE-HELPER.ps1',
+    'platforms/windows/TAILSCALE-HELPER.ps1',
     'platforms/windows/START-MANAGER.ps1',
     'platforms/windows/00-OPEN-MANAGER.bat',
     'platforms/windows/RESET-MANAGER-ACCESS.ps1',
@@ -38,6 +39,8 @@ $required = @(
     'platforms/windows/17-CHECK-FOR-UPDATE.bat',
     'platforms/nas-docker/compose.yaml',
     'platforms/nas-docker/compose.qnap.yaml',
+    'platforms/nas-docker/compose.tailscale.yaml',
+    'platforms/nas-docker/tailscale/config/serve.json',
     'platforms/nas-docker/tautweekly.sh',
     'platforms/nas-docker/container-update.sh',
     'platforms/nas-docker/app/preview-home.html',
@@ -48,6 +51,8 @@ $required = @(
     'platforms/nas-docker/app/DeletedItemCache.ps1',
     'platforms/nas-docker/app/Smtp-Transport.ps1',
     'platforms/mac-docker/compose.yaml',
+    'platforms/mac-docker/compose.tailscale.yaml',
+    'platforms/mac-docker/tailscale/config/serve.json',
     'platforms/mac-docker/tautweekly.sh',
     'platforms/mac-docker/check-release.sh',
     'platforms/mac-docker/mac-update.sh',
@@ -63,6 +68,8 @@ $required = @(
     'platforms/linux/check-release.sh',
     'platforms/linux/preview-home.html',
     'platforms/linux/systemd/tautweekly.service',
+    'platforms/linux/systemd/tautweekly-remote-access.socket',
+    'platforms/linux/systemd/tautweekly-remote-access@.service',
     'platforms/freebsd-podman/install-freebsd.sh',
     'platforms/freebsd-podman/tautweekly',
     'platforms/freebsd-podman/rc.d/tautweekly',
@@ -147,10 +154,10 @@ if (-not ($failures | Where-Object { $_ -like '*contributor*' -or $_ -like '*Con
 }
 
 $forbiddenNames = @(
-    'config.json', '.env', 'state.json', 'access-state.json',
+    'config.json', '.env', 'state.json', 'access-state.json', 'remote-access.json',
     'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json',
     'configuration-status.json', 'last-run.json', 'deleted-item-cache.json',
-    '.tautweekly-operation.lock'
+    '.tautweekly-operation.lock', 'authkey.local'
 )
 $forbiddenDirectories = @('logs', 'output', 'cache', '.manager-data', '__pycache__')
 
@@ -162,6 +169,9 @@ foreach ($item in $items) {
     if (-not $item.PSIsContainer -and ($item.Name -in $forbiddenNames -or $item.Name -like 'config.backup.*.json')) {
         Add-Failure "Forbidden runtime file is present: $relative"
     }
+    if (-not $item.PSIsContainer -and $relative -match '(?i)(^|[\\/])tailscale[\\/]state[\\/](?!\.keep$)') {
+        Add-Failure "Forbidden Tailscale node state is present: $relative"
+    }
     if ($item.PSIsContainer -and $item.Name -in $forbiddenDirectories) {
         Add-Failure "Forbidden runtime directory is present: $relative"
     }
@@ -170,7 +180,7 @@ foreach ($item in $items) {
     }
 }
 if (-not ($items | Where-Object {
-    (-not $_.PSIsContainer -and ($_.Name -in $forbiddenNames -or $_.Name -like 'config.backup.*.json' -or $_.Name -like '*.log' -or $_.Name -like '*.log.*' -or $_.Extension -in @('.pfx','.pem','.key'))) -or
+    (-not $_.PSIsContainer -and ($_.Name -in $forbiddenNames -or $_.Name -like 'config.backup.*.json' -or $_.Name -like '*.log' -or $_.Name -like '*.log.*' -or $_.Extension -in @('.pfx','.pem','.key') -or $_.FullName -match '[\\/]tailscale[\\/]state[\\/](?!\.keep$)')) -or
     ($_.PSIsContainer -and $_.Name -in $forbiddenDirectories)
 })) { Add-Pass "No forbidden runtime or credential files are present." }
 

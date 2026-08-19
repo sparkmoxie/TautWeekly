@@ -6,6 +6,32 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Added optional Windows Tailscale Serve controls below Browser access, with a
+  narrowly elevated UAC helper, exact route ownership and hostname enforcement,
+  private HTTPS cookie/origin hardening, conflict-safe recovery, and no Funnel
+  or router exposure. The existing Windows Manager password remains optional.
+- Added the same optional private-access card to native Linux, macOS Docker,
+  FreeBSD Podman, Compose/NAS, Unraid, QNAP, and compatible Docker packages.
+  Native Linux uses a one-time root-owned fixed-action socket adapter while
+  host-managed packages save only one exact externally created private
+  `.ts.net` address and keep mandatory Manager authentication.
+- Added optional userspace Tailscale Compose sidecars for generic NAS/Docker and
+  macOS Docker hosts without a supported native client. The sidecars use a
+  file-backed one-off key, persistent node state, a fixed private Serve config,
+  and no Docker socket, TUN device, added capability, or Funnel configuration.
+- Added an active-route pulse around the full Tailscale card, with a static
+  reduced-motion treatment.
+
+### Fixed
+
+- Returned first-time Tailscale HTTPS approval links to Manager without waiting
+  indefinitely for the provider CLI, and made Verify and enable failures visibly
+  confirm their result in the global status surface.
+- Warned explicitly that Tailscale's first-use consent page can preselect Funnel
+  and requires HTTPS certificates only with Funnel turned off.
+
 ## [0.16.0] - 2026-08-18
 
 ### Added

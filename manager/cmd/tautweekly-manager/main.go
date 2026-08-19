@@ -56,6 +56,11 @@ func run(args []string) error {
 		return showBootstrapToken(args)
 	case "access-recover":
 		return recoverRequiredAccess(args)
+	case "remote-access-helper":
+		if len(args) != 0 {
+			return errors.New("the internal remote-access helper does not accept arguments")
+		}
+		return manager.RunLinuxRemoteAccessHelper(os.Stdin, os.Stdout)
 	case "status":
 		return printStatus(args)
 	case "shutdown":

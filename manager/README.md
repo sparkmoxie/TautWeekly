@@ -250,5 +250,27 @@ and opens the password controls directly. Its tooltip is platform-aware
 (`Browser access`, `Container access`, or `Manager access`), so the same control
 and password-update route carry into maintained container and native packages.
 
+Windows also exposes an optional Tailscale card below Browser access. Passive
+Dashboard loads never invoke Tailscale or request elevation. Explicit Enable,
+Disable, and Verify actions use the fixed packaged `TAILSCALE-HELPER.ps1`, which
+requests UAC, accepts only Inspect, Enable, or Disable for the Manager loopback target, refuses unrelated Serve
+state, never enables Funnel or resets all Serve configuration, and returns a
+strict bounded result over a nonce-protected ephemeral loopback callback. The
+normal Manager process remains unelevated. The exact verified `.ts.net`
+hostname is the only provider value persisted in private Manager state and the
+only additional Host header accepted. Requests through that host require HTTPS
+origin semantics, Secure session cookies, and HSTS. Windows trusted-local and
+optional password-lock behavior remain unchanged.
+
+Native Linux uses the same route-ownership contract through a root-owned
+systemd accepted socket. Its one-shot helper verifies the Unix peer is exactly
+the packaged `tautweekly` service UID and maps only the fixed protocol actions
+to the fixed loopback target. Container, macOS Docker, FreeBSD Podman, Unraid,
+QNAP, and compatible Docker modes use an external adapter instead: the
+authenticated administrator must create private Serve outside Manager, confirm
+Funnel is off, and save one exact HTTPS `.ts.net` URL. Manager never receives a
+Tailscale key, Docker socket, host command channel, root identity, or wildcard
+host. All non-Windows modes retain mandatory Manager authentication.
+
 The implementation specification is
 [docs/WEBGUI-IMPLEMENTATION.md](../docs/WEBGUI-IMPLEMENTATION.md).

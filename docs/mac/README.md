@@ -140,6 +140,28 @@ are not trusted. `GET /health/live` is unauthenticated and exposes only
 liveness; configuration, paths, versions, credentials, and newsletter state
 remain authenticated.
 
+### Optional private Tailscale access
+
+Install and sign in to the Tailscale macOS client, install its CLI integration,
+and create a private background Serve route to the loopback Manager:
+
+```bash
+tailscale serve --bg --yes --https=443 http://127.0.0.1:8787
+```
+
+If Tailscale presents a provider consent page, enable **HTTPS certificates
+only** and turn **Funnel off**. Copy the resulting exact `https://...ts.net`
+address into Manager **Settings > Tailscale**, confirm private Serve/Funnel-off,
+and enable it. Manager stores only that exact hostname; it receives no
+Tailscale credential or Docker control. The Manager password remains required,
+and remote sessions have full administration.
+
+For Docker-only hosts that cannot install the native client, the archive also
+includes an optional `compose.tailscale.yaml` userspace sidecar. Follow the
+[NAS/Docker sidecar procedure](../nas-docker/README.md#optional-userspace-compose-sidecar).
+It has no Docker socket, `/dev/net/tun`, added capability, host-network access,
+or public Funnel configuration. The native Mac client is the simpler default.
+
 ## Persistent data, permissions, and backup
 
 The image is read-only. Writable runtime state is limited to the bind-mounted

@@ -28,6 +28,11 @@ const state = {
   startupSaving: false,
   startupError: "",
   authAccess: null,
+  tailscale: { supported: false, installed: false, enabled: false, active: false, state: "unsupported" },
+  tailscaleSaving: false,
+  tailscaleVerifying: false,
+  tailscaleError: "",
+  tailscaleSetupURL: "",
   about: null,
   diagnostics: { events: [], maximumEntries: 200, retentionDays: 30 },
   capabilities: null,
@@ -273,11 +278,13 @@ async function loadAll() {
     renderSchedule();
     renderStartupSettings();
     renderAccessSettings();
+    renderTailscaleSettings();
     renderUpdates();
     renderAbout();
     manageOperationPolling();
     manageSchedulePolling();
     setGlobalStatus("Local status refreshed.", true);
+    void loadTailscaleAccess();
   } catch (error) {
     if (error.status === 401) {
       showAuthentication();
@@ -2515,6 +2522,217 @@ function renderAccessSettings() {
   if (policy) policy.textContent = locked
     ? "Secrets stay hidden by default. Saving preserves stored credentials unless you replace or clear them. Revealing one value requires your Manager password, returns only that field, and clears it from the page after 30 seconds. Existing configurations receive a private timestamped backup."
     : "Secrets stay hidden by default. Saving preserves stored credentials unless you replace or clear them. An explicit reveal returns only the selected field and clears it from the page after 30 seconds. Existing configurations receive a private timestamped backup.";
+  renderTailscaleSettings();
+}
+
+function tailscaleStatePresentation(remote) {
+  switch (remote.state) {
+  case "enabled": return { label: "Connected", tone: "good", status: "Private HTTPS Serve route is active." };
+  case "external-enabled": return { label: "Enabled", tone: "good", status: "Manager accepts only the saved private Tailscale HTTPS hostname." };
+  case "external-ready": return { label: "Setup required", tone: "neutral", status: "Create a private Tailscale Serve route on the package host, then save its exact HTTPS address." };
+  case "enabled-unverified": return { label: "Configured", tone: "pending", status: "Private access is saved. Use Verify with Windows approval to recheck the Serve route." };
+  case "ready": return { label: "Off", tone: "neutral", status: "Tailscale is ready. Turn on private access to create the HTTPS route." };
+  case "detected": return { label: "Detected", tone: "pending", status: "A matching TautWeekly Serve route already exists and can be adopted." };
+  case "interrupted": return { label: "Interrupted", tone: "bad", status: "Private access is enabled locally, but the expected Serve route is missing." };
+  case "conflict": return { label: "Conflict", tone: "bad", status: "Tailscale Serve is configured for something else. TautWeekly left it unchanged." };
+  case "not-installed": return { label: "Not installed", tone: "neutral", status: "Install and sign in to Tailscale on this host before enabling private access." };
+  case "approval-required": return { label: "Approval required", tone: "pending", status: "Windows administrator approval is required to inspect or change Tailscale Serve." };
+  case "authorization-required": return { label: "Host approval required", tone: "pending", status: "Run the one-time Linux host authorization command, then retry." };
+  case "sign-in-required": return { label: "Sign in required", tone: "pending", status: "Sign in to Tailscale on this host, then refresh." };
+  case "unavailable": return { label: "Unavailable", tone: "bad", status: "Tailscale status could not be verified safely." };
+  default: return { label: "Unavailable", tone: "neutral", status: "Tailscale private access is not available for this package." };
+  }
+}
+
+function validTailscaleURL(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && parsed.port === "" && parsed.pathname === "/" && parsed.hostname.endsWith(".ts.net");
+  } catch (_) {
+    return false;
+  }
+}
+
+function validTailscaleSetupURL(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && parsed.username === "" && parsed.password === "" && parsed.port === "" && parsed.hostname === "login.tailscale.com" && parsed.hash === "";
+  } catch (_) {
+    return false;
+  }
+}
+
+function renderTailscaleSettings() {
+  const panel = byId("tailscale-settings-panel");
+  if (!panel) return;
+  const remote = state.tailscale || {};
+  panel.hidden = !remote.supported;
+  if (!remote.supported) return;
+  panel.classList.toggle("enabled-glow", Boolean(remote.enabled && remote.active));
+
+  const presentation = tailscaleStatePresentation(remote);
+  const external = remote.management === "external";
+  const windows = state.runtimeMode === "windows";
+  panel.setAttribute("aria-busy", String(state.tailscaleSaving));
+  setChip("tailscale-settings-chip", state.tailscaleSaving ? "Saving" : presentation.label, state.tailscaleSaving ? "pending" : presentation.tone);
+  setText("tailscale-serve-status", presentation.status);
+
+  const toggle = byId("tailscale-enabled");
+  toggle.checked = Boolean(remote.enabled);
+  toggle.disabled = state.tailscaleSaving || (!remote.enabled && (!remote.installed || ["conflict", "unavailable", "sign-in-required", "authorization-required"].includes(remote.state)));
+  toggle.closest(".tailscale-setting").classList.toggle("disabled", toggle.disabled);
+  toggle.closest(".config-toggle").querySelector("em").textContent = remote.enabled ? "On" : "Off";
+  setText("tailscale-toggle-help", external
+    ? "The package host or optional sidecar owns Tailscale. Manager saves only one exact private HTTPS hostname and never handles a Tailscale credential."
+    : windows
+      ? "Tailscale must already be installed and signed in. Windows asks for administrator approval only when you Enable, Disable, or Verify."
+      : "Tailscale must already be installed and signed in. The Linux host administrator authorizes the fixed adapter once; Manager remains unprivileged.");
+
+  const authorizationCommand = remote.hostAuthorizationCommand === "sudo tautweekly remote-access-authorize"
+    ? remote.hostAuthorizationCommand : "";
+  byId("tailscale-host-authorization").hidden = !remote.hostAuthorizationRequired || authorizationCommand === "";
+  setText("tailscale-host-authorization-command", authorizationCommand || "sudo tautweekly remote-access-authorize");
+  byId("tailscale-copy-authorization").disabled = state.tailscaleSaving || authorizationCommand === "";
+
+  const externalSetup = byId("tailscale-external-setup");
+  externalSetup.hidden = !external;
+  const externalURL = byId("tailscale-external-url");
+  externalURL.disabled = state.tailscaleSaving || Boolean(remote.enabled);
+  if (external && validTailscaleURL(remote.url || "")) externalURL.value = remote.url;
+  byId("tailscale-private-confirm").disabled = state.tailscaleSaving || Boolean(remote.enabled);
+  const guide = byId("tailscale-external-guide");
+  const guidePath = state.runtimeMode === "mac"
+    ? "mac/#network"
+    : state.capabilities?.packageKind === "freebsd-podman"
+      ? "freebsd/#security"
+      : "nas-docker/#security";
+  guide.href = `https://sparkmoxie.github.io/TautWeekly/${guidePath}`;
+
+  const hasURL = validTailscaleURL(remote.url || "");
+  const link = byId("tailscale-url");
+  link.hidden = !hasURL;
+  byId("tailscale-url-empty").hidden = hasURL;
+  byId("tailscale-copy-button").hidden = !hasURL;
+  if (hasURL) {
+    link.href = remote.url;
+    link.textContent = remote.url;
+  } else {
+    link.removeAttribute("href");
+    link.textContent = "";
+  }
+
+  const passwordLocked = Boolean(state.authAccess?.authenticationRequired);
+  setText("tailscale-password-status", windows ? (passwordLocked ? "Optional lock enabled" : "Optional lock off") : "Required login enabled");
+  const boundary = byId("tailscale-security-boundary");
+  boundary.innerHTML = !windows
+    ? "<strong>The Manager login remains required.</strong> Tailnet access is an additional network boundary, not a replacement for authentication. Every signed-in remote session still has full Manager administration; there is no read-only role."
+    : passwordLocked
+    ? "<strong>Two access checks are active.</strong> A permitted tailnet device must also enter the independent Manager password. Existing Windows password-lock behavior is unchanged."
+    : "<strong>The password lock remains optional on Windows.</strong> Any user or device permitted to reach this computer through the tailnet receives full Manager administration. Review tailnet grants and protect every enrolled device.";
+
+  byId("tailscale-refresh-button").hidden = external;
+  byId("tailscale-refresh-button").textContent = windows ? "Verify with Windows" : "Verify private access";
+  byId("tailscale-refresh-button").disabled = state.tailscaleSaving || !remote.installed || remote.hostAuthorizationRequired;
+  byId("tailscale-copy-button").disabled = state.tailscaleSaving;
+  const setupLink = byId("tailscale-setup-link");
+  const hasSetupURL = validTailscaleSetupURL(state.tailscaleSetupURL);
+  setupLink.hidden = !hasSetupURL;
+  byId("tailscale-provider-warning").hidden = !hasSetupURL;
+  if (hasSetupURL) setupLink.href = state.tailscaleSetupURL;
+  else setupLink.removeAttribute("href");
+  const message = byId("tailscale-settings-message");
+  if (state.tailscaleError) message.textContent = state.tailscaleError;
+  else if (state.tailscaleSaving) message.textContent = state.tailscaleVerifying
+    ? "Waiting for Windows approval, then verifying the exact Tailscale Serve route..."
+    : remote.enabled ? "Disabling private access and verifying Tailscale Serve ownership..." : "Enabling a private HTTPS Serve route and verifying its exact target...";
+  else message.textContent = remote.enabled && remote.active
+    ? "Open the private address only from a device signed in to an authorized tailnet."
+    : presentation.status;
+  byId("tailscale-recovery-copy").innerHTML = external
+    ? "<strong>Local or host access remains the recovery path.</strong> Disabling blocks the saved private hostname immediately. Remove the external Serve route separately with the package host or sidecar instructions."
+    : "<strong>Local access remains the recovery path.</strong> Disabling blocks the saved private hostname first, then removes only the owned HTTPS Serve route. If another Serve configuration is present, TautWeekly leaves it unchanged.";
+}
+
+async function updateTailscaleAccess() {
+  const requested = byId("tailscale-enabled").checked;
+  const external = state.tailscale?.management === "external";
+  state.tailscaleSaving = true;
+  state.tailscaleError = "";
+  state.tailscaleSetupURL = "";
+  renderTailscaleSettings();
+  try {
+    state.tailscale = await request("/api/v1/remote-access/tailscale", {
+      method: "PUT",
+      body: JSON.stringify({
+        enabled: requested,
+        url: external ? byId("tailscale-external-url").value.trim() : "",
+        confirmedPrivate: external ? byId("tailscale-private-confirm").checked : false,
+      }),
+    });
+    if (external && !requested) byId("tailscale-private-confirm").checked = false;
+    setGlobalStatus(requested ? "Private Tailscale access enabled." : "Private Tailscale access disabled.", true);
+  } catch (error) {
+    state.tailscaleError = error.message;
+    if (error.code === "tailscale-provider-approval-required" && validTailscaleSetupURL(error.fields?.setupUrl || "")) state.tailscaleSetupURL = error.fields.setupUrl;
+    setGlobalStatus(error.message, true);
+    try { state.tailscale = await request("/api/v1/remote-access/tailscale"); }
+    catch (_) { /* Preserve the actionable update error. */ }
+  } finally {
+    state.tailscaleSaving = false;
+    renderTailscaleSettings();
+  }
+}
+
+async function copyTailscaleAuthorizationCommand() {
+  const command = state.tailscale?.hostAuthorizationCommand;
+  if (command !== "sudo tautweekly remote-access-authorize") return;
+  try {
+    await navigator.clipboard.writeText(command);
+    setGlobalStatus("Linux host authorization command copied.", true);
+  } catch (_) {
+    state.tailscaleError = "The browser could not copy the command. Select it manually instead.";
+    renderTailscaleSettings();
+  }
+}
+
+async function refreshTailscaleAccess() {
+  state.tailscaleSaving = true;
+  state.tailscaleVerifying = true;
+  state.tailscaleError = "";
+  state.tailscaleSetupURL = "";
+  renderTailscaleSettings();
+  try {
+    state.tailscale = await request("/api/v1/remote-access/tailscale/verify", { method: "POST" });
+    setGlobalStatus("Tailscale Serve status verified.", true);
+  } catch (error) {
+    state.tailscaleError = error.message;
+    if (error.code === "tailscale-provider-approval-required" && validTailscaleSetupURL(error.fields?.setupUrl || "")) state.tailscaleSetupURL = error.fields.setupUrl;
+    setGlobalStatus(error.message, true);
+  } finally {
+    state.tailscaleSaving = false;
+    state.tailscaleVerifying = false;
+    renderTailscaleSettings();
+  }
+}
+
+async function loadTailscaleAccess() {
+  try {
+    state.tailscale = await request("/api/v1/remote-access/tailscale");
+  } catch (error) {
+    state.tailscaleError = error.message;
+  }
+  renderTailscaleSettings();
+}
+
+async function copyTailscaleURL() {
+  if (!validTailscaleURL(state.tailscale?.url || "")) return;
+  try {
+    await navigator.clipboard.writeText(state.tailscale.url);
+    setGlobalStatus("Private Tailscale address copied.", true);
+  } catch (_) {
+    state.tailscaleError = "The browser could not copy the private address. Select it manually instead.";
+    renderTailscaleSettings();
+  }
 }
 
 function accessSurfaceLabel() {
@@ -3176,6 +3394,10 @@ byId("schedule-confirm-run").addEventListener("click", startScheduleOperation);
 document.querySelectorAll("[data-schedule-action]").forEach((button) => button.addEventListener("click", () => chooseScheduleAction(button.dataset.scheduleAction)));
 byId("startup-manager").addEventListener("change", startupSettingsChanged);
 byId("startup-dashboard").addEventListener("change", startupSettingsChanged);
+byId("tailscale-enabled").addEventListener("change", updateTailscaleAccess);
+byId("tailscale-refresh-button").addEventListener("click", refreshTailscaleAccess);
+byId("tailscale-copy-button").addEventListener("click", copyTailscaleURL);
+byId("tailscale-copy-authorization").addEventListener("click", copyTailscaleAuthorizationCommand);
 byId("update-check-button").addEventListener("click", checkForUpdates);
 byId("update-install-confirm").addEventListener("change", renderUpdates);
 byId("update-install-button").addEventListener("click", installUpdate);
