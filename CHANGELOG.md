@@ -6,6 +6,16 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-08-18
+
+### Fixed
+
+- Changed the validated **Update available** status chip from the generic blue
+  checking state to the agreed violet/purple treatment with a subtle purple
+  pulse. The purple header update icon beside the Manager lock is unchanged,
+  and active update checks remain blue so discovery and availability are
+  visually distinct.
+
 ## [0.17.0] - 2026-08-18
 
 ### Added
