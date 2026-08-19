@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-18
+
 ### Added
 
 - Added optional Windows Tailscale Serve controls below Browser access, with a
