@@ -171,6 +171,8 @@ containerized Manager stores only the exact hostname and never receives root,
 rc.d, Podman, or Tailscale control. Its independent password remains required;
 all remote sessions have full administration. Disable the Manager setting
 first, then remove the host Serve route if private access is no longer wanted.
+For optional mobile use, install and sign in to Tailscale on the phone or
+tablet, then open the private address shown by Manager.
 
 ## Operations
 

@@ -309,10 +309,12 @@ an auth key, tunnel token, provider credential, wildcard, port, or URL path.
 
 On first use Tailscale may open a consent page where Funnel is preselected.
 Enable **HTTPS certificates only** and turn **Funnel off**. Every remote device
-must run Tailscale and be allowed by tailnet policy. Every Manager session still
-has full administration; no read-only role exists. Local or host access is the
-recovery path. Disabling in Manager blocks the saved hostname immediately, but
-the host administrator must remove an externally owned Serve route separately.
+must run Tailscale and be allowed by tailnet policy. For optional mobile use,
+install and sign in to the Tailscale app on the phone or tablet, then open the
+private address shown by Manager. Every Manager session still has full
+administration; no read-only role exists. Local or host access is the recovery
+path. Disabling in Manager blocks the saved hostname immediately, but the host
+administrator must remove an externally owned Serve route separately.
 
 #### Optional userspace Compose sidecar
 
