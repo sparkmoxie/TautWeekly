@@ -274,6 +274,92 @@ func TestUpdateStatusIsLocalAndManualCheckPersistsSanitizedCache(t *testing.T) {
 	}
 }
 
+func TestBackgroundUpdateCheckRecommendationUsesFreshnessBackoffAndChannel(t *testing.T) {
+	now := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
+	currentNow := now
+	checker := &fixtureUpdateChecker{release: updateRelease{Version: "1.1.0", ReleaseNotesURL: stableReleaseBaseURL + "1.1.0"}}
+	coordinator := newUpdateCoordinator(Options{
+		DataDir:                   t.TempDir(),
+		TautWeeklyRoot:            t.TempDir(),
+		Version:                   "1.0.0",
+		RuntimeMode:               runtimeModeLinux,
+		PackageVersion:            "1.0.0",
+		Now:                       func() time.Time { return currentNow },
+		updateChecker:             checker,
+		updateMinimumCheckDelay:   time.Minute,
+		updateMaximumFailureDelay: time.Hour,
+	})
+	if status := coordinator.Status(); !status.BackgroundCheckRecommended || status.CheckInProgress {
+		t.Fatalf("absent cache did not recommend one background check: %+v", status)
+	}
+	checked, err := coordinator.CheckNow(context.Background())
+	if err != nil || checked.BackgroundCheckRecommended || checker.callCount() != 1 {
+		t.Fatalf("fresh successful check recommendation: status=%+v calls=%d err=%v", checked, checker.callCount(), err)
+	}
+	currentNow = now.Add(updateBackgroundMaxAge - time.Second)
+	if status := coordinator.Status(); status.BackgroundCheckRecommended {
+		t.Fatalf("fresh cached check was treated as stale: %+v", status)
+	}
+	currentNow = now.Add(updateBackgroundMaxAge)
+	if status := coordinator.Status(); !status.BackgroundCheckRecommended || status.State != "update-available" {
+		t.Fatalf("stale cached result did not remain visible while recommending refresh: %+v", status)
+	}
+
+	failureNow := now
+	failureChecker := &fixtureUpdateChecker{err: errors.New("synthetic offline")}
+	failure := newUpdateCoordinator(Options{
+		DataDir:                 t.TempDir(),
+		TautWeeklyRoot:          t.TempDir(),
+		Version:                 "1.0.0",
+		RuntimeMode:             runtimeModeLinux,
+		PackageVersion:          "1.0.0",
+		Now:                     func() time.Time { return failureNow },
+		updateChecker:           failureChecker,
+		updateMinimumCheckDelay: time.Minute,
+	})
+	failed, err := failure.CheckNow(context.Background())
+	if err != nil || failed.BackgroundCheckRecommended || failed.LastFailure == nil {
+		t.Fatalf("failure backoff did not suppress background checks: status=%+v err=%v", failed, err)
+	}
+	failureNow = now.Add(time.Minute)
+	if status := failure.Status(); !status.BackgroundCheckRecommended {
+		t.Fatalf("expired failure backoff did not permit a later session check: %+v", status)
+	}
+
+	unsupported := newUpdateCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: t.TempDir(), Version: "1.0.0", RuntimeMode: runtimeModeLinux, PackageVersion: "1.0.0", UpdateChannel: "edge", updateChecker: checker})
+	if status := unsupported.Status(); status.BackgroundCheckRecommended || status.UpdateChannel != "unsupported" {
+		t.Fatalf("unsupported channel recommended a background check: %+v", status)
+	}
+}
+
+func TestBackgroundUpdateCheckRecommendationSuppressesConcurrentChecks(t *testing.T) {
+	checker := &fixtureUpdateChecker{wait: true}
+	coordinator := newUpdateCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: t.TempDir(), Version: "1.0.0", RuntimeMode: runtimeModeLinux, PackageVersion: "1.0.0", updateChecker: checker})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		_, _ = coordinator.CheckNow(ctx)
+		close(done)
+	}()
+	deadline := time.Now().Add(time.Second)
+	for checker.callCount() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	status := coordinator.Status()
+	if !status.CheckInProgress || status.BackgroundCheckRecommended {
+		cancel()
+		<-done
+		t.Fatalf("active check did not suppress another background recommendation: %+v", status)
+	}
+	if _, err := coordinator.CheckNow(context.Background()); err == nil || err.Error() != "check-in-progress" || checker.callCount() != 1 {
+		cancel()
+		<-done
+		t.Fatalf("concurrent check was not suppressed: calls=%d err=%v", checker.callCount(), err)
+	}
+	cancel()
+	<-done
+}
+
 func TestUpdateCheckTimeoutBackoffAndUnsupportedChannelAreSanitized(t *testing.T) {
 	now := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
 	checker := &fixtureUpdateChecker{wait: true}
@@ -446,7 +532,7 @@ func TestWindowsInstallActionUsesOnlyInjectedVerifiedUpdaterWhenReady(t *testing
 		updateChecker:  checker,
 	})
 	afterRestart := restarted.Status()
-	if afterRestart.State != "current" || afterRestart.InstallState != "idle" || afterRestart.UpdateAvailable {
+	if afterRestart.State != "current" || afterRestart.InstallState != "idle" || afterRestart.UpdateAvailable || afterRestart.BackgroundCheckRecommended {
 		t.Fatalf("post-update restart status: %+v", afterRestart)
 	}
 }
@@ -507,6 +593,9 @@ func TestUpdatePackageLanguageAndLegacyAdapterMatrix(t *testing.T) {
 			}
 			if requiresHostAdapter(test.kind) && status.HostAdapterState != "legacy" {
 				t.Fatalf("legacy adapter was not identified for %s: %+v", test.kind, status)
+			}
+			if status.SchemaVersion != updateStatusSchemaVersion || !status.BackgroundCheckRecommended {
+				t.Fatalf("shared update bootstrap contract for %s: %+v", test.kind, status)
 			}
 		})
 	}

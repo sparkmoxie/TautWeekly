@@ -145,22 +145,23 @@
     lockEnabled: false,
     updateStartedMS: 0,
     update: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       observedAtUtc: now(),
-      state: "update-available",
-      managerVersion: "0.14.1",
-      applicationVersion: "0.14.1",
-      packageVersion: "0.14.1",
+      state: "unknown",
+      managerVersion: "0.15.2",
+      applicationVersion: "0.15.2",
+      packageVersion: "0.15.2",
       packageKind: "supported-host-updater",
       packageLabel: "Synthetic supported package",
       hostAdapterState: "not-applicable",
       updateChannel: "stable",
-      latestStableVersion: "0.15.0",
-      updateAvailable: true,
-      installSupported: true,
+      latestStableVersion: "",
+      updateAvailable: false,
+      installSupported: false,
       installState: "idle",
       checkInProgress: false,
-      lastSuccessfulCheckUtc: now(),
+      backgroundCheckRecommended: true,
+      lastSuccessfulCheckUtc: "",
       releaseNotesUrl: "",
       guidance: {
         owner: "TautWeekly verified updater (simulated)",
@@ -293,6 +294,7 @@
       updateAvailable: false,
       installSupported: false,
       installState: "completed",
+      backgroundCheckRecommended: false,
     });
   }
 
@@ -355,9 +357,20 @@
     if (/^\/api\/v1\/schedule\/(install|enable|disable|remove)$/.test(path) && method === "POST") return json(startSchedule(path.split("/").at(-1)), 202);
     if (path === "/api/v1/updates" && method === "GET") return json({ ...model.update, observedAtUtc: now() });
     if (path === "/api/v1/updates/check" && method === "POST") {
-      model.update.lastSuccessfulCheckUtc = now();
-      model.update.observedAtUtc = now();
-      return json(model.update);
+      model.update.checkInProgress = true;
+      return new Promise((resolve) => setTimeout(() => {
+        Object.assign(model.update, {
+          state: "update-available",
+          latestStableVersion: "0.16.0",
+          updateAvailable: true,
+          installSupported: true,
+          checkInProgress: false,
+          backgroundCheckRecommended: false,
+          lastSuccessfulCheckUtc: now(),
+          observedAtUtc: now(),
+        });
+        resolve(json(model.update));
+      }, 450));
     }
     if (path === "/api/v1/updates/install" && method === "POST") {
       model.updateStartedMS = Date.now();

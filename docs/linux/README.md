@@ -232,9 +232,12 @@ normal Trending result while retaining new TV releases below the hero.
 
 Start with Manager **Settings > Updates**. It is the primary view of the running
 application, native package, stable channel, latest stable release, check time,
-sanitized failure, and release notes. **Check now** contacts only the fixed
-stable-release endpoint with a bounded timeout; ordinary Manager and Dashboard
-health remain offline-capable. The card never invokes `sudo`, systemd, or the
+sanitized failure, and release notes. Authenticated entry renders the cache and
+makes one non-blocking bounded check only when the last success is missing or
+at least 24 hours old and backoff permits; **Check now** explicitly refreshes
+the same fixed endpoint. Manager navigation, Dashboard rendering, and health
+remain offline-capable. The passive purple header notification only links here.
+The card never invokes `sudo`, systemd, or the
 package updater and provides the copyable host command `sudo tautweekly update`.
 
 For a terminal-only comparison, run `tautweekly check-update` between the installed

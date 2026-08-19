@@ -33,7 +33,9 @@ jobs:
           node --check docs/assets/site.js
           node --check docs/gui-preview/mock-api.js
           node --check docs/gui-preview/rich-preview.js
+          node --check docs/gui-preview/update-ui.js
           node --check docs/gui-preview/app.js
+          node scripts/test-manager-update-indicator.mjs
       - name: Validate shell scripts
         run: ./scripts/validate-shell.sh
       - name: Test container health behavior
@@ -127,7 +129,9 @@ jobs:
         shell: pwsh
         run: ./scripts/test-manager-cross-builds.ps1
       - name: Validate embedded Manager JavaScript
-        run: node --check manager/internal/manager/web/app.js
+        run: |
+          node --check manager/internal/manager/web/update-ui.js
+          node --check manager/internal/manager/web/app.js
       - name: Validate Manager accessibility structure
         run: python scripts/test-manager-accessibility.py
 

@@ -162,8 +162,11 @@ filesystem-level backup, stop the service and copy both `.env` and `data/`.
 Manager **Settings > Updates** is the primary Mac status source. It separately
 reports the container application/image, extracted Mac package, host-adapter
 compatibility, stable channel, latest stable release, check history, sanitized
-failure, and release notes. **Check now** is a bounded manual request; routine
-Manager health does not need Internet access. The containerized web process
+failure, and release notes. Authenticated entry renders cached status first and
+makes one non-blocking bounded check only when the last success is missing or
+at least 24 hours old and backoff permits; **Check now** explicitly refreshes
+the same endpoint. Navigation, Dashboard rendering, and Manager health remain
+offline-capable. The passive purple header notification only links here. The containerized web process
 cannot invoke Docker Desktop or change host package files, so the card exposes
 the copyable `./tautweekly.sh update` host command but no install button.
 

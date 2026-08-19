@@ -48,9 +48,14 @@ Every maintained Manager uses **Settings > Updates** as the primary status
 source. It distinguishes the running application/Manager, release package, and
 container image where those versions are knowable; reports the stable channel,
 latest verified release, last successful check, last sanitized failure, and
-legacy or mismatched host adapters; and links to the release notes. **Check
-now** is manual and bounded, and normal Dashboard health remains completely
-offline-capable. Only Windows can start an installation from the GUI, using the
+legacy or mismatched host adapters; and links to the release notes. An
+authenticated Manager session renders cached status first, then makes one
+non-blocking bounded check only when the last successful result is missing or
+at least 24 hours old and retry backoff permits. **Check now** remains available
+for an explicit refresh, while navigation, Dashboard rendering, and health
+endpoints remain offline-capable. A purple header notification links to this
+status view when a validated newer running-application version exists; it never
+installs an update. Only Windows can start an installation from the GUI, using the
 existing verified updater and Windows elevation. All other platforms show the
 exact host-owned command or native update flow without giving the web process
 Docker, root, Podman, systemd, rc.d, or package-file authority.
