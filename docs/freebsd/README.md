@@ -154,6 +154,24 @@ trusted TLS reverse proxy, retain a narrow host bind, set the exact DNS name in
 `TAUTWEEKLY_MANAGER_ALLOWED_HOSTS`, set
 `TAUTWEEKLY_MANAGER_SECURE_COOKIES=true`, and restart the service.
 
+### Optional private Tailscale access
+
+FreeBSD Tailscale support is community-maintained. Install and sign in to the
+host client using the current FreeBSD/Tailscale guidance, then create a private
+HTTPS Serve route to the loopback Manager:
+
+```sh
+sudo tailscale serve --bg --yes --https=443 http://127.0.0.1:8787
+```
+
+Enable **HTTPS certificates only** and turn **Funnel off** if the provider asks
+for consent. Copy the resulting exact `https://...ts.net` address into Manager
+**Settings > Tailscale**, confirm private Serve/Funnel-off, and enable it. The
+containerized Manager stores only the exact hostname and never receives root,
+rc.d, Podman, or Tailscale control. Its independent password remains required;
+all remote sessions have full administration. Disable the Manager setting
+first, then remove the host Serve route if private access is no longer wanted.
+
 ## Operations
 
 Use the Manager GUI for normal configuration, verification, library/user

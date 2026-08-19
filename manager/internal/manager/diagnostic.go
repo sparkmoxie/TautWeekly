@@ -71,6 +71,32 @@ var diagnosticSummaries = map[string]string{
 	"startup-enabled-dashboard":        "Manager sign-in startup and one-time Dashboard opening were enabled for the current Windows user.",
 }
 
+var remoteAccessDiagnosticSummaries = map[string]string{
+	"remote-access-request-invalid":         "The Manager rejected an invalid private remote access request.",
+	"remote-access-unsupported":             "Private remote access is unavailable for this package.",
+	"tailscale-serve-conflict":              "An existing Tailscale Serve configuration was not owned by TautWeekly and was left unchanged.",
+	"tailscale-disable-incomplete":          "The private hostname was blocked locally, but the owned Tailscale Serve route still needs cleanup.",
+	"tailscale-unavailable":                 "Tailscale was not installed, connected, or available to the Manager user.",
+	"tailscale-approval-required":           "Windows administrator approval was required to inspect or change Tailscale Serve.",
+	"tailscale-host-authorization-required": "The native Linux host has not authorized TautWeekly's fixed Tailscale adapter.",
+	"tailscale-approval-declined":           "Windows administrator approval was cancelled before Tailscale Serve changed.",
+	"tailscale-provider-approval-required":  "Tailscale required one-time provider approval before private HTTPS Serve could be enabled.",
+	"tailscale-sign-in-required":            "Tailscale must be signed in before private Serve access can be configured.",
+	"tailscale-verification-failed":         "Tailscale did not retain the exact private HTTPS route expected by TautWeekly.",
+	"remote-access-state-write-failed":      "The private remote access setting could not be saved safely.",
+	"tailscale-disabled":                    "Private Tailscale access was disabled.",
+	"tailscale-enabled":                     "Private Tailscale access was enabled and verified.",
+	"tailscale-verified":                    "Tailscale Serve status was explicitly inspected without changing it.",
+}
+
+func diagnosticSummary(code string) (string, bool) {
+	if summary, ok := diagnosticSummaries[code]; ok {
+		return summary, true
+	}
+	summary, ok := remoteAccessDiagnosticSummaries[code]
+	return summary, ok
+}
+
 type DiagnosticEvent struct {
 	SchemaVersion int    `json:"schemaVersion"`
 	RecordedAtUTC string `json:"recordedAtUtc"`
@@ -100,7 +126,7 @@ func newDiagnosticStore(dataDir string, now func() time.Time) *diagnosticStore {
 }
 
 func (s *diagnosticStore) Record(area, outcome, code string) {
-	summary, ok := diagnosticSummaries[code]
+	summary, ok := diagnosticSummary(code)
 	if !ok || !validDiagnosticArea(area) || !validDiagnosticOutcome(outcome) {
 		return
 	}
@@ -188,7 +214,8 @@ func (s *diagnosticStore) pruneLocked() error {
 }
 
 func validDiagnosticEvent(event DiagnosticEvent) bool {
-	if event.SchemaVersion != diagnosticSchemaVersion || event.Summary != diagnosticSummaries[event.Code] {
+	summary, ok := diagnosticSummary(event.Code)
+	if event.SchemaVersion != diagnosticSchemaVersion || !ok || event.Summary != summary {
 		return false
 	}
 	if !validDiagnosticArea(event.Area) || !validDiagnosticOutcome(event.Outcome) {
@@ -200,7 +227,7 @@ func validDiagnosticEvent(event DiagnosticEvent) bool {
 
 func validDiagnosticArea(area string) bool {
 	switch area {
-	case "configuration", "recovery", "lan-verification", "smtp-preflight", "tautulli-discovery", "startup":
+	case "configuration", "recovery", "lan-verification", "smtp-preflight", "tautulli-discovery", "startup", "remote-access":
 		return true
 	default:
 		return false

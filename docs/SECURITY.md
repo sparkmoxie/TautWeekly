@@ -56,6 +56,26 @@ Disabling the feature stops access but does not erase the existing cache.
   LAN bind restricted by the host firewall. macOS binds to Mac loopback by
   default; changing that bind requires the same explicit allowed-host and TLS
   review as any other network-reachable Manager.
+- Optional Tailscale support uses private HTTPS Serve, never public Funnel.
+  Windows verifies a fixed route through an explicit UAC helper; native Linux
+  uses a root-owned, socket-activated helper that verifies the fixed service UID
+  and exposes only Inspect/Enable/Disable for the fixed loopback target. All
+  container/host-managed packages accept only one exact HTTPS `.ts.net`
+  hostname after an authenticated administrator confirms the external route is
+  private and Funnel is off. They never accept a Tailscale credential or gain a
+  Docker/Podman/host control plane.
+- Treat tailnet membership as an additional network boundary, not Manager
+  authentication. Non-Windows packages keep their independent Manager password
+  required; the Windows password lock remains optional. Every remote session
+  has full Manager administration because no read-only role exists. Restrict
+  tailnet grants, use MFA at the identity provider, protect and promptly revoke
+  lost devices, keep clients updated, and retain local/host recovery access.
+- A saved external Tailscale address means Manager will accept that exact Host;
+  it does not prove the host-owned route is still present or private. Recheck
+  Serve and Funnel state after host/client updates. Disable in Manager first so
+  the hostname is blocked immediately, then remove the external route. Never
+  expose or retain auth keys in Manager, Compose YAML, `.env`, Community Apps
+  templates, screenshots, logs, or support bundles.
 - For a trusted TLS reverse proxy, allow only its exact DNS host, preserve the
   original Host header, and enable secure Manager cookies. Do not trust broad
   wildcards or publish the plain HTTP backend. The Manager does not infer TLS

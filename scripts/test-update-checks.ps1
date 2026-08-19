@@ -45,6 +45,7 @@ function New-TestRelease([string]$Version, [string]$Marker) {
     Copy-Item -LiteralPath $lockHelper -Destination (Join-Path $packageRoot 'Operation-Lock.ps1')
     [IO.File]::WriteAllText((Join-Path $packageRoot 'TautWeekly.ps1'), "Set-StrictMode -Version Latest`n# $Marker`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $packageRoot 'SCHEDULE-HELPER.ps1'), "Set-StrictMode -Version Latest`n# fictional update fixture`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $packageRoot 'TAILSCALE-HELPER.ps1'), "Set-StrictMode -Version Latest`n# fictional update fixture`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $packageRoot 'START-MANAGER.ps1'), "Set-StrictMode -Version Latest`n# fictional update fixture`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $packageRoot 'RESET-MANAGER-ACCESS.ps1'), "Set-StrictMode -Version Latest`n# fictional update fixture`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $packageRoot '00-OPEN-MANAGER.bat'), "@echo off`r`nrem fictional update fixture`r`n", [Text.UTF8Encoding]::new($false))

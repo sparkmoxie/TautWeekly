@@ -45,6 +45,7 @@ type Options struct {
 	startupController         startupSettingsController
 	updateChecker             updateReleaseChecker
 	updateInstaller           updateInstallController
+	remoteAccessController    remoteAccessController
 	updateMinimumCheckDelay   time.Duration
 	updateMaximumFailureDelay time.Duration
 }
@@ -63,6 +64,7 @@ type Server struct {
 	schedule          *scheduleCoordinator
 	startup           startupSettingsController
 	updates           *updateCoordinator
+	remoteAccess      remoteAccessController
 	capabilities      Capabilities
 	handler           http.Handler
 	bootstrapToken    string
@@ -185,6 +187,10 @@ func New(options Options) (*Server, error) {
 	} else if startup == nil {
 		startup = newPlatformStartupController(options.TautWeeklyRoot, options.DataDir)
 	}
+	remoteAccess := options.remoteAccessController
+	if remoteAccess == nil {
+		remoteAccess = newPlatformRemoteAccessController(options)
+	}
 	server := &Server{
 		options:        options,
 		auth:           store,
@@ -196,6 +202,7 @@ func New(options Options) (*Server, error) {
 		schedule:       schedule,
 		startup:        startup,
 		updates:        newUpdateCoordinator(options),
+		remoteAccess:   remoteAccess,
 		capabilities:   capabilitiesFor(options),
 		bootstrapToken: store.bootstrapToken,
 	}
@@ -231,6 +238,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/updates/install", s.protected(s.handleUpdateInstall, true))
 	mux.HandleFunc("GET /api/v1/startup", s.protected(s.handleStartupSettings, false))
 	mux.HandleFunc("PUT /api/v1/startup", s.protected(s.handleUpdateStartupSettings, true))
+	mux.HandleFunc("GET /api/v1/remote-access/tailscale", s.protected(s.handleTailscaleRemoteAccessStatus, false))
+	mux.HandleFunc("POST /api/v1/remote-access/tailscale/verify", s.protected(s.handleVerifyTailscaleRemoteAccess, true))
+	mux.HandleFunc("PUT /api/v1/remote-access/tailscale", s.protected(s.handleUpdateTailscaleRemoteAccess, true))
 	mux.HandleFunc("GET /api/v1/config", s.protected(s.handleConfig, false))
 	mux.HandleFunc("GET /api/v1/config/editor", s.protected(s.handleConfigEditor, false))
 	mux.HandleFunc("GET /api/v1/config/status", s.protected(s.handleConfigurationStatus, false))
@@ -289,7 +299,7 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
-		if s.options.SecureCookies {
+		if s.remoteRequestIsSecure(r) {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		}
 		if !strings.HasPrefix(r.URL.Path, "/preview/") {
@@ -312,6 +322,9 @@ func (s *Server) allowedHost(value string) bool {
 	ip := net.ParseIP(host)
 	if ip != nil {
 		return ip.IsLoopback() || isContainerRuntimeMode(s.capabilities.RuntimeMode)
+	}
+	if s.remoteAccess.AllowsHost(host) {
+		return true
 	}
 	if !isContainerRuntimeMode(s.capabilities.RuntimeMode) {
 		return false
@@ -358,7 +371,10 @@ func (s *Server) validOrigin(r *http.Request) bool {
 		return true
 	}
 	parsed, err := url.Parse(value)
-	return err == nil && strings.EqualFold(parsed.Host, r.Host)
+	if err != nil || !strings.EqualFold(parsed.Host, r.Host) {
+		return false
+	}
+	return !s.remoteAccess.AllowsHost(r.Host) || parsed.Scheme == "https"
 }
 
 func (s *Server) handleLiveness(w http.ResponseWriter, _ *http.Request) {
@@ -493,6 +509,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
+		Secure:   s.remoteRequestIsSecure(r),
 		MaxAge:   -1,
 	})
 	w.WriteHeader(http.StatusNoContent)
@@ -1147,7 +1164,7 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, curren
 		Value:    current.Token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil || s.options.SecureCookies,
+		Secure:   s.remoteRequestIsSecure(r),
 		SameSite: http.SameSiteStrictMode,
 		Expires:  current.ExpiresAt,
 		MaxAge:   int(current.ExpiresAt.Sub(s.options.Now()).Seconds()),

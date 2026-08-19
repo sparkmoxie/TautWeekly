@@ -93,6 +93,27 @@ visible through Manager, `./tautweekly.sh schedule-status`, and
 
 ## Manager or preview does not open
 
+### Private Tailscale address does not open
+
+- Confirm the remote computer or mobile device is connected to the same
+  tailnet and permitted by its current grants. Disconnecting the remote client
+  is expected to make the private address unreachable.
+- In Manager **Settings > Tailscale**, distinguish **Connected** (integrated
+  route verified) from **Enabled** (an external exact hostname is allowlisted;
+  the host-owned route cannot be inspected by Manager).
+- On native Linux, run `tautweekly remote-access-status`. If authorization is
+  absent, run `sudo tautweekly remote-access-authorize`, then retry Settings.
+  Disable in Manager before using `sudo tautweekly remote-access-revoke`.
+- On Windows, choose **Verify with Windows** and approve the UAC prompt. A
+  conflicting existing Serve configuration is intentionally left unchanged.
+- For a first-use provider link, enable HTTPS certificates only and turn
+  Funnel off even if the provider page preselects it.
+- For macOS, FreeBSD, QNAP, Unraid, or another host-managed package, inspect the
+  host/client Serve state separately and confirm it still proxies the mapped
+  loopback Manager port. Disable the Manager setting before removing the route.
+- The Manager password remains required outside Windows; Windows keeps its
+  existing optional lock behavior. There is no read-only remote role.
+
 Windows, NAS/Docker, macOS Docker Desktop, native Linux, and FreeBSD serve previews through the
 authenticated Manager. NAS/Docker normally maps host port 8787 to container
 port 8080; macOS publishes container port 8080 at `http://localhost:8787/` by

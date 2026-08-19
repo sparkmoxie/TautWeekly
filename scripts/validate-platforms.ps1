@@ -40,6 +40,24 @@ Require-Text 'platforms/linux/systemd/tautweekly.service' @(
     'TAUTWEEKLY_PACKAGE_KIND=linux-native',
     'TimeoutStopSec=30min'
 )
+Require-Text 'platforms/linux/systemd/tautweekly-remote-access.socket' @(
+    'ConditionPathExists=/etc/tautweekly/remote-access\.enabled',
+    'ListenStream=/run/tautweekly/remote-access\.sock',
+    'SocketUser=root',
+    'SocketGroup=tautweekly',
+    'SocketMode=0660',
+    'Accept=yes'
+)
+Require-Text 'platforms/linux/systemd/tautweekly-remote-access@.service' @(
+    'User=root',
+    'ExecStart=/opt/tautweekly/bin/tautweekly-manager remote-access-helper',
+    'StandardInput=socket',
+    'StandardOutput=socket',
+    'CapabilityBoundingSet=',
+    'NoNewPrivileges=true',
+    'ProtectSystem=strict',
+    'RestrictAddressFamilies=AF_UNIX'
+)
 Require-Text 'platforms/linux/tautweekly.env.example' @(
     'TAUTWEEKLY_PREVIEW_BIND=127\.0\.0\.1',
     'TAUTWEEKLY_DATA_DIR=/var/lib/tautweekly',
@@ -73,7 +91,10 @@ Require-Text 'platforms/linux/tautweekly' @(
     'manager-bootstrap',
     'manager-reset-access',
     'access-recover',
-    'http://127\.0\.0\.1:8788'
+    'http://127\.0\.0\.1:8788',
+    'remote-access-authorize',
+    'remote-access-revoke',
+    'remote-access-status'
 )
 Require-Text 'platforms/linux/preview-home.html' @(
     'authenticated native Linux Manager endpoint',
@@ -475,8 +496,37 @@ foreach ($relative in @('platforms/nas-docker/compose.yaml', 'platforms/nas-dock
         'TAUTWEEKLY_HOST_ADAPTER_API'
     )
 }
+foreach ($relative in @('platforms/nas-docker/compose.tailscale.yaml', 'platforms/mac-docker/compose.tailscale.yaml')) {
+    Require-Text $relative @(
+        'tailscale/tailscale:v1\.102\.2',
+        'TS_AUTHKEY: file:/run/secrets/tailscale_authkey',
+        'TS_AUTH_ONCE: "true"',
+        'TS_SERVE_CONFIG: /config/serve\.json',
+        'TS_USERSPACE: "true"',
+        'read_only: true',
+        'no-new-privileges:true',
+        'cap_drop:',
+        '- ALL'
+    )
+    Forbid-Text $relative @(
+        '(?i)funnel',
+        '(?i)docker\.sock',
+        '(?m)^\s*privileged:',
+        '(?m)^\s*cap_add:',
+        '(?i)/dev/net/tun',
+        '(?i)tskey-'
+    )
+}
+foreach ($relative in @('platforms/nas-docker/tailscale/config/serve.json', 'platforms/mac-docker/tailscale/config/serve.json')) {
+    Require-Text $relative @(
+        '"HTTPS": true',
+        '"\$\{TS_CERT_DOMAIN\}:443"',
+        '"Proxy": "http://tautweekly:8080"'
+    )
+    Forbid-Text $relative @('(?i)funnel')
+}
 Require-Text 'platforms/nas-docker/Dockerfile' @(
-    'FROM golang:1\.26\.5-bookworm AS manager-build',
+    'FROM golang:1\.26\.6-bookworm AS manager-build',
     'GOOS=linux GOARCH="\$\{TARGETARCH:-amd64\}"',
     'tautweekly-manager',
     'HOME=/tmp/tautweekly/home',
@@ -650,7 +700,7 @@ foreach ($relative in @(
 }
 Write-Host '[PASS] Capability-neutral renderer and scheduling wrappers remain identical across container editions.'
 
-$forbiddenRuntimeNames = @('config.json', '.env', 'state.json', 'access-state.json', 'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json')
+$forbiddenRuntimeNames = @('config.json', '.env', 'state.json', 'access-state.json', 'remote-access.json', 'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json')
 foreach ($platform in @('linux', 'freebsd-podman')) {
     $path = Join-Path (Join-Path $Root 'platforms') $platform
     $forbidden = @(Get-ChildItem -LiteralPath $path -Recurse -Force | Where-Object {

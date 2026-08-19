@@ -286,6 +286,69 @@ makes login intentionally fail. TautWeekly does not provision certificates or
 declare any proxy trusted. Prefer a VPN for administration and never expose
 plain HTTP to the public internet.
 
+### Optional private Tailscale access
+
+Manager **Settings > Tailscale** supports every maintained container package
+without granting the web process host control. First create a private HTTPS
+Tailscale Serve route on the Docker/NAS host to its mapped loopback port (8787
+by default), then paste only the resulting exact `https://...ts.net` address,
+confirm that Funnel is off, and enable it. Manager saves one hostname, enforces
+it as an exact Host value, uses Secure cookies/HSTS and HTTPS same-origin rules
+for that host, and keeps its independent password required. It does not accept
+an auth key, tunnel token, provider credential, wildcard, port, or URL path.
+
+- **Unraid 7:** use the recommended Tailscale Plugin, sign the server into the
+  tailnet, and create a private Serve route to the mapped TautWeekly port. Do
+  not put a Tailscale key in the Community Apps template.
+- **QNAP:** use the Tailscale App Center package and its documented SSH CLI path
+  to create the private Serve route. Container Station continues to own
+  TautWeekly; Manager receives no QNAP privilege.
+- **Generic Linux/NAS:** prefer the host's supported Tailscale package and a
+  private Serve route to `http://127.0.0.1:8787` (or the configured mapped
+  port). This is simpler than adding another container.
+
+On first use Tailscale may open a consent page where Funnel is preselected.
+Enable **HTTPS certificates only** and turn **Funnel off**. Every remote device
+must run Tailscale and be allowed by tailnet policy. Every Manager session still
+has full administration; no read-only role exists. Local or host access is the
+recovery path. Disabling in Manager blocks the saved hostname immediately, but
+the host administrator must remove an externally owned Serve route separately.
+
+#### Optional userspace Compose sidecar
+
+Use the shipped sidecar only when the host has no supported Tailscale client.
+It uses the official pinned image in userspace mode and a fixed private Serve
+config that proxies only to `http://tautweekly:8080`. It has no host network,
+Docker socket, `/dev/net/tun`, added Linux capability, Manager credential, or
+Funnel entry.
+
+1. In the Tailscale console, create a **one-off** auth key for this node. If the
+   tailnet uses device approval or restrictive grants, approve only the intended
+   node and users.
+2. Create `tailscale/authkey.local` beside the Compose files with mode 0600 and
+   place the key there. The path is ignored by Git and excluded from releases.
+3. Start the overlay:
+
+   ```bash
+   docker compose -f compose.yaml -f compose.tailscale.yaml up -d
+   ```
+
+4. Confirm the node is connected and enable **HTTPS certificates only** in the
+   provider console. The bundled `${TS_CERT_DOMAIN}` Serve config then creates
+   the private address. Never enable Funnel.
+5. Empty `tailscale/authkey.local` after the persistent node state is written;
+   the one-off key is no longer needed. Keep `tailscale/state/` private and back
+   it up or deliberately re-enroll the node after loss.
+6. Copy the exact Serve address into Manager Settings and confirm it from a
+   separately enrolled device. To stop the sidecar, disable the Manager setting
+   first, then run the same two-file Compose command with `stop tailscale` and
+   remove only that sidecar deliberately when its retained identity is no longer
+   required.
+
+QNAP/Unraid vendor clients are preferred because their host lifecycle and
+recovery surfaces are clearer than a sidecar. Never place an auth key in `.env`,
+Compose YAML, Community Apps XML, logs, screenshots, or Manager fields.
+
 When TautWeekly for Plex and Tautulli share a user-defined Docker network, a service URL
 such as `http://tautulli:8181` is appropriate. Otherwise, use a DNS name the
 container can resolve.

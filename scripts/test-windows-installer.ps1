@@ -79,7 +79,7 @@ try {
     }
     Assert-True (Test-Path -LiteralPath $setup -PathType Leaf) 'Setup remained locked or was not restored after its process exited.'
     foreach ($relative in @(
-        'tautweekly-manager.exe', 'TautWeekly.ps1', 'START-MANAGER.ps1', 'RESET-MANAGER-ACCESS.ps1',
+        'tautweekly-manager.exe', 'TautWeekly.ps1', 'START-MANAGER.ps1', 'RESET-MANAGER-ACCESS.ps1', 'TAILSCALE-HELPER.ps1',
         'Open-TautWeekly.cmd', 'Reset-TautWeekly-Access.cmd', 'Uninstall-TautWeekly.cmd', 'TautWeekly-Uninstall.exe',
         'tautweekly.ico', 'INSTALL-METADATA.txt', 'RELEASE-FILES.txt'
     )) {

@@ -123,6 +123,38 @@ private backup of the original file.
 Opening or refreshing the Dashboard does not contact Tautulli, Plex, or SMTP and
 does not change configuration.
 
+## Optional private access with Tailscale
+
+Under **Settings > Tailscale**, Windows can publish the loopback Manager through
+Tailscale Serve as private HTTPS. TautWeekly never enables Funnel, opens a
+router port, or creates a public URL. There is no URL to paste into Config: after
+Tailscale verifies the route, Manager displays the exact generated `.ts.net`
+address.
+
+Prerequisites are irreducible: install Tailscale on this computer, sign it into
+your tailnet, and install/sign in to Tailscale on each remote computer or mobile
+device that should connect. Tailnet grants still decide which enrolled users
+and devices can reach this computer. The remote address is not usable from an
+ordinary Internet browser without a Tailscale client.
+
+Turning the switch on or off, or choosing **Verify with Windows**, requests a
+normal Windows administrator confirmation. Manager itself stays unelevated.
+The fixed packaged helper accepts only Inspect, Enable, or Disable for Manager's fixed
+loopback port, refuses an unrelated Serve configuration, and verifies the exact
+HTTPS route after changing it. Opening or refreshing Dashboard never prompts
+for administrator access. On a tailnet that has not enabled HTTPS certificates,
+Tailscale may also require its own one-time web consent before setup can finish.
+That provider page can preselect **Tailscale Funnel**. Enable **HTTPS
+certificates only** and turn Funnel off; TautWeekly never needs public Funnel
+access.
+
+The Windows Manager password remains optional. With the lock off, every user or
+device permitted by the tailnet to reach this computer receives full Manager
+administration; there is no read-only remote role. Enabling the independent
+Manager password adds a second login without changing Tailscale membership.
+Local `http://127.0.0.1:8788` remains the recovery path. Disable blocks the saved
+private hostname locally before attempting to remove the owned Serve route.
+
 ## Notification area and sign-in startup
 
 The notification-area icon is the persistent Windows control for the local

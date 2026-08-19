@@ -131,6 +131,54 @@ case "$cmd" in
     systemctl start tautweekly.service
     echo "Run sudo tautweekly manager-bootstrap to retrieve the new one-time pairing token."
     ;;
+  remote-access-authorize)
+    require_root
+    tailscale_cli=""
+    for candidate in /usr/bin/tailscale /usr/local/bin/tailscale; do
+      if [[ -f "$candidate" && ! -L "$candidate" ]]; then
+        tailscale_cli="$candidate"
+        break
+      fi
+    done
+    if [[ -z "$tailscale_cli" ]]; then
+      echo "Install the official Tailscale Linux package and sign this host into your tailnet first." >&2
+      exit 69
+    fi
+    backend_state="$($tailscale_cli status --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("BackendState", ""))' 2>/dev/null || true)"
+    if [[ "$backend_state" != "Running" ]]; then
+      echo "Tailscale is installed but not connected. Run sudo tailscale up, finish sign-in, and retry." >&2
+      exit 69
+    fi
+    install -m 0644 -o root -g root /dev/null /etc/tautweekly/remote-access.enabled
+    systemctl enable --now tautweekly-remote-access.socket >/dev/null
+    systemctl is-active --quiet tautweekly-remote-access.socket || {
+      echo "The fixed TautWeekly remote-access adapter socket did not start." >&2
+      exit 70
+    }
+    echo "Authorized TautWeekly's fixed Inspect/Enable/Disable Tailscale adapter."
+    echo "The Manager remains the unprivileged tautweekly service user; Funnel remains unsupported."
+    ;;
+  remote-access-revoke)
+    require_root
+    remote_state="$data_root/manager/remote-access.json"
+    if [[ -f "$remote_state" ]]; then
+      remote_enabled="$(python3 -c 'import json,sys; print("true" if json.load(open(sys.argv[1], encoding="utf-8")).get("enabled") is True else "false")' "$remote_state" 2>/dev/null || echo invalid)"
+      if [[ "$remote_enabled" != "false" ]]; then
+        echo "Disable private access in Manager before revoking the host adapter so the owned Serve route is removed safely." >&2
+        exit 75
+      fi
+    fi
+    systemctl disable --now tautweekly-remote-access.socket >/dev/null 2>&1 || true
+    rm -f /etc/tautweekly/remote-access.enabled
+    echo "Revoked the optional TautWeekly Tailscale adapter."
+    ;;
+  remote-access-status)
+    if [[ -f /etc/tautweekly/remote-access.enabled ]] && systemctl is-active --quiet tautweekly-remote-access.socket 2>/dev/null; then
+      echo "TautWeekly Tailscale adapter: authorized"
+    else
+      echo "TautWeekly Tailscale adapter: not authorized"
+    fi
+    ;;
   start|stop|restart|status)
     require_root
     systemctl "$cmd" tautweekly.service
@@ -171,6 +219,9 @@ TautWeekly for Plex native Linux commands
 
   sudo tautweekly manager-bootstrap
   sudo tautweekly manager-reset-access
+  sudo tautweekly remote-access-authorize
+  sudo tautweekly remote-access-revoke
+  tautweekly remote-access-status
   sudo tautweekly setup
   sudo tautweekly verify
   sudo tautweekly list-users

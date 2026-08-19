@@ -137,6 +137,7 @@ $expected = [ordered]@{
         'TautWeekly-windows/18-RESET-MANAGER-ACCESS.bat',
         'TautWeekly-windows/RESET-MANAGER-ACCESS.ps1',
         'TautWeekly-windows/SCHEDULE-HELPER.ps1',
+        'TautWeekly-windows/TAILSCALE-HELPER.ps1',
         'TautWeekly-windows/tautweekly-manager.exe',
         'TautWeekly-windows/TautWeekly-Uninstall.exe',
         'TautWeekly-windows/THIRD_PARTY_NOTICES.md',
@@ -159,6 +160,8 @@ $expected = [ordered]@{
         'TautWeekly-nas-docker/package-update.sh',
         'TautWeekly-nas-docker/container-update.sh',
         'TautWeekly-nas-docker/compose.yaml',
+        'TautWeekly-nas-docker/compose.tailscale.yaml',
+        'TautWeekly-nas-docker/tailscale/config/serve.json',
         'TautWeekly-nas-docker/RELEASE-FILES.txt',
         'TautWeekly-nas-docker/README.md'
     )
@@ -175,6 +178,8 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/app/product-branding/favicon.ico',
         'TautWeekly-mac-docker/app/product-branding/tautweekly-app-icon-128.png',
         'TautWeekly-mac-docker/tautweekly.sh',
+        'TautWeekly-mac-docker/compose.tailscale.yaml',
+        'TautWeekly-mac-docker/tailscale/config/serve.json',
         'TautWeekly-mac-docker/check-release.sh',
         'TautWeekly-mac-docker/mac-update.sh',
         'TautWeekly-mac-docker/package-update.sh',
@@ -194,6 +199,8 @@ $expected = [ordered]@{
         'TautWeekly-linux/app/product-branding/tautweekly-app-icon-128.png',
         'TautWeekly-linux/install-linux.sh',
         'TautWeekly-linux/systemd/tautweekly.service',
+        'TautWeekly-linux/systemd/tautweekly-remote-access.socket',
+        'TautWeekly-linux/systemd/tautweekly-remote-access@.service',
         'TautWeekly-linux/tautweekly',
         'TautWeekly-linux/check-release.sh',
         'TautWeekly-linux/package-update.sh',
@@ -258,9 +265,9 @@ $zipReleaseManifests = @{}
 $releaseVersions = New-Object System.Collections.Generic.List[string]
 
 $forbiddenNames = @(
-    'config.json', '.env', 'state.json', 'access-state.json',
+    'config.json', '.env', 'state.json', 'access-state.json', 'remote-access.json',
     'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json',
-    'configuration-status.json'
+    'configuration-status.json', 'authkey.local'
 )
 
 $zipArchives = @(Get-ChildItem -LiteralPath $DistPath -File -Filter '*.zip')
@@ -402,7 +409,8 @@ foreach ($archiveName in $expected.Keys) {
 
         $forbidden = @($entryNames | Where-Object {
             $name = ($_ -split '/')[-1]
-            $name -in $forbiddenNames -or $_ -match '/(logs|output|cache|\.manager-data)/'
+            $name -in $forbiddenNames -or $_ -match '/(logs|output|cache|\.manager-data)/' -or
+                $_ -match '/tailscale/state/(?!\.keep(?:/|$)).+'
         })
         Assert-True ($forbidden.Count -eq 0) "$archiveName contains runtime/private paths: $($forbidden -join ', ')"
 
@@ -574,7 +582,8 @@ foreach ($tarArchive in $tarArchives) {
         }
         $forbidden = @($relativeFiles | Where-Object {
             $name = ($_ -split '/')[-1]
-            $name -in $forbiddenNames -or $_ -match '(^|/)(logs|output|cache)/'
+            $name -in $forbiddenNames -or $_ -match '(^|/)(logs|output|cache)/' -or
+                $_ -match '(^|/)tailscale/state/(?!\.keep$).+'
         })
         Assert-True ($forbidden.Count -eq 0) "$($tarArchive.Name) contains runtime/private paths: $($forbidden -join ', ')"
 

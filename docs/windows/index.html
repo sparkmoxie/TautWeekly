@@ -78,6 +78,7 @@
           <a href="#previews">Previews and TestEmail</a>
           <a href="#schedule">Schedule</a>
           <a href="#updates">Update or migrate</a>
+          <a href="#tailscale">Private remote access</a>
           <a href="#password">Password protection</a>
           <a href="#data">Private data</a>
           <a href="#metadata-readiness">Metadata readiness</a>
@@ -209,6 +210,15 @@
           <div class="card"><div class="icon">B</div><h3>Preserved data</h3><p>Config, state, output, logs, cache, custom assets, Manager history, and compatible task state remain.</p></div>
           <div class="card"><div class="icon">C</div><h3>Automatic rollback</h3><p>Release-owned files are restored if post-install verification fails. No periodic update task is installed.</p></div>
         </div>
+      </section>
+
+      <section class="section" id="tailscale" data-search="tailscale remote mobile private serve https funnel vpn tailnet">
+        <div class="section-head"><div><span class="eyebrow">Optional private remote access</span><h2>Private HTTPS through your tailnet</h2></div><p>Settings can create and verify one exact Tailscale Serve route without making the Manager public.</p></div>
+        <div class="grid2">
+          <div class="card blue"><div class="icon">TS</div><h3>Install, sign in, enable</h3><p>Install Tailscale on this Windows host and every remote computer or mobile device. In <strong>Settings &gt; Tailscale</strong>, enable private access and approve the fixed Windows helper.</p></div>
+          <div class="card"><div class="icon">HTTPS</div><h3>HTTPS only; Funnel off</h3><p>If Tailscale opens its consent page, enable HTTPS certificates only and turn Funnel off. TautWeekly never needs a router port or public URL.</p></div>
+        </div>
+        <div class="callout"><div><strong>The Windows password lock stays optional.</strong><p>Tailnet policy decides who can reach the host. With the Manager lock off, every permitted tailnet user or device receives full Manager administration; there is no read-only role. Local loopback access remains the recovery path.</p></div></div>
       </section>
 
       <section class="section" id="password" data-search="password protection lock settings trusted local pairing token recovery reset eight characters">

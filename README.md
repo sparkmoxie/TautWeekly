@@ -60,6 +60,16 @@ existing verified updater and Windows elevation. All other platforms show the
 exact host-owned command or native update flow without giving the web process
 Docker, root, Podman, systemd, rc.d, or package-file authority.
 
+Every package also has an optional **Settings > Tailscale** card for private
+HTTPS remote administration. Windows and native Linux can create and verify a
+fixed loopback Serve route through narrow package helpers; macOS, FreeBSD,
+QNAP, Unraid, and compatible Docker/NAS hosts create the private route through
+their host client or the shipped optional userspace sidecar, then save only its
+exact `.ts.net` address. Funnel is never required or enabled by TautWeekly.
+Non-Windows Manager passwords remain required, the Windows lock remains
+optional, and every remote login has full administration rather than a
+read-only role.
+
 ### Windows Manager: the normal setup path
 
 Windows users should download and run

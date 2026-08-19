@@ -103,7 +103,7 @@ function Assert-PackageOwnedPath {
     $segments = @($normalized -split '/')
     $leaf = $segments[-1]
     $privateNames = @(
-        'config.json', '.env', 'state.json', 'access-state.json',
+        'config.json', '.env', 'state.json', 'access-state.json', 'remote-access.json',
         'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json',
         'configuration-status.json', 'last-run.json', 'deleted-item-cache.json',
         '.tautweekly-operation.lock'
@@ -420,7 +420,7 @@ if ($InstallerTestMode) {
 $candidateManifest = Read-ReleaseManifest -Root $CandidateRoot
 $requiredFiles = @(
     'TautWeekly.ps1', 'Check-Update.ps1', 'Windows-Update.ps1',
-    'Operation-Lock.ps1', 'SCHEDULE-HELPER.ps1',
+    'Operation-Lock.ps1', 'SCHEDULE-HELPER.ps1', 'TAILSCALE-HELPER.ps1',
     '00-OPEN-MANAGER.bat', 'START-MANAGER.ps1', '18-RESET-MANAGER-ACCESS.bat', 'RESET-MANAGER-ACCESS.ps1',
     'tautweekly-manager.exe', 'RELEASE-METADATA.txt'
 )

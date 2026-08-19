@@ -43,6 +43,14 @@ Only Windows can start its existing verified updater from the GUI; every other
 guide names the exact host-owned command or platform-native flow and its
 limitations.
 
+Every maintained package also exposes an optional **Settings > Tailscale**
+private-access card. Windows and native Linux have narrow, package-owned
+adapters; macOS, FreeBSD, QNAP, Unraid, and other Docker/NAS packages accept
+only a separately created exact private Serve hostname. TautWeekly never
+enables Funnel or treats tailnet membership as a replacement for the Manager
+login. An active card uses a motion-safe full-card glow so the additional
+remote administration boundary remains visible.
+
 ## Documentation
 
 - [Windows installation](windows/README.md)
