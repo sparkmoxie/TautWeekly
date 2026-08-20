@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -312,12 +313,12 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 }
 
 func (s *Server) allowedHost(value string) bool {
-	host := value
-	if parsed, _, err := net.SplitHostPort(value); err == nil {
-		host = parsed
+	authority, ok := canonicalAuthority(value, "http")
+	if !ok {
+		return false
 	}
-	host = strings.Trim(host, "[]")
-	if strings.EqualFold(host, "localhost") {
+	host := authority.host
+	if host == "localhost" {
 		return true
 	}
 	ip := net.ParseIP(host)
@@ -331,7 +332,8 @@ func (s *Server) allowedHost(value string) bool {
 		return false
 	}
 	for _, allowed := range s.options.AllowedHosts {
-		if strings.EqualFold(strings.TrimSpace(allowed), host) {
+		allowedAuthority, valid := canonicalAuthority(strings.TrimSpace(allowed), "http")
+		if valid && allowedAuthority.host == host {
 			return true
 		}
 	}
@@ -351,8 +353,8 @@ func (s *Server) protected(next http.HandlerFunc, mutation bool) http.HandlerFun
 			return
 		}
 		if mutation {
-			if !s.validOrigin(r) {
-				writeAPIError(w, http.StatusForbidden, "origin-rejected", "Request origin is not allowed.")
+			if rejectionCode := s.originRejectionCode(r); rejectionCode != "" {
+				writeAPIError(w, http.StatusForbidden, rejectionCode, "Request origin is not allowed.")
 				return
 			}
 			provided := r.Header.Get("X-CSRF-Token")
@@ -366,16 +368,91 @@ func (s *Server) protected(next http.HandlerFunc, mutation bool) http.HandlerFun
 	}
 }
 
-func (s *Server) validOrigin(r *http.Request) bool {
-	value := r.Header.Get("Origin")
-	if value == "" {
-		return true
+func (s *Server) originRejectionCode(r *http.Request) string {
+	values := r.Header.Values("Origin")
+	if len(values) == 0 || len(values) == 1 && values[0] == "" {
+		return ""
 	}
-	parsed, err := url.Parse(value)
-	if err != nil || !strings.EqualFold(parsed.Host, r.Host) {
-		return false
+	if len(values) != 1 || strings.TrimSpace(values[0]) != values[0] || strings.Contains(values[0], ",") {
+		return "invalid-origin"
 	}
-	return !s.remoteAccess.AllowsHost(r.Host) || parsed.Scheme == "https"
+	parsed, err := url.Parse(values[0])
+	if err != nil || parsed.Scheme != "http" && parsed.Scheme != "https" || parsed.Opaque != "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "invalid-origin"
+	}
+
+	hostProbe, ok := canonicalAuthority(r.Host, "https")
+	if !ok {
+		return "invalid-origin"
+	}
+	remoteHost := s.remoteAccess.AllowsHost(hostProbe.host)
+	remoteHTTPS := remoteHost && hostProbe.port == "443"
+	if remoteHost && !remoteHTTPS {
+		return "remote-http"
+	}
+	requestScheme := "http"
+	if r.TLS != nil || s.options.SecureCookies || remoteHTTPS {
+		requestScheme = "https"
+	}
+	requestAuthority, ok := canonicalAuthority(r.Host, requestScheme)
+	if !ok {
+		return "invalid-origin"
+	}
+	originAuthority, ok := canonicalAuthority(parsed.Host, parsed.Scheme)
+	if !ok {
+		return "invalid-origin"
+	}
+	if remoteHTTPS && parsed.Scheme == "http" && originAuthority.host == requestAuthority.host {
+		return "remote-http"
+	}
+	if originAuthority.key != requestAuthority.key {
+		return "origin-host-mismatch"
+	}
+	if parsed.Scheme != requestScheme {
+		return "origin-scheme-mismatch"
+	}
+	return ""
+}
+
+type normalizedAuthority struct {
+	host string
+	key  string
+	port string
+}
+
+func canonicalAuthority(value, scheme string) (normalizedAuthority, bool) {
+	if value == "" || strings.TrimSpace(value) != value || scheme != "http" && scheme != "https" {
+		return normalizedAuthority{}, false
+	}
+	parsed, err := url.Parse("//" + value)
+	if err != nil || parsed.User != nil || parsed.Host == "" || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return normalizedAuthority{}, false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if strings.HasSuffix(host, ".") {
+		host = strings.TrimSuffix(host, ".")
+	}
+	if host == "" || strings.HasSuffix(host, ".") {
+		return normalizedAuthority{}, false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		host = ip.String()
+	}
+	port := parsed.Port()
+	if port == "" {
+		if scheme == "https" {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	} else {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return normalizedAuthority{}, false
+		}
+		port = strconv.Itoa(number)
+	}
+	return normalizedAuthority{host: host, key: net.JoinHostPort(host, port), port: port}, true
 }
 
 func (s *Server) handleLiveness(w http.ResponseWriter, _ *http.Request) {
@@ -587,6 +664,10 @@ func (s *Server) handleSkipConfigurationPreviews(w http.ResponseWriter, r *http.
 	switch request.Reason {
 	case "metadata-not-ready":
 		summary = "Metadata readiness was not confirmed. Complete the recommended refreshes, then validate and save again."
+	case "discovery-failed":
+		summary = "Preview generation was skipped because Tautulli choices could not be refreshed. Review the discovery result, then use Refresh Tautulli choices to continue without another save."
+	case "choices-unavailable":
+		summary = "Preview generation was skipped because no retained Tautulli choices are available. Refresh Tautulli choices to continue without another save."
 	case "owner-not-found":
 		summary = "Tautulli did not expose one unambiguous owner or administrator. Choose a user under Previews to run it manually."
 	case "operation-active":
@@ -686,8 +767,21 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		writeAPIFieldErrors(w, http.StatusUnprocessableEntity, "config-validation-failed", "Review the highlighted configuration fields.", fieldErrors)
 		return
 	}
-	if err := s.configuration.Reset(result.Editor.Revision); err != nil {
-		s.recordDiagnostic("configuration", "warning", "config-status-write-failed")
+	if result.Saved {
+		if !result.PostSave.RunDiscovery {
+			retained, rebaseErr := s.discovery.Rebase(result.PreviousRevision, result.Editor.Revision)
+			result.PostSave.RetainedDiscovery = retained
+			if rebaseErr != nil {
+				s.recordDiagnostic("configuration", "warning", "discovery-rebase-failed")
+			}
+		}
+		if err := s.configuration.Rebase(result.PreviousRevision, result.Editor.Revision, &result.PostSave); err != nil {
+			s.recordDiagnostic("configuration", "warning", "config-status-write-failed")
+		}
+	} else {
+		s.recordDiagnostic("configuration", "passed", "config-unchanged")
+		writeJSON(w, http.StatusOK, result)
+		return
 	}
 	s.recordDiagnostic("configuration", "passed", "config-saved")
 	writeJSON(w, http.StatusOK, result)

@@ -113,19 +113,22 @@ Task Scheduler, and installer language. Its host wrapper is the normal source
 of pairing-token retrieval and narrow access recovery.
 
 Page load and dashboard refresh never contact Tautulli, Plex, or SMTP. A
-successful **Validate, save, and verify** action automatically refreshes the
-sanitized Tautulli choices, runs the private-LAN Tautulli/Plex check, runs the
-non-sending SMTP preflight, and starts six local previews only when discovery
-reports one unambiguous owner or administrator ID. The SMTP preflight permits a
+successful **Validate, save, and verify** action uses a typed backend impact
+plan and runs only affected work: Tautulli changes rerun discovery and
+integration checks, Plex changes rerun integration checks, SMTP-card changes
+rerun SMTP preflight, and presentation/content/library changes regenerate six
+local previews when retained or refreshed discovery reports one unambiguous
+owner or administrator ID. Cache, email, schedule, and delivery-delay-only
+saves retain applicable results and run no checks or preview work. The SMTP preflight permits a
 configured private or public unicast provider but stops before authentication
 and sending; SMTP credentials, From-address permission, and real MIME delivery
 are validated only by the separately confirmed `TestEmail` operation. Every
 automatic check remains manually repeatable. Preview files and the newest
 successful preview selection persist on disk, while cached Tautulli choices are
 accepted only for the current configuration revision. The four setup outcomes
-(choices, Tautulli/Plex, SMTP preflight, and local previews) are also retained
-only for that revision; saving or restoring a different configuration resets
-them before the new checks run. Guarded test delivery is
+(choices, Tautulli/Plex, SMTP preflight, and local previews) are retained for
+that revision; a save safely rebases only unaffected sanitized evidence to the
+new full revision, while restore resets every outcome to not-run. Guarded test delivery is
 always manual, sends six messages only to the saved `TestEmail`, and cannot be
 cancelled after it starts because some messages may already have been accepted
 by SMTP. A separate manual production-send card invokes either the fixed
@@ -260,7 +263,10 @@ strict bounded result over a nonce-protected ephemeral loopback callback. The
 normal Manager process remains unelevated. The exact verified `.ts.net`
 hostname is the only provider value persisted in private Manager state and the
 only additional Host header accepted. Requests through that host require HTTPS
-origin semantics, Secure session cookies, and HSTS. Windows trusted-local and
+origin semantics, Secure session cookies, and HSTS. Origin/Host authority
+comparison normalizes DNS case, one trailing dot, and equivalent default ports,
+but rejects malformed or different authorities and ignores proxy forwarding
+headers. Windows trusted-local and
 optional password-lock behavior remain unchanged.
 
 Native Linux uses the same route-ownership contract through a root-owned

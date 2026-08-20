@@ -196,6 +196,13 @@ For LAN or reverse-proxy access, verify the exact DNS name is listed in the
 platform's Manager allowed-host setting. Terminate TLS at a trusted reverse
 proxy, enable secure cookies, preserve the original Host header, and do not
 publish the plain HTTP backend. IP-literal access needs no DNS allowlist entry.
+An Origin rejection now reports a sanitized code: `invalid-origin` for a
+malformed value, `origin-host-mismatch` or `origin-scheme-mismatch` for a real
+same-origin difference, and `remote-http` when a saved Tailscale hostname was
+used over HTTP. Forwarded headers cannot override these checks. If default
+`http://localhost:8787` still fails, provide only the browser address scheme,
+sanitized Host shape (localhost, private DNS, or `.ts.net`), and whether a
+trusted TLS proxy is in use; do not post the private hostname or credentials.
 
 ## Container permission errors
 

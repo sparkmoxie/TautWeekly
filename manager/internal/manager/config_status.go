@@ -95,6 +95,84 @@ func (s *configurationStatusStore) ResetNotRun(revision string) error {
 	return s.reset(revision, "not-run")
 }
 
+// Rebase moves only evidence whose normalized inputs did not change. The plan
+// is updated to report what was actually retained, never merely what was
+// eligible for retention.
+func (s *configurationStatusStore) Rebase(previousRevision, nextRevision string, plan *ConfigPostSavePlan) error {
+	if !validConfigRevision(nextRevision) || plan == nil {
+		return errConfigurationStatusRevision
+	}
+	now := s.now().UTC().Format(time.RFC3339)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	previous, hasPrevious := ConfigurationStatus{}, false
+	if validConfigRevision(previousRevision) {
+		previous, hasPrevious = s.readLocked(previousRevision)
+	}
+	next := newConfigurationStatus(nextRevision, "not-run", s.now())
+	next.UpdatedAtUTC = now
+
+	retainStep := func(name string, allowed bool) bool {
+		if !allowed || !hasPrevious {
+			return false
+		}
+		step, ok := previous.Steps[name]
+		if !ok || step.State == "waiting" || step.State == "running" || step.State == "not-run" {
+			return false
+		}
+		next.Steps[name] = step
+		return true
+	}
+	waitFor := func(name string, required bool) {
+		if !required {
+			return
+		}
+		next.Steps[name] = ConfigurationStatusStep{State: "waiting", Summary: configurationStatusWaitingCopy[name], UpdatedAtUTC: now}
+	}
+
+	if !plan.RunDiscovery && plan.RetainedDiscovery {
+		plan.RetainedDiscovery = retainStep("choices", true)
+	} else {
+		plan.RetainedDiscovery = false
+	}
+	waitFor("choices", plan.RunDiscovery)
+
+	if !plan.RunIntegration && hasPrevious && previous.LastVerification != nil {
+		retained := *previous.LastVerification
+		retained.ConfigRevision = nextRevision
+		if clean, ok := cleanStoredIntegrationCheck(nextRevision, retained); ok {
+			next.LastVerification = &clean
+			plan.RetainedIntegration = retainStep("lan", true)
+		}
+	}
+	waitFor("lan", plan.RunIntegration)
+
+	if !plan.RunSMTP && hasPrevious && previous.LastSMTPCheck != nil {
+		retained := *previous.LastSMTPCheck
+		retained.ConfigRevision = nextRevision
+		if clean, ok := cleanStoredSMTPCheck(nextRevision, retained); ok {
+			next.LastSMTPCheck = &clean
+			plan.RetainedSMTP = retainStep("smtp", true)
+		}
+	}
+	waitFor("smtp", plan.RunSMTP)
+
+	if !plan.GeneratePreviews {
+		plan.RetainedPreviews = retainStep("previews", true)
+	}
+	waitFor("previews", plan.GeneratePreviews)
+
+	next.Running = false
+	for _, step := range next.Steps {
+		if step.State == "waiting" || step.State == "running" {
+			next.Running = true
+			break
+		}
+	}
+	return writePrivateJSON(s.path, next)
+}
+
 func (s *configurationStatusStore) reset(revision, state string) error {
 	if !validConfigRevision(revision) {
 		return errConfigurationStatusRevision

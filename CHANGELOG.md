@@ -6,6 +6,25 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.18.2] - 2026-08-20
+
+### Fixed
+
+- Made configuration saves rerun only the checks affected by normalized field
+  changes. Presentation, newsletter-content, and library changes now preserve
+  sanitized discovery and connection evidence while regenerating previews;
+  cache, email, schedule, and delivery-delay-only saves run no connection
+  checks or preview work, and exact no-op saves create no backup or setup work.
+- Kept the Config workflow as the primary automatic validation path while
+  retaining **Verify** for detailed manual diagnostics. A successful manual
+  Refresh or Verify can now resume a pending preview without another save, and
+  failed discovery reports that preview generation was skipped instead of
+  incorrectly reporting a missing owner.
+- Canonicalized same-origin authorities for DNS case, one trailing dot, and
+  equivalent omitted/default ports while preserving exact Host, scheme, CSRF,
+  authentication, HTTPS, and Tailscale boundaries. Rejections now return
+  sanitized support codes and continue to ignore forwarding headers.
+
 ## [0.18.1] - 2026-08-20
 
 ### Changed

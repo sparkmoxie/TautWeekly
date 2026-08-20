@@ -127,7 +127,7 @@
       </section>
 
       <section class="view" id="view-configuration" data-panel="configuration" hidden>
-        <div class="page-heading"><div><span class="eyebrow">Guided setup preview</span><h1>Configure without touching JSON.</h1><p>Explore the package-neutral Manager workflow with fictional values, synthetic choices, simulated verification, and local demo previews.</p></div><span class="state-chip pending" id="config-chip">Checking</span></div>
+        <div class="page-heading"><div><span class="eyebrow">Guided setup preview</span><h1>Configure without touching JSON.</h1><p>Explore the package-neutral Manager workflow with fictional values and a card-scoped plan for synthetic checks and local demo previews.</p></div><span class="state-chip pending" id="config-chip">Checking</span></div>
         <div class="privacy-banner"><span aria-hidden="true">&#9671;</span><p id="config-secret-policy"><strong>Fictional values only:</strong> edits live in memory for this tab, are never persisted, and reset on reload. Secret controls use a fixed demo placeholder and never collect or expose a credential.</p></div>
         <div class="direct-plex-notice" id="direct-plex-notice" hidden><span aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-hub"></use></svg></span><div><strong id="direct-plex-notice-heading">Complete direct Plex setup</strong><p id="direct-plex-notice-copy"></p></div><button class="button button-secondary" id="direct-plex-review-button" type="button">Review connections</button></div>
         <section class="setup-workflow" id="setup-workflow" aria-labelledby="setup-workflow-heading" hidden>
@@ -142,7 +142,7 @@
           <div class="setup-workflow-boundary"><span aria-hidden="true">&#9671;</span><p>This demonstration never opens a network connection, authenticates, sends email, writes files, changes recipient state, or installs a schedule. Every passing result is synthetic.</p></div>
         </section>
         <section class="discovery-panel" aria-labelledby="discovery-heading">
-          <div><span class="eyebrow">Fictional Tautulli choices</span><h2 id="discovery-heading">Included libraries and delivery exclusions</h2><p>A simulated save loads a fixed roster of invented libraries, numeric IDs, display names, and roles. Choices exist only in memory and reset on reload.</p></div>
+          <div><span class="eyebrow">Fictional Tautulli choices</span><h2 id="discovery-heading">Included libraries and delivery exclusions</h2><p>The initial demo and simulated Tautulli changes load a fixed roster of invented libraries, numeric IDs, display names, and roles. Other card saves retain it in memory until reload.</p></div>
           <label class="verification-confirm"><input id="discovery-confirm" type="checkbox"><span><strong>Repeat synthetic discovery</strong><small>Reload the fictional movie/TV libraries and user display names already bundled with this page.</small></span></label>
           <button class="button button-secondary" id="discovery-run-button" type="button" disabled>Refresh fictional choices</button>
           <p class="verification-message" id="discovery-message" role="status" aria-live="polite">Save the synthetic configuration before loading choices.</p>
@@ -155,7 +155,7 @@
         <div class="config-blocked" id="config-blocked" hidden><h2>Automatic editing is unavailable</h2><p>The synthetic configuration is invalid or unreadable. Reload the page to restore its fixed fictional values.</p></div>
         <form class="config-form" id="config-form" novalidate>
           <div class="config-sections" id="config-sections"></div>
-          <div class="config-actions"><div><strong>Simulated save and verification</strong><small id="config-save-copy">Values are validated in this tab, retained only in memory, and followed by passing synthetic checks and six bundled previews.</small></div><div class="config-action-buttons"><button class="button button-secondary" id="config-reset-button" type="button">Discard edits</button><button class="button button-primary" id="config-save-button" type="submit">Validate, save, and verify</button></div></div>
+          <div class="config-actions"><div><strong>Simulated scoped save and verification</strong><small id="config-save-copy">Values are validated in this tab and retained only in memory. Only affected synthetic checks or bundled previews rerun.</small></div><div class="config-action-buttons"><button class="button button-secondary" id="config-reset-button" type="button">Discard edits</button><button class="button button-primary" id="config-save-button" type="submit">Validate, save, and verify</button></div></div>
         </form>
         <div class="section-heading"><div><span class="eyebrow">Recovery preview</span><h2>Configuration backups</h2></div><p>The listed backup is fictional. Restore updates temporary demo state only; Delete requires confirmation and removes only the in-memory demo row.</p></div>
         <section class="backup-panel" aria-labelledby="backup-heading"><div class="panel-heading"><h2 id="backup-heading">Synthetic backup metadata</h2><small id="backup-count">Checking</small></div><div class="backup-list" id="backup-list"></div></section>

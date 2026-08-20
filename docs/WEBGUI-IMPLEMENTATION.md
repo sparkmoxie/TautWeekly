@@ -335,8 +335,10 @@ Health is a shared product contract, not a single green badge.
 - GET /api/v1/config/status
   - Authenticated, revision-scoped results for libraries/users, Tautulli/Plex,
     SMTP preflight, and local previews.
-  - Persists sanitized states across refreshes and Manager restarts; a new
-    configuration revision resets all four results before checks run.
+  - Persists sanitized states across refreshes and Manager restarts. A save
+    classifies normalized old/new values on the backend, safely rebases only
+    unaffected sanitized evidence to the new full revision, and marks only
+    affected results for rerun. A restore remains a full not-run boundary.
 
 Temporary Tautulli, Plex, or SMTP failures set integration state to degraded.
 They must not cause Docker to restart an otherwise healthy process.
@@ -732,6 +734,11 @@ change their password there but cannot disable the mandatory boundary.
 
 - No permissive CORS
 - Origin and Host validation
+  - Canonical authority comparison lower-cases DNS, removes one trailing dot,
+    and treats omitted `:80`/`:443` like the explicit default while still
+    requiring the exact request scheme and host. Malformed origins, different
+    hosts, and HTTP mutations through a private Tailscale hostname use
+    sanitized support codes and are rejected. Forwarded headers are ignored.
 - CSRF protection on mutations
 - Content Security Policy
 - Frame restrictions except the dedicated sandboxed preview route
@@ -925,17 +932,20 @@ under `manager/`. The Windows configuration editor adds schema validation,
 optimistic revision checks, atomic replacement, private backups, and write-only
 secret updates. Configuration backups can be listed without exposing their
 contents and restored after schema validation, revision confirmation, and a
-pre-restore safety backup. A successful save now starts the safe setup sequence:
-sanitized discovery, LAN-only Tautulli/direct-Plex verification, non-sending
-SMTP preflight, and local preview generation when one explicit owner or
-administrator ID is available. Each step remains manually repeatable; page
-load and status refresh never contact external services. Local loopback
-fixtures cover the adapters in automated tests and explicit live-LAN acceptance
-has passed.
+pre-restore safety backup. A successful save now consumes a typed backend
+impact plan: Tautulli changes rerun discovery and integration checks, Plex
+changes rerun integration checks, SMTP-card changes rerun only SMTP preflight,
+and identity/newsletter-content/custom-card/library changes regenerate local
+previews. Cache, email, schedule, and delivery-delay-only saves retain all
+applicable results and run no setup check or preview work. Each check remains
+manually repeatable under Verify; page load and status refresh never contact
+external services. Local loopback fixtures cover the adapters in automated
+tests and explicit live-LAN acceptance has passed.
 The four sanitized setup results are persisted in private, revision-scoped
 Manager state and are rendered both as permanent Config cards and an aggregate
-Dashboard Config status card. A save or restore resets them for the new
-revision, manual retests update the same record, and late results from an older
+Dashboard Config status card. A save safely rebases unaffected sanitized
+results when their relevant inputs are unchanged; a restore resets them to
+not-run. Manual retests update the same record, and late results from an older
 revision are rejected.
 Guided Tautulli discovery returns only stable numeric IDs, sanitized library
 names, user display names, media types, counts, eligibility enums, and explicit
