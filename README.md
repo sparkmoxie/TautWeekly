@@ -44,45 +44,58 @@ and milestone emails. Preview locally, send controlled tests, then schedule deli
 | Native Linux | Current Ubuntu, Debian, or RHEL host with systemd | [Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-linux.tar.gz) |
 | FreeBSD / Podman **beta** | FreeBSD 15.1+ amd64 host | [FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-freebsd-podman.tar.gz) |
 
-Every maintained Manager uses **Settings > Updates** for cached, offline-safe
-application/package status and explicit release checks. Missing or 24-hour-old
-status refreshes once in the background; successful results are reused for five
-minutes. The header SVG appears only for a validated newer release, the card
-glows for any non-current state, and the existing green **Current** chip remains.
-Windows can launch its verified updater; every other package keeps updates with
-the host and shows the appropriate guidance.
+Manager additions, newest first:
 
-Every package also offers optional private HTTPS administration through
-**Settings > Tailscale**. TautWeekly never requires or enables Funnel. Windows
-keeps its password lock optional; other remote-capable Managers require
-authentication. See the platform guide for setup and mobile access details.
+- An optional custom text card before the newsletter release-count/date block,
+  with configurable border color/opacity, optional title and subheading, and a
+  required plain-text body when enabled.
+- Optional private HTTPS administration through **Settings > Tailscale**, with
+  package-aware setup and no Funnel requirement. Windows keeps its password lock
+  optional; other remote-capable Managers require authentication.
+- Capability-aware **Settings > Updates** status for application, package, image,
+  and host-adapter layers. A header SVG appears only for a validated newer
+  release; Windows can launch its verified updater, while other packages keep
+  update authority with the host.
+- A responsive Dashboard with guided **Config**, **Verify**, **Previews**,
+  **Schedule**, and **Settings** workflows, plus private backups and preview-first
+  delivery controls.
 
-### Windows Manager: full native startup and tray system
+See the platform guides for exact setup, mobile access, update, and recovery
+steps.
 
-The native installer provides guided local setup, tray health/actions, optional
-sign-in startup, an optional password lock, and an independent Windows Scheduled
-Task for weekly delivery.
+### Windows Manager
 
-### NAS / Docker Manager: one secure core
+Run the native Setup EXE, choose the permanent application folder, and finish
+the guided local GUI. Windows adds tray health/actions, optional sign-in startup
+and password lock, plus an independent Scheduled Task; **Settings > Updates**
+can start the existing verified elevated updater.
 
-QNAP, Unraid, Compose, and compatible Docker hosts share the authenticated
-Manager and persistent `/data` boundary while retaining their host-owned update
-and recovery lifecycles.
+### NAS / Docker Manager
 
-### macOS Manager: Docker Desktop, tailored for Mac
+Install through the QNAP, Unraid, or Compose path, bootstrap the authenticated
+Manager, and keep private state under `/data`. The GUI owns configuration,
+preview, and scheduling workflows; QNAP/Compose wrappers and Unraid Apps retain
+their host-owned verified update and recovery paths.
 
-Intel and Apple-silicon Macs receive the authenticated Manager in a Docker
-Desktop profile with persistent private data and Mac-owned verified updates.
+### macOS Manager
 
-### Native Linux Manager: GUI-first systemd service
+Install the Intel or Apple-silicon Docker Desktop package, bootstrap Manager
+access, and complete setup in the GUI with persistent `data/`. Mac updates stay
+with the verified host wrapper, including architecture-aware rebuild, health
+verification, and rollback.
 
-Native amd64 and arm64 packages run an authenticated, loopback-only systemd
-Manager with persistent private state and explicit host-owned updates.
+### Native Linux Manager
 
-### FreeBSD Podman Manager: beta host adapter
+Install the matching amd64 or arm64 archive and access the authenticated,
+loopback-only GUI through the documented tunnel/bootstrap flow. systemd owns the
+service and schedule while `tautweekly update` retains verified host update and
+recovery authority.
 
-The beta FreeBSD package runs the authenticated OCI Manager through Podman with
-rc.d ownership, private backups, and health-checked host updates and rollback.
+### FreeBSD Podman Manager
+
+Install the beta Podman package, bootstrap Manager access through the documented
+tunnel, and use the same guided GUI. rc.d and the host wrapper retain service,
+backup, verified update, health-check, and rollback ownership.
 
 ## Current newsletter behavior
 
@@ -90,7 +103,6 @@ rc.d ownership, private backups, and health-checked host updates and rollback.
   episode details when available.
 - A private personal recap with watch time and most-watched movies and shows.
 - Adaptive **HOT NEW RELEASE** and **TRENDING THIS WEEK** highlights.
-- An optional custom text card before the newsletter release-count/date block.
 - A privacy-preserving, server-wide Binge Champion award.
 - Welcome, active-week, quiet-week, and milestone newsletter layouts.
 - Browser previews and controlled TestEmail delivery before scheduling.
