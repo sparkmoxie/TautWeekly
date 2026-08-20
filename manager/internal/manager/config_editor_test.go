@@ -36,6 +36,26 @@ func TestReadConfigEditorUsesSafeDefaultsWithoutSecrets(t *testing.T) {
 	if buttonLabel.Label != "Button label" || buttonLabel.Value != "Open Plex" || buttonLabel.Max == nil || *buttonLabel.Max != 64 {
 		t.Fatalf("unexpected button-label default: %+v", buttonLabel)
 	}
+	customEnabled := editorField(t, view, "CustomTextCardEnabled")
+	customBorder := editorField(t, view, "CustomTextCardBorderColor")
+	customOpacity := editorField(t, view, "CustomTextCardBorderOpacity")
+	customBody := editorField(t, view, "CustomTextCardBody")
+	if customEnabled.Value != false || customBorder.Value != "#72aef7" || customOpacity.Value != int64(34) || customBody.Value != "" {
+		t.Fatalf("unexpected custom-text-card defaults: enabled=%#v border=%#v opacity=%#v body=%#v", customEnabled.Value, customBorder.Value, customOpacity.Value, customBody.Value)
+	}
+	cacheGroup := -1
+	customGroup := -1
+	for index, group := range view.Groups {
+		if group == "Cache" {
+			cacheGroup = index
+		}
+		if group == "Custom text card" {
+			customGroup = index
+		}
+	}
+	if customGroup != cacheGroup+1 {
+		t.Fatalf("custom text card group is not immediately after Cache: %v", view.Groups)
+	}
 }
 
 func TestReadConfigEditorNeverReturnsStoredSecrets(t *testing.T) {
@@ -272,6 +292,53 @@ func TestSaveConfigRejectsUnsafeOrOversizedButtonLabels(t *testing.T) {
 	}
 	if _, message := parseAndValidateConfigValue(json.RawMessage(`"`+strings.Repeat("x", 65)+`"`), definition); !strings.Contains(message, "64 characters") {
 		t.Fatalf("length validation message: %q", message)
+	}
+}
+
+func TestCustomTextCardValidationIsConditionalAndPlainTextOnly(t *testing.T) {
+	root := t.TempDir()
+	view := ReadConfigEditor(root)
+	request := validConfigSaveRequest(t, view)
+	request.Secrets["ApiKey"] = SecretChange{Action: "replace", Value: "fictional-api-key"}
+	request.Secrets["SmtpPassword"] = SecretChange{Action: "replace", Value: "fictional-smtp-password"}
+	request.Values["CustomTextCardEnabled"] = json.RawMessage(`true`)
+	request.Values["CustomTextCardBody"] = json.RawMessage(`""`)
+	request.Values["CustomTextCardBorderColor"] = json.RawMessage(`"blue"`)
+
+	_, fieldErrors, err := SaveConfig(root, request, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fieldErrors["CustomTextCardBody"] == "" || fieldErrors["CustomTextCardBorderColor"] == "" {
+		t.Fatalf("expected conditional body and color errors, got %v", fieldErrors)
+	}
+
+	request.Values["CustomTextCardBody"] = json.RawMessage("\"First line\\r\\nSecond <line> & safe\"")
+	request.Values["CustomTextCardBorderColor"] = json.RawMessage(`"#72aef7"`)
+	request.Values["CustomTextCardBorderOpacity"] = json.RawMessage(`101`)
+	_, fieldErrors, err = SaveConfig(root, request, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fieldErrors["CustomTextCardBorderOpacity"] == "" {
+		t.Fatalf("expected opacity range error, got %v", fieldErrors)
+	}
+
+	request.Values["CustomTextCardBorderOpacity"] = json.RawMessage(`34`)
+	result, fieldErrors, err := SaveConfig(root, request, time.Now)
+	if err != nil || len(fieldErrors) != 0 || !result.Saved {
+		t.Fatalf("save custom text card: result=%+v fields=%v err=%v", result, fieldErrors, err)
+	}
+	raw, err := os.ReadFile(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := map[string]any{}
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored["CustomTextCardEnabled"] != true || stored["CustomTextCardBody"] != "First line\nSecond <line> & safe" {
+		t.Fatalf("custom text card values were not stored as normalized plain text: %#v", stored)
 	}
 }
 

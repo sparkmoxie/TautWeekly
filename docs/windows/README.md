@@ -83,9 +83,11 @@ successful check, last sanitized failure, and release-notes link. Authenticated
 entry renders cached status first and makes one non-blocking bounded request
 only when the last success is missing or at least 24 hours old and backoff
 permits. Opening or refreshing the Dashboard does not itself contact GitHub;
-choose **Check now** for an explicit refresh. A purple header notification
+successful results are reused for five minutes, then **Check now** permits an
+explicit refresh. A purple header notification
 appears only for a validated newer running application and links to this view;
-it does not start installation.
+the status card glows for every non-current state while the green **Current**
+chip remains unchanged. Neither cue starts installation.
 
 When a newer verified stable release is available, Windows alone shows
 **Install update** behind a separate confirmation. That action starts the

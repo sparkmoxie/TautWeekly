@@ -456,10 +456,12 @@ reports the stable channel, latest verified release, last successful check,
 last sanitized failure, release notes, and whether the saved host adapter is
 current, legacy, or mismatched. Authenticated entry renders cached status first
 and makes one non-blocking bounded check only when the last success is missing
-or at least 24 hours old and backoff permits; **Check now** explicitly refreshes
-the same endpoint. Navigation, Dashboard rendering, and health remain
-offline-capable. A passive purple header notification only links here and never
-claims package ownership. The Manager remains non-root and has no Docker socket or host helper,
+or at least 24 hours old and backoff permits. Successful results are reused for
+five minutes before **Check now** refreshes the same endpoint. Navigation,
+Dashboard rendering, and health remain offline-capable. A passive purple header
+notification appears only for a validated available update, while the card
+glows for every non-current state; neither claims package ownership. The
+Manager remains non-root and has no Docker socket or host helper,
 so it never offers an install button for Docker/NAS packages.
 
 The guidance is package-specific: Unraid points to Docker/Apps and its current

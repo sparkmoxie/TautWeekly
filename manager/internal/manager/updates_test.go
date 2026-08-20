@@ -308,14 +308,14 @@ func TestBackgroundUpdateCheckRecommendationUsesFreshnessBackoffAndChannel(t *te
 	failureNow := now
 	failureChecker := &fixtureUpdateChecker{err: errors.New("synthetic offline")}
 	failure := newUpdateCoordinator(Options{
-		DataDir:                 t.TempDir(),
-		TautWeeklyRoot:          t.TempDir(),
-		Version:                 "1.0.0",
-		RuntimeMode:             runtimeModeLinux,
-		PackageVersion:          "1.0.0",
-		Now:                     func() time.Time { return failureNow },
-		updateChecker:           failureChecker,
-		updateMinimumCheckDelay: time.Minute,
+		DataDir:                   t.TempDir(),
+		TautWeeklyRoot:            t.TempDir(),
+		Version:                   "1.0.0",
+		RuntimeMode:               runtimeModeLinux,
+		PackageVersion:            "1.0.0",
+		Now:                       func() time.Time { return failureNow },
+		updateChecker:             failureChecker,
+		updateMinimumFailureDelay: time.Minute,
 	})
 	failed, err := failure.CheckNow(context.Background())
 	if err != nil || failed.BackgroundCheckRecommended || failed.LastFailure == nil {
@@ -360,6 +360,56 @@ func TestBackgroundUpdateCheckRecommendationSuppressesConcurrentChecks(t *testin
 	<-done
 }
 
+func TestSuccessfulUpdateChecksReuseFreshResultAcrossPackageKinds(t *testing.T) {
+	t.Parallel()
+	packages := []struct {
+		kind string
+		mode string
+	}{
+		{packageKindWindows, runtimeModeWindows},
+		{packageKindLinux, runtimeModeLinux},
+		{packageKindMac, runtimeModeMac},
+		{packageKindFreeBSD, runtimeModeNAS},
+		{packageKindNAS, runtimeModeNAS},
+		{packageKindQNAP, runtimeModeNAS},
+		{packageKindUnraid, runtimeModeNAS},
+		{packageKindCompatibleDocker, runtimeModeNAS},
+	}
+	for _, currentPackage := range packages {
+		currentPackage := currentPackage
+		t.Run(currentPackage.kind, func(t *testing.T) {
+			t.Parallel()
+			checkedAt := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
+			currentNow := checkedAt
+			checker := &fixtureUpdateChecker{release: updateRelease{Version: "1.1.0", ReleaseNotesURL: stableReleaseBaseURL + "1.1.0"}}
+			coordinator := newUpdateCoordinator(Options{
+				DataDir:            t.TempDir(),
+				TautWeeklyRoot:     t.TempDir(),
+				Version:            "1.0.0",
+				RuntimeMode:        currentPackage.mode,
+				PackageKind:        currentPackage.kind,
+				PackageVersion:     "1.0.0",
+				HostAdapterVersion: currentHostAdapterAPI,
+				Now:                func() time.Time { return currentNow },
+				updateChecker:      checker,
+			})
+
+			first, err := coordinator.CheckNow(context.Background())
+			if err != nil || checker.callCount() != 1 || first.NextCheckAllowedAtUTC != checkedAt.Add(updateCheckMinimumDelay).Format(time.RFC3339) {
+				t.Fatalf("first check: status=%+v calls=%d err=%v", first, checker.callCount(), err)
+			}
+			currentNow = checkedAt.Add(updateCheckMinimumDelay - time.Second)
+			if second, err := coordinator.CheckNow(context.Background()); err == nil || err.Error() != "check-backoff" || checker.callCount() != 1 || second.State != "update-available" {
+				t.Fatalf("fresh result was not reused: status=%+v calls=%d err=%v", second, checker.callCount(), err)
+			}
+			currentNow = checkedAt.Add(updateCheckMinimumDelay)
+			if refreshed, err := coordinator.CheckNow(context.Background()); err != nil || checker.callCount() != 2 || refreshed.LastSuccessfulCheckUTC != currentNow.Format(time.RFC3339) {
+				t.Fatalf("refresh after cooldown: status=%+v calls=%d err=%v", refreshed, checker.callCount(), err)
+			}
+		})
+	}
+}
+
 func TestUpdateCheckTimeoutBackoffAndUnsupportedChannelAreSanitized(t *testing.T) {
 	now := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
 	checker := &fixtureUpdateChecker{wait: true}
@@ -371,7 +421,7 @@ func TestUpdateCheckTimeoutBackoffAndUnsupportedChannelAreSanitized(t *testing.T
 		PackageVersion:            "1.0.0",
 		Now:                       func() time.Time { return now },
 		updateChecker:             checker,
-		updateMinimumCheckDelay:   time.Second,
+		updateMinimumFailureDelay: time.Second,
 		updateMaximumFailureDelay: time.Minute,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)

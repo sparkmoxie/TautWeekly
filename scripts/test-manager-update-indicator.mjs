@@ -78,9 +78,14 @@ assert.match(productionCSS, /color:var\(--violet\)/);
 assert.match(productionCSS, /animation:hero-pulse 2\.9s ease-out infinite/);
 for (const [name, css, javascript] of [["production", productionCSS, productionJS], ["preview", previewCSS, previewJS]]) {
   assert.match(javascript, /case "update-available": return \{ label: "Update available", tone: "update-available"/, `${name} update state does not select the dedicated purple tone`);
+  assert.match(javascript, /classList\.toggle\("update-attention-glow", update\.state !== "current"\)/, `${name} update card glow does not follow the non-current state`);
   assert.match(css, /\.state-chip\.update-available\{[^}]*color:var\(--violet\)[^}]*animation:state-pulse-update 2\.9s ease-in-out infinite/, `${name} update chip is not purple with a pulse`);
   assert.match(css, /@keyframes state-pulse-update\{[^}]+rgba\(173,140,255/, `${name} update chip pulse is not purple`);
+  assert.match(css, /\.update-settings-panel\.update-attention-glow:before\{[^}]*animation:update-panel-pulse 2\.9s ease-out infinite/, `${name} non-current update card background does not pulse`);
+  assert.match(css, /@keyframes update-panel-pulse\{0%,100%\{opacity:\.42\}50%\{opacity:1\}\}/, `${name} update card pulse is missing`);
+  assert.match(css, /prefers-reduced-motion:reduce.*?update-settings-panel\.update-attention-glow:before/s, `${name} update card glow lacks reduced-motion support`);
   assert.match(css, /forced-colors:active[^}]+\.state-chip\.update-available/, `${name} update chip lacks forced-colors support`);
+  assert.match(css, /forced-colors:active.*?\.update-settings-panel\.update-attention-glow/s, `${name} update card glow lacks forced-colors support`);
 }
 assert.match(productionCSS, /prefers-reduced-motion:reduce[^}]+update-status-halo/s);
 assert.match(productionCSS, /forced-colors:active/);

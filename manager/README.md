@@ -69,11 +69,12 @@ Current capabilities:
 - bounded stable-release checks with a sanitized private cache, exponential
   failure backoff, strict GitHub URL/asset metadata validation, one
   authenticated non-blocking refresh when the last success is missing or at
-  least 24 hours old, and no network dependency in navigation, Dashboard
-  rendering, or health checks;
+  least 24 hours old, a five-minute successful-result reuse guard, and no
+  network dependency in navigation, Dashboard rendering, or health checks;
 - a passive purple header notification that appears only for a validated newer
   running application and routes to the consolidated status view without
-  taking package-update ownership;
+  taking package-update ownership, plus a card-level attention glow for every
+  non-current comparison state;
 - an explicitly confirmed Windows-only install action that invokes the fixed
   packaged updater, while native Linux, macOS, FreeBSD, NAS, QNAP, Unraid, and
   compatible Docker modes return guidance without host mutation authority;

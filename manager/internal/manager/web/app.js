@@ -799,6 +799,7 @@ function renderConfigEditor() {
     if (!fields.length) continue;
     const section = document.createElement("section");
     section.className = "config-section";
+    if (group === "Custom text card") section.classList.add("config-section-custom-text-card");
     const heading = document.createElement("div");
     heading.className = "config-section-heading";
     const title = document.createElement("h2");
@@ -828,6 +829,9 @@ function renderConfigEditor() {
   }
   renderDirectPlexNotice();
   renderDiscovery();
+  byId("config-CustomTextCardEnabled")?.addEventListener("change", updateConfigSaveAvailability);
+  byId("config-CustomTextCardBody")?.addEventListener("input", updateConfigSaveAvailability);
+  updateConfigSaveAvailability();
 }
 
 function renderDirectPlexNotice() {
@@ -1162,6 +1166,45 @@ function createConfigControl(field) {
       input.append(option);
     }
     control.append(input);
+  } else if (field.type === "textarea") {
+    input = document.createElement("textarea");
+    input.rows = 6;
+    input.value = field.value ?? "";
+    if (field.max !== undefined) input.maxLength = Number(field.max);
+    control.append(input);
+  } else if (field.type === "range") {
+    input = document.createElement("input");
+    input.type = "range";
+    input.min = String(field.min ?? 0);
+    input.max = String(field.max ?? 100);
+    input.step = "1";
+    input.value = field.value ?? "0";
+    const shell = document.createElement("span");
+    shell.className = "config-range";
+    const output = document.createElement("output");
+    output.value = `${input.value}%`;
+    output.textContent = output.value;
+    input.addEventListener("input", () => {
+      output.value = `${input.value}%`;
+      output.textContent = output.value;
+    });
+    shell.append(input, output);
+    control.append(shell);
+  } else if (field.type === "color") {
+    input = document.createElement("input");
+    input.type = "color";
+    input.value = field.value || "#72aef7";
+    const shell = document.createElement("span");
+    shell.className = "config-color";
+    const output = document.createElement("output");
+    output.value = input.value.toUpperCase();
+    output.textContent = output.value;
+    input.addEventListener("input", () => {
+      output.value = input.value.toUpperCase();
+      output.textContent = output.value;
+    });
+    shell.append(input, output);
+    control.append(shell);
   } else {
     input = document.createElement("input");
     input.type = configInputType(field.type);
@@ -1356,7 +1399,7 @@ function closeSecretRevealDialog() {
 }
 
 function configInputType(type) {
-  if (["url", "email", "time", "password"].includes(type)) return type;
+  if (["url", "email", "time", "password", "color"].includes(type)) return type;
   if (type === "integer") return "number";
   if (type === "secret") return "password";
   return "text";
@@ -1375,7 +1418,7 @@ function collectConfigSaveRequest() {
       else secrets[field.name] = { action: "preserve" };
     } else if (field.type === "boolean") {
       values[field.name] = input.checked;
-    } else if (field.type === "integer") {
+    } else if (field.type === "integer" || field.type === "range") {
       values[field.name] = input.value === "" ? null : Number(input.value);
     } else if (field.type === "string-list" || field.type === "email-list") {
       values[field.name] = input.value.split(/[\n,]/).map((value) => value.trim()).filter(Boolean);
@@ -1563,11 +1606,50 @@ async function runPostSaveSetup(revision) {
   }
 }
 
+function customTextCardBodyMissing() {
+  return Boolean(byId("config-CustomTextCardEnabled")?.checked && !byId("config-CustomTextCardBody")?.value.trim());
+}
+
+function updateConfigSaveAvailability() {
+  const button = byId("config-save-button");
+  if (!button) return;
+  const missing = customTextCardBodyMissing();
+  const enabled = Boolean(byId("config-CustomTextCardEnabled")?.checked);
+  const input = byId("config-CustomTextCardBody");
+  const control = document.querySelector('[data-config-field="CustomTextCardBody"]');
+  const error = byId("config-error-CustomTextCardBody");
+  button.disabled = button.dataset.busy === "true" || missing;
+  if (input) {
+    input.required = enabled;
+    input.setAttribute("aria-required", String(enabled));
+  }
+  if (missing && error) {
+    error.textContent = "Card body text is required when the custom text card is enabled.";
+    error.dataset.liveValidation = "true";
+    input?.setAttribute("aria-invalid", "true");
+    if (input) input.dataset.liveValidation = "true";
+    control?.classList.add("invalid");
+  } else if (error?.dataset.liveValidation === "true") {
+    error.textContent = "";
+    delete error.dataset.liveValidation;
+    if (input?.dataset.liveValidation === "true") {
+      input.removeAttribute("aria-invalid");
+      delete input.dataset.liveValidation;
+      control?.classList.remove("invalid");
+    }
+  }
+}
+
 async function submitConfig(event) {
   event.preventDefault();
+  if (customTextCardBodyMissing()) {
+    updateConfigSaveAvailability();
+    return;
+  }
   clearConfigErrors();
   const saveButton = byId("config-save-button");
-  saveButton.disabled = true;
+  saveButton.dataset.busy = "true";
+  updateConfigSaveAvailability();
   byId("config-reset-button").disabled = true;
   setSwappingButtonText("config-save-button", "Saving...");
   setGlobalStatus("Validating local configuration...");
@@ -1584,7 +1666,8 @@ async function submitConfig(event) {
     showConfigErrors(error.message, error.fields);
     setGlobalStatus(error.message, true);
   } finally {
-    saveButton.disabled = false;
+    delete saveButton.dataset.busy;
+    updateConfigSaveAvailability();
     byId("config-reset-button").disabled = false;
     setSwappingButtonText("config-save-button", "Validate, save, and verify");
   }
@@ -1620,7 +1703,7 @@ function clearConfigErrors() {
   byId("config-errors").hidden = true;
   byId("config-error-list").replaceChildren();
   document.querySelectorAll("[data-config-field]").forEach((control) => control.classList.remove("invalid"));
-  document.querySelectorAll("[data-config-field] input, [data-config-field] select").forEach((input) => input.removeAttribute("aria-invalid"));
+  document.querySelectorAll("[data-config-field] input, [data-config-field] select, [data-config-field] textarea").forEach((input) => input.removeAttribute("aria-invalid"));
   document.querySelectorAll(".config-field-error").forEach((error) => { error.textContent = ""; });
 }
 
@@ -2841,6 +2924,7 @@ function releaseLayerSummary(update) {
 function renderUpdates() {
   const update = state.updates || {};
   renderUpdateStatusButton(update);
+  byId("update-settings-panel").classList.toggle("update-attention-glow", update.state !== "current");
   const presentation = updateStatePresentation(update);
   setChip("update-settings-chip", state.updateChecking || update.checkInProgress ? "Checking" : presentation.label, state.updateChecking || update.checkInProgress ? "pending" : presentation.tone);
   setText("update-settings-summary", presentation.summary);

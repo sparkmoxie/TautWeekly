@@ -62,6 +62,10 @@ $requiredFunctions = @(
     'Get-ConfiguredPlexWebUrl',
     'Get-ConfiguredPlexButtonLabel',
     'Get-ConfiguredDeliveryDay',
+    'Get-BoundedCustomTextValue',
+    'Get-ConfiguredCustomTextCard',
+    'Get-CustomTextCardTableHtml',
+    'Get-CustomTextCardPlainText',
     'Get-UserStats',
     'Add-UserStatsMediaMetadata',
     'Get-PopulatedPreviewStats',
@@ -402,9 +406,23 @@ foreach ($relativePath in $rendererPaths) {
         PlexWebUrl           = 'https://app.plex.tv/'
         PlexButtonLabel      = 'View & Request'
         ScheduleDay          = 'Friday'
+        CustomTextCardEnabled = $true
+        CustomTextCardBorderColor = '#72aef7'
+        CustomTextCardBorderOpacity = 34
+        CustomTextCardTitle = 'Custom <Title>'
+        CustomTextCardSubheading = 'Maintenance & more'
+        CustomTextCardBody = "First <line> & safe`r`nSecond line"
     }
 
     Assert-True ((Get-ConfiguredPlexButtonLabel) -eq 'View & Request') "$relativePath did not return the configured button label"
+    $customCardHtml = Get-CustomTextCardTableHtml
+    Assert-True ($customCardHtml.Contains('class="email-card custom-text-card"')) "$relativePath did not render the enabled custom text card"
+    Assert-True ($customCardHtml.Contains('CUSTOM &lt;TITLE&gt;') -and $customCardHtml.Contains('Maintenance &amp; more')) "$relativePath did not HTML-encode custom card headings"
+    Assert-True ($customCardHtml.Contains('First &lt;line&gt; &amp; safe<br>Second line')) "$relativePath did not safely preserve custom card body line breaks"
+    Assert-True ($customCardHtml.Contains('border-color:rgba(114,174,247,0.34)')) "$relativePath did not render the configured border color and opacity"
+    $script:Config.CustomTextCardEnabled = $false
+    Assert-True ([string]::IsNullOrWhiteSpace((Get-CustomTextCardTableHtml))) "$relativePath rendered the disabled custom text card"
+    $script:Config.CustomTextCardEnabled = $true
     $configuredValues = $script:Config
     $script:Config = [PSCustomObject]@{ PlexWebUrl = 'javascript:alert(1)' }
     Assert-True ((Get-ConfiguredPlexWebUrl) -eq 'https://app.plex.tv/desktop/') "$relativePath accepted a non-HTTP custom button URL"
@@ -995,6 +1013,10 @@ foreach ($relativePath in $rendererPaths) {
         -EndLabel 'August 7'
     Assert-True ($samplePlainText.Contains('movies watched')) "$relativePath could not render empty-history sample movie stats as plain text"
     Assert-True ($samplePlainText.Contains('View & Request: https://app.plex.tv/')) "$relativePath did not render the custom button label and URL in plain text"
+    Assert-True ($samplePlainText.Contains("CUSTOM <TITLE>`r`nMaintenance & more`r`nFirst <line> & safe`nSecond line")) "$relativePath did not render the plain-text custom card"
+    $customPlainIndex = $samplePlainText.IndexOf('CUSTOM <TITLE>', [StringComparison]::Ordinal)
+    $releasePlainIndex = if ($customPlainIndex -ge 0) { $samplePlainText.IndexOf('1 new movie', $customPlainIndex + 1, [StringComparison]::Ordinal) } else { -1 }
+    Assert-True ($customPlainIndex -ge 0 -and $releasePlainIndex -gt $customPlainIndex) "$relativePath placed the plain-text custom card after the release metadata (custom=$customPlainIndex release=$releasePlainIndex)"
 
     $threeMovies = Get-UserStats -History @(
         $movie,
