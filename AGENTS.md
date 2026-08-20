@@ -24,3 +24,10 @@ These instructions apply to the entire repository.
 - Create and modify public project files only in the local `TautWeekly` Git repository or one of its Git worktrees.
 - Preserve unrelated user changes and use a clean branch or worktree when the primary checkout is dirty.
 - Never commit runtime configuration, credentials, tokens, personal identifiers, generated newsletters, logs, state files, or private infrastructure details.
+
+## Primary Quickstart feature spotlight
+
+- Keep the featured release box in `docs/index.html` focused on the newest published release that adds substantial user-facing functionality.
+- A release qualifies when its changelog has an `Added` section describing a new end-user capability. Maintenance-only fixes, hardening, documentation, internal tooling, minor visual polish, and other tweaks do not replace the featured release.
+- When a qualifying feature release is published, update the spotlight's `data-feature-release` value, version label, explanation, capability summary, configuration link, and release-notes link together.
+- Keep repository validation aligned with this policy so a later maintenance release cannot silently displace the latest feature release.

@@ -124,6 +124,48 @@ foreach ($relative in $pages) {
     Write-Host "[PASS] Documentation features: $relative"
 }
 
+$homeQuickstart = [IO.File]::ReadAllText((Join-Path $docs 'index.html'))
+$changelog = [IO.File]::ReadAllText((Join-Path $Root 'CHANGELOG.md'))
+$releaseBlocks = [regex]::Matches(
+    $changelog,
+    '(?ms)^## \[(?<version>\d+\.\d+\.\d+)\][^\r\n]*\r?\n(?<body>.*?)(?=^## \[|\z)'
+)
+$latestFeatureBlock = @($releaseBlocks | Where-Object {
+    $_.Groups['body'].Value -match '(?m)^### Added\s*$'
+} | Select-Object -First 1)
+if ($latestFeatureBlock.Count -ne 1) {
+    throw 'CHANGELOG.md does not contain a published feature release with an Added section'
+}
+$latestFeatureRelease = 'v' + $latestFeatureBlock[0].Groups['version'].Value
+$spotlightSection = [regex]::Match(
+    $homeQuickstart,
+    '(?is)<section\b(?=[^>]*\bid=["'']feature-spotlight["''])[^>]*>(?<content>.*?)</section>'
+)
+if (-not $spotlightSection.Success) {
+    throw 'Primary Quickstart feature spotlight section is missing'
+}
+$spotlightOpeningTag = $spotlightSection.Value.Substring(0, $spotlightSection.Value.IndexOf('>') + 1)
+$featureReleaseMatch = [regex]::Match(
+    $spotlightOpeningTag,
+    '(?i)\bdata-feature-release=["''](?<version>v\d+\.\d+\.\d+)["'']'
+)
+if (-not $featureReleaseMatch.Success) {
+    throw 'Primary Quickstart feature spotlight is missing data-feature-release'
+}
+$spotlightRelease = $featureReleaseMatch.Groups['version'].Value
+if ($spotlightRelease -ne $latestFeatureRelease) {
+    throw "Primary Quickstart spotlights $spotlightRelease; latest feature release is $latestFeatureRelease"
+}
+$releaseNotesRelative = "releases/$latestFeatureRelease.md"
+if (-not [IO.File]::Exists((Join-Path $docs $releaseNotesRelative))) {
+    throw "Feature spotlight release notes are missing: $releaseNotesRelative"
+}
+$escapedReleaseLink = [regex]::Escape('href="' + $releaseNotesRelative + '"')
+if ($spotlightSection.Groups['content'].Value -notmatch $escapedReleaseLink) {
+    throw "Primary Quickstart feature spotlight does not link to $releaseNotesRelative"
+}
+Write-Host "[PASS] Primary Quickstart spotlights latest feature release: $latestFeatureRelease"
+
 $quickstartCss = [IO.File]::ReadAllText((Join-Path $docs 'assets/quickstart.css'))
 $quickstartJs = [IO.File]::ReadAllText((Join-Path $docs 'assets/quickstart.js'))
 foreach ($pattern in @(

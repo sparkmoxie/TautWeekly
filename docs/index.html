@@ -69,17 +69,17 @@
       </div>
     </section>
 
-    <section class="section searchable" data-search="deleted items metadata artwork cache retention future retroactive limitation">
+    <section class="section searchable" id="feature-spotlight" data-feature-release="v0.18.0" data-search="feature release custom text card newsletter message title subheading body border opacity preview welcome packages">
       <div class="section-heading">
-        <div><div class="eyebrow">v0.9.0 storage boundary</div><h2>Future deletion protection, not retroactive reconstruction</h2></div>
-        <p>The v0.8.3 Plex hosted-provider recovery is best-effort. Tautulli history can retain identifiers and descriptive fields, but not durable artwork bytes after Plex/Tautulli discards them.</p>
+        <div><div class="eyebrow">v0.18.0 newsletter customization</div><h2>Add your own message without redesigning the newsletter</h2></div>
+        <p>The latest feature release brings a configurable custom text card to every maintained package, with consistent HTML, plain-text, preview, and welcome-state output.</p>
       </div>
       <article class="card featured">
-        <span class="tag">Exact stable GUID only</span>
-        <h3>A bounded cache is populated while media is still live</h3>
-        <p>v0.9.0 stores the minimum newsletter presentation metadata and one poster under private platform storage, then reuses it after a future deletion. It never title-matches ambiguous old history and cannot repair assets deleted before the cache was populated.</p>
-        <ul><li>365 days by default</li><li>1,000 items</li><li>256 MiB total</li><li>No tokens, recipients, or viewing metrics</li></ul>
-        <div class="card-actions"><a href="CONFIGURATION.md#persistent-deleted-item-cache">Cache configuration and migration</a><a href="releases/v0.9.0.md">v0.9.0 release notes</a></div>
+        <span class="tag">Every maintained package</span>
+        <h3>One optional card, shaped in Manager Config</h3>
+        <p>v0.18.0 places a custom message before the newsletter release-count and date block. Existing newsletters stay unchanged until the card is enabled, and the Manager requires a body before validation can continue.</p>
+        <ul><li>Optional gold title</li><li>Optional larger white subheading</li><li>Required plain-text body when enabled</li><li>Configurable border color and opacity</li></ul>
+        <div class="card-actions"><a href="CONFIGURATION.md#optional-custom-text-card">Custom text card configuration</a><a href="releases/v0.18.0.md">v0.18.0 release notes</a></div>
       </article>
     </section>
 
