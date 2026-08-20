@@ -6,6 +6,19 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-08-20
+
+### Changed
+
+- Clarified the capability-aware application and package status card by placing
+  **Latest stable** beside **Manager build**, renaming **Release layers** to
+  **Release alignment**, and removing the deprecated **Package baseline**
+  field from the production Manager and live synthetic GUI Preview.
+- Made **Host adapter** conditional on an applicable reported contract and
+  reflowed the status grid across desktop and mobile widths without changing
+  update classification, checks, caching, indicators, or installation
+  boundaries.
+
 ## [0.18.0] - 2026-08-20
 
 ### Added
