@@ -597,6 +597,133 @@ function Get-ConfiguredDeliveryDay {
     }
     return "Friday"
 }
+function Get-BoundedCustomTextValue {
+    param(
+        [AllowNull()][object]$Value,
+        [int]$MaximumLength,
+        [bool]$AllowLineBreaks
+    )
+
+    $text = [string]$Value
+    if ($AllowLineBreaks) {
+        $text = [regex]::Replace($text, '\r\n?', [string][char]10)
+        $text = [regex]::Replace($text, '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '')
+    }
+    else {
+        $text = [regex]::Replace($text, '[\x00-\x1F\x7F]', '')
+    }
+    $text = $text.Trim()
+    $elements = [Globalization.StringInfo]::ParseCombiningCharacters($text)
+    if ($elements.Count -gt $MaximumLength) {
+        return $text.Substring(0, $elements[$MaximumLength])
+    }
+    return $text
+}
+
+function Get-ConfiguredCustomTextCard {
+    $enabled = (
+        $null -ne $Config.PSObject.Properties["CustomTextCardEnabled"] -and
+        [bool]$Config.CustomTextCardEnabled
+    )
+    $bodyValue = if ($null -ne $Config.PSObject.Properties["CustomTextCardBody"]) { $Config.CustomTextCardBody } else { "" }
+    $body = Get-BoundedCustomTextValue -Value $bodyValue -MaximumLength 2000 -AllowLineBreaks $true
+    if (-not $enabled -or [string]::IsNullOrWhiteSpace($body)) {
+        return [PSCustomObject]@{ Enabled = $false }
+    }
+
+    $borderColor = if ($null -ne $Config.PSObject.Properties["CustomTextCardBorderColor"]) {
+        ([string]$Config.CustomTextCardBorderColor).Trim()
+    }
+    else {
+        "#72aef7"
+    }
+    if ($borderColor -notmatch '^#[0-9a-fA-F]{6}$') {
+        $borderColor = "#72aef7"
+    }
+    $opacity = if ($null -ne $Config.PSObject.Properties["CustomTextCardBorderOpacity"]) {
+        [Math]::Max(0, [Math]::Min(100, (Safe-Int $Config.CustomTextCardBorderOpacity)))
+    }
+    else {
+        34
+    }
+    $titleValue = if ($null -ne $Config.PSObject.Properties["CustomTextCardTitle"]) { $Config.CustomTextCardTitle } else { "" }
+    $subheadingValue = if ($null -ne $Config.PSObject.Properties["CustomTextCardSubheading"]) { $Config.CustomTextCardSubheading } else { "" }
+
+    return [PSCustomObject]@{
+        Enabled       = $true
+        Title         = Get-BoundedCustomTextValue -Value $titleValue -MaximumLength 120 -AllowLineBreaks $false
+        Subheading    = Get-BoundedCustomTextValue -Value $subheadingValue -MaximumLength 200 -AllowLineBreaks $false
+        Body          = $body
+        BorderColor   = $borderColor.ToLowerInvariant()
+        BorderOpacity = $opacity
+    }
+}
+
+function Get-CustomTextCardTableHtml {
+    $card = Get-ConfiguredCustomTextCard
+    if (-not $card.Enabled) {
+        return ""
+    }
+
+    $titleHtml = ""
+    if (-not [string]::IsNullOrWhiteSpace($card.Title)) {
+        $titleHtml = '<div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">' + (HtmlEncode $card.Title.ToUpperInvariant()) + '</div>'
+    }
+    $subheadingHtml = ""
+    if (-not [string]::IsNullOrWhiteSpace($card.Subheading)) {
+        $subheadingPadding = if ([string]::IsNullOrWhiteSpace($titleHtml)) { "0" } else { "7px" }
+        $subheadingHtml = '<div style="padding-top:' + $subheadingPadding + ';font-size:22px;line-height:1.2;color:#ffffff;font-weight:800;">' + (HtmlEncode $card.Subheading) + '</div>'
+    }
+    $bodyPadding = if ([string]::IsNullOrWhiteSpace($titleHtml) -and [string]::IsNullOrWhiteSpace($subheadingHtml)) { "0" } else { "7px" }
+    $bodyHtml = (HtmlEncode $card.Body) -replace '(\r\n|\r|\n)', '<br>'
+    $hex = $card.BorderColor.TrimStart('#')
+    $red = [Convert]::ToInt32($hex.Substring(0, 2), 16)
+    $green = [Convert]::ToInt32($hex.Substring(2, 2), 16)
+    $blue = [Convert]::ToInt32($hex.Substring(4, 2), 16)
+    $alpha = [double]$card.BorderOpacity / 100
+    $fallbackRed = [int][Math]::Round(($red * $alpha) + (24 * (1 - $alpha)))
+    $fallbackGreen = [int][Math]::Round(($green * $alpha) + (24 * (1 - $alpha)))
+    $fallbackBlue = [int][Math]::Round(($blue * $alpha) + (24 * (1 - $alpha)))
+    $fallbackColor = "#{0:X2}{1:X2}{2:X2}" -f $fallbackRed, $fallbackGreen, $fallbackBlue
+    $alphaText = $alpha.ToString("0.##", [Globalization.CultureInfo]::InvariantCulture)
+    $borderStyle = if ($card.BorderOpacity -eq 0) {
+        "border:0;"
+    }
+    else {
+        "border:1px solid $fallbackColor;border-color:rgba($red,$green,$blue,$alphaText);"
+    }
+
+    return @"
+<table class="email-card custom-text-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="background-color:#181818;$($borderStyle)border-radius:10px;border-collapse:separate;">
+  <tr>
+    <td valign="middle" style="padding:20px 22px;">
+      $titleHtml
+      $subheadingHtml
+      <div style="padding-top:$bodyPadding;font-size:13px;line-height:1.5;color:#9b9b9b;">$bodyHtml</div>
+    </td>
+  </tr>
+</table>
+"@
+}
+
+function Get-CustomTextCardPlainText {
+    $card = Get-ConfiguredCustomTextCard
+    if (-not $card.Enabled) {
+        return ""
+    }
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    if (-not [string]::IsNullOrWhiteSpace($card.Title)) {
+        $lines.Add($card.Title.ToUpperInvariant())
+    }
+    if (-not [string]::IsNullOrWhiteSpace($card.Subheading)) {
+        $lines.Add($card.Subheading)
+    }
+    $lines.Add($card.Body)
+    $newline = [string][char]13 + [string][char]10
+    return (($lines -join $newline) + $newline + $newline)
+}
+
 
 function Build-TautulliUri {
     param(
@@ -6288,12 +6415,36 @@ function Build-NewsletterHtml {
         ("&zwnj;&nbsp;" * 28)
     }
 
+    $customTextCardTable = Get-CustomTextCardTableHtml
+    $headerCustomTextCardBlock = ""
+    $welcomeCustomTextCardBlock = ""
+    if (-not [string]::IsNullOrWhiteSpace($customTextCardTable)) {
+        if ($WelcomeOnly -or $RecentAccess) {
+            $welcomeCustomTextCardBlock = @"
+<tr>
+<td class="pad" style="padding:0 20px 18px;">
+  $customTextCardTable
+</td>
+</tr>
+"@
+        }
+        else {
+            $headerCustomTextCardBlock = @"
+  <div style="padding-top:18px;">
+    $customTextCardTable
+  </div>
+"@
+        }
+    }
+    $headerReleaseMetaTopPadding = if ([string]::IsNullOrWhiteSpace($headerCustomTextCardBlock)) { "10px" } else { "18px" }
+
+
     $headerReleaseMetaBlock = if ($WelcomeOnly -or $RecentAccess) {
         ""
     }
     else {
         @"
-  <div style="padding-top:10px;font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:0.8px;">$(HtmlEncode $releaseCountLine)</div>
+  <div style="padding-top:$headerReleaseMetaTopPadding;font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:0.8px;">$(HtmlEncode $releaseCountLine)</div>
   <div style="padding-top:6px;font-size:12px;color:#666666;">$(HtmlEncode $StartLabel) – $(HtmlEncode $EndLabel)</div>
 "@
     }
@@ -7041,11 +7192,14 @@ $mediaStatsRow
   <div style="font-size:13px;font-weight:800;letter-spacing:2px;color:#e5a00d;">$(HtmlEncode $serverLabel)</div>
   <div style="padding-top:8px;font-size:30px;line-height:1.15;font-weight:800;color:#ffffff;">Hey $friendly,</div>
   <div style="padding-top:8px;font-size:15px;line-height:1.55;color:#a9a9a9;">$headerIntro</div>
+$headerCustomTextCardBlock
 $headerReleaseMetaBlock
 </td>
 </tr>
 
 $welcomeBlock
+
+$welcomeCustomTextCardBlock
 
 $welcomeReleaseMetaBlock
 
@@ -7098,6 +7252,7 @@ function Build-PlainText {
     $deliveryDay = Get-ConfiguredDeliveryDay
     $plexWebUrl = Get-ConfiguredPlexWebUrl
     $plexButtonLabel = Get-ConfiguredPlexButtonLabel
+    $customTextCardBlock = Get-CustomTextCardPlainText
 
     $movieCount = @($ReleaseData.Movies).Count
     $tvCount = @($ReleaseData.TV).Count
@@ -7265,6 +7420,7 @@ Your individual viewing recap stays in your email. Other users don't receive it.
         return @"
 ${plainPreheaderBlock}Hey $($User.FriendlyName),
 $welcomeText
+$customTextCardBlock
 $releaseMetaText
 $heroLine
 
@@ -7280,6 +7436,7 @@ ${plexButtonLabel}: $plexWebUrl
 ${plainPreheaderBlock}Hey $($User.FriendlyName),
 
 Your $deliveryDay Plex drop is here.
+$customTextCardBlock
 $releaseMetaText
 $heroLine
 
@@ -7383,6 +7540,7 @@ function Build-WelcomePlainText {
     $deliveryDay = Get-ConfiguredDeliveryDay
     $plexWebUrl = Get-ConfiguredPlexWebUrl
     $plexButtonLabel = Get-ConfiguredPlexButtonLabel
+    $customTextCardBlock = Get-CustomTextCardPlainText
 
     $plainPreheader = Get-DynamicPreheader -ReleaseData $ReleaseData
     $plainPreheaderBlock = if ([string]::IsNullOrWhiteSpace($plainPreheader)) {
@@ -7397,6 +7555,7 @@ ${plainPreheaderBlock}Welcome aboard, $($User.FriendlyName).
 
 Your access to $serverName is live. Grab the remote — you're cleared for departure.
 
+$customTextCardBlock
 Your welcome email also includes the current New Releases from the server.
 
 $($deliveryDay.ToUpperInvariant()) DROPS

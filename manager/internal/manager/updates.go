@@ -25,7 +25,8 @@ const (
 	stableReleaseEndpoint     = "https://api.github.com/repos/sparkmoxie/TautWeekly/releases/latest"
 	stableReleaseBaseURL      = "https://github.com/sparkmoxie/TautWeekly/releases/tag/v"
 	stableReleaseDownloadURL  = "https://github.com/sparkmoxie/TautWeekly/releases/download/v"
-	updateCheckMinimumDelay   = 30 * time.Second
+	updateCheckMinimumDelay   = 5 * time.Minute
+	updateFailureMinimumDelay = 30 * time.Second
 	updateFailureMaximumDelay = 10 * time.Minute
 	updateBackgroundMaxAge    = 24 * time.Hour
 )
@@ -141,6 +142,7 @@ type updateCoordinator struct {
 	installState        string
 	nextCheckAllowed    time.Time
 	minimumCheckDelay   time.Duration
+	minimumFailureDelay time.Duration
 	maximumFailureDelay time.Duration
 }
 
@@ -157,6 +159,10 @@ func newUpdateCoordinator(options Options) *updateCoordinator {
 	if minimumDelay <= 0 {
 		minimumDelay = updateCheckMinimumDelay
 	}
+	minimumFailureDelay := options.updateMinimumFailureDelay
+	if minimumFailureDelay <= 0 {
+		minimumFailureDelay = updateFailureMinimumDelay
+	}
 	maximumDelay := options.updateMaximumFailureDelay
 	if maximumDelay <= 0 {
 		maximumDelay = updateFailureMaximumDelay
@@ -168,6 +174,7 @@ func newUpdateCoordinator(options Options) *updateCoordinator {
 		cachePath:           filepath.Join(options.DataDir, "update-status.json"),
 		installState:        "idle",
 		minimumCheckDelay:   minimumDelay,
+		minimumFailureDelay: minimumFailureDelay,
 		maximumFailureDelay: maximumDelay,
 	}
 	coordinator.cache = coordinator.readCache()
@@ -388,7 +395,7 @@ func classifyUpdateStatus(status UpdateStatus) (string, bool) {
 }
 
 func (c *updateCoordinator) failureDelayLocked() time.Duration {
-	delay := c.minimumCheckDelay
+	delay := c.minimumFailureDelay
 	for attempt := 1; attempt < c.cache.FailureCount && delay < c.maximumFailureDelay; attempt++ {
 		delay *= 2
 	}

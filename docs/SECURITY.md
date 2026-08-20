@@ -86,8 +86,9 @@ Disabling the feature stops access but does not erase the existing cache.
 - Normal Manager/Dashboard health and `GET /api/v1/updates` are offline-only.
   After authenticated application entry renders that cached result, the GUI
   makes one non-blocking check only when no successful result exists or it is at
-  least 24 hours old and retry backoff permits. **Check now** uses the same
-  endpoint for an explicit refresh. Both paths use a fixed HTTPS GitHub
+  least 24 hours old and retry backoff permits. Successful results are reused
+  for five minutes before **Check now** can use the same endpoint for another
+  explicit refresh. Both paths use a fixed HTTPS GitHub
   endpoint, reject redirects and unexpected hosts/assets, bound time and
   response size, cache only public release fields plus fixed sanitized
   failures, and back off repeated checks. The login/bootstrap page, navigation,

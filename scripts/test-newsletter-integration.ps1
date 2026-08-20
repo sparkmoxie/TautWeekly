@@ -137,6 +137,12 @@ foreach ($engine in $engines) {
                 MaxMovies = 4
                 MaxTv = 4
                 SendDelaySeconds = 0
+                CustomTextCardEnabled = $true
+                CustomTextCardBorderColor = '#72aef7'
+                CustomTextCardBorderOpacity = 34
+                CustomTextCardTitle = 'Custom <Title>'
+                CustomTextCardSubheading = 'Assessment & notes'
+                CustomTextCardBody = "Synthetic <notice> & safe`nSecond line"
             }
             if ($scenario -in $sendTestScenarios) {
                 $configOverrides['SmtpHost'] = '127.0.0.1'
@@ -282,6 +288,18 @@ foreach ($engine in $engines) {
                 }
                 Assert-True ($previewHtml.Contains('href="https://requests.example.test/"')) "$($engine.Name)/$scenario $($previewPath.Name) lost the custom button URL."
                 Assert-True ($previewHtml.Contains('>View &amp; Request &lt;Now&gt;</a>')) "$($engine.Name)/$scenario $($previewPath.Name) did not safely render the custom button label."
+                Assert-True ($previewHtml.Contains('class="email-card custom-text-card"')) "$($engine.Name)/$scenario $($previewPath.Name) did not render the enabled custom text card."
+                Assert-True ($previewHtml.Contains('CUSTOM &lt;TITLE&gt;') -and $previewHtml.Contains('Assessment &amp; notes')) "$($engine.Name)/$scenario $($previewPath.Name) did not safely render the custom text card headings."
+                Assert-True ($previewHtml.Contains('Synthetic &lt;notice&gt; &amp; safe<br>Second line')) "$($engine.Name)/$scenario $($previewPath.Name) did not safely preserve custom text body formatting."
+                Assert-True ($previewHtml.Contains('border-color:rgba(114,174,247,0.34)')) "$($engine.Name)/$scenario $($previewPath.Name) lost the configured custom card border opacity."
+                $customCardIndex = $previewHtml.IndexOf('class="email-card custom-text-card"', [StringComparison]::Ordinal)
+                $releaseMetaIndex = if ($previewHtml.Contains('NO NEW RELEASES THIS WEEK')) {
+                    $previewHtml.IndexOf('NO NEW RELEASES THIS WEEK', [StringComparison]::Ordinal)
+                }
+                else {
+                    $previewHtml.IndexOf('NEW MOVIE', [StringComparison]::Ordinal)
+                }
+                Assert-True ($customCardIndex -ge 0 -and $releaseMetaIndex -gt $customCardIndex) "$($engine.Name)/$scenario $($previewPath.Name) did not place the custom text card before release metadata."
                 Assert-True (-not $previewHtml.Contains('background:#0f0f0f')) "$($engine.Name)/$scenario $($previewPath.Name) retained the outer background shorthand."
                 Assert-True (-not $previewHtml.Contains('background:#181818')) "$($engine.Name)/$scenario $($previewPath.Name) retained the card background shorthand."
                 Assert-True (-not $previewHtml.Contains('color-scheme:dark only')) "$($engine.Name)/$scenario $($previewPath.Name) retained the incompatible dark-only declaration."

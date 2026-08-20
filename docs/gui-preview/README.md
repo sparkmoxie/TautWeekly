@@ -11,13 +11,18 @@ Windows example uses bundled fictional application/package/release metadata and
 simulates authenticated background discovery, the passive purple header
 notification, **Check now**, and the confirmed updater state entirely in
 memory. It does not contact GitHub, launch a process, request elevation, or
-change a file; reload resets the demonstration.
+change a file. Successful synthetic results are reused for five minutes to
+mirror the production duplicate-check guard; reload resets the demonstration.
 
 The newsletter frames intentionally mirror the production email presentation.
 They bundle local copies of public media artwork and title logos plus dated
 Rotten Tomatoes and IMDb visual-score snapshots. Those media fixtures remain
 property of their respective owners, may change at their sources, and imply no
 affiliation or endorsement. The score snapshot date is shown inside each frame.
+
+Config also includes an in-memory custom text card demonstration immediately
+after Cache. Its toggle, border color/opacity, optional headings, and plain-text
+body feed the bundled newsletter frames without writing a configuration file.
 
 The page never contacts Plex, Tautulli, SMTP, a scheduler, or another external
 service; it writes no files and stores no credentials or entered values. Its

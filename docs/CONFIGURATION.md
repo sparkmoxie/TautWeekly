@@ -150,6 +150,23 @@ that include the cache must remain private. A full uninstall can remove the
 entire private data root only after configuration, state, output, cache entries,
 and backups are no longer needed.
 
+## Optional custom text card
+
+| Key | Default | Accepted range | Purpose |
+|---|---:|---:|---|
+| `CustomTextCardEnabled` | `false` | Boolean | Places the custom card before the newsletter title/date block |
+| `CustomTextCardBorderColor` | `#72aef7` | Six-digit hex color | Selects the optional card-border color |
+| `CustomTextCardBorderOpacity` | `34` | 0-100 | Sets border opacity; 0 removes the visible border |
+| `CustomTextCardTitle` | empty | 0-120 characters | Optional gold uppercase label at the Welcome Aboard title size |
+| `CustomTextCardSubheading` | empty | 0-200 characters | Optional large white heading |
+| `CustomTextCardBody` | empty | 1-2000 characters when enabled | Required plain-text body when the card is enabled |
+
+The Manager balances the card layout when either optional heading is omitted.
+Line breaks are preserved, and every configured value is HTML-escaped before
+rendering. Enabling the card with an empty or whitespace-only body blocks
+validation, save, and verification. Existing configurations remain disabled
+by default and do not need to add these keys.
+
 ## Branding and mail
 
 | Key | Purpose |

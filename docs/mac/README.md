@@ -188,9 +188,11 @@ reports the container application/image, extracted Mac package, host-adapter
 compatibility, stable channel, latest stable release, check history, sanitized
 failure, and release notes. Authenticated entry renders cached status first and
 makes one non-blocking bounded check only when the last success is missing or
-at least 24 hours old and backoff permits; **Check now** explicitly refreshes
-the same endpoint. Navigation, Dashboard rendering, and Manager health remain
-offline-capable. The passive purple header notification only links here. The containerized web process
+at least 24 hours old and backoff permits. Successful results are reused for
+five minutes before **Check now** refreshes the same endpoint. Navigation,
+Dashboard rendering, and Manager health remain offline-capable. The passive
+purple header notification appears only for a validated available update; the
+card glows for every non-current state. The containerized web process
 cannot invoke Docker Desktop or change host package files, so the card exposes
 the copyable `./tautweekly.sh update` host command but no install button.
 

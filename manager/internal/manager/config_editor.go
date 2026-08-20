@@ -102,7 +102,11 @@ func configDefinitions() []configDefinition {
 	portMin, portMax := integerBounds(1, 65535)
 	_, shortMax := integerBounds(0, 300)
 	_, buttonLabelMax := integerBounds(0, 64)
+	_, customTitleMax := integerBounds(0, 120)
+	_, customSubheadingMax := integerBounds(0, 200)
+	_, customBodyMax := integerBounds(0, 2000)
 	_, daysMax := integerBounds(1, 3650)
+	opacityMin, opacityMax := integerBounds(0, 100)
 	percentMin, percentMax := integerBounds(1, 100)
 	episodeMin, episodeMax := integerBounds(0, 86400)
 	countMin, countMax := integerBounds(0, 100)
@@ -146,6 +150,12 @@ func configDefinitions() []configDefinition {
 		{Name: "DeletedItemCacheRetentionDays", Label: "Cache retention days", Group: "Cache", Type: "integer", Required: true, Default: int64(365), Min: portMin, Max: daysMax},
 		{Name: "DeletedItemCacheMaxItems", Label: "Maximum cached items", Group: "Cache", Type: "integer", Required: true, Default: int64(1000), Min: itemsMin, Max: itemsMax},
 		{Name: "DeletedItemCacheMaxBytesMB", Label: "Maximum cache size (MB)", Group: "Cache", Type: "integer", Required: true, Default: int64(256), Min: bytesMin, Max: bytesMax},
+		{Name: "CustomTextCardEnabled", Label: "Enable custom text card", Group: "Custom text card", Type: "boolean", Default: false, Help: "When enabled, this card appears before the newsletter release-count and date block in every newsletter state."},
+		{Name: "CustomTextCardBorderColor", Label: "Border color", Group: "Custom text card", Type: "color", Default: "#72aef7", Help: "Choose the card accent color. Border opacity controls whether it is visible."},
+		{Name: "CustomTextCardBorderOpacity", Label: "Border opacity", Group: "Custom text card", Type: "range", Default: int64(34), Min: opacityMin, Max: opacityMax, Help: "Set to 0% for no border."},
+		{Name: "CustomTextCardTitle", Label: "Optional title", Group: "Custom text card", Type: "text", Default: "", Max: customTitleMax, Help: "Gold uppercase label using the Welcome Aboard title size."},
+		{Name: "CustomTextCardSubheading", Label: "Optional subheading", Group: "Custom text card", Type: "text", Default: "", Max: customSubheadingMax, Help: "Large white heading using the Welcome Aboard heading size."},
+		{Name: "CustomTextCardBody", Label: "Card body (required when enabled)", Group: "Custom text card", Type: "textarea", Default: "", Max: customBodyMax, Help: "Plain text only. Line breaks are preserved and HTML is always escaped."},
 		{Name: "IncludedLibraryIds", Label: "Included library IDs", Group: "Advanced", Type: "string-list", Help: "Comma-separated Tautulli section IDs. Empty retains legacy all-library scope.", Default: []string{}},
 		{Name: "ExcludedUserIds", Label: "Excluded user IDs", Group: "Advanced", Type: "string-list", Help: "Comma-separated Tautulli user IDs.", Default: []string{}},
 		{Name: "ExcludedEmails", Label: "Excluded email addresses", Group: "Advanced", Type: "email-list", Help: "Legacy config-file exclusion list preserved by the Manager but not exposed in the GUI.", Default: []string{}},
@@ -163,7 +173,7 @@ func ReadConfigEditor(root string) ConfigEditorView {
 		TokenConfigured:       configValueConfigured(values["PlexToken"]),
 		RuntimeTokenAvailable: runtimePlexToken(values) != "" && !configValueConfigured(values["PlexToken"]),
 	}
-	view.Groups = []string{"Connections", "Identity", "Email", "SMTP", "Schedule", "Newsletter", "Cache", "Advanced"}
+	view.Groups = []string{"Connections", "Identity", "Email", "SMTP", "Schedule", "Newsletter", "Cache", "Custom text card", "Advanced"}
 	if !view.Valid {
 		view.Fields = []ConfigEditorField{}
 		return view
@@ -408,7 +418,7 @@ func parseAndValidateConfigValue(raw json.RawMessage, definition configDefinitio
 			return nil, "Choose enabled or disabled."
 		}
 		return parsed, ""
-	case "integer":
+	case "integer", "range":
 		number, ok := value.(json.Number)
 		if !ok {
 			return nil, "Enter a whole number."
@@ -464,6 +474,23 @@ func parseAndValidateConfigValue(raw json.RawMessage, definition configDefinitio
 		if definition.Type == "url" && text != "" && !validHTTPURL(text) {
 			return nil, "Enter a complete http:// or https:// URL."
 		}
+		if definition.Type == "color" && text != "" && !validHexColor(text) {
+			return nil, "Choose a six-digit hexadecimal color."
+		}
+		if strings.HasPrefix(definition.Name, "CustomTextCard") {
+			if definition.Type == "textarea" {
+				if strings.IndexFunc(text, func(r rune) bool { return unicode.IsControl(r) && r != '\r' && r != '\n' && r != '\t' }) >= 0 {
+					return nil, "Use plain text with line breaks only."
+				}
+				text = strings.ReplaceAll(text, "\r\n", "\n")
+				text = strings.ReplaceAll(text, "\r", "\n")
+			} else if strings.IndexFunc(text, unicode.IsControl) >= 0 {
+				return nil, "Use a single line without control characters."
+			}
+			if definition.Max != nil && int64(utf8.RuneCountInString(text)) > *definition.Max {
+				return nil, fmt.Sprintf("Use %d characters or fewer.", *definition.Max)
+			}
+		}
 		if definition.Name == "PlexButtonLabel" {
 			if strings.IndexFunc(text, unicode.IsControl) >= 0 {
 				return nil, "Use a single line without control characters."
@@ -491,6 +518,10 @@ func parseAndValidateConfigValue(raw json.RawMessage, definition configDefinitio
 }
 
 func validateConfigRelationships(values map[string]any, fieldErrors map[string]string) {
+	customTextCardEnabled, _ := values["CustomTextCardEnabled"].(bool)
+	if customTextCardEnabled && strings.TrimSpace(fmt.Sprint(values["CustomTextCardBody"])) == "" {
+		fieldErrors["CustomTextCardBody"] = "Card body text is required when the custom text card is enabled."
+	}
 	if !secretConfigured(values, "ApiKey") {
 		fieldErrors["ApiKey"] = "A Tautulli API key is required."
 	}
@@ -549,6 +580,14 @@ func validEmail(value string) bool {
 func validHTTPURL(value string) bool {
 	parsed, err := url.Parse(value)
 	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
+}
+
+func validHexColor(value string) bool {
+	if len(value) != 7 || value[0] != '#' {
+		return false
+	}
+	_, err := strconv.ParseUint(value[1:], 16, 24)
+	return err == nil
 }
 
 func containsFold(values []string, candidate string) bool {

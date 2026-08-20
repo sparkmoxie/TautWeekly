@@ -47,6 +47,7 @@ type Options struct {
 	updateInstaller           updateInstallController
 	remoteAccessController    remoteAccessController
 	updateMinimumCheckDelay   time.Duration
+	updateMinimumFailureDelay time.Duration
 	updateMaximumFailureDelay time.Duration
 }
 

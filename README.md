@@ -51,11 +51,15 @@ latest verified release, last successful check, last sanitized failure, and
 legacy or mismatched host adapters; and links to the release notes. An
 authenticated Manager session renders cached status first, then makes one
 non-blocking bounded check only when the last successful result is missing or
-at least 24 hours old and retry backoff permits. **Check now** remains available
-for an explicit refresh, while navigation, Dashboard rendering, and health
+at least 24 hours old and retry backoff permits. A successful automatic or
+manual result is reused for five minutes before another explicit refresh is
+allowed. **Check now** remains available after that guard, while navigation,
+Dashboard rendering, and health
 endpoints remain offline-capable. A purple header notification links to this
-status view when a validated newer running-application version exists; it never
-installs an update. Only Windows can start an installation from the GUI, using the
+status view only when a successful check validates a newer running-application
+version; the larger status card attracts attention for every non-current state,
+while the existing green **Current** chip remains unchanged. Neither cue installs
+an update. Only Windows can start an installation from the GUI, using the
 existing verified updater and Windows elevation. All other platforms show the
 exact host-owned command or native update flow without giving the web process
 Docker, root, Podman, systemd, rc.d, or package-file authority.

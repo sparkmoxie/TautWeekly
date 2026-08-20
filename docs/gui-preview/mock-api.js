@@ -70,6 +70,12 @@
     field("DeletedItemCacheEnabled", "Enable deleted-item cache", "Cache", "boolean", true),
     field("DeletedItemCacheRetentionDays", "Cache retention days", "Cache", "integer", 365, { required: true, min: 1, max: 3650 }),
     field("DeletedItemCacheMaxItems", "Maximum cached items", "Cache", "integer", 1000, { required: true, min: 1, max: 10000 }),
+    field("CustomTextCardEnabled", "Enable custom text card", "Custom text card", "boolean", true, { help: "When enabled, the synthetic card appears before the newsletter release-count and date block in every state." }),
+    field("CustomTextCardBorderColor", "Border color", "Custom text card", "color", "#72aef7", { help: "Choose the card accent color. Border opacity controls whether it is visible." }),
+    field("CustomTextCardBorderOpacity", "Border opacity", "Custom text card", "range", 34, { min: 0, max: 100, help: "Set to 0% for no border." }),
+    field("CustomTextCardTitle", "Optional title", "Custom text card", "text", "CUSTOM TITLE", { max: 120, help: "Gold uppercase label using the Welcome Aboard title size." }),
+    field("CustomTextCardSubheading", "Optional subheading", "Custom text card", "text", "Custom subheading", { max: 200, help: "Large white heading using the Welcome Aboard heading size." }),
+    field("CustomTextCardBody", "Card body (required when enabled)", "Custom text card", "textarea", "A synthetic announcement for local assessment.\nLine breaks remain plain text and no service is contacted.", { max: 2000, help: "Plain text only. Line breaks are preserved and HTML is always escaped." }),
     field("IncludedLibraryIds", "Included library IDs", "Advanced", "string-list", ["11", "12", "13"]),
     field("ExcludedUserIds", "Excluded user IDs", "Advanced", "string-list", ["41005", "41012"]),
     field("ExcludedEmails", "Excluded email addresses", "Advanced", "email-list", []),
@@ -179,7 +185,7 @@
       valid: true,
       state: "ready",
       revision,
-      groups: ["Connections", "Identity", "Email", "SMTP", "Schedule", "Newsletter", "Cache", "Advanced"],
+      groups: ["Connections", "Identity", "Email", "SMTP", "Schedule", "Newsletter", "Cache", "Custom text card", "Advanced"],
       fields: editorFields,
       issues: {},
       directPlex: { legacyFieldsMissing: false, urlConfigured: true, tokenConfigured: true, runtimeTokenAvailable: false },
@@ -326,6 +332,22 @@
     if (path === "/api/v1/status") return json(status());
     if (path === "/api/v1/config") {
       if (method === "PUT") {
+        const values = body.values || {};
+        const currentValue = (name) => values[name] ?? editorFields.find((item) => item.name === name)?.value;
+        const fields = {};
+        if (currentValue("CustomTextCardEnabled") && !String(currentValue("CustomTextCardBody") || "").trim()) {
+          fields.CustomTextCardBody = "Card body text is required when the custom text card is enabled.";
+        }
+        if (!/^#[0-9a-f]{6}$/i.test(String(currentValue("CustomTextCardBorderColor") || ""))) {
+          fields.CustomTextCardBorderColor = "Choose a six-digit hexadecimal color.";
+        }
+        const opacity = Number(currentValue("CustomTextCardBorderOpacity"));
+        if (!Number.isInteger(opacity) || opacity < 0 || opacity > 100) {
+          fields.CustomTextCardBorderOpacity = "Enter a value from 0 through 100.";
+        }
+        if (Object.keys(fields).length) {
+          return json({ error: { code: "configuration-invalid", message: "The fictional configuration needs attention.", fields } }, 400);
+        }
         for (const [name, value] of Object.entries(body.values || {})) {
           const target = editorFields.find((item) => item.name === name);
           if (target) target.value = value;
@@ -357,8 +379,11 @@
     if (/^\/api\/v1\/schedule\/(install|enable|disable|remove)$/.test(path) && method === "POST") return json(startSchedule(path.split("/").at(-1)), 202);
     if (path === "/api/v1/updates" && method === "GET") return json({ ...model.update, observedAtUtc: now() });
     if (path === "/api/v1/updates/check" && method === "POST") {
+      const nextAllowed = model.update.nextCheckAllowedAtUtc ? new Date(model.update.nextCheckAllowedAtUtc).getTime() : 0;
+      if (nextAllowed > Date.now()) return json({ error: { code: "check-backoff", message: "The synthetic result is still fresh; another check is temporarily unnecessary." } }, 429);
       model.update.checkInProgress = true;
       return new Promise((resolve) => setTimeout(() => {
+        const completedAt = new Date();
         Object.assign(model.update, {
           state: "update-available",
           latestStableVersion: "0.16.0",
@@ -366,8 +391,9 @@
           installSupported: true,
           checkInProgress: false,
           backgroundCheckRecommended: false,
-          lastSuccessfulCheckUtc: now(),
-          observedAtUtc: now(),
+          lastSuccessfulCheckUtc: completedAt.toISOString(),
+          nextCheckAllowedAtUtc: new Date(completedAt.getTime() + 5 * 60 * 1000).toISOString(),
+          observedAtUtc: completedAt.toISOString(),
         });
         resolve(json(model.update));
       }, 450));
