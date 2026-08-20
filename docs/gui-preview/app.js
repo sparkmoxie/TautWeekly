@@ -2414,7 +2414,7 @@ function readableList(values) {
   return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
 }
 
-function releaseLayerSummary(update) {
+function releaseAlignmentSummary(update) {
   const managerVersion = update.managerVersion || "";
   const layers = [
     ["Application", update.applicationVersion],
@@ -2427,7 +2427,7 @@ function releaseLayerSummary(update) {
   const parts = [];
   if (matching.length) parts.push(`${readableList(matching)} ${matching.length === 1 ? "matches" : "match"} Manager build`);
   parts.push(...different, ...missing);
-  return parts.join(" · ") || "No release layers reported";
+  return parts.join(" · ") || "Release alignment unavailable";
 }
 
 function renderUpdates() {
@@ -2438,12 +2438,17 @@ function renderUpdates() {
   setChip("update-settings-chip", state.updateChecking ? "Checking" : presentation.label, state.updateChecking ? "pending" : presentation.tone);
   setText("update-settings-summary", presentation.summary);
   setText("update-manager-version", displayUpdateVersion(update.managerVersion));
-  setText("update-package-baseline", state.about?.packageVersion || "Synthetic baseline unavailable");
-  setText("update-platform", titleCase(state.status?.platform));
-  setText("update-release-layers", releaseLayerSummary(update));
-  setText("update-host-adapter", update.hostAdapterState === "not-applicable" ? "Not applicable" : `${update.hostAdapterVersion ? `API ${update.hostAdapterVersion}` : "Not reported"} - ${titleCase(update.hostAdapterState)}`);
-  setText("update-channel", titleCase(update.updateChannel || "stable"));
   setText("update-latest-version", displayUpdateVersion(update.latestStableVersion, "Not checked"));
+  setText("update-platform", titleCase(state.status?.platform));
+  setText("update-release-alignment", releaseAlignmentSummary(update));
+  const hostAdapterApplicable = Boolean(update.hostAdapterState) && update.hostAdapterState !== "not-applicable";
+  const hostAdapterRow = byId("update-host-adapter-row");
+  hostAdapterRow.hidden = !hostAdapterApplicable;
+  hostAdapterRow.parentElement.classList.toggle("host-adapter-hidden", !hostAdapterApplicable);
+  if (hostAdapterApplicable) {
+    setText("update-host-adapter", `${update.hostAdapterVersion ? `API ${update.hostAdapterVersion}` : "Not reported"} - ${titleCase(update.hostAdapterState)}`);
+  }
+  setText("update-channel", titleCase(update.updateChannel || "stable"));
   setText("update-last-success", formatDate(update.lastSuccessfulCheckUtc));
 
   const failure = byId("update-failure");

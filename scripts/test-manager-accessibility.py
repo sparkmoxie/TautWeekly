@@ -81,8 +81,9 @@ def main() -> int:
     parser.add_argument("--js", type=Path, default=Path("manager/internal/manager/web/app.js"))
     args = parser.parse_args()
 
+    html = args.html.read_text(encoding="utf-8")
     document = DocumentParser()
-    document.feed(args.html.read_text(encoding="utf-8"))
+    document.feed(html)
     nodes = list(descendants(document.root))
     failures: list[str] = []
 
@@ -167,7 +168,7 @@ def main() -> int:
         'setAttribute("aria-invalid", "true")': "dynamic validation does not expose aria-invalid",
         'role="status"': "status live regions are missing from the HTML source",
     }
-    combined = javascript + "\n" + args.html.read_text(encoding="utf-8")
+    combined = javascript + "\n" + html
     for evidence, message in required_dynamic_contracts.items():
         if evidence not in combined:
             failures.append(message)
@@ -323,10 +324,14 @@ def main() -> int:
         "update-status-button",
         "update-settings-chip",
         "update-manager-version",
-        "update-package-baseline",
+        "update-latest-version",
         "update-platform",
         "update-edition",
-        "update-release-layers",
+        "update-release-alignment",
+        "update-host-adapter-row",
+        "update-host-adapter",
+        "update-channel",
+        "update-last-success",
         "update-check-button",
         "update-guidance-summary",
         "update-copy-command",
@@ -338,8 +343,55 @@ def main() -> int:
             failures.append(f"Settings update card omits accessible control: {control}")
     if 'class="build-details"' in combined or 'id="update-application-version"' in combined or 'id="update-package-version"' in combined:
         failures.append("Manager and package identity is still duplicated outside the consolidated update status surface")
-    if "function releaseLayerSummary(" not in javascript or 'matching.length === 1 ? "matches" : "match"' not in javascript:
-        failures.append("application and package release layers are not summarized without duplicate version values")
+    if "function releaseAlignmentSummary(" not in javascript or 'matching.length === 1 ? "matches" : "match"' not in javascript:
+        failures.append("application and package release alignment is not summarized without duplicate version values")
+    update_surfaces = (
+        ("Manager", html, javascript, css),
+        (
+            "GUI preview",
+            Path("docs/gui-preview/index.html").read_text(encoding="utf-8"),
+            Path("docs/gui-preview/app.js").read_text(encoding="utf-8"),
+            Path("docs/gui-preview/app.css").read_text(encoding="utf-8"),
+        ),
+    )
+    expected_update_labels = (
+        "Manager build",
+        "Latest stable",
+        "Platform",
+        "Edition",
+        "Release alignment",
+        "Host adapter",
+        "Update channel",
+        "Last successful check",
+    )
+    for surface, surface_html, surface_javascript, surface_css in update_surfaces:
+        grid_start = surface_html.find('<dl class="update-version-grid host-adapter-hidden">')
+        grid_end = surface_html.find("</dl>", grid_start)
+        grid_html = surface_html[grid_start:grid_end] if grid_start >= 0 and grid_end >= 0 else ""
+        label_positions = [grid_html.find(f"<dt>{label}</dt>") for label in expected_update_labels]
+        if not grid_html or any(position < 0 for position in label_positions) or label_positions != sorted(label_positions):
+            failures.append(f"{surface} update fields do not use the approved visible order")
+        if "Package baseline" in surface_html or "update-package-baseline" in surface_html + surface_javascript:
+            failures.append(f"{surface} still exposes the deprecated Package baseline field")
+        if "Release layers" in surface_html or "update-release-layers" in surface_html + surface_javascript:
+            failures.append(f"{surface} still exposes the replaced Release layers label or ID")
+        if 'id="update-host-adapter-row" hidden' not in grid_html:
+            failures.append(f"{surface} host adapter is visible before applicability is known")
+        for marker in (
+            'Boolean(update.hostAdapterState) && update.hostAdapterState !== "not-applicable"',
+            "hostAdapterRow.hidden = !hostAdapterApplicable;",
+            'classList.toggle("host-adapter-hidden", !hostAdapterApplicable)',
+            'if (hostAdapterApplicable) {',
+        ):
+            if marker not in surface_javascript:
+                failures.append(f"{surface} host-adapter visibility contract is missing: {marker}")
+        for marker in (
+            ".update-version-grid.host-adapter-hidden>div:last-child{grid-column:span 2}",
+            ".update-version-grid.host-adapter-hidden>div:last-child{grid-column:1/-1}",
+            ".update-version-grid.host-adapter-hidden>div:last-child{grid-column:auto}",
+        ):
+            if marker not in surface_css:
+                failures.append(f"{surface} conditional update grid reflow is missing: {marker}")
     for marker in (
         'request("/api/v1/updates")',
         'request("/api/v1/updates/check", { method: "POST", body: "{}" })',
