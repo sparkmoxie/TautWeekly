@@ -19,6 +19,19 @@ $pages = @(
 )
 $redirectPages = @('nas-docker/quickstart.html')
 $terminalPages = 0
+$sharedQuickstartPages = @(
+    'windows/index.html',
+    'nas-docker/manager.html',
+    'mac/index.html',
+    'linux/index.html',
+    'freebsd/index.html'
+)
+$expandedPlatformPages = @(
+    'nas-docker/manager.html',
+    'mac/index.html',
+    'linux/index.html',
+    'freebsd/index.html'
+)
 $renderedUrls = @{
     'index.html'                  = 'https://sparkmoxie.github.io/TautWeekly/'
     'windows/index.html'          = 'https://sparkmoxie.github.io/TautWeekly/windows/'
@@ -48,6 +61,10 @@ foreach ($relative in $pages) {
     if ($relative -in @('index.html', 'nas-docker/manager.html')) {
         $combined += [IO.File]::ReadAllText((Join-Path $docs 'assets/styles.css'))
         $combined += [IO.File]::ReadAllText((Join-Path $docs 'assets/site.js'))
+    }
+    if ($relative -in $sharedQuickstartPages) {
+        $combined += [IO.File]::ReadAllText((Join-Path $docs 'assets/quickstart.css'))
+        $combined += [IO.File]::ReadAllText((Join-Path $docs 'assets/quickstart.js'))
     }
     if ($relative -eq 'gui-preview/index.html') {
         $combined += [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/app.css'))
@@ -105,6 +122,85 @@ foreach ($relative in $pages) {
 
     if ($combined -match '(?i)terminal') { $terminalPages++ }
     Write-Host "[PASS] Documentation features: $relative"
+}
+
+$quickstartCss = [IO.File]::ReadAllText((Join-Path $docs 'assets/quickstart.css'))
+$quickstartJs = [IO.File]::ReadAllText((Join-Path $docs 'assets/quickstart.js'))
+foreach ($pattern in @(
+    '@media\s*\(max-width:\s*1100px\)',
+    '@media\s*\(max-width:\s*760px\)',
+    '@media\s*\(prefers-reduced-motion:\s*reduce\)',
+    '\.console-pulse',
+    'animation:\s*none',
+    '\.menu-open',
+    '\.nav-scrim'
+)) {
+    if ($quickstartCss -notmatch $pattern) {
+        throw "Shared Quickstart responsive/motion style is missing: $pattern"
+    }
+}
+foreach ($pattern in @(
+    'matchMedia\(''\(max-width: 1100px\)''\)',
+    'aria-expanded',
+    'aria-hidden',
+    '\.inert',
+    'aria-current',
+    "event\.key === 'Escape'",
+    "event\.key === 'Tab'",
+    'navigator\.clipboard\.writeText'
+)) {
+    if ($quickstartJs -notmatch $pattern) {
+        throw "Shared Quickstart interaction/accessibility contract is missing: $pattern"
+    }
+}
+
+foreach ($relative in $sharedQuickstartPages) {
+    $html = [IO.File]::ReadAllText((Join-Path $docs $relative))
+    foreach ($pattern in @(
+        '<body\s+class="[^"]*quickstart',
+        'href="\.\./assets/quickstart\.css"',
+        'src="\.\./assets/quickstart\.js"',
+        'id="menu-toggle"[^>]+aria-controls="guide-nav"[^>]+aria-expanded="false"',
+        'id="guide-nav"[^>]+data-quickstart-nav[^>]+aria-label=',
+        'id="menu-close"[^>]+aria-label="Close guide menu"',
+        'id="nav-scrim"[^>]+aria-label="Close guide menu"',
+        'for="quickstart-search"',
+        'id="quickstart-search"[^>]+type="search"',
+        'class="console-pulse"\s+aria-hidden="true"',
+        'id="scroll-percent"'
+    )) {
+        if ($html -notmatch $pattern) {
+            throw "Shared Quickstart UI/accessibility contract '$pattern' is missing from $relative"
+        }
+    }
+
+    $ids = @([regex]::Matches($html, '(?i)\bid=["''](?<id>[^"'']+)["'']') | ForEach-Object { $_.Groups['id'].Value })
+    foreach ($link in [regex]::Matches($html, '(?i)<a[^>]+href=["'']#(?<target>[^"'']+)["'']')) {
+        $target = $link.Groups['target'].Value
+        if ($target -notin $ids) {
+            throw "Shared Quickstart navigation target is missing from ${relative}: #$target"
+        }
+    }
+    Write-Host "[PASS] Shared Quickstart UI/accessibility: $relative"
+}
+
+foreach ($relative in $expandedPlatformPages) {
+    $html = [IO.File]::ReadAllText((Join-Path $docs $relative))
+    foreach ($pattern in @(
+        'Main features',
+        'Library selection',
+        'User exclusions',
+        'Newsletter and custom text',
+        'Basic troubleshooting',
+        'id="troubleshooting"',
+        'TestEmail',
+        'Schedule'
+    )) {
+        if ($html -notmatch $pattern) {
+            throw "Quickstart feature/troubleshooting coverage '$pattern' is missing from $relative"
+        }
+    }
+    Write-Host "[PASS] Quickstart feature/troubleshooting coverage: $relative"
 }
 
 $guiPreview = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/index.html'))

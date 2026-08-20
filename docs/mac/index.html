@@ -20,17 +20,31 @@
     .section{margin-top:54px}.section.filtered,.hero.filtered{display:none}.section h2{font-size:clamp(27px,4vw,40px);margin:0 0 8px}.lede{max-width:760px;color:var(--muted);margin:0 0 22px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}.card{border:1px solid var(--line);border-radius:17px;background:var(--panel);padding:21px}.card h3{margin:0 0 8px}.card p,.card li{color:var(--muted)}.card ol,.card ul{padding-left:21px}.card li+li{margin-top:8px}.wide{grid-column:1/-1}.code{border:1px solid var(--line);border-radius:12px;background:#0b0b0b;padding:16px;overflow:auto;white-space:pre-wrap}.tag{display:inline-flex;border:1px solid rgba(118,217,154,.4);border-radius:999px;background:rgba(118,217,154,.08);color:#9ce8b7;padding:4px 9px;font-size:11px;font-weight:800}.warning{border-left:4px solid var(--gold)}.check{list-style:none;padding:0}.check li{display:flex;gap:9px}.check li:before{content:"✓";color:var(--green);font-weight:900}.noresults{display:none;margin-top:30px;padding:22px;border:1px solid #765817;border-radius:14px;background:#201706}.noresults.show{display:block}.footer{margin-top:55px;padding-top:24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;color:#888;font-size:13px}
     @media(max-width:880px){.hero{grid-template-columns:1fr;padding:32px}.grid{grid-template-columns:1fr}.wide{grid-column:auto}.search{width:44vw}}@media(max-width:560px){.top-inner{flex-wrap:wrap}.search{order:2;width:100%}main{padding-inline:13px}.hero{padding:27px 21px}.hero h1{font-size:43px}.footer{flex-direction:column}}
   </style>
+  <link rel="stylesheet" href="../assets/quickstart.css">
 </head>
-<body>
-  <div class="progress" id="progress" aria-hidden="true"></div>
-  <header class="top">
-    <div class="top-inner">
-      <a class="brand" href="../"><img src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38"><span><strong>TautWeekly for Plex</strong><small>macOS Docker Desktop Manager</small></span></a>
-      <label class="search"><span class="sr-only"></span><input id="search" type="search" placeholder="Search this Quickstart" aria-label="Search this Quickstart"></label>
+<body class="quickstart qs-mac">
+  <div class="progress" aria-hidden="true"><span id="scroll-progress"></span></div>
+  <header class="qs-topbar">
+    <div class="qs-topbar-inner">
+      <a class="qs-brand" href="../" aria-label="TautWeekly Quickstart home"><img src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38"><span class="qs-brand-copy"><strong>TAUTWEEKLY FOR PLEX</strong><small>macOS Docker Desktop Manager</small></span></a>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-controls="guide-nav" aria-expanded="false"><span class="sr-only">Open guide menu</span><span class="menu-icon" aria-hidden="true"></span></button>
+      <div class="qs-search" role="search"><label class="sr-only" for="quickstart-search">Search the macOS Quickstart</label><input id="quickstart-search" type="search" placeholder="Search install, Config, Tailscale, update…" autocomplete="off"><kbd class="search-shortcut" aria-hidden="true">/</kbd><button class="search-clear" id="search-clear" type="button" aria-label="Clear search">×</button></div>
+      <div class="reading-progress" aria-label="Reading progress"><b aria-hidden="true">●</b> <span id="scroll-percent">0%</span></div>
     </div>
   </header>
-  <main>
-    <section class="hero searchable" data-search="macos docker desktop manager gui setup install intel apple silicon arm64 amd64">
+
+  <div class="qs-layout">
+    <aside class="qs-sidebar" id="guide-nav" data-quickstart-nav aria-label="macOS guide navigation">
+      <div class="navbox">
+        <div class="navbox-head"><div class="navtitle">macOS Manager</div><button class="nav-close" id="menu-close" type="button" aria-label="Close guide menu">×</button></div>
+        <nav class="guide-nav"><a class="active" href="#overview">Overview</a><a href="#install">Install</a><a href="#setup">Main features</a><a href="#metadata">Metadata readiness</a><a href="#network">Remote access</a><a href="#update">Update</a><a href="#recovery">Recovery and data</a><a href="#troubleshooting">Basic troubleshooting</a><a href="#expert">Expert fallbacks</a></nav>
+        <div class="side-note">Docker Desktop owns the container lifecycle. The authenticated Manager owns configuration, verification, previews, TestEmail, and scheduling.</div>
+      </div>
+    </aside>
+    <button class="nav-scrim" id="nav-scrim" type="button" aria-label="Close guide menu" tabindex="-1"></button>
+
+    <main class="qs-main">
+    <section class="hero searchable" id="overview" data-search="macos docker desktop manager gui setup install intel apple silicon arm64 amd64">
       <div>
         <div class="kicker"><img src="../assets/platforms/apple.svg" alt=""><span>Mac-tailored authenticated Manager</span></div>
         <h1>Set up on Mac.<span>Stay in the GUI.</span></h1>
@@ -44,7 +58,7 @@
 <span class="ok">✓</span> token returned only here
 
 <span class="gold">$</span> ./tautweekly.sh open-manager
-<span class="ok">✓</span> Config → Verify → Previews → TestEmail</pre></div>
+<span class="ok">✓</span> Config → Verify → Previews → TestEmail <span class="console-pulse" aria-hidden="true"></span></pre></div>
     </section>
 
     <section class="section searchable" id="install" data-search="download checksum install docker desktop archive chmod mac-install gui first run pairing password localhost 8787">
@@ -58,12 +72,15 @@
       </div>
     </section>
 
-    <section class="section searchable" id="setup" data-search="manager config validate save verify libraries users tautulli plex smtp previews testemail schedule status custom text card body">
-      <h2>Manager is the setup source</h2><p class="lede">Normal configuration no longer uses the terminal wizard. The interface adapts to Docker Desktop and suppresses Windows tray, sign-in startup, Task Scheduler, installer, and NAS-host controls.</p>
+    <section class="section searchable" id="setup" data-search="main features manager config validate save verify library selection users exclusions tautulli plex smtp branding previews testemail schedule status custom text card body">
+      <span class="tag">Main features</span><h2>Shape the newsletter in Manager Config</h2><p class="lede">Normal configuration no longer uses the terminal wizard. These are the everyday controls; the full reference covers advanced renderer fields.</p>
       <div class="grid">
-        <article class="card"><h3>Config</h3><p>Enter Tautulli, direct Plex, SMTP, content scope, exclusions, timezone, the weekly window, and the optional custom text card. Its body is required when enabled. Select <strong>Validate, save, and verify</strong>.</p></article>
-        <article class="card"><h3>Verify and PreviewAll</h3><p>Confirm saved library/user discovery, private-LAN connectivity, non-sending SMTP preflight, then inspect all six authenticated previews.</p></article>
-        <article class="card"><h3>TestEmail and Schedule</h3><p>Run the explicit controlled TestEmail operation. Enable future embedded-scheduler starts only after the next-run timezone and result are correct.</p></article>
+        <article class="card"><h3>Connections and delivery</h3><p>Add Tautulli, recommended direct Plex, SMTP, sender identity, and a controlled <code>TestEmail</code>. Saved secrets remain write-only.</p></article>
+        <article class="card"><h3>Library selection</h3><p>Choose the movie and TV libraries that define release, Trending, and personal-stat content. Unselected sections do not contribute.</p></article>
+        <article class="card"><h3>User exclusions</h3><p>Review the discovered roster and exclude anyone who should not receive production mail. Excluded users remain available for safe preview and TestEmail sampling.</p></article>
+        <article class="card"><h3>Newsletter and custom text</h3><p>Set lookback, card limits, branding, and the optional custom text card. Its body is required when enabled; title, subheading, and border are optional.</p></article>
+        <article class="card"><h3>Verify and PreviewAll</h3><p>Select <strong>Validate, save, and verify</strong>, confirm library/user discovery and non-sending connectivity checks, then inspect all six previews.</p></article>
+        <article class="card"><h3>TestEmail and Schedule</h3><p>Send the six controlled messages only to <code>TestEmail</code>. Enable future starts after content, recipients, timezone, and inbox rendering are correct.</p></article>
       </div>
     </section>
 
@@ -89,17 +106,25 @@
       <p>In Manager <strong>Config &gt; Configuration backups</strong>, Delete requires a second confirmation and permanently removes only that backup; it does not alter the current configuration.</p>
     </section>
 
+    <section class="section searchable" id="troubleshooting" data-search="basic troubleshooting manager unavailable docker desktop connection verify preview skipped testemail schedule timezone logs">
+      <span class="tag">Basic troubleshooting</span><h2>Check the boundary that failed</h2><p class="lede">Start with Manager status and Docker Desktop; keep private credentials, generated output, and raw logs out of public support reports.</p>
+      <div class="grid">
+        <article class="card"><h3>Manager does not open</h3><p>Confirm Docker Desktop is running, <code>docker info</code> succeeds, and the TautWeekly container is healthy. Reopen with <code>./tautweekly.sh open-manager</code>.</p></article>
+        <article class="card"><h3>Verify cannot reach a service</h3><p>For Plex or Tautulli on the Mac, use <code>host.docker.internal</code>; container <code>localhost</code> points back to TautWeekly. Confirm LAN firewalls and the saved URL.</p></article>
+        <article class="card"><h3>Preview is skipped or incomplete</h3><p>Confirm one owner/admin sample, selected libraries, and metadata readiness. Save and verify again before regenerating all six previews.</p></article>
+        <article class="card"><h3>TestEmail or schedule fails</h3><p>Keep production disabled. Recheck SMTP, sender permission, <code>TestEmail</code>, exclusions, timezone, and the saved revision, then inspect the sanitized operation result.</p></article>
+      </div>
+      <div class="actions"><a class="button" href="../TROUBLESHOOTING.md">Full troubleshooting</a><a class="button" href="../CONFIGURATION.md">Configuration reference</a></div>
+    </section>
+
     <section class="section searchable" id="expert" data-search="expert recovery terminal setup verify preview-all user_id send-test schedule logs status">
       <h2>Terminal commands are expert fallbacks</h2><p class="lede"><code>setup</code>, <code>verify</code>, <code>preview-all USER_ID</code>, and <code>send-test-all USER_ID</code> remain for recovery and automation. They do not replace the normal Manager setup and acceptance workflow.</p>
       <article class="card"><ul class="check"><li><code>./tautweekly.sh status</code> and <code>logs</code> inspect Docker Desktop lifecycle.</li><li><code>./tautweekly.sh check-update</code> checks only; it never applies or schedules an update.</li><li>Real-recipient welcome and bulk delivery retain explicit confirmation.</li></ul></article>
     </section>
-    <p class="noresults" id="noresults">No Quickstart section matches that search.</p>
-    <footer class="footer"><span>TautWeekly for Plex · macOS Docker Desktop Manager</span><span><a href="../SECURITY.md">Security</a> · <a href="../TROUBLESHOOTING.md">Troubleshooting</a> · <a href="https://github.com/sparkmoxie/TautWeekly/releases/latest">Stable release</a></span></footer>
-  </main>
-  <script>
-    const progress=document.getElementById('progress'),search=document.getElementById('search'),sections=[...document.querySelectorAll('.searchable')],none=document.getElementById('noresults');
-    addEventListener('scroll',()=>{const d=document.documentElement;progress.style.width=(d.scrollTop/Math.max(1,d.scrollHeight-d.clientHeight)*100)+'%'},{passive:true});
-    function filter(){const terms=search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);let visible=0;for(const section of sections){const text=(section.dataset.search+' '+section.innerText).toLowerCase(),show=terms.every(term=>text.includes(term));section.classList.toggle('filtered',!show);if(show)visible++}none.classList.toggle('show',visible===0)}search.addEventListener('input',filter);
-  </script>
+    <p class="noresults" id="no-results" hidden>No Quickstart section matches that search.</p>
+    <footer class="qs-footer"><span>TautWeekly for Plex · macOS Docker Desktop Manager</span><span><a href="../SECURITY.md">Security</a> · <a href="../TROUBLESHOOTING.md">Troubleshooting</a> · <a href="https://github.com/sparkmoxie/TautWeekly/releases/latest">Stable release</a></span></footer>
+    </main>
+  </div>
+  <script src="../assets/quickstart.js"></script>
 </body>
 </html>

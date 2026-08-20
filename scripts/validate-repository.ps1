@@ -83,6 +83,7 @@ $required = @(
     'assets/branding/SHA256SUMS.txt',
     'assets/platforms/README.md', 'assets/platforms/ASSET-SHA256SUMS.txt',
     'docs/favicon.ico', 'docs/site.webmanifest',
+    'docs/assets/quickstart.css', 'docs/assets/quickstart.js',
     'platforms/windows/TautWeekly.ico',
     'docs/WEBGUI-IMPLEMENTATION.md',
     'manager/go.mod', 'manager/cmd/tautweekly-manager/main.go',

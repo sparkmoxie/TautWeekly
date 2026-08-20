@@ -17,17 +17,31 @@
   <style>
     .guide-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.guide-card{padding:27px;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(150deg,#1a1a1d,#121214)}.guide-card h3{margin-top:0}.guide-card p,.guide-card li{color:var(--muted)}.guide-card code,.paths code{color:var(--gold2)}.paths{width:100%;border-collapse:collapse;border:1px solid var(--line);background:var(--panel)}.paths th,.paths td{padding:14px 16px;border:1px solid var(--line);text-align:left;vertical-align:top}.paths th{color:var(--gold);font-size:12px;text-transform:uppercase}.paths td{color:#c7c7cd}.command{overflow:auto;margin:16px 0;padding:18px;border:1px solid #343439;border-radius:12px;background:#0d0d0f;color:#e3e3e6;white-space:pre-wrap;font:13px/1.7 "SFMono-Regular",Consolas,monospace}.warning{border-color:rgba(255,92,92,.42);background:rgba(255,92,92,.07)}.section h3{margin-bottom:8px}.section p{color:var(--muted)}.hero .terminal pre{min-height:auto}.hero .terminal{transform:none}@media(max-width:760px){.guide-grid{grid-template-columns:1fr}.paths{display:block;overflow-x:auto}}
   </style>
+  <link rel="stylesheet" href="../assets/quickstart.css">
 </head>
-<body>
-  <div class="progress" id="scroll-progress" aria-hidden="true"></div>
-  <header class="site-header">
-    <a class="brand" href="../"><img class="brand-mark" src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38"><span>Taut<span>Weekly</span> for Plex <em>NAS</em></span></a>
-    <nav aria-label="Quickstart navigation"><a href="#install">Install</a><a href="#first-access">First access</a><a href="#acceptance">Acceptance</a><a href="#security">Security</a><a href="#lifecycle">Lifecycle</a><a href="#limits">Limits</a></nav>
-    <label class="search"><span class="sr-only">Search the NAS Manager Quickstart</span><input id="site-search" type="search" placeholder="Search NAS Quickstart" autocomplete="off"><kbd>/</kbd></label>
+<body class="quickstart qs-nas">
+  <div class="progress" aria-hidden="true"><span id="scroll-progress"></span></div>
+  <header class="qs-topbar">
+    <div class="qs-topbar-inner">
+      <a class="qs-brand" href="../" aria-label="TautWeekly Quickstart home"><img src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38"><span class="qs-brand-copy"><strong>TAUTWEEKLY FOR PLEX</strong><small>NAS / Docker Manager Quickstart</small></span></a>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-controls="guide-nav" aria-expanded="false"><span class="sr-only">Open guide menu</span><span class="menu-icon" aria-hidden="true"></span></button>
+      <div class="qs-search" role="search"><label class="sr-only" for="quickstart-search">Search the NAS Manager Quickstart</label><input id="quickstart-search" type="search" placeholder="Search install, QNAP, password, update…" autocomplete="off"><kbd class="search-shortcut" aria-hidden="true">/</kbd><button class="search-clear" id="search-clear" type="button" aria-label="Clear search">×</button></div>
+      <div class="reading-progress" aria-label="Reading progress"><b aria-hidden="true">●</b> <span id="scroll-percent">0%</span></div>
+    </div>
   </header>
 
-  <main>
-    <section class="hero searchable" data-search="nas docker qnap unraid compose manager authenticated overview">
+  <div class="qs-layout">
+    <aside class="qs-sidebar" id="guide-nav" data-quickstart-nav aria-label="NAS / Docker guide navigation">
+      <div class="navbox">
+        <div class="navbox-head"><div class="navtitle">NAS / Docker Manager</div><button class="nav-close" id="menu-close" type="button" aria-label="Close guide menu">×</button></div>
+        <nav class="guide-nav"><a class="active" href="#overview">Overview</a><a href="#install">Install paths</a><a href="#first-access">First access</a><a href="#features">Main features</a><a href="#acceptance">Acceptance</a><a href="#security">Security</a><a href="#scheduling">Schedule</a><a href="#lifecycle">Update and lifecycle</a><a href="#troubleshooting">Basic troubleshooting</a><a href="#limits">Validation limits</a></nav>
+        <div class="side-note">The authenticated Manager owns setup and acceptance. Unraid, QNAP, or the original Compose tool continues to own the container lifecycle.</div>
+      </div>
+    </aside>
+    <button class="nav-scrim" id="nav-scrim" type="button" aria-label="Close guide menu" tabindex="-1"></button>
+
+    <main class="qs-main">
+    <section class="hero searchable" id="overview" data-search="nas docker qnap unraid compose manager authenticated overview">
       <div class="hero-copy">
         <div class="eyebrow">Shared NAS / container Manager</div>
         <h1>One secure core.<br><span>Host-owned lifecycle.</span></h1>
@@ -43,7 +57,7 @@ Pair once, then create the admin password.
 
 <span class="ok">No default password</span>
 <span class="ok">No token in container logs</span>
-<span class="gold">Automatic delivery remains disabled</span></pre></div>
+<span class="gold">Automatic delivery remains disabled</span><span class="console-pulse" aria-hidden="true"></span></pre></div>
     </section>
 
     <section class="metrics searchable" data-search="facts authentication session csrf health volume"><div><strong>required</strong><span>Manager authentication</span></div><div><strong>8 hours</strong><span>in-memory session lifetime</span></div><div><strong>/health/live</strong><span>minimal public liveness</span></div><div><strong>30 min</strong><span>Compose shutdown grace</span></div></section>
@@ -74,6 +88,18 @@ docker compose up -d
       <div class="section-heading"><div><div class="eyebrow">First run</div><h2>Pair locally; configure in the Manager.</h2></div><p>The container creates a random one-time token in private persistent storage. Startup logs say pairing is required but never print the token or a credentialed URL.</p></div>
       <div class="timeline"><div><b>01</b><h3>Retrieve</h3><p>Run <code>manager-bootstrap</code> explicitly from the trusted host or container Console.</p></div><div><b>02</b><h3>Pair</h3><p>Open the NAS IP URL, enter the token, and create an administrator password of 8–256 UTF-8 bytes.</p></div><div><b>03</b><h3>Configure</h3><p>Save Tautulli, recommended direct Plex, SMTP, branding, library scope, exclusions, the weekly window, and the optional custom text card. Its body is required when enabled.</p></div><div><b>04</b><h3>Accept</h3><p>Run safe checks, generate six preview states, and send only to TestEmail.</p></div><div><b>05</b><h3>Enable</h3><p>Explicitly enable future starts only after the recipient roster and test messages pass review.</p></div></div>
       <div class="callout"><div class="shield">!</div><div><h3>Recovery is narrow by design.</h3><p><code>./tautweekly.sh manager-reset-access</code> removes only Manager credentials, pairing material, and active browser sessions, then restarts the container. It preserves newsletter configuration, secrets, schedules, state, output, history, and backups. Retrieve the new one-time token with <code>manager-bootstrap</code>.</p></div><ul><li>No default password</li><li>No secret in normal diagnostics</li><li>Five failed attempts in five minutes are rate-limited</li></ul></div>
+    </section>
+
+    <section id="features" class="section searchable" data-search="main features config connections branding library selection content scope user exclusion custom text newsletter preview testemail schedule">
+      <div class="section-heading"><div><div class="eyebrow">Main features</div><h2>Shape the newsletter in Manager Config.</h2></div><p>These are the everyday controls. Use the full configuration reference only when you need an advanced field or renderer detail.</p></div>
+      <div class="guide-grid">
+        <article class="guide-card"><h3>Connections and delivery</h3><p>Add Tautulli, recommended direct Plex, SMTP, sender identity, and a controlled <code>TestEmail</code>. Saved secrets stay write-only in the Manager.</p></article>
+        <article class="guide-card"><h3>Library selection</h3><p>Choose the movie and TV libraries that define the newsletter content scope. Unselected sections do not contribute releases, Trending, or personal statistics.</p></article>
+        <article class="guide-card"><h3>User exclusions</h3><p>Review the discovered user roster and exclude anyone who should not receive production mail. Excluded users remain available as safe preview or TestEmail samples.</p></article>
+        <article class="guide-card"><h3>Newsletter and custom text</h3><p>Set the lookback, card limits, branding, and optional custom text card. When enabled, give the card a body; its title, subheading, and border are optional refinements.</p></article>
+        <article class="guide-card"><h3>Verify and preview</h3><p>Use <strong>Validate, save, and verify</strong>, then inspect all six browser previews. Validation checks configuration and reachability without sending mail.</p></article>
+        <article class="guide-card"><h3>Test and schedule</h3><p>Send the six controlled messages only to <code>TestEmail</code>. Enable the weekly schedule after content, recipients, timezone, and inbox rendering are correct.</p></article>
+      </div>
     </section>
 
     <section id="acceptance" class="section searchable" data-search="config verify previewall testemail metadata ratings source plex tautulli refresh acceptance">
@@ -115,6 +141,17 @@ docker compose up -d
       <div class="callout"><div class="shield">v14</div><div><h3>One-time migration for an older saved host adapter</h3><p>If Settings reports <strong>Legacy</strong> or <strong>Mismatched</strong>, the image may have updated while the external package did not. Retrieve the token with the documented direct container Console command, then download the current stable NAS archive and <code>SHA256SUMS.txt</code>, verify them, and extract the archive over the same package directory without deleting <code>.env</code> or <code>data/</code>. After that one-time refresh, the packaged update command advances host files and image together.</p></div><ul><li>Never copy from unreleased main</li><li>Preserve the data path</li><li>Unraid refreshes its saved Apps template instead</li></ul></div>
     </section>
 
+    <section id="troubleshooting" class="section searchable" data-search="basic troubleshooting manager unavailable container health logs connection verify preview skipped testemail schedule timezone permissions">
+      <div class="section-heading"><div><div class="eyebrow">Basic troubleshooting</div><h2>Check the boundary that failed.</h2></div><p>Start with the Manager status and the host-owned container controls; keep credentials and private logs out of public support reports.</p></div>
+      <div class="guide-grid">
+        <article class="guide-card"><h3>Manager does not open</h3><p>Confirm the container is healthy, port 8787 is mapped as intended, and the persistent <code>/data</code> path is writable by the configured PUID/PGID. Then review only the recent container logs.</p></article>
+        <article class="guide-card"><h3>Verify cannot reach a service</h3><p>Test the saved Tautulli or Plex URL from the container network. Container <code>localhost</code> means TautWeekly itself; use a shared network, NAS address, or supported host gateway.</p></article>
+        <article class="guide-card"><h3>Preview is skipped or incomplete</h3><p>Confirm one unambiguous owner/admin sample, selected libraries, and the metadata readiness sequence. Save and verify again before regenerating previews.</p></article>
+        <article class="guide-card"><h3>TestEmail or schedule fails</h3><p>Keep production disabled. Recheck SMTP, sender permission, <code>TestEmail</code>, timezone, recipient exclusions, and the saved configuration revision; then inspect the sanitized operation result.</p></article>
+      </div>
+      <div class="actions"><a class="button" href="../TROUBLESHOOTING.md">Full troubleshooting</a><a class="button" href="../CONFIGURATION.md">Configuration reference</a></div>
+    </section>
+
     <section id="limits" class="section searchable" data-search="limitations qpkg hardware testing validation arm64 qnap app store unraid">
       <div class="section-heading"><div><div class="eyebrow">Validation and gaps</div><h2>Automated confidence, explicit hardware limits.</h2></div><p>The repository exercises shared Manager unit/security/accessibility tests, shell and package contracts, a virtual health service, isolated persistent data, amd64 boot smoke, and multi-architecture image builds in CI.</p></div>
       <div class="guide-grid"><article class="guide-card"><h3>Covered without real services</h3><ul><li>No real Tautulli, Plex, SMTP, or user configuration</li><li>Private Manager bootstrap and log-redaction checks</li><li>Host-header, CSRF, cookie, recovery, and scheduler contracts</li><li>Container health, non-root ownership, and root-refusal smoke tests</li><li>amd64 and arm64 Buildx targets</li></ul></article><article class="guide-card"><h3>Irreducible acceptance gaps</h3><ul><li>QNAP firmware/Container Station behavior on physical hardware</li><li>Unraid Community Applications moderation and live WebUI behavior</li><li>NAS-vendor reverse proxies, firewalls, storage ACLs, and hard-stop timeouts</li><li>Real SMTP providers, Plex/Tautulli datasets, and mail clients</li><li>Native QPKG signing or App Center submission, which is not in scope</li></ul></article></div>
@@ -122,8 +159,9 @@ docker compose up -d
     </section>
 
     <div class="no-results" id="no-results" hidden>No sections matched. Try “Unraid”, “QNAP”, “password”, “TLS”, “upgrade”, or “uninstall”.</div>
-  </main>
-  <footer><span>NAS / Docker Manager Quickstart — TautWeekly for Plex</span><span>Independent community project — not affiliated with Plex or Tautulli</span><a href="README.md">Detailed documentation</a></footer>
-  <script src="../assets/site.js"></script>
+    <footer class="qs-footer"><span>NAS / Docker Manager Quickstart — TautWeekly for Plex</span><span>Independent community project — not affiliated with Plex or Tautulli</span><a href="README.md">Detailed documentation</a></footer>
+    </main>
+  </div>
+  <script src="../assets/quickstart.js"></script>
 </body>
 </html>

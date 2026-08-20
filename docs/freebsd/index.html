@@ -18,17 +18,31 @@
     @media(max-width:980px){.guide-grid{grid-template-columns:1fr}.path-table{display:block;overflow-x:auto}.page-toc{position:static}}
     @media(max-width:640px){.command-block{padding:18px 60px 18px 15px;font-size:11px}.warning{grid-template-columns:1fr}}
   </style>
+  <link rel="stylesheet" href="../assets/quickstart.css">
 </head>
-<body>
-  <div class="progress" id="scroll-progress" aria-hidden="true"></div>
-  <header class="site-header">
-    <a class="brand" href="../" aria-label="TautWeekly documentation home"><img class="brand-mark" src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38"><span>Taut<span>Weekly</span> <em>for Plex</em></span></a>
-<nav aria-label="Quickstart navigation"><a href="#requirements">Requirements</a><a href="#install">Install</a><a href="#acceptance">Acceptance</a><a href="#security">Security</a><a href="#updates">Updates</a></nav>
-    <label class="search"><span class="sr-only">Search the FreeBSD Podman Quickstart</span><input id="site-search" type="search" placeholder="Search FreeBSD Quickstart…" autocomplete="off"><kbd>/</kbd></label>
+<body class="quickstart qs-freebsd">
+  <div class="progress" aria-hidden="true"><span id="scroll-progress"></span></div>
+  <header class="qs-topbar">
+    <div class="qs-topbar-inner">
+      <a class="qs-brand" href="../" aria-label="TautWeekly Quickstart home"><img src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38"><span class="qs-brand-copy"><strong>TAUTWEEKLY FOR PLEX</strong><small>FreeBSD Podman Manager Quickstart</small></span></a>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-controls="guide-nav" aria-expanded="false"><span class="sr-only">Open guide menu</span><span class="menu-icon" aria-hidden="true"></span></button>
+      <div class="qs-search" role="search"><label class="sr-only" for="quickstart-search">Search the FreeBSD Podman Quickstart</label><input id="quickstart-search" type="search" placeholder="Search Podman, rc.d, security, update…" autocomplete="off"><kbd class="search-shortcut" aria-hidden="true">/</kbd><button class="search-clear" id="search-clear" type="button" aria-label="Clear search">×</button></div>
+      <div class="reading-progress" aria-label="Reading progress"><b aria-hidden="true">●</b> <span id="scroll-percent">0%</span></div>
+    </div>
   </header>
 
-  <main>
-    <section class="hero searchable" data-search="freebsd podman linux containers rc.d overview beta">
+  <div class="qs-layout">
+    <aside class="qs-sidebar" id="guide-nav" data-quickstart-nav aria-label="FreeBSD Podman guide navigation">
+      <div class="navbox">
+        <div class="navbox-head"><div class="navtitle">FreeBSD Podman Manager</div><button class="nav-close" id="menu-close" type="button" aria-label="Close guide menu">×</button></div>
+        <nav class="guide-nav"><a class="active" href="#overview">Overview</a><a href="#requirements">Requirements</a><a href="#install">Install and pair</a><a href="#metadata-readiness">Metadata readiness</a><a href="#acceptance">Main features</a><a href="#security">Security and data</a><a href="#updates">Update and recovery</a><a href="#troubleshooting">Basic troubleshooting</a></nav>
+        <div class="side-note">The authenticated Manager owns setup and acceptance. The root-owned rc.d wrapper retains the Podman, backup, update, and service boundaries.</div>
+      </div>
+    </aside>
+    <button class="nav-scrim" id="nav-scrim" type="button" aria-label="Close guide menu" tabindex="-1"></button>
+
+    <main class="qs-main">
+    <section class="hero searchable" id="overview" data-search="freebsd podman linux containers rc.d overview beta">
       <div class="hero-copy">
         <div class="platform-identity"><img class="freebsd-logo" src="../assets/platforms/freebsd.png" alt="" width="570" height="164"><div class="eyebrow">Podman · rc.d</div></div>
         <h1>Native lifecycle.<br><span>Maintained container.</span></h1>
@@ -47,7 +61,7 @@
 <span class="ok">✓</span> one-time token returned only here
 
 <span class="muted">$</span> ssh -L 8787:127.0.0.1:8787 admin@freebsd-host
-<span class="gold">→</span> Manager Config · Verify · PreviewAll · TestEmail <span class="cursor">▋</span></pre>
+<span class="gold">→</span> Manager Config · Verify · PreviewAll · TestEmail <span class="console-pulse" aria-hidden="true"></span></pre>
       </div>
     </section>
 
@@ -86,8 +100,14 @@ ssh -L 8787:127.0.0.1:8787 admin@freebsd-host
       <div class="warning"><i>!</i><div><h3>Full refreshes can be slow and can update metadata or artwork.</h3><p>Do not refresh unrelated libraries. Tautulli's table refresh does not replace Plex's refresh. Routine TautWeekly updates do not require this when current output is correct.</p></div></div>
     </section>
 
-    <section id="acceptance" class="section searchable" data-search="acceptance workflow libraries scope users exclusions preview test schedule send production metadata refresh custom text card body">
-      <div class="section-heading"><div><div class="eyebrow">Acceptance gate</div><h2>Observe before delivery</h2></div><p>Use Manager Config for library scope and delivery exclusions, then Verify, PreviewAll, TestEmail, and Schedule. Excluded users remain usable as sample data for safe testing, but scheduled and confirmed production delivery omits them.</p></div>
+    <section id="acceptance" class="section searchable" data-search="main features acceptance workflow connections smtp branding library selection scope users exclusions preview test schedule send production metadata refresh custom text card body">
+      <div class="section-heading"><div><div class="eyebrow">Main features and acceptance</div><h2>Shape it, inspect it, then deliver</h2></div><p>The Manager exposes the everyday newsletter controls without requiring JSON edits. Use the full reference for advanced renderer fields.</p></div>
+      <div class="guide-grid">
+        <article class="guide-card"><h3>Connections and delivery</h3><p>Add Tautulli, recommended direct Plex, SMTP, sender identity, and a controlled <code>TestEmail</code>. Saved secrets remain write-only.</p></article>
+        <article class="guide-card"><h3>Library selection</h3><p>Choose the movie and TV libraries that define releases, Trending, and personal statistics. Unselected sections do not contribute.</p></article>
+        <article class="guide-card"><h3>User exclusions</h3><p>Exclude anyone who should not receive production mail. Excluded users remain available for safe preview and TestEmail sampling.</p></article>
+        <article class="guide-card"><h3>Newsletter and custom text</h3><p>Set lookback, card limits, branding, and the optional custom text card. Its body is required when enabled; title, subheading, and border are optional.</p></article>
+      </div>
       <div class="timeline"><div><b>01</b><h3>Configure</h3><p>Write Tautulli, recommended direct Plex, mail secrets, and the optional custom text card only inside private container data. Its body is required when enabled.</p></div><div><b>02</b><h3>Verify</h3><p>Check Tautulli, direct Plex identity/authenticated library access, SMTP TCP reachability, files, timezone, and schedule.</p></div><div><b>03</b><h3>Preview</h3><p>Render all deterministic states without mail.</p></div><div><b>04</b><h3>TestEmail</h3><p>Validate SMTP authentication, sender permission, MIME, and the actual mail client.</p></div><div><b>05</b><h3>Opt in</h3><p>Enable the scheduler after roster review.</p></div></div>
       <div class="command-block" id="acceptance-command"># Expert/recovery fallbacks only:
 sudo tautweekly list-libraries
@@ -130,9 +150,21 @@ sudo podman logs --tail 200 tautweekly<button data-copy="#logs-command">Copy</bu
       <div class="warning"><i>!</i><div><h3>Do not publish plain HTTP Manager access.</h3><p>Keep <code>127.0.0.1</code> and use SSH. A trusted TLS reverse proxy must use an exact allowed DNS host and secure cookies. The rc.d stop path gives an already-running newsletter delivery up to 30 minutes to drain after Manager access closes.</p></div></div>
     </section>
 
+    <section id="troubleshooting" class="section searchable" data-search="basic troubleshooting manager unavailable service rc.d podman connection verify preview skipped testemail schedule timezone logs">
+      <div class="section-heading"><div><div class="eyebrow">Basic troubleshooting</div><h2>Check the boundary that failed</h2></div><p>Start with Manager status and the rc.d/Podman lifecycle; keep credentials, generated output, and raw private logs out of public support reports.</p></div>
+      <div class="guide-grid">
+        <article class="guide-card"><h3>Manager does not open</h3><p>Run <code>sudo service tautweekly status</code>, confirm the Podman container is healthy, and use the documented SSH tunnel to host loopback.</p></article>
+        <article class="guide-card"><h3>Verify cannot reach a service</h3><p>Test the saved Tautulli or Plex URL from the host and Podman network. Confirm the target listening address and firewall; container <code>localhost</code> means TautWeekly itself.</p></article>
+        <article class="guide-card"><h3>Preview is skipped or incomplete</h3><p>Confirm one owner/admin sample, selected libraries, and metadata readiness. Save and verify again before regenerating all previews.</p></article>
+        <article class="guide-card"><h3>TestEmail or schedule fails</h3><p>Keep production disabled. Recheck SMTP, sender permission, <code>TestEmail</code>, exclusions, timezone, and the saved revision, then inspect the sanitized Manager result and recent Podman logs.</p></article>
+      </div>
+      <div class="actions"><a class="button" href="../TROUBLESHOOTING.md">Full troubleshooting</a><a class="button" href="../CONFIGURATION.md">Configuration reference</a></div>
+    </section>
+
     <div class="no-results" id="no-results" hidden>No sections matched. Try “Podman,” “install,” “preview,” “security,” or “update.”</div>
-  </main>
-<footer><span>FreeBSD Podman Quickstart · TautWeekly for Plex</span><span>Independent community project · not affiliated with Plex, Tautulli, or FreeBSD</span><a href="README.md">Documentation</a></footer>
-  <script src="../assets/site.js"></script>
+    <footer class="qs-footer"><span>FreeBSD Podman Quickstart · TautWeekly for Plex</span><span>Independent community project · not affiliated with Plex, Tautulli, or FreeBSD</span><a href="README.md">Documentation</a></footer>
+    </main>
+  </div>
+  <script src="../assets/quickstart.js"></script>
 </body>
 </html>
