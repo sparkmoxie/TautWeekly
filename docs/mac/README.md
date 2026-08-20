@@ -67,6 +67,27 @@ and diagnostics use the shared Manager security contracts. Browser reads never
 return stored secrets. A service restart invalidates active browser sessions
 without disabling the newsletter schedule.
 
+### Optional custom newsletter text card
+
+The optional Config card immediately after **Cache** places administrator text
+before the newsletter release-count/date block. It is disabled by default.
+
+| Option | Default | Accepted value |
+|---|---:|---|
+| Enabled | `false` | On or off |
+| Border color | `#72aef7` | Six-digit hex color |
+| Border opacity | `34` | Integer 0-100; 0 hides the border |
+| Title | empty | Optional gold uppercase text, 0-120 characters |
+| Subheading | empty | Optional large white text, 0-200 characters |
+| Body | empty | Required plain text, 1-2000 characters when enabled |
+
+Title and subheading are independently optional, and the layout rebalances
+when either is omitted. Line breaks are preserved, and content is escaped for
+normal and welcome HTML, the plain-text alternative, and generated previews.
+An empty or whitespace-only body blocks browser and Manager API validation,
+save, and verification. See the
+[configuration reference](../CONFIGURATION.md#optional-custom-text-card).
+
 ## Connect to Mac-hosted Plex and Tautulli
 
 Docker Desktop exposes software running directly on the Mac through
@@ -190,9 +211,10 @@ failure, and release notes. Authenticated entry renders cached status first and
 makes one non-blocking bounded check only when the last success is missing or
 at least 24 hours old and backoff permits. Successful results are reused for
 five minutes before **Check now** refreshes the same endpoint. Navigation,
-Dashboard rendering, and Manager health remain offline-capable. The passive
-purple header notification appears only for a validated available update; the
-card glows for every non-current state. The containerized web process
+Dashboard rendering, and Manager health remain offline-capable. **Current**
+retains its green glow. The passive purple header SVG appears only for a
+validated newer running application; the card glows for every non-current
+state. The containerized web process
 cannot invoke Docker Desktop or change host package files, so the card exposes
 the copyable `./tautweekly.sh update` host command but no install button.
 
