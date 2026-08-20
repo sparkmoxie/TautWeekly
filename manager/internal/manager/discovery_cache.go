@@ -57,6 +57,43 @@ func (s *tautulliDiscoveryStore) Load(configRevision string) *TautulliDiscoveryR
 	return &clean
 }
 
+// Rebase carries only the already-sanitized discovery choices to a new full
+// configuration revision. Callers use it only when normalized Tautulli inputs
+// are unchanged.
+func (s *tautulliDiscoveryStore) Rebase(previousRevision, nextRevision string) (bool, error) {
+	if !validConfigRevision(previousRevision) || !validConfigRevision(nextRevision) {
+		return false, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	info, err := os.Stat(s.path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maximumDiscoveryCacheBytes {
+		return false, nil
+	}
+	raw, err := os.ReadFile(s.path)
+	if err != nil || len(raw) > maximumDiscoveryCacheBytes {
+		return false, nil
+	}
+	var stored TautulliDiscoveryResult
+	if json.Unmarshal(raw, &stored) != nil {
+		return false, nil
+	}
+	clean, ok := sanitizeCachedDiscovery(stored)
+	if !ok || clean.ConfigRevision != previousRevision {
+		return false, nil
+	}
+	clean.ConfigRevision = nextRevision
+	encoded, err := json.Marshal(clean)
+	if err != nil {
+		return false, err
+	}
+	encoded = append(encoded, '\n')
+	if err := writePrivateBytes(s.path, encoded); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func sanitizeCachedDiscovery(stored TautulliDiscoveryResult) (TautulliDiscoveryResult, bool) {
 	if stored.Mode != "real-lan-discovery" || stored.NetworkBoundary != "private-and-loopback-only" || !validConfigRevision(stored.ConfigRevision) {
 		return TautulliDiscoveryResult{}, false

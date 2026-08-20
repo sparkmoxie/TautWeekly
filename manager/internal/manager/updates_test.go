@@ -463,6 +463,7 @@ func TestUpdateEndpointsRequireAuthenticationCSRFOriginAndAllowedHost(t *testing
 		PackageKind:        packageKindUnraid,
 		HostAdapterVersion: currentHostAdapterAPI,
 		AllowedHosts:       []string{"weekly.nas.example"},
+		SecureCookies:      true,
 		updateChecker:      checker,
 	})
 	if err != nil {

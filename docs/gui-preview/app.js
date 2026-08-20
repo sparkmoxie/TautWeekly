@@ -633,7 +633,7 @@ function renderConfigEditor() {
     input.value = Array.isArray(field.value) ? field.value.join(", ") : "";
     sections.append(input);
   }
-  byId("config-save-copy").textContent = "The mock API validates values in this tab, records a fictional backup, runs passing synthetic checks, and refreshes six bundled previews. Nothing is persisted.";
+  byId("config-save-copy").textContent = "The mock API validates values in this tab and returns the same scoped save plan as production. Only affected synthetic checks or bundled previews rerun; unrelated results stay connected. Nothing is persisted.";
   if (Object.keys(editor.issues || {}).length) {
     showConfigErrors("Complete the required setup fields before saving.", editor.issues, false);
   }
@@ -1222,13 +1222,19 @@ function collectConfigSaveRequest() {
 
 const setupWorkflowSteps = ["choices", "lan", "smtp", "previews"];
 
-function beginSetupWorkflow() {
-  state.setupWorkflow = {
+function beginSetupWorkflow(plan) {
+  const workflow = structuredClone(state.setupWorkflow || {
     available: true,
-    running: true,
-    steps: Object.fromEntries(setupWorkflowSteps.map((name) => [name, { state: "waiting", summary: "Waiting for the synthetic configuration." }])),
-  };
-  state.setupWorkflowRunning = true;
+    running: false,
+    steps: Object.fromEntries(setupWorkflowSteps.map((name) => [name, { state: "not-run", summary: "Not run for the synthetic configuration." }])),
+  });
+  const affected = { choices: plan?.runDiscovery, lan: plan?.runIntegration, smtp: plan?.runSmtp, previews: plan?.generatePreviews };
+  for (const [name, required] of Object.entries(affected)) {
+    if (required) workflow.steps[name] = { state: "waiting", summary: "Waiting for the affected synthetic configuration." };
+  }
+  workflow.running = Object.values(affected).some(Boolean);
+  state.setupWorkflow = workflow;
+  state.setupWorkflowRunning = workflow.running;
   renderSetupWorkflow();
 }
 
@@ -1279,76 +1285,90 @@ async function retainSkippedPreviewStatus(revision, reason) {
   renderSetupWorkflow();
 }
 
-async function runPostSaveSetup(revision) {
-  let discovered = null;
-  state.discoveryRunning = true;
-  updateSetupWorkflowStep("choices", "running", "Loading bundled fictional libraries, users, and roles...");
-  renderDiscovery();
-  renderVerification();
-  try {
-    discovered = await request("/api/v1/discovery/tautulli", {
-      method: "POST",
-      body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
-    });
-    state.discovery = discovered;
-    if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
-    updateSetupWorkflowStep("choices", "passed", `${discovered.libraries?.length || 0} fictional libraries and ${discovered.users?.length || 0} fictional users loaded in memory.`);
-  } catch (error) {
-    updateSetupWorkflowStep("choices", "failed", error.message);
-  } finally {
-    state.discoveryRunning = false;
+async function runPostSaveSetup(revision, plan) {
+  let discovered = state.discovery;
+  let discoveryFailed = false;
+  if (plan.runDiscovery) {
+    state.discoveryRunning = true;
+    updateSetupWorkflowStep("choices", "running", "Loading bundled fictional libraries, users, and roles...");
     renderDiscovery();
     renderVerification();
+    try {
+      discovered = await request("/api/v1/discovery/tautulli", {
+        method: "POST",
+        body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
+      });
+      state.discovery = discovered;
+      if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
+      updateSetupWorkflowStep("choices", "passed", `${discovered.libraries?.length || 0} fictional libraries and ${discovered.users?.length || 0} fictional users loaded in memory.`);
+    } catch (error) {
+      discoveryFailed = true;
+      updateSetupWorkflowStep("choices", "failed", error.message);
+    } finally {
+      state.discoveryRunning = false;
+      renderDiscovery();
+      renderVerification();
+    }
   }
 
-  state.verificationRunning = true;
-  updateSetupWorkflowStep("lan", "running", "Simulating Tautulli and direct Plex checks with fictional endpoints...");
-  renderDiscovery();
-  renderVerification();
-  try {
-    const result = await request("/api/v1/checks/integrations", {
-      method: "POST",
-      body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
-    });
-    state.verification = { ...state.verification, last: result };
-    updateSetupWorkflowStep("lan", result.overall, result.overall === "passed"
-      ? "Synthetic Tautulli and direct Plex verification passed. Detailed fictional evidence is available under Verify."
-      : "The synthetic connection checks completed with a result that needs review under Verify.");
-  } catch (error) {
-    updateSetupWorkflowStep("lan", "failed", error.message);
-  } finally {
-    state.verificationRunning = false;
+  if (plan.runIntegration) {
+    state.verificationRunning = true;
+    updateSetupWorkflowStep("lan", "running", "Simulating Tautulli and direct Plex checks with fictional endpoints...");
     renderDiscovery();
     renderVerification();
+    try {
+      const result = await request("/api/v1/checks/integrations", {
+        method: "POST",
+        body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
+      });
+      state.verification = { ...state.verification, last: result };
+      updateSetupWorkflowStep("lan", result.overall, result.overall === "passed"
+        ? "Synthetic Tautulli and direct Plex verification passed. Detailed fictional evidence is available under Verify."
+        : "The synthetic connection checks completed with a result that needs review under Verify.");
+    } catch (error) {
+      updateSetupWorkflowStep("lan", "failed", error.message);
+    } finally {
+      state.verificationRunning = false;
+      renderDiscovery();
+      renderVerification();
+    }
   }
 
-  state.smtpVerificationRunning = true;
-  updateSetupWorkflowStep("smtp", "running", "Simulating SMTP reachability and STARTTLS without opening a socket...");
-  renderDiscovery();
-  renderVerification();
-  try {
-    const result = await request("/api/v1/checks/smtp-network", {
-      method: "POST",
-      body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
-    });
-    state.verification = { ...state.verification, smtp: result };
-    updateSetupWorkflowStep("smtp", result.overall, result.summary);
-  } catch (error) {
-    updateSetupWorkflowStep("smtp", "failed", error.message);
-  } finally {
-    state.smtpVerificationRunning = false;
+  if (plan.runSmtp) {
+    state.smtpVerificationRunning = true;
+    updateSetupWorkflowStep("smtp", "running", "Simulating SMTP reachability and STARTTLS without opening a socket...");
     renderDiscovery();
     renderVerification();
+    try {
+      const result = await request("/api/v1/checks/smtp-network", {
+        method: "POST",
+        body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
+      });
+      state.verification = { ...state.verification, smtp: result };
+      updateSetupWorkflowStep("smtp", result.overall, result.summary);
+    } catch (error) {
+      updateSetupWorkflowStep("smtp", "failed", error.message);
+    } finally {
+      state.smtpVerificationRunning = false;
+      renderDiscovery();
+      renderVerification();
+    }
   }
 
   const suggestedUserID = discovered?.suggestedPreviewUserId || "";
-  if (!validPreviewUserID(suggestedUserID)) {
+  if (plan.generatePreviews && discoveryFailed) {
+    updateSetupWorkflowStep("previews", "skipped", "Preview generation was skipped because fictional Tautulli choices could not be refreshed. Use Refresh Tautulli choices to continue without another save.");
+    await retainSkippedPreviewStatus(revision, "discovery-failed");
+  } else if (plan.generatePreviews && !discovered) {
+    updateSetupWorkflowStep("previews", "skipped", "Preview generation was skipped because no retained fictional Tautulli choices are available. Use Refresh Tautulli choices to continue without another save.");
+    await retainSkippedPreviewStatus(revision, "choices-unavailable");
+  } else if (plan.generatePreviews && !validPreviewUserID(suggestedUserID)) {
     updateSetupWorkflowStep("previews", "skipped", "The fictional roster has no unambiguous administrator ID. Choose a demo user under Previews to model the six states manually.");
     await retainSkippedPreviewStatus(revision, "owner-not-found");
-  } else if (operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation)) {
+  } else if (plan.generatePreviews && (operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation))) {
     updateSetupWorkflowStep("previews", "skipped", "Another Manager or schedule operation is active. Generate previews manually after it finishes.");
     await retainSkippedPreviewStatus(revision, "operation-active");
-  } else {
+  } else if (plan.generatePreviews) {
     state.operationStarting = true;
     state.operationStartingType = "preview-all";
     updateSetupWorkflowStep("previews", "running", "Refreshing six bundled newsletter previews for the fictional administrator...");
@@ -1369,7 +1389,7 @@ async function runPostSaveSetup(revision) {
     }
   }
 
-  state.setupWorkflow.running = false;
+  if (state.setupWorkflow) state.setupWorkflow.running = false;
   state.setupWorkflowRunning = false;
   try {
     await refreshConfigurationStatus();
@@ -1431,6 +1451,15 @@ function updateConfigSaveAvailability() {
   }
 }
 
+function savedWithoutVerificationMessage(plan) {
+  switch (plan?.confirmationCode) {
+  case "cache-enabled": return "Cache enabled.";
+  case "cache-disabled": return "Cache disabled.";
+  case "cache-updated": return "Cache settings saved.";
+  default: return "Demo configuration saved in memory. Existing synthetic checks and previews remain valid.";
+  }
+}
+
 async function submitConfig(event) {
   event.preventDefault();
   if (customTextCardBodyMissing()) {
@@ -1447,12 +1476,21 @@ async function submitConfig(event) {
   try {
     const result = await request("/api/v1/config", { method: "PUT", body: JSON.stringify(collectConfigSaveRequest()) });
     state.editor = result.editor;
-    beginSetupWorkflow();
+    if (!result.saved) {
+      setGlobalStatus("No demo configuration changes were found. No synthetic checks or preview work ran.", true);
+      return;
+    }
     await loadAll();
     selectView("configuration");
-    setGlobalStatus(result.backup ? "Demo configuration saved in memory with a fictional backup. Running synthetic checks..." : "Demo configuration saved in memory. Running synthetic checks...");
-    await runPostSaveSetup(result.editor.revision);
-    setGlobalStatus("Synthetic save verification finished. Review the results above.", true);
+    beginSetupWorkflow(result.postSave);
+    const hasPostSaveWork = Boolean(result.postSave.runDiscovery || result.postSave.runIntegration || result.postSave.runSmtp || result.postSave.generatePreviews);
+    if (!hasPostSaveWork) {
+      setGlobalStatus(savedWithoutVerificationMessage(result.postSave), true);
+      return;
+    }
+    setGlobalStatus("Demo configuration saved in memory with a fictional backup. Running only affected synthetic checks...");
+    await runPostSaveSetup(result.editor.revision, result.postSave);
+    setGlobalStatus("Affected synthetic save verification finished. Review the results above.", true);
   } catch (error) {
     showConfigErrors(error.message, error.fields);
     setGlobalStatus(error.message, true);

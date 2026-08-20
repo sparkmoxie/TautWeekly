@@ -79,7 +79,10 @@ Disabling the feature stops access but does not erase the existing cache.
 - For a trusted TLS reverse proxy, allow only its exact DNS host, preserve the
   original Host header, and enable secure Manager cookies. Do not trust broad
   wildcards or publish the plain HTTP backend. The Manager does not infer TLS
-  or client identity from forwarded headers.
+  or client identity from forwarded headers. Same-origin comparison
+  lower-cases DNS, removes one trailing dot, and normalizes omitted/default
+  `:80` or `:443`; malformed origins, different hosts, and Tailscale HTTP
+  mutations remain rejected with sanitized reason codes.
 - Unauthenticated health endpoints expose liveness only. They do not return
   configuration, credentials, sessions, paths, diagnostics, or newsletter
   state.

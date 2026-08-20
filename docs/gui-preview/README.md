@@ -23,6 +23,10 @@ affiliation or endorsement. The score snapshot date is shown inside each frame.
 Config also includes an in-memory custom text card demonstration immediately
 after Cache. Its toggle, border color/opacity, optional headings, and plain-text
 body feed the bundled newsletter frames without writing a configuration file.
+Synthetic saves consume the same typed, card-scoped impact plan shape as the
+production Manager, so presentation changes preserve fictional connection
+evidence, cache-only saves show a concise confirmation, and no-op saves run no
+simulated work.
 
 The page never contacts Plex, Tautulli, SMTP, a scheduler, or another external
 service; it writes no files and stores no credentials or entered values. Its

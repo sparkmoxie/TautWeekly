@@ -414,8 +414,8 @@ function renderCapabilities() {
       ? "<strong>Mac package recovery remains available.</strong> Run <code>./tautweekly.sh manager-reset-access</code> in the extracted package directory. Recovery resets only Manager credentials and sessions, restarts the Docker Desktop service, and preserves configuration, schedules, history, output, and newsletter state."
     : "<strong>Local recovery remains available.</strong> If the password is forgotten, run <code>18-RESET-MANAGER-ACCESS.bat</code> from the TautWeekly folder. Installed copies also include <code>Reset-TautWeekly-Access.cmd</code>. Recovery disables only the Manager lock and leaves configuration, credentials, schedules, history, and previews untouched.";
   setText("foundation-schedule-copy", service
-    ? `A successful configuration save runs clearly labeled, non-sending checks and local discovery. Email delivery remains explicit, and schedule controls update only the embedded ${embeddedRuntimeLabel()} scheduler; they never stop a delivery already running.`
-    : "A successful configuration save runs clearly labeled, non-sending connection checks and local discovery. Email delivery remains limited to an explicit TestEmail action, and schedule changes use a fixed UAC helper that verifies task ownership.");
+    ? `A successful configuration save reruns only the discovery, non-sending checks, or previews affected by that card. Email delivery remains explicit, and schedule controls update only the embedded ${embeddedRuntimeLabel()} scheduler; they never stop a delivery already running.`
+    : "A successful configuration save reruns only the discovery, non-sending checks, or previews affected by that card. Email delivery remains limited to an explicit TestEmail action, and schedule changes use a fixed UAC helper that verifies task ownership.");
   document.querySelectorAll("[data-windows-schedule-only]").forEach((element) => { element.hidden = service; });
   if (service) {
     setText("schedule-page-eyebrow", linux ? "Linux service delivery lifecycle" : mac ? "Mac Docker delivery lifecycle" : "Container delivery lifecycle");
@@ -822,8 +822,8 @@ function renderConfigEditor() {
     sections.append(input);
   }
   byId("config-save-copy").textContent = editor.exists
-    ? "A private timestamped backup is created before config.json is replaced, then safe discovery, connection checks, and six non-sending local previews run."
-    : "A new private config.json is created only after validation, then safe discovery, connection checks, and six non-sending local previews run.";
+    ? "A private timestamped backup is created before config.json is replaced. Only affected discovery, connection checks, SMTP preflight, or local previews rerun; unrelated valid results remain connected."
+    : "A new private config.json is created only after validation, then the required discovery, connection checks, SMTP preflight, and six non-sending local previews run.";
   if (Object.keys(editor.issues || {}).length) {
     showConfigErrors("Complete the required setup fields before saving.", editor.issues, false);
   }
@@ -869,7 +869,7 @@ function renderDiscovery() {
   if (!state.discovery) {
     byId("discovery-results").hidden = true;
     byId("discovery-message").textContent = ready
-      ? "A successful save loads these choices automatically. Confirm above to repeat the saved service lookup now."
+      ? "The first valid save or a saved Tautulli connection change loads these choices automatically. Confirm above to repeat the saved service lookup now."
       : "Save a complete configuration before loading choices.";
     renderUserComboboxes();
     return;
@@ -1100,6 +1100,7 @@ function initializeUserCombobox(container) {
 
 async function runTautulliDiscovery() {
   if (state.discoveryRunning || state.verificationRunning || state.smtpVerificationRunning || state.editor?.state !== "ready" || !byId("discovery-confirm").checked) return;
+  let refreshed = false;
   state.discoveryRunning = true;
   renderDiscovery();
   renderVerification();
@@ -1109,6 +1110,7 @@ async function runTautulliDiscovery() {
       method: "POST",
       body: JSON.stringify({ expectedRevision: state.editor.revision, confirmRealNetwork: true }),
     });
+    refreshed = true;
     if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
     byId("discovery-confirm").checked = false;
     setGlobalStatus("Tautulli choices loaded and retained locally.", true);
@@ -1124,6 +1126,7 @@ async function runTautulliDiscovery() {
     }
     renderDiscovery();
     renderVerification();
+    if (refreshed) await recoverPendingPreviewsFromChoices();
   }
 }
 
@@ -1431,13 +1434,8 @@ function collectConfigSaveRequest() {
 
 const setupWorkflowSteps = ["choices", "lan", "smtp", "previews"];
 
-function beginSetupWorkflow() {
-  state.setupWorkflow = {
-    available: true,
-    running: true,
-    steps: Object.fromEntries(setupWorkflowSteps.map((name) => [name, { state: "waiting", summary: "Waiting for the saved configuration." }])),
-  };
-  state.setupWorkflowRunning = true;
+function beginSetupWorkflow(plan) {
+  state.setupWorkflowRunning = Boolean(plan?.runDiscovery || plan?.runIntegration || plan?.runSmtp || plan?.generatePreviews);
   renderSetupWorkflow();
 }
 
@@ -1488,76 +1486,90 @@ async function retainSkippedPreviewStatus(revision, reason) {
   renderSetupWorkflow();
 }
 
-async function runPostSaveSetup(revision) {
-  let discovered = null;
-  state.discoveryRunning = true;
-  updateSetupWorkflowStep("choices", "running", "Loading active libraries, users, and any explicit owner or administrator role...");
-  renderDiscovery();
-  renderVerification();
-  try {
-    discovered = await request("/api/v1/discovery/tautulli", {
-      method: "POST",
-      body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
-    });
-    state.discovery = discovered;
-    if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
-    updateSetupWorkflowStep("choices", "passed", `${discovered.libraries?.length || 0} active libraries and ${discovered.users?.length || 0} users loaded and retained locally.`);
-  } catch (error) {
-    updateSetupWorkflowStep("choices", "failed", error.message);
-  } finally {
-    state.discoveryRunning = false;
+async function runPostSaveSetup(revision, plan) {
+  let discovered = state.discovery?.configRevision === revision ? state.discovery : null;
+  let discoveryFailed = false;
+  if (plan.runDiscovery) {
+    state.discoveryRunning = true;
+    updateSetupWorkflowStep("choices", "running", "Loading active libraries, users, and any explicit owner or administrator role...");
     renderDiscovery();
     renderVerification();
+    try {
+      discovered = await request("/api/v1/discovery/tautulli", {
+        method: "POST",
+        body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
+      });
+      state.discovery = discovered;
+      if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
+      updateSetupWorkflowStep("choices", "passed", `${discovered.libraries?.length || 0} active libraries and ${discovered.users?.length || 0} users loaded and retained locally.`);
+    } catch (error) {
+      discoveryFailed = true;
+      updateSetupWorkflowStep("choices", "failed", error.message);
+    } finally {
+      state.discoveryRunning = false;
+      renderDiscovery();
+      renderVerification();
+    }
   }
 
-  state.verificationRunning = true;
-  updateSetupWorkflowStep("lan", "running", "Testing the saved Tautulli and direct Plex endpoints...");
-  renderDiscovery();
-  renderVerification();
-  try {
-    const result = await request("/api/v1/checks/integrations", {
-      method: "POST",
-      body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
-    });
-    state.verification = { ...state.verification, last: result };
-    updateSetupWorkflowStep("lan", result.overall, result.overall === "passed"
-      ? "Tautulli and direct Plex verification passed. Detailed evidence is available under Verify."
-      : "The connection checks completed with a result that needs review under Verify.");
-  } catch (error) {
-    updateSetupWorkflowStep("lan", "failed", error.message);
-  } finally {
-    state.verificationRunning = false;
+  if (plan.runIntegration) {
+    state.verificationRunning = true;
+    updateSetupWorkflowStep("lan", "running", "Testing the saved Tautulli and direct Plex endpoints...");
     renderDiscovery();
     renderVerification();
+    try {
+      const result = await request("/api/v1/checks/integrations", {
+        method: "POST",
+        body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
+      });
+      state.verification = { ...state.verification, last: result };
+      updateSetupWorkflowStep("lan", result.overall, result.overall === "passed"
+        ? "Tautulli and direct Plex verification passed. Detailed evidence is available under Verify."
+        : "The connection checks completed with a result that needs review under Verify.");
+    } catch (error) {
+      updateSetupWorkflowStep("lan", "failed", error.message);
+    } finally {
+      state.verificationRunning = false;
+      renderDiscovery();
+      renderVerification();
+    }
   }
 
-  state.smtpVerificationRunning = true;
-  updateSetupWorkflowStep("smtp", "running", "Checking SMTP reachability and STARTTLS without authenticating or sending...");
-  renderDiscovery();
-  renderVerification();
-  try {
-    const result = await request("/api/v1/checks/smtp-network", {
-      method: "POST",
-      body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
-    });
-    state.verification = { ...state.verification, smtp: result };
-    updateSetupWorkflowStep("smtp", result.overall, result.summary);
-  } catch (error) {
-    updateSetupWorkflowStep("smtp", "failed", error.message);
-  } finally {
-    state.smtpVerificationRunning = false;
+  if (plan.runSmtp) {
+    state.smtpVerificationRunning = true;
+    updateSetupWorkflowStep("smtp", "running", "Checking SMTP reachability and STARTTLS without authenticating or sending...");
     renderDiscovery();
     renderVerification();
+    try {
+      const result = await request("/api/v1/checks/smtp-network", {
+        method: "POST",
+        body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
+      });
+      state.verification = { ...state.verification, smtp: result };
+      updateSetupWorkflowStep("smtp", result.overall, result.summary);
+    } catch (error) {
+      updateSetupWorkflowStep("smtp", "failed", error.message);
+    } finally {
+      state.smtpVerificationRunning = false;
+      renderDiscovery();
+      renderVerification();
+    }
   }
 
   const suggestedUserID = discovered?.suggestedPreviewUserId || "";
-  if (!validPreviewUserID(suggestedUserID)) {
+  if (plan.generatePreviews && discoveryFailed) {
+    updateSetupWorkflowStep("previews", "skipped", "Preview generation was skipped because Tautulli choices could not be refreshed. Resolve the discovery result, then use Refresh Tautulli choices to continue without another save.");
+    await retainSkippedPreviewStatus(revision, "discovery-failed");
+  } else if (plan.generatePreviews && !discovered) {
+    updateSetupWorkflowStep("previews", "skipped", "Preview generation was skipped because no retained Tautulli choices are available. Refresh Tautulli choices to continue without another save.");
+    await retainSkippedPreviewStatus(revision, "choices-unavailable");
+  } else if (plan.generatePreviews && !validPreviewUserID(suggestedUserID)) {
     updateSetupWorkflowStep("previews", "skipped", "Tautulli did not expose one unambiguous owner or administrator ID. Choose a user under Previews to generate the six local states manually.");
     await retainSkippedPreviewStatus(revision, "owner-not-found");
-  } else if (operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation)) {
+  } else if (plan.generatePreviews && (operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation))) {
     updateSetupWorkflowStep("previews", "skipped", "Another Manager or schedule operation is active. Generate previews manually after it finishes.");
     await retainSkippedPreviewStatus(revision, "operation-active");
-  } else {
+  } else if (plan.generatePreviews) {
     state.operationStarting = true;
     state.operationStartingType = "preview-all";
     updateSetupWorkflowStep("previews", "running", "Starting six local newsletter previews for the verified owner or administrator...");
@@ -1578,7 +1590,7 @@ async function runPostSaveSetup(revision) {
     }
   }
 
-  state.setupWorkflow.running = false;
+  if (state.setupWorkflow) state.setupWorkflow.running = false;
   state.setupWorkflowRunning = false;
   try {
     await refreshConfigurationStatus();
@@ -1603,6 +1615,36 @@ async function runPostSaveSetup(revision) {
     renderAbout();
   } catch (_) {
     // Diagnostics are supplementary; the individual setup results remain visible.
+  }
+}
+
+async function recoverPendingPreviewsFromChoices() {
+  const revision = state.editor?.revision || "";
+  const previewState = state.setupWorkflow?.steps?.previews?.state || "not-run";
+  const suggestedUserID = state.discovery?.configRevision === revision ? state.discovery.suggestedPreviewUserId || "" : "";
+  if (!["not-run", "waiting", "failed", "skipped"].includes(previewState)
+      || !validPreviewUserID(suggestedUserID)
+      || operationIsActive(state.operation)
+      || scheduleOperationIsActive(state.scheduleOperation)) return;
+
+  state.operationStarting = true;
+  state.operationStartingType = "preview-all";
+  updateSetupWorkflowStep("previews", "running", "Starting six local newsletter previews from the refreshed choices...");
+  renderOperations();
+  try {
+    state.operation = await request("/api/v1/operations", {
+      method: "POST",
+      body: JSON.stringify({ type: "preview-all", expectedRevision: revision, userId: suggestedUserID, confirmNoSend: true }),
+    });
+    updateSetupWorkflowStep("previews", "running", "Six-state local preview generation started. No email will be sent; progress is available under Previews.");
+    manageOperationPolling();
+    setGlobalStatus("Preview generation resumed without another configuration save.", true);
+  } catch (error) {
+    updateSetupWorkflowStep("previews", error.code === "operation-busy" || error.code === "schedule-busy" ? "skipped" : "failed", error.message);
+  } finally {
+    state.operationStarting = false;
+    state.operationStartingType = "";
+    renderOperations();
   }
 }
 
@@ -1640,6 +1682,21 @@ function updateConfigSaveAvailability() {
   }
 }
 
+function savedWithoutVerificationMessage(plan) {
+  switch (plan?.confirmationCode) {
+  case "cache-enabled": return "Cache enabled.";
+  case "cache-disabled": return "Cache disabled.";
+  case "cache-updated": return "Cache settings saved.";
+  default: {
+    const categories = plan?.changedCategories || [];
+    if (categories.length === 1 && categories[0] === "email") return "Email settings saved.";
+    if (categories.length === 1 && categories[0] === "schedule") return "Schedule settings saved.";
+    if (categories.length === 1 && categories[0] === "newsletter") return "Newsletter delivery settings saved.";
+    return "Configuration saved. Existing checks and previews remain valid.";
+  }
+  }
+}
+
 async function submitConfig(event) {
   event.preventDefault();
   if (customTextCardBodyMissing()) {
@@ -1656,12 +1713,25 @@ async function submitConfig(event) {
   try {
     const result = await request("/api/v1/config", { method: "PUT", body: JSON.stringify(collectConfigSaveRequest()) });
     state.editor = result.editor;
-    beginSetupWorkflow();
+    if (!result.saved) {
+      setGlobalStatus("No material configuration changes were found. No checks or preview work ran.", true);
+      return;
+    }
     await loadAll();
     selectView("configuration");
-    setGlobalStatus(result.backup ? "Configuration saved and backed up. Running safe checks..." : "Configuration saved. Running safe checks...");
-    await runPostSaveSetup(result.editor.revision);
-    setGlobalStatus("Save verification finished. Review the results above.", true);
+    beginSetupWorkflow(result.postSave);
+    if (!result.postSave?.materialChange) {
+      setGlobalStatus(result.backup ? "Configuration normalized and backed up. No checks or preview work were needed." : "Configuration normalized. No checks or preview work were needed.", true);
+      return;
+    }
+    const hasPostSaveWork = Boolean(result.postSave.runDiscovery || result.postSave.runIntegration || result.postSave.runSmtp || result.postSave.generatePreviews);
+    if (!hasPostSaveWork) {
+      setGlobalStatus(savedWithoutVerificationMessage(result.postSave), true);
+      return;
+    }
+    setGlobalStatus(result.backup ? "Configuration saved and backed up. Running only affected checks..." : "Configuration saved. Running only affected checks...");
+    await runPostSaveSetup(result.editor.revision, result.postSave);
+    setGlobalStatus("Affected save verification finished. Review the results above.", true);
   } catch (error) {
     showConfigErrors(error.message, error.fields);
     setGlobalStatus(error.message, true);
@@ -1916,6 +1986,7 @@ function renderVerification() {
 
 async function runVerification() {
   if (state.verificationRunning || state.smtpVerificationRunning || state.discoveryRunning || !byId("verification-confirm").checked || state.editor?.state !== "ready") return;
+  let completed = false;
   state.verificationRunning = true;
   const button = byId("verification-run-button");
   setSwappingButtonText("verification-run-button", "Testing saved services...");
@@ -1927,6 +1998,7 @@ async function runVerification() {
       method: "POST",
       body: JSON.stringify({ expectedRevision: state.editor.revision, confirmRealNetwork: true }),
     });
+    completed = true;
     state.verification = { ...state.verification, last: result };
     byId("verification-confirm").checked = false;
     setGlobalStatus(result.overall === "failed" ? "Connection test completed with failures." : "Connection test completed.", true);
@@ -1942,6 +2014,7 @@ async function runVerification() {
     }
     renderVerification();
     renderDiscovery();
+    if (completed) await recoverPendingPreviewsFromChoices();
   }
 }
 

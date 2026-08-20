@@ -204,8 +204,11 @@ def main() -> int:
         failures.append("retained verification diagnostics expose an internal LAN label")
     if 'id="metadata-readiness-confirm"' in combined or "metadataReady" in javascript:
         failures.append("automatic preview generation is still blocked by a separate readiness gate")
-    if 'runPostSaveSetup(result.editor.revision);' not in javascript or 'type: "preview-all"' not in javascript:
-        failures.append("validated configuration saves do not automatically start local previews")
+    if 'runPostSaveSetup(result.editor.revision, result.postSave);' not in javascript or 'plan.generatePreviews' not in javascript or 'type: "preview-all"' not in javascript:
+        failures.append("validated configuration saves do not follow the backend-scoped preview plan")
+    for post_save_flag in ("runDiscovery", "runIntegration", "runSmtp", "generatePreviews"):
+        if f"result.postSave.{post_save_flag}" not in javascript:
+            failures.append(f"configuration saves do not consume backend impact flag: {post_save_flag}")
     if "window.TautWeeklyUpdateUI.routeFromHash(window.location.hash)" not in javascript or "updateHistory: false" not in javascript:
         failures.append("Manager does not restore a local route safely after authentication")
     if 'id="first-time-setup"' not in combined or 'data-open-view="configuration"' not in combined:

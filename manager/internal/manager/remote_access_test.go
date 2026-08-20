@@ -349,31 +349,57 @@ func TestTailscaleHostnameGetsSecureCookiesHSTSAndHTTPSOriginEnforcement(t *test
 		t.Fatal(err)
 	}
 	cookie := &http.Cookie{Name: sessionCookieName, Value: current.Token}
+	acceptedMutations := 0
 	for _, test := range []struct {
-		origin string
-		want   int
+		name           string
+		host           string
+		origin         string
+		forwardedProto string
+		want           int
+		wantCode       string
 	}{
-		{"http://" + hostname, http.StatusForbidden},
-		{"https://" + hostname, http.StatusOK},
+		{name: "Tailscale HTTP rejected", host: hostname, origin: "http://" + hostname, want: http.StatusForbidden, wantCode: "remote-http"},
+		{name: "exact HTTPS", host: hostname, origin: "https://" + hostname, want: http.StatusOK},
+		{name: "equivalent default HTTPS port", host: hostname + ":443", origin: "https://" + hostname, want: http.StatusOK},
+		{name: "case and trailing dot normalized", host: strings.ToUpper(hostname) + ".", origin: "https://" + strings.ToUpper(hostname) + ".", want: http.StatusOK},
+		{name: "non-default remote HTTPS port rejected", host: hostname + ":8443", origin: "https://" + hostname + ":8443", want: http.StatusForbidden, wantCode: "remote-http"},
+		{name: "different host rejected", host: hostname, origin: "https://other.example-tailnet.ts.net", want: http.StatusForbidden, wantCode: "origin-host-mismatch"},
+		{name: "spoofed proxy proto ignored", host: hostname, origin: "http://" + hostname, forwardedProto: "https", want: http.StatusForbidden, wantCode: "remote-http"},
+		{name: "origin path rejected", host: hostname, origin: "https://" + hostname + "/mutated", want: http.StatusForbidden, wantCode: "invalid-origin"},
 	} {
-		request := httptest.NewRequest(http.MethodPut, "/api/v1/remote-access/tailscale", strings.NewReader(`{"enabled":true}`))
-		request.Host = hostname
-		request.Header.Set("Content-Type", "application/json")
-		request.Header.Set("Origin", test.origin)
-		request.Header.Set("X-CSRF-Token", current.CSRFToken)
-		request.AddCookie(cookie)
-		response := httptest.NewRecorder()
-		server.Handler().ServeHTTP(response, request)
-		if response.Code != test.want {
-			t.Fatalf("origin %q: got %d, want %d, body %s", test.origin, response.Code, test.want, response.Body.String())
-		}
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPut, "/api/v1/remote-access/tailscale", strings.NewReader(`{"enabled":true}`))
+			request.Host = test.host
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Origin", test.origin)
+			request.Header.Set("X-CSRF-Token", current.CSRFToken)
+			if test.forwardedProto != "" {
+				request.Header.Set("Forwarded", "proto="+test.forwardedProto+";host=attacker.example")
+				request.Header.Set("X-Forwarded-Proto", test.forwardedProto)
+				request.Header.Set("X-Forwarded-Host", "attacker.example")
+			}
+			request.AddCookie(cookie)
+			response := httptest.NewRecorder()
+			server.Handler().ServeHTTP(response, request)
+			if response.Code != test.want || test.wantCode != "" && !strings.Contains(response.Body.String(), `"code":"`+test.wantCode+`"`) {
+				t.Fatalf("origin %q host %q: got %d, want %d/%q, body %s", test.origin, test.host, response.Code, test.want, test.wantCode, response.Body.String())
+			}
+			if response.Code == http.StatusOK {
+				acceptedMutations++
+			}
+		})
 	}
-	if len(remote.updates) != 1 || !remote.updates[0] {
+	if len(remote.updates) != acceptedMutations || acceptedMutations != 3 {
 		t.Fatalf("HTTPS mutation did not reach the typed controller: %v", remote.updates)
 	}
 	history := server.diagnostics.History()
-	if len(history.Events) != 1 || history.Events[0].Area != "remote-access" || history.Events[0].Code != "tailscale-enabled" {
+	if len(history.Events) != acceptedMutations {
 		t.Fatalf("remote access diagnostic was not retained safely: %+v", history.Events)
+	}
+	for _, event := range history.Events {
+		if event.Area != "remote-access" || event.Code != "tailscale-enabled" {
+			t.Fatalf("remote access diagnostic was not retained safely: %+v", history.Events)
+		}
 	}
 }
 

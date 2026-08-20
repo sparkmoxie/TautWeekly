@@ -770,5 +770,6 @@ func (s *Server) handleUpdateTailscaleRemoteAccess(w http.ResponseWriter, r *htt
 }
 
 func (s *Server) remoteRequestIsSecure(r *http.Request) bool {
-	return r.TLS != nil || s.options.SecureCookies || s.remoteAccess.AllowsHost(r.Host)
+	authority, ok := canonicalAuthority(r.Host, "https")
+	return r.TLS != nil || s.options.SecureCookies || ok && authority.port == "443" && s.remoteAccess.AllowsHost(authority.host)
 }

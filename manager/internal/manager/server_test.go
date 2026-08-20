@@ -69,6 +69,40 @@ func TestServerSecurityAndRedaction(t *testing.T) {
 	}
 }
 
+func TestOriginAuthorityCanonicalizationKeepsExactSameOrigin(t *testing.T) {
+	server, err := New(Options{DataDir: t.TempDir(), TautWeeklyRoot: t.TempDir(), Version: "test", RuntimeMode: runtimeModeMac})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name   string
+		host   string
+		origin string
+		want   string
+	}{
+		{name: "default mac localhost", host: "localhost:8787", origin: "http://localhost:8787"},
+		{name: "HTTP default port omitted in origin", host: "localhost:80", origin: "http://localhost"},
+		{name: "HTTP default port omitted in Host", host: "localhost", origin: "http://localhost:80"},
+		{name: "DNS case and trailing dot", host: "LOCALHOST.:8787", origin: "http://localhost:8787"},
+		{name: "cross origin", host: "localhost:8787", origin: "http://127.0.0.1:8787", want: "origin-host-mismatch"},
+		{name: "scheme mismatch", host: "localhost:8787", origin: "https://localhost:8787", want: "origin-scheme-mismatch"},
+		{name: "malformed origin", host: "localhost:8787", origin: "http://localhost:8787/path", want: "invalid-origin"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+			request.Host = test.host
+			request.Header.Set("Origin", test.origin)
+			if got := server.originRejectionCode(request); got != test.want {
+				t.Fatalf("origin rejection code: got %q, want %q", got, test.want)
+			}
+			if test.want == "" && !server.allowedHost(test.host) {
+				t.Fatalf("canonical Host %q was not allowlisted", test.host)
+			}
+		})
+	}
+}
+
 func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 	t.Parallel()
 	server, err := New(Options{DataDir: t.TempDir(), TautWeeklyRoot: t.TempDir(), Version: "test"})
@@ -359,6 +393,11 @@ func TestConfigurationStatusAPIIsRevisionScopedAndPersists(t *testing.T) {
 	skipped := mutationRequestForTest(server, http.MethodPost, "/api/v1/config/status/previews/skipped", skipBody, cookie, current.CSRFToken)
 	if skipped.Code != http.StatusOK || !strings.Contains(skipped.Body.String(), `"state":"skipped"`) {
 		t.Fatalf("skip preview status: got %d, body %s", skipped.Code, skipped.Body.String())
+	}
+	discoverySkipBody, _ := json.Marshal(skipConfigurationPreviewsRequest{ExpectedRevision: revision, Reason: "discovery-failed"})
+	discoverySkipped := mutationRequestForTest(server, http.MethodPost, "/api/v1/config/status/previews/skipped", discoverySkipBody, cookie, current.CSRFToken)
+	if discoverySkipped.Code != http.StatusOK || !strings.Contains(discoverySkipped.Body.String(), "Preview generation was skipped because Tautulli choices could not be refreshed") || strings.Contains(discoverySkipped.Body.String(), "unambiguous owner") {
+		t.Fatalf("failed-discovery preview status was masked: got %d, body %s", discoverySkipped.Code, discoverySkipped.Body.String())
 	}
 	completedAt := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
 	if err := server.configuration.StoreIntegrationCheck(revision, IntegrationCheckResult{

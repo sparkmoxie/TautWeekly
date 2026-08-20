@@ -313,6 +313,33 @@
     try { return JSON.parse(init.body); } catch (_) { return {}; }
   }
 
+  function postSavePlan(changed, values) {
+    const plan = { materialChange: changed.length > 0, changedCategories: [], runDiscovery: false, runIntegration: false, runSmtp: false, generatePreviews: false, retainedDiscovery: true, retainedIntegration: true, retainedSmtp: true, retainedPreviews: true };
+    const categories = new Set();
+    for (const name of changed) {
+      if (["TautulliUrl", "ApiKey"].includes(name)) { categories.add("tautulli"); plan.runDiscovery = true; plan.runIntegration = true; plan.generatePreviews = true; }
+      else if (["PlexServerUrl", "PlexToken"].includes(name)) { categories.add("plex"); plan.runIntegration = true; plan.generatePreviews = true; }
+      else if (name.startsWith("Smtp")) { categories.add("smtp"); plan.runSmtp = true; }
+      else if (["PlexWebUrl", "PlexButtonLabel", "ServerLabel", "FooterServerName"].includes(name)) { categories.add("identity"); plan.generatePreviews = true; }
+      else if (["FromName", "FromEmail", "ReplyToEmail", "TestEmail"].includes(name)) categories.add("email");
+      else if (name.startsWith("Schedule") || name === "ScheduledTaskName") categories.add("schedule");
+      else if (name.startsWith("DeletedItemCache")) categories.add("cache");
+      else if (name.startsWith("CustomTextCard")) { categories.add("custom-text-card"); plan.generatePreviews = true; }
+      else if (["IncludedLibraryIds", "ExcludedUserIds", "ExcludedEmails"].includes(name)) { categories.add("libraries"); plan.generatePreviews = true; }
+      else if (["DaysBack", "RecentAccessDays", "WatchedPercent", "MinimumEpisodeSeconds", "MaxMovies", "MaxTv"].includes(name)) { categories.add("newsletter"); plan.generatePreviews = true; }
+      else categories.add("newsletter");
+    }
+    plan.changedCategories = ["tautulli", "plex", "smtp", "identity", "email", "schedule", "newsletter", "cache", "custom-text-card", "libraries"].filter((name) => categories.has(name));
+    plan.retainedDiscovery = !plan.runDiscovery;
+    plan.retainedIntegration = !plan.runIntegration;
+    plan.retainedSmtp = !plan.runSmtp;
+    plan.retainedPreviews = !plan.generatePreviews;
+    if (categories.size === 1 && categories.has("cache")) {
+      plan.confirmationCode = changed.includes("DeletedItemCacheEnabled") ? (values.DeletedItemCacheEnabled ? "cache-enabled" : "cache-disabled") : "cache-updated";
+    }
+    return plan;
+  }
+
   window.fetch = (input, init = {}) => {
     const raw = typeof input === "string" ? input : input.url;
     const url = new URL(raw, window.location.href);
@@ -348,11 +375,18 @@
         if (Object.keys(fields).length) {
           return json({ error: { code: "configuration-invalid", message: "The fictional configuration needs attention.", fields } }, 400);
         }
+        const changedValues = Object.entries(values).filter(([name, value]) => {
+          const target = editorFields.find((item) => item.name === name);
+          return target && JSON.stringify(target.value) !== JSON.stringify(value);
+        }).map(([name]) => name);
+        const changedSecrets = Object.entries(body.secrets || {}).filter(([, change]) => change?.action && change.action !== "preserve").map(([name]) => name);
+        const changed = [...new Set([...changedValues, ...changedSecrets])];
+        const plan = postSavePlan(changed, values);
         for (const [name, value] of Object.entries(body.values || {})) {
           const target = editorFields.find((item) => item.name === name);
           if (target) target.value = value;
         }
-        return json({ saved: true, backup: "synthetic-demo-backup", editor: editor() });
+        return json({ saved: plan.materialChange, backup: plan.materialChange ? "synthetic-demo-backup" : "", editor: editor(), postSave: plan });
       }
       return json(configView());
     }

@@ -89,9 +89,29 @@ type ConfigSaveRequest struct {
 }
 
 type ConfigSaveResult struct {
-	Saved  bool             `json:"saved"`
-	Backup string           `json:"backup,omitempty"`
-	Editor ConfigEditorView `json:"editor"`
+	Saved            bool               `json:"saved"`
+	Backup           string             `json:"backup,omitempty"`
+	Editor           ConfigEditorView   `json:"editor"`
+	PostSave         ConfigPostSavePlan `json:"postSave"`
+	PreviousRevision string             `json:"-"`
+}
+
+// ConfigPostSavePlan is computed from normalized in-memory values so the
+// browser never needs to classify fields or inspect secret values. Retained
+// flags are populated by the server only when sanitized evidence was actually
+// rebased to the new full configuration revision.
+type ConfigPostSavePlan struct {
+	MaterialChange      bool     `json:"materialChange"`
+	ChangedCategories   []string `json:"changedCategories,omitempty"`
+	ConfirmationCode    string   `json:"confirmationCode,omitempty"`
+	RunDiscovery        bool     `json:"runDiscovery"`
+	RunIntegration      bool     `json:"runIntegration"`
+	RunSMTP             bool     `json:"runSmtp"`
+	GeneratePreviews    bool     `json:"generatePreviews"`
+	RetainedDiscovery   bool     `json:"retainedDiscovery"`
+	RetainedIntegration bool     `json:"retainedIntegration"`
+	RetainedSMTP        bool     `json:"retainedSmtp"`
+	RetainedPreviews    bool     `json:"retainedPreviews"`
 }
 
 func integerBounds(minimum, maximum int64) (*int64, *int64) {
@@ -285,12 +305,22 @@ func SaveConfig(root string, request ConfigSaveRequest, now func() time.Time) (C
 	if len(fieldErrors) > 0 {
 		return ConfigSaveResult{}, fieldErrors, nil
 	}
+	previousRevision := configRevision(raw, exists)
+	postSave := classifyConfigPostSave(normalizedConfigValues(current), normalizedConfigValues(next), exists)
 
 	encoded, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
 		return ConfigSaveResult{}, nil, fmt.Errorf("encode configuration: %w", err)
 	}
 	encoded = append(encoded, '\n')
+	if exists && bytes.Equal(raw, encoded) {
+		return ConfigSaveResult{
+			Saved:            false,
+			Editor:           ReadConfigEditor(root),
+			PostSave:         ConfigPostSavePlan{},
+			PreviousRevision: previousRevision,
+		}, nil, nil
+	}
 	if now == nil {
 		now = time.Now
 	}
@@ -298,7 +328,119 @@ func SaveConfig(root string, request ConfigSaveRequest, now func() time.Time) (C
 	if err != nil {
 		return ConfigSaveResult{}, nil, err
 	}
-	return ConfigSaveResult{Saved: true, Backup: backup, Editor: ReadConfigEditor(root)}, nil, nil
+	return ConfigSaveResult{Saved: true, Backup: backup, Editor: ReadConfigEditor(root), PostSave: postSave, PreviousRevision: previousRevision}, nil, nil
+}
+
+func normalizedConfigValues(values map[string]any) map[string]any {
+	normalized := make(map[string]any)
+	for _, definition := range configDefinitions() {
+		if definition.Type == "secret" {
+			value := values[definition.Name]
+			if definition.Name == "SmtpPassword" && !configValueConfigured(value) {
+				value = values["SmtpAppPassword"]
+			}
+			if text, ok := value.(string); ok {
+				normalized[definition.Name] = text
+			} else {
+				normalized[definition.Name] = ""
+			}
+			continue
+		}
+		value, exists := values[definition.Name]
+		if !exists {
+			value = definition.Default
+		}
+		encoded, err := json.Marshal(editorValue(value, definition))
+		if err != nil {
+			normalized[definition.Name] = value
+			continue
+		}
+		parsed, message := parseAndValidateConfigValue(encoded, definition)
+		if message != "" {
+			normalized[definition.Name] = editorValue(value, definition)
+			continue
+		}
+		normalized[definition.Name] = parsed
+	}
+	return normalized
+}
+
+func classifyConfigPostSave(current, next map[string]any, existed bool) ConfigPostSavePlan {
+	changed := make(map[string]bool)
+	for name, nextValue := range next {
+		if !configComparisonEqual(current[name], nextValue) {
+			changed[name] = true
+		}
+	}
+	if !existed {
+		for name := range next {
+			changed[name] = true
+		}
+	}
+
+	plan := ConfigPostSavePlan{}
+	category := make(map[string]bool)
+	for name := range changed {
+		switch {
+		case name == "TautulliUrl" || name == "ApiKey":
+			category["tautulli"] = true
+			plan.RunDiscovery = true
+			plan.RunIntegration = true
+			plan.GeneratePreviews = true
+		case name == "PlexServerUrl" || name == "PlexToken":
+			category["plex"] = true
+			plan.RunIntegration = true
+			plan.GeneratePreviews = true
+		case strings.HasPrefix(name, "Smtp"):
+			category["smtp"] = true
+			plan.RunSMTP = true
+		case name == "PlexWebUrl" || name == "PlexButtonLabel" || name == "ServerLabel" || name == "FooterServerName":
+			category["identity"] = true
+			plan.GeneratePreviews = true
+		case name == "FromName" || name == "FromEmail" || name == "ReplyToEmail" || name == "TestEmail":
+			category["email"] = true
+		case strings.HasPrefix(name, "Schedule") || name == "ScheduledTaskName":
+			category["schedule"] = true
+		case strings.HasPrefix(name, "DeletedItemCache"):
+			category["cache"] = true
+		case strings.HasPrefix(name, "CustomTextCard"):
+			category["custom-text-card"] = true
+			plan.GeneratePreviews = true
+		case name == "IncludedLibraryIds" || name == "ExcludedUserIds" || name == "ExcludedEmails":
+			category["libraries"] = true
+			plan.GeneratePreviews = true
+		case name == "DaysBack" || name == "RecentAccessDays" || name == "WatchedPercent" || name == "MinimumEpisodeSeconds" || name == "MaxMovies" || name == "MaxTv":
+			category["newsletter"] = true
+			plan.GeneratePreviews = true
+		case name == "SendDelaySeconds" || name == "TestSendDelaySeconds":
+			category["newsletter"] = true
+		default:
+			category["delivery"] = true
+		}
+	}
+	plan.MaterialChange = len(changed) > 0
+	for _, name := range []string{"tautulli", "plex", "smtp", "identity", "email", "schedule", "newsletter", "cache", "custom-text-card", "libraries", "delivery"} {
+		if category[name] {
+			plan.ChangedCategories = append(plan.ChangedCategories, name)
+		}
+	}
+	if len(category) == 1 && category["cache"] {
+		plan.ConfirmationCode = "cache-updated"
+		if changed["DeletedItemCacheEnabled"] {
+			if enabled, _ := next["DeletedItemCacheEnabled"].(bool); enabled {
+				plan.ConfirmationCode = "cache-enabled"
+			} else {
+				plan.ConfirmationCode = "cache-disabled"
+			}
+		}
+	}
+	return plan
+}
+
+func configComparisonEqual(left, right any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
 }
 
 func managerPreservesConfigValue(name string) bool {
