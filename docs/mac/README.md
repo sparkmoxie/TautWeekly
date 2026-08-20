@@ -237,6 +237,9 @@ The updater takes the same operation lock as the renderer, preserves `.env`,
 the previous release manifest, verifies the running image version and health,
 and restores both prior package files and the previous local image automatically
 if the candidate fails. Keep the private data backup for independent recovery.
+Manager-triggered preview and delivery operations make one non-blocking lock
+attempt and report **Operation busy** immediately; host CLI, scheduler, updater,
+and shutdown waits retain their existing bounds.
 
 ### One-time update from an image-only host wrapper
 

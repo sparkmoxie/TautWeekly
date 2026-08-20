@@ -278,6 +278,9 @@ verifies both the published SHA-256 and internal `RELEASE-FILES.txt`, installs
 the current wrapper/rc.d adapter, and then updates the image. It refuses a busy
 TautWeekly operation, verifies the in-container health probe and version label,
 and retags/restarts the prior image automatically if the new container fails.
+Manager-triggered preview and delivery operations make one non-blocking lock
+attempt and report **Operation busy** immediately; terminal, scheduler, updater,
+and rc.d lifecycle waits retain their existing bounds.
 Private data under `/var/db/tautweekly` and the existing root-owned environment
 file are never replaced. Normal stop/restart gives
 the shared service up to 30 minutes to let an already-running newsletter

@@ -42,6 +42,14 @@ for command_name in docker docker-compose runuser systemctl journalctl service p
   make_stub "$command_name"
 done
 
+cat >"$stub_bin/flock" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s %s\n' "$(basename "$0")" "$*" >>"$TAUTWEEKLY_TEST_CALL_LOG"
+exit "${TAUTWEEKLY_TEST_FLOCK_EXIT:-0}"
+STUB
+chmod +x "$stub_bin/flock"
+
 export TAUTWEEKLY_TEST_CALL_LOG="$call_log"
 export PATH="$stub_bin:$PATH"
 
@@ -160,6 +168,7 @@ if command -v flock >/dev/null 2>&1; then
   TAUTWEEKLY_DATA_DIR="$test_root/data" \
   TAUTWEEKLY_CONFIG="$test_root/data/config.json" \
     bash "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" Preview 'Viewer With Spaces'
+  assert_call 'flock -w 30 9'
   assert_call "pwsh -NoLogo -NoProfile -NonInteractive -File /virtual/app/TautWeekly.ps1 -Mode Preview -ConfigPath $test_root/data/config.json -UserId Viewer With Spaces"
 
   mkdir -p "$test_root/data/manager"
@@ -177,8 +186,21 @@ if command -v flock >/dev/null 2>&1; then
     TAUTWEEKLY_CONFIG="$test_root/data/config.json" \
       bash "$manager_runtime_wrapper" PreviewAll 17 \
         --manager-config "$manager_config" --manager-result "$manager_result" --no-open
+    assert_call 'flock -n 9'
     assert_call "pwsh -NoLogo -NoProfile -NonInteractive -File /virtual/app/TautWeekly.ps1 -Mode PreviewAll -ConfigPath $manager_config -UserId 17 -ResultPath $manager_result -NoOpen"
   done
+
+  set +e
+  TAUTWEEKLY_TEST_FLOCK_EXIT=1 \
+  TAUTWEEKLY_APP_DIR=/virtual/app \
+  TAUTWEEKLY_DATA_DIR="$test_root/data" \
+  TAUTWEEKLY_CONFIG="$test_root/data/config.json" \
+    bash "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" PreviewAll 17 \
+      --manager-config "$manager_config" --manager-result "$manager_result" --no-open \
+      >/dev/null 2>&1
+  manager_busy_status=$?
+  set -e
+  [[ "$manager_busy_status" -eq 75 ]] || fail "Manager lock contention exited $manager_busy_status instead of 75"
 
   if TAUTWEEKLY_APP_DIR=/virtual/app TAUTWEEKLY_DATA_DIR="$test_root/data" \
       bash "$repo_root/platforms/nas-docker/app/bin/run-mode.sh" PreviewAll 17 \

@@ -747,6 +747,23 @@ function scheduleFailureCopy(category, supportCode) {
   }
 }
 
+function rendererFailureCopy(category, supportCode) {
+  const suffix = supportCode ? ` Support code: ${supportCode}.` : "";
+  switch (category) {
+  case "operation-busy": return "Another newsletter, update, or scheduled-delivery operation owns the package renderer. Wait for it to finish, then retry." + suffix;
+  case "configuration-invalid": return "The renderer could not load the saved configuration snapshot. Review Config, then retry." + suffix;
+  case "tautulli-unavailable": return "The renderer could not complete the required Tautulli data stage. Run Verify, then retry." + suffix;
+  case "plex-unavailable": return "Direct Plex verification could not be completed. Review the sanitized evidence under Verify, then retry." + suffix;
+  case "asset-unavailable": return "The renderer could not prepare a required local media asset. Review private data-directory access and free space, then retry." + suffix;
+  case "render-failed": return "Newsletter HTML construction failed before the operation completed. Review Config and Verify, then retry." + suffix;
+  case "output-failed": return "Newsletter HTML was built, but the private preview files could not be written. Review private data-directory access and free space, then retry." + suffix;
+  case "smtp-failed": return "The renderer failed during SMTP handoff. Review Verify and the controlled TestEmail workflow before retrying." + suffix;
+  case "platform-unsupported": return "This package does not expose the requested renderer operation." + suffix;
+  case "manager-restarted": return "The Manager restarted before it could reconcile the renderer result. Refresh status, then retry." + suffix;
+  default: return "The package renderer did not complete successfully. Raw process output was not retained." + suffix;
+  }
+}
+
 function renderConfig() {
   const config = state.config;
   const grid = byId("config-grid");
@@ -2312,7 +2329,7 @@ function operationSummary(operation) {
     case "queued": return { heading: "Manual Welcome queued", copy: "One selected-user welcome newsletter is waiting to start." };
     case "running": return { heading: "Sending one Manual Welcome", copy: "One selected Plex user is being processed. Cancellation is disabled once delivery begins." };
     case "succeeded": return { heading: "Manual Welcome accepted by SMTP", copy: "One welcome message was accepted by SMTP. The selected user's welcome state was updated; inbox delivery is not asserted." };
-    case "failed": return { heading: "Manual Welcome delivery failed", copy: operation.supportCode ? `The welcome renderer failed. Support code: ${operation.supportCode}.` : "The welcome renderer failed without exposing its recipient or raw output." };
+    case "failed": return { heading: "Manual Welcome delivery failed", copy: rendererFailureCopy(operation.errorCategory, operation.supportCode) };
     default: return { heading: "Manual Welcome delivery recorded", copy: "Review aggregate SMTP acceptance without exposing the selected recipient." };
     }
   }
@@ -2325,7 +2342,7 @@ function operationSummary(operation) {
     case "running": return { heading: "Sending the production newsletter", copy: "Eligible recipients are being processed. Cancellation is disabled once delivery begins." };
     case "succeeded": return { heading: "Manual newsletter accepted by SMTP", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted by SMTP and ${skipped} recipient${skipped === 1 ? " was" : "s were"} skipped. Inbox delivery is not asserted.` };
     case "partial": return { heading: "Manual newsletter completed with delivery failures", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed. Inbox delivery is not asserted${operation.supportCode ? `; support code: ${operation.supportCode}` : ""}.` };
-    case "failed": return { heading: "Manual newsletter delivery failed", copy: operation.supportCode ? `${accepted} messages were accepted before failure. Support code: ${operation.supportCode}.` : "The production renderer failed without exposing recipients or raw output." };
+    case "failed": return { heading: "Manual newsletter delivery failed", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}` };
     default: return { heading: "Manual newsletter delivery recorded", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed. Inbox delivery is not asserted.` };
     }
   }
@@ -2334,7 +2351,7 @@ function operationSummary(operation) {
     case "queued": return { heading: "Test delivery queued", copy: "The fixed six-message TestEmail operation is waiting to start." };
     case "running": return { heading: "Sending six test messages", copy: "Messages go only to the configured TestEmail; cancellation is disabled once sending begins." };
     case "succeeded": return { heading: "Test delivery accepted by SMTP", copy: `${operation.smtpAcceptedCount || 0} test messages were accepted by SMTP. Inbox delivery is not asserted.` };
-    case "failed": return { heading: "Test delivery failed", copy: operation.supportCode ? `${operation.smtpAcceptedCount || 0} messages were accepted before failure. Support code: ${operation.supportCode}.` : "The test renderer failed without exposing its destination or raw output." };
+    case "failed": return { heading: "Test delivery failed", copy: `${operation.smtpAcceptedCount || 0} test message${operation.smtpAcceptedCount === 1 ? " was" : "s were"} accepted before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}` };
     default: return { heading: "Test delivery recorded", copy: "Review aggregate SMTP acceptance and failure counts." };
     }
   }
@@ -2344,7 +2361,7 @@ function operationSummary(operation) {
   case "cancelling": return { heading: "Cancelling preview generation", copy: "The Manager is stopping the local renderer and retaining a sanitized result." };
   case "succeeded": return { heading: "Preview generation completed", copy: `${count} generated preview${count === 1 ? " is" : "s are"} available for authenticated review.` };
   case "cancelled": return { heading: "Preview generation cancelled", copy: "The local renderer was stopped before normal completion; no email was sent." };
-  case "failed": return { heading: "Preview generation failed", copy: operation.supportCode ? `A sanitized support code is available: ${operation.supportCode}.` : "The renderer exited without exposing private output to the browser." };
+  case "failed": return { heading: "Preview generation failed", copy: rendererFailureCopy(operation.errorCategory, operation.supportCode) };
   default: return { heading: "Preview operation recorded", copy: "Review the sanitized state and generated preview list." };
   }
 }

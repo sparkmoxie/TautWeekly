@@ -532,6 +532,9 @@ The update command refuses to start while the application operation lock is
 busy, never deletes `data/`, forces Compose to use the pulled image instead of
 rebuilding bundled source, and restores both the prior host package and image
 automatically when copying, recreation, version, or health verification fails.
+Manager-triggered preview and delivery operations make one non-blocking lock
+attempt and report **Operation busy** immediately; host CLI, scheduler, updater,
+and shutdown waits retain their existing bounds.
 The supplied Compose file grants a
 29-minute delivery drain inside a 30-minute stop grace period: Manager HTTP
 access closes first, then shutdown waits on the shared newsletter operation

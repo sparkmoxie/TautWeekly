@@ -19,6 +19,7 @@ type rendererResult struct {
 	SchemaVersion         int      `json:"schemaVersion"`
 	Mode                  string   `json:"mode"`
 	Outcome               string   `json:"outcome"`
+	ErrorCategory         string   `json:"errorCategory,omitempty"`
 	DeliveryScope         string   `json:"deliveryScope"`
 	StartedAtUTC          string   `json:"startedAtUtc"`
 	FinishedAtUTC         string   `json:"finishedAtUtc"`
@@ -57,6 +58,11 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 	}
 	if result.Outcome != "succeeded" && result.Outcome != "partial" && result.Outcome != "failed" {
 		return false
+	}
+	if result.ErrorCategory != "" {
+		if result.Outcome != "failed" || !validRendererErrorCategory(result.ErrorCategory) {
+			return false
+		}
 	}
 	if result.DeliveryScope != expectedDeliveryScope(result.Mode) {
 		return false
@@ -119,6 +125,23 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 		}
 	}
 	return true
+}
+
+func validRendererErrorCategory(category string) bool {
+	switch category {
+	case "operation-busy",
+		"configuration-invalid",
+		"tautulli-unavailable",
+		"plex-unavailable",
+		"asset-unavailable",
+		"render-failed",
+		"output-failed",
+		"smtp-failed",
+		"renderer-failed":
+		return true
+	default:
+		return false
+	}
 }
 
 func expectedDeliveryScope(mode string) string {

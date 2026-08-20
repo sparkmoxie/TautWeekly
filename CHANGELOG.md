@@ -6,6 +6,24 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.18.3] - 2026-08-20
+
+### Fixed
+
+- Preserved a fixed, allowlisted renderer failure category in Manager operation
+  records across Windows, NAS/Docker, macOS, native Linux, and FreeBSD. Preview
+  and delivery failures now distinguish configuration, Tautulli, Direct Plex,
+  asset, HTML-render, preview-output, SMTP, and package-lock stages without
+  retaining raw process output or private values.
+- Made Manager-triggered service-package operations attempt the shared renderer
+  lock without waiting, so a scheduled delivery, update, or terminal operation
+  reports **Operation busy** immediately instead of failing generically after
+  30 seconds. Existing bounded terminal, scheduler, update, and shutdown waits
+  remain unchanged.
+- Replaced the opaque preview-failure sentence with category-specific recovery
+  guidance while keeping the sanitized support code and sandboxed preview
+  boundary.
+
 ## [0.18.2] - 2026-08-20
 
 ### Fixed

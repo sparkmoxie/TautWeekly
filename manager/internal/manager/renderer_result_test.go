@@ -99,6 +99,34 @@ func TestRendererResultValidatesSendTestAllAggregateContract(t *testing.T) {
 	}
 }
 
+func TestRendererResultAcceptsOnlyAllowlistedFailureCategories(t *testing.T) {
+	failed := validPreviewAllRendererResult()
+	failed.Outcome = "failed"
+	failed.GeneratedPreviewFiles = nil
+	failed.ErrorCategory = "tautulli-unavailable"
+	if !validRendererResult(failed, "PreviewAll") {
+		t.Fatalf("allowlisted renderer failure category was rejected: %+v", failed)
+	}
+
+	unknown := failed
+	unknown.ErrorCategory = "private-hostname-or-raw-error"
+	if validRendererResult(unknown, "PreviewAll") {
+		t.Fatalf("unknown renderer failure category was accepted: %+v", unknown)
+	}
+
+	succeeded := validPreviewAllRendererResult()
+	succeeded.ErrorCategory = "render-failed"
+	if validRendererResult(succeeded, "PreviewAll") {
+		t.Fatalf("successful renderer result retained a failure category: %+v", succeeded)
+	}
+
+	legacy := failed
+	legacy.ErrorCategory = ""
+	if !validRendererResult(legacy, "PreviewAll") {
+		t.Fatalf("legacy category-free failure was rejected: %+v", legacy)
+	}
+}
+
 func validPreviewAllRendererResult() rendererResult {
 	started := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
 	return rendererResult{

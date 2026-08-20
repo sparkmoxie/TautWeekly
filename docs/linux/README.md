@@ -315,6 +315,9 @@ commands, records and verifies the repository release metadata, and confirms a
 previously active service becomes active again. Sign back into the Manager,
 review **Settings > Updates** and **Dashboard**, rerun verification, PreviewAll, and TestEmail, and only
 then leave the schedule enabled for the next production delivery.
+Manager-triggered preview and delivery operations make one non-blocking lock
+attempt and report **Operation busy** immediately; terminal, scheduler, updater,
+and service-lifecycle waits retain their existing bounds.
 
 If the upgrade addresses missing ratings/artwork or output remains stale,
 complete metadata readiness before those checks.

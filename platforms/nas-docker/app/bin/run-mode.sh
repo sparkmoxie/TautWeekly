@@ -71,7 +71,12 @@ elif [[ -n "$NO_OPEN" ]]; then
 fi
 
 exec 9>"$data_root/.tautweekly-operation.lock"
-if ! flock -w 30 9; then
+if [[ -n "$MANAGER_RESULT" ]]; then
+  lock_args=( -n 9 )
+else
+  lock_args=( -w 30 9 )
+fi
+if ! flock "${lock_args[@]}"; then
   echo "Another TautWeekly for Plex operation is already running. Try again after it finishes." >&2
   exit 75
 fi

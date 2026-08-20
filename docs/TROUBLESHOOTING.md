@@ -129,6 +129,29 @@ persistent `config.json`, then use **Validate, save, and verify**, PreviewAll,
 and TestEmail in the GUI. Terminal setup and preview commands are recovery or
 expert fallbacks on Manager-capable packages.
 
+### Preview generation fails or reports Operation busy
+
+Open **Previews** and read the fixed failure category beside the sanitized
+support code. `operation-busy` means a scheduled delivery, update, or explicit
+terminal operation currently owns the shared package renderer; wait for that
+work to finish and retry. Manager-triggered service-package operations do not
+wait on this lock, while host CLI, scheduler, updater, and shutdown workflows
+retain their bounded waits. Do not delete the lock file: the live operating-
+system file handle, not file presence, determines ownership.
+
+`configuration-invalid`, `tautulli-unavailable`, `plex-unavailable`,
+`asset-unavailable`, `render-failed`, `output-failed`, and `smtp-failed` identify
+only the fixed stage that stopped. Follow the Manager guidance, run **Verify**
+when directed, and retry. Existing preview history remains available unless a
+new file was successfully replaced. Browser-extension `content-script.js`,
+`ObjectMultiplex`, or `MaxListenersExceededWarning` messages and the expected
+blocked-script messages from the script-disabled preview iframe do not identify
+a package-renderer failure. Do not add `allow-scripts` to the preview sandbox.
+
+Provide the fixed category, support code, package kind, and whether another
+scheduled/update/manual operation was active when asking for help. Do not post
+configuration, raw logs, generated previews, private addresses, or identities.
+
 Use **Settings > Updates** as the first update diagnostic. **Unknown** means no
 successful stable check is available, the local version is not a release
 version, or the configured channel is unsupported; use **Check now** and read
