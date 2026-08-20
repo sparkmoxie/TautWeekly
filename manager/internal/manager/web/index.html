@@ -297,15 +297,14 @@
         </section>
         <section class="update-settings-panel" id="update-settings-panel" aria-labelledby="update-settings-heading">
           <div class="update-settings-heading"><div><span class="eyebrow">Capability-aware updates</span><h2 id="update-settings-heading" tabindex="-1">Application and package status</h2><p id="update-settings-summary">Reading the last local update result. No Internet request is made during normal refresh.</p></div><span class="state-chip pending" id="update-settings-chip">Unknown</span></div>
-          <dl class="update-version-grid">
+          <dl class="update-version-grid host-adapter-hidden">
             <div><dt>Manager build</dt><dd id="update-manager-version">Not reported</dd></div>
-            <div><dt>Package baseline</dt><dd id="update-package-baseline">Not reported</dd></div>
+            <div><dt>Latest stable</dt><dd id="update-latest-version">Not checked</dd></div>
             <div><dt>Platform</dt><dd id="update-platform">Not reported</dd></div>
             <div><dt>Edition</dt><dd id="update-edition">Manager</dd></div>
-            <div><dt>Release layers</dt><dd id="update-release-layers">Not reported</dd></div>
-            <div><dt>Host adapter</dt><dd id="update-host-adapter">Not applicable</dd></div>
+            <div><dt>Release alignment</dt><dd id="update-release-alignment">Not reported</dd></div>
+            <div id="update-host-adapter-row" hidden><dt>Host adapter</dt><dd id="update-host-adapter">Not reported</dd></div>
             <div><dt>Update channel</dt><dd id="update-channel">Stable</dd></div>
-            <div><dt>Latest stable</dt><dd id="update-latest-version">Not checked</dd></div>
             <div><dt>Last successful check</dt><dd id="update-last-success">Not recorded</dd></div>
           </dl>
           <div class="update-failure" id="update-failure" role="status" aria-live="polite" hidden><strong>Last update action failure</strong><p id="update-failure-message"></p><small id="update-failure-time"></small></div>
