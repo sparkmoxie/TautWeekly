@@ -22,16 +22,31 @@
     @media(max-width:900px){header{grid-template-columns:auto 1fr}nav{display:none}.hero{grid-template-columns:1fr;gap:35px}.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}.metrics div:nth-child(2){border-right:0}.sequence{grid-template-columns:1fr 1fr}.sequence div{border-bottom:1px solid var(--line)}.section-head{align-items:start;flex-direction:column}.paths{display:block;overflow-x:auto}}
     @media(max-width:580px){header{padding:11px 13px;gap:8px}.brand span:last-child{display:none}.hero{min-height:0;padding:55px 0}.hero h1{font-size:43px}.lead{font-size:16px}.terminal pre{padding:19px;font-size:11px}.metrics,.sequence{grid-template-columns:1fr}.metrics div{border-right:0;border-bottom:1px solid var(--line)}footer{flex-direction:column}}
   </style>
+  <link rel="stylesheet" href="../assets/quickstart.css">
 </head>
-<body>
-  <div class="progress" id="progress" aria-hidden="true"></div>
-  <header>
-    <a class="brand" href="../"><img class="mark" src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38"><span>Taut<em>Weekly</em> for Plex</span></a>
-<nav aria-label="Quickstart navigation"><a href="#requirements">Requirements</a><a href="#install">GUI setup</a><a href="#acceptance">Acceptance</a><a href="#remote-access">Remote access</a><a href="#security">Security</a><a href="#upgrade">Update</a></nav>
-    <label class="search"><span hidden>Search the Native Linux Quickstart</span><input id="search" type="search" placeholder="Search Linux Quickstart…" autocomplete="off"></label>
+<body class="quickstart qs-linux">
+  <div class="progress" aria-hidden="true"><span id="scroll-progress"></span></div>
+  <header class="qs-topbar">
+    <div class="qs-topbar-inner">
+      <a class="qs-brand" href="../" aria-label="TautWeekly Quickstart home"><img src="../assets/branding/tautweekly-app-icon-64.png" alt="" width="38" height="38"><span class="qs-brand-copy"><strong>TAUTWEEKLY FOR PLEX</strong><small>Native Linux Manager Quickstart</small></span></a>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-controls="guide-nav" aria-expanded="false"><span class="sr-only">Open guide menu</span><span class="menu-icon" aria-hidden="true"></span></button>
+      <div class="qs-search" role="search"><label class="sr-only" for="quickstart-search">Search the Native Linux Quickstart</label><input id="quickstart-search" type="search" placeholder="Search install, systemd, security, update…" autocomplete="off"><kbd class="search-shortcut" aria-hidden="true">/</kbd><button class="search-clear" id="search-clear" type="button" aria-label="Clear search">×</button></div>
+      <div class="reading-progress" aria-label="Reading progress"><b aria-hidden="true">●</b> <span id="scroll-percent">0%</span></div>
+    </div>
   </header>
-  <main>
-    <section class="hero searchable" data-search="linux native powershell systemd install overview">
+
+  <div class="qs-layout">
+    <aside class="qs-sidebar" id="guide-nav" data-quickstart-nav aria-label="Native Linux guide navigation">
+      <div class="navbox">
+        <div class="navbox-head"><div class="navtitle">Native Linux Manager</div><button class="nav-close" id="menu-close" type="button" aria-label="Close guide menu">×</button></div>
+        <nav class="guide-nav"><a class="active" href="#overview">Overview</a><a href="#requirements">Requirements</a><a href="#install">Install and pair</a><a href="#metadata-readiness">Metadata readiness</a><a href="#acceptance">Main features</a><a href="#remote-access">Remote access</a><a href="#security">Security and data</a><a href="#upgrade">Update and recovery</a><a href="#troubleshooting">Basic troubleshooting</a></nav>
+        <div class="side-note">The authenticated Manager owns setup and acceptance. The root-owned wrapper remains the narrow boundary for systemd, updates, backup, and remote-access authorization.</div>
+      </div>
+    </aside>
+    <button class="nav-scrim" id="nav-scrim" type="button" aria-label="Close guide menu" tabindex="-1"></button>
+
+    <main class="qs-main">
+    <section class="hero searchable" id="overview" data-search="linux native powershell systemd install overview">
       <div>
         <div class="eyebrow"><img src="../assets/platforms/linux-tux.png" alt="" width="104" height="120"><span>Native Linux · no Docker required</span></div>
         <h1>A quiet service.<br><span>A deliberate send.</span></h1>
@@ -47,7 +62,7 @@
 <span class="ok">✓</span> one-time token, terminal only
 
 <span class="prompt">$</span> ssh -L 8788:127.0.0.1:8788 HOST
-<span class="gold">→</span> GUI setup · verify · TestEmail</pre></div>
+<span class="gold">→</span> GUI setup · verify · TestEmail <span class="console-pulse" aria-hidden="true"></span></pre></div>
     </section>
 
     <section class="metrics searchable" data-search="facts directories secrets ports"><div><strong>0</strong><span>default passwords</span></div><div><strong>0700</strong><span>private data directory mode</span></div><div><strong>127.0.0.1</strong><span>default Manager bind</span></div><div><strong>opt-in</strong><span>automatic production delivery</span></div></section>
@@ -74,8 +89,14 @@ sudo tautweekly manager-bootstrap
       <div class="callout"><div><strong>Full refreshes can be slow and can update metadata or artwork.</strong><p>Do not refresh unrelated libraries. Tautulli's table refresh does not replace Plex's refresh. Routine TautWeekly updates do not require this when current output is correct.</p></div></div>
     </section>
 
-    <section id="acceptance" class="section searchable" data-search="acceptance libraries scope list users exclusions preview test schedule send metadata refresh custom text card body">
-      <div class="section-head"><div><div class="eyebrow">Acceptance gate</div><h2>Production comes fifth.</h2></div><p>Each GUI step proves a narrower boundary before any real recipient is eligible. The Manager loads libraries and the bounded user roster without exposing credentials or email addresses.</p></div>
+    <section id="acceptance" class="section searchable" data-search="main features acceptance connections smtp branding library selection content scope list users exclusions preview test schedule send metadata refresh custom text card body">
+      <div class="section-head"><div><div class="eyebrow">Main features and acceptance</div><h2>Shape it, inspect it, then deliver.</h2></div><p>The Manager exposes the everyday newsletter controls without requiring JSON edits. Use the full reference for advanced renderer fields.</p></div>
+      <div class="grid">
+        <article class="card"><h3>Connections and delivery</h3><p>Add Tautulli, recommended direct Plex, SMTP, sender identity, and a controlled <code>TestEmail</code>. Saved secrets remain write-only.</p></article>
+        <article class="card"><h3>Library selection</h3><p>Choose the movie and TV libraries that define releases, Trending, and personal statistics. Unselected sections do not contribute.</p></article>
+        <article class="card"><h3>User exclusions</h3><p>Exclude anyone who should not receive production mail. Excluded users remain available for safe preview and TestEmail sampling.</p></article>
+        <article class="card"><h3>Newsletter and custom text</h3><p>Set lookback, card limits, branding, and the optional custom text card. Its body is required when enabled; title, subheading, and border are optional.</p></article>
+      </div>
       <div class="sequence"><div><b>01 Config</b><p>Use the Manager to enter Tautulli, recommended direct Plex, SMTP, branding, libraries, exclusions, schedule, and the optional custom text card. Its body is required when enabled.</p></div><div><b>02 Verify</b><p>Run the GUI checks for Tautulli, direct Plex identity/authenticated library access, files, SMTP reachability, and time zone.</p></div><div><b>03 Preview</b><p>Render six deterministic browser states without email.</p></div><div><b>04 TestEmail</b><p>Validate SMTP authentication, sender permission, MIME, and mail-client rendering.</p></div><div><b>05 Schedule</b><p>Enable in the GUI only after roster and exclusions are reviewed.</p></div></div>
       <div class="command" id="accept"># In the Manager at http://127.0.0.1:8788:
 Config → Validate, save, and verify
@@ -112,11 +133,21 @@ sudo journalctl -u tautweekly -n 200 --no-pager<button class="copy" data-copy="#
       <div class="callout"><div><strong>Unattended upgrades are not enabled.</strong><p>If acceptance fails, reinstall the previous verified archive or restore the timestamped program backup; private state remains under <code>/var/lib/tautweekly</code>. Reinstall preserves that directory. Uninstall removes the service and replaceable application but should retain private data until its backup is verified and deletion is explicitly intended.</p></div></div>
       <div class="callout"><div><strong>Individual backup deletion is explicit.</strong><p>Manager <strong>Config &gt; Configuration backups</strong> requires <strong>Confirm delete</strong> before permanently deleting one backup. It does not modify the live configuration.</p></div></div>
     </section>
+
+    <section id="troubleshooting" class="section searchable" data-search="basic troubleshooting manager unavailable systemctl connection verify preview skipped testemail schedule timezone logs journalctl">
+      <div class="section-head"><div><div class="eyebrow">Basic troubleshooting</div><h2>Check the boundary that failed.</h2></div><p>Start with Manager status and the systemd service; keep credentials, generated output, and raw private logs out of public support reports.</p></div>
+      <div class="grid">
+        <article class="card"><h3>Manager does not open</h3><p>Run <code>sudo systemctl status tautweekly</code>, confirm the service is active, and use <code>tautweekly open-manager</code>. For a remote host, keep loopback and use the documented SSH tunnel.</p></article>
+        <article class="card"><h3>Verify cannot reach a service</h3><p>Test the saved Tautulli or Plex URL from the Linux host and service network. Confirm the target listening address, firewall, and that loopback is used only for a service on this host.</p></article>
+        <article class="card"><h3>Preview is skipped or incomplete</h3><p>Confirm one owner/admin sample, selected libraries, and metadata readiness. Save and verify again before regenerating all six previews.</p></article>
+        <article class="card"><h3>TestEmail or schedule fails</h3><p>Keep production disabled. Recheck SMTP, sender permission, <code>TestEmail</code>, exclusions, timezone, and the saved revision, then inspect Manager history or recent sanitized journal output.</p></article>
+      </div>
+      <div class="actions"><a class="button" href="../TROUBLESHOOTING.md">Full troubleshooting</a><a class="button" href="../CONFIGURATION.md">Configuration reference</a></div>
+    </section>
     <div class="no-results" id="no-results" hidden>No sections matched. Try “PowerShell,” “install,” “preview,” “security,” or “upgrade.”</div>
-  </main>
-<footer><span>Native Linux Quickstart · TautWeekly for Plex</span><span>Independent community project · not affiliated with Plex or Tautulli</span><a href="README.md">Documentation</a></footer>
-  <script>
-    (()=>{const progress=document.querySelector('#progress'),search=document.querySelector('#search'),sections=[...document.querySelectorAll('.searchable')],empty=document.querySelector('#no-results');const scroll=()=>{const max=document.documentElement.scrollHeight-innerHeight;progress.style.width=`${max>0?Math.min(100,scrollY/max*100):0}%`};const filter=()=>{const q=search.value.trim().toLowerCase();let n=0;sections.forEach(s=>{const hit=!q||`${s.dataset.search||''} ${s.textContent}`.toLowerCase().includes(q);s.classList.toggle('is-filtered',!hit);if(hit)n++});empty.hidden=n!==0};addEventListener('scroll',scroll,{passive:true});addEventListener('resize',scroll);search.addEventListener('input',filter);addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==search){e.preventDefault();search.focus()}if(e.key==='Escape'){search.value='';search.blur();filter()}});document.querySelectorAll('[data-copy]').forEach(b=>b.addEventListener('click',async()=>{const t=document.querySelector(b.dataset.copy);if(!t)return;const text=[...t.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent).join('').trim();await navigator.clipboard.writeText(text);const old=b.textContent;b.textContent='Copied';setTimeout(()=>b.textContent=old,1200)}));scroll()})();
-  </script>
+    <footer class="qs-footer"><span>Native Linux Quickstart · TautWeekly for Plex</span><span>Independent community project · not affiliated with Plex or Tautulli</span><a href="README.md">Documentation</a></footer>
+    </main>
+  </div>
+  <script src="../assets/quickstart.js"></script>
 </body>
 </html>
