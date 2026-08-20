@@ -162,10 +162,13 @@ and backups are no longer needed.
 | `CustomTextCardBody` | empty | 1-2000 characters when enabled | Required plain-text body when the card is enabled |
 
 The Manager balances the card layout when either optional heading is omitted.
-Line breaks are preserved, and every configured value is HTML-escaped before
-rendering. Enabling the card with an empty or whitespace-only body blocks
-validation, save, and verification. Existing configurations remain disabled
-by default and do not need to add these keys.
+Line breaks are preserved. Values remain plain text and are HTML-escaped before
+rendering, so configured content cannot become executable markup. The card is
+included in normal and welcome HTML newsletters, the plain-text alternative,
+and generated previews. Enabling the card with an empty or whitespace-only
+body blocks validation, save, and verification in both the browser and Manager
+API. Existing configurations remain disabled by default and do not need to add
+these keys.
 
 ## Branding and mail
 

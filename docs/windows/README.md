@@ -212,6 +212,7 @@ guides all supported values and keeps secrets write-only after save.
 | Email | Sender display name, sender address, optional reply-to address, and a controlled `TestEmail` recipient |
 | SMTP | Host, STARTTLS port (commonly 587), authentication setting, username, and application password when required |
 | Newsletter | Lookback window, content limits, branding, and other supported renderer settings |
+| Custom text card | Optional border, title, and subheading plus a required body when enabled |
 | Schedule | Desired local Windows day and time; saving configuration does not install the task |
 | Guided scope | Included movie/TV libraries and users excluded from production delivery |
 
@@ -224,6 +225,27 @@ Under **Config > Configuration backups**, Restore validates the chosen backup
 and first saves the current configuration. Delete requires **Confirm delete**,
 permanently removes only that selected backup, and leaves the live configuration
 unchanged.
+
+### Optional custom newsletter text card
+
+The optional Config card immediately after **Cache** places administrator text
+before the newsletter release-count/date block. It is disabled by default.
+
+| Option | Default | Accepted value |
+|---|---:|---|
+| Enabled | `false` | On or off |
+| Border color | `#72aef7` | Six-digit hex color |
+| Border opacity | `34` | Integer 0-100; 0 hides the border |
+| Title | empty | Optional gold uppercase text, 0-120 characters |
+| Subheading | empty | Optional large white text, 0-200 characters |
+| Body | empty | Required plain text, 1-2000 characters when enabled |
+
+Title and subheading are independently optional, and the layout rebalances
+when either is omitted. Line breaks are preserved, and content is escaped for
+normal and welcome HTML, the plain-text alternative, and generated previews.
+An empty or whitespace-only body blocks browser and Manager API validation,
+save, and verification. See the
+[configuration reference](../CONFIGURATION.md#optional-custom-text-card).
 
 ### Validate, save, and verify
 

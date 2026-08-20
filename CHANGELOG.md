@@ -6,6 +6,35 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-20
+
+### Added
+
+- Added an optional custom text card before the newsletter release-count and
+  date block across Windows, NAS/Docker, macOS, native Linux, and FreeBSD
+  packages. The card supports an optional gold title, optional white
+  subheading, required plain-text body, and configurable border color and
+  opacity, with matching HTML, plain-text, preview, and welcome-state output.
+
+### Changed
+
+- Added a card-level attention glow whenever capability-aware update status is
+  not **Current**, while retaining the existing green Current treatment and
+  showing the purple header update SVG only after a successful validated check
+  finds a newer running-application release.
+- Reused successful update-check results for five minutes across all maintained
+  package kinds while preserving the 24-hour authenticated-entry refresh,
+  explicit **Check now** control, short failure retry backoff, and offline-safe
+  Manager navigation and health behavior.
+
+### Fixed
+
+- Removed the phantom grey Config and Settings rectangles by making incomplete
+  separator-backed grid rows span the intended black surface consistently.
+- Prevented validation, save, and verification when the custom card is enabled
+  without its required body text, with matching accessible client and server
+  validation.
+
 ## [0.17.1] - 2026-08-18
 
 ### Fixed

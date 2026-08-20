@@ -44,7 +44,7 @@ and milestone emails. Preview locally, send controlled tests, then schedule deli
 | Native Linux | Current Ubuntu, Debian, or RHEL host with systemd | [Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-linux.tar.gz) |
 | FreeBSD / Podman **beta** | FreeBSD 15.1+ amd64 host | [FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-freebsd-podman.tar.gz) |
 
-Manager additions, newest first:
+Manager release updates:
 
 - An optional custom text card before the newsletter release-count/date block,
   with configurable border color/opacity, optional title and subheading, and a
@@ -97,6 +97,24 @@ Install the beta Podman package, bootstrap Manager access through the documented
 tunnel, and use the same guided GUI. rc.d and the host wrapper retain service,
 backup, verified update, health-check, and rollback ownership.
 
+## GUI Manager
+
+The responsive Manager is the primary workflow on every maintained package:
+
+- **Set up and configure:** Dashboard guides first run; Config manages
+  connections, SMTP, branding, library scope, delivery exclusions, schedule,
+  backups, and the optional custom newsletter text card without hand-editing
+  JSON. Stored secrets remain write-only.
+- **Verify before sending:** one non-sending validation records connection,
+  library/user, SMTP preflight, and local-preview evidence. Previews renders six
+  newsletter states, and controlled TestEmail delivery stays separate from
+  production recipients.
+- **Operate deliberately:** Schedule reports and controls only the package's
+  supported delivery lifecycle; Settings covers access, optional private
+  Tailscale HTTPS, capability-aware update status, release notes, diagnostics,
+  and recovery. Host-owned packages keep update and service authority outside
+  the web process.
+
 ## Current newsletter behavior
 
 - New movie and TV additions with artwork, summaries, genres, ratings, and
@@ -114,9 +132,12 @@ cache, and rendering rules live in the references linked below.
 ## Get started
 
 1. Choose your platform above and open its interactive Quickstart.
-2. Install the latest stable package and complete the guided setup.
-3. Run verification, inspect a private preview, and send a controlled TestEmail.
-4. Enable scheduled delivery only after the result is correct.
+2. Install the latest stable package, open the Manager, and complete its guided
+   GUI setup. Platform commands are only for installation, private bootstrap,
+   or documented expert/recovery work.
+3. In the GUI, run **Validate, save, and verify**, inspect all six private
+   previews, and send a controlled TestEmail.
+4. Enable scheduled delivery in the GUI only after the result is correct.
 
 The platform guides contain the exact requirements, commands, metadata-readiness
 sequence, update and rollback behavior, network guidance, and troubleshooting.

@@ -37,8 +37,22 @@ formatting. No Plex token or private server data is embedded.
 - [Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/)
 - [FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/)
 
+Every Quickstart follows the same GUI-first path: install the package, open and
+pair the Manager where required, complete **Config**, run the non-sending
+verification, review all six **Previews**, send only to **TestEmail**, and then
+opt into **Schedule**. Config can add an optional custom text card before the
+release-count/date block; its body is required whenever the card is enabled.
+The [configuration reference](CONFIGURATION.md#optional-custom-text-card) and
+each platform README document the complete options. Commands in the guides are
+reserved for installation, bootstrap, expert operation, or recovery.
+
 Across these packages, Manager **Settings > Updates** is the primary source for
 application, package/image, host-adapter, stable-release, and check status.
+Successful results are reused for five minutes, and the normal background
+freshness window remains 24 hours. **Current** keeps its green status glow;
+every non-current status gives the capability-aware update card an attention
+glow. The purple header SVG appears only after a successful check validates a
+newer running-application release.
 Only Windows can start its existing verified updater from the GUI; every other
 guide names the exact host-owned command or platform-native flow and its
 limitations.

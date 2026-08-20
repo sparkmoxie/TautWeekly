@@ -152,13 +152,14 @@
         </div>
       </section>
 
-      <section class="section" id="configuration" data-search="configuration config tautulli api key plex token email smtp starttls testemail newsletter schedule library exclusions secrets">
+      <section class="section" id="configuration" data-search="configuration config tautulli api key plex token email smtp starttls testemail newsletter custom text card body schedule library exclusions secrets">
         <div class="section-head"><div><span class="eyebrow">Guided Config</span><h2>Configure without touching JSON</h2></div><p>Enter new values or review an existing configuration. Stored secrets remain write-only and are preserved unless explicitly replaced or cleared.</p></div>
         <div class="table"><table><thead><tr><th>Config area</th><th>What belongs there</th><th>Why it matters</th></tr></thead><tbody>
           <tr><td><strong>Connections</strong></td><td>Tautulli URL and API key; optional direct Plex URL and token</td><td>Tautulli supplies activity. Direct Plex improves provider ratings and artwork.</td></tr>
           <tr><td><strong>Email</strong></td><td>Sender name/address, optional reply-to, controlled <code>TestEmail</code></td><td>Test delivery remains separated from production recipients.</td></tr>
           <tr><td><strong>SMTP</strong></td><td>Host, STARTTLS port, authentication, username, application password</td><td>The safe preflight stops before credentials or message submission.</td></tr>
           <tr><td><strong>Newsletter</strong></td><td>Lookback, card limits, branding, and supported renderer settings</td><td>Controls content without manual JSON edits.</td></tr>
+          <tr><td><strong>Custom text card</strong></td><td>Optional border, title, and subheading plus a required body when enabled</td><td>Appears before the release-count/date block in previews and delivery.</td></tr>
           <tr><td><strong>Schedule</strong></td><td>Desired local Windows day and time</td><td>Saving does not install automation; Schedule remains a separate action.</td></tr>
           <tr><td><strong>Guided scope</strong></td><td>Included movie/TV libraries and production delivery exclusions</td><td>Selections persist in the saved configuration.</td></tr>
         </tbody></table></div>
@@ -197,7 +198,7 @@
       </section>
 
       <section class="section" id="updates" data-search="update migrate old portable bat installation folder backup rollback no periodic update task">
-        <div class="section-head"><div><span class="eyebrow">Settings status + verified updater</span><h2>Check, Install, Update, or Migrate</h2></div><p>Start in <strong>Settings &gt; Updates</strong>. It reports the running application and installed package separately, renders cached update status immediately, and performs one non-blocking bounded stable-release refresh on authenticated entry only when the last successful check is missing or at least 24 hours old and retry backoff permits. <strong>Check now</strong> remains an explicit refresh, normal health stays offline-capable, and the passive purple header notification only links to this status.</p></div>
+        <div class="section-head"><div><span class="eyebrow">Settings status + verified updater</span><h2>Check, Install, Update, or Migrate</h2></div><p>Start in <strong>Settings &gt; Updates</strong>. It reports the running application and installed package separately, renders cached status immediately, and performs one bounded background refresh only when the last successful check is missing or at least 24 hours old and backoff permits. Successful results are reused for five minutes; <strong>Check now</strong> then explicitly refreshes the same endpoint. <strong>Current</strong> retains its green glow, every non-current status gives the update card an attention glow, and the purple header SVG appears only after a successful check validates a newer running application. Normal health remains offline-capable.</p></div>
         <div class="callout blue"><div><strong>Windows is the only Manager with an Install update button.</strong><p>After a fresh verified check and separate confirmation, the Manager starts the existing fixed updater. It accepts no browser-supplied URL, path, version, command, or arguments; Windows elevation, checksums, the internal manifest, backup, health verification, and rollback still apply. No unattended updater is installed.</p></div></div>
         <div class="table"><table><thead><tr><th>Your current installation</th><th>Folder choice</th><th>Required action</th></tr></thead><tbody>
           <tr><td><strong>Fresh</strong></td><td>Choose an empty permanent folder.</td><td><span class="state install">Install</span></td></tr>

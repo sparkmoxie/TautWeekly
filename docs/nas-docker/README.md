@@ -189,6 +189,27 @@ send only to TestEmail, and inspect **Schedule**. Before enabling delivery,
 confirm the configured timezone, scheduler timezone, and scheduler-local time
 agree. Recreate or restart the container after changing its timezone.
 
+### Optional custom newsletter text card
+
+The optional Config card immediately after **Cache** places administrator text
+before the newsletter release-count/date block. It is disabled by default.
+
+| Option | Default | Accepted value |
+|---|---:|---|
+| Enabled | `false` | On or off |
+| Border color | `#72aef7` | Six-digit hex color |
+| Border opacity | `34` | Integer 0-100; 0 hides the border |
+| Title | empty | Optional gold uppercase text, 0-120 characters |
+| Subheading | empty | Optional large white text, 0-200 characters |
+| Body | empty | Required plain text, 1-2000 characters when enabled |
+
+Title and subheading are independently optional, and the layout rebalances
+when either is omitted. Line breaks are preserved, and content is escaped for
+normal and welcome HTML, the plain-text alternative, and generated previews.
+An empty or whitespace-only body blocks browser and Manager API validation,
+save, and verification. See the
+[configuration reference](../CONFIGURATION.md#optional-custom-text-card).
+
 The following release-archive commands are expert/recovery fallbacks. Run them
 from the extracted project directory on the Docker host, not in the container:
 
@@ -458,9 +479,10 @@ current, legacy, or mismatched. Authenticated entry renders cached status first
 and makes one non-blocking bounded check only when the last success is missing
 or at least 24 hours old and backoff permits. Successful results are reused for
 five minutes before **Check now** refreshes the same endpoint. Navigation,
-Dashboard rendering, and health remain offline-capable. A passive purple header
-notification appears only for a validated available update, while the card
-glows for every non-current state; neither claims package ownership. The
+Dashboard rendering, and health remain offline-capable. **Current** retains its
+green glow. A passive purple header SVG appears only for a validated newer
+running application, while the card glows for every non-current state; neither
+claims package ownership. The
 Manager remains non-root and has no Docker socket or host helper,
 so it never offers an install button for Docker/NAS packages.
 
