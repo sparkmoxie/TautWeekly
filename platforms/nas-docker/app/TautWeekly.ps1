@@ -31,6 +31,12 @@ $script:TautWeeklyResultWriting = $false
 $script:TautWeeklyResultSmtpAcceptedCount = 0
 $script:TautWeeklyResultSkippedCount = 0
 $script:TautWeeklyResultFailedCount = 0
+$script:TautWeeklyResultSkipReasons = [ordered]@{
+    inactiveOrDeleted = 0
+    missingEmail       = 0
+    excludedUserId     = 0
+    excludedEmail      = 0
+}
 $script:TautWeeklyResultErrorCategory = "renderer-failed"
 $script:TautWeeklyResultGeneratedPreviewFiles = New-Object System.Collections.Generic.List[string]
 $script:TautWeeklyResultDeliveryScope = switch ($Mode) {
@@ -71,7 +77,7 @@ function Write-TautWeeklyStructuredResult {
                 Sort-Object -Unique
         )
         $result = [ordered]@{
-            schemaVersion = 1
+            schemaVersion = 2
             mode = [string]$Mode
             outcome = $Outcome
             errorCategory = $(if ($Outcome -eq "failed") { [string]$script:TautWeeklyResultErrorCategory } else { "" })
@@ -82,6 +88,7 @@ function Write-TautWeeklyStructuredResult {
             smtpAcceptedCount = [Math]::Max(0, [int]$script:TautWeeklyResultSmtpAcceptedCount)
             skippedCount = [Math]::Max(0, [int]$script:TautWeeklyResultSkippedCount)
             failedCount = [Math]::Max(0, [int]$script:TautWeeklyResultFailedCount)
+            skipReasonCounts = $script:TautWeeklyResultSkipReasons
             generatedPreviewFiles = $safePreviewFiles
         }
         $temporaryPath = Join-Path $resultDirectory (".tautweekly-result-{0}.tmp" -f [Guid]::NewGuid().ToString("N"))
@@ -444,7 +451,7 @@ function Add-AccessStateUser {
         WelcomeSentUtc = ""
     }
 
-    $State.Users | Add-Member -NotePropertyName $id -NotePropertyValue $entry -Force
+    Add-Member -InputObject $State.Users -MemberType NoteProperty -Name $id -Value $entry -Force
 }
 
 function Sync-AccessRoster {
@@ -7813,27 +7820,25 @@ function Get-NewsletterUser {
     }
 }
 
-function Should-SkipUser {
+function Get-UserSkipReason {
     param([object]$User)
 
-    if ($User.DeletedUser -gt 0) { return $true }
-    if ($User.IsActive -eq 0) { return $true }
-    if ($User.DoNotify -eq 0) { return $true }
-    if ([string]::IsNullOrWhiteSpace([string]$User.Email)) { return $true }
+    if ($User.DeletedUser -gt 0 -or $User.IsActive -eq 0) { return "inactiveOrDeleted" }
+    if ([string]::IsNullOrWhiteSpace([string]$User.Email)) { return "missingEmail" }
 
     if ($null -ne $Config.PSObject.Properties["ExcludedUserIds"]) {
         foreach ($id in @($Config.ExcludedUserIds)) {
-            if ([string]$id -eq [string]$User.UserId) { return $true }
+            if ([string]$id -eq [string]$User.UserId) { return "excludedUserId" }
         }
     }
 
     if ($null -ne $Config.PSObject.Properties["ExcludedEmails"]) {
         foreach ($email in @($Config.ExcludedEmails)) {
-            if ([string]$email -ieq [string]$User.Email) { return $true }
+            if ([string]$email -ieq [string]$User.Email) { return "excludedEmail" }
         }
     }
 
-    return $false
+    return ""
 }
 
 # ---------------------------------------------------------------------------
@@ -7906,7 +7911,7 @@ if ($Mode -eq "ListUsers") {
                 FriendlyName = $u.FriendlyName
                 Email        = $u.Email
                 Active       = $u.IsActive
-                Notify       = $u.DoNotify
+                TautulliNotify = $u.DoNotify
             })
         }
         catch {
@@ -7916,6 +7921,7 @@ if ($Mode -eq "ListUsers") {
 
     $rows | Sort-Object FriendlyName | Format-Table -AutoSize
     Write-Host ""
+    Write-Host "TautulliNotify is legacy notification-agent state and does not control TautWeekly delivery." -ForegroundColor DarkGray
     Write-Host "ListUsers only displays the roster; it does not select or save a default user." -ForegroundColor Yellow
     Write-Host "Pass a numeric UserId from this table to Preview, PreviewAll, SendTest, SendTestAll, or SendWelcome."
     exit 0
@@ -8785,10 +8791,12 @@ if ($Mode -eq "SendAll") {
         try {
             $user = Get-NewsletterUser -Id ([string]$n.user_id)
 
-            if (Should-SkipUser -User $user) {
-                Write-Log "Skipping $($user.FriendlyName) ($($user.UserId))."
+            $skipReason = Get-UserSkipReason -User $user
+            if (-not [string]::IsNullOrWhiteSpace($skipReason)) {
+                Write-Log "Skipping one production recipient: $skipReason."
                 $skipped++
                 $script:TautWeeklyResultSkippedCount = $skipped
+                $script:TautWeeklyResultSkipReasons[$skipReason]++
                 continue
             }
 
@@ -8836,6 +8844,11 @@ if ($Mode -eq "SendAll") {
     if ($failed -gt 0) {
         Write-TautWeeklyStructuredResult -Outcome $(if ($sent -gt 0) { "partial" } else { "failed" })
         exit 2
+    }
+    if ($sent -eq 0) {
+        $script:TautWeeklyResultErrorCategory = "no-eligible-recipients"
+        Write-TautWeeklyStructuredResult -Outcome "failed"
+        exit 3
     }
     Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0

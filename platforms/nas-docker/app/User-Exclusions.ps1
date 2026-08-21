@@ -85,8 +85,7 @@ function ConvertTo-TautWeeklySelectableUsers {
 
         $email = [string](Get-TautWeeklyObjectValue -InputObject $detail -Name 'email' -Default '')
         $isActive = [int](Get-TautWeeklyObjectValue -InputObject $detail -Name 'is_active' -Default 0)
-        $doNotify = [int](Get-TautWeeklyObjectValue -InputObject $detail -Name 'do_notify' -Default 0)
-        $eligible = $isActive -gt 0 -and $doNotify -gt 0 -and -not [string]::IsNullOrWhiteSpace($email)
+        $eligible = $isActive -gt 0 -and -not [string]::IsNullOrWhiteSpace($email)
 
         $users.Add([PSCustomObject]@{
             UserId = $userId
@@ -240,7 +239,7 @@ function Read-TautWeeklyExcludedUserIds {
         Write-Host ('{0,-4} {1,-10} {2,-9} {3,-24} {4,-20} {5}' -f ($index + 1), $status, $delivery, [string]$user.FriendlyName, [string]$user.UserId, $email)
     }
     Write-Host ''
-    Write-Host '* Inactive users, users with Tautulli notifications disabled, and users without email are already skipped.' -ForegroundColor DarkGray
+    Write-Host '* Inactive users and users without email are already skipped. Tautulli notification-agent settings do not control TautWeekly delivery.' -ForegroundColor DarkGray
     Write-Host 'Enter the rows to exclude, for example 2,4-6. This replaces the known-user selection.'
     Write-Host "Press Enter (or type 'keep') to keep it unchanged; type 'none' to clear every exclusion."
 

@@ -275,6 +275,13 @@ in `config.json`; the guided display is retained until another validation
 refreshes the available choices. Library scope filters releases, quiet mode,
 Trending, Binge Champion, and personal statistics before calculations run.
 
+User checkboxes are exclusions: checked means excluded. Unchecked active users
+with an email address are eligible regardless of Tautulli's legacy
+notification-agent `do_notify` value. Manual and scheduled SendAll use the same
+policy. A zero-eligible run is a failed no-delivery result with fixed aggregate
+skip reasons, never SMTP-accepted success; Manager history retains no recipient
+identity or email address.
+
 Validation never authenticates to SMTP, sends email, changes welcome state, or
 installs a schedule.
 

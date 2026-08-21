@@ -142,7 +142,7 @@
           <p class="verification-message" id="discovery-message" role="status" aria-live="polite">Save a complete configuration before loading choices.</p>
           <div class="discovery-results" id="discovery-results" hidden>
             <section><div class="panel-heading"><h3>Included libraries</h3><small id="discovery-library-count"></small></div><p>Select at least one active movie or TV library. Saving the form applies these choices without exposing raw IDs.</p><div class="choice-list" id="discovery-libraries" role="group" aria-label="Included library choices" tabindex="0"></div></section>
-            <section><div class="panel-heading"><h3>Delivery exclusions</h3><small id="discovery-user-count"></small></div><p>Checked users are excluded from production delivery but remain available for previews and TestEmail runs.</p><div class="choice-list" id="discovery-users" role="group" aria-label="User delivery exclusion choices" tabindex="0"></div></section>
+            <section><div class="panel-heading"><h3>Delivery exclusions — checked means excluded</h3><small id="discovery-user-count"></small></div><p>Checked users do not receive production delivery. Unchecked active users with an email address are eligible; Tautulli notification-agent settings do not control TautWeekly delivery. Every user remains available for previews and TestEmail runs.</p><div class="choice-list" id="discovery-users" role="group" aria-label="User delivery exclusion choices; checked means excluded" tabindex="0"></div></section>
           </div>
         </section>
         <div class="config-alert" id="config-errors" role="alert" hidden><strong>Configuration needs attention</strong><ul id="config-error-list"></ul></div>

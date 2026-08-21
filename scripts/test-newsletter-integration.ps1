@@ -292,10 +292,11 @@ foreach ($engine in $engines) {
                 Assert-True (Test-Path -LiteralPath $managerResultPath) 'NAS Manager operation did not produce its structured result.'
                 $managerResultRaw = Get-Content -LiteralPath $managerResultPath -Raw -Encoding UTF8
                 $managerResult = $managerResultRaw | ConvertFrom-Json
-                Assert-True ($managerResult.schemaVersion -eq 1) 'NAS Manager result used the wrong schema version.'
+                Assert-True ($managerResult.schemaVersion -eq 2) 'NAS Manager result used the wrong schema version.'
                 Assert-True ($managerResult.mode -eq 'PreviewAll' -and $managerResult.outcome -eq 'succeeded') 'NAS Manager result reported the wrong operation outcome.'
                 Assert-True ([string]::IsNullOrEmpty([string]$managerResult.errorCategory)) 'NAS Manager success retained a renderer failure category.'
                 Assert-True ($managerResult.deliveryScope -eq 'none') 'NAS Manager preview result reported a delivery scope.'
+                Assert-True (($managerResult.skipReasonCounts.inactiveOrDeleted + $managerResult.skipReasonCounts.missingEmail + $managerResult.skipReasonCounts.excludedUserId + $managerResult.skipReasonCounts.excludedEmail) -eq 0) 'NAS Manager preview result reported production skip reasons.'
                 Assert-True ($managerResult.generatedPreviewFiles.Count -eq 7) 'NAS Manager result did not report all generated previews.'
                 Assert-True (-not $managerResultRaw.Contains('virtual-api-key')) 'NAS Manager result exposed the synthetic Tautulli API key.'
                 Assert-True (-not $managerResultRaw.Contains('virtual-plex-token')) 'NAS Manager result exposed the synthetic Plex token.'

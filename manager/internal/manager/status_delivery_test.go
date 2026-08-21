@@ -12,7 +12,7 @@ func TestLatestRendererResultProvidesTruthfulDeliveryEvidence(t *testing.T) {
 	root := t.TempDir()
 	started := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
 	result := rendererResult{
-		SchemaVersion:     1,
+		SchemaVersion:     2,
 		Mode:              "SendAll",
 		Outcome:           "succeeded",
 		DeliveryScope:     "production",
@@ -21,6 +21,7 @@ func TestLatestRendererResultProvidesTruthfulDeliveryEvidence(t *testing.T) {
 		DurationMS:        3000,
 		SMTPAcceptedCount: 3,
 		SkippedCount:      1,
+		SkipReasonCounts:  &DeliverySkipReasonCounts{ExcludedUserID: 1},
 	}
 	writeRendererResultFixture(t, root, result)
 	snapshot := StatusSnapshot{Delivery: DeliveryStatus{Result: "task-result-0", Evidence: "task-scheduler"}}
@@ -30,6 +31,9 @@ func TestLatestRendererResultProvidesTruthfulDeliveryEvidence(t *testing.T) {
 	}
 	if snapshot.Delivery.LastAttemptUTC != result.StartedAtUTC || snapshot.Delivery.LastSuccessUTC != result.FinishedAtUTC {
 		t.Fatalf("unexpected delivery timestamps: %+v", snapshot.Delivery)
+	}
+	if snapshot.Delivery.SkipReasonCounts == nil || snapshot.Delivery.SkipReasonCounts.ExcludedUserID != 1 {
+		t.Fatalf("sanitized skip evidence was not surfaced: %+v", snapshot.Delivery)
 	}
 }
 
@@ -63,6 +67,19 @@ func TestLatestRendererResultDistinguishesPartialFailureAndNoAcceptedDelivery(t 
 	applyLatestRendererDelivery(&snapshot, root)
 	if snapshot.Delivery.Result != "completed-no-accepted-deliveries" || snapshot.Delivery.LastSuccessUTC != "" {
 		t.Fatalf("zero-acceptance run was presented as a successful send: %+v", snapshot.Delivery)
+	}
+
+	noEligible := base
+	noEligible.SchemaVersion = 2
+	noEligible.Outcome = "failed"
+	noEligible.ErrorCategory = "no-eligible-recipients"
+	noEligible.SkippedCount = 2
+	noEligible.SkipReasonCounts = &DeliverySkipReasonCounts{ExcludedUserID: 1, ExcludedEmail: 1}
+	writeRendererResultFixture(t, root, noEligible)
+	snapshot = StatusSnapshot{Delivery: DeliveryStatus{Result: "not-recorded", Evidence: "none"}}
+	applyLatestRendererDelivery(&snapshot, root)
+	if snapshot.Delivery.Result != "failed" || snapshot.Delivery.ErrorCategory != "no-eligible-recipients" || snapshot.Delivery.SkipReasonCounts == nil {
+		t.Fatalf("zero-eligible result was not surfaced explicitly: %+v", snapshot.Delivery)
 	}
 }
 

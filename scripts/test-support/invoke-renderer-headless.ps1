@@ -32,3 +32,4 @@ elseif ($Mode -eq 'SendAll') {
 else {
     & $RendererPath -Mode $Mode -ConfigPath $ConfigPath -UserId $UserId @resultArguments
 }
+exit $LASTEXITCODE

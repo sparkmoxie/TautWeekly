@@ -99,6 +99,70 @@ func TestRendererResultValidatesSendTestAllAggregateContract(t *testing.T) {
 	}
 }
 
+func TestRendererResultV2ValidatesProductionEligibilityEvidence(t *testing.T) {
+	started := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
+	valid := rendererResult{
+		SchemaVersion:     2,
+		Mode:              "SendAll",
+		Outcome:           "succeeded",
+		DeliveryScope:     "production",
+		StartedAtUTC:      started.Format(time.RFC3339Nano),
+		FinishedAtUTC:     started.Add(time.Second).Format(time.RFC3339Nano),
+		DurationMS:        1000,
+		SMTPAcceptedCount: 2,
+		SkippedCount:      4,
+		SkipReasonCounts: &DeliverySkipReasonCounts{
+			InactiveOrDeleted: 1,
+			MissingEmail:      1,
+			ExcludedUserID:    1,
+			ExcludedEmail:     1,
+		},
+	}
+	if !validRendererResult(valid, "SendAll") {
+		t.Fatalf("valid schema-v2 SendAll result was rejected: %+v", valid)
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*rendererResult)
+	}{
+		{name: "missing fixed reason counts", mutate: func(result *rendererResult) { result.SkipReasonCounts = nil }},
+		{name: "reason sum mismatch", mutate: func(result *rendererResult) { result.SkipReasonCounts.ExcludedEmail = 0 }},
+		{name: "negative reason", mutate: func(result *rendererResult) { result.SkipReasonCounts.MissingEmail = -1 }},
+		{name: "successful zero acceptance", mutate: func(result *rendererResult) { result.SMTPAcceptedCount = 0 }},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			result := valid
+			counts := *valid.SkipReasonCounts
+			result.SkipReasonCounts = &counts
+			test.mutate(&result)
+			if validRendererResult(result, "SendAll") {
+				t.Fatalf("invalid schema-v2 result was accepted: %+v", result)
+			}
+		})
+	}
+
+	noEligible := valid
+	noEligible.Outcome = "failed"
+	noEligible.ErrorCategory = "no-eligible-recipients"
+	noEligible.SMTPAcceptedCount = 0
+	if !validRendererResult(noEligible, "SendAll") {
+		t.Fatalf("valid no-eligible-recipient result was rejected: %+v", noEligible)
+	}
+	noEligible.FailedCount = 1
+	if validRendererResult(noEligible, "SendAll") {
+		t.Fatalf("no-eligible-recipient result with an SMTP failure was accepted: %+v", noEligible)
+	}
+	wrongMode := validPreviewAllRendererResult()
+	wrongMode.Outcome = "failed"
+	wrongMode.GeneratedPreviewFiles = nil
+	wrongMode.ErrorCategory = "no-eligible-recipients"
+	if validRendererResult(wrongMode, "PreviewAll") {
+		t.Fatalf("recipient-only error category was accepted for PreviewAll: %+v", wrongMode)
+	}
+}
+
 func TestRendererResultAcceptsOnlyAllowlistedFailureCategories(t *testing.T) {
 	failed := validPreviewAllRendererResult()
 	failed.Outcome = "failed"

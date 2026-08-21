@@ -37,14 +37,16 @@ type ScheduleStatus struct {
 }
 
 type DeliveryStatus struct {
-	LastAttemptUTC    string `json:"lastAttemptUtc,omitempty"`
-	LastSuccessUTC    string `json:"lastSuccessUtc,omitempty"`
-	Result            string `json:"result"`
-	Evidence          string `json:"evidence"`
-	SMTPAcceptedCount int    `json:"smtpAcceptedCount"`
-	SkippedCount      int    `json:"skippedCount"`
-	FailedCount       int    `json:"failedCount"`
-	ExitCode          *int64 `json:"exitCode,omitempty"`
+	LastAttemptUTC    string                    `json:"lastAttemptUtc,omitempty"`
+	LastSuccessUTC    string                    `json:"lastSuccessUtc,omitempty"`
+	Result            string                    `json:"result"`
+	Evidence          string                    `json:"evidence"`
+	SMTPAcceptedCount int                       `json:"smtpAcceptedCount"`
+	SkippedCount      int                       `json:"skippedCount"`
+	FailedCount       int                       `json:"failedCount"`
+	SkipReasonCounts  *DeliverySkipReasonCounts `json:"skipReasonCounts,omitempty"`
+	ErrorCategory     string                    `json:"errorCategory,omitempty"`
+	ExitCode          *int64                    `json:"exitCode,omitempty"`
 }
 
 type IntegrationStatus struct {
@@ -284,6 +286,8 @@ func applyLatestRendererDelivery(snapshot *StatusSnapshot, root string) {
 	snapshot.Delivery.SMTPAcceptedCount = result.SMTPAcceptedCount
 	snapshot.Delivery.SkippedCount = result.SkippedCount
 	snapshot.Delivery.FailedCount = result.FailedCount
+	snapshot.Delivery.SkipReasonCounts = result.SkipReasonCounts
+	snapshot.Delivery.ErrorCategory = result.ErrorCategory
 	switch {
 	case result.Outcome == "succeeded" && result.SMTPAcceptedCount > 0:
 		snapshot.Delivery.Result = "smtp-accepted"

@@ -49,7 +49,7 @@ $nameRows = @(
 $detailRows = @(
     [PSCustomObject]@{
         user_id = '0'; username = 'owner'; email = 'owner@example.com'
-        is_active = 1; do_notify = 1
+        is_active = 1; do_notify = 0
     }
 )
 $mergedUsers = @(ConvertTo-TautWeeklySelectableUsers -Names $nameRows -DetailedUsers $detailRows)
@@ -57,7 +57,7 @@ Assert-Equal -Name 'Bulk and name rosters are merged by stable ID' -Actual $merg
 $owner = $mergedUsers | Where-Object UserId -eq '0' | Select-Object -First 1
 $viewer = $mergedUsers | Where-Object UserId -eq '145330906' | Select-Object -First 1
 Assert-Equal -Name 'Name roster supplies missing friendly name' -Actual $owner.FriendlyName -Expected 'Server Owner'
-Assert-Equal -Name 'Detailed bulk row retains delivery eligibility' -Actual ([bool]$owner.Eligible) -Expected $true
+Assert-Equal -Name 'Legacy Tautulli notification state does not suppress delivery eligibility' -Actual ([bool]$owner.Eligible) -Expected $true
 Assert-Equal -Name 'Name-only user remains selectable' -Actual $viewer.FriendlyName -Expected 'Remote Viewer'
 Assert-Equal -Name 'Name-only user is not marked delivery-eligible' -Actual ([bool]$viewer.Eligible) -Expected $false
 Assert-Equal -Name 'Name-only user reports unavailable details' -Actual ([bool]$viewer.DetailsAvailable) -Expected $false

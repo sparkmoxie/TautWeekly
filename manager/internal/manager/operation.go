@@ -45,25 +45,26 @@ type CreateOperationRequest struct {
 }
 
 type OperationRecord struct {
-	SchemaVersion       int      `json:"schemaVersion"`
-	ID                  string   `json:"id"`
-	Type                string   `json:"type"`
-	Trigger             string   `json:"trigger"`
-	PackageVersion      string   `json:"packageVersion,omitempty"`
-	State               string   `json:"state"`
-	Outcome             string   `json:"outcome,omitempty"`
-	StartedAtUTC        string   `json:"startedAtUtc"`
-	FinishedAtUTC       string   `json:"finishedAtUtc,omitempty"`
-	DurationMS          int64    `json:"durationMs,omitempty"`
-	DeliveryScope       string   `json:"deliveryScope,omitempty"`
-	SMTPAcceptedCount   int      `json:"smtpAcceptedCount,omitempty"`
-	SkippedCount        int      `json:"skippedCount,omitempty"`
-	FailedCount         int      `json:"failedCount,omitempty"`
-	ExitCode            *int     `json:"exitCode,omitempty"`
-	GeneratedPreviewIDs []string `json:"generatedPreviewIds"`
-	ErrorCategory       string   `json:"errorCategory,omitempty"`
-	SupportCode         string   `json:"supportCode,omitempty"`
-	Cancellable         bool     `json:"cancellable"`
+	SchemaVersion       int                       `json:"schemaVersion"`
+	ID                  string                    `json:"id"`
+	Type                string                    `json:"type"`
+	Trigger             string                    `json:"trigger"`
+	PackageVersion      string                    `json:"packageVersion,omitempty"`
+	State               string                    `json:"state"`
+	Outcome             string                    `json:"outcome,omitempty"`
+	StartedAtUTC        string                    `json:"startedAtUtc"`
+	FinishedAtUTC       string                    `json:"finishedAtUtc,omitempty"`
+	DurationMS          int64                     `json:"durationMs,omitempty"`
+	DeliveryScope       string                    `json:"deliveryScope,omitempty"`
+	SMTPAcceptedCount   int                       `json:"smtpAcceptedCount,omitempty"`
+	SkippedCount        int                       `json:"skippedCount,omitempty"`
+	FailedCount         int                       `json:"failedCount,omitempty"`
+	SkipReasonCounts    *DeliverySkipReasonCounts `json:"skipReasonCounts,omitempty"`
+	ExitCode            *int                      `json:"exitCode,omitempty"`
+	GeneratedPreviewIDs []string                  `json:"generatedPreviewIds"`
+	ErrorCategory       string                    `json:"errorCategory,omitempty"`
+	SupportCode         string                    `json:"supportCode,omitempty"`
+	Cancellable         bool                      `json:"cancellable"`
 }
 
 type OperationHistory struct {
@@ -256,6 +257,7 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 		record.SMTPAcceptedCount = structuredResult.SMTPAcceptedCount
 		record.SkippedCount = structuredResult.SkippedCount
 		record.FailedCount = structuredResult.FailedCount
+		record.SkipReasonCounts = structuredResult.SkipReasonCounts
 		if record.Type == "send-all" {
 			_ = writePrivateJSON(filepath.Join(c.runtimeRoot, "last-run.json"), structuredResult)
 		}
@@ -359,6 +361,7 @@ func (c *operationCoordinator) finishRecoveredDelivery(record OperationRecord, r
 	record.SMTPAcceptedCount = result.SMTPAcceptedCount
 	record.SkippedCount = result.SkippedCount
 	record.FailedCount = result.FailedCount
+	record.SkipReasonCounts = result.SkipReasonCounts
 	switch {
 	case record.Type == "send-all" && result.Outcome == "partial":
 		record.State = "partial"

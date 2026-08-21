@@ -33,6 +33,8 @@ class Handler(socketserver.StreamRequestHandler):
             if upper.startswith("EHLO "):
                 self.send("250-smtp.tautweekly.test")
                 self.send("250 SIZE 10485760")
+            elif upper.startswith("RCPT TO:") and any(value in line.lower() for value in self.server.reject_recipients):  # type: ignore[attr-defined]
+                self.send("550 Rejected by virtual recipient policy")
             elif upper.startswith("MAIL FROM:") or upper.startswith("RCPT TO:"):
                 self.send("250 Accepted")
             elif upper == "DATA":
@@ -66,12 +68,14 @@ def main() -> None:
     parser.add_argument("--call-log", type=Path, required=True)
     parser.add_argument("--ready-file", type=Path, required=True)
     parser.add_argument("--data-file", type=Path)
+    parser.add_argument("--reject-recipient", action="append", default=[])
     args = parser.parse_args()
 
     args.call_log.write_text("", encoding="utf-8")
     with Server(("127.0.0.1", args.port), Handler) as server:
         server.call_log = args.call_log  # type: ignore[attr-defined]
         server.data_file = args.data_file  # type: ignore[attr-defined]
+        server.reject_recipients = [value.lower() for value in args.reject_recipient]  # type: ignore[attr-defined]
         args.ready_file.write_text(str(server.server_address[1]), encoding="utf-8")
         server.serve_forever()
 

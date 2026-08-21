@@ -22,6 +22,7 @@ type fixturePreviewRunner struct {
 	userID               string
 	runs                 int
 	sendAllPartial       bool
+	sendAllNoEligible    bool
 	previewExitCode      int
 	previewErrorCategory string
 }
@@ -218,8 +219,20 @@ func (r *fixturePreviewRunner) RunSendAll(ctx context.Context, _, configPath, re
 		exitCode = 2
 		runErr = errors.New("renderer returned exit status 2")
 	}
+	if r.sendAllNoEligible {
+		outcome = "failed"
+		accepted = 0
+		skipped = 2
+		failed = 0
+		exitCode = 3
+		runErr = errors.New("renderer returned exit status 3")
+	}
+	skipReasons := &DeliverySkipReasonCounts{InactiveOrDeleted: 1, ExcludedUserID: 1}
+	if r.sendAllPartial {
+		skipReasons = &DeliverySkipReasonCounts{MissingEmail: 1}
+	}
 	result := rendererResult{
-		SchemaVersion:         1,
+		SchemaVersion:         2,
 		Mode:                  "SendAll",
 		Outcome:               outcome,
 		DeliveryScope:         "production",
@@ -229,7 +242,11 @@ func (r *fixturePreviewRunner) RunSendAll(ctx context.Context, _, configPath, re
 		SMTPAcceptedCount:     accepted,
 		SkippedCount:          skipped,
 		FailedCount:           failed,
+		SkipReasonCounts:      skipReasons,
 		GeneratedPreviewFiles: []string{},
+	}
+	if r.sendAllNoEligible {
+		result.ErrorCategory = "no-eligible-recipients"
 	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
@@ -446,6 +463,9 @@ func TestSendAllOperationRequiresProductionConfirmationAndRecordsOnlyAggregates(
 	if finished.DeliveryScope != "production" || finished.SMTPAcceptedCount != 4 || finished.SkippedCount != 2 || finished.FailedCount != 0 || len(finished.GeneratedPreviewIDs) != 0 {
 		t.Fatalf("unexpected production send result: %+v", finished)
 	}
+	if finished.SkipReasonCounts == nil || finished.SkipReasonCounts.InactiveOrDeleted != 1 || finished.SkipReasonCounts.ExcludedUserID != 1 {
+		t.Fatalf("production send omitted sanitized skip reasons: %+v", finished)
+	}
 	request.UserID = "42"
 	if _, err := coordinator.Start(request); !errors.Is(err, ErrOperationInvalid) {
 		t.Fatalf("production send accepted an unnecessary user ID: %v", err)
@@ -502,6 +522,23 @@ func TestSendAllOperationRetainsStructuredPartialDeliveryEvidence(t *testing.T) 
 	finished := waitForOperationState(t, coordinator, "partial")
 	if finished.Outcome != "partial" || finished.ExitCode == nil || *finished.ExitCode != 2 || finished.SMTPAcceptedCount != 3 || finished.SkippedCount != 1 || finished.FailedCount != 1 || finished.SupportCode == "" {
 		t.Fatalf("unexpected partial production result: %+v", finished)
+	}
+}
+
+func TestSendAllOperationReportsZeroEligibleRecipientsAsFailure(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	runner := &fixturePreviewRunner{sendAllNoEligible: true}
+	coordinator, err := newOperationCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Now: time.Now, operationRunner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	if _, err := coordinator.Start(CreateOperationRequest{Type: "send-all", ExpectedRevision: view.Revision, ConfirmProductionSend: true}); err != nil {
+		t.Fatal(err)
+	}
+	finished := waitForOperationState(t, coordinator, "failed")
+	if finished.ErrorCategory != "no-eligible-recipients" || finished.SMTPAcceptedCount != 0 || finished.SkippedCount != 2 || finished.FailedCount != 0 || finished.SkipReasonCounts == nil || finished.SupportCode == "" {
+		t.Fatalf("zero-eligible production result was not explicit and sanitized: %+v", finished)
 	}
 }
 

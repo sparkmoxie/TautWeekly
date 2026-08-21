@@ -100,6 +100,8 @@ func TestLinuxCapabilitiesRequireAuthenticationAndDescribeNativeService(t *testi
 		TautWeeklyRoot: t.TempDir(),
 		RuntimeRoot:    runtimeRoot,
 		RuntimeMode:    runtimeModeLinux,
+		AllowedHosts:   []string{"weekly.linux.example"},
+		SecureCookies:  true,
 		Version:        "test",
 	})
 	if err != nil {
@@ -111,6 +113,20 @@ func TestLinuxCapabilitiesRequireAuthenticationAndDescribeNativeService(t *testi
 	}
 	if _, ok := server.schedule.runner.(containerScheduleMutationRunner); !ok {
 		t.Fatalf("Linux Manager did not use the embedded service schedule runner: %T", server.schedule.runner)
+	}
+	current, err := server.auth.newSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	request.Host = "weekly.linux.example"
+	request.Header.Set("Origin", "https://weekly.linux.example")
+	request.Header.Set("X-CSRF-Token", current.CSRFToken)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: current.Token})
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("native Linux exact-DNS protected mutation: got %d, body %s", recorder.Code, recorder.Body.String())
 	}
 	snapshot := CollectStatus(t.Context(), Options{
 		DataDir:        t.TempDir(),

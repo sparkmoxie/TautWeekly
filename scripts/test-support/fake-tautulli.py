@@ -117,6 +117,21 @@ USERS = {
 }
 
 
+def configured_users(server: ThreadingHTTPServer) -> dict[str, dict[str, object]]:
+    users_file: Path | None = server.users_file  # type: ignore[attr-defined]
+    if users_file is None:
+        return USERS
+    values = json.loads(users_file.read_text(encoding="utf-8-sig"))
+    if not isinstance(values, list):
+        raise ValueError("virtual users file must contain a JSON array")
+    users: dict[str, dict[str, object]] = {}
+    for value in values:
+        if not isinstance(value, dict) or not str(value.get("user_id", "")):
+            raise ValueError("virtual user requires a user_id")
+        users[str(value["user_id"])] = value
+    return users
+
+
 def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
     if section_id == "10":
         rows = [
@@ -688,13 +703,19 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if command == "get_user_names":
-            self.api_success([{"user_id": value["user_id"]} for value in USERS.values()])
+            users = configured_users(self.server)  # type: ignore[arg-type]
+            self.api_success([{"user_id": value["user_id"]} for value in users.values()])
             return
         if command == "get_users":
-            self.api_success(list(USERS.values()))
+            self.api_success(list(configured_users(self.server).values()))  # type: ignore[arg-type]
             return
         if command == "get_user":
-            self.api_success(USERS.get(query.get("user_id", ""), USERS["1"]))
+            users = configured_users(self.server)  # type: ignore[arg-type]
+            user = users.get(query.get("user_id", ""))
+            if user is None:
+                self.write_json({"response": {"result": "error", "message": "virtual user not found", "data": {}}})
+                return
+            self.api_success(user)
             return
         if command == "refresh_users_list":
             self.api_success({})
@@ -926,6 +947,7 @@ def main() -> None:
         required=True,
     )
     parser.add_argument("--state-file", type=Path)
+    parser.add_argument("--users-file", type=Path)
     parser.add_argument("--call-log", type=Path, required=True)
     parser.add_argument("--ready-file", type=Path, required=True)
     args = parser.parse_args()
@@ -934,6 +956,7 @@ def main() -> None:
     server.rows = media_rows(args.scenario)  # type: ignore[attr-defined]
     server.scenario = args.scenario  # type: ignore[attr-defined]
     server.state_file = args.state_file  # type: ignore[attr-defined]
+    server.users_file = args.users_file  # type: ignore[attr-defined]
     server.call_log = args.call_log  # type: ignore[attr-defined]
     server.base_url = f"http://127.0.0.1:{args.port}"  # type: ignore[attr-defined]
     args.call_log.write_text("", encoding="utf-8")

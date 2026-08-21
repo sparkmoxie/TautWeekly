@@ -267,6 +267,13 @@ scheduler and SendAll. Preview/TestEmail modes and the separately confirmed
 one-off welcome remain explicit administrator tools. Treat the displayed
 names and email addresses as private recipient data.
 
+In Manager Config and the terminal fallback, checked/selected rows mean
+**excluded**, not selected for delivery. Unchecked active users with an email
+address remain eligible even when Tautulli's legacy notification-agent
+`do_notify` value is disabled. A manual or scheduled SendAll with no eligible
+recipient is recorded as a failed no-delivery attempt with only fixed aggregate
+skip reasons; it is never presented as SMTP-accepted success.
+
 ## Manage newsletter libraries
 
 Manager Config discovers active Tautulli movie/TV libraries and stores the
@@ -306,6 +313,12 @@ That setting forces Secure cookies and HSTS; enabling it on a plain HTTP URL
 makes login intentionally fail. TautWeekly does not provision certificates or
 declare any proxy trusted. Prefer a VPN for administration and never expose
 plain HTTP to the public internet.
+
+For the generic Compose package, `./tautweekly.sh restart` performs that
+single-service recreation and applies current `.env` values while preserving
+the image, volumes, `.env`, and `data/`. NAS vendor controls must use their
+equivalent recreate/update-container action; a process-only restart cannot
+apply changed container environment values.
 
 ### Optional private Tailscale access
 

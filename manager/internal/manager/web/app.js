@@ -138,13 +138,25 @@ async function performRequest(path, options = {}) {
   const contentType = response.headers.get("Content-Type") || "";
   const payload = contentType.includes("application/json") ? await response.json() : null;
   if (!response.ok) {
-    const error = new Error(payload?.error?.message || `Request failed (${response.status}).`);
+    const code = payload?.error?.code || "request-failed";
+    const error = new Error(sanitizedRequestErrorMessage(code, payload?.error?.message, response.status));
     error.status = response.status;
-    error.code = payload?.error?.code || "request-failed";
+    error.code = code;
     error.fields = payload?.error?.fields || {};
     throw error;
   }
   return payload;
+}
+
+function sanitizedRequestErrorMessage(code, fallback, status) {
+  const fixed = {
+    "invalid-origin": "The browser sent a malformed origin. Open the Manager from its exact configured address and try again.",
+    "origin-host-mismatch": "The browser origin does not match this Manager address. Reopen the exact configured Manager URL and try again.",
+    "origin-scheme-mismatch": "The browser origin uses the wrong HTTP or HTTPS scheme. Reopen the exact configured Manager URL and try again.",
+    "remote-http": "Remote Manager changes require HTTPS. Use the configured private HTTPS address and try again.",
+  };
+  if (fixed[code]) return `${fixed[code]} (${code})`;
+  return fallback || `Request failed (${status}).`;
 }
 
 async function renewTrustedLocalSession() {
@@ -568,6 +580,12 @@ function renderStatus() {
   setText("timeline-last-copy", rendererEvidence
     ? `${snapshot.delivery.smtpAcceptedCount || 0} accepted by SMTP · ${snapshot.delivery.skippedCount || 0} skipped · ${snapshot.delivery.failedCount || 0} failed.`
     : "No sanitized renderer result has been recorded.");
+  if (rendererEvidence) {
+    const deliveryPrefix = snapshot.delivery.errorCategory === "no-eligible-recipients"
+      ? "No eligible production recipients; no message was accepted by SMTP."
+      : byId("timeline-last-copy").textContent;
+    setText("timeline-last-copy", `${deliveryPrefix}${skipReasonCopy(snapshot.delivery.skipReasonCounts)}`);
+  }
   const deliveryTone = snapshot.delivery.result === "smtp-accepted" ? "good" : snapshot.delivery.result === "failed" ? "bad" : "neutral";
   setChip("delivery-chip", snapshot.delivery.result === "not-recorded" ? "No history" : titleCase(snapshot.delivery.result), deliveryTone);
   renderIntegrationStatus();
@@ -1013,7 +1031,7 @@ function renderDiscoveryUserCount(users = state.discovery?.users || []) {
   count.append(document.createTextNode(" ● "));
   const status = document.createElement("span");
   status.className = changed ? "discovery-selected-count" : "discovery-excluded-count";
-  status.textContent = `${effective} ${changed ? "selected" : "excluded"}`;
+  status.textContent = `${effective} excluded${changed ? " (unsaved)" : ""}`;
   count.append(status);
 }
 
@@ -2521,13 +2539,16 @@ function operationSummary(operation) {
     const accepted = operation.smtpAcceptedCount || 0;
     const skipped = operation.skippedCount || 0;
     const failed = operation.failedCount || 0;
+    const reasonCopy = skipReasonCopy(operation.skipReasonCounts);
     switch (operation.state) {
     case "queued": return { heading: "Manual newsletter delivery queued", copy: "The fixed production delivery is waiting to start." };
     case "running": return { heading: "Sending the production newsletter", copy: "Eligible recipients are being processed. Cancellation is disabled once delivery begins." };
-    case "succeeded": return { heading: "Manual newsletter accepted by SMTP", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted by SMTP and ${skipped} recipient${skipped === 1 ? " was" : "s were"} skipped. Inbox delivery is not asserted.` };
-    case "partial": return { heading: "Manual newsletter completed with delivery failures", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed. Inbox delivery is not asserted${operation.supportCode ? `; support code: ${operation.supportCode}` : ""}.` };
-    case "failed": return { heading: "Manual newsletter delivery failed", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}` };
-    default: return { heading: "Manual newsletter delivery recorded", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed. Inbox delivery is not asserted.` };
+    case "succeeded": return { heading: "Manual newsletter accepted by SMTP", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted by SMTP and ${skipped} recipient${skipped === 1 ? " was" : "s were"} skipped.${reasonCopy} Inbox delivery is not asserted.` };
+    case "partial": return { heading: "Manual newsletter completed with delivery failures", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy} Inbox delivery is not asserted${operation.supportCode ? `; support code: ${operation.supportCode}` : ""}.` };
+    case "failed": return operation.errorCategory === "no-eligible-recipients"
+      ? { heading: "No eligible production recipients", copy: `No message was accepted by SMTP.${reasonCopy} Checked exclusion boxes mean excluded.${operation.supportCode ? ` Support code: ${operation.supportCode}.` : ""}` }
+      : { heading: "Manual newsletter delivery failed", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}` };
+    default: return { heading: "Manual newsletter delivery recorded", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy} Inbox delivery is not asserted.` };
     }
   }
   if (operation.type === "send-test-all") {
@@ -2548,6 +2569,18 @@ function operationSummary(operation) {
   case "failed": return { heading: "Preview generation failed", copy: rendererFailureCopy(operation.errorCategory, operation.supportCode) };
   default: return { heading: "Preview operation recorded", copy: "Review the sanitized state and generated preview list." };
   }
+}
+
+function skipReasonCopy(counts) {
+  if (!counts) return "";
+  const reasons = [
+    [counts.inactiveOrDeleted, "inactive or deleted"],
+    [counts.missingEmail, "missing email"],
+    [counts.excludedUserId, "excluded by user selection"],
+    [counts.excludedEmail, "excluded by legacy email rule"],
+  ].filter(([count]) => Number.isInteger(count) && count > 0);
+  if (!reasons.length) return "";
+  return ` Skip reasons: ${reasons.map(([count, label]) => `${count} ${label}`).join("; ")}.`;
 }
 
 function operationTone(operation) {

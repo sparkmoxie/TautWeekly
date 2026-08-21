@@ -6,6 +6,44 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-08-21
+
+### Fixed
+
+- Restored production `SendAll` eligibility for active Tautulli users with an
+  email address when the legacy upstream `do_notify` notification-agent flag
+  is disabled. Explicit user/email exclusions, inactive or deleted users, and
+  missing addresses remain hard skips in manual and scheduled delivery.
+- Made an all-skipped production run fail with a fixed
+  `no-eligible-recipients` category instead of appearing SMTP-accepted, and
+  added sanitized aggregate skip counts to the Manager status and operation
+  views without retaining recipient identities or addresses.
+- Fixed first-run access-roster creation for numeric Tautulli user IDs under
+  Windows PowerShell 5.1, which could stop a first production send before
+  recipient classification. The explicit member form is synchronized across
+  Windows, macOS, NAS/Docker, native Linux, and FreeBSD renderer packages.
+- Made supported macOS and NAS/Docker restart commands force-recreate the app
+  service so changed `.env` values are applied, and documented the equivalent
+  recreate requirement for vendor-managed Compose interfaces.
+- Applied documented exact DNS host allowlisting to the native Linux managed
+  service path while preserving same-origin, scheme, authentication, CSRF,
+  and secure-cookie enforcement.
+
+### Changed
+
+- Clarified in Config that checked user boxes are delivery exclusions and that
+  Tautulli notification-agent settings do not control TautWeekly delivery.
+- Replaced opaque origin rejection text with fixed, sanitized recovery
+  guidance and support codes, and tightened the macOS reverse-proxy workflow
+  around exact hostnames, original `Host` preservation, secure cookies, and
+  container recreation.
+
+### Security
+
+- Kept delivery diagnostics count-only and allowlisted, retained every explicit
+  exclusion and access-state boundary, and continued to ignore untrusted
+  `Forwarded` and `X-Forwarded-*` headers.
+
 ## [0.19.0] - 2026-08-20
 
 ### Added

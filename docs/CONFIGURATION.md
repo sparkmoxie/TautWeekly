@@ -262,6 +262,16 @@ merged by ID. TautWeekly for Plex does not call `get_user` once per roster row;
 if the detailed bulk request fails, name-only rows remain selectable but are
 not marked delivery-eligible in the selector.
 
+The Config checkboxes are exclusions: checked means excluded. An unchecked
+user is production-eligible only when the Tautulli record is active and has an
+email address. Tautulli's legacy `do_notify` notification-agent value does not
+grant or revoke TautWeekly delivery; explicit `ExcludedUserIds` and
+`ExcludedEmails` remain the administrator-controlled opt-out policy. SendAll
+records only fixed aggregate skip counts for inactive/deleted users, missing
+email, stable-ID exclusions, and legacy email exclusions. It never stores a
+recipient identity in Manager history or reports a zero-recipient run as SMTP
+success.
+
 Normally revise exclusions in Manager Config. Recovery/expert fallbacks are
 `14-MANAGE-USER-EXCLUSIONS.bat` on Windows,
 `./tautweekly.sh exclude-users` on either Docker edition, and
@@ -289,9 +299,11 @@ instead of falling back to UTC.
 `schedule-status` reports both the zone/time resolved by its short-lived control
 process and the zone/time recorded by the active scheduler heartbeat. After
 changing a timezone environment file, restart the native service. After changing
-Docker or Podman environment configuration, recreate or restart the container as
-the platform requires, then confirm that `Scheduler TZ` matches `Configured TZ`
-before enabling delivery.
+Docker environment configuration, run the package `./tautweekly.sh restart`
+command, which recreates the application service so current `.env` values are
+applied. Podman and NAS vendor controls must use their equivalent container
+recreation flow. Then confirm that `Scheduler TZ` matches `Configured TZ` before
+enabling delivery.
 
 ## Docker environment
 

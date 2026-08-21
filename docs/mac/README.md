@@ -147,19 +147,26 @@ Use the Mac wrapper for lifecycle status:
 ./tautweekly.sh restart
 ```
 
+`restart` recreates only the `tautweekly` service with the existing image and
+volumes, so current `.env` values are applied. It preserves `.env`, `data/`,
+configuration, Manager access state, schedules, and generated output.
+
 ## Network, reverse proxy, and TLS
 
 The generated `.env` keeps `PREVIEW_BIND=127.0.0.1`; that compatibility name
 now controls the authenticated Manager host port. Keep loopback unless trusted
 LAN access is intentional. The Manager always requires authentication.
 
-For a deliberate DNS name, add only exact names to `MANAGER_ALLOWED_HOSTS`.
-For HTTPS behind a trusted reverse proxy, preserve the original Host header,
-set `MANAGER_SECURE_COOKIES=true`, terminate TLS at the proxy, and do not
-publish the plain HTTP backend. Wildcard hosts and forwarded identity headers
-are not trusted. `GET /health/live` is unauthenticated and exposes only
-liveness; configuration, paths, versions, credentials, and newsletter state
-remain authenticated.
+For a deliberate DNS name, add the hostname only (for example,
+`weekly.example.com`, with no scheme, port, wildcard, path, or trailing value)
+to `MANAGER_ALLOWED_HOSTS`. For HTTPS behind a trusted reverse proxy, preserve
+that exact original `Host` header, set `MANAGER_SECURE_COOKIES=true`, terminate
+TLS at the proxy, and do not publish the plain HTTP backend. Run
+`./tautweekly.sh restart` after either `.env` change so Compose recreates the
+service. `Forwarded` and `X-Forwarded-*` never override Host, origin, or TLS
+checks. `GET /health/live` is unauthenticated and exposes only liveness;
+configuration, paths, versions, credentials, and newsletter state remain
+authenticated.
 
 ### Optional private Tailscale access
 

@@ -23,7 +23,7 @@ Start-Sleep -Seconds 2
 
 if ($Mode -eq "SendTestAll") {
     $testResult = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         mode = "SendTestAll"
         outcome = "succeeded"
         deliveryScope = "test"
@@ -33,6 +33,7 @@ if ($Mode -eq "SendTestAll") {
         smtpAcceptedCount = 6
         skippedCount = 0
         failedCount = 0
+        skipReasonCounts = [ordered]@{ inactiveOrDeleted = 0; missingEmail = 0; excludedUserId = 0; excludedEmail = 0 }
         generatedPreviewFiles = @()
     }
     [IO.File]::WriteAllText($ResultPath, (($testResult | ConvertTo-Json -Compress) + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
@@ -41,7 +42,7 @@ if ($Mode -eq "SendTestAll") {
 
 if ($Mode -eq "SendWelcome") {
     $welcomeResult = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         mode = "SendWelcome"
         outcome = "succeeded"
         deliveryScope = "welcome"
@@ -51,6 +52,7 @@ if ($Mode -eq "SendWelcome") {
         smtpAcceptedCount = 1
         skippedCount = 0
         failedCount = 0
+        skipReasonCounts = [ordered]@{ inactiveOrDeleted = 0; missingEmail = 0; excludedUserId = 0; excludedEmail = 0 }
         generatedPreviewFiles = @()
     }
     [IO.File]::WriteAllText($ResultPath, (($welcomeResult | ConvertTo-Json -Compress) + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
@@ -91,7 +93,7 @@ $index = @"
 Set-Content -LiteralPath (Join-Path $output "preview-all-00-INDEX.html") -Value $index -Encoding UTF8
 
 $result = [ordered]@{
-    schemaVersion = 1
+    schemaVersion = 2
     mode = "PreviewAll"
     outcome = "succeeded"
     deliveryScope = "none"
@@ -101,6 +103,7 @@ $result = [ordered]@{
     smtpAcceptedCount = 0
     skippedCount = 0
     failedCount = 0
+    skipReasonCounts = [ordered]@{ inactiveOrDeleted = 0; missingEmail = 0; excludedUserId = 0; excludedEmail = 0 }
     generatedPreviewFiles = @(
         "preview-all-00-INDEX.html",
         "preview-all-01-manual-welcome.html",
