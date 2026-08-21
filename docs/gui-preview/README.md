@@ -23,12 +23,16 @@ affiliation or endorsement. The score snapshot date is shown inside each frame.
 Config also includes an in-memory custom text card demonstration immediately
 after Cache. Its toggle, border color/opacity, optional headings, and plain-text
 body feed the bundled newsletter frames without writing a configuration file.
-The Optional title field has an adjacent, locally packaged `add_reaction`
-selector for None, Celebrate, Construction, Rocket, Tickets, and Warning. The
-five user-supplied GIFs are copied without visual modification and are selected
-by a separate allowlisted synthetic asset ID; the title remains plain text and
-uppercase. A selection renders immediately after the title at 18 x 18 pixels
-in all six newsletter states, while None removes it.
+The Optional title field has a locally packaged `add_reaction` control inside
+its right edge. Its picker offers Celebrate, Construction, Rocket, Tickets,
+Warning, and Alert. The six user-supplied GIFs are copied without visual modification and
+are selected by a separate allowlisted synthetic asset ID; the title remains
+plain text and uppercase. The selected GIF replaces the empty-state reaction
+glyph inside the title field at 24 x 24 pixels, so the field presents its text
+and current visual choice together. The same selection renders immediately
+after the title at 18 x 18 pixels in all six newsletter states. Selecting the
+active GIF again removes it without a redundant None tile. Delete or Backspace
+also clears the selection while the in-field GIF control is focused.
 Synthetic saves consume the same typed, card-scoped impact plan shape as the
 production Manager, so presentation changes preserve fictional connection
 evidence, cache-only saves show a concise confirmation, and no-op saves run no

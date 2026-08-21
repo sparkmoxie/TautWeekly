@@ -320,6 +320,7 @@ foreach ($reference in $mediaReferences) {
 }
 
 $titleGifHashes = [ordered]@{
+    'alert.gif'        = '403A9C533D5807F8ED9A8DFDE0F1386AB05AE92147A4C586BCA24E8CCE34EE95'
     'celebrate.gif'    = '86879C45175F3901A8676D9B0BB5132C7A98B20A9F40487C21E4C896CE196616'
     'construction.gif' = '2266492FFE1F5FDF87B41C81388A00D5844598304E8FDC8157255D1998C9B788'
     'rocket.gif'       = 'D644D67D81484688452B5D4BC1F79E98333A33B4FE4C03283839DD9008F19A5F'
@@ -343,7 +344,7 @@ foreach ($entry in $titleGifHashes.GetEnumerator()) {
 
 foreach ($pattern in @(
     'CustomTextCardTitleGif.+synthetic-asset-id.+none',
-    'TITLE_GIF_IDS = new Set\(\["none", "celebrate", "construction", "rocket", "tickets", "warning"\]\)',
+    'TITLE_GIF_IDS = new Set\(\["none", "celebrate", "construction", "rocket", "tickets", "warning", "alert"\]\)',
     'const titleGifAssets = Object\.freeze',
     'Object\.hasOwn\(titleGifAssets, requestedTitleGifID\)',
     'assetInput\.type = "hidden"',
@@ -355,12 +356,24 @@ foreach ($pattern in @(
     'ArrowDown',
     '\["Enter", " "\]',
     'Escape',
+    'noTitleGifChoice',
+    'assetInput\.value === choice\.id \? noTitleGifChoice : choice',
+    'id: "alert", label: "Alert", file: "alert\.gif"',
+    'activate again to remove',
+    '\["Delete", "Backspace"\]\.includes\(event\.key\)',
     'data-material-symbol="add_reaction"|dataset\.materialSymbol = "add_reaction"',
     'data-fill="0"',
     'data-weight="400"',
     'data-grade="0"',
     'data-optical-size="24"',
-    'title-gif-trigger \.ui-icon\{width:24px;height:24px\}',
+    'title-gif-field\{position:relative',
+    'title-gif-field>input\{min-width:0;padding-right:3\.25rem\}',
+    'title-gif-trigger\{position:absolute;z-index:1;top:4px;right:4px',
+    'trigger\.replaceChildren\(\)',
+    'selectedImage\.className = "title-gif-trigger-image"',
+    'selectedImage\.width = 24',
+    'selectedImage\.height = 24',
+    'title-gif-trigger \.ui-icon,\.title-gif-trigger-image\{width:24px;height:24px\}',
     'custom-title-gif.+width="18" height="18" alt="" style="vertical-align:-4px;margin-left:6px"',
     'esc\(card\.title\.toUpperCase\(\)\)\}\$\{titleGif\}',
     'titleGifID',
@@ -369,6 +382,12 @@ foreach ($pattern in @(
     if ($guiPreviewCombined -notmatch $pattern) {
         throw "GUI Preview title-GIF selector contract is missing: $pattern"
     }
+}
+if ($guiPreviewApp -match '\{ id: "none", label: "None"[^\r\n]+titleGifChoices') {
+    throw 'GUI Preview title-GIF picker must not render a redundant None choice.'
+}
+if ($guiPreviewApp -match 'titleGifChoices = Object\.freeze\(\[[\s\S]*?\{ id: "none", label: "None"') {
+    throw 'GUI Preview title-GIF picker must expose only real GIF choices.'
 }
 
 foreach ($stateID in @('demo-welcome', 'demo-new', 'demo-history', 'demo-normal', 'demo-quiet', 'demo-warnings')) {

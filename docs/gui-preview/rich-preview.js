@@ -37,6 +37,7 @@
     rocket: "rocket.gif",
     tickets: "tickets.gif",
     warning: "warning.gif",
+    alert: "alert.gif",
   });
 
   const styles = `

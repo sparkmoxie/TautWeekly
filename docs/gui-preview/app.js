@@ -36,13 +36,14 @@ const state = {
 const byId = (id) => document.getElementById(id);
 const titleCase = (value) => String(value || "unknown").replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const guidedConfigFields = new Set(["IncludedLibraryIds", "ExcludedUserIds"]);
+const noTitleGifChoice = Object.freeze({ id: "none", label: "None", file: "" });
 const titleGifChoices = Object.freeze([
-  { id: "none", label: "None", file: "" },
   { id: "celebrate", label: "Celebrate", file: "celebrate.gif" },
   { id: "construction", label: "Construction", file: "construction.gif" },
   { id: "rocket", label: "Rocket", file: "rocket.gif" },
   { id: "tickets", label: "Tickets", file: "tickets.gif" },
   { id: "warning", label: "Warning", file: "warning.gif" },
+  { id: "alert", label: "Alert", file: "alert.gif" },
 ]);
 const activeSecretReveals = new Map();
 let pendingSecretReveal = null;
@@ -1143,7 +1144,8 @@ function attachTitleGifPicker(control, titleInput) {
   trigger.setAttribute("aria-haspopup", "listbox");
   trigger.setAttribute("aria-expanded", "false");
   trigger.setAttribute("aria-controls", "custom-title-gif-picker");
-  trigger.append(createMaterialIcon("add-reaction"));
+  const reactionIcon = createMaterialIcon("add-reaction");
+  trigger.append(reactionIcon);
 
   const picker = document.createElement("div");
   picker.className = "title-gif-picker";
@@ -1158,7 +1160,7 @@ function attachTitleGifPicker(control, titleInput) {
   const headingText = document.createElement("strong");
   headingText.textContent = "Title GIF";
   const headingHint = document.createElement("small");
-  headingHint.textContent = "Rendered at 18 x 18 px";
+  headingHint.textContent = "18 x 18 px · select again to remove";
   heading.append(headingText, headingHint);
   picker.append(heading);
 
@@ -1169,13 +1171,29 @@ function attachTitleGifPicker(control, titleInput) {
     assetInput.value = choice.id;
     trigger.classList.toggle("selected", choice.id !== "none");
     trigger.setAttribute("aria-label", choice.id === "none" ? "Choose an optional title GIF; none selected" : `Change optional title GIF; ${choice.label} selected`);
+    trigger.replaceChildren();
+    if (choice.file) {
+      const selectedImage = document.createElement("img");
+      selectedImage.className = "title-gif-trigger-image";
+      selectedImage.src = `media/${choice.file}`;
+      selectedImage.alt = "";
+      selectedImage.width = 24;
+      selectedImage.height = 24;
+      trigger.append(selectedImage);
+    } else {
+      trigger.append(reactionIcon);
+    }
+    let selectedButton = null;
     for (const button of optionButtons) {
       const selected = button.dataset.titleGifId === choice.id;
       button.classList.toggle("selected", selected);
       button.setAttribute("aria-selected", String(selected));
+      button.setAttribute("aria-label", selected ? `${button.dataset.titleGifLabel} selected; activate again to remove` : button.dataset.titleGifLabel);
       button.tabIndex = selected ? 0 : -1;
+      if (selected) selectedButton = button;
       if (selected && focus) button.focus();
     }
+    if (!selectedButton && optionButtons[0]) optionButtons[0].tabIndex = 0;
     const previewButton = document.querySelector(`[data-preview-id="${CSS.escape(state.selectedPreviewID)}"]`);
     if (previewButton) openPreview(state.selectedPreviewID, previewButton);
   };
@@ -1192,7 +1210,7 @@ function attachTitleGifPicker(control, titleInput) {
     picker.hidden = false;
     shell.classList.add("open");
     trigger.setAttribute("aria-expanded", "true");
-    optionButtons.find((button) => button.getAttribute("aria-selected") === "true")?.focus();
+    (optionButtons.find((button) => button.getAttribute("aria-selected") === "true") || optionButtons[0])?.focus();
   };
 
   for (const choice of titleGifChoices) {
@@ -1200,25 +1218,21 @@ function attachTitleGifPicker(control, titleInput) {
     option.type = "button";
     option.className = "title-gif-option";
     option.dataset.titleGifId = choice.id;
+    option.dataset.titleGifLabel = choice.label;
     option.setAttribute("role", "option");
     const thumbnail = document.createElement("span");
     thumbnail.className = "title-gif-thumbnail";
-    if (choice.file) {
-      const image = document.createElement("img");
-      image.src = `media/${choice.file}`;
-      image.alt = "";
-      image.width = 42;
-      image.height = 42;
-      thumbnail.append(image);
-    } else {
-      thumbnail.classList.add("none");
-      thumbnail.textContent = "None";
-    }
+    const image = document.createElement("img");
+    image.src = `media/${choice.file}`;
+    image.alt = "";
+    image.width = 42;
+    image.height = 42;
+    thumbnail.append(image);
     const optionLabel = document.createElement("span");
     optionLabel.textContent = choice.label;
     option.append(thumbnail, optionLabel);
     option.addEventListener("click", () => {
-      selectChoice(choice);
+      selectChoice(assetInput.value === choice.id ? noTitleGifChoice : choice);
       closePicker(true);
     });
     option.addEventListener("keydown", (event) => {
@@ -1226,7 +1240,7 @@ function attachTitleGifPicker(control, titleInput) {
       let target = -1;
       if (["Enter", " "].includes(event.key)) {
         event.preventDefault();
-        selectChoice(choice);
+        selectChoice(assetInput.value === choice.id ? noTitleGifChoice : choice);
         closePicker(true);
         return;
       }
@@ -1250,13 +1264,19 @@ function attachTitleGifPicker(control, titleInput) {
   picker.append(grid);
   trigger.addEventListener("click", () => picker.hidden ? openPicker() : closePicker());
   trigger.addEventListener("keydown", (event) => {
+    if (["Delete", "Backspace"].includes(event.key) && assetInput.value !== "none") {
+      event.preventDefault();
+      selectChoice(noTitleGifChoice);
+      closePicker();
+      return;
+    }
     if (["ArrowDown", "ArrowUp"].includes(event.key)) {
       event.preventDefault();
       openPicker();
     }
   });
   shell.append(trigger, picker, assetInput);
-  selectChoice(titleGifChoices.find((choice) => choice.id === selectedID) || titleGifChoices[0]);
+  selectChoice(titleGifChoices.find((choice) => choice.id === selectedID) || noTitleGifChoice);
 }
 
 function updateSecretToggle(field, input, button) {
