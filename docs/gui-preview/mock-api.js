@@ -6,7 +6,7 @@
   const BACKUP_LIMIT = 10;
   const OPERATION_HISTORY_LIMIT = 20;
   const DIAGNOSTIC_LIMIT = 20;
-  const TITLE_GIF_IDS = new Set(["none", "celebrate", "construction", "rocket", "tickets", "warning"]);
+  const TITLE_GIF_IDS = new Set(["none", "celebrate", "construction", "rocket", "tickets", "warning", "alert"]);
   const retainNewest = (items, maximum) => items.slice(0, maximum);
   let backupSequence = 20;
   let diagnosticSequence = 30;
