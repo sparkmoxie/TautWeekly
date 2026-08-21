@@ -172,6 +172,7 @@ foreach ($engine in $engines) {
                 CustomTextCardBorderColor = '#72aef7'
                 CustomTextCardBorderOpacity = 34
                 CustomTextCardTitle = 'Custom <Title>'
+                CustomTextCardTitleGif = 'celebrate'
                 CustomTextCardSubheading = 'Assessment & notes'
                 CustomTextCardBody = "Synthetic <notice> & safe`nSecond line"
             }
@@ -322,6 +323,8 @@ foreach ($engine in $engines) {
                 Assert-True ($previewHtml.Contains('>View &amp; Request &lt;Now&gt;</a>')) "$($engine.Name)/$scenario $($previewPath.Name) did not safely render the custom button label."
                 Assert-True ($previewHtml.Contains('class="email-card custom-text-card"')) "$($engine.Name)/$scenario $($previewPath.Name) did not render the enabled custom text card."
                 Assert-True ($previewHtml.Contains('CUSTOM &lt;TITLE&gt;') -and $previewHtml.Contains('Assessment &amp; notes')) "$($engine.Name)/$scenario $($previewPath.Name) did not safely render the custom text card headings."
+                Assert-True ($previewHtml.Contains('<span>CUSTOM &lt;TITLE&gt;</span><img src="../assets/celebrate.gif"')) "$($engine.Name)/$scenario $($previewPath.Name) did not append the selected title GIF in every newsletter state."
+                Assert-True ($previewHtml.Contains('width="18" height="18" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-left:6px;"')) "$($engine.Name)/$scenario $($previewPath.Name) changed the approved title GIF dimensions or alignment."
                 Assert-True ($previewHtml.Contains('Synthetic &lt;notice&gt; &amp; safe<br>Second line')) "$($engine.Name)/$scenario $($previewPath.Name) did not safely preserve custom text body formatting."
                 Assert-True ($previewHtml.Contains('border-color:rgba(114,174,247,0.34)')) "$($engine.Name)/$scenario $($previewPath.Name) lost the configured custom card border opacity."
                 $customCardIndex = $previewHtml.IndexOf('class="email-card custom-text-card"', [StringComparison]::Ordinal)
@@ -662,6 +665,12 @@ foreach ($engine in $engines) {
                 Assert-True ('DATA' -in $smtpCommands) "$($engine.Name)/$scenario SendTest did not submit an SMTP message."
                 Assert-True (Test-Path $smtpDataFile) "$($engine.Name)/$scenario SendTest did not preserve the captured MIME message."
                 $emailThemeArgs = @($smtpDataFile)
+                $emailThemeArgs += @(
+                    '--require-html', 'CUSTOM &lt;TITLE&gt;</span><img',
+                    '--require-html', 'cid:custom_title_celebrate',
+                    '--require-html', 'display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-left:6px;',
+                    '--require-cid-sha256', 'custom_title_celebrate=86879C45175F3901A8676D9B0BB5132C7A98B20A9F40487C21E4C896CE196616'
+                )
                 if ($scenario -eq 'rating-export-fallback') {
                     $emailThemeArgs += @(
                         # Windows PowerShell 5.1 strips embedded quote

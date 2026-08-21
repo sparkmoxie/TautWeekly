@@ -55,6 +55,9 @@ jobs:
       - name: Test bounded deleted-item cache on PowerShell 7
         shell: pwsh
         run: ./scripts/test-deleted-item-cache.ps1
+      - name: Test rolling configuration-backup retention on PowerShell 7
+        shell: pwsh
+        run: ./scripts/test-config-backup-retention.ps1
       - name: Test SMTP authentication protocol on PowerShell 7
         run: python3 scripts/test-smtp-transport.py --helper platforms/nas-docker/app/Smtp-Transport.ps1
       - name: Validate NAS Compose configuration
@@ -80,6 +83,9 @@ jobs:
       - name: Test bounded deleted-item cache on Windows PowerShell
         shell: powershell
         run: .\scripts\test-deleted-item-cache.ps1
+      - name: Test rolling configuration-backup retention on Windows PowerShell
+        shell: powershell
+        run: .\scripts\test-config-backup-retention.ps1
       - name: Test user-exclusion selection
         shell: powershell
         run: .\scripts\test-user-exclusions.ps1

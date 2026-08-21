@@ -36,6 +36,7 @@
   "CustomTextCardBorderColor": "#72aef7",
   "CustomTextCardBorderOpacity": 34,
   "CustomTextCardTitle": "",
+  "CustomTextCardTitleGif": "none",
   "CustomTextCardSubheading": "",
   "CustomTextCardBody": "",
   "IncludedLibraryIds": [],

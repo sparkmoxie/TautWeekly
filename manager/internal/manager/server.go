@@ -148,6 +148,9 @@ func New(options Options) (*Server, error) {
 	options.RuntimeRoot = filepath.Clean(runtimeRoot)
 	options.DataDir = filepath.Clean(dataDir)
 	options.RuntimeMode = normalizedRuntimeMode(options.RuntimeMode)
+	if err := normalizeConfigBackups(options.RuntimeRoot); err != nil {
+		return nil, fmt.Errorf("normalize configuration backups: %w", err)
+	}
 	if isManagedServiceRuntimeMode(options.RuntimeMode) {
 		options.RequireAuthentication = true
 	}
@@ -788,6 +791,8 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConfigBackups(w http.ResponseWriter, _ *http.Request) {
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
 	writeJSON(w, http.StatusOK, ListConfigBackups(s.options.RuntimeRoot))
 }
 

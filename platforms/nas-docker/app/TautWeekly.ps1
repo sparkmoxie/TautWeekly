@@ -688,6 +688,34 @@ function Get-BoundedCustomTextValue {
     return $text
 }
 
+function Get-CustomTextCardTitleGifAsset {
+    param([AllowNull()][object]$Value)
+
+    $id = ([string]$Value).Trim().ToLowerInvariant()
+    $definition = switch ($id) {
+        "celebrate"    { @{ Id = "celebrate"; File = "celebrate.gif"; Cid = "custom_title_celebrate" } }
+        "construction" { @{ Id = "construction"; File = "construction.gif"; Cid = "custom_title_construction" } }
+        "rocket"       { @{ Id = "rocket"; File = "rocket.gif"; Cid = "custom_title_rocket" } }
+        "tickets"      { @{ Id = "tickets"; File = "tickets.gif"; Cid = "custom_title_tickets" } }
+        "warning"      { @{ Id = "warning"; File = "warning.gif"; Cid = "custom_title_warning" } }
+        "alert"        { @{ Id = "alert"; File = "alert.gif"; Cid = "custom_title_alert" } }
+        default          { $null }
+    }
+    if ($null -eq $definition) {
+        return $null
+    }
+    $path = Join-Path $AssetsDir $definition.File
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        return $null
+    }
+    return [PSCustomObject]@{
+        Id   = $definition.Id
+        File = $definition.File
+        Cid  = $definition.Cid
+        Path = $path
+    }
+}
+
 function Get-ConfiguredCustomTextCard {
     $enabled = (
         $null -ne $Config.PSObject.Properties["CustomTextCardEnabled"] -and
@@ -715,11 +743,13 @@ function Get-ConfiguredCustomTextCard {
         34
     }
     $titleValue = if ($null -ne $Config.PSObject.Properties["CustomTextCardTitle"]) { $Config.CustomTextCardTitle } else { "" }
+    $titleGifValue = if ($null -ne $Config.PSObject.Properties["CustomTextCardTitleGif"]) { $Config.CustomTextCardTitleGif } else { "none" }
     $subheadingValue = if ($null -ne $Config.PSObject.Properties["CustomTextCardSubheading"]) { $Config.CustomTextCardSubheading } else { "" }
 
     return [PSCustomObject]@{
         Enabled       = $true
         Title         = Get-BoundedCustomTextValue -Value $titleValue -MaximumLength 120 -AllowLineBreaks $false
+        TitleGif      = Get-CustomTextCardTitleGifAsset -Value $titleGifValue
         Subheading    = Get-BoundedCustomTextValue -Value $subheadingValue -MaximumLength 200 -AllowLineBreaks $false
         Body          = $body
         BorderColor   = $borderColor.ToLowerInvariant()
@@ -728,6 +758,11 @@ function Get-ConfiguredCustomTextCard {
 }
 
 function Get-CustomTextCardTableHtml {
+    param(
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode = "Preview"
+    )
+
     $card = Get-ConfiguredCustomTextCard
     if (-not $card.Enabled) {
         return ""
@@ -735,7 +770,12 @@ function Get-CustomTextCardTableHtml {
 
     $titleHtml = ""
     if (-not [string]::IsNullOrWhiteSpace($card.Title)) {
-        $titleHtml = '<div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">' + (HtmlEncode $card.Title.ToUpperInvariant()) + '</div>'
+        $titleGifHtml = ""
+        if ($null -ne $card.TitleGif) {
+            $source = if ($ImageMode -eq "Email") { "cid:$($card.TitleGif.Cid)" } else { "../assets/$($card.TitleGif.File)" }
+            $titleGifHtml = '<img src="' + (HtmlEncode $source) + '" alt="" width="18" height="18" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-left:6px;">'
+        }
+        $titleHtml = '<div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;"><span>' + (HtmlEncode $card.Title.ToUpperInvariant()) + '</span>' + $titleGifHtml + '</div>'
     }
     $subheadingHtml = ""
     if (-not [string]::IsNullOrWhiteSpace($card.Subheading)) {
@@ -6383,7 +6423,7 @@ function Build-NewsletterHtml {
         ("&zwnj;&nbsp;" * 28)
     }
 
-    $customTextCardTable = Get-CustomTextCardTableHtml
+    $customTextCardTable = Get-CustomTextCardTableHtml -ImageMode $ImageMode
     $headerCustomTextCardBlock = ""
     $welcomeCustomTextCardBlock = ""
     if (-not [string]::IsNullOrWhiteSpace($customTextCardTable)) {
@@ -7643,6 +7683,12 @@ function Send-NewsletterMail {
             @{ Path = (Join-Path $AssetsDir "lockinfo.gif"); Cid = "icon_lockinfo"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "watchlist.gif"); Cid = "icon_binge"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "popcorn.gif"); Cid = "icon_popcorn"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "celebrate.gif"); Cid = "custom_title_celebrate"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "construction.gif"); Cid = "custom_title_construction"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "rocket.gif"); Cid = "custom_title_rocket"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "tickets.gif"); Cid = "custom_title_tickets"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "warning.gif"); Cid = "custom_title_warning"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "alert.gif"); Cid = "custom_title_alert"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "rt_ripe.png"); Cid = "rt_ripe"; MediaType = "image/png" },
             @{ Path = (Join-Path $AssetsDir "rt_rotten.png"); Cid = "rt_rotten"; MediaType = "image/png" },
             @{ Path = (Join-Path $AssetsDir "rt_upright.png"); Cid = "rt_upright"; MediaType = "image/png" },

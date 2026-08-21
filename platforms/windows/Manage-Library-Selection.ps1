@@ -7,6 +7,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'Library-Selection.ps1')
+. (Join-Path $PSScriptRoot 'Configuration-Backups.ps1')
 
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
     throw "Config file not found: $ConfigPath. Run the primary setup first."
@@ -47,8 +48,7 @@ if (-not $changed) {
     exit 0
 }
 
-$backupPath = Join-Path (Split-Path -Parent $ConfigPath) ("config.backup.{0}.json" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
-Copy-Item -LiteralPath $ConfigPath -Destination $backupPath -Force
+$backupPath = New-TautWeeklyConfigurationBackup -ConfigPath $ConfigPath -Directory (Split-Path -Parent $ConfigPath)
 
 if ($null -eq $configuredProperty) {
     $config | Add-Member -MemberType NoteProperty -Name 'IncludedLibraryIds' -Value @($updated)

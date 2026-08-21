@@ -174,6 +174,7 @@ func configDefinitions() []configDefinition {
 		{Name: "CustomTextCardBorderColor", Label: "Border color", Group: "Custom text card", Type: "color", Default: "#72aef7", Help: "Choose the card accent color. Border opacity controls whether it is visible."},
 		{Name: "CustomTextCardBorderOpacity", Label: "Border opacity", Group: "Custom text card", Type: "range", Default: int64(34), Min: opacityMin, Max: opacityMax, Help: "Set to 0% for no border."},
 		{Name: "CustomTextCardTitle", Label: "Optional title", Group: "Custom text card", Type: "text", Default: "", Max: customTitleMax, Help: "Gold uppercase label using the Welcome Aboard title size."},
+		{Name: "CustomTextCardTitleGif", Label: "Optional title GIF", Group: "Custom text card", Type: "asset-id", Default: "none", Options: []string{"celebrate", "construction", "rocket", "tickets", "warning", "alert"}, Help: "Optional allowlisted GIF displayed beside the uppercase title."},
 		{Name: "CustomTextCardSubheading", Label: "Optional subheading", Group: "Custom text card", Type: "text", Default: "", Max: customSubheadingMax, Help: "Large white heading using the Welcome Aboard heading size."},
 		{Name: "CustomTextCardBody", Label: "Card body (required when enabled)", Group: "Custom text card", Type: "textarea", Default: "", Max: customBodyMax, Help: "Plain text only. Line breaks are preserved and HTML is always escaped."},
 		{Name: "IncludedLibraryIds", Label: "Included library IDs", Group: "Advanced", Type: "string-list", Help: "Comma-separated Tautulli section IDs. Empty retains legacy all-library scope.", Default: []string{}},
@@ -523,6 +524,9 @@ func secretConfigured(values map[string]any, name string) bool {
 }
 
 func editorValue(value any, definition configDefinition) any {
+	if definition.Type == "asset-id" {
+		return normalizeCustomTextCardTitleGif(value)
+	}
 	if definition.Type == "string-list" || definition.Type == "email-list" {
 		result := []string{}
 		if values, ok := value.([]any); ok {
@@ -607,6 +611,13 @@ func parseAndValidateConfigValue(raw json.RawMessage, definition configDefinitio
 			return nil, "Enter a text value."
 		}
 		text = strings.TrimSpace(text)
+		if definition.Type == "asset-id" {
+			normalized := strings.ToLower(text)
+			if normalized == "none" || containsFold(definition.Options, normalized) {
+				return normalized, ""
+			}
+			return nil, "Choose one of the available title GIFs or clear the selection."
+		}
 		if definition.Required && text == "" {
 			return nil, "This field is required."
 		}
@@ -657,6 +668,20 @@ func parseAndValidateConfigValue(raw json.RawMessage, definition configDefinitio
 		}
 		return text, ""
 	}
+}
+
+func normalizeCustomTextCardTitleGif(value any) string {
+	text, ok := value.(string)
+	if !ok {
+		return "none"
+	}
+	text = strings.ToLower(strings.TrimSpace(text))
+	for _, allowed := range []string{"celebrate", "construction", "rocket", "tickets", "warning", "alert"} {
+		if text == allowed {
+			return allowed
+		}
+	}
+	return "none"
 }
 
 func validateConfigRelationships(values map[string]any, fieldErrors map[string]string) {
@@ -758,6 +783,9 @@ func writeConfigAtomically(root string, previous []byte, existed bool, content [
 		backup = "config.backup." + now.UTC().Format("20060102-150405.000000000Z") + ".json"
 		if err := writePrivateFile(filepath.Join(root, backup), previous, os.O_CREATE|os.O_EXCL); err != nil {
 			return "", fmt.Errorf("create configuration backup: %w", err)
+		}
+		if err := normalizeConfigBackups(root); err != nil {
+			return "", fmt.Errorf("apply configuration backup retention: %w", err)
 		}
 	}
 

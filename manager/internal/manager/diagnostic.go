@@ -13,8 +13,8 @@ import (
 
 const (
 	diagnosticSchemaVersion = 1
-	diagnosticHistoryLimit  = 200
-	diagnosticHistoryAge    = 30 * 24 * time.Hour
+	diagnosticHistoryLimit  = 20
+	diagnosticRetention     = "count-only-fifo"
 	maximumDiagnosticLine   = 4 << 10
 )
 
@@ -107,9 +107,9 @@ type DiagnosticEvent struct {
 }
 
 type DiagnosticHistory struct {
-	Events         []DiagnosticEvent `json:"events"`
-	MaximumEntries int               `json:"maximumEntries"`
-	RetentionDays  int               `json:"retentionDays"`
+	Events          []DiagnosticEvent `json:"events"`
+	MaximumEntries  int               `json:"maximumEntries"`
+	RetentionPolicy string            `json:"retentionPolicy"`
 }
 
 type diagnosticStore struct {
@@ -122,7 +122,11 @@ func newDiagnosticStore(dataDir string, now func() time.Time) *diagnosticStore {
 	if now == nil {
 		now = time.Now
 	}
-	return &diagnosticStore{path: filepath.Join(dataDir, "diagnostic-history.jsonl"), now: now}
+	store := &diagnosticStore{path: filepath.Join(dataDir, "diagnostic-history.jsonl"), now: now}
+	store.mu.Lock()
+	_ = store.pruneLocked()
+	store.mu.Unlock()
+	return store
 }
 
 func (s *diagnosticStore) Record(area, outcome, code string) {
@@ -156,9 +160,9 @@ func (s *diagnosticStore) History() DiagnosticHistory {
 	defer s.mu.Unlock()
 	_ = s.pruneLocked()
 	return DiagnosticHistory{
-		Events:         s.readLocked(),
-		MaximumEntries: diagnosticHistoryLimit,
-		RetentionDays:  int(diagnosticHistoryAge / (24 * time.Hour)),
+		Events:          s.readLocked(),
+		MaximumEntries:  diagnosticHistoryLimit,
+		RetentionPolicy: diagnosticRetention,
 	}
 }
 
@@ -185,13 +189,9 @@ func (s *diagnosticStore) readLocked() []DiagnosticEvent {
 
 func (s *diagnosticStore) pruneLocked() error {
 	events := s.readLocked()
-	cutoff := s.now().UTC().Add(-diagnosticHistoryAge)
 	kept := make([]DiagnosticEvent, 0, len(events))
 	for _, event := range events {
-		recorded, err := time.Parse(time.RFC3339, event.RecordedAtUTC)
-		if err == nil && !recorded.Before(cutoff) {
-			kept = append(kept, event)
-		}
+		kept = append(kept, event)
 		if len(kept) == diagnosticHistoryLimit {
 			break
 		}

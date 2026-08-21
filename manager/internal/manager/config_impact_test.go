@@ -59,6 +59,7 @@ func TestEveryConfigFieldHasExplicitSaveImpact(t *testing.T) {
 		"CustomTextCardBorderColor":     {category: "custom-text-card", preview: true},
 		"CustomTextCardBorderOpacity":   {category: "custom-text-card", preview: true},
 		"CustomTextCardTitle":           {category: "custom-text-card", preview: true},
+		"CustomTextCardTitleGif":        {category: "custom-text-card", preview: true},
 		"CustomTextCardSubheading":      {category: "custom-text-card", preview: true},
 		"CustomTextCardBody":            {category: "custom-text-card", preview: true},
 		"IncludedLibraryIds":            {category: "libraries", preview: true},

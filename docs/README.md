@@ -41,7 +41,8 @@ Every Quickstart follows the same GUI-first path: install the package, open and
 pair the Manager where required, complete **Config**, run the non-sending
 verification, review all six **Previews**, send only to **TestEmail**, and then
 opt into **Schedule**. Config can add an optional custom text card before the
-release-count/date block; its body is required whenever the card is enabled.
+release-count/date block; its body is required whenever the card is enabled,
+and its uppercase title can append one of six packaged local GIFs.
 The [configuration reference](CONFIGURATION.md#optional-custom-text-card) and
 each platform README document the complete options. Commands in the guides are
 reserved for installation, bootstrap, expert operation, or recovery.

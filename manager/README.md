@@ -24,9 +24,11 @@ Current capabilities:
 - minimal unauthenticated liveness;
 - normalized Windows Task Scheduler status;
 - secret-redacted configuration reads;
-- schema-driven Windows configuration editing;
+- schema-driven cross-package configuration editing, including a separate
+  allowlisted six-choice local GIF ID beside the optional custom-card title;
 - optimistic revision checks, server-side validation, and atomic saves;
-- private timestamped backups for existing configurations;
+- private timestamped backups for existing configurations, with startup and
+  write-time normalization to the newest 10 Manager or legacy expert backups;
 - four revision-scoped setup results that persist across refreshes and Manager
   restarts, remain visible on Config, and roll up into a Dashboard Config
   status card;
@@ -206,8 +208,8 @@ and a support code when needed. Categories distinguish package-lock,
 configuration, Tautulli, Direct Plex, asset, HTML-render, preview-output, SMTP,
 and generic renderer stages; they never contain an exception message, path,
 address, media title, or identity. The
-local history is bounded to 90 days or 500 completed operations, with the
-newest 50 available to the authenticated UI.
+local history uses count-only FIFO retention of the newest 20 completed
+operations, all available to the authenticated UI.
 
 Service-package Manager operations make one non-blocking attempt at the shared
 newsletter lock and report `operation-busy` immediately when a scheduled,
@@ -221,8 +223,8 @@ paths, commands, and raw helper output.
 
 Configuration diagnostics are stored privately in
 `.manager-data/diagnostic-history.jsonl` and shown only inside the local
-Manager under Settings. They retain at most 200 sanitized events for 30
-days. Configuration values, URLs, IP addresses, email addresses, user
+Manager under Settings. They use count-only FIFO retention of the newest 20
+sanitized events. Configuration values, URLs, IP addresses, email addresses, user
 identities, credentials, media data, raw responses, and command output are not
 accepted by the diagnostic schema.
 
