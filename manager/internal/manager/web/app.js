@@ -60,6 +60,8 @@ const activeSecretReveals = new Map();
 let pendingSecretReveal = null;
 let sessionRecoveryPromise = null;
 let updateInstallPollTimer;
+let deliveryStatusPollTimer;
+let deliveryStatusPollInFlight = false;
 let updateInstallExpectedVersion = "";
 let updateInstallSawDisconnect = false;
 let updateInstallPollDeadline = 0;
@@ -542,6 +544,7 @@ function retainedSetupCheckState(name) {
 
 function renderStatus() {
   const snapshot = state.status;
+  if (!snapshot) return;
   const overall = snapshot.overall;
   const healthy = overall === "healthy";
   const blocked = overall === "blocked";
@@ -568,12 +571,14 @@ function renderStatus() {
   setText("schedule-copy", embeddedSchedule
     ? scheduleProbeFailed ? "The embedded scheduler heartbeat is unavailable or stale." : "Read from the package-managed scheduler heartbeat and persistent configuration."
     : scheduleProbeFailed ? "Windows Task Scheduler status could not be verified." : !scheduleOwned ? "A same-named task exists but does not match this installation." : snapshot.schedule.supported ? "Read directly from Windows Task Scheduler." : "Schedule management is unavailable on this platform.");
-  setText("last-attempt", formatDate(snapshot.delivery.lastAttemptUtc));
-  setText("last-result", titleCase(snapshot.delivery.result));
+  const deliveryRunning = productionDeliveryIsRunning(snapshot);
+  const deliveryAttemptUTC = productionDeliveryStartedAt(snapshot);
+  setText("last-attempt", formatDate(deliveryAttemptUTC));
+  setSwappingText("last-result", deliveryRunning ? "Running" : titleCase(snapshot.delivery.result));
   setText("last-success", formatDate(snapshot.delivery.lastSuccessUtc));
-  setText("timeline-last-attempt", formatDate(snapshot.delivery.lastAttemptUtc));
+  setText("timeline-last-attempt", formatDate(deliveryAttemptUTC));
   const rendererEvidence = snapshot.delivery.evidence === "renderer-result";
-  setText("last-accepted-count", rendererEvidence ? String(snapshot.delivery.smtpAcceptedCount || 0) : "Not recorded");
+  setText("last-accepted-count", deliveryRunning ? "In progress" : rendererEvidence ? String(snapshot.delivery.smtpAcceptedCount || 0) : "Not recorded");
   const deliveryFailureCopy = rendererEvidence && snapshot.delivery.errorCategory && snapshot.delivery.errorCategory !== "no-eligible-recipients"
     ? `${rendererFailureCopy(snapshot.delivery.errorCategory, "")}${smtpFailureEvidenceCopy(snapshot.delivery.smtpFailure)}`
     : "";
@@ -583,21 +588,58 @@ function renderStatus() {
   setText("timeline-last-copy", rendererEvidence
     ? `${snapshot.delivery.smtpAcceptedCount || 0} accepted by SMTP · ${snapshot.delivery.skippedCount || 0} skipped · ${snapshot.delivery.failedCount || 0} failed.`
     : "No sanitized renderer result has been recorded.");
-  if (rendererEvidence) {
+  if (deliveryRunning) {
+    setText("delivery-copy", "A production delivery is running. SMTP acceptance will appear automatically when the run finishes.");
+    setText("timeline-last-copy", "Production delivery is in progress. Sanitized result evidence will appear automatically when the run finishes.");
+  }
+  if (rendererEvidence && !deliveryRunning) {
     const deliveryPrefix = snapshot.delivery.errorCategory === "no-eligible-recipients"
       ? "No eligible production recipients; no message was accepted by SMTP."
       : byId("timeline-last-copy").textContent;
     setText("timeline-last-copy", `${deliveryPrefix}${skipReasonCopy(snapshot.delivery.skipReasonCounts)}${snapshot.delivery.errorCategory && snapshot.delivery.errorCategory !== "no-eligible-recipients" ? ` ${rendererFailureCopy(snapshot.delivery.errorCategory, "")}${smtpFailureEvidenceCopy(snapshot.delivery.smtpFailure)}` : ""}`);
   }
-  const deliveryTone = snapshot.delivery.result === "smtp-accepted" ? "good" : snapshot.delivery.result === "failed" ? "bad" : "neutral";
-  setChip("delivery-chip", snapshot.delivery.result === "not-recorded" ? "No history" : titleCase(snapshot.delivery.result), deliveryTone);
+  const deliveryTone = deliveryRunning ? "pending" : snapshot.delivery.result === "smtp-accepted" ? "good" : snapshot.delivery.result === "failed" ? "bad" : "neutral";
+  setChip("delivery-chip", deliveryRunning ? "Running" : snapshot.delivery.result === "not-recorded" ? "No history" : titleCase(snapshot.delivery.result), deliveryTone);
+  byId("delivery-status-icon").classList.toggle("delivery-icon-running", deliveryRunning);
   renderIntegrationStatus();
   renderDashboardConfigStatus();
   setText("next-run", formatDate(snapshot.schedule.nextRunLocal));
   setText("next-run-utc", snapshot.schedule.nextRunUtc ? `UTC: ${formatDate(snapshot.schedule.nextRunUtc)}` : embeddedSchedule ? "The embedded scheduler has not reported a valid upcoming run." : "Task Scheduler has not reported an upcoming run.");
   setText("preview-count", snapshot.previewSummary);
+  setTimelineCardState("timeline-upcoming-card", "timeline-ready", scheduleHasUpcomingRun(snapshot));
+  setTimelineCardState("timeline-last-attempt-card", "timeline-success", rendererEvidence && !deliveryRunning && snapshot.delivery.result === "smtp-accepted");
+  setTimelineCardState("timeline-previews-card", "timeline-ready", state.previews.length > 0);
   setText("sidebar-platform", `${titleCase(snapshot.platform)} · ${isNAS() ? "trusted LAN" : isLinuxService() ? "host loopback" : isMacDocker() ? "Mac loopback" : "local only"}`);
   setText("update-platform", titleCase(snapshot.platform));
+  manageDeliveryStatusPolling();
+}
+
+function productionDeliveryOperationIsActive() {
+  return state.operation?.type === "send-all" && operationIsActive(state.operation);
+}
+
+function productionDeliveryIsRunning(snapshot = state.status) {
+  return Boolean(snapshot?.delivery?.running || productionDeliveryOperationIsActive());
+}
+
+function productionDeliveryStartedAt(snapshot = state.status) {
+  return productionDeliveryOperationIsActive()
+    ? state.operation?.startedAtUtc || snapshot?.delivery?.lastAttemptUtc
+    : snapshot?.delivery?.lastAttemptUtc;
+}
+
+function scheduleHasUpcomingRun(snapshot) {
+  const schedule = snapshot?.schedule;
+  if (!schedule?.installed || !schedule.enabled || !schedule.owned) return false;
+  const embedded = schedule.provider?.startsWith("embedded-");
+  if (embedded ? schedule.state !== "running" : schedule.state !== "ready") return false;
+  const next = new Date(schedule.nextRunUtc || schedule.nextRunLocal || "");
+  const observed = new Date(snapshot.observedAtUtc || Date.now());
+  return !Number.isNaN(next.getTime()) && !Number.isNaN(observed.getTime()) && next.getTime() > observed.getTime();
+}
+
+function setTimelineCardState(id, className, active) {
+  byId(id).classList.toggle(className, Boolean(active));
 }
 
 function renderDashboardGreeting(observedAtUtc) {
@@ -2695,6 +2737,7 @@ async function startManualSendOperation() {
     state.operationStarting = false;
     state.operationStartingType = "";
     renderOperations();
+    renderStatus();
     manageOperationPolling();
   }
 }
@@ -2717,6 +2760,29 @@ async function cancelPreviewOperation() {
 }
 
 let operationPollTimer;
+
+function manageDeliveryStatusPolling() {
+  clearTimeout(deliveryStatusPollTimer);
+  if (document.hidden || byId("app-shell").hidden || !state.status) return;
+  deliveryStatusPollTimer = setTimeout(pollDeliveryStatus, productionDeliveryIsRunning() ? 1500 : 5000);
+}
+
+async function pollDeliveryStatus() {
+  clearTimeout(deliveryStatusPollTimer);
+  if (deliveryStatusPollInFlight || document.hidden || byId("app-shell").hidden || !state.status) return;
+  deliveryStatusPollInFlight = true;
+  try {
+    state.status = await request("/api/v1/status");
+    renderStatus();
+    if (state.editor) renderSchedule();
+  } catch (error) {
+    if (error.status === 401) showAuthentication();
+    else deliveryStatusPollTimer = setTimeout(pollDeliveryStatus, 5000);
+  } finally {
+    deliveryStatusPollInFlight = false;
+  }
+}
+
 function manageOperationPolling() {
   clearTimeout(operationPollTimer);
   if (!operationIsActive(state.operation)) return;
@@ -2730,6 +2796,7 @@ async function pollOperation() {
     state.operation = response.current || null;
     if (operationIsActive(state.operation)) {
       renderOperations();
+      renderStatus();
       manageOperationPolling();
       return;
     }
@@ -3632,6 +3699,7 @@ function showAuthentication() {
   renderUserComboboxes();
   clearTimeout(operationPollTimer);
   clearTimeout(schedulePollTimer);
+  clearTimeout(deliveryStatusPollTimer);
   byId("app-shell").hidden = true;
   byId("auth-shell").hidden = false;
   byId("pair-form").hidden = true;
@@ -3767,7 +3835,14 @@ byId("secret-reveal-dialog").addEventListener("close", () => {
   byId("secret-reveal-message").textContent = "";
   pendingSecretReveal = null;
 });
-document.addEventListener("visibilitychange", () => { if (document.hidden) clearAllRevealedSecrets(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    clearAllRevealedSecrets();
+    clearTimeout(deliveryStatusPollTimer);
+    return;
+  }
+  if (!byId("app-shell").hidden && state.status) void pollDeliveryStatus();
+});
 materializeMaterialIcons();
 initializeMaskedInputToggles();
 document.querySelectorAll("[data-user-combobox]").forEach(initializeUserCombobox);

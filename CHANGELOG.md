@@ -6,6 +6,31 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-08-21
+
+### Changed
+
+- Added passive authenticated dashboard polling so scheduled and manually
+  started production delivery state updates without pressing Refresh on
+  Windows, NAS/Docker, macOS Docker, native Linux, and FreeBSD.
+- Added conservative gold ready-state glows to valid upcoming-run and
+  generated-preview timeline cards, plus a green successful-run glow to the
+  latest application-attempt card.
+
+### Fixed
+
+- Replaced Windows Task Scheduler's active `267009` result with an explicit
+  blue `Running` delivery state and prevented an older successful renderer
+  result from masking a newer active run.
+- Made the Delivery card, badge, and mail icon transition through a blue
+  running pulse and return automatically to the existing green SMTP-accepted
+  state when sanitized completion evidence appears. Reduced-motion settings
+  retain the state colors without animation.
+- Kept long container and native-service deliveries visibly running after the
+  scheduler heartbeat pauses for the synchronous send. A fresh package
+  supervisor heartbeat now confirms that the scheduler's persistent running
+  state is live rather than stale.
+
 ## [0.19.1] - 2026-08-21
 
 ### Fixed

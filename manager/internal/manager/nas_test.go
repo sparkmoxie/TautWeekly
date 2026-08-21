@@ -318,4 +318,51 @@ func TestNASStatusUsesEmbeddedSchedulerHeartbeatAndState(t *testing.T) {
 	if snapshot.Delivery.Evidence != "embedded-scheduler" || snapshot.Delivery.Result != "success" || snapshot.Delivery.ExitCode == nil || *snapshot.Delivery.ExitCode != 0 {
 		t.Fatalf("embedded scheduler delivery state was not represented truthfully: %+v", snapshot.Delivery)
 	}
+
+	if err := writePrivateJSON(filepath.Join(runtimeRoot, "scheduler-state.json"), containerSchedulerState{
+		LastAttemptUTC: now.Format(time.RFC3339),
+		LastSuccessUTC: now.Add(-time.Hour).Format(time.RFC3339),
+		LastResult:     "running",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePrivateJSON(filepath.Join(runtimeRoot, "scheduler-heartbeat.json"), map[string]any{
+		"Utc":        now.Add(-2 * time.Minute).Format(time.RFC3339),
+		"Local":      now.Add(-2 * time.Minute).Format(time.RFC3339),
+		"TimeZoneId": "Etc/UTC",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePrivateJSON(filepath.Join(runtimeRoot, "service-heartbeat.json"), serviceSupervisorHeartbeat{
+		UTC: now.Format(time.RFC3339),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	writeRendererResultFixture(t, runtimeRoot, rendererResult{
+		SchemaVersion:     2,
+		Mode:              "SendAll",
+		Outcome:           "succeeded",
+		DeliveryScope:     "production",
+		StartedAtUTC:      now.Add(-time.Hour).Format(time.RFC3339Nano),
+		FinishedAtUTC:     now.Add(-50 * time.Minute).Format(time.RFC3339Nano),
+		DurationMS:        600000,
+		SMTPAcceptedCount: 7,
+	})
+	snapshot = CollectStatus(t.Context(), Options{
+		DataDir:        t.TempDir(),
+		TautWeeklyRoot: t.TempDir(),
+		RuntimeRoot:    runtimeRoot,
+		RuntimeMode:    runtimeModeNAS,
+		Version:        "test",
+		Now:            func() time.Time { return now },
+	})
+	if !snapshot.Delivery.Running || snapshot.Delivery.Result != "running" || snapshot.Delivery.Evidence != "embedded-scheduler" || snapshot.Delivery.LastAttemptUTC != now.Format(time.RFC3339) {
+		t.Fatalf("active embedded delivery was hidden by stale renderer evidence: %+v", snapshot.Delivery)
+	}
+	if snapshot.Schedule.State != "running" || snapshot.Runtime.Scheduler != "running" {
+		t.Fatalf("fresh supervisor heartbeat did not preserve active scheduler state: schedule=%+v runtime=%+v", snapshot.Schedule, snapshot.Runtime)
+	}
+	if snapshot.Delivery.SMTPAcceptedCount != 0 || snapshot.Delivery.ExitCode != nil {
+		t.Fatalf("active embedded delivery retained stale terminal evidence: %+v", snapshot.Delivery)
+	}
 }
