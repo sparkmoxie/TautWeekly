@@ -231,6 +231,15 @@ refresh before reading the live roster. New eligible users are included unless
 explicitly excluded; an unconfirmed refresh stops before SMTP with sanitized
 guidance.
 
+Direct configured SMTP remains the standard path. New configurations use
+`SendDelaySeconds=30` and `TestSendDelaySeconds=10`. SendAll stops after an
+authentication, temporary provider/service, batch-wide, transport, or
+ambiguous-DATA failure instead of reconnecting for every remaining recipient;
+an address/mailbox-specific RCPT rejection may continue after the configured
+delay. Avoid
+Test All or a manual production run near the scheduled batch, and stop retries
+during a provider account lock.
+
 Manager Config (or the `manage-libraries` expert fallback) queries active
 movie/TV libraries and saves stable section IDs in `IncludedLibraryIds`. This global scope is applied
 before releases, quiet mode, Trending, Binge Champion, and personal statistics

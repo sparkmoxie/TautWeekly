@@ -248,6 +248,11 @@ func (r *fixturePreviewRunner) RunSendAll(ctx context.Context, _, configPath, re
 	if r.sendAllNoEligible {
 		result.ErrorCategory = "no-eligible-recipients"
 	}
+	if r.sendAllPartial {
+		result.SchemaVersion = 3
+		result.ErrorCategory = "smtp-recipient-rejected"
+		result.SMTPFailure = &SMTPFailureEvidence{Category: "smtp-recipient-rejected", Stage: "rcpt-to", ResponseCode: 550, ResponseClass: 5, BatchFatal: false, Acceptance: "not-attempted"}
+	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		return 42, err
@@ -520,7 +525,7 @@ func TestSendAllOperationRetainsStructuredPartialDeliveryEvidence(t *testing.T) 
 		t.Fatal(err)
 	}
 	finished := waitForOperationState(t, coordinator, "partial")
-	if finished.Outcome != "partial" || finished.ExitCode == nil || *finished.ExitCode != 2 || finished.SMTPAcceptedCount != 3 || finished.SkippedCount != 1 || finished.FailedCount != 1 || finished.SupportCode == "" {
+	if finished.Outcome != "partial" || finished.ExitCode == nil || *finished.ExitCode != 2 || finished.SMTPAcceptedCount != 3 || finished.SkippedCount != 1 || finished.FailedCount != 1 || finished.ErrorCategory != "smtp-recipient-rejected" || finished.SMTPFailure == nil || finished.SMTPFailure.ResponseCode != 550 || finished.SupportCode == "" {
 		t.Fatalf("unexpected partial production result: %+v", finished)
 	}
 }

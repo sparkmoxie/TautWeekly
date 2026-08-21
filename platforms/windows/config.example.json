@@ -20,7 +20,7 @@
   "SmtpAuthenticationMethod": "Auto",
   "SmtpTimeoutSeconds": 30,
   "TestEmail": "you@example.com",
-  "TestSendDelaySeconds": 2,
+  "TestSendDelaySeconds": 10,
   "ScheduleDay": "Friday",
   "ScheduleTime": "09:30",
   "ScheduledTaskName": "TautWeekly for Plex Newsletter",
@@ -44,5 +44,5 @@
   "ExcludedUserIds": [],
   "ExcludedEmails": [],
   "RecentAccessDays": 7,
-  "SendDelaySeconds": 10
+  "SendDelaySeconds": 30
 }

@@ -54,6 +54,23 @@ If Proton reports `Sender address rejected: not logged in`, update to a build
 containing the explicit SMTP authentication transport, then regenerate or
 re-enter the token if the error remains.
 
+## SMTP provider temporarily locks or limits the account
+
+- Stop Test All, manual production sends, and repeated checks. Do not run them
+  near the scheduled batch.
+- Use `SendDelaySeconds=30` for production and `TestSendDelaySeconds=10` for
+  controlled Test All delivery. Spacing reduces cadence but cannot override
+  provider account, quota, reputation, or abuse controls.
+- v0.19.1 and newer stop the batch after authentication failure, a temporary
+  4xx response such as `421`, a batch-wide rejection, transport failure, or
+  unknown final-DATA acceptance. The Manager shows only fixed sanitized stage,
+  numeric response, and recovery guidance.
+- Follow the provider notice and allow a quiet period. A short lock may clear
+  quickly; if it does not, wait up to 24 hours before using the provider's
+  normal account-recovery process.
+- Do not share provider response text, addresses, account data, configuration,
+  credentials, or raw logs in an issue.
+
 ## User exclusions cannot be loaded
 
 Manager Config preserves exclusions from an existing configuration when the

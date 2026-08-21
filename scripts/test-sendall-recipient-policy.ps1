@@ -19,6 +19,12 @@ function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 
+function Get-ScenarioValue([object]$Scenario, [string]$Name, [object]$Default) {
+    $property = $Scenario.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $Default }
+    return $property.Value
+}
+
 function Get-FreeTcpPort {
     $listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0)
     $listener.Start()
@@ -56,6 +62,9 @@ $scenarios = @(
         Skipped = 0
         Failed = 0
         Reasons = @(0, 0, 0, 0)
+        SendDelay = 1
+        MinimumConnectionGapMilliseconds = 800
+        ExpectedConnections = 2
     },
     [PSCustomObject]@{
         Name = 'stale-manager-discovery-new-user'
@@ -129,11 +138,144 @@ $scenarios = @(
         FreshAccessState = $false
         ExitCode = 2
         Outcome = 'partial'
-        ErrorCategory = ''
+        ErrorCategory = 'smtp-recipient-rejected'
         Accepted = 1
         Skipped = 0
         Failed = 1
         Reasons = @(0, 0, 0, 0)
+        SmtpFailureCategory = 'smtp-recipient-rejected'
+        SmtpFailureStage = 'rcpt-to'
+        SmtpFailureCode = 550
+        SmtpFailureBatchFatal = $false
+        SmtpFailureAcceptance = 'not-attempted'
+        ExpectedConnections = 2
+    },
+    [PSCustomObject]@{
+        Name = 'recipient-rejection-continues-spaced'
+        Users = @(
+            (New-VirtualUser -Id '1' -Email 'viewer1@example.com'),
+            (New-VirtualUser -Id '2' -Email 'viewer2@example.com'),
+            (New-VirtualUser -Id '3' -Email 'viewer3@example.com')
+        )
+        ExcludedUserIds = @()
+        ExcludedEmails = @()
+        RejectRecipient = 'viewer1@example.com'
+        FreshAccessState = $false
+        ExitCode = 2
+        Outcome = 'partial'
+        ErrorCategory = 'smtp-recipient-rejected'
+        Accepted = 2
+        Skipped = 0
+        Failed = 1
+        Reasons = @(0, 0, 0, 0)
+        SendDelay = 1
+        MinimumConnectionGapMilliseconds = 800
+        ExpectedConnections = 3
+        SmtpFailureCategory = 'smtp-recipient-rejected'
+        SmtpFailureStage = 'rcpt-to'
+        SmtpFailureCode = 550
+        SmtpFailureBatchFatal = $false
+        SmtpFailureAcceptance = 'not-attempted'
+    },
+    [PSCustomObject]@{
+        Name = 'auth-failure-stops-batch'
+        Users = @(
+            (New-VirtualUser -Id '1' -Email 'viewer1@example.com'),
+            (New-VirtualUser -Id '2' -Email 'viewer2@example.com')
+        )
+        ExcludedUserIds = @()
+        ExcludedEmails = @()
+        RejectRecipient = ''
+        FakeSmtpMode = 'auth-failure'
+        FreshAccessState = $false
+        ExitCode = 2
+        Outcome = 'failed'
+        ErrorCategory = 'smtp-auth-failed'
+        Accepted = 0
+        Skipped = 0
+        Failed = 1
+        Reasons = @(0, 0, 0, 0)
+        SmtpFailureCategory = 'smtp-auth-failed'
+        SmtpFailureStage = 'auth'
+        SmtpFailureCode = 535
+        SmtpFailureBatchFatal = $true
+        SmtpFailureAcceptance = 'not-attempted'
+        ExpectedConnections = 1
+    },
+    [PSCustomObject]@{
+        Name = 'rate-limit-stops-batch'
+        Users = @(
+            (New-VirtualUser -Id '1' -Email 'viewer1@example.com'),
+            (New-VirtualUser -Id '2' -Email 'viewer2@example.com')
+        )
+        ExcludedUserIds = @()
+        ExcludedEmails = @()
+        RejectRecipient = ''
+        FakeSmtpMode = 'rate-limit-greeting'
+        FreshAccessState = $false
+        ExitCode = 2
+        Outcome = 'failed'
+        ErrorCategory = 'smtp-rate-limited'
+        Accepted = 0
+        Skipped = 0
+        Failed = 1
+        Reasons = @(0, 0, 0, 0)
+        SmtpFailureCategory = 'smtp-rate-limited'
+        SmtpFailureStage = 'greeting'
+        SmtpFailureCode = 421
+        SmtpFailureBatchFatal = $true
+        SmtpFailureAcceptance = 'not-attempted'
+        ExpectedConnections = 1
+    },
+    [PSCustomObject]@{
+        Name = 'ambiguous-data-stops-without-retry'
+        Users = @(
+            (New-VirtualUser -Id '1' -Email 'viewer1@example.com'),
+            (New-VirtualUser -Id '2' -Email 'viewer2@example.com')
+        )
+        ExcludedUserIds = @()
+        ExcludedEmails = @()
+        RejectRecipient = ''
+        FakeSmtpMode = 'drop-after-data'
+        FreshAccessState = $false
+        ExitCode = 2
+        Outcome = 'failed'
+        ErrorCategory = 'smtp-acceptance-unknown'
+        Accepted = 0
+        Skipped = 0
+        Failed = 1
+        Reasons = @(0, 0, 0, 0)
+        SmtpFailureCategory = 'smtp-acceptance-unknown'
+        SmtpFailureStage = 'data-acceptance'
+        SmtpFailureCode = 0
+        SmtpFailureBatchFatal = $true
+        SmtpFailureAcceptance = 'unknown'
+        ExpectedConnections = 1
+    },
+    [PSCustomObject]@{
+        Name = 'batch-policy-rejection-stops-batch'
+        Users = @(
+            (New-VirtualUser -Id '1' -Email 'viewer1@example.com'),
+            (New-VirtualUser -Id '2' -Email 'viewer2@example.com')
+        )
+        ExcludedUserIds = @()
+        ExcludedEmails = @()
+        RejectRecipient = ''
+        FakeSmtpMode = 'reject-policy'
+        FreshAccessState = $false
+        ExitCode = 2
+        Outcome = 'failed'
+        ErrorCategory = 'smtp-provider-rejected'
+        Accepted = 0
+        Skipped = 0
+        Failed = 1
+        Reasons = @(0, 0, 0, 0)
+        SmtpFailureCategory = 'smtp-provider-rejected'
+        SmtpFailureStage = 'rcpt-to'
+        SmtpFailureCode = 550
+        SmtpFailureBatchFatal = $true
+        SmtpFailureAcceptance = 'not-attempted'
+        ExpectedConnections = 1
     },
     [PSCustomObject]@{
         Name = 'required-roster-refresh-failure'
@@ -233,6 +375,13 @@ foreach ($engine in $engines) {
             if (-not [string]::IsNullOrWhiteSpace([string]$scenario.RejectRecipient)) {
                 $smtpArguments += @('--reject-recipient', [string]$scenario.RejectRecipient)
             }
+            $fakeSmtpMode = [string](Get-ScenarioValue -Scenario $scenario -Name 'FakeSmtpMode' -Default '')
+            switch ($fakeSmtpMode) {
+                'auth-failure' { $smtpArguments += '--auth-failure' }
+                'rate-limit-greeting' { $smtpArguments += '--rate-limit-greeting' }
+                'drop-after-data' { $smtpArguments += '--drop-after-data' }
+                'reject-policy' { $smtpArguments += '--reject-policy' }
+            }
             $smtp = $null
             $smtp = Start-Process -FilePath $PythonPath -ArgumentList $smtpArguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $smtpStdout -RedirectStandardError $smtpStderr
             try {
@@ -247,8 +396,9 @@ foreach ($engine in $engines) {
                     TautulliUrl = $baseUrl; ApiKey = 'virtual-api-key'; PlexServerUrl = $baseUrl; PlexToken = 'virtual-plex-token'
                     FooterServerName = 'Virtual Plex'; IncludedLibraryIds = @('10', '20')
                     ExcludedUserIds = @($scenario.ExcludedUserIds); ExcludedEmails = @($scenario.ExcludedEmails)
-                    DaysBack = 7; MaxMovies = 2; MaxTv = 2; SendDelaySeconds = 0
-                    SmtpHost = '127.0.0.1'; SmtpPort = $smtpPort; SmtpEnableSsl = $false; SmtpUseAuthentication = $false; SmtpTimeoutSeconds = 5
+                    DaysBack = 7; MaxMovies = 2; MaxTv = 2; SendDelaySeconds = [int](Get-ScenarioValue -Scenario $scenario -Name 'SendDelay' -Default 0)
+                    SmtpHost = '127.0.0.1'; SmtpPort = $smtpPort; SmtpEnableSsl = $false; SmtpUseAuthentication = ($fakeSmtpMode -eq 'auth-failure'); SmtpTimeoutSeconds = 5
+                    SmtpUsername = 'virtual-sender@example.com'; SmtpPassword = 'virtual-app-password'; SmtpAuthenticationMethod = 'Auto'
                     FromEmail = 'sender@example.com'; FromName = 'TautWeekly Policy Test'; TestEmail = 'test@example.com'
                 }
                 foreach ($entry in $overrides.GetEnumerator()) { $config | Add-Member -NotePropertyName $entry.Key -NotePropertyValue $entry.Value -Force }
@@ -313,11 +463,40 @@ foreach ($engine in $engines) {
                 Assert-True (Test-Path -LiteralPath $resultPath) "$($engine.Name)/$($scenario.Name) omitted its structured result."
                 $resultRaw = Get-Content -LiteralPath $resultPath -Raw -Encoding UTF8
                 $result = $resultRaw | ConvertFrom-Json
-                Assert-True ($result.schemaVersion -eq 2 -and $result.outcome -eq $scenario.Outcome) "$($engine.Name)/$($scenario.Name) reported schema $($result.schemaVersion) / outcome $($result.outcome) / category $($result.errorCategory), expected 2 / $($scenario.Outcome)."
+                Assert-True ($result.schemaVersion -eq 3 -and $result.outcome -eq $scenario.Outcome) "$($engine.Name)/$($scenario.Name) reported schema $($result.schemaVersion) / outcome $($result.outcome) / category $($result.errorCategory), expected 3 / $($scenario.Outcome)."
                 Assert-True ([string]$result.errorCategory -eq [string]$scenario.ErrorCategory) "$($engine.Name)/$($scenario.Name) reported the wrong fixed error category."
                 Assert-True ($result.smtpAcceptedCount -eq $scenario.Accepted -and $result.skippedCount -eq $scenario.Skipped -and $result.failedCount -eq $scenario.Failed) "$($engine.Name)/$($scenario.Name) reported inconsistent delivery aggregates."
                 $actualReasons = @($result.skipReasonCounts.inactiveOrDeleted, $result.skipReasonCounts.missingEmail, $result.skipReasonCounts.excludedUserId, $result.skipReasonCounts.excludedEmail)
                 Assert-True (($actualReasons -join ',') -eq (@($scenario.Reasons) -join ',')) "$($engine.Name)/$($scenario.Name) reported inconsistent fixed skip reasons."
+                $expectedSmtpCategory = [string](Get-ScenarioValue -Scenario $scenario -Name 'SmtpFailureCategory' -Default '')
+                if ([string]::IsNullOrWhiteSpace($expectedSmtpCategory)) {
+                    Assert-True ($null -eq $result.smtpFailure) "$($engine.Name)/$($scenario.Name) retained unexpected SMTP failure evidence."
+                }
+                else {
+                    Assert-True ($null -ne $result.smtpFailure) "$($engine.Name)/$($scenario.Name) omitted typed SMTP failure evidence."
+                    Assert-True ([string]$result.smtpFailure.category -eq $expectedSmtpCategory) "$($engine.Name)/$($scenario.Name) reported the wrong sanitized SMTP category."
+                    Assert-True ([string]$result.smtpFailure.stage -eq [string](Get-ScenarioValue $scenario 'SmtpFailureStage' '')) "$($engine.Name)/$($scenario.Name) reported the wrong sanitized SMTP stage."
+                    Assert-True ([int]$result.smtpFailure.responseCode -eq [int](Get-ScenarioValue $scenario 'SmtpFailureCode' 0)) "$($engine.Name)/$($scenario.Name) reported the wrong sanitized SMTP response code."
+                    Assert-True ([bool]$result.smtpFailure.batchFatal -eq [bool](Get-ScenarioValue $scenario 'SmtpFailureBatchFatal' $false)) "$($engine.Name)/$($scenario.Name) reported the wrong batch-fatal classification."
+                    Assert-True ([string]$result.smtpFailure.acceptance -eq [string](Get-ScenarioValue $scenario 'SmtpFailureAcceptance' '')) "$($engine.Name)/$($scenario.Name) reported the wrong acceptance classification."
+                }
+                $smtpCalls = @(
+                    Get-Content -LiteralPath $smtpLog -ErrorAction SilentlyContinue |
+                        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                        ForEach-Object { $_ | ConvertFrom-Json }
+                )
+                $connections = @($smtpCalls | Where-Object { [string]$_.command -eq '<connection>' })
+                $expectedConnections = [int](Get-ScenarioValue -Scenario $scenario -Name 'ExpectedConnections' -Default -1)
+                if ($expectedConnections -ge 0) {
+                    Assert-True ($connections.Count -eq $expectedConnections) "$($engine.Name)/$($scenario.Name) opened $($connections.Count) SMTP connections instead of $expectedConnections."
+                }
+                $minimumGap = [int](Get-ScenarioValue -Scenario $scenario -Name 'MinimumConnectionGapMilliseconds' -Default 0)
+                if ($minimumGap -gt 0 -and $connections.Count -gt 1) {
+                    for ($connectionIndex = 1; $connectionIndex -lt $connections.Count; $connectionIndex++) {
+                        $gapMilliseconds = ([double]$connections[$connectionIndex].timestamp - [double]$connections[$connectionIndex - 1].timestamp) * 1000
+                        Assert-True ($gapMilliseconds -ge $minimumGap) "$($engine.Name)/$($scenario.Name) bypassed configured spacing after a recipient attempt ($([Math]::Round($gapMilliseconds)) ms)."
+                    }
+                }
                 $tautulliCalls = @(
                     Get-Content -LiteralPath $tautulliLog -ErrorAction SilentlyContinue |
                         Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
@@ -341,7 +520,6 @@ foreach ($engine in $engines) {
                     # A failed required refresh must stop before roster discovery,
                     # integration/media work, preview work, or SMTP preflight.
                     Assert-True ($apiCommands.Count -eq 1) "$($engine.Name) continued into production data calls after a failed roster refresh."
-                    $smtpCalls = @(Get-Content -LiteralPath $smtpLog -ErrorAction SilentlyContinue | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
                     Assert-True ($smtpCalls.Count -eq 0) "$($engine.Name) contacted SMTP after the required roster refresh failed."
                     Assert-True (-not $resultRaw.Contains('virtual roster refresh rejected')) "$($engine.Name) exposed the raw upstream refresh failure."
                 }
@@ -382,6 +560,10 @@ foreach ($path in @('platforms/windows/TautWeekly.ps1', 'platforms/nas-docker/ap
     $renderer = Get-Content -LiteralPath (Join-Path $Root $path) -Raw -Encoding UTF8
     Assert-True ($renderer.Contains('Sync-AccessRoster -RequireFreshUsers:($Mode -eq "SendAll")')) "$path does not require the shared refresh-on-SendAll path."
 }
+
+$smtpHelpers = @('platforms/windows/Smtp-Transport.ps1', 'platforms/nas-docker/app/Smtp-Transport.ps1', 'platforms/mac-docker/app/Smtp-Transport.ps1')
+$smtpHelperHashes = @($smtpHelpers | ForEach-Object { (Get-FileHash -LiteralPath (Join-Path $Root $_) -Algorithm SHA256).Hash } | Sort-Object -Unique)
+Assert-True ($smtpHelperHashes.Count -eq 1) 'Maintained SMTP transport copies are not synchronized.'
 
 Assert-True ($executed -gt 0) 'No SendAll recipient-policy scenarios executed.'
 Write-Host "[PASS] SendAll recipient policy, privacy, platform synchronization, and schedule/manual parity validated ($executed scenarios)."

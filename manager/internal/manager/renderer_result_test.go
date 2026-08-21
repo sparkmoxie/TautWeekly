@@ -181,6 +181,75 @@ func TestRendererResultV2ValidatesProductionEligibilityEvidence(t *testing.T) {
 	}
 }
 
+func TestRendererResultV3ValidatesSanitizedSMTPFailureEvidence(t *testing.T) {
+	started := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
+	valid := rendererResult{
+		SchemaVersion:    3,
+		Mode:             "SendAll",
+		Outcome:          "failed",
+		ErrorCategory:    "smtp-rate-limited",
+		DeliveryScope:    "production",
+		StartedAtUTC:     started.Format(time.RFC3339Nano),
+		FinishedAtUTC:    started.Add(time.Second).Format(time.RFC3339Nano),
+		DurationMS:       1000,
+		FailedCount:      1,
+		SkipReasonCounts: &DeliverySkipReasonCounts{},
+		SMTPFailure:      &SMTPFailureEvidence{Category: "smtp-rate-limited", Stage: "greeting", ResponseCode: 421, ResponseClass: 4, BatchFatal: true, Acceptance: "not-attempted"},
+	}
+	if !validRendererResult(valid, "SendAll") {
+		t.Fatalf("valid schema-v3 SMTP failure was rejected: %+v", valid)
+	}
+
+	partial := valid
+	partial.Outcome = "partial"
+	partial.ErrorCategory = "smtp-recipient-rejected"
+	partial.SMTPAcceptedCount = 2
+	partial.SMTPFailure = &SMTPFailureEvidence{Category: "smtp-recipient-rejected", Stage: "rcpt-to", ResponseCode: 550, ResponseClass: 5, BatchFatal: false, Acceptance: "not-attempted"}
+	if !validRendererResult(partial, "SendAll") {
+		t.Fatalf("valid schema-v3 recipient-specific partial result was rejected: %+v", partial)
+	}
+
+	ambiguous := valid
+	ambiguous.ErrorCategory = "smtp-acceptance-unknown"
+	ambiguous.SMTPFailure = &SMTPFailureEvidence{Category: "smtp-acceptance-unknown", Stage: "data-acceptance", ResponseCode: 0, ResponseClass: 0, BatchFatal: true, Acceptance: "unknown"}
+	if !validRendererResult(ambiguous, "SendAll") {
+		t.Fatalf("valid ambiguous-acceptance evidence was rejected: %+v", ambiguous)
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*rendererResult)
+	}{
+		{name: "missing evidence", mutate: func(result *rendererResult) { result.SMTPFailure = nil }},
+		{name: "category mismatch", mutate: func(result *rendererResult) { result.SMTPFailure.Category = "smtp-auth-failed" }},
+		{name: "response class mismatch", mutate: func(result *rendererResult) { result.SMTPFailure.ResponseClass = 5 }},
+		{name: "unsafe stage", mutate: func(result *rendererResult) { result.SMTPFailure.Stage = "private-host.example" }},
+		{name: "rate limit allowed to continue", mutate: func(result *rendererResult) { result.SMTPFailure.BatchFatal = false }},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			result := valid
+			evidence := *valid.SMTPFailure
+			result.SMTPFailure = &evidence
+			test.mutate(&result)
+			if validRendererResult(result, "SendAll") {
+				t.Fatalf("invalid schema-v3 SMTP evidence was accepted: %+v", result)
+			}
+		})
+	}
+
+	wrongMode := validPreviewAllRendererResult()
+	wrongMode.SchemaVersion = 3
+	wrongMode.Outcome = "failed"
+	wrongMode.ErrorCategory = "smtp-rate-limited"
+	wrongMode.GeneratedPreviewFiles = nil
+	wrongMode.SkipReasonCounts = &DeliverySkipReasonCounts{}
+	wrongMode.SMTPFailure = valid.SMTPFailure
+	if validRendererResult(wrongMode, "PreviewAll") {
+		t.Fatalf("production SMTP evidence was accepted for PreviewAll: %+v", wrongMode)
+	}
+}
+
 func TestRendererResultAcceptsOnlyAllowlistedFailureCategories(t *testing.T) {
 	failed := validPreviewAllRendererResult()
 	failed.Outcome = "failed"

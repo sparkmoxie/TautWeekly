@@ -281,6 +281,15 @@ roster. A new eligible user is included unless explicitly excluded; if the
 refresh cannot be confirmed, the run stops before SMTP with fixed sanitized
 guidance.
 
+Direct configured SMTP remains the standard path. New configurations use
+`SendDelaySeconds=30` and `TestSendDelaySeconds=10`. SendAll stops after an
+authentication, temporary provider/service, batch-wide, transport, or
+ambiguous-DATA failure instead of reconnecting for every remaining recipient;
+an address/mailbox-specific RCPT rejection may continue after the configured
+delay. Avoid
+Test All or a manual production run near the scheduled batch, and stop retries
+during a provider account lock.
+
 ## Manage newsletter libraries
 
 Manager Config discovers active Tautulli movie/TV libraries and stores the

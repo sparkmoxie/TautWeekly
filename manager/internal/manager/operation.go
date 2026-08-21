@@ -59,6 +59,7 @@ type OperationRecord struct {
 	SMTPAcceptedCount   int                       `json:"smtpAcceptedCount,omitempty"`
 	SkippedCount        int                       `json:"skippedCount,omitempty"`
 	FailedCount         int                       `json:"failedCount,omitempty"`
+	SMTPFailure         *SMTPFailureEvidence      `json:"smtpFailure,omitempty"`
 	SkipReasonCounts    *DeliverySkipReasonCounts `json:"skipReasonCounts,omitempty"`
 	ExitCode            *int                      `json:"exitCode,omitempty"`
 	GeneratedPreviewIDs []string                  `json:"generatedPreviewIds"`
@@ -257,6 +258,7 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 		record.SMTPAcceptedCount = structuredResult.SMTPAcceptedCount
 		record.SkippedCount = structuredResult.SkippedCount
 		record.FailedCount = structuredResult.FailedCount
+		record.SMTPFailure = structuredResult.SMTPFailure
 		record.SkipReasonCounts = structuredResult.SkipReasonCounts
 		if record.Type == "send-all" {
 			_ = writePrivateJSON(filepath.Join(c.runtimeRoot, "last-run.json"), structuredResult)
@@ -275,6 +277,7 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 	case record.Type == "send-all" && resultErr == nil && structuredResult.Outcome == "partial":
 		record.State = "partial"
 		record.Outcome = "partial"
+		record.ErrorCategory = structuredResult.ErrorCategory
 		record.SupportCode = operationSupportCode(record.ID)
 	case runErr != nil:
 		record.State = "failed"

@@ -292,7 +292,7 @@ foreach ($engine in $engines) {
                 Assert-True (Test-Path -LiteralPath $managerResultPath) 'NAS Manager operation did not produce its structured result.'
                 $managerResultRaw = Get-Content -LiteralPath $managerResultPath -Raw -Encoding UTF8
                 $managerResult = $managerResultRaw | ConvertFrom-Json
-                Assert-True ($managerResult.schemaVersion -eq 2) 'NAS Manager result used the wrong schema version.'
+                Assert-True ($managerResult.schemaVersion -eq 3) 'NAS Manager result used the wrong schema version.'
                 Assert-True ($managerResult.mode -eq 'PreviewAll' -and $managerResult.outcome -eq 'succeeded') 'NAS Manager result reported the wrong operation outcome.'
                 Assert-True ([string]::IsNullOrEmpty([string]$managerResult.errorCategory)) 'NAS Manager success retained a renderer failure category.'
                 Assert-True ($managerResult.deliveryScope -eq 'none') 'NAS Manager preview result reported a delivery scope.'

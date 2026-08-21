@@ -222,8 +222,26 @@ authorization.
 | `ExcludedUserIds` | `[]` | Users omitted by stable Tautulli ID |
 | `ExcludedEmails` | `[]` | Email addresses omitted from delivery |
 | `RecentAccessDays` | 7 | New/recent access classification |
-| `SendDelaySeconds` | 10 | Pause between real production recipients |
-| `TestSendDelaySeconds` | 2 | Pause between controlled test messages |
+| `SendDelaySeconds` | 30 | Pause between real production recipient attempts |
+| `TestSendDelaySeconds` | 10 | Pause between controlled Test All messages |
+
+Direct configured SMTP remains the standard delivery path. Production messages
+stay personalized with exactly one envelope recipient. The recommended cadence
+is 30 seconds between production attempts and 10 seconds between controlled
+Test All messages; existing configurations keep their explicit values. Avoid
+running Test All or a manual production batch near the scheduled send.
+
+Spacing reduces cadence but cannot override provider quotas, reputation, or
+account-protection controls. Authentication failure, a temporary 4xx
+provider/service response such as `421`, a batch-wide rejection, a transport
+failure, or unknown final-DATA acceptance stops SendAll before another SMTP
+connection. A permanent 5xx RCPT rejection with an address/mailbox-specific
+enhanced status may continue to later
+recipients, but the same configured delay still applies before the next
+attempt. Accepted or ambiguously accepted DATA is never retried. After a
+provider lock, stop retries and allow a quiet period according to the provider
+notice; if it does not clear sooner, wait up to 24 hours before escalating
+through the provider's normal account-recovery path.
 
 ### Global library selection
 

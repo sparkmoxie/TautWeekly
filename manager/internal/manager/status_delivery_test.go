@@ -81,6 +81,20 @@ func TestLatestRendererResultDistinguishesPartialFailureAndNoAcceptedDelivery(t 
 	if snapshot.Delivery.Result != "failed" || snapshot.Delivery.ErrorCategory != "no-eligible-recipients" || snapshot.Delivery.SkipReasonCounts == nil {
 		t.Fatalf("zero-eligible result was not surfaced explicitly: %+v", snapshot.Delivery)
 	}
+
+	rateLimited := base
+	rateLimited.SchemaVersion = 3
+	rateLimited.Outcome = "failed"
+	rateLimited.ErrorCategory = "smtp-rate-limited"
+	rateLimited.FailedCount = 1
+	rateLimited.SkipReasonCounts = &DeliverySkipReasonCounts{}
+	rateLimited.SMTPFailure = &SMTPFailureEvidence{Category: "smtp-rate-limited", Stage: "greeting", ResponseCode: 421, ResponseClass: 4, BatchFatal: true, Acceptance: "not-attempted"}
+	writeRendererResultFixture(t, root, rateLimited)
+	snapshot = StatusSnapshot{Delivery: DeliveryStatus{Result: "not-recorded", Evidence: "none"}}
+	applyLatestRendererDelivery(&snapshot, root)
+	if snapshot.Delivery.Result != "failed" || snapshot.Delivery.ErrorCategory != "smtp-rate-limited" || snapshot.Delivery.SMTPFailure == nil || snapshot.Delivery.SMTPFailure.ResponseCode != 421 {
+		t.Fatalf("sanitized SMTP circuit-breaker evidence was not surfaced: %+v", snapshot.Delivery)
+	}
 }
 
 func TestMalformedLatestRendererResultDoesNotReplaceTaskEvidence(t *testing.T) {

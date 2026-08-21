@@ -23,6 +23,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `no-eligible-recipients` category instead of appearing SMTP-accepted, and
   added sanitized aggregate skip counts to the Manager status and operation
   views without retaining recipient identities or addresses.
+- Stopped a production batch after the first authentication failure,
+  temporary provider/service response, batch-wide rejection, transport
+  failure, or unknown final-DATA acceptance instead of reconnecting for every
+  remaining recipient. Address/mailbox-specific RCPT rejections remain
+  per-recipient,
+  and configured spacing now also applies after those failed attempts.
 - Fixed first-run access-roster creation for numeric Tautulli user IDs under
   Windows PowerShell 5.1, which could stop a first production send before
   recipient classification. The explicit member form is synchronized across
@@ -40,6 +46,11 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Tautulli notification-agent settings do not control TautWeekly delivery.
   Clarified that **Repeat this Tautulli lookup** updates Manager choices only;
   it is not required to refresh production recipients.
+- Raised new-install and missing-value cadence defaults to 30 seconds for
+  production recipients and 10 seconds for controlled Test All messages.
+  Existing explicit values are preserved; operators should avoid running Test
+  All or manual production delivery near the scheduled batch and leave the
+  provider quiet after a temporary account lock.
 - Replaced opaque origin rejection text with fixed, sanitized recovery
   guidance and support codes, and tightened the macOS reverse-proxy workflow
   around exact hostnames, original `Host` preservation, secure cookies, and
@@ -50,6 +61,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Kept delivery diagnostics count-only and allowlisted, retained every explicit
   exclusion and access-state boundary, and continued to ignore untrusted
   `Forwarded` and `X-Forwarded-*` headers.
+- Added only fixed SMTP category, stage, numeric response code/class,
+  batch-fatal, and acceptance-state evidence. Provider response text,
+  accounts, hosts, recipients, and credentials remain excluded.
 
 ## [0.19.0] - 2026-08-20
 

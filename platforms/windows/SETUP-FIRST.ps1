@@ -234,7 +234,7 @@ if (-not [int]::TryParse($smtpPortText, [ref]$smtpPort) -or $smtpPort -lt 1 -or 
 }
 $smtpSsl = Read-YesNo "Use SMTP TLS/SSL (STARTTLS for port 587)?" $true
 if ($smtpPort -eq 465) {
-    throw "Port 465 uses implicit SMTPS, which System.Net.Mail.SmtpClient does not support. Use your provider's STARTTLS port (commonly 587) or a compatible relay."
+    throw "Port 465 uses implicit SMTPS, which this transport does not support. Use your provider's supported STARTTLS endpoint, commonly port 587."
 }
 $smtpAuth = Read-YesNo "Does this SMTP server require username/password authentication?" $true
 $smtpUsername = ""
@@ -284,8 +284,8 @@ $config = [ordered]@{
     SmtpAuthenticationMethod = "Auto"
     SmtpTimeoutSeconds = 30
     TestEmail = $testEmail
-    TestSendDelaySeconds = 2
-    SendDelaySeconds = 10
+    TestSendDelaySeconds = 10
+    SendDelaySeconds = 30
     ScheduleDay = $canonicalDay
     ScheduleTime = $scheduleTime
     ScheduledTaskName = $taskName

@@ -277,6 +277,15 @@ refresh before it reads the live roster. New eligible users are included unless
 explicitly excluded; an unconfirmed refresh stops before SMTP with sanitized
 guidance.
 
+Direct configured SMTP remains the standard path. New configurations use
+`SendDelaySeconds=30` and `TestSendDelaySeconds=10`. SendAll stops after an
+authentication, temporary provider/service, batch-wide, transport, or
+ambiguous-DATA failure instead of reconnecting for every remaining recipient;
+an address/mailbox-specific RCPT rejection may continue after the configured
+delay. Avoid
+Test All or a manual production run near the scheduled batch, and stop retries
+during a provider account lock.
+
 The inherited newsletter payload lists up to four most-watched movies and four
 most-watched TV shows, omits an empty TV stats card, and shows only duration in
 Total Watched. Binge Champion shares watch time plus nonzero unique movie and
