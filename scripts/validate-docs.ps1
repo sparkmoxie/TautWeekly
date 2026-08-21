@@ -310,6 +310,27 @@ if ($guiPreviewRich -match '(?i)https?://') {
     throw 'GUI Preview rich newsletter renderer contains an external HTTP endpoint.'
 }
 
+foreach ($pattern in @(
+    'statMovieCount:\s*12',
+    'statShowCount:\s*11',
+    'statMovieCount:\s*5,\s*statShowCount:\s*1',
+    'function personalRating\(',
+    'class="personal-ratings"',
+    'class="stats-media-stack"',
+    'class="stats-summary-grid"',
+    'stats-media-card \.watched-list\{display:grid;grid-template-columns:repeat\(2',
+    'stats-media-card \.watched-list,\.stats-summary-grid\{grid-template-columns:1fr\}',
+    'YOU CLOCKED',
+    'total watch time'
+)) {
+    if ($guiPreviewRich -notmatch $pattern) {
+        throw "GUI Preview personal-stat parity is missing: $pattern"
+    }
+}
+if ($guiPreviewRich -match 'items\.slice\(0,\s*2\)' -or $guiPreviewRich -match 'total watched') {
+    throw 'GUI Preview retains a capped personal-stat row list or stale total-watch-time label.'
+}
+
 $guiPreviewMedia = Join-Path $docs 'gui-preview/media'
 $mediaReferences = [regex]::Matches($guiPreviewRich, '(?i)"(?<name>[^"/]+\.(?:gif|png|jpe?g))"')
 foreach ($reference in $mediaReferences) {
@@ -438,6 +459,24 @@ foreach ($previewCopy in @(
     if (-not $previewGallery.Contains($previewCopy)) {
         throw "Email States Preview is missing requested copy: $previewCopy"
     }
+}
+foreach ($pattern in @(
+    'class="stats-title-cell"',
+    'class="stats-title-spacer"',
+    'class="stats-summary-cell"',
+    'summaryHeight=178',
+    'winner||high?movies.length:5',
+    'winner||high?shows.length:1',
+    'YOU CLOCKED',
+    'total watch time',
+    'alt="IMDb"'
+)) {
+    if ($previewGallery -notmatch $pattern) {
+        throw "Email States Preview personal-stat parity is missing: $pattern"
+    }
+}
+if ($previewGallery -match 'rowCount=Math\.max' -or $previewGallery -match 'total watched') {
+    throw 'Email States Preview retains media-coupled summary height or stale total-watch-time copy.'
 }
 
 if ($terminalPages -lt 3) {

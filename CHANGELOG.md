@@ -6,6 +6,32 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Added uncapped personal movie and TV statistics so every qualifying unique
+  title in the reporting window appears in HTML email, local previews, and
+  plain text with its eligible poster, metadata, and rating treatment.
+
+### Changed
+
+- Moved Movies watched and TV shows watched into separate full-width cards.
+  Each card pairs two titles per desktop row and stacks one title per mobile
+  row, while preserving watch-time-then-plays ranking and one-sided/empty
+  states.
+- Kept personal total watch time and Binge Champion in equal-height compact
+  cards independent of personal title count. The personal card now uses the
+  `YOU CLOCKED` eyebrow and `total watch time` label; its all-playback duration
+  remains intentionally distinct from qualifying Binge Champion duration.
+- Expanded the network-blocked synthetic GUI preview with uncapped, uneven,
+  winner/non-winner, rated/unrated, desktop, and mobile personal-stat fixtures.
+
+### Fixed
+
+- Stopped personal rows beyond the former four-title limit from missing
+  metadata enrichment, posters, ratings, HTML output, or plain-text output.
+- Restored production-equivalent Rotten Tomatoes and IMDb treatment inside
+  synthetic personal movie and TV rows without inventing unavailable ratings.
+
 ## [0.19.2] - 2026-08-21
 
 ### Changed

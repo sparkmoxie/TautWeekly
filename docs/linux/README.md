@@ -286,10 +286,11 @@ delay. Avoid
 Test All or a manual production run near the scheduled batch, and stop retries
 during a provider account lock.
 
-The inherited newsletter payload lists up to four most-watched movies and four
-most-watched TV shows, omits an empty TV stats card, and shows only duration in
-Total Watched. Binge Champion shares watch time plus nonzero unique movie and
-TV-show counts.
+The inherited newsletter payload lists every qualifying unique movie and TV
+show. Movies and TV use separate full-width cards with two title columns on
+desktop and one on mobile; empty media cards remain omitted. Personal total
+watch time stays distinct from the qualifying Binge Champion duration and
+nonzero unique movie/TV-show counts.
 Only new movies qualify for **HOT NEW RELEASE**; movie-empty weeks promote the
 normal Trending result while retaining new TV releases below the hero.
 

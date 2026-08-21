@@ -1914,10 +1914,10 @@ function Add-UserStatsMediaMetadata {
     $movies = @()
     $tvShows = @()
     if ($null -ne $Stats.PSObject.Properties["MovieItems"]) {
-        $movies = @($Stats.MovieItems | Select-Object -First 4)
+        $movies = @($Stats.MovieItems)
     }
     if ($null -ne $Stats.PSObject.Properties["TvShowItems"]) {
-        $tvShows = @($Stats.TvShowItems | Select-Object -First 4)
+        $tvShows = @($Stats.TvShowItems)
     }
 
     if ($movies.Count -gt 0 -or $tvShows.Count -gt 0) {
@@ -5886,8 +5886,10 @@ function Get-StatsMovieRowsHtml {
     )
 
     $rows = New-Object System.Text.StringBuilder
+    $cells = New-Object System.Text.StringBuilder
+    $columnIndex = 0
 
-    foreach ($item in @($Items | Select-Object -First 4)) {
+    foreach ($item in @($Items)) {
         $title = HtmlEncode (Truncate-Text ([string]$item.Title) 42)
         $posterSrc = Get-ImageSource `
             -RatingKey ([string]$item.PosterRatingKey) `
@@ -5920,16 +5922,32 @@ function Get-StatsMovieRowsHtml {
                 '</div>'
         }
 
-        [void]$rows.Append(@"
-<tr>
-  <td width="50" valign="middle" style="width:50px;padding:7px 8px 7px 0;border-bottom:1px solid #292929;">$posterHtml</td>
-  <td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929;">
-    <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$title</div>
-    $genreHtml
-    $ratingLineHtml
-  </td>
-</tr>
+        $cellPadding = if ($columnIndex -eq 0) { "7px 12px 7px 0" } else { "7px 0 7px 12px" }
+        [void]$cells.Append(@"
+<td class="stats-title-cell" width="50%" valign="top" style="width:50%;padding:$cellPadding;border-bottom:1px solid #292929;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0">
+    <tr>
+      <td width="50" valign="middle" style="width:50px;padding:0 8px 0 0;">$posterHtml</td>
+      <td valign="middle" style="padding:0;">
+        <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$title</div>
+        $genreHtml
+        $ratingLineHtml
+      </td>
+    </tr>
+  </table>
+</td>
 "@)
+        $columnIndex++
+        if ($columnIndex -eq 2) {
+            [void]$rows.Append("<tr>$($cells.ToString())</tr>")
+            [void]$cells.Clear()
+            $columnIndex = 0
+        }
+    }
+
+    if ($columnIndex -gt 0) {
+        [void]$cells.Append('<td class="stats-title-spacer" width="50%" style="width:50%;border-bottom:1px solid #292929;"></td>')
+        [void]$rows.Append("<tr>$($cells.ToString())</tr>")
     }
 
     return $rows.ToString()
@@ -6047,8 +6065,10 @@ function Get-StatsTvShowRowsHtml {
     )
 
     $rows = New-Object System.Text.StringBuilder
+    $cells = New-Object System.Text.StringBuilder
+    $columnIndex = 0
 
-    foreach ($item in @($Items | Select-Object -First 4)) {
+    foreach ($item in @($Items)) {
         $showTitle = HtmlEncode (Truncate-Text ([string]$item.ShowTitle) 42)
         $posterSrc = Get-ImageSource `
             -RatingKey ([string]$item.PosterRatingKey) `
@@ -6076,16 +6096,32 @@ function Get-StatsTvShowRowsHtml {
             '</div>'
         }
 
-        [void]$rows.Append(@"
-<tr>
-  <td width="50" valign="middle" style="width:50px;padding:7px 8px 7px 0;border-bottom:1px solid #292929;">$posterHtml</td>
-  <td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929;">
-    <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$showTitle</div>
-    $ratingLineHtml
-    <div style="padding-top:3px;font-size:10px;line-height:1.35;color:#9b9b9b;font-weight:600;">$(HtmlEncode $watchTime) watched</div>
-  </td>
-</tr>
+        $cellPadding = if ($columnIndex -eq 0) { "7px 12px 7px 0" } else { "7px 0 7px 12px" }
+        [void]$cells.Append(@"
+<td class="stats-title-cell" width="50%" valign="top" style="width:50%;padding:$cellPadding;border-bottom:1px solid #292929;">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0">
+    <tr>
+      <td width="50" valign="middle" style="width:50px;padding:0 8px 0 0;">$posterHtml</td>
+      <td valign="middle" style="padding:0;">
+        <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$showTitle</div>
+        $ratingLineHtml
+        <div style="padding-top:3px;font-size:10px;line-height:1.35;color:#9b9b9b;font-weight:600;">$(HtmlEncode $watchTime) watched</div>
+      </td>
+    </tr>
+  </table>
+</td>
 "@)
+        $columnIndex++
+        if ($columnIndex -eq 2) {
+            [void]$rows.Append("<tr>$($cells.ToString())</tr>")
+            [void]$cells.Clear()
+            $columnIndex = 0
+        }
+    }
+
+    if ($columnIndex -gt 0) {
+        [void]$cells.Append('<td class="stats-title-spacer" width="50%" style="width:50%;border-bottom:1px solid #292929;"></td>')
+        [void]$rows.Append("<tr>$($cells.ToString())</tr>")
     }
 
     return $rows.ToString()
@@ -6911,14 +6947,14 @@ $tvCards
     $movieTitleCount = 0
     if ($null -ne $Stats.PSObject.Properties["MovieItems"]) {
         $movieTitleCount = @($Stats.MovieItems).Count
-        $movieItems = @($Stats.MovieItems | Select-Object -First 4)
+        $movieItems = @($Stats.MovieItems)
     }
 
     $tvShowItems = @()
     $tvShowTitleCount = 0
     if ($null -ne $Stats.PSObject.Properties["TvShowItems"]) {
         $tvShowTitleCount = @($Stats.TvShowItems).Count
-        $tvShowItems = @($Stats.TvShowItems | Select-Object -First 4)
+        $tvShowItems = @($Stats.TvShowItems)
     }
     $movieDetailMode = ($movieItems.Count -gt 0)
     $tvShowDetailMode = ($tvShowItems.Count -gt 0)
@@ -6937,21 +6973,7 @@ $tvCards
             -ImageMode $ImageMode
     } else { "" }
 
-    $detailRowCount = 0
-    if ($movieDetailMode) {
-        $detailRowCount = [Math]::Max($detailRowCount, [Math]::Min(4, $movieItems.Count))
-    }
-    if ($tvShowDetailMode) {
-        $detailRowCount = [Math]::Max($detailRowCount, [Math]::Min(4, $tvShowItems.Count))
-    }
-
-    $statsCardHeight = switch ($detailRowCount) {
-        4 { 356 }
-        3 { 286 }
-        2 { 216 }
-        1 { 154 }
-        default { 138 }
-    }
+    $summaryCardHeight = 178
 
     $movieCardContent = if ($movieDetailMode) {
         @"
@@ -6969,17 +6991,7 @@ $tvCards
   $movieRows
 </table>
 "@
-    } else {
-        @"
-<table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="height:${statsCardHeight}px;">
-  <tr><td valign="middle">
-    <img src="$moviesIconSrc" width="42" height="42" alt="Movies watched" style="display:block;width:42px;height:42px;border:0;">
-    <div style="padding-top:9px;font-size:28px;font-weight:800;color:#ffffff;line-height:1.1;">$moviesWatched</div>
-    <div style="padding-top:5px;font-size:12px;color:#8e8e8e;">movies watched</div>
-  </td></tr>
-</table>
-"@
-    }
+    } else { "" }
 
     $tvShowCardContent = if ($tvShowDetailMode) {
         @"
@@ -6997,31 +7009,17 @@ $tvCards
   $tvShowRows
 </table>
 "@
-    } else {
-        @"
-<table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" style="height:${statsCardHeight}px;">
-  <tr><td valign="middle">
-    <img src="$tvIconSrc" width="42" height="42" alt="TV shows watched" style="display:block;width:42px;height:42px;border:0;">
-    <div style="padding-top:9px;font-size:28px;font-weight:800;color:#ffffff;line-height:1.1;">$episodesStreamed</div>
-    <div style="padding-top:5px;font-size:12px;color:#8e8e8e;">TV shows watched</div>
-  </td></tr>
-</table>
-"@
-    }
+    } else { "" }
 
-    $mediaStatsRow = ""
-    if ($movieDetailMode -and $tvShowDetailMode) {
-        $mediaStatsRow = @"
-<tr>
-  <td width="50%" valign="top" style="padding:0 5px 10px 0;"><table class="email-card" width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;height:${statsCardHeight}px;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$movieCardContent</td></tr></table></td>
-  <td width="50%" valign="top" style="padding:0 0 10px 5px;"><table class="email-card" width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;height:${statsCardHeight}px;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$tvShowCardContent</td></tr></table></td>
-</tr>
+    $mediaStatsRows = ""
+    if ($movieDetailMode) {
+        $mediaStatsRows += @"
+<tr><td colspan="2" width="100%" valign="top" style="padding:0 0 10px;"><table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td valign="top" style="padding:14px 16px;">$movieCardContent</td></tr></table></td></tr>
 "@
     }
-    elseif ($movieDetailMode -or $tvShowDetailMode) {
-        $singleMediaContent = if ($movieDetailMode) { $movieCardContent } else { $tvShowCardContent }
-        $mediaStatsRow = @"
-<tr><td colspan="2" width="100%" valign="top" style="padding:0 0 10px;"><table class="email-card" width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;height:${statsCardHeight}px;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td height="$statsCardHeight" valign="top" style="height:${statsCardHeight}px;padding:14px;">$singleMediaContent</td></tr></table></td></tr>
+    if ($tvShowDetailMode) {
+        $mediaStatsRows += @"
+<tr><td colspan="2" width="100%" valign="top" style="padding:0 0 10px;"><table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;"><tr><td valign="top" style="padding:14px 16px;">$tvShowCardContent</td></tr></table></td></tr>
 "@
     }
 
@@ -7068,23 +7066,24 @@ $tvCards
 <tr>
 <td class="pad" style="padding:0 20px 24px;">
 <table width="100%" cellspacing="0" cellpadding="0" border="0">
-$mediaStatsRow
+$mediaStatsRows
 <tr>
-  <td width="50%" valign="top" style="padding:0 5px 10px 0;">
-    <table class="email-card" width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;height:${statsCardHeight}px;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+  <td class="stats-summary-cell" width="50%" valign="top" style="width:50%;padding:0 5px 10px 0;">
+    <table class="email-card" width="100%" height="$summaryCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;height:${summaryCardHeight}px;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
       <tr>
-        <td height="$statsCardHeight" valign="middle" style="height:${statsCardHeight}px;padding:17px;">
-          <img src="$clockIconSrc" width="42" height="42" alt="Total watched" style="display:block;width:42px;height:42px;border:0;">
-          <div style="padding-top:10px;font-size:27px;font-weight:800;color:#ffffff;line-height:1.1;">$timeText</div>
-          <div style="padding-top:5px;font-size:12px;color:#8e8e8e;">total watched</div>
+        <td height="$summaryCardHeight" valign="middle" style="height:${summaryCardHeight}px;padding:17px;">
+          <div style="font-size:9px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">YOU CLOCKED</div>
+          <img src="$clockIconSrc" width="42" height="42" alt="Personal total watch time" style="display:block;width:42px;height:42px;border:0;margin-top:9px;">
+          <div style="padding-top:8px;font-size:27px;font-weight:800;color:#ffffff;line-height:1.1;">$timeText</div>
+          <div style="padding-top:3px;font-size:12px;color:#8e8e8e;">total watch time</div>
         </td>
       </tr>
     </table>
   </td>
-  <td width="50%" valign="top" style="padding:0 0 10px 5px;">
-    <table width="100%" height="$statsCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="$bingeBackground" style="width:100%;height:${statsCardHeight}px;background-color:$bingeBackground;border:1px solid $bingeBorder;border-radius:10px;border-collapse:separate;">
+  <td class="stats-summary-cell" width="50%" valign="top" style="width:50%;padding:0 0 10px 5px;">
+    <table width="100%" height="$summaryCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="$bingeBackground" style="width:100%;height:${summaryCardHeight}px;background-color:$bingeBackground;border:1px solid $bingeBorder;border-radius:10px;border-collapse:separate;">
       <tr>
-        <td height="$statsCardHeight" valign="middle" style="height:${statsCardHeight}px;padding:17px;">
+        <td height="$summaryCardHeight" valign="middle" style="height:${summaryCardHeight}px;padding:17px;">
           <div style="font-size:9px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">$(HtmlEncode $bingeEyebrow)</div>
           <img src="$trophyIconSrc" width="$(if ($isBingeWinner) { 54 } else { 42 })" height="$(if ($isBingeWinner) { 54 } else { 42 })" alt="Binge Champion award" style="display:block;width:$(if ($isBingeWinner) { 54 } else { 42 })px;height:$(if ($isBingeWinner) { 54 } else { 42 })px;border:0;margin-top:9px;">
           <div style="padding-top:8px;font-size:$(if ($isBingeWinner) { 18 } else { 16 })px;line-height:1.25;font-weight:900;color:#ffffff;">$(HtmlEncode $bingeTimeLine)</div>
@@ -7221,6 +7220,9 @@ $mediaStatsRow
   .design-mobile-banner { width:100% !important; height:150px !important; object-fit:cover !important; }
   .design-mobile-logo { max-width:250px !important; max-height:100px !important; width:auto !important; height:auto !important; }
   .design-mobile-logo-overlay { bottom:10px !important; }
+  .stats-title-cell { display:block !important; width:100% !important; padding:7px 0 !important; }
+  .stats-title-spacer { display:none !important; }
+  .stats-summary-cell { display:block !important; width:100% !important; padding:0 0 10px !important; }
 }
 </style>
 </head>
@@ -7374,13 +7376,13 @@ function Build-PlainText {
     $plainMovieTitleCount = 0
     if ($null -ne $Stats.PSObject.Properties["MovieItems"]) {
         $plainMovieTitleCount = @($Stats.MovieItems).Count
-        $plainMovieItems = @($Stats.MovieItems | Select-Object -First 4)
+        $plainMovieItems = @($Stats.MovieItems)
     }
     $plainTvShowItems = @()
     $plainTvShowTitleCount = 0
     if ($null -ne $Stats.PSObject.Properties["TvShowItems"]) {
         $plainTvShowTitleCount = @($Stats.TvShowItems).Count
-        $plainTvShowItems = @($Stats.TvShowItems | Select-Object -First 4)
+        $plainTvShowItems = @($Stats.TvShowItems)
     }
 
     $movieStatsText = ""
@@ -7432,7 +7434,7 @@ YOUR WEEK ON PLEX
 
 $movieStatsText
 $tvStatsText
-$($Stats.TotalTimeText) total watched
+$($Stats.TotalTimeText) total watch time
 "@
     }
 
@@ -8192,10 +8194,10 @@ function Build-ForUser {
 
     $statsPosterItems = @()
     if ($null -ne $stats.PSObject.Properties["MovieItems"]) {
-        $statsPosterItems += @($stats.MovieItems | Select-Object -First 4)
+        $statsPosterItems += @($stats.MovieItems)
     }
     if ($null -ne $stats.PSObject.Properties["TvShowItems"]) {
-        $statsPosterItems += @($stats.TvShowItems | Select-Object -First 4)
+        $statsPosterItems += @($stats.TvShowItems)
     }
     $statsPosterItems += @($trendingPosterItem)
 
@@ -8384,10 +8386,10 @@ function Build-AllEmailVariants {
 
     $populatedPosterItems = @($trendingPosterItem)
     if ($null -ne $populatedVariant.Stats.PSObject.Properties["MovieItems"]) {
-        $populatedPosterItems += @($populatedVariant.Stats.MovieItems | Select-Object -First 4)
+        $populatedPosterItems += @($populatedVariant.Stats.MovieItems)
     }
     if ($null -ne $populatedVariant.Stats.PSObject.Properties["TvShowItems"]) {
-        $populatedPosterItems += @($populatedVariant.Stats.TvShowItems | Select-Object -First 4)
+        $populatedPosterItems += @($populatedVariant.Stats.TvShowItems)
     }
 
     $script:TautWeeklyResultErrorCategory = "asset-unavailable"
