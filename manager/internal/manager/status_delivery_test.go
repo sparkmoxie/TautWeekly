@@ -109,6 +109,62 @@ func TestMalformedLatestRendererResultDoesNotReplaceTaskEvidence(t *testing.T) {
 	}
 }
 
+func TestWindowsTaskRunningSignalRequiresOwnedActiveTask(t *testing.T) {
+	runningCode := windowsTaskRunningResult
+	for _, test := range []struct {
+		name  string
+		probe windowsTaskProbe
+		want  bool
+	}{
+		{name: "live state", probe: windowsTaskProbe{Installed: true, Owned: true, State: "Running", LastRunUTC: "2031-04-18T16:30:00Z"}, want: true},
+		{name: "scheduler result", probe: windowsTaskProbe{Installed: true, Owned: true, State: "Ready", LastTaskResult: &runningCode, LastRunUTC: "2031-04-18T16:30:00Z"}, want: true},
+		{name: "foreign task", probe: windowsTaskProbe{Installed: true, Owned: false, State: "Running", LastTaskResult: &runningCode}, want: false},
+		{name: "completed task", probe: windowsTaskProbe{Installed: true, Owned: true, State: "Ready"}, want: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			signal := windowsTaskDeliveryRunSignal(test.probe)
+			if signal.Running != test.want {
+				t.Fatalf("running=%t, want %t for %+v", signal.Running, test.want, test.probe)
+			}
+			if test.want && (signal.StartedAtUTC != test.probe.LastRunUTC || signal.Evidence != "task-scheduler") {
+				t.Fatalf("unexpected running signal: %+v", signal)
+			}
+		})
+	}
+}
+
+func TestActiveDeliveryOverridesStaleCompletedRendererEvidence(t *testing.T) {
+	root := t.TempDir()
+	started := time.Date(2031, 4, 18, 16, 0, 0, 0, time.UTC)
+	writeRendererResultFixture(t, root, rendererResult{
+		SchemaVersion:     2,
+		Mode:              "SendAll",
+		Outcome:           "succeeded",
+		DeliveryScope:     "production",
+		StartedAtUTC:      started.Format(time.RFC3339Nano),
+		FinishedAtUTC:     started.Add(5 * time.Minute).Format(time.RFC3339Nano),
+		DurationMS:        300000,
+		SMTPAcceptedCount: 12,
+	})
+	snapshot := StatusSnapshot{Delivery: DeliveryStatus{
+		Result:         "not-recorded",
+		Evidence:       "none",
+		LastSuccessUTC: started.Add(5 * time.Minute).Format(time.RFC3339Nano),
+	}}
+	applyLatestRendererDelivery(&snapshot, root)
+	activeStart := started.Add(7 * 24 * time.Hour).Format(time.RFC3339Nano)
+	applyActiveDelivery(&snapshot, deliveryRunSignal{Running: true, StartedAtUTC: activeStart, Evidence: "task-scheduler"})
+	if !snapshot.Delivery.Running || snapshot.Delivery.Result != "running" || snapshot.Delivery.Evidence != "task-scheduler" || snapshot.Delivery.LastAttemptUTC != activeStart {
+		t.Fatalf("active delivery did not replace stale completion: %+v", snapshot.Delivery)
+	}
+	if snapshot.Delivery.SMTPAcceptedCount != 0 || snapshot.Delivery.ExitCode != nil || snapshot.Delivery.SMTPFailure != nil || snapshot.Delivery.ErrorCategory != "" {
+		t.Fatalf("active delivery retained stale terminal evidence: %+v", snapshot.Delivery)
+	}
+	if snapshot.Delivery.LastSuccessUTC == "" {
+		t.Fatal("active delivery should retain the prior accepted-run timestamp")
+	}
+}
+
 func writeRendererResultFixture(t *testing.T, root string, result rendererResult) {
 	t.Helper()
 	encoded, err := json.Marshal(result)

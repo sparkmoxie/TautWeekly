@@ -37,6 +37,7 @@ type ScheduleStatus struct {
 }
 
 type DeliveryStatus struct {
+	Running           bool                      `json:"running"`
 	LastAttemptUTC    string                    `json:"lastAttemptUtc,omitempty"`
 	LastSuccessUTC    string                    `json:"lastSuccessUtc,omitempty"`
 	Result            string                    `json:"result"`
@@ -48,6 +49,14 @@ type DeliveryStatus struct {
 	SkipReasonCounts  *DeliverySkipReasonCounts `json:"skipReasonCounts,omitempty"`
 	ErrorCategory     string                    `json:"errorCategory,omitempty"`
 	ExitCode          *int64                    `json:"exitCode,omitempty"`
+}
+
+const windowsTaskRunningResult int64 = 267009 // SCHED_S_TASK_RUNNING (0x00041301)
+
+type deliveryRunSignal struct {
+	Running      bool
+	StartedAtUTC string
+	Evidence     string
 }
 
 type IntegrationStatus struct {
@@ -96,6 +105,7 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 	config := ReadRedactedConfig(runtimeRoot)
 	editor := ReadConfigEditor(runtimeRoot)
 	previews, _ := listPreviews(runtimeRoot)
+	activeDelivery := deliveryRunSignal{}
 
 	capabilities := capabilitiesFor(options)
 	snapshot := StatusSnapshot{
@@ -177,12 +187,14 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 				snapshot.Delivery.Evidence = "task-scheduler"
 				snapshot.Delivery.Result = "task-result-" + strconv.FormatInt(*probe.LastTaskResult, 10)
 			}
+			activeDelivery = windowsTaskDeliveryRunSignal(probe)
 		}
 	}
 	if isManagedServiceRuntimeMode(capabilities.RuntimeMode) {
-		applyEmbeddedScheduleStatus(&snapshot, runtimeRoot, observed, capabilities.ScheduleProvider)
+		activeDelivery = applyEmbeddedScheduleStatus(&snapshot, runtimeRoot, observed, capabilities.ScheduleProvider)
 	}
 	applyLatestRendererDelivery(&snapshot, runtimeRoot)
+	applyActiveDelivery(&snapshot, activeDelivery)
 	return snapshot
 }
 
@@ -192,6 +204,10 @@ type containerSchedulerHeartbeat struct {
 	TimeZoneID string `json:"TimeZoneId"`
 }
 
+type serviceSupervisorHeartbeat struct {
+	UTC string `json:"Utc"`
+}
+
 type containerSchedulerState struct {
 	LastAttemptUTC string `json:"LastAttemptUtc"`
 	LastSuccessUTC string `json:"LastSuccessUtc"`
@@ -199,7 +215,7 @@ type containerSchedulerState struct {
 	LastExitCode   *int64 `json:"LastExitCode"`
 }
 
-func applyEmbeddedScheduleStatus(snapshot *StatusSnapshot, runtimeRoot string, observed time.Time, provider string) {
+func applyEmbeddedScheduleStatus(snapshot *StatusSnapshot, runtimeRoot string, observed time.Time, provider string) deliveryRunSignal {
 	values, _, exists, state := readConfigDocument(runtimeRoot)
 	enabled := exists && state == "ready" && configMapBool(values, "ScheduleEnabled", false)
 	snapshot.Schedule = ScheduleStatus{
@@ -236,10 +252,60 @@ func applyEmbeddedScheduleStatus(snapshot *StatusSnapshot, runtimeRoot string, o
 		snapshot.Delivery.LastSuccessUTC = schedulerState.LastSuccessUTC
 		snapshot.Delivery.ExitCode = schedulerState.LastExitCode
 		if strings.TrimSpace(schedulerState.LastResult) != "" {
-			snapshot.Delivery.Result = strings.ToLower(strings.ReplaceAll(schedulerState.LastResult, " ", "-"))
+			normalizedResult := strings.ToLower(strings.ReplaceAll(schedulerState.LastResult, " ", "-"))
+			snapshot.Delivery.Result = normalizedResult
 			snapshot.Delivery.Evidence = "embedded-scheduler"
+			if normalizedResult == "running" && (snapshot.Schedule.State == "running" || serviceSupervisorHeartbeatIsFresh(runtimeRoot, observed)) {
+				if snapshot.Schedule.State != "running" {
+					snapshot.Schedule.State = "running"
+					snapshot.Runtime.Scheduler = "running"
+					snapshot.Schedule.NextRunLocal, snapshot.Schedule.NextRunUTC = nextContainerRun(values, heartbeat.TimeZoneID, observed)
+					if snapshot.Overall == "degraded" {
+						snapshot.Overall = "healthy"
+					}
+				}
+				return deliveryRunSignal{Running: true, StartedAtUTC: schedulerState.LastAttemptUTC, Evidence: "embedded-scheduler"}
+			}
 		}
 	}
+	return deliveryRunSignal{}
+}
+
+func serviceSupervisorHeartbeatIsFresh(runtimeRoot string, observed time.Time) bool {
+	var heartbeat serviceSupervisorHeartbeat
+	if !readSmallJSON(filepath.Join(runtimeRoot, "service-heartbeat.json"), &heartbeat) {
+		return false
+	}
+	stamp, err := time.Parse(time.RFC3339, heartbeat.UTC)
+	return err == nil && observed.Sub(stamp.UTC()) <= 90*time.Second && !observed.Before(stamp.UTC().Add(-5*time.Second))
+}
+
+func windowsTaskDeliveryRunSignal(probe windowsTaskProbe) deliveryRunSignal {
+	if !probe.Installed || !probe.Owned {
+		return deliveryRunSignal{}
+	}
+	runningResult := probe.LastTaskResult != nil && *probe.LastTaskResult == windowsTaskRunningResult
+	if !strings.EqualFold(strings.TrimSpace(probe.State), "running") && !runningResult {
+		return deliveryRunSignal{}
+	}
+	return deliveryRunSignal{Running: true, StartedAtUTC: probe.LastRunUTC, Evidence: "task-scheduler"}
+}
+
+func applyActiveDelivery(snapshot *StatusSnapshot, active deliveryRunSignal) {
+	if !active.Running {
+		return
+	}
+	snapshot.Delivery.Running = true
+	snapshot.Delivery.Result = "running"
+	snapshot.Delivery.Evidence = active.Evidence
+	snapshot.Delivery.LastAttemptUTC = active.StartedAtUTC
+	snapshot.Delivery.ExitCode = nil
+	snapshot.Delivery.SMTPAcceptedCount = 0
+	snapshot.Delivery.SkippedCount = 0
+	snapshot.Delivery.FailedCount = 0
+	snapshot.Delivery.SMTPFailure = nil
+	snapshot.Delivery.SkipReasonCounts = nil
+	snapshot.Delivery.ErrorCategory = ""
 }
 
 func readSmallJSON(path string, target any) bool {
