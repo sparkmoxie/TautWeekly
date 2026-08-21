@@ -14,6 +14,10 @@ $fakeSmtp = Join-Path $Root 'scripts/test-support/fake-smtp.py'
 $headlessRunner = Join-Path $Root 'scripts/test-support/invoke-renderer-headless.ps1'
 $powerShell7 = Get-Command pwsh -ErrorAction SilentlyContinue
 $windowsHost = if ($env:SystemRoot) { Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe' } else { '' }
+$processWindowArgs = @{}
+if ($PSVersionTable.PSEdition -eq 'Desktop' -or $env:OS -eq 'Windows_NT') {
+    $processWindowArgs.WindowStyle = 'Hidden'
+}
 
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
@@ -331,7 +335,7 @@ foreach ($engine in $engines) {
             '-u', $fakeTautulli, '--port', [string]$tautulliPort, '--scenario', 'quiet',
             '--users-file', $usersFile, '--refresh-users-file', $refreshUsersFile,
             '--fail-refresh-file', $failRefreshFile, '--call-log', $tautulliLog, '--ready-file', $tautulliReady
-        ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $tautulliStdout -RedirectStandardError $tautulliStderr
+        ) -PassThru @processWindowArgs -RedirectStandardOutput $tautulliStdout -RedirectStandardError $tautulliStderr
         for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $tautulliReady); $attempt++) {
             if ($tautulli.HasExited) { throw "Virtual Tautulli exited early: $(Get-Content $tautulliStderr -Raw -ErrorAction SilentlyContinue)" }
             Start-Sleep -Milliseconds 50
@@ -383,7 +387,7 @@ foreach ($engine in $engines) {
                 'reject-policy' { $smtpArguments += '--reject-policy' }
             }
             $smtp = $null
-            $smtp = Start-Process -FilePath $PythonPath -ArgumentList $smtpArguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $smtpStdout -RedirectStandardError $smtpStderr
+            $smtp = Start-Process -FilePath $PythonPath -ArgumentList $smtpArguments -PassThru @processWindowArgs -RedirectStandardOutput $smtpStdout -RedirectStandardError $smtpStderr
             try {
                 for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $smtpReady); $attempt++) {
                     if ($smtp.HasExited) { throw "Virtual SMTP exited early: $(Get-Content $smtpStderr -Raw -ErrorAction SilentlyContinue)" }
@@ -439,7 +443,7 @@ foreach ($engine in $engines) {
                             '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
                             '-RendererPath', (Join-Path $appRoot 'TautWeekly.ps1'), '-ConfigPath', $configPath,
                             '-UserId', '1', '-Mode', 'SendAll', '-ResultPath', $unconfirmedResultPath, '-NoConfirmSendAll'
-                        ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $unconfirmedStdout -RedirectStandardError $unconfirmedStderr
+                        ) -Wait -PassThru @processWindowArgs -RedirectStandardOutput $unconfirmedStdout -RedirectStandardError $unconfirmedStderr
                         Assert-True ($unconfirmedProcess.ExitCode -eq 1) "$($engine.Name) accepted an unconfirmed production SendAll."
                         $callsAfterUnconfirmed = @(Get-Content -LiteralPath $tautulliLog -ErrorAction SilentlyContinue | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
                         Assert-True ($callsAfterUnconfirmed -eq $callsBeforeUnconfirmed) "$($engine.Name) contacted Tautulli before production confirmation."
@@ -450,7 +454,7 @@ foreach ($engine in $engines) {
                         '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
                         '-RendererPath', (Join-Path $appRoot 'TautWeekly.ps1'), '-ConfigPath', $configPath,
                         '-UserId', '1', '-Mode', 'SendAll', '-ResultPath', $resultPath
-                    ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+                    ) -Wait -PassThru @processWindowArgs -RedirectStandardOutput $stdout -RedirectStandardError $stderr
                 }
                 finally {
                     $env:TAUTWEEKLY_DATA_DIR = $oldDataRoot
