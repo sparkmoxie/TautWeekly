@@ -129,7 +129,7 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 		t.Fatal("static application shell omitted the explicit production-recipient policy")
 	}
 	app := requestForTest(server, http.MethodGet, "/app.js", nil, nil)
-	if app.Code != http.StatusOK || !strings.Contains(app.Body.String(), "no-eligible-recipients") || !strings.Contains(app.Body.String(), "origin-host-mismatch") || !strings.Contains(app.Body.String(), "(unsaved)") {
+	if app.Code != http.StatusOK || !strings.Contains(app.Body.String(), "no-eligible-recipients") || !strings.Contains(app.Body.String(), "origin-host-mismatch") || !strings.Contains(app.Body.String(), "httpHostHeader") || !strings.Contains(app.Body.String(), "No configuration was saved") || !strings.Contains(app.Body.String(), "(unsaved)") {
 		t.Fatalf("production JavaScript omitted recipient/origin guidance: status=%d", app.Code)
 	}
 }

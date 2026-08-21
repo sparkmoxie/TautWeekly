@@ -168,6 +168,11 @@ checks. `GET /health/live` is unauthenticated and exposes only liveness;
 configuration, paths, versions, credentials, and newsletter state remain
 authenticated.
 
+For Cloudflare Tunnel, leave the TautWeekly ingress route without an
+`httpHostHeader` override. Rewriting Host to `127.0.0.1`, the container name,
+or another backend address causes a deliberate `origin-host-mismatch` because
+the browser origin no longer matches the Host received by the Manager.
+
 ### Optional private Tailscale access
 
 Install and sign in to the Tailscale macOS client, install its CLI integration,

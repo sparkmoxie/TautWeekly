@@ -236,6 +236,10 @@ For LAN or reverse-proxy access, verify the exact DNS name is listed in the
 platform's Manager allowed-host setting. Terminate TLS at a trusted reverse
 proxy, enable secure cookies, preserve the original Host header, and do not
 publish the plain HTTP backend. IP-literal access needs no DNS allowlist entry.
+If a Cloudflare Tunnel route uses an `httpHostHeader` override, remove that
+override for the TautWeekly route so cloudflared forwards the browser's public
+Host unchanged. Do not add the rewritten loopback or container address to the
+DNS allowlist.
 An Origin rejection now reports a sanitized code: `invalid-origin` for a
 malformed value, `origin-host-mismatch` or `origin-scheme-mismatch` for a real
 same-origin difference, and `remote-http` when a saved Tailscale hostname was
