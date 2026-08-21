@@ -249,8 +249,9 @@ $guiPreview = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/index.html'))
 $guiPreviewApp = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/app.js'))
 $guiPreviewAPI = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/mock-api.js'))
 $guiPreviewRich = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/rich-preview.js'))
+$guiPreviewCSS = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/app.css'))
 $guiPreviewManifest = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/manifest.webmanifest'))
-$guiPreviewCombined = $guiPreview + $guiPreviewApp + $guiPreviewAPI + $guiPreviewRich + $guiPreviewManifest
+$guiPreviewCombined = $guiPreview + $guiPreviewApp + $guiPreviewAPI + $guiPreviewRich + $guiPreviewCSS + $guiPreviewManifest
 
 foreach ($pattern in @(
     'connect-src ''none''',
@@ -317,6 +318,96 @@ foreach ($reference in $mediaReferences) {
         throw "GUI Preview local media asset is missing: $assetPath"
     }
 }
+
+$titleGifHashes = [ordered]@{
+    'celebrate.gif'    = '86879C45175F3901A8676D9B0BB5132C7A98B20A9F40487C21E4C896CE196616'
+    'construction.gif' = '2266492FFE1F5FDF87B41C81388A00D5844598304E8FDC8157255D1998C9B788'
+    'rocket.gif'       = 'D644D67D81484688452B5D4BC1F79E98333A33B4FE4C03283839DD9008F19A5F'
+    'tickets.gif'      = '7931191FE094F6BD6605C18F0FDE3E3C68B1441BC946BE6380A7F5AF0BE6DEE5'
+    'warning.gif'      = '447C12C7F9F8460D30EA914C4F895076DDDFE199386DC74585113DC0DD8910EC'
+}
+foreach ($entry in $titleGifHashes.GetEnumerator()) {
+    $assetPath = Join-Path $guiPreviewMedia $entry.Key
+    if (-not (Test-Path -LiteralPath $assetPath -PathType Leaf)) {
+        throw "GUI Preview title GIF is missing: $assetPath"
+    }
+    $actualHash = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash
+    if ($actualHash -ne $entry.Value) {
+        throw "GUI Preview title GIF was visually or bytewise modified: $($entry.Key)"
+    }
+    $assetID = [IO.Path]::GetFileNameWithoutExtension($entry.Key)
+    if ($guiPreviewRich -notmatch [regex]::Escape("${assetID}: `"$($entry.Key)`"")) {
+        throw "GUI Preview safe title-GIF mapping is missing: $assetID"
+    }
+}
+
+foreach ($pattern in @(
+    'CustomTextCardTitleGif.+synthetic-asset-id.+none',
+    'TITLE_GIF_IDS = new Set\(\["none", "celebrate", "construction", "rocket", "tickets", "warning"\]\)',
+    'const titleGifAssets = Object\.freeze',
+    'Object\.hasOwn\(titleGifAssets, requestedTitleGifID\)',
+    'assetInput\.type = "hidden"',
+    'role", "listbox"',
+    'role", "option"',
+    'aria-selected',
+    'aria-expanded',
+    'ArrowRight',
+    'ArrowDown',
+    '\["Enter", " "\]',
+    'Escape',
+    'data-material-symbol="add_reaction"|dataset\.materialSymbol = "add_reaction"',
+    'data-fill="0"',
+    'data-weight="400"',
+    'data-grade="0"',
+    'data-optical-size="24"',
+    'title-gif-trigger \.ui-icon\{width:24px;height:24px\}',
+    'custom-title-gif.+width="18" height="18" alt="" style="vertical-align:-4px;margin-left:6px"',
+    'esc\(card\.title\.toUpperCase\(\)\)\}\$\{titleGif\}',
+    'titleGifID',
+    'titleGifFile'
+)) {
+    if ($guiPreviewCombined -notmatch $pattern) {
+        throw "GUI Preview title-GIF selector contract is missing: $pattern"
+    }
+}
+
+foreach ($stateID in @('demo-welcome', 'demo-new', 'demo-history', 'demo-normal', 'demo-quiet', 'demo-warnings')) {
+    if ($guiPreviewRich -notmatch [regex]::Escape("`"$stateID`": {")) {
+        throw "GUI Preview title-GIF coverage is missing newsletter state: $stateID"
+    }
+}
+if ($guiPreviewRich -notmatch '\$\{welcomeBlock\(state\)\}\$\{customTextCard\(\)\}<div class="release-meta">') {
+    throw 'GUI Preview custom title GIF is not routed through every newsletter state before release metadata.'
+}
+
+foreach ($pattern in @(
+    'const BACKUP_LIMIT = 10',
+    'const OPERATION_HISTORY_LIMIT = 20',
+    'const DIAGNOSTIC_LIMIT = 20',
+    'retainNewest\(Array\.from\(\{ length: 12 \}',
+    'retainNewest\(\[completedPreview, \.\.\.archivedOperations\], OPERATION_HISTORY_LIMIT\)',
+    'recordBackup\(revision\)',
+    'recordDiagnostic\("manager-operation"',
+    'maximumEntries: BACKUP_LIMIT',
+    'maximumEntries: OPERATION_HISTORY_LIMIT.+retentionPolicy: "count-only-fifo"',
+    'maximumEntries: DIAGNOSTIC_LIMIT.+retentionPolicy: "count-only-fifo"',
+    'slice\(0, state\.backupMaximum\)',
+    'slice\(0, state\.historyMaximum\)',
+    'slice\(0, diagnosticMaximum\)',
+    'newest 10 fictional backups',
+    'Count-only FIFO keeps the newest 20 completed items',
+    'Count-only FIFO keeps the newest 20 fictional events'
+)) {
+    if ($guiPreviewCombined -notmatch $pattern) {
+        throw "GUI Preview rolling-retention contract is missing: $pattern"
+    }
+}
+
+if ($guiPreviewRich -match 'CustomTextCardTitle[^\r\n]+(?:celebrate|construction|rocket|tickets|warning)\.gif') {
+    throw 'GUI Preview title text contains a literal GIF filename or marker.'
+}
+
+Write-Host '[PASS] GUI Preview title-GIF selector, safe mapping, six-state output, accessibility, and rolling FIFO caps are covered.'
 
 Write-Host '[PASS] GUI Preview is static, relative, package-neutral, locally enriched, non-persistent, and network-blocked.'
 
