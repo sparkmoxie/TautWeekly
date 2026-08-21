@@ -962,12 +962,24 @@ that run. Test delivery is limited by the renderer to the saved `TestEmail`,
 records aggregate SMTP acceptance only, and exposes no unsafe cancellation.
 Manual production delivery uses the same fixed renderer contract as the
 schedule, accepts no browser-supplied user or command input, cannot be
-cancelled, and retains aggregate accepted, skipped, and failed counts. All
+cancelled, and retains aggregate accepted, skipped, and failed counts. The
+shared `SendAll` path makes exactly one bounded `refresh_users_list` request
+under the renderer lock before reading or classifying Tautulli's live roster;
+failure stops before SMTP with an allowlisted count-only category. Manager
+discovery cache is never the production recipient source. All
 three write bounded sanitized current/history records without the user ID,
     configuration, service addresses, command line, or raw process output. The
     renderer's opt-in structured result contains only mode, outcome, one fixed
     allowlisted failure category, timing, delivery scope, aggregate counts, and
-    preview basenames. Manager-triggered service-package work attempts the
+    preview basenames. Schema v3 may additionally retain a fixed SMTP category
+    and stage, numeric response code/class, batch-fatal state, and acceptance
+    state; raw provider text, accounts, hosts, recipients, and credentials are
+    rejected. Authentication, temporary provider/service, batch-wide,
+    transport, and ambiguous-DATA failures stop SendAll before another SMTP
+    connection. A permanent 5xx RCPT rejection is recipient-specific only when
+    its enhanced status identifies an address or mailbox condition,
+    and the configured delay applies before the next attempt even after that
+    failure. Manager-triggered service-package work attempts the
     shared renderer lock without waiting and maps lock exit 75 to
     `operation-busy`; host CLI and lifecycle waits are unchanged. Scheduled Windows
     `SendAll` writes this to ignored private `last-run.json` so the dashboard can

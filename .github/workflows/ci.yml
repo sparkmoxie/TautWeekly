@@ -101,6 +101,9 @@ jobs:
       - name: Test full active-week and quiet-week rendering
         shell: powershell
         run: .\scripts\test-newsletter-integration.ps1
+      - name: Test production recipient policy and zero-delivery evidence
+        shell: powershell
+        run: .\scripts\test-sendall-recipient-policy.ps1
       - name: Test SMTP authentication protocol on Windows PowerShell
         run: python scripts/test-smtp-transport.py --helper platforms/windows/Smtp-Transport.ps1
 

@@ -585,8 +585,22 @@ function rendererFailureCopy(category, supportCode) {
   case "render-failed": return "Fictional newsletter HTML construction did not complete." + suffix;
   case "output-failed": return "The fictional newsletter was built, but its in-memory preview could not be replaced." + suffix;
   case "smtp-failed": return "The fictional SMTP handoff simulation did not complete." + suffix;
+  case "smtp-auth-failed": return "The fictional SMTP authentication step was rejected, so the simulated batch stopped after one attempt." + suffix;
+  case "smtp-rate-limited": return "The fictional provider returned a temporary limit, so the simulated batch stopped before another recipient attempt." + suffix;
+  case "smtp-recipient-rejected": return "One fictional recipient received an address/mailbox-specific permanent rejection; later simulated attempts remained spaced." + suffix;
+  case "smtp-provider-rejected": return "A fictional batch-wide SMTP stage was rejected, so the simulation stopped before another attempt." + suffix;
+  case "smtp-transport-failed": return "The fictional SMTP connection ended before acceptance could begin, so the simulation stopped." + suffix;
+  case "smtp-acceptance-unknown": return "The fictional connection ended after DATA without confirmed acceptance; no retry was modeled." + suffix;
+  case "user-roster-refresh-failed": return "The fictional user-roster refresh could not be confirmed, so the delivery simulation stopped before SMTP." + suffix;
   default: return "The mock renderer did not complete successfully. No private output exists in this demo." + suffix;
   }
+}
+
+function smtpFailureEvidenceCopy(evidence) {
+  if (!evidence || !evidence.stage) return "";
+  const response = Number(evidence.responseCode) > 0 ? `; fictional SMTP response ${Number(evidence.responseCode)}` : "; no fictional SMTP response";
+  const acceptance = evidence.acceptance === "unknown" ? "; acceptance remains unknown and was not retried" : "";
+  return ` Sanitized fictional stage: ${titleCase(String(evidence.stage).replaceAll("-", " "))}${response}${acceptance}.`;
 }
 
 function renderConfig() {
@@ -2266,8 +2280,8 @@ function operationSummary(operation) {
     case "queued": return { heading: "All-recipient simulation queued", copy: "The fictional delivery workflow is waiting to start in memory." };
     case "running": return { heading: "Modeling all-recipient delivery", copy: "Fictional eligible recipients are being processed in memory." };
     case "succeeded": return { heading: "All-recipient simulation passed", copy: `${accepted} fictional SMTP accept${accepted === 1 ? " was" : "s were"} modeled and ${skipped} fictional recipient${skipped === 1 ? " was" : "s were"} skipped. No inbox exists.` };
-    case "partial": return { heading: "All-recipient simulation completed with failures", copy: `${accepted} fictional accepts, ${skipped} skipped, and ${failed} failed${operation.supportCode ? `; demo code: ${operation.supportCode}` : ""}.` };
-    case "failed": return { heading: "All-recipient simulation failed", copy: `${accepted} fictional accept${accepted === 1 ? " was" : "s were"} modeled before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}` };
+    case "partial": return { heading: "All-recipient simulation stopped after a partial delivery", copy: `${accepted} fictional accepts, ${skipped} skipped, and ${failed} failed. ${operation.errorCategory ? rendererFailureCopy(operation.errorCategory, operation.supportCode) : "One or more fictional recipient attempts failed."}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
+    case "failed": return { heading: "All-recipient simulation failed", copy: `${accepted} fictional accept${accepted === 1 ? " was" : "s were"} modeled before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
     default: return { heading: "All-recipient simulation recorded", copy: `${accepted} fictional accepts, ${skipped} skipped, and ${failed} failed. No inbox exists.` };
     }
   }

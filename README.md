@@ -113,8 +113,10 @@ The responsive Manager is the primary workflow on every maintained package:
 - **Operate deliberately:** Schedule reports and controls only the package's
   supported delivery lifecycle; Settings covers access, optional private
   Tailscale HTTPS, capability-aware update status, release notes, diagnostics,
-  and recovery. Host-owned packages keep update and service authority outside
-  the web process.
+  and recovery. Manual and scheduled production delivery share one guarded
+  live-roster refresh and eligibility path, 30-second default attempt spacing,
+  and fail-fast handling for batch-wide SMTP failures. Host-owned packages keep
+  update and service authority outside the web process.
 
 ## Current newsletter behavior
 

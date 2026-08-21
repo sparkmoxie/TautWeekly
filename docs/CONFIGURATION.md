@@ -222,8 +222,26 @@ authorization.
 | `ExcludedUserIds` | `[]` | Users omitted by stable Tautulli ID |
 | `ExcludedEmails` | `[]` | Email addresses omitted from delivery |
 | `RecentAccessDays` | 7 | New/recent access classification |
-| `SendDelaySeconds` | 10 | Pause between real production recipients |
-| `TestSendDelaySeconds` | 2 | Pause between controlled test messages |
+| `SendDelaySeconds` | 30 | Pause between real production recipient attempts |
+| `TestSendDelaySeconds` | 10 | Pause between controlled Test All messages |
+
+Direct configured SMTP remains the standard delivery path. Production messages
+stay personalized with exactly one envelope recipient. The recommended cadence
+is 30 seconds between production attempts and 10 seconds between controlled
+Test All messages; existing configurations keep their explicit values. Avoid
+running Test All or a manual production batch near the scheduled send.
+
+Spacing reduces cadence but cannot override provider quotas, reputation, or
+account-protection controls. Authentication failure, a temporary 4xx
+provider/service response such as `421`, a batch-wide rejection, a transport
+failure, or unknown final-DATA acceptance stops SendAll before another SMTP
+connection. A permanent 5xx RCPT rejection with an address/mailbox-specific
+enhanced status may continue to later
+recipients, but the same configured delay still applies before the next
+attempt. Accepted or ambiguously accepted DATA is never retried. After a
+provider lock, stop retries and allow a quiet period according to the provider
+notice; if it does not clear sooner, wait up to 24 hours before escalating
+through the provider's normal account-recovery path.
 
 ### Global library selection
 
@@ -262,6 +280,25 @@ merged by ID. TautWeekly for Plex does not call `get_user` once per roster row;
 if the detailed bulk request fails, name-only rows remain selectable but are
 not marked delivery-eligible in the selector.
 
+The Config checkboxes are exclusions: checked means excluded. An unchecked
+user is production-eligible only when the Tautulli record is active and has an
+email address. Tautulli's legacy `do_notify` notification-agent value does not
+grant or revoke TautWeekly delivery; explicit `ExcludedUserIds` and
+`ExcludedEmails` remain the administrator-controlled opt-out policy. SendAll
+records only fixed aggregate skip counts for inactive/deleted users, missing
+email, stable-ID exclusions, and legacy email exclusions. It never stores a
+recipient identity in Manager history or reports a zero-recipient run as SMTP
+success.
+
+**Repeat this Tautulli lookup** refreshes only the Manager's saved library and
+user choices. Every manually confirmed or scheduled SendAll instead makes one
+bounded, authenticated `refresh_users_list` request at the start of the shared
+production path, then fetches and classifies Tautulli's live roster. A newly
+eligible Plex user is therefore included on the next production send unless
+explicitly excluded; no Config save or daily Manager poll is required. If
+Tautulli cannot confirm the refresh, delivery fails before any SMTP connection
+with the fixed `user-roster-refresh-failed` category.
+
 Normally revise exclusions in Manager Config. Recovery/expert fallbacks are
 `14-MANAGE-USER-EXCLUSIONS.bat` on Windows,
 `./tautweekly.sh exclude-users` on either Docker edition, and
@@ -289,9 +326,11 @@ instead of falling back to UTC.
 `schedule-status` reports both the zone/time resolved by its short-lived control
 process and the zone/time recorded by the active scheduler heartbeat. After
 changing a timezone environment file, restart the native service. After changing
-Docker or Podman environment configuration, recreate or restart the container as
-the platform requires, then confirm that `Scheduler TZ` matches `Configured TZ`
-before enabling delivery.
+Docker environment configuration, run the package `./tautweekly.sh restart`
+command, which recreates the application service so current `.env` values are
+applied. Podman and NAS vendor controls must use their equivalent container
+recreation flow. Then confirm that `Scheduler TZ` matches `Configured TZ` before
+enabling delivery.
 
 ## Docker environment
 

@@ -331,7 +331,7 @@ func (s *Server) allowedHost(value string) bool {
 	if s.remoteAccess.AllowsHost(host) {
 		return true
 	}
-	if !isContainerRuntimeMode(s.capabilities.RuntimeMode) {
+	if !isManagedServiceRuntimeMode(s.capabilities.RuntimeMode) {
 		return false
 	}
 	for _, allowed := range s.options.AllowedHosts {

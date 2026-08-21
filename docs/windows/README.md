@@ -275,6 +275,28 @@ in `config.json`; the guided display is retained until another validation
 refreshes the available choices. Library scope filters releases, quiet mode,
 Trending, Binge Champion, and personal statistics before calculations run.
 
+User checkboxes are exclusions: checked means excluded. Unchecked active users
+with an email address are eligible regardless of Tautulli's legacy
+notification-agent `do_notify` value. Manual and scheduled SendAll use the same
+policy. A zero-eligible run is a failed no-delivery result with fixed aggregate
+skip reasons, never SMTP-accepted success; Manager history retains no recipient
+identity or email address.
+
+**Repeat this Tautulli lookup** updates only the choices shown in Config. Every
+manual or scheduled SendAll performs one bounded Tautulli/Plex user-list
+refresh before reading the live roster, so a new eligible user is included
+without another Config save unless explicitly excluded. An unconfirmed refresh
+stops before SMTP with fixed sanitized guidance.
+
+Direct configured SMTP remains the standard path. New configurations use
+`SendDelaySeconds=30` and `TestSendDelaySeconds=10`. SendAll stops after an
+authentication, temporary provider/service, batch-wide, transport, or
+ambiguous-DATA failure instead of reconnecting for every remaining recipient;
+an address/mailbox-specific RCPT rejection may continue after the configured
+delay. Avoid
+Test All or a manual production run near the scheduled batch, and stop retries
+during a provider account lock.
+
 Validation never authenticates to SMTP, sends email, changes welcome state, or
 installs a schedule.
 

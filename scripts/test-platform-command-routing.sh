@@ -68,12 +68,20 @@ bash "$repo_root/platforms/nas-docker/tautweekly.sh" shell
 assert_call 'docker compose exec tautweekly /opt/tautweekly/bin/run-as-user.sh bash'
 
 reset_calls
+bash "$repo_root/platforms/nas-docker/tautweekly.sh" restart
+assert_call 'docker compose up -d --no-build --force-recreate tautweekly'
+
+reset_calls
 bash "$repo_root/platforms/mac-docker/tautweekly.sh" manage-libraries
 assert_call 'docker compose exec tautweekly /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1'
 
 reset_calls
 bash "$repo_root/platforms/mac-docker/tautweekly.sh" manager-bootstrap
 assert_call 'docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager'
+
+reset_calls
+bash "$repo_root/platforms/mac-docker/tautweekly.sh" restart
+assert_call 'docker compose up -d --no-build --force-recreate tautweekly'
 
 reset_calls
 bash "$repo_root/platforms/mac-docker/tautweekly.sh" open-manager

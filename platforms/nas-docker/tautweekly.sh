@@ -44,7 +44,7 @@ case "$cmd" in
     ;;
   up|start) compose_cmd up -d ;;
   down|stop) compose_cmd down ;;
-  restart) compose_cmd restart tautweekly ;;
+  restart) compose_cmd up -d --no-build --force-recreate tautweekly ;;
   status) compose_cmd ps ;;
   logs) compose_cmd logs -f --tail=200 tautweekly ;;
   shell) compose_cmd exec tautweekly /opt/tautweekly/bin/run-as-user.sh bash ;;

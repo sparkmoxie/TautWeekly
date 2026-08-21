@@ -147,19 +147,26 @@ Use the Mac wrapper for lifecycle status:
 ./tautweekly.sh restart
 ```
 
+`restart` recreates only the `tautweekly` service with the existing image and
+volumes, so current `.env` values are applied. It preserves `.env`, `data/`,
+configuration, Manager access state, schedules, and generated output.
+
 ## Network, reverse proxy, and TLS
 
 The generated `.env` keeps `PREVIEW_BIND=127.0.0.1`; that compatibility name
 now controls the authenticated Manager host port. Keep loopback unless trusted
 LAN access is intentional. The Manager always requires authentication.
 
-For a deliberate DNS name, add only exact names to `MANAGER_ALLOWED_HOSTS`.
-For HTTPS behind a trusted reverse proxy, preserve the original Host header,
-set `MANAGER_SECURE_COOKIES=true`, terminate TLS at the proxy, and do not
-publish the plain HTTP backend. Wildcard hosts and forwarded identity headers
-are not trusted. `GET /health/live` is unauthenticated and exposes only
-liveness; configuration, paths, versions, credentials, and newsletter state
-remain authenticated.
+For a deliberate DNS name, add the hostname only (for example,
+`weekly.example.com`, with no scheme, port, wildcard, path, or trailing value)
+to `MANAGER_ALLOWED_HOSTS`. For HTTPS behind a trusted reverse proxy, preserve
+that exact original `Host` header, set `MANAGER_SECURE_COOKIES=true`, terminate
+TLS at the proxy, and do not publish the plain HTTP backend. Run
+`./tautweekly.sh restart` after either `.env` change so Compose recreates the
+service. `Forwarded` and `X-Forwarded-*` never override Host, origin, or TLS
+checks. `GET /health/live` is unauthenticated and exposes only liveness;
+configuration, paths, versions, credentials, and newsletter state remain
+authenticated.
 
 ### Optional private Tailscale access
 
@@ -284,6 +291,20 @@ the package never deletes them implicitly.
 USER_ID`, library/user selectors, and schedule commands remain available for
 recovery or scripted administration. They are not the normal Mac setup source.
 Real-recipient `welcome` and `send-all` commands retain explicit confirmation.
+Manager's **Repeat this Tautulli lookup** refreshes only the displayed choices;
+every manual or scheduled SendAll performs one bounded Tautulli/Plex user-list
+refresh before reading the live roster. A newly eligible user is included
+unless explicitly excluded, and an unconfirmed refresh stops before SMTP with
+fixed sanitized guidance.
+
+Direct configured SMTP remains the standard path. New configurations use
+`SendDelaySeconds=30` and `TestSendDelaySeconds=10`. SendAll stops after an
+authentication, temporary provider/service, batch-wide, transport, or
+ambiguous-DATA failure instead of reconnecting for every remaining recipient;
+an address/mailbox-specific RCPT rejection may continue after the configured
+delay. Avoid
+Test All or a manual production run near the scheduled batch, and stop retries
+during a provider account lock.
 
 ## Limitations
 

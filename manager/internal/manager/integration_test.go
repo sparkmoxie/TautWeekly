@@ -467,7 +467,7 @@ func TestTautulliDiscoveryReturnsSanitizedChoicesWithoutEmailOrSecrets(t *testin
 			}
 		case "get_users":
 			data = []any{
-				map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "is_active": 1, "do_notify": 1, "is_admin": 1},
+				map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "is_active": 1, "do_notify": 0, "is_admin": 1},
 				map[string]any{"user_id": "2", "username": "viewer", "email": "private-viewer@example.org", "is_active": 0, "do_notify": 1},
 			}
 		case "get_users_table":
@@ -476,7 +476,7 @@ func TestTautulliDiscoveryReturnsSanitizedChoicesWithoutEmailOrSecrets(t *testin
 				return
 			}
 			data = map[string]any{"data": []any{
-				map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "email": "private-admin@example.org", "is_active": 1, "do_notify": 1},
+				map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "email": "private-admin@example.org", "is_active": 1, "do_notify": 0},
 			}}
 		default:
 			http.Error(w, "unsupported", http.StatusBadRequest)

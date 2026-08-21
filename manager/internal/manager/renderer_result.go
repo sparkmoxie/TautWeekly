@@ -16,18 +16,36 @@ const maximumRendererResultBytes = 64 << 10
 var errRendererResultInvalid = errors.New("renderer result is invalid")
 
 type rendererResult struct {
-	SchemaVersion         int      `json:"schemaVersion"`
-	Mode                  string   `json:"mode"`
-	Outcome               string   `json:"outcome"`
-	ErrorCategory         string   `json:"errorCategory,omitempty"`
-	DeliveryScope         string   `json:"deliveryScope"`
-	StartedAtUTC          string   `json:"startedAtUtc"`
-	FinishedAtUTC         string   `json:"finishedAtUtc"`
-	DurationMS            int64    `json:"durationMs"`
-	SMTPAcceptedCount     int      `json:"smtpAcceptedCount"`
-	SkippedCount          int      `json:"skippedCount"`
-	FailedCount           int      `json:"failedCount"`
-	GeneratedPreviewFiles []string `json:"generatedPreviewFiles"`
+	SchemaVersion         int                       `json:"schemaVersion"`
+	Mode                  string                    `json:"mode"`
+	Outcome               string                    `json:"outcome"`
+	ErrorCategory         string                    `json:"errorCategory,omitempty"`
+	DeliveryScope         string                    `json:"deliveryScope"`
+	StartedAtUTC          string                    `json:"startedAtUtc"`
+	FinishedAtUTC         string                    `json:"finishedAtUtc"`
+	DurationMS            int64                     `json:"durationMs"`
+	SMTPAcceptedCount     int                       `json:"smtpAcceptedCount"`
+	SkippedCount          int                       `json:"skippedCount"`
+	FailedCount           int                       `json:"failedCount"`
+	SMTPFailure           *SMTPFailureEvidence      `json:"smtpFailure"`
+	SkipReasonCounts      *DeliverySkipReasonCounts `json:"skipReasonCounts,omitempty"`
+	GeneratedPreviewFiles []string                  `json:"generatedPreviewFiles"`
+}
+
+type SMTPFailureEvidence struct {
+	Category      string `json:"category"`
+	Stage         string `json:"stage"`
+	ResponseCode  int    `json:"responseCode"`
+	ResponseClass int    `json:"responseClass"`
+	BatchFatal    bool   `json:"batchFatal"`
+	Acceptance    string `json:"acceptance"`
+}
+
+type DeliverySkipReasonCounts struct {
+	InactiveOrDeleted int `json:"inactiveOrDeleted"`
+	MissingEmail      int `json:"missingEmail"`
+	ExcludedUserID    int `json:"excludedUserId"`
+	ExcludedEmail     int `json:"excludedEmail"`
 }
 
 func readRendererResult(path, expectedMode string) (rendererResult, error) {
@@ -53,16 +71,33 @@ func readRendererResult(path, expectedMode string) (rendererResult, error) {
 }
 
 func validRendererResult(result rendererResult, expectedMode string) bool {
-	if result.SchemaVersion != 1 || result.Mode != expectedMode || expectedDeliveryScope(result.Mode) == "" {
+	if (result.SchemaVersion != 1 && result.SchemaVersion != 2 && result.SchemaVersion != 3) || result.Mode != expectedMode || expectedDeliveryScope(result.Mode) == "" {
 		return false
 	}
 	if result.Outcome != "succeeded" && result.Outcome != "partial" && result.Outcome != "failed" {
 		return false
 	}
 	if result.ErrorCategory != "" {
-		if result.Outcome != "failed" || !validRendererErrorCategory(result.ErrorCategory) {
+		if (result.Outcome != "failed" && !(result.Mode == "SendAll" && result.Outcome == "partial")) || !validRendererErrorCategory(result.ErrorCategory) {
 			return false
 		}
+		if (result.ErrorCategory == "no-eligible-recipients" || result.ErrorCategory == "user-roster-refresh-failed") && result.Mode != "SendAll" {
+			return false
+		}
+		if structuredSMTPFailureCategory(result.ErrorCategory) && result.Mode != "SendAll" {
+			return false
+		}
+	}
+	if result.SchemaVersion < 3 {
+		if result.SMTPFailure != nil {
+			return false
+		}
+	} else if result.SMTPFailure != nil {
+		if result.Mode != "SendAll" || (result.Outcome != "failed" && result.Outcome != "partial") || result.ErrorCategory != result.SMTPFailure.Category || !validSMTPFailureEvidence(*result.SMTPFailure) {
+			return false
+		}
+	} else if structuredSMTPFailureCategory(result.ErrorCategory) {
+		return false
 	}
 	if result.DeliveryScope != expectedDeliveryScope(result.Mode) {
 		return false
@@ -74,6 +109,22 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 	}
 	for _, count := range []int{result.SMTPAcceptedCount, result.SkippedCount, result.FailedCount} {
 		if count < 0 || count > 1_000_000 {
+			return false
+		}
+	}
+	if result.SchemaVersion == 1 {
+		if result.SkipReasonCounts != nil {
+			return false
+		}
+	} else {
+		if result.SkipReasonCounts == nil || !validDeliverySkipReasonCounts(*result.SkipReasonCounts) {
+			return false
+		}
+		if result.Mode == "SendAll" {
+			if result.SkipReasonCounts.total() != result.SkippedCount {
+				return false
+			}
+		} else if result.SkipReasonCounts.total() != 0 {
 			return false
 		}
 	}
@@ -116,7 +167,13 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 			return false
 		}
 	case "SendAll":
-		if len(seen) != 0 || (result.Outcome == "succeeded" && result.FailedCount != 0) || (result.Outcome == "partial" && (result.SMTPAcceptedCount == 0 || result.FailedCount == 0)) {
+		if len(seen) != 0 || (result.Outcome == "succeeded" && (result.FailedCount != 0 || (result.SchemaVersion >= 2 && result.SMTPAcceptedCount == 0))) || (result.Outcome == "partial" && (result.SMTPAcceptedCount == 0 || result.FailedCount == 0)) {
+			return false
+		}
+		if result.ErrorCategory == "no-eligible-recipients" && (result.Outcome != "failed" || result.SMTPAcceptedCount != 0 || result.FailedCount != 0) {
+			return false
+		}
+		if result.ErrorCategory == "user-roster-refresh-failed" && (result.Outcome != "failed" || result.SMTPAcceptedCount != 0 || result.SkippedCount != 0 || result.FailedCount != 0) {
 			return false
 		}
 	case "ListUsers", "VerifyPlex":
@@ -137,11 +194,80 @@ func validRendererErrorCategory(category string) bool {
 		"render-failed",
 		"output-failed",
 		"smtp-failed",
+		"smtp-auth-failed",
+		"smtp-rate-limited",
+		"smtp-recipient-rejected",
+		"smtp-provider-rejected",
+		"smtp-transport-failed",
+		"smtp-acceptance-unknown",
+		"user-roster-refresh-failed",
+		"no-eligible-recipients",
 		"renderer-failed":
 		return true
 	default:
 		return false
 	}
+}
+
+func structuredSMTPFailureCategory(category string) bool {
+	switch category {
+	case "smtp-auth-failed", "smtp-rate-limited", "smtp-recipient-rejected", "smtp-provider-rejected", "smtp-transport-failed", "smtp-acceptance-unknown":
+		return true
+	default:
+		return false
+	}
+}
+
+func validSMTPFailureEvidence(evidence SMTPFailureEvidence) bool {
+	if !structuredSMTPFailureCategory(evidence.Category) {
+		return false
+	}
+	validStage := false
+	for _, stage := range []string{"configuration", "mime", "connect", "greeting", "ehlo", "starttls", "tls", "auth", "mail-from", "rcpt-to", "data-command", "data-acceptance"} {
+		if evidence.Stage == stage {
+			validStage = true
+			break
+		}
+	}
+	if !validStage || (evidence.Acceptance != "not-attempted" && evidence.Acceptance != "rejected" && evidence.Acceptance != "unknown") {
+		return false
+	}
+	if evidence.ResponseCode == 0 {
+		if evidence.ResponseClass != 0 {
+			return false
+		}
+	} else if evidence.ResponseCode < 200 || evidence.ResponseCode > 599 || evidence.ResponseClass != evidence.ResponseCode/100 {
+		return false
+	}
+	switch evidence.Category {
+	case "smtp-auth-failed":
+		return evidence.BatchFatal && evidence.Stage == "auth" && evidence.Acceptance == "not-attempted"
+	case "smtp-rate-limited":
+		return evidence.BatchFatal && evidence.ResponseClass == 4
+	case "smtp-recipient-rejected":
+		return !evidence.BatchFatal && evidence.Stage == "rcpt-to" && evidence.ResponseClass == 5 && evidence.Acceptance == "not-attempted"
+	case "smtp-provider-rejected":
+		return evidence.BatchFatal && evidence.ResponseCode > 0 && evidence.ResponseClass != 4
+	case "smtp-transport-failed":
+		return evidence.BatchFatal && evidence.ResponseCode == 0 && evidence.Acceptance == "not-attempted"
+	case "smtp-acceptance-unknown":
+		return evidence.BatchFatal && evidence.Stage == "data-acceptance" && evidence.ResponseCode == 0 && evidence.Acceptance == "unknown"
+	default:
+		return false
+	}
+}
+
+func validDeliverySkipReasonCounts(counts DeliverySkipReasonCounts) bool {
+	for _, count := range []int{counts.InactiveOrDeleted, counts.MissingEmail, counts.ExcludedUserID, counts.ExcludedEmail} {
+		if count < 0 || count > 1_000_000 {
+			return false
+		}
+	}
+	return true
+}
+
+func (counts DeliverySkipReasonCounts) total() int {
+	return counts.InactiveOrDeleted + counts.MissingEmail + counts.ExcludedUserID + counts.ExcludedEmail
 }
 
 func expectedDeliveryScope(mode string) string {

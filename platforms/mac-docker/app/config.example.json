@@ -20,7 +20,7 @@
   "SmtpAuthenticationMethod": "Auto",
   "SmtpTimeoutSeconds": 30,
   "TestEmail": "you@example.com",
-  "TestSendDelaySeconds": 2,
+  "TestSendDelaySeconds": 10,
   "ScheduleDay": "Friday",
   "ScheduleTime": "09:30",
   "DaysBack": 7,
@@ -43,7 +43,7 @@
   "ExcludedUserIds": [],
   "ExcludedEmails": [],
   "RecentAccessDays": 7,
-  "SendDelaySeconds": 10,
+  "SendDelaySeconds": 30,
   "ScheduleEnabled": false,
   "ScheduleGraceMinutes": 60,
   "SchedulerPollSeconds": 30

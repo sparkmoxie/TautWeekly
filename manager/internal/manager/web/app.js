@@ -138,13 +138,25 @@ async function performRequest(path, options = {}) {
   const contentType = response.headers.get("Content-Type") || "";
   const payload = contentType.includes("application/json") ? await response.json() : null;
   if (!response.ok) {
-    const error = new Error(payload?.error?.message || `Request failed (${response.status}).`);
+    const code = payload?.error?.code || "request-failed";
+    const error = new Error(sanitizedRequestErrorMessage(code, payload?.error?.message, response.status));
     error.status = response.status;
-    error.code = payload?.error?.code || "request-failed";
+    error.code = code;
     error.fields = payload?.error?.fields || {};
     throw error;
   }
   return payload;
+}
+
+function sanitizedRequestErrorMessage(code, fallback, status) {
+  const fixed = {
+    "invalid-origin": "The browser sent a malformed origin. Open the Manager from its exact configured address and try again.",
+    "origin-host-mismatch": "The browser origin does not match this Manager address. Reopen the exact configured Manager URL and try again.",
+    "origin-scheme-mismatch": "The browser origin uses the wrong HTTP or HTTPS scheme. Reopen the exact configured Manager URL and try again.",
+    "remote-http": "Remote Manager changes require HTTPS. Use the configured private HTTPS address and try again.",
+  };
+  if (fixed[code]) return `${fixed[code]} (${code})`;
+  return fallback || `Request failed (${status}).`;
 }
 
 async function renewTrustedLocalSession() {
@@ -562,12 +574,21 @@ function renderStatus() {
   setText("timeline-last-attempt", formatDate(snapshot.delivery.lastAttemptUtc));
   const rendererEvidence = snapshot.delivery.evidence === "renderer-result";
   setText("last-accepted-count", rendererEvidence ? String(snapshot.delivery.smtpAcceptedCount || 0) : "Not recorded");
+  const deliveryFailureCopy = rendererEvidence && snapshot.delivery.errorCategory && snapshot.delivery.errorCategory !== "no-eligible-recipients"
+    ? `${rendererFailureCopy(snapshot.delivery.errorCategory, "")}${smtpFailureEvidenceCopy(snapshot.delivery.smtpFailure)}`
+    : "";
   setText("delivery-copy", rendererEvidence
-    ? "Application evidence records SMTP acceptance, not inbox delivery."
+    ? deliveryFailureCopy || "Application evidence records SMTP acceptance, not inbox delivery."
     : "Task execution is not presented as SMTP acceptance or inbox delivery.");
   setText("timeline-last-copy", rendererEvidence
     ? `${snapshot.delivery.smtpAcceptedCount || 0} accepted by SMTP · ${snapshot.delivery.skippedCount || 0} skipped · ${snapshot.delivery.failedCount || 0} failed.`
     : "No sanitized renderer result has been recorded.");
+  if (rendererEvidence) {
+    const deliveryPrefix = snapshot.delivery.errorCategory === "no-eligible-recipients"
+      ? "No eligible production recipients; no message was accepted by SMTP."
+      : byId("timeline-last-copy").textContent;
+    setText("timeline-last-copy", `${deliveryPrefix}${skipReasonCopy(snapshot.delivery.skipReasonCounts)}${snapshot.delivery.errorCategory && snapshot.delivery.errorCategory !== "no-eligible-recipients" ? ` ${rendererFailureCopy(snapshot.delivery.errorCategory, "")}${smtpFailureEvidenceCopy(snapshot.delivery.smtpFailure)}` : ""}`);
+  }
   const deliveryTone = snapshot.delivery.result === "smtp-accepted" ? "good" : snapshot.delivery.result === "failed" ? "bad" : "neutral";
   setChip("delivery-chip", snapshot.delivery.result === "not-recorded" ? "No history" : titleCase(snapshot.delivery.result), deliveryTone);
   renderIntegrationStatus();
@@ -772,10 +793,24 @@ function rendererFailureCopy(category, supportCode) {
   case "render-failed": return "Newsletter HTML construction failed before the operation completed. Review Config and Verify, then retry." + suffix;
   case "output-failed": return "Newsletter HTML was built, but the private preview files could not be written. Review private data-directory access and free space, then retry." + suffix;
   case "smtp-failed": return "The renderer failed during SMTP handoff. Review Verify and the controlled TestEmail workflow before retrying." + suffix;
+  case "smtp-auth-failed": return "SMTP authentication was rejected, so the batch stopped after one attempt. Stop retries, confirm the provider account and credentials, then retry only after the provider permits access." + suffix;
+  case "smtp-rate-limited": return "The SMTP provider returned a temporary service or rate-limit response, so the batch stopped before another recipient attempt. Stop retries and follow the provider's recovery guidance before trying again." + suffix;
+  case "smtp-recipient-rejected": return "The SMTP provider returned an address/mailbox-specific permanent rejection for one recipient; later attempts remained individually isolated and spaced." + suffix;
+  case "smtp-provider-rejected": return "The SMTP provider rejected a batch-wide protocol stage, so delivery stopped before another recipient attempt. Review the provider account or SMTP policy before retrying." + suffix;
+  case "smtp-transport-failed": return "The SMTP connection ended before message acceptance could begin, so the batch stopped before another recipient attempt. Verify the provider endpoint, then retry cautiously." + suffix;
+  case "smtp-acceptance-unknown": return "The SMTP connection ended after message data was submitted but before acceptance could be confirmed. The message was not retried, and the batch stopped to prevent duplicates." + suffix;
+  case "user-roster-refresh-failed": return "Tautulli could not confirm a fresh Plex user roster, so production delivery stopped before SMTP. Confirm Tautulli can reach Plex, then retry." + suffix;
   case "platform-unsupported": return "This package does not expose the requested renderer operation." + suffix;
   case "manager-restarted": return "The Manager restarted before it could reconcile the renderer result. Refresh status, then retry." + suffix;
   default: return "The package renderer did not complete successfully. Raw process output was not retained." + suffix;
   }
+}
+
+function smtpFailureEvidenceCopy(evidence) {
+  if (!evidence || !evidence.stage) return "";
+  const response = Number(evidence.responseCode) > 0 ? `; SMTP response ${Number(evidence.responseCode)}` : "; no SMTP response was available";
+  const acceptance = evidence.acceptance === "unknown" ? "; acceptance is unknown and was not retried" : "";
+  return ` Sanitized stage: ${titleCase(String(evidence.stage).replaceAll("-", " "))}${response}${acceptance}.`;
 }
 
 function renderConfig() {
@@ -1013,7 +1048,7 @@ function renderDiscoveryUserCount(users = state.discovery?.users || []) {
   count.append(document.createTextNode(" ● "));
   const status = document.createElement("span");
   status.className = changed ? "discovery-selected-count" : "discovery-excluded-count";
-  status.textContent = `${effective} ${changed ? "selected" : "excluded"}`;
+  status.textContent = `${effective} excluded${changed ? " (unsaved)" : ""}`;
   count.append(status);
 }
 
@@ -2521,13 +2556,16 @@ function operationSummary(operation) {
     const accepted = operation.smtpAcceptedCount || 0;
     const skipped = operation.skippedCount || 0;
     const failed = operation.failedCount || 0;
+    const reasonCopy = skipReasonCopy(operation.skipReasonCounts);
     switch (operation.state) {
     case "queued": return { heading: "Manual newsletter delivery queued", copy: "The fixed production delivery is waiting to start." };
     case "running": return { heading: "Sending the production newsletter", copy: "Eligible recipients are being processed. Cancellation is disabled once delivery begins." };
-    case "succeeded": return { heading: "Manual newsletter accepted by SMTP", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted by SMTP and ${skipped} recipient${skipped === 1 ? " was" : "s were"} skipped. Inbox delivery is not asserted.` };
-    case "partial": return { heading: "Manual newsletter completed with delivery failures", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed. Inbox delivery is not asserted${operation.supportCode ? `; support code: ${operation.supportCode}` : ""}.` };
-    case "failed": return { heading: "Manual newsletter delivery failed", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}` };
-    default: return { heading: "Manual newsletter delivery recorded", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed. Inbox delivery is not asserted.` };
+    case "succeeded": return { heading: "Manual newsletter accepted by SMTP", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted by SMTP and ${skipped} recipient${skipped === 1 ? " was" : "s were"} skipped.${reasonCopy} Inbox delivery is not asserted.` };
+    case "partial": return { heading: "Manual newsletter stopped after a partial delivery", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy} ${operation.errorCategory ? rendererFailureCopy(operation.errorCategory, operation.supportCode) : "One or more recipient attempts failed."}${smtpFailureEvidenceCopy(operation.smtpFailure)} Inbox delivery is not asserted.` };
+    case "failed": return operation.errorCategory === "no-eligible-recipients"
+      ? { heading: "No eligible production recipients", copy: `No message was accepted by SMTP.${reasonCopy} Checked exclusion boxes mean excluded.${operation.supportCode ? ` Support code: ${operation.supportCode}.` : ""}` }
+      : { heading: "Manual newsletter delivery failed", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
+    default: return { heading: "Manual newsletter delivery recorded", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy} Inbox delivery is not asserted.` };
     }
   }
   if (operation.type === "send-test-all") {
@@ -2548,6 +2586,18 @@ function operationSummary(operation) {
   case "failed": return { heading: "Preview generation failed", copy: rendererFailureCopy(operation.errorCategory, operation.supportCode) };
   default: return { heading: "Preview operation recorded", copy: "Review the sanitized state and generated preview list." };
   }
+}
+
+function skipReasonCopy(counts) {
+  if (!counts) return "";
+  const reasons = [
+    [counts.inactiveOrDeleted, "inactive or deleted"],
+    [counts.missingEmail, "missing email"],
+    [counts.excludedUserId, "excluded by user selection"],
+    [counts.excludedEmail, "excluded by legacy email rule"],
+  ].filter(([count]) => Number.isInteger(count) && count > 0);
+  if (!reasons.length) return "";
+  return ` Skip reasons: ${reasons.map(([count, label]) => `${count} ${label}`).join("; ")}.`;
 }
 
 function operationTone(operation) {

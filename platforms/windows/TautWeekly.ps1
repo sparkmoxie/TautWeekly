@@ -31,6 +31,13 @@ $script:TautWeeklyResultWriting = $false
 $script:TautWeeklyResultSmtpAcceptedCount = 0
 $script:TautWeeklyResultSkippedCount = 0
 $script:TautWeeklyResultFailedCount = 0
+$script:TautWeeklyResultSmtpFailure = $null
+$script:TautWeeklyResultSkipReasons = [ordered]@{
+    inactiveOrDeleted = 0
+    missingEmail       = 0
+    excludedUserId     = 0
+    excludedEmail      = 0
+}
 $script:TautWeeklyResultErrorCategory = "renderer-failed"
 $script:TautWeeklyResultGeneratedPreviewFiles = New-Object System.Collections.Generic.List[string]
 $script:TautWeeklyResultDeliveryScope = switch ($Mode) {
@@ -72,10 +79,10 @@ function Write-TautWeeklyStructuredResult {
                 Sort-Object -Unique
         )
         $result = [ordered]@{
-            schemaVersion         = 1
+            schemaVersion         = 3
             mode                  = [string]$Mode
             outcome               = $Outcome
-            errorCategory         = $(if ($Outcome -eq "failed") { [string]$script:TautWeeklyResultErrorCategory } else { "" })
+            errorCategory         = $(if ($Outcome -in @("failed", "partial")) { [string]$script:TautWeeklyResultErrorCategory } else { "" })
             deliveryScope         = [string]$script:TautWeeklyResultDeliveryScope
             startedAtUtc          = $script:TautWeeklyResultStartedAtUtc.ToString("o")
             finishedAtUtc         = $finishedAtUtc.ToString("o")
@@ -83,6 +90,8 @@ function Write-TautWeeklyStructuredResult {
             smtpAcceptedCount     = [Math]::Max(0, [int]$script:TautWeeklyResultSmtpAcceptedCount)
             skippedCount          = [Math]::Max(0, [int]$script:TautWeeklyResultSkippedCount)
             failedCount           = [Math]::Max(0, [int]$script:TautWeeklyResultFailedCount)
+            smtpFailure           = $script:TautWeeklyResultSmtpFailure
+            skipReasonCounts      = $script:TautWeeklyResultSkipReasons
             generatedPreviewFiles = $safePreviewFiles
         }
 
@@ -102,6 +111,26 @@ function Write-TautWeeklyStructuredResult {
         }
         $script:TautWeeklyResultWriting = $false
     }
+}
+
+function Get-TautWeeklySmtpFailureEvidence {
+    param([AllowNull()][object]$Exception)
+
+    $candidate = $Exception
+    while ($null -ne $candidate) {
+        if ($candidate.GetType().Name -eq 'TautWeeklySmtpException') {
+            return [ordered]@{
+                category      = [string]$candidate.Category
+                stage         = [string]$candidate.Stage
+                responseCode  = [Math]::Max(0, [int]$candidate.ResponseCode)
+                responseClass = [Math]::Max(0, [int]$candidate.ResponseClass)
+                batchFatal    = [bool]$candidate.BatchFatal
+                acceptance    = [string]$candidate.Acceptance
+            }
+        }
+        $candidate = $candidate.InnerException
+    }
+    return $null
 }
 
 trap {
@@ -381,10 +410,12 @@ function Add-AccessStateUser {
         WelcomeSentUtc = ""
     }
 
-    $State.Users | Add-Member -NotePropertyName $id -NotePropertyValue $entry -Force
+    Add-Member -InputObject $State.Users -MemberType NoteProperty -Name $id -Value $entry -Force
 }
 
 function Sync-AccessRoster {
+    param([switch]$RequireFreshUsers)
+
     # Tautulli's API exposes current access, not the Plex invitation acceptance
     # timestamp. We therefore establish a baseline once, then treat a newly
     # appearing active user as newly accepted from that point forward.
@@ -392,6 +423,11 @@ function Sync-AccessRoster {
         Invoke-TautulliApi -Command "refresh_users_list" | Out-Null
     }
     catch {
+        if ($RequireFreshUsers) {
+            $script:TautWeeklyResultErrorCategory = "user-roster-refresh-failed"
+            Write-Log "Required user-list refresh could not be confirmed; production delivery stopped before SMTP." "ERROR"
+            throw "Required Tautulli user-list refresh could not be confirmed."
+        }
         Write-Log "User-list refresh failed; continuing with the current local user list." "WARN"
     }
 
@@ -7849,27 +7885,25 @@ function Get-NewsletterUser {
     }
 }
 
-function Should-SkipUser {
+function Get-UserSkipReason {
     param([object]$User)
 
-    if ($User.DeletedUser -gt 0) { return $true }
-    if ($User.IsActive -eq 0) { return $true }
-    if ($User.DoNotify -eq 0) { return $true }
-    if ([string]::IsNullOrWhiteSpace([string]$User.Email)) { return $true }
+    if ($User.DeletedUser -gt 0 -or $User.IsActive -eq 0) { return "inactiveOrDeleted" }
+    if ([string]::IsNullOrWhiteSpace([string]$User.Email)) { return "missingEmail" }
 
     if ($null -ne $Config.PSObject.Properties["ExcludedUserIds"]) {
         foreach ($id in @($Config.ExcludedUserIds)) {
-            if ([string]$id -eq [string]$User.UserId) { return $true }
+            if ([string]$id -eq [string]$User.UserId) { return "excludedUserId" }
         }
     }
 
     if ($null -ne $Config.PSObject.Properties["ExcludedEmails"]) {
         foreach ($email in @($Config.ExcludedEmails)) {
-            if ([string]$email -ieq [string]$User.Email) { return $true }
+            if ([string]$email -ieq [string]$User.Email) { return "excludedEmail" }
         }
     }
 
-    return $false
+    return ""
 }
 
 # ---------------------------------------------------------------------------
@@ -7945,7 +7979,7 @@ if ($Mode -eq "ListUsers") {
                 FriendlyName = $u.FriendlyName
                 Email        = $u.Email
                 Active       = $u.IsActive
-                Notify       = $u.DoNotify
+                TautulliNotify = $u.DoNotify
             })
         }
         catch {
@@ -7955,6 +7989,7 @@ if ($Mode -eq "ListUsers") {
 
     $rows | Sort-Object FriendlyName | Format-Table -AutoSize
     Write-Host ""
+    Write-Host "TautulliNotify is legacy notification-agent state and does not control TautWeekly delivery." -ForegroundColor DarkGray
     Write-Host "ListUsers only displays the roster; it does not select or save a default user." -ForegroundColor Yellow
     Write-Host "Pass a numeric UserId from this table to Preview, PreviewAll, SendTest, SendTestAll, or SendWelcome."
     Write-TautWeeklyStructuredResult -Outcome "succeeded"
@@ -8080,6 +8115,10 @@ if ($Mode -eq "SendWelcome") {
 # ---------------------------------------------------------------------------
 # COMMON DATA FOR FRIDAY PREVIEW / TEST / SEND
 # ---------------------------------------------------------------------------
+if ($Mode -eq "SendAll" -and -not $ConfirmSendAll) {
+    throw "SendAll is intentionally locked. Re-run with -ConfirmSendAll after reviewing a test email."
+}
+
 $script:TautWeeklyResultErrorCategory = "configuration-invalid"
 $tautWeeklyState = Get-TautWeeklyState
 Write-Log ("TautWeekly for Plex age: {0} day(s); warm-up mode: {1}" -f $tautWeeklyState.AgeDays, $tautWeeklyState.IsWarmingUp)
@@ -8091,7 +8130,7 @@ $accessState = if ($Mode -in @("PreviewAll","SendTestAll")) {
 }
 else {
     $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
-    Sync-AccessRoster
+    Sync-AccessRoster -RequireFreshUsers:($Mode -eq "SendAll")
 }
 $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
 $daysBack = if ($null -ne $Config.PSObject.Properties["DaysBack"]) { Safe-Int $Config.DaysBack } else { 7 }
@@ -8715,7 +8754,7 @@ if ($Mode -eq "SendTestAll") {
 
     $bundle = Build-AllEmailVariants -Id $UserId -ImageMode "Email"
     $script:TautWeeklyResultErrorCategory = "smtp-failed"
-    $delaySeconds = 2
+    $delaySeconds = 10
     if ($null -ne $Config.PSObject.Properties["TestSendDelaySeconds"]) {
         $delaySeconds = [Math]::Max(0, (Safe-Int $Config.TestSendDelaySeconds))
     }
@@ -8809,32 +8848,39 @@ if ($Mode -eq "SendTest") {
 # MODE: SEND ALL
 # ---------------------------------------------------------------------------
 if ($Mode -eq "SendAll") {
-    if (-not $ConfirmSendAll) {
-        throw "SendAll is intentionally locked. Re-run with -ConfirmSendAll after reviewing a test email."
-    }
-
     $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
-    $names = Get-TautulliUserNames
+    $names = @(Get-TautulliUserNames)
     $sent = 0
     $skipped = 0
     $failed = 0
+    $deliveryFailureCategory = ""
+    $sendDelay = 30
+    if ($null -ne $Config.PSObject.Properties["SendDelaySeconds"]) {
+        $sendDelay = [Math]::Max(0, (Safe-Int $Config.SendDelaySeconds))
+    }
 
-    foreach ($n in $names) {
+    for ($recipientIndex = 0; $recipientIndex -lt $names.Count; $recipientIndex++) {
+        $n = $names[$recipientIndex]
+        $attemptedSmtp = $false
         try {
             $user = Get-NewsletterUser -Id ([string]$n.user_id)
 
-            if (Should-SkipUser -User $user) {
-                Write-Log "Skipping $($user.FriendlyName) ($($user.UserId))."
+            $skipReason = Get-UserSkipReason -User $user
+            if (-not [string]::IsNullOrWhiteSpace($skipReason)) {
+                Write-Log "Skipping one production recipient: $skipReason."
                 $skipped++
                 $script:TautWeeklyResultSkippedCount = $skipped
+                $script:TautWeeklyResultSkipReasons[$skipReason]++
                 continue
             }
 
+            $script:TautWeeklyResultErrorCategory = "render-failed"
             $result = Build-ForUser -Id $user.UserId -ImageMode "Email"
             $subject = Get-NewsletterSubject -User $result.User -RecentAccess $result.RecentAccess
 
             $script:TautWeeklyResultErrorCategory = "smtp-failed"
             Write-Log "Sending to $($result.User.FriendlyName) <$($result.User.Email)>..."
+            $attemptedSmtp = $true
             Send-NewsletterMail `
                 -To $result.User.Email `
                 -Subject $subject `
@@ -8849,19 +8895,32 @@ if ($Mode -eq "SendAll") {
 
             $sent++
             $script:TautWeeklyResultSmtpAcceptedCount = $sent
-            $sendDelay = 10
-            if ($null -ne $Config.PSObject.Properties["SendDelaySeconds"]) {
-                $sendDelay = [Math]::Max(0, (Safe-Int $Config.SendDelaySeconds))
-            }
-            if ($sendDelay -gt 0) {
-                Write-Log "Pausing $sendDelay seconds before the next recipient..."
-                Start-Sleep -Seconds $sendDelay
-            }
         }
         catch {
             $failed++
             $script:TautWeeklyResultFailedCount = $failed
-            Write-Log "Send failed for user $($n.user_id): $($_.Exception.Message)" "ERROR"
+            $smtpFailure = Get-TautWeeklySmtpFailureEvidence -Exception $_.Exception
+            if ($null -ne $smtpFailure) {
+                $script:TautWeeklyResultSmtpFailure = $smtpFailure
+                $script:TautWeeklyResultErrorCategory = [string]$smtpFailure.category
+                $deliveryFailureCategory = [string]$smtpFailure.category
+                Write-Log ("SMTP recipient attempt stopped safely ({0}, stage {1}, response {2})." -f $smtpFailure.category, $smtpFailure.stage, $smtpFailure.responseCode) "ERROR"
+                if ([bool]$smtpFailure.batchFatal) {
+                    Write-Log "Stopping the production batch before another SMTP connection or recipient attempt." "ERROR"
+                    break
+                }
+            }
+            else {
+                if ([string]::IsNullOrWhiteSpace($deliveryFailureCategory)) {
+                    $deliveryFailureCategory = [string]$script:TautWeeklyResultErrorCategory
+                }
+                Write-Log "One production recipient failed before SMTP acceptance." "ERROR"
+            }
+        }
+
+        if ($attemptedSmtp -and $sendDelay -gt 0 -and $recipientIndex -lt ($names.Count - 1)) {
+            Write-Log "Pausing $sendDelay seconds before the next recipient attempt..."
+            Start-Sleep -Seconds $sendDelay
         }
     }
 
@@ -8872,8 +8931,16 @@ if ($Mode -eq "SendAll") {
     Write-Host ("Failed:  {0}" -f $failed)
 
     if ($failed -gt 0) {
+        if (-not [string]::IsNullOrWhiteSpace($deliveryFailureCategory)) {
+            $script:TautWeeklyResultErrorCategory = $deliveryFailureCategory
+        }
         Write-TautWeeklyStructuredResult -Outcome $(if ($sent -gt 0) { "partial" } else { "failed" })
         exit 2
+    }
+    if ($sent -eq 0) {
+        $script:TautWeeklyResultErrorCategory = "no-eligible-recipients"
+        Write-TautWeeklyStructuredResult -Outcome "failed"
+        exit 3
     }
     Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0

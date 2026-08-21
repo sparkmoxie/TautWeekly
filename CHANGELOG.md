@@ -6,6 +6,65 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-08-21
+
+### Fixed
+
+- Restored production `SendAll` eligibility for active Tautulli users with an
+  email address when the legacy upstream `do_notify` notification-agent flag
+  is disabled. Explicit user/email exclusions, inactive or deleted users, and
+  missing addresses remain hard skips in manual and scheduled delivery.
+- Made the shared manual/scheduled `SendAll` path synchronously refresh
+  Tautulli's Plex user list exactly once before reading the live roster. A new
+  eligible user no longer requires a Manager discovery refresh; an unconfirmed
+  upstream refresh fails before SMTP with the fixed sanitized
+  `user-roster-refresh-failed` category.
+- Made an all-skipped production run fail with a fixed
+  `no-eligible-recipients` category instead of appearing SMTP-accepted, and
+  added sanitized aggregate skip counts to the Manager status and operation
+  views without retaining recipient identities or addresses.
+- Stopped a production batch after the first authentication failure,
+  temporary provider/service response, batch-wide rejection, transport
+  failure, or unknown final-DATA acceptance instead of reconnecting for every
+  remaining recipient. Address/mailbox-specific RCPT rejections remain
+  per-recipient,
+  and configured spacing now also applies after those failed attempts.
+- Fixed first-run access-roster creation for numeric Tautulli user IDs under
+  Windows PowerShell 5.1, which could stop a first production send before
+  recipient classification. The explicit member form is synchronized across
+  Windows, macOS, NAS/Docker, native Linux, and FreeBSD renderer packages.
+- Made supported macOS and NAS/Docker restart commands force-recreate the app
+  service so changed `.env` values are applied, and documented the equivalent
+  recreate requirement for vendor-managed Compose interfaces.
+- Applied documented exact DNS host allowlisting to the native Linux managed
+  service path while preserving same-origin, scheme, authentication, CSRF,
+  and secure-cookie enforcement.
+
+### Changed
+
+- Clarified in Config that checked user boxes are delivery exclusions and that
+  Tautulli notification-agent settings do not control TautWeekly delivery.
+  Clarified that **Repeat this Tautulli lookup** updates Manager choices only;
+  it is not required to refresh production recipients.
+- Raised new-install and missing-value cadence defaults to 30 seconds for
+  production recipients and 10 seconds for controlled Test All messages.
+  Existing explicit values are preserved; operators should avoid running Test
+  All or manual production delivery near the scheduled batch and leave the
+  provider quiet after a temporary account lock.
+- Replaced opaque origin rejection text with fixed, sanitized recovery
+  guidance and support codes, and tightened the macOS reverse-proxy workflow
+  around exact hostnames, original `Host` preservation, secure cookies, and
+  container recreation.
+
+### Security
+
+- Kept delivery diagnostics count-only and allowlisted, retained every explicit
+  exclusion and access-state boundary, and continued to ignore untrusted
+  `Forwarded` and `X-Forwarded-*` headers.
+- Added only fixed SMTP category, stage, numeric response code/class,
+  batch-fatal, and acceptance-state evidence. Provider response text,
+  accounts, hosts, recipients, and credentials remain excluded.
+
 ## [0.19.0] - 2026-08-20
 
 ### Added

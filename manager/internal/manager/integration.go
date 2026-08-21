@@ -296,7 +296,7 @@ func normalizeDiscoveredUsers(names, details []map[string]any, legacyRules map[s
 		if hasDetails {
 			eligibility = "skipped"
 			email := discoveredUserEmail(detail)
-			if integrationTruthy(detail["is_active"]) && integrationTruthy(detail["do_notify"]) && email != "" && email != "<nil>" {
+			if integrationTruthy(detail["is_active"]) && email != "" && email != "<nil>" {
 				eligibility = "eligible"
 			}
 			if _, excluded := legacyRules[email]; excluded {

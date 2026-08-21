@@ -125,6 +125,13 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 	if cache := response.Header().Get("Cache-Control"); cache != "no-store" {
 		t.Fatalf("static application cache policy: got %q, want no-store", cache)
 	}
+	if !strings.Contains(response.Body.String(), "checked means excluded") || !strings.Contains(response.Body.String(), "notification-agent settings do not control TautWeekly delivery") {
+		t.Fatal("static application shell omitted the explicit production-recipient policy")
+	}
+	app := requestForTest(server, http.MethodGet, "/app.js", nil, nil)
+	if app.Code != http.StatusOK || !strings.Contains(app.Body.String(), "no-eligible-recipients") || !strings.Contains(app.Body.String(), "origin-host-mismatch") || !strings.Contains(app.Body.String(), "(unsaved)") {
+		t.Fatalf("production JavaScript omitted recipient/origin guidance: status=%d", app.Code)
+	}
 }
 
 func TestEmbeddedTitleGifAssetsAreLocalAndByteIdentical(t *testing.T) {
