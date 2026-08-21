@@ -3,6 +3,7 @@ package manager
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -343,6 +344,63 @@ func TestCustomTextCardValidationIsConditionalAndPlainTextOnly(t *testing.T) {
 	if stored["CustomTextCardEnabled"] != true || stored["CustomTextCardTitleGif"] != "celebrate" || stored["CustomTextCardBody"] != "First line\nSecond <line> & safe" {
 		t.Fatalf("custom text card values were not stored as normalized plain text: %#v", stored)
 	}
+}
+
+func TestCustomTextCardDisablePreservesSavedContent(t *testing.T) {
+	root := t.TempDir()
+	view := ReadConfigEditor(root)
+	request := validConfigSaveRequest(t, view)
+	request.Secrets["ApiKey"] = SecretChange{Action: "replace", Value: "fictional-api-key"}
+	request.Secrets["SmtpPassword"] = SecretChange{Action: "replace", Value: "fictional-smtp-password"}
+	request.Values["CustomTextCardEnabled"] = json.RawMessage(`true`)
+	request.Values["CustomTextCardBorderColor"] = json.RawMessage(`"#123abc"`)
+	request.Values["CustomTextCardBorderOpacity"] = json.RawMessage(`47`)
+	request.Values["CustomTextCardTitle"] = json.RawMessage(`"MAINTENANCE NOTICE"`)
+	request.Values["CustomTextCardTitleGif"] = json.RawMessage(`"warning"`)
+	request.Values["CustomTextCardSubheading"] = json.RawMessage(`"Synthetic maintenance window"`)
+	request.Values["CustomTextCardBody"] = json.RawMessage(`"Synthetic details remain saved while hidden."`)
+
+	result, fieldErrors, err := SaveConfig(root, request, time.Now)
+	if err != nil || len(fieldErrors) != 0 || !result.Saved {
+		t.Fatalf("save enabled custom text card: result=%+v fields=%v err=%v", result, fieldErrors, err)
+	}
+
+	view = ReadConfigEditor(root)
+	request = validConfigSaveRequest(t, view)
+	request.Values["CustomTextCardEnabled"] = json.RawMessage(`false`)
+	result, fieldErrors, err = SaveConfig(root, request, time.Now)
+	if err != nil || len(fieldErrors) != 0 || !result.Saved {
+		t.Fatalf("disable custom text card: result=%+v fields=%v err=%v", result, fieldErrors, err)
+	}
+
+	assertCustomTextCard := func(wantEnabled string) ConfigEditorView {
+		t.Helper()
+		current := ReadConfigEditor(root)
+		want := map[string]string{
+			"CustomTextCardEnabled":       wantEnabled,
+			"CustomTextCardBorderColor":   "#123abc",
+			"CustomTextCardBorderOpacity": "47",
+			"CustomTextCardTitle":         "MAINTENANCE NOTICE",
+			"CustomTextCardTitleGif":      "warning",
+			"CustomTextCardSubheading":    "Synthetic maintenance window",
+			"CustomTextCardBody":          "Synthetic details remain saved while hidden.",
+		}
+		for name, expected := range want {
+			if got := fmt.Sprint(editorField(t, current, name).Value); got != expected {
+				t.Errorf("%s after toggle: got %q, want %q", name, got, expected)
+			}
+		}
+		return current
+	}
+
+	view = assertCustomTextCard("false")
+	request = validConfigSaveRequest(t, view)
+	request.Values["CustomTextCardEnabled"] = json.RawMessage(`true`)
+	result, fieldErrors, err = SaveConfig(root, request, time.Now)
+	if err != nil || len(fieldErrors) != 0 || !result.Saved {
+		t.Fatalf("re-enable custom text card: result=%+v fields=%v err=%v", result, fieldErrors, err)
+	}
+	assertCustomTextCard("true")
 }
 
 func TestReadConfigEditorNormalizesUnsafeStoredTitleGifWithoutBreakingStartup(t *testing.T) {

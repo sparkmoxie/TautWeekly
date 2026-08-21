@@ -170,7 +170,7 @@ func configDefinitions() []configDefinition {
 		{Name: "DeletedItemCacheRetentionDays", Label: "Cache retention days", Group: "Cache", Type: "integer", Required: true, Default: int64(365), Min: portMin, Max: daysMax},
 		{Name: "DeletedItemCacheMaxItems", Label: "Maximum cached items", Group: "Cache", Type: "integer", Required: true, Default: int64(1000), Min: itemsMin, Max: itemsMax},
 		{Name: "DeletedItemCacheMaxBytesMB", Label: "Maximum cache size (MB)", Group: "Cache", Type: "integer", Required: true, Default: int64(256), Min: bytesMin, Max: bytesMax},
-		{Name: "CustomTextCardEnabled", Label: "Enable custom text card", Group: "Custom text card", Type: "boolean", Default: false, Help: "When enabled, this card appears before the newsletter release-count and date block in every newsletter state."},
+		{Name: "CustomTextCardEnabled", Label: "Enable custom text card", Group: "Custom text card", Type: "boolean", Default: false, Help: "When enabled, this card appears before the newsletter release-count and date block in every newsletter state. Disabling it hides the card without clearing its saved content."},
 		{Name: "CustomTextCardBorderColor", Label: "Border color", Group: "Custom text card", Type: "color", Default: "#72aef7", Help: "Choose the card accent color. Border opacity controls whether it is visible."},
 		{Name: "CustomTextCardBorderOpacity", Label: "Border opacity", Group: "Custom text card", Type: "range", Default: int64(34), Min: opacityMin, Max: opacityMax, Help: "Set to 0% for no border."},
 		{Name: "CustomTextCardTitle", Label: "Optional title", Group: "Custom text card", Type: "text", Default: "", Max: customTitleMax, Help: "Gold uppercase label using the Welcome Aboard title size."},

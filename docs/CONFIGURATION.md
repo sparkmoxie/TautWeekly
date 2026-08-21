@@ -161,7 +161,7 @@ and backups are no longer needed.
 
 | Key | Default | Accepted range | Purpose |
 |---|---:|---:|---|
-| `CustomTextCardEnabled` | `false` | Boolean | Places the custom card before the newsletter title/date block |
+| `CustomTextCardEnabled` | `false` | Boolean | Places the custom card before the newsletter title/date block; disabling hides it without clearing saved content |
 | `CustomTextCardBorderColor` | `#72aef7` | Six-digit hex color | Selects the optional card-border color |
 | `CustomTextCardBorderOpacity` | `34` | 0-100 | Sets border opacity; 0 removes the visible border |
 | `CustomTextCardTitle` | empty | 0-120 characters | Optional gold uppercase label at the Welcome Aboard title size |
@@ -170,6 +170,9 @@ and backups are no longer needed.
 | `CustomTextCardBody` | empty | 1-2000 characters when enabled | Required plain-text body when the card is enabled |
 
 The Manager balances the card layout when either optional heading is omitted.
+Saving the card disabled retains its title, GIF, subheading, body, border color,
+and opacity. Re-enabling it restores those saved values; only rendering is
+suppressed while disabled.
 The in-field title control shows a local add-reaction glyph when no GIF is
 selected and a 24×24 preview after selection. Selecting the active GIF again,
 or pressing Delete/Backspace while the control is focused, clears it. The

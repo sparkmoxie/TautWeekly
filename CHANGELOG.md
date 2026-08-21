@@ -6,6 +6,18 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Clarified `origin-host-mismatch` recovery in the shared Manager and macOS
+  guidance: reverse proxies must preserve the original public Host, and a
+  Cloudflare Tunnel route must not rewrite it with `httpHostHeader`.
+
+### Fixed
+
+- Regression-locked the custom text card toggle so disabling the card hides it
+  without clearing its saved title, GIF, subheading, body, border color, or
+  opacity; re-enabling restores the retained content.
+
 ## [0.20.0] - 2026-08-21
 
 ### Added

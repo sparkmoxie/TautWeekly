@@ -153,7 +153,7 @@ async function performRequest(path, options = {}) {
 function sanitizedRequestErrorMessage(code, fallback, status) {
   const fixed = {
     "invalid-origin": "The browser sent a malformed origin. Open the Manager from its exact configured address and try again.",
-    "origin-host-mismatch": "The browser origin does not match this Manager address. Reopen the exact configured Manager URL and try again.",
+    "origin-host-mismatch": "The browser origin does not match the Host received by this Manager. Preserve the original public Host at the reverse proxy; remove any Host rewrite such as a Cloudflare Tunnel httpHostHeader override, then retry. No configuration was saved.",
     "origin-scheme-mismatch": "The browser origin uses the wrong HTTP or HTTPS scheme. Reopen the exact configured Manager URL and try again.",
     "remote-http": "Remote Manager changes require HTTPS. Use the configured private HTTPS address and try again.",
   };

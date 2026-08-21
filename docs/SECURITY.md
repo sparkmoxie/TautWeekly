@@ -85,8 +85,10 @@ Disabling the feature stops access but does not erase the existing cache.
   templates, screenshots, logs, or support bundles.
 - For a trusted TLS reverse proxy, allow only its exact DNS host, preserve the
   original Host header, and enable secure Manager cookies. Do not trust broad
-  wildcards or publish the plain HTTP backend. The Manager does not infer TLS
-  or client identity from forwarded headers. Same-origin comparison
+  wildcards or publish the plain HTTP backend. Remove proxy Host rewrites,
+  including a Cloudflare Tunnel `httpHostHeader` override; never allowlist the
+  rewritten backend address as a workaround. The Manager does not infer TLS or
+  client identity from forwarded headers. Same-origin comparison
   lower-cases DNS, removes one trailing dot, and normalizes omitted/default
   `:80` or `:443`; malformed origins, different hosts, and Tailscale HTTP
   mutations remain rejected with sanitized reason codes.
