@@ -18,8 +18,8 @@ import (
 
 const (
 	operationSchemaVersion = 1
-	operationHistoryLimit  = 500
-	operationHistoryAge    = 90 * 24 * time.Hour
+	operationHistoryLimit  = 20
+	operationRetention     = "count-only-fifo"
 	maximumOperationLine   = 64 << 10
 	operationRecoveryAge   = 24 * time.Hour
 )
@@ -67,7 +67,9 @@ type OperationRecord struct {
 }
 
 type OperationHistory struct {
-	Operations []OperationRecord `json:"operations"`
+	Operations      []OperationRecord `json:"operations"`
+	MaximumEntries  int               `json:"maximumEntries"`
+	RetentionPolicy string            `json:"retentionPolicy"`
 }
 
 type operationRunner interface {
@@ -121,6 +123,9 @@ func newOperationCoordinator(options Options) (*operationCoordinator, error) {
 	if coordinator.now == nil {
 		coordinator.now = time.Now
 		coordinator.store.now = time.Now
+	}
+	if err := coordinator.store.pruneHistory(); err != nil {
+		return nil, fmt.Errorf("normalize operation history: %w", err)
 	}
 	coordinator.current = coordinator.store.readCurrent()
 	if coordinator.current != nil && operationActive(coordinator.current.State) {
@@ -444,8 +449,12 @@ func (c *operationCoordinator) Current() *OperationRecord {
 }
 
 func (c *operationCoordinator) Get(id string) (OperationRecord, error) {
-	if current := c.Current(); current != nil && current.ID == id {
-		return *current, nil
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.current != nil && c.current.ID == id {
+		copy := *c.current
+		copy.GeneratedPreviewIDs = append([]string{}, c.current.GeneratedPreviewIDs...)
+		return copy, nil
 	}
 	for _, record := range c.store.readHistory() {
 		if record.ID == id {
@@ -456,11 +465,15 @@ func (c *operationCoordinator) Get(id string) (OperationRecord, error) {
 }
 
 func (c *operationCoordinator) History() OperationHistory {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_ = c.store.pruneHistory()
 	records := c.store.readHistory()
-	if len(records) > 50 {
-		records = records[:50]
+	return OperationHistory{
+		Operations:      records,
+		MaximumEntries:  operationHistoryLimit,
+		RetentionPolicy: operationRetention,
 	}
-	return OperationHistory{Operations: records}
 }
 
 func (c *operationCoordinator) Cancel(id string) (OperationRecord, error) {
@@ -562,13 +575,9 @@ func (s operationStore) readHistory() []OperationRecord {
 
 func (s operationStore) pruneHistory() error {
 	records := s.readHistory()
-	cutoff := s.now().UTC().Add(-operationHistoryAge)
 	kept := make([]OperationRecord, 0, len(records))
 	for _, record := range records {
-		started, err := time.Parse(time.RFC3339, record.StartedAtUTC)
-		if err == nil && !started.Before(cutoff) {
-			kept = append(kept, record)
-		}
+		kept = append(kept, record)
 		if len(kept) == operationHistoryLimit {
 			break
 		}

@@ -177,6 +177,51 @@ def main() -> int:
         failures.append("dashboard integration details have no shared verification renderer")
     if "function configFieldIsHidden(field)" not in javascript or 'isServiceRuntime() && field.name === "ScheduledTaskName"' not in javascript:
         failures.append("service Manager modes do not suppress the Windows Scheduled Task configuration field")
+    title_gif_contract = (
+        'const noTitleGifChoice = Object.freeze({ id: "none", label: "None", file: "" });',
+        '{ id: "celebrate", label: "Celebrate", file: "celebrate.gif" }',
+        '{ id: "construction", label: "Construction", file: "construction.gif" }',
+        '{ id: "rocket", label: "Rocket", file: "rocket.gif" }',
+        '{ id: "tickets", label: "Tickets", file: "tickets.gif" }',
+        '{ id: "warning", label: "Warning", file: "warning.gif" }',
+        '{ id: "alert", label: "Alert", file: "alert.gif" }',
+        'function attachTitleGifPicker(control, titleInput)',
+        'assetInput.type = "hidden";',
+        'trigger.setAttribute("aria-haspopup", "listbox")',
+        'picker.setAttribute("role", "listbox")',
+        'option.setAttribute("role", "option")',
+        '["Enter", " "]',
+        '["ArrowRight", "ArrowDown"]',
+        '["ArrowLeft", "ArrowUp"]',
+        'event.key === "Home"',
+        'event.key === "End"',
+        'event.key === "Escape"',
+        '["Delete", "Backspace"]',
+        'picker.hidden ? openPicker() : closePicker(true);',
+        'selectedImage.width = 24;',
+        'selectedImage.height = 24;',
+        'selectedImage.src = `/media/${choice.file}`;',
+    )
+    for marker in title_gif_contract:
+        if marker not in javascript:
+            failures.append(f"optional title GIF selector contract is missing: {marker}")
+    if javascript.count('if (["Enter", " "].includes(event.key))') < 2:
+        failures.append("optional title GIF trigger does not suppress native Enter/Space activation before opening the picker")
+    if 'id="icon-add-reaction"' not in html or 'data-symbol="add_reaction" data-fill="0" data-weight="400" data-grade="0" data-optical-size="24"' not in html:
+        failures.append("local Material Symbols Outlined add_reaction SVG metadata is missing")
+    if ".title-gif-trigger:focus-visible" not in css or ".title-gif-options{display:grid" not in css:
+        failures.append("optional title GIF selector lacks focus or responsive grid styling")
+    if "fonts.googleapis.com" in combined or "fonts.gstatic.com" in combined:
+        failures.append("Manager title GIF selector added a runtime Google Fonts dependency")
+    for marker in (
+        "state.backupMaximum = Number(backups.maximumEntries) || 10;",
+        "state.historyMaximum = Number(history.maximumEntries) || 20;",
+        "const diagnosticMaximum = Number(diagnostics.maximumEntries) || 20;",
+        'id="operation-history-count"',
+        "count-only-fifo",
+    ):
+        if marker not in combined:
+            failures.append(f"rolling retention UI contract is missing: {marker}")
     for marker in (
         'function isMacDocker()',
         'runtimeMode() === "mac"',

@@ -63,6 +63,7 @@ $requiredFunctions = @(
     'Get-ConfiguredPlexButtonLabel',
     'Get-ConfiguredDeliveryDay',
     'Get-BoundedCustomTextValue',
+    'Get-CustomTextCardTitleGifAsset',
     'Get-ConfiguredCustomTextCard',
     'Get-CustomTextCardTableHtml',
     'Get-CustomTextCardPlainText',
@@ -87,6 +88,8 @@ function Assert-True {
 
 foreach ($relativePath in $rendererPaths) {
     $path = Join-Path $Root $relativePath
+    $assetFolder = if ($relativePath -like 'platforms/windows/*') { 'assets' } else { 'assets-default' }
+    $script:AssetsDir = Join-Path (Split-Path -Parent $path) $assetFolder
     $tokens = $null
     $parseErrors = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile(
@@ -410,16 +413,26 @@ foreach ($relativePath in $rendererPaths) {
         CustomTextCardBorderColor = '#72aef7'
         CustomTextCardBorderOpacity = 34
         CustomTextCardTitle = 'Custom <Title>'
+        CustomTextCardTitleGif = 'celebrate'
         CustomTextCardSubheading = 'Maintenance & more'
         CustomTextCardBody = "First <line> & safe`r`nSecond line"
     }
 
     Assert-True ((Get-ConfiguredPlexButtonLabel) -eq 'View & Request') "$relativePath did not return the configured button label"
-    $customCardHtml = Get-CustomTextCardTableHtml
+    $customCardHtml = Get-CustomTextCardTableHtml -ImageMode Preview
     Assert-True ($customCardHtml.Contains('class="email-card custom-text-card"')) "$relativePath did not render the enabled custom text card"
     Assert-True ($customCardHtml.Contains('CUSTOM &lt;TITLE&gt;') -and $customCardHtml.Contains('Maintenance &amp; more')) "$relativePath did not HTML-encode custom card headings"
     Assert-True ($customCardHtml.Contains('First &lt;line&gt; &amp; safe<br>Second line')) "$relativePath did not safely preserve custom card body line breaks"
     Assert-True ($customCardHtml.Contains('border-color:rgba(114,174,247,0.34)')) "$relativePath did not render the configured border color and opacity"
+    Assert-True ($customCardHtml.Contains('<span>CUSTOM &lt;TITLE&gt;</span><img src="../assets/celebrate.gif"')) "$relativePath did not append the allowlisted preview GIF immediately after the uppercase title"
+    Assert-True ($customCardHtml.Contains('width="18" height="18" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-left:6px;"')) "$relativePath changed the approved title GIF dimensions or alignment"
+    $customCardEmailHtml = Get-CustomTextCardTableHtml -ImageMode Email
+    Assert-True ($customCardEmailHtml.Contains('cid:custom_title_celebrate')) "$relativePath did not map the selected title GIF to its deterministic email CID"
+    $script:Config.CustomTextCardTitleGif = '../celebrate.gif'
+    Assert-True (-not (Get-CustomTextCardTableHtml -ImageMode Email).Contains('custom_title_')) "$relativePath accepted an unsafe title GIF identifier"
+    $script:Config.CustomTextCardTitleGif = 'celebrate.gif'
+    Assert-True (-not (Get-CustomTextCardTableHtml -ImageMode Preview).Contains('../assets/celebrate.gif')) "$relativePath accepted a filename in place of an allowlisted title GIF ID"
+    $script:Config.CustomTextCardTitleGif = 'celebrate'
     $script:Config.CustomTextCardEnabled = $false
     Assert-True ([string]::IsNullOrWhiteSpace((Get-CustomTextCardTableHtml))) "$relativePath rendered the disabled custom text card"
     $script:Config.CustomTextCardEnabled = $true

@@ -2,6 +2,8 @@ package manager
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -122,6 +124,32 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 	}
 	if cache := response.Header().Get("Cache-Control"); cache != "no-store" {
 		t.Fatalf("static application cache policy: got %q, want no-store", cache)
+	}
+}
+
+func TestEmbeddedTitleGifAssetsAreLocalAndByteIdentical(t *testing.T) {
+	t.Parallel()
+	server, err := New(Options{DataDir: t.TempDir(), TautWeeklyRoot: t.TempDir(), Version: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := map[string]string{
+		"celebrate.gif":    "86879C45175F3901A8676D9B0BB5132C7A98B20A9F40487C21E4C896CE196616",
+		"construction.gif": "2266492FFE1F5FDF87B41C81388A00D5844598304E8FDC8157255D1998C9B788",
+		"rocket.gif":       "D644D67D81484688452B5D4BC1F79E98333A33B4FE4C03283839DD9008F19A5F",
+		"tickets.gif":      "7931191FE094F6BD6605C18F0FDE3E3C68B1441BC946BE6380A7F5AF0BE6DEE5",
+		"warning.gif":      "447C12C7F9F8460D30EA914C4F895076DDDFE199386DC74585113DC0DD8910EC",
+		"alert.gif":        "403A9C533D5807F8ED9A8DFDE0F1386AB05AE92147A4C586BCA24E8CCE34EE95",
+	}
+	for name, wantHash := range expected {
+		response := requestForTest(server, http.MethodGet, "/media/"+name, nil, nil)
+		if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "image/gif" {
+			t.Fatalf("embedded %s: status=%d type=%q", name, response.Code, response.Header().Get("Content-Type"))
+		}
+		digest := sha256.Sum256(response.Body.Bytes())
+		if got := strings.ToUpper(hex.EncodeToString(digest[:])); got != wantHash {
+			t.Fatalf("embedded %s SHA-256: got %s, want %s", name, got, wantHash)
+		}
 	}
 }
 
@@ -291,7 +319,7 @@ func TestDiagnosticsAPIRequiresAuthenticationAndReturnsSanitizedSetupEvents(t *t
 		t.Fatalf("configuration save: got %d, body %s", saved.Code, saved.Body.String())
 	}
 	diagnostics := requestForTest(server, http.MethodGet, "/api/v1/diagnostics", nil, cookie)
-	if diagnostics.Code != http.StatusOK || !strings.Contains(diagnostics.Body.String(), `"code":"config-saved"`) {
+	if diagnostics.Code != http.StatusOK || !strings.Contains(diagnostics.Body.String(), `"code":"config-saved"`) || !strings.Contains(diagnostics.Body.String(), `"maximumEntries":20`) || !strings.Contains(diagnostics.Body.String(), `"retentionPolicy":"count-only-fifo"`) {
 		t.Fatalf("diagnostics response: got %d, body %s", diagnostics.Code, diagnostics.Body.String())
 	}
 	for _, forbidden := range []string{"diagnostic-api-secret", "diagnostic-smtp-secret", root, "config.json"} {
@@ -613,7 +641,7 @@ func TestBackupAndRealCheckAPIsAreGuardedAndSanitized(t *testing.T) {
 	cookie := &http.Cookie{Name: sessionCookieName, Value: current.Token}
 
 	backups := requestForTest(server, http.MethodGet, "/api/v1/config/backups", nil, cookie)
-	if backups.Code != http.StatusOK || !strings.Contains(backups.Body.String(), backupID) {
+	if backups.Code != http.StatusOK || !strings.Contains(backups.Body.String(), backupID) || !strings.Contains(backups.Body.String(), `"maximumEntries":10`) || !strings.Contains(backups.Body.String(), `"retentionPolicy":"newest-first-fifo"`) {
 		t.Fatalf("backup list: got %d, body %s", backups.Code, backups.Body.String())
 	}
 	if strings.Contains(backups.Body.String(), "api-secret-never-return") {
@@ -740,6 +768,9 @@ func TestPreviewOperationAPIsRequireCSRFAndReturnOnlySanitizedRecords(t *testing
 			t.Fatalf("GET %s: got %d, body %s", target, response.Code, response.Body.String())
 		}
 		assertOperationResponseSanitized(t, response.Body.String(), privateUserID)
+		if target == "/api/v1/history" && (!strings.Contains(response.Body.String(), `"maximumEntries":20`) || !strings.Contains(response.Body.String(), `"retentionPolicy":"count-only-fifo"`)) {
+			t.Fatalf("history API omitted count-only retention metadata: %s", response.Body.String())
+		}
 	}
 
 	cancelWithoutCSRF := requestForTest(server, http.MethodPost, "/api/v1/operations/"+finished.ID+"/cancel", nil, cookie)

@@ -14,6 +14,7 @@ $examplePath = "/opt/tautweekly/config.example.json"
 $isNativeLinux = [string]$env:TAUTWEEKLY_MANAGER_RUNTIME_MODE -eq "linux"
 . (Join-Path $PSScriptRoot "User-Exclusions.ps1")
 . (Join-Path $PSScriptRoot "Library-Selection.ps1")
+. (Join-Path $PSScriptRoot "Configuration-Backups.ps1")
 
 function Read-Default {
     param([string]$Prompt, [string]$Default = "")
@@ -136,6 +137,13 @@ $existingDeletedItemCacheEnabled = $true
 $existingDeletedItemCacheRetentionDays = 365
 $existingDeletedItemCacheMaxItems = 1000
 $existingDeletedItemCacheMaxBytesMB = 256
+$existingCustomTextCardEnabled = $false
+$existingCustomTextCardBorderColor = '#72aef7'
+$existingCustomTextCardBorderOpacity = 34
+$existingCustomTextCardTitle = ''
+$existingCustomTextCardTitleGif = 'none'
+$existingCustomTextCardSubheading = ''
+$existingCustomTextCardBody = ''
 if (Test-Path $configPath) {
     Write-Host "An existing config.json was found:" -ForegroundColor Yellow
     Write-Host "  $configPath"
@@ -161,12 +169,18 @@ if (Test-Path $configPath) {
         if ($null -ne $existingConfig.PSObject.Properties["DeletedItemCacheRetentionDays"]) { $existingDeletedItemCacheRetentionDays = Get-ExistingBoundedInteger $existingConfig.DeletedItemCacheRetentionDays $existingDeletedItemCacheRetentionDays 1 3650 }
         if ($null -ne $existingConfig.PSObject.Properties["DeletedItemCacheMaxItems"]) { $existingDeletedItemCacheMaxItems = Get-ExistingBoundedInteger $existingConfig.DeletedItemCacheMaxItems $existingDeletedItemCacheMaxItems 1 10000 }
         if ($null -ne $existingConfig.PSObject.Properties["DeletedItemCacheMaxBytesMB"]) { $existingDeletedItemCacheMaxBytesMB = Get-ExistingBoundedInteger $existingConfig.DeletedItemCacheMaxBytesMB $existingDeletedItemCacheMaxBytesMB 16 2048 }
+        if ($null -ne $existingConfig.PSObject.Properties["CustomTextCardEnabled"]) { $existingCustomTextCardEnabled = Get-ExistingBooleanValue $existingConfig.CustomTextCardEnabled $existingCustomTextCardEnabled }
+        if ($null -ne $existingConfig.PSObject.Properties["CustomTextCardBorderColor"] -and [string]$existingConfig.CustomTextCardBorderColor -match '^#[0-9a-fA-F]{6}$') { $existingCustomTextCardBorderColor = ([string]$existingConfig.CustomTextCardBorderColor).ToLowerInvariant() }
+        if ($null -ne $existingConfig.PSObject.Properties["CustomTextCardBorderOpacity"]) { $existingCustomTextCardBorderOpacity = Get-ExistingBoundedInteger $existingConfig.CustomTextCardBorderOpacity $existingCustomTextCardBorderOpacity 0 100 }
+        if ($null -ne $existingConfig.PSObject.Properties["CustomTextCardTitle"]) { $existingCustomTextCardTitle = [string]$existingConfig.CustomTextCardTitle }
+        if ($null -ne $existingConfig.PSObject.Properties["CustomTextCardTitleGif"] -and ([string]$existingConfig.CustomTextCardTitleGif).Trim().ToLowerInvariant() -in @('celebrate','construction','rocket','tickets','warning','alert')) { $existingCustomTextCardTitleGif = ([string]$existingConfig.CustomTextCardTitleGif).Trim().ToLowerInvariant() }
+        if ($null -ne $existingConfig.PSObject.Properties["CustomTextCardSubheading"]) { $existingCustomTextCardSubheading = [string]$existingConfig.CustomTextCardSubheading }
+        if ($null -ne $existingConfig.PSObject.Properties["CustomTextCardBody"]) { $existingCustomTextCardBody = [string]$existingConfig.CustomTextCardBody }
     }
     catch {
         Write-Host "WARNING: Existing user exclusions and library selection could not be read and will not be carried forward." -ForegroundColor Yellow
     }
-    $backup = Join-Path $DataRoot ("config.backup.{0}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
-    Copy-Item $configPath $backup -Force
+    $backup = New-TautWeeklyConfigurationBackup -ConfigPath $configPath -Directory $DataRoot
     Write-Host "Backup created: $backup"
 }
 
@@ -319,6 +333,13 @@ $config = [ordered]@{
     DeletedItemCacheRetentionDays = $existingDeletedItemCacheRetentionDays
     DeletedItemCacheMaxItems = $existingDeletedItemCacheMaxItems
     DeletedItemCacheMaxBytesMB = $existingDeletedItemCacheMaxBytesMB
+    CustomTextCardEnabled = $existingCustomTextCardEnabled
+    CustomTextCardBorderColor = $existingCustomTextCardBorderColor
+    CustomTextCardBorderOpacity = $existingCustomTextCardBorderOpacity
+    CustomTextCardTitle = $existingCustomTextCardTitle
+    CustomTextCardTitleGif = $existingCustomTextCardTitleGif
+    CustomTextCardSubheading = $existingCustomTextCardSubheading
+    CustomTextCardBody = $existingCustomTextCardBody
     IncludedLibraryIds = @($includedLibraryIds)
     ExcludedUserIds = @($excludedUserIds)
     ExcludedEmails = @($existingExcludedEmails)

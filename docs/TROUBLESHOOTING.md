@@ -259,6 +259,22 @@ Use only the files that exist in your platform distribution.
 - Linux and FreeBSD: run `sudo tautweekly schedule-status`, then inspect the
   systemd journal or Podman logs respectively.
 
+## Custom title GIF is missing or does not clear
+
+Open Manager **Config > Custom text card** and inspect **Optional title**. The
+empty add-reaction glyph means no GIF is selected. Select Celebrate,
+Construction, Rocket, Tickets, Warning, or Alert; selecting the active choice
+again clears it. With the in-field control focused, Delete or Backspace also
+clears it. Save and regenerate previews after changing the selection.
+
+The GIF renders only when the custom card is enabled, its required body is
+present, and its optional title is non-empty. A missing packaged asset or an
+unsafe legacy value such as a path, URL, or filename falls back to no GIF. Use
+the package's verified update/repair path if an approved asset is missing; do
+not add remote image URLs or rename files. Delivered email uses an inline CID,
+so a mail client that blocks animation may show only the first frame even when
+the MIME attachment and preview are correct.
+
 ## Native Linux service does not start
 
 Run `sudo systemctl status tautweekly` and

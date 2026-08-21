@@ -11,7 +11,14 @@ expert/recovery fallbacks on those packages.
 Manager **Config > Configuration backups** lists private backup metadata, can
 validate/restore one selected backup while first saving the current config, and
 can permanently delete one selected backup only after **Confirm delete**.
-Deletion leaves the live `config.json` unchanged and cannot be undone.
+Deletion leaves the live `config.json` unchanged and cannot be undone. Manager
+and expert/recovery writers retain the newest 10 recognized backups; each new
+overflow backup removes the oldest. Startup safely normalizes existing excess,
+including legacy timestamp names, without adopting unrelated files or symlinks.
+
+Manager operation history and configuration diagnostics each use count-only
+FIFO retention of the newest 20 completed records. Each new overflow record
+removes the oldest; record age does not otherwise expire an entry.
 
 ## Tautulli and Plex
 
@@ -158,17 +165,25 @@ and backups are no longer needed.
 | `CustomTextCardBorderColor` | `#72aef7` | Six-digit hex color | Selects the optional card-border color |
 | `CustomTextCardBorderOpacity` | `34` | 0-100 | Sets border opacity; 0 removes the visible border |
 | `CustomTextCardTitle` | empty | 0-120 characters | Optional gold uppercase label at the Welcome Aboard title size |
+| `CustomTextCardTitleGif` | `none` | `celebrate`, `construction`, `rocket`, `tickets`, `warning`, `alert`, or `none` | Optional packaged GIF appended to a non-empty rendered title |
 | `CustomTextCardSubheading` | empty | 0-200 characters | Optional large white heading |
 | `CustomTextCardBody` | empty | 1-2000 characters when enabled | Required plain-text body when the card is enabled |
 
 The Manager balances the card layout when either optional heading is omitted.
+The in-field title control shows a local add-reaction glyph when no GIF is
+selected and a 24×24 preview after selection. Selecting the active GIF again,
+or pressing Delete/Backspace while the control is focused, clears it. The
+stored asset ID never changes the title text. Delivered HTML places the
+allowlisted GIF immediately after the uppercase title at 18×18 pixels using a
+selected-only `image/gif` CID; previews use the byte-identical packaged asset.
+If the ID or asset is missing or unsafe, rendering continues with no GIF.
 Line breaks are preserved. Values remain plain text and are HTML-escaped before
 rendering, so configured content cannot become executable markup. The card is
 included in normal and welcome HTML newsletters, the plain-text alternative,
 and generated previews. Enabling the card with an empty or whitespace-only
 body blocks validation, save, and verification in both the browser and Manager
 API. Existing configurations remain disabled by default and do not need to add
-these keys.
+these keys; a missing title-GIF key means `none`.
 
 ## Branding and mail
 

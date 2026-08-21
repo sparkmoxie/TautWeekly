@@ -662,7 +662,7 @@ func TestOperationHistorySkipsMalformedEntries(t *testing.T) {
 	}
 }
 
-func TestOperationHistoryPrunesByAgeAndCount(t *testing.T) {
+func TestOperationHistoryUsesCountOnlyFIFOAndNormalizesAtStartup(t *testing.T) {
 	data := t.TempDir()
 	path := filepath.Join(data, "operation-history.jsonl")
 	now := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
@@ -686,28 +686,30 @@ func TestOperationHistoryPrunesByAgeAndCount(t *testing.T) {
 		content.Write(encoded)
 		content.WriteByte('\n')
 	}
-	writeRecord("expired", now.Add(-operationHistoryAge-time.Hour))
-	for index := 0; index < operationHistoryLimit+10; index++ {
+	for index := 0; index < operationHistoryLimit-1; index++ {
 		writeRecord("recent-"+strconv.Itoa(index), now.Add(-time.Duration(index)*time.Minute))
+	}
+	writeRecord("old-but-valid", now.Add(-400*24*time.Hour))
+	for index := 0; index < 10; index++ {
+		writeRecord("overflow-"+strconv.Itoa(index), now.Add(-time.Duration(500+index)*24*time.Hour))
 	}
 	if err := os.WriteFile(path, content.Bytes(), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	store := operationStore{historyPath: path, now: func() time.Time { return now }}
-	if err := store.pruneHistory(); err != nil {
+	coordinator, err := newOperationCoordinator(Options{DataDir: data, TautWeeklyRoot: t.TempDir(), Now: func() time.Time { return now }})
+	if err != nil {
 		t.Fatal(err)
 	}
-	records := store.readHistory()
+	history := coordinator.History()
+	records := history.Operations
 	if len(records) != operationHistoryLimit {
 		t.Fatalf("pruned record count: got %d, want %d", len(records), operationHistoryLimit)
 	}
-	if records[0].ID != "recent-0" || records[len(records)-1].ID != "recent-499" {
+	if records[0].ID != "recent-0" || records[len(records)-1].ID != "old-but-valid" {
 		t.Fatalf("history did not retain the newest bounded records: first=%s last=%s", records[0].ID, records[len(records)-1].ID)
 	}
-	for _, record := range records {
-		if record.ID == "expired" {
-			t.Fatal("expired operation remained in history")
-		}
+	if history.MaximumEntries != operationHistoryLimit || history.RetentionPolicy != "count-only-fifo" {
+		t.Fatalf("unexpected retention metadata: %+v", history)
 	}
 }
 

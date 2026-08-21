@@ -163,11 +163,11 @@
           <tr><td><strong>Email</strong></td><td>Sender name/address, optional reply-to, controlled <code>TestEmail</code></td><td>Test delivery remains separated from production recipients.</td></tr>
           <tr><td><strong>SMTP</strong></td><td>Host, STARTTLS port, authentication, username, application password</td><td>The safe preflight stops before credentials or message submission.</td></tr>
           <tr><td><strong>Newsletter</strong></td><td>Lookback, card limits, branding, and supported renderer settings</td><td>Controls content without manual JSON edits.</td></tr>
-          <tr><td><strong>Custom text card</strong></td><td>Optional border, title, and subheading plus a required body when enabled</td><td>Appears before the release-count/date block in previews and delivery.</td></tr>
+          <tr><td><strong>Custom text card</strong></td><td>Optional border, title, six-choice local title GIF, and subheading plus a required body when enabled</td><td>Appears before the release-count/date block in previews and delivery.</td></tr>
           <tr><td><strong>Schedule</strong></td><td>Desired local Windows day and time</td><td>Saving does not install automation; Schedule remains a separate action.</td></tr>
           <tr><td><strong>Library selection and user exclusions</strong></td><td>Included movie/TV libraries and users excluded from production delivery</td><td>Selections persist in the saved configuration; excluded users remain available for safe preview and TestEmail sampling.</td></tr>
         </tbody></table></div>
-        <div class="callout green"><div><strong>Safe local save and deliberate recovery.</strong><p>A private timestamped backup is created before <code>config.json</code> is replaced. Configuration backups can be restored, or one can be permanently deleted only after <strong>Confirm delete</strong>; deletion leaves the live configuration unchanged.</p></div></div>
+        <div class="callout green"><div><strong>Safe local save and deliberate recovery.</strong><p>A private timestamped backup is created before <code>config.json</code> is replaced. The newest 10 are retained automatically. Configuration backups can be restored, or one can be permanently deleted only after <strong>Confirm delete</strong>; deletion leaves the live configuration unchanged.</p></div></div>
       </section>
 
       <section class="section searchable" id="verification" data-search="validate save verify libraries users tautulli plex smtp preflight local previews persistent config status">

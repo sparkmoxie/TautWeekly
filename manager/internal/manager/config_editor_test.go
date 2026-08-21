@@ -39,9 +39,10 @@ func TestReadConfigEditorUsesSafeDefaultsWithoutSecrets(t *testing.T) {
 	customEnabled := editorField(t, view, "CustomTextCardEnabled")
 	customBorder := editorField(t, view, "CustomTextCardBorderColor")
 	customOpacity := editorField(t, view, "CustomTextCardBorderOpacity")
+	customTitleGif := editorField(t, view, "CustomTextCardTitleGif")
 	customBody := editorField(t, view, "CustomTextCardBody")
-	if customEnabled.Value != false || customBorder.Value != "#72aef7" || customOpacity.Value != int64(34) || customBody.Value != "" {
-		t.Fatalf("unexpected custom-text-card defaults: enabled=%#v border=%#v opacity=%#v body=%#v", customEnabled.Value, customBorder.Value, customOpacity.Value, customBody.Value)
+	if customEnabled.Value != false || customBorder.Value != "#72aef7" || customOpacity.Value != int64(34) || customTitleGif.Value != "none" || customBody.Value != "" {
+		t.Fatalf("unexpected custom-text-card defaults: enabled=%#v border=%#v opacity=%#v titleGif=%#v body=%#v", customEnabled.Value, customBorder.Value, customOpacity.Value, customTitleGif.Value, customBody.Value)
 	}
 	cacheGroup := -1
 	customGroup := -1
@@ -304,17 +305,19 @@ func TestCustomTextCardValidationIsConditionalAndPlainTextOnly(t *testing.T) {
 	request.Values["CustomTextCardEnabled"] = json.RawMessage(`true`)
 	request.Values["CustomTextCardBody"] = json.RawMessage(`""`)
 	request.Values["CustomTextCardBorderColor"] = json.RawMessage(`"blue"`)
+	request.Values["CustomTextCardTitleGif"] = json.RawMessage(`"../alert.gif"`)
 
 	_, fieldErrors, err := SaveConfig(root, request, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fieldErrors["CustomTextCardBody"] == "" || fieldErrors["CustomTextCardBorderColor"] == "" {
+	if fieldErrors["CustomTextCardBody"] == "" || fieldErrors["CustomTextCardBorderColor"] == "" || fieldErrors["CustomTextCardTitleGif"] == "" {
 		t.Fatalf("expected conditional body and color errors, got %v", fieldErrors)
 	}
 
 	request.Values["CustomTextCardBody"] = json.RawMessage("\"First line\\r\\nSecond <line> & safe\"")
 	request.Values["CustomTextCardBorderColor"] = json.RawMessage(`"#72aef7"`)
+	request.Values["CustomTextCardTitleGif"] = json.RawMessage(`"Celebrate"`)
 	request.Values["CustomTextCardBorderOpacity"] = json.RawMessage(`101`)
 	_, fieldErrors, err = SaveConfig(root, request, time.Now)
 	if err != nil {
@@ -337,8 +340,36 @@ func TestCustomTextCardValidationIsConditionalAndPlainTextOnly(t *testing.T) {
 	if err := json.Unmarshal(raw, &stored); err != nil {
 		t.Fatal(err)
 	}
-	if stored["CustomTextCardEnabled"] != true || stored["CustomTextCardBody"] != "First line\nSecond <line> & safe" {
+	if stored["CustomTextCardEnabled"] != true || stored["CustomTextCardTitleGif"] != "celebrate" || stored["CustomTextCardBody"] != "First line\nSecond <line> & safe" {
 		t.Fatalf("custom text card values were not stored as normalized plain text: %#v", stored)
+	}
+}
+
+func TestReadConfigEditorNormalizesUnsafeStoredTitleGifWithoutBreakingStartup(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	path := filepath.Join(root, "config.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]any{}
+	if err := json.Unmarshal(raw, &values); err != nil {
+		t.Fatal(err)
+	}
+	values["CustomTextCardTitleGif"] = "../../unsafe.gif"
+	raw, err = json.Marshal(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	if value := editorField(t, view, "CustomTextCardTitleGif").Value; value != "none" {
+		t.Fatalf("unsafe stored title GIF was not normalized: %#v", value)
+	}
+	if issue := view.Issues["CustomTextCardTitleGif"]; issue != "" {
+		t.Fatalf("unsafe stored title GIF broke startup: %q", issue)
 	}
 }
 

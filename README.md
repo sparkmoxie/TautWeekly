@@ -103,8 +103,9 @@ The responsive Manager is the primary workflow on every maintained package:
 
 - **Set up and configure:** Dashboard guides first run; Config manages
   connections, SMTP, branding, library scope, delivery exclusions, schedule,
-  backups, and the optional custom newsletter text card without hand-editing
-  JSON. Stored secrets remain write-only.
+  rolling backups, and the optional custom newsletter text card—including its
+  six-choice local title GIF selector—without hand-editing JSON. Stored secrets
+  remain write-only.
 - **Verify before sending:** one non-sending validation records connection,
   library/user, SMTP preflight, and local-preview evidence. Previews renders six
   newsletter states, and controlled TestEmail delivery stays separate from
@@ -123,6 +124,7 @@ The responsive Manager is the primary workflow on every maintained package:
 - Adaptive **HOT NEW RELEASE** and **TRENDING THIS WEEK** highlights.
 - A privacy-preserving, server-wide Binge Champion award.
 - Welcome, active-week, quiet-week, and milestone newsletter layouts.
+- An optional uppercase custom-card title with one allowlisted 18×18 local GIF.
 - Browser previews and controlled TestEmail delivery before scheduling.
 
 Tautulli is the required activity source. Optional direct Plex access enriches

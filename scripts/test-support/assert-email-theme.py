@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 from email import policy
 from email.parser import BytesParser
 from pathlib import Path
@@ -28,6 +29,7 @@ def main() -> int:
     parser.add_argument("message", type=Path)
     parser.add_argument("--require-html", action="append", default=[])
     parser.add_argument("--forbid-html", action="append", default=[])
+    parser.add_argument("--require-cid-sha256", action="append", default=[])
     args = parser.parse_args()
 
     message = BytesParser(policy=policy.default).parsebytes(args.message.read_bytes())
@@ -57,6 +59,26 @@ def main() -> int:
             raise AssertionError(
                 f"delivered HTML retained the incompatible dark-only declaration: {stale_scheme}"
             )
+
+    for specification in args.require_cid_sha256:
+        if "=" not in specification:
+            raise AssertionError(f"invalid CID hash requirement: {specification}")
+        cid, expected_hash = specification.split("=", 1)
+        matches = [
+            part
+            for part in message.walk()
+            if (part.get("Content-ID") or "").strip("<>") == cid
+        ]
+        if len(matches) != 1:
+            raise AssertionError(f"expected one MIME part for CID {cid}, found {len(matches)}")
+        part = matches[0]
+        if part.get_content_type() != "image/gif":
+            raise AssertionError(f"CID {cid} has unsafe MIME type {part.get_content_type()}")
+        if part.get_filename() is not None or part.get_param("name", header="content-type") is not None:
+            raise AssertionError(f"CID {cid} unexpectedly exposes an attachment filename")
+        actual_hash = hashlib.sha256(part.get_payload(decode=True) or b"").hexdigest().upper()
+        if actual_hash != expected_hash.upper():
+            raise AssertionError(f"CID {cid} SHA-256 mismatch: {actual_hash}")
 
     print("[PASS] Captured SMTP HTML advertises Apple-compatible schemes and preserves explicit dark fallbacks.")
     return 0

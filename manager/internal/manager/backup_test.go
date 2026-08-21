@@ -28,7 +28,7 @@ func TestListAndRestoreConfigBackup(t *testing.T) {
 	}
 
 	listed := ListConfigBackups(root)
-	if len(listed.Backups) != 1 || listed.Backups[0].ID != updated.Backup || listed.Backups[0].Revision == "" {
+	if len(listed.Backups) != 1 || listed.Backups[0].ID != updated.Backup || listed.Backups[0].Revision == "" || listed.MaximumEntries != 10 || listed.RetentionPolicy != "newest-first-fifo" {
 		t.Fatalf("unexpected backup list: %+v", listed)
 	}
 	encodedList, err := json.Marshal(listed)
@@ -57,6 +57,39 @@ func TestListAndRestoreConfigBackup(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, restored.SafetyBackup)); err != nil {
 		t.Fatalf("pre-restore safety backup is unavailable: %v", err)
+	}
+}
+
+func TestConfigBackupRetentionNormalizesCanonicalAndLegacyOverflow(t *testing.T) {
+	root := t.TempDir()
+	created := []string{}
+	for index := 0; index < configBackupLimit+3; index++ {
+		stamp := time.Date(2031, 4, 18, 16, index, 0, 0, time.UTC).Format("20060102-150405")
+		name := "config.backup." + stamp + ".json"
+		if index%2 == 0 {
+			name = "config.backup." + stamp + ".000000000Z.json"
+		}
+		if err := os.WriteFile(filepath.Join(root, name), []byte(`{"FooterServerName":"Fictional"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		created = append(created, name)
+	}
+	unsafe := "config.backup.unsafe.json"
+	if err := os.WriteFile(filepath.Join(root, unsafe), []byte("leave me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	listed := ListConfigBackups(root)
+	if len(listed.Backups) != configBackupLimit {
+		t.Fatalf("backup count: got %d, want %d", len(listed.Backups), configBackupLimit)
+	}
+	for _, name := range created[:3] {
+		if _, err := os.Stat(filepath.Join(root, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("oldest backup was not removed: %s (%v)", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, unsafe)); err != nil {
+		t.Fatalf("unrecognized file was changed: %v", err)
 	}
 }
 

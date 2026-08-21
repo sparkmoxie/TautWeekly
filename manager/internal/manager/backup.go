@@ -10,9 +10,15 @@ import (
 	"time"
 )
 
-const maximumConfigBytes = 1 << 20
+const (
+	maximumConfigBytes    = 1 << 20
+	configBackupLimit     = 10
+	configBackupRetention = "newest-first-fifo"
+)
 
-var backupNamePattern = regexp.MustCompile(`^config\.backup\.\d{8}-\d{6}\.\d{9}Z\.json$`)
+// The second form is retained for backups created by the established expert
+// scripts. Both forms remain restorable, deletable, and subject to retention.
+var backupNamePattern = regexp.MustCompile(`^config\.backup\.\d{8}-\d{6}(?:\.\d{9}Z)?\.json$`)
 
 var (
 	ErrBackupInvalid  = errors.New("configuration backup is invalid")
@@ -27,7 +33,9 @@ type ConfigBackup struct {
 }
 
 type ConfigBackupList struct {
-	Backups []ConfigBackup `json:"backups"`
+	Backups         []ConfigBackup `json:"backups"`
+	MaximumEntries  int            `json:"maximumEntries"`
+	RetentionPolicy string         `json:"retentionPolicy"`
 }
 
 type ConfigRestoreRequest struct {
@@ -47,7 +55,12 @@ type ConfigBackupDeleteResult struct {
 }
 
 func ListConfigBackups(root string) ConfigBackupList {
-	result := ConfigBackupList{Backups: []ConfigBackup{}}
+	_ = normalizeConfigBackups(root)
+	result := ConfigBackupList{
+		Backups:         []ConfigBackup{},
+		MaximumEntries:  configBackupLimit,
+		RetentionPolicy: configBackupRetention,
+	}
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return result
@@ -75,6 +88,48 @@ func ListConfigBackups(root string) ConfigBackupList {
 		return result.Backups[i].ID > result.Backups[j].ID
 	})
 	return result
+}
+
+func normalizeConfigBackups(root string) error {
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Type()&os.ModeSymlink != 0 || !backupNamePattern.MatchString(entry.Name()) {
+			continue
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		names = append(names, entry.Name())
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(names)))
+	if len(names) <= configBackupLimit {
+		return nil
+	}
+	for _, name := range names[configBackupLimit:] {
+		path := filepath.Join(root, name)
+		info, inspectErr := os.Lstat(path)
+		if errors.Is(inspectErr, os.ErrNotExist) {
+			continue
+		}
+		if inspectErr != nil {
+			return inspectErr
+		}
+		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+			continue
+		}
+		if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			return removeErr
+		}
+	}
+	return nil
 }
 
 func RestoreConfigBackup(root, id, expectedRevision string, now func() time.Time) (ConfigRestoreResult, map[string]string, error) {

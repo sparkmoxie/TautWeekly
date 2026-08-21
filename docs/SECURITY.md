@@ -11,12 +11,19 @@ permissions. Native Linux uses a dedicated service account and mode-0700
 the container with a non-root runtime identity.
 
 Backups contain the same secrets. Encrypt them or place them in protected
-storage, and define a retention period. Manager **Config > Configuration
+storage. Manager and expert/recovery writers retain the newest 10 recognized
+timestamped backups and remove the oldest on overflow. Manager **Config > Configuration
 backups** exposes only metadata. Restore validates the selected file and first
 saves the live configuration. Delete accepts only the exact Manager-listed
 backup filename, refuses symlinks/non-files, requires an authenticated
 same-origin CSRF-protected request plus a separate browser confirmation, and
 permanently removes only that backup. It never changes `config.json`.
+
+Custom-title GIF configuration accepts only six fixed asset IDs. IDs map to
+packaged byte-verified filenames, `image/gif` MIME types, and deterministic CIDs;
+paths, URLs, filenames, arbitrary MIME types, and arbitrary CIDs are rejected.
+Email attaches only the selected referenced asset, and the Manager serves the
+same local files without a runtime font or network dependency.
 
 ## Deleted-item cache
 

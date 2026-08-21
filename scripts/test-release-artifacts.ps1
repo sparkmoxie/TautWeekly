@@ -126,6 +126,7 @@ $expected = [ordered]@{
     'TautWeekly-windows.zip' = @(
         'TautWeekly-windows/TautWeekly.ps1',
         'TautWeekly-windows/DeletedItemCache.ps1',
+        'TautWeekly-windows/Configuration-Backups.ps1',
         'TautWeekly-windows/Smtp-Transport.ps1',
         'TautWeekly-windows/config.example.json',
         'TautWeekly-windows/15-MANAGE-LIBRARIES.bat',
@@ -151,6 +152,7 @@ $expected = [ordered]@{
     'TautWeekly-nas-docker.zip' = @(
         'TautWeekly-nas-docker/app/TautWeekly.ps1',
         'TautWeekly-nas-docker/app/DeletedItemCache.ps1',
+        'TautWeekly-nas-docker/app/Configuration-Backups.ps1',
         'TautWeekly-nas-docker/app/Smtp-Transport.ps1',
         'TautWeekly-nas-docker/app/Schedule-Time.ps1',
         'TautWeekly-nas-docker/app/healthcheck.sh',
@@ -171,6 +173,7 @@ $expected = [ordered]@{
     'TautWeekly-mac-docker.zip' = @(
         'TautWeekly-mac-docker/app/TautWeekly.ps1',
         'TautWeekly-mac-docker/app/DeletedItemCache.ps1',
+        'TautWeekly-mac-docker/app/Configuration-Backups.ps1',
         'TautWeekly-mac-docker/app/Smtp-Transport.ps1',
         'TautWeekly-mac-docker/app/Schedule-Time.ps1',
         'TautWeekly-mac-docker/app/bin/run-as-user.sh',
@@ -193,6 +196,7 @@ $expected = [ordered]@{
     'TautWeekly-linux.zip' = @(
         'TautWeekly-linux/app/TautWeekly.ps1',
         'TautWeekly-linux/app/DeletedItemCache.ps1',
+        'TautWeekly-linux/app/Configuration-Backups.ps1',
         'TautWeekly-linux/app/Smtp-Transport.ps1',
         'TautWeekly-linux/app/Schedule-Time.ps1',
         'TautWeekly-linux/app/bin/run-as-user.sh',
@@ -216,6 +220,7 @@ $expected = [ordered]@{
     'TautWeekly-freebsd-podman.zip' = @(
         'TautWeekly-freebsd-podman/app/TautWeekly.ps1',
         'TautWeekly-freebsd-podman/app/DeletedItemCache.ps1',
+        'TautWeekly-freebsd-podman/app/Configuration-Backups.ps1',
         'TautWeekly-freebsd-podman/app/Smtp-Transport.ps1',
         'TautWeekly-freebsd-podman/app/Schedule-Time.ps1',
         'TautWeekly-freebsd-podman/app/bin/run-as-user.sh',
@@ -242,6 +247,12 @@ $assetRoots = [ordered]@{
 $expectedGifHashes = [ordered]@{
     'movies.gif' = '9BCD489463C963C38469771518700308CCADE3965A32EDA18E12DC718950C971'
     'tv.gif'     = '35FFCB45F313953AD0EEF2C7EC852B4B68B0E033E5055BC0926B87EB2EDEF117'
+    'celebrate.gif' = '86879C45175F3901A8676D9B0BB5132C7A98B20A9F40487C21E4C896CE196616'
+    'construction.gif' = '2266492FFE1F5FDF87B41C81388A00D5844598304E8FDC8157255D1998C9B788'
+    'rocket.gif' = 'D644D67D81484688452B5D4BC1F79E98333A33B4FE4C03283839DD9008F19A5F'
+    'tickets.gif' = '7931191FE094F6BD6605C18F0FDE3E3C68B1441BC946BE6380A7F5AF0BE6DEE5'
+    'warning.gif' = '447C12C7F9F8460D30EA914C4F895076DDDFE199386DC74585113DC0DD8910EC'
+    'alert.gif' = '403A9C533D5807F8ED9A8DFDE0F1386AB05AE92147A4C586BCA24E8CCE34EE95'
 }
 $expectedBrandFiles = [ordered]@{
     'TautWeekly-windows.zip' = [ordered]@{

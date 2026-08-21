@@ -50,6 +50,8 @@ jobs:
           ./scripts/validate-docs.ps1
           ./scripts/validate-powershell.ps1
           ./scripts/test-deleted-item-cache.ps1
+          ./scripts/test-config-backup-retention.ps1
+          ./scripts/test-renderer-collections.ps1
       - name: Validate shell scripts
         run: ./scripts/validate-shell.sh
       - name: Test scheduler timezone behavior

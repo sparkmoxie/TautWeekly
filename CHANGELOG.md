@@ -6,6 +6,33 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-08-20
+
+### Added
+
+- Added an optional in-field title GIF selector to the custom text card across
+  Windows, NAS/Docker, macOS, native Linux, and FreeBSD packages. The six
+  allowlisted choices—Celebrate, Construction, Rocket, Tickets, Warning, and
+  Alert—render beside the uppercase title in all six newsletter states and as
+  a deterministic selected-only 18×18 CID asset in delivered email.
+
+### Changed
+
+- Made configuration backups a newest-first rolling set of 10 across Manager
+  and expert/recovery writers, including safe startup normalization of legacy
+  timestamped backups and pre-restore safety backups.
+- Changed recent completed Manager operations and sanitized configuration
+  diagnostics to count-only FIFO retention of the newest 20 records. Existing
+  excess is normalized at startup; record age no longer removes an otherwise
+  retained entry.
+
+### Security
+
+- Kept title text separate from the selected asset ID, normalized missing or
+  unsafe stored IDs to no selection, rejected unsafe submissions, and mapped
+  only fixed local GIF filenames, MIME types, and CIDs without runtime network
+  or Google Fonts dependencies.
+
 ## [0.18.3] - 2026-08-20
 
 ### Fixed
