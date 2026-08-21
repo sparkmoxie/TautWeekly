@@ -962,7 +962,11 @@ that run. Test delivery is limited by the renderer to the saved `TestEmail`,
 records aggregate SMTP acceptance only, and exposes no unsafe cancellation.
 Manual production delivery uses the same fixed renderer contract as the
 schedule, accepts no browser-supplied user or command input, cannot be
-cancelled, and retains aggregate accepted, skipped, and failed counts. All
+cancelled, and retains aggregate accepted, skipped, and failed counts. The
+shared `SendAll` path makes exactly one bounded `refresh_users_list` request
+under the renderer lock before reading or classifying Tautulli's live roster;
+failure stops before SMTP with an allowlisted count-only category. Manager
+discovery cache is never the production recipient source. All
 three write bounded sanitized current/history records without the user ID,
     configuration, service addresses, command line, or raw process output. The
     renderer's opt-in structured result contains only mode, outcome, one fixed

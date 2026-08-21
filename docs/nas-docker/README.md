@@ -274,6 +274,13 @@ address remain eligible even when Tautulli's legacy notification-agent
 recipient is recorded as a failed no-delivery attempt with only fixed aggregate
 skip reasons; it is never presented as SMTP-accepted success.
 
+**Repeat this Tautulli lookup** updates only the choices displayed by Manager.
+At the start of every manual or scheduled SendAll, the shared guarded renderer
+makes one bounded Tautulli/Plex user-list refresh and then reads the live
+roster. A new eligible user is included unless explicitly excluded; if the
+refresh cannot be confirmed, the run stops before SMTP with fixed sanitized
+guidance.
+
 ## Manage newsletter libraries
 
 Manager Config discovers active Tautulli movie/TV libraries and stores the

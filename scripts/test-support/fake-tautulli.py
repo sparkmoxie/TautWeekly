@@ -718,6 +718,30 @@ class Handler(BaseHTTPRequestHandler):
             self.api_success(user)
             return
         if command == "refresh_users_list":
+            fail_refresh_file: Path | None = self.server.fail_refresh_file  # type: ignore[attr-defined]
+            if fail_refresh_file is not None and fail_refresh_file.exists():
+                self.write_json(
+                    {
+                        "response": {
+                            "result": "error",
+                            "message": "virtual roster refresh rejected",
+                            "data": {},
+                        }
+                    }
+                )
+                return
+            refresh_users_file: Path | None = self.server.refresh_users_file  # type: ignore[attr-defined]
+            users_file: Path | None = self.server.users_file  # type: ignore[attr-defined]
+            if (
+                refresh_users_file is not None
+                and refresh_users_file.exists()
+                and refresh_users_file.stat().st_size > 0
+                and users_file is not None
+            ):
+                refreshed = json.loads(refresh_users_file.read_text(encoding="utf-8-sig"))
+                if not isinstance(refreshed, list):
+                    raise ValueError("virtual refreshed users file must contain a JSON array")
+                users_file.write_text(json.dumps(refreshed), encoding="utf-8")
             self.api_success({})
             return
         if command == "get_tautulli_info":
@@ -948,6 +972,8 @@ def main() -> None:
     )
     parser.add_argument("--state-file", type=Path)
     parser.add_argument("--users-file", type=Path)
+    parser.add_argument("--refresh-users-file", type=Path)
+    parser.add_argument("--fail-refresh-file", type=Path)
     parser.add_argument("--call-log", type=Path, required=True)
     parser.add_argument("--ready-file", type=Path, required=True)
     args = parser.parse_args()
@@ -957,6 +983,8 @@ def main() -> None:
     server.scenario = args.scenario  # type: ignore[attr-defined]
     server.state_file = args.state_file  # type: ignore[attr-defined]
     server.users_file = args.users_file  # type: ignore[attr-defined]
+    server.refresh_users_file = args.refresh_users_file  # type: ignore[attr-defined]
+    server.fail_refresh_file = args.fail_refresh_file  # type: ignore[attr-defined]
     server.call_log = args.call_log  # type: ignore[attr-defined]
     server.base_url = f"http://127.0.0.1:{args.port}"  # type: ignore[attr-defined]
     args.call_log.write_text("", encoding="utf-8")

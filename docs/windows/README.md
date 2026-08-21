@@ -282,6 +282,12 @@ policy. A zero-eligible run is a failed no-delivery result with fixed aggregate
 skip reasons, never SMTP-accepted success; Manager history retains no recipient
 identity or email address.
 
+**Repeat this Tautulli lookup** updates only the choices shown in Config. Every
+manual or scheduled SendAll performs one bounded Tautulli/Plex user-list
+refresh before reading the live roster, so a new eligible user is included
+without another Config save unless explicitly excluded. An unconfirmed refresh
+stops before SMTP with fixed sanitized guidance.
+
 Validation never authenticates to SMTP, sends email, changes welcome state, or
 installs a schedule.
 

@@ -272,6 +272,15 @@ email, stable-ID exclusions, and legacy email exclusions. It never stores a
 recipient identity in Manager history or reports a zero-recipient run as SMTP
 success.
 
+**Repeat this Tautulli lookup** refreshes only the Manager's saved library and
+user choices. Every manually confirmed or scheduled SendAll instead makes one
+bounded, authenticated `refresh_users_list` request at the start of the shared
+production path, then fetches and classifies Tautulli's live roster. A newly
+eligible Plex user is therefore included on the next production send unless
+explicitly excluded; no Config save or daily Manager poll is required. If
+Tautulli cannot confirm the refresh, delivery fails before any SMTP connection
+with the fixed `user-roster-refresh-failed` category.
+
 Normally revise exclusions in Manager Config. Recovery/expert fallbacks are
 `14-MANAGE-USER-EXCLUSIONS.bat` on Windows,
 `./tautweekly.sh exclude-users` on either Docker edition, and

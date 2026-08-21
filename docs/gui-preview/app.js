@@ -585,6 +585,7 @@ function rendererFailureCopy(category, supportCode) {
   case "render-failed": return "Fictional newsletter HTML construction did not complete." + suffix;
   case "output-failed": return "The fictional newsletter was built, but its in-memory preview could not be replaced." + suffix;
   case "smtp-failed": return "The fictional SMTP handoff simulation did not complete." + suffix;
+  case "user-roster-refresh-failed": return "The fictional user-roster refresh could not be confirmed, so the delivery simulation stopped before SMTP." + suffix;
   default: return "The mock renderer did not complete successfully. No private output exists in this demo." + suffix;
   }
 }

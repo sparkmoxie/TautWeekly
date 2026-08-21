@@ -161,6 +161,24 @@ func TestRendererResultV2ValidatesProductionEligibilityEvidence(t *testing.T) {
 	if validRendererResult(wrongMode, "PreviewAll") {
 		t.Fatalf("recipient-only error category was accepted for PreviewAll: %+v", wrongMode)
 	}
+
+	rosterFailure := valid
+	rosterFailure.Outcome = "failed"
+	rosterFailure.ErrorCategory = "user-roster-refresh-failed"
+	rosterFailure.SMTPAcceptedCount = 0
+	rosterFailure.SkippedCount = 0
+	rosterFailure.SkipReasonCounts = &DeliverySkipReasonCounts{}
+	if !validRendererResult(rosterFailure, "SendAll") {
+		t.Fatalf("valid fail-closed roster-refresh result was rejected: %+v", rosterFailure)
+	}
+	rosterFailure.SkippedCount = 1
+	if validRendererResult(rosterFailure, "SendAll") {
+		t.Fatalf("roster-refresh failure with delivery classification was accepted: %+v", rosterFailure)
+	}
+	wrongMode.ErrorCategory = "user-roster-refresh-failed"
+	if validRendererResult(wrongMode, "PreviewAll") {
+		t.Fatalf("SendAll-only roster-refresh category was accepted for PreviewAll: %+v", wrongMode)
+	}
 }
 
 func TestRendererResultAcceptsOnlyAllowlistedFailureCategories(t *testing.T) {

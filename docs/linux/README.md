@@ -271,6 +271,12 @@ writing; empty/absent IDs retain legacy all-library behavior.
 Exclusions apply to scheduled and confirmed `SendAll` delivery. One-off welcome
 mail is a separate, explicit administrator action.
 
+Manager's **Repeat this Tautulli lookup** updates only its displayed choices.
+Every manual or scheduled SendAll performs one bounded Tautulli/Plex user-list
+refresh before it reads the live roster. New eligible users are included unless
+explicitly excluded; an unconfirmed refresh stops before SMTP with sanitized
+guidance.
+
 The inherited newsletter payload lists up to four most-watched movies and four
 most-watched TV shows, omits an empty TV stats card, and shows only duration in
 Total Watched. Binge Champion shares watch time plus nonzero unique movie and

@@ -455,6 +455,8 @@ function Add-AccessStateUser {
 }
 
 function Sync-AccessRoster {
+    param([switch]$RequireFreshUsers)
+
     # Tautulli's API exposes current access, not the Plex invitation acceptance
     # timestamp. We therefore establish a baseline once, then treat a newly
     # appearing active user as newly accepted from that point forward.
@@ -462,6 +464,11 @@ function Sync-AccessRoster {
         Invoke-TautulliApi -Command "refresh_users_list" | Out-Null
     }
     catch {
+        if ($RequireFreshUsers) {
+            $script:TautWeeklyResultErrorCategory = "user-roster-refresh-failed"
+            Write-Log "Required user-list refresh could not be confirmed; production delivery stopped before SMTP." "ERROR"
+            throw "Required Tautulli user-list refresh could not be confirmed."
+        }
         Write-Log "User-list refresh failed; continuing with the current local user list." "WARN"
     }
 
@@ -8045,6 +8052,10 @@ if ($Mode -eq "SendWelcome") {
 # ---------------------------------------------------------------------------
 # COMMON DATA FOR FRIDAY PREVIEW / TEST / SEND
 # ---------------------------------------------------------------------------
+if ($Mode -eq "SendAll" -and -not $ConfirmSendAll) {
+    throw "SendAll is intentionally locked. Re-run with -ConfirmSendAll after reviewing a test email."
+}
+
 $script:TautWeeklyResultErrorCategory = "configuration-invalid"
 $tautWeeklyState = Get-TautWeeklyState
 Write-Log ("TautWeekly for Plex age: {0} day(s); warm-up mode: {1}" -f $tautWeeklyState.AgeDays, $tautWeeklyState.IsWarmingUp)
@@ -8056,7 +8067,7 @@ $accessState = if ($Mode -in @("PreviewAll","SendTestAll")) {
 }
 else {
     $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
-    Sync-AccessRoster
+    Sync-AccessRoster -RequireFreshUsers:($Mode -eq "SendAll")
 }
 $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
 $daysBack = if ($null -ne $Config.PSObject.Properties["DaysBack"]) { Safe-Int $Config.DaysBack } else { 7 }
@@ -8776,10 +8787,6 @@ if ($Mode -eq "SendTest") {
 # MODE: SEND ALL
 # ---------------------------------------------------------------------------
 if ($Mode -eq "SendAll") {
-    if (-not $ConfirmSendAll) {
-        throw "SendAll is intentionally locked. Re-run with -ConfirmSendAll after reviewing a test email."
-    }
-
     $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
     $names = Get-TautulliUserNames
     $sent = 0

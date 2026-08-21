@@ -790,6 +790,7 @@ function rendererFailureCopy(category, supportCode) {
   case "render-failed": return "Newsletter HTML construction failed before the operation completed. Review Config and Verify, then retry." + suffix;
   case "output-failed": return "Newsletter HTML was built, but the private preview files could not be written. Review private data-directory access and free space, then retry." + suffix;
   case "smtp-failed": return "The renderer failed during SMTP handoff. Review Verify and the controlled TestEmail workflow before retrying." + suffix;
+  case "user-roster-refresh-failed": return "Tautulli could not confirm a fresh Plex user roster, so production delivery stopped before SMTP. Confirm Tautulli can reach Plex, then retry." + suffix;
   case "platform-unsupported": return "This package does not expose the requested renderer operation." + suffix;
   case "manager-restarted": return "The Manager restarted before it could reconcile the renderer result. Refresh status, then retry." + suffix;
   default: return "The package renderer did not complete successfully. Raw process output was not retained." + suffix;

@@ -138,6 +138,10 @@ one-user `SendWelcome` mode or the full `SendAll` mode, requires its own explici
 confirmation, cannot be cancelled, and reports SMTP acceptance separately from
 inbox delivery. The selected welcome user ID is passed only to the private
 renderer process and is not retained in Manager operation history.
+Each manual or scheduled `SendAll` uses that same guarded renderer path to run
+one bounded Tautulli/Plex user-list refresh before reading the live roster.
+Manager discovery cache is not a recipient source. An unconfirmed refresh stops
+before SMTP and yields only a fixed sanitized failure category and support code.
 
 Schedule changes accept only four action enums. The normal Manager remains
 unelevated; the packaged helper requests UAC, rechecks the exact configuration

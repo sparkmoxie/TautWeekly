@@ -14,6 +14,11 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   email address when the legacy upstream `do_notify` notification-agent flag
   is disabled. Explicit user/email exclusions, inactive or deleted users, and
   missing addresses remain hard skips in manual and scheduled delivery.
+- Made the shared manual/scheduled `SendAll` path synchronously refresh
+  Tautulli's Plex user list exactly once before reading the live roster. A new
+  eligible user no longer requires a Manager discovery refresh; an unconfirmed
+  upstream refresh fails before SMTP with the fixed sanitized
+  `user-roster-refresh-failed` category.
 - Made an all-skipped production run fail with a fixed
   `no-eligible-recipients` category instead of appearing SMTP-accepted, and
   added sanitized aggregate skip counts to the Manager status and operation
@@ -33,6 +38,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Clarified in Config that checked user boxes are delivery exclusions and that
   Tautulli notification-agent settings do not control TautWeekly delivery.
+  Clarified that **Repeat this Tautulli lookup** updates Manager choices only;
+  it is not required to refresh production recipients.
 - Replaced opaque origin rejection text with fixed, sanitized recovery
   guidance and support codes, and tightened the macOS reverse-proxy workflow
   around exact hostnames, original `Host` preservation, secure cookies, and

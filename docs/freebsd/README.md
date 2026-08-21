@@ -225,6 +225,12 @@ The wrapper always requires an explicit confirmation for real welcome or
 production delivery. Excluded users remain available to preview and TestEmail
 modes but are omitted from scheduled and confirmed `SendAll` delivery.
 
+Manager's **Repeat this Tautulli lookup** updates only its displayed choices.
+Every manual or scheduled SendAll performs one bounded Tautulli/Plex user-list
+refresh before reading the live roster. New eligible users are included unless
+explicitly excluded; an unconfirmed refresh stops before SMTP with sanitized
+guidance.
+
 Manager Config (or the `manage-libraries` expert fallback) queries active
 movie/TV libraries and saves stable section IDs in `IncludedLibraryIds`. This global scope is applied
 before releases, quiet mode, Trending, Binge Champion, and personal statistics

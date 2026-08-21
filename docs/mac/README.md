@@ -291,6 +291,11 @@ the package never deletes them implicitly.
 USER_ID`, library/user selectors, and schedule commands remain available for
 recovery or scripted administration. They are not the normal Mac setup source.
 Real-recipient `welcome` and `send-all` commands retain explicit confirmation.
+Manager's **Repeat this Tautulli lookup** refreshes only the displayed choices;
+every manual or scheduled SendAll performs one bounded Tautulli/Plex user-list
+refresh before reading the live roster. A newly eligible user is included
+unless explicitly excluded, and an unconfirmed refresh stops before SMTP with
+fixed sanitized guidance.
 
 ## Limitations
 

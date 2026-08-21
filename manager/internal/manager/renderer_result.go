@@ -71,7 +71,7 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 		if result.Outcome != "failed" || !validRendererErrorCategory(result.ErrorCategory) {
 			return false
 		}
-		if result.ErrorCategory == "no-eligible-recipients" && result.Mode != "SendAll" {
+		if (result.ErrorCategory == "no-eligible-recipients" || result.ErrorCategory == "user-roster-refresh-failed") && result.Mode != "SendAll" {
 			return false
 		}
 	}
@@ -149,6 +149,9 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 		if result.ErrorCategory == "no-eligible-recipients" && (result.Outcome != "failed" || result.SMTPAcceptedCount != 0 || result.FailedCount != 0) {
 			return false
 		}
+		if result.ErrorCategory == "user-roster-refresh-failed" && (result.Outcome != "failed" || result.SMTPAcceptedCount != 0 || result.SkippedCount != 0 || result.FailedCount != 0) {
+			return false
+		}
 	case "ListUsers", "VerifyPlex":
 		if len(seen) != 0 || result.SMTPAcceptedCount != 0 || result.SkippedCount != 0 || result.FailedCount != 0 || result.Outcome == "partial" {
 			return false
@@ -167,6 +170,7 @@ func validRendererErrorCategory(category string) bool {
 		"render-failed",
 		"output-failed",
 		"smtp-failed",
+		"user-roster-refresh-failed",
 		"no-eligible-recipients",
 		"renderer-failed":
 		return true

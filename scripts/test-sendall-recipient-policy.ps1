@@ -58,6 +58,27 @@ $scenarios = @(
         Reasons = @(0, 0, 0, 0)
     },
     [PSCustomObject]@{
+        Name = 'stale-manager-discovery-new-user'
+        DiscoveryUsers = @(
+            (New-VirtualUser -Id '1' -Email 'viewer1@example.com')
+        )
+        Users = @(
+            (New-VirtualUser -Id '1' -Email 'viewer1@example.com'),
+            (New-VirtualUser -Id '2' -Email 'viewer2@example.com')
+        )
+        ExcludedUserIds = @()
+        ExcludedEmails = @()
+        RejectRecipient = ''
+        FreshAccessState = $false
+        ExitCode = 0
+        Outcome = 'succeeded'
+        ErrorCategory = ''
+        Accepted = 2
+        Skipped = 0
+        Failed = 0
+        Reasons = @(0, 0, 0, 0)
+    },
+    [PSCustomObject]@{
         Name = 'mixed-fixed-skip-reasons'
         Users = @(
             (New-VirtualUser -Id '1' -Email 'viewer1@example.com' -Notify 0),
@@ -113,6 +134,24 @@ $scenarios = @(
         Skipped = 0
         Failed = 1
         Reasons = @(0, 0, 0, 0)
+    },
+    [PSCustomObject]@{
+        Name = 'required-roster-refresh-failure'
+        Users = @(
+            (New-VirtualUser -Id '1' -Email 'viewer1@example.com')
+        )
+        FailRefresh = $true
+        ExcludedUserIds = @()
+        ExcludedEmails = @()
+        RejectRecipient = ''
+        FreshAccessState = $false
+        ExitCode = 1
+        Outcome = 'failed'
+        ErrorCategory = 'user-roster-refresh-failed'
+        Accepted = 0
+        Skipped = 0
+        Failed = 0
+        Reasons = @(0, 0, 0, 0)
     }
 )
 
@@ -133,6 +172,8 @@ foreach ($engine in $engines) {
     $appRoot = Join-Path $tempRoot 'app'
     $dataRoot = Join-Path $tempRoot 'data'
     $usersFile = Join-Path $tempRoot 'users.json'
+    $refreshUsersFile = Join-Path $tempRoot 'refresh-users.json'
+    $failRefreshFile = Join-Path $tempRoot 'fail-refresh.flag'
     $tautulliLog = Join-Path $tempRoot 'tautulli-calls.jsonl'
     $tautulliReady = Join-Path $tempRoot 'tautulli-ready.txt'
     $tautulliStdout = Join-Path $tempRoot 'tautulli.stdout.txt'
@@ -142,11 +183,12 @@ foreach ($engine in $engines) {
 
     $tautulli = $null
     try {
-        @($scenarios[0].Users) | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $usersFile -Encoding UTF8
+        ConvertTo-Json -InputObject @($scenarios[0].Users) -Depth 8 | Set-Content -LiteralPath $usersFile -Encoding UTF8
         $tautulliPort = Get-FreeTcpPort
         $tautulli = Start-Process -FilePath $PythonPath -ArgumentList @(
             '-u', $fakeTautulli, '--port', [string]$tautulliPort, '--scenario', 'quiet',
-            '--users-file', $usersFile, '--call-log', $tautulliLog, '--ready-file', $tautulliReady
+            '--users-file', $usersFile, '--refresh-users-file', $refreshUsersFile,
+            '--fail-refresh-file', $failRefreshFile, '--call-log', $tautulliLog, '--ready-file', $tautulliReady
         ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $tautulliStdout -RedirectStandardError $tautulliStderr
         for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $tautulliReady); $attempt++) {
             if ($tautulli.HasExited) { throw "Virtual Tautulli exited early: $(Get-Content $tautulliStderr -Raw -ErrorAction SilentlyContinue)" }
@@ -165,9 +207,23 @@ foreach ($engine in $engines) {
         }
 
         foreach ($scenario in $scenarios) {
-            @($scenario.Users) | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $usersFile -Encoding UTF8
+            $discoveryUsers = if ($null -ne $scenario.PSObject.Properties['DiscoveryUsers']) { @($scenario.DiscoveryUsers) } else { @($scenario.Users) }
+            ConvertTo-Json -InputObject @($discoveryUsers) -Depth 8 | Set-Content -LiteralPath $usersFile -Encoding UTF8
+            if ($null -ne $scenario.PSObject.Properties['DiscoveryUsers']) {
+                ConvertTo-Json -InputObject @($scenario.Users) -Depth 8 | Set-Content -LiteralPath $refreshUsersFile -Encoding UTF8
+            }
+            else {
+                [IO.File]::WriteAllText($refreshUsersFile, '')
+            }
+            if ($null -ne $scenario.PSObject.Properties['FailRefresh'] -and [bool]$scenario.FailRefresh) {
+                New-Item -ItemType File -Force -Path $failRefreshFile | Out-Null
+            }
+            else {
+                Remove-Item -LiteralPath $failRefreshFile -Force -ErrorAction SilentlyContinue
+            }
             $userProbe = Invoke-RestMethod -Uri ($baseUrl + '/api/v2?apikey=virtual-api-key&cmd=get_users') -Method Get
-            Assert-True (@($userProbe.response.data).Count -eq @($scenario.Users).Count) "$($engine.Name)/$($scenario.Name) virtual roster did not load deterministically."
+            Assert-True (@($userProbe.response.data).Count -eq @($discoveryUsers).Count) "$($engine.Name)/$($scenario.Name) virtual discovery roster did not load deterministically."
+            $callBaseline = @(Get-Content -LiteralPath $tautulliLog -ErrorAction SilentlyContinue | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
             $smtpPort = Get-FreeTcpPort
             $smtpLog = Join-Path $tempRoot ("smtp-$($scenario.Name).jsonl")
             $smtpReady = Join-Path $tempRoot ("smtp-$($scenario.Name)-ready.txt")
@@ -224,6 +280,22 @@ foreach ($engine in $engines) {
                         $env:TAUTWEEKLY_DATA_DIR = $dataRoot
                         $env:TAUTWEEKLY_CONFIG = $configPath
                     }
+                    if ($scenario.Name -eq 'all-legacy-notify-disabled') {
+                        $unconfirmedResultPath = Join-Path $tempRoot ("result-unconfirmed-$($engine.Name).json")
+                        $unconfirmedStdout = Join-Path $tempRoot ("renderer-unconfirmed-$($engine.Name).stdout.txt")
+                        $unconfirmedStderr = Join-Path $tempRoot ("renderer-unconfirmed-$($engine.Name).stderr.txt")
+                        $callsBeforeUnconfirmed = @(Get-Content -LiteralPath $tautulliLog -ErrorAction SilentlyContinue | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
+                        $unconfirmedProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
+                            '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
+                            '-RendererPath', (Join-Path $appRoot 'TautWeekly.ps1'), '-ConfigPath', $configPath,
+                            '-UserId', '1', '-Mode', 'SendAll', '-ResultPath', $unconfirmedResultPath, '-NoConfirmSendAll'
+                        ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $unconfirmedStdout -RedirectStandardError $unconfirmedStderr
+                        Assert-True ($unconfirmedProcess.ExitCode -eq 1) "$($engine.Name) accepted an unconfirmed production SendAll."
+                        $callsAfterUnconfirmed = @(Get-Content -LiteralPath $tautulliLog -ErrorAction SilentlyContinue | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
+                        Assert-True ($callsAfterUnconfirmed -eq $callsBeforeUnconfirmed) "$($engine.Name) contacted Tautulli before production confirmation."
+                        $smtpCallsBeforeConfirmed = @(Get-Content -LiteralPath $smtpLog -ErrorAction SilentlyContinue | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                        Assert-True ($smtpCallsBeforeConfirmed.Count -eq 0) "$($engine.Name) contacted SMTP before production confirmation."
+                    }
                     $process = Start-Process -FilePath $engine.Host -ArgumentList @(
                         '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
                         '-RendererPath', (Join-Path $appRoot 'TautWeekly.ps1'), '-ConfigPath', $configPath,
@@ -246,6 +318,33 @@ foreach ($engine in $engines) {
                 Assert-True ($result.smtpAcceptedCount -eq $scenario.Accepted -and $result.skippedCount -eq $scenario.Skipped -and $result.failedCount -eq $scenario.Failed) "$($engine.Name)/$($scenario.Name) reported inconsistent delivery aggregates."
                 $actualReasons = @($result.skipReasonCounts.inactiveOrDeleted, $result.skipReasonCounts.missingEmail, $result.skipReasonCounts.excludedUserId, $result.skipReasonCounts.excludedEmail)
                 Assert-True (($actualReasons -join ',') -eq (@($scenario.Reasons) -join ',')) "$($engine.Name)/$($scenario.Name) reported inconsistent fixed skip reasons."
+                $tautulliCalls = @(
+                    Get-Content -LiteralPath $tautulliLog -ErrorAction SilentlyContinue |
+                        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                        Select-Object -Skip $callBaseline |
+                        ForEach-Object { $_ | ConvertFrom-Json }
+                )
+                $apiCommands = @(
+                    $tautulliCalls |
+                        Where-Object { [string]$_.path -eq '/api/v2' } |
+                        ForEach-Object { [string]$_.query.cmd }
+                )
+                Assert-True (@($apiCommands | Where-Object { $_ -eq 'refresh_users_list' }).Count -eq 1) "$($engine.Name)/$($scenario.Name) did not refresh the Tautulli roster exactly once."
+                Assert-True ($apiCommands.Count -gt 0 -and $apiCommands[0] -eq 'refresh_users_list') "$($engine.Name)/$($scenario.Name) did not refresh before reading production data."
+                if ($scenario.Name -eq 'stale-manager-discovery-new-user') {
+                    $refreshIndex = [Array]::IndexOf([object[]]$apiCommands, 'refresh_users_list')
+                    $rosterIndex = [Array]::IndexOf([object[]]$apiCommands, 'get_users')
+                    Assert-True ($refreshIndex -ge 0 -and $rosterIndex -gt $refreshIndex) "$($engine.Name) did not fetch the live roster after the required refresh."
+                    Assert-True ($result.smtpAcceptedCount -eq 2) "$($engine.Name) did not include the synthetic user added after stale Manager discovery."
+                }
+                if ($scenario.Name -eq 'required-roster-refresh-failure') {
+                    # A failed required refresh must stop before roster discovery,
+                    # integration/media work, preview work, or SMTP preflight.
+                    Assert-True ($apiCommands.Count -eq 1) "$($engine.Name) continued into production data calls after a failed roster refresh."
+                    $smtpCalls = @(Get-Content -LiteralPath $smtpLog -ErrorAction SilentlyContinue | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                    Assert-True ($smtpCalls.Count -eq 0) "$($engine.Name) contacted SMTP after the required roster refresh failed."
+                    Assert-True (-not $resultRaw.Contains('virtual roster refresh rejected')) "$($engine.Name) exposed the raw upstream refresh failure."
+                }
                 foreach ($user in @($scenario.Users)) {
                     $privateValues = @([string]$user.email, [string]$user.friendly_name) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
                     foreach ($privateValue in $privateValues) {
@@ -278,6 +377,11 @@ foreach ($path in @('platforms/nas-docker/app/Scheduler.ps1', 'platforms/mac-doc
 }
 $windowsSchedule = Get-Content -LiteralPath (Join-Path $Root 'platforms/windows/SCHEDULE-HELPER.ps1') -Raw -Encoding UTF8
 Assert-True ($windowsSchedule.Contains('-Mode SendAll -ResultPath') -and $windowsSchedule.Contains('-ConfirmSendAll')) 'Windows scheduled delivery does not route through the shared guarded SendAll mode.'
+
+foreach ($path in @('platforms/windows/TautWeekly.ps1', 'platforms/nas-docker/app/TautWeekly.ps1', 'platforms/mac-docker/app/TautWeekly.ps1')) {
+    $renderer = Get-Content -LiteralPath (Join-Path $Root $path) -Raw -Encoding UTF8
+    Assert-True ($renderer.Contains('Sync-AccessRoster -RequireFreshUsers:($Mode -eq "SendAll")')) "$path does not require the shared refresh-on-SendAll path."
+}
 
 Assert-True ($executed -gt 0) 'No SendAll recipient-policy scenarios executed.'
 Write-Host "[PASS] SendAll recipient policy, privacy, platform synchronization, and schedule/manual parity validated ($executed scenarios)."
