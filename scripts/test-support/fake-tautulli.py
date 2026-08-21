@@ -21,8 +21,8 @@ DELETED_HISTORY_SCENARIOS = (
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
     old = now - (30 * 86400)
-    movie_added = now if scenario in ("active", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
-    tv_added = now if scenario in ("active", "tv-only", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
+    movie_added = now if scenario in ("active", "personal-many", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
+    tv_added = now if scenario in ("active", "personal-many", "tv-only", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
     rows = {
         "10": [
             {
@@ -134,6 +134,29 @@ def configured_users(server: ThreadingHTTPServer) -> dict[str, dict[str, object]
 
 def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
     if section_id == "10":
+        if scenario == "personal-many":
+            return [
+                {
+                    "section_id": "10",
+                    "media_type": "movie",
+                    "rating_key": f"personal-movie-{index:02d}",
+                    "title": f"Personal Movie {index:02d}",
+                    "year": "2026",
+                    "summary": "Synthetic uncapped personal movie history.",
+                    "rating": "8.7" if index != 10 else "",
+                    "rating_image": "rottentomatoes://image.rating.ripe" if index != 10 else "",
+                    "audience_rating": "9.1" if index != 10 else "",
+                    "audience_rating_image": "rottentomatoes://image.rating.upright" if index != 10 else "",
+                    "genres": ["Drama", "Mystery"],
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 30 * (13 - index),
+                    "watched_status": 1,
+                    "percent_complete": 100,
+                    "group_count": 1,
+                }
+                for index in range(1, 13)
+            ]
         rows = [
             {
                 "section_id": "10",
@@ -185,6 +208,31 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                 "rating_image": "imdb://image.rating",
             }
         ]
+        if scenario == "personal-many":
+            rows.extend(
+                {
+                    "section_id": "20",
+                    "media_type": "episode",
+                    "rating_key": f"personal-episode-{index:02d}",
+                    "grandparent_rating_key": f"selected-show-personal-{index:02d}",
+                    "grandparent_title": f"Personal Show {index:02d}",
+                    "parent_title": "Season 1",
+                    "title": f"Personal Episode {index:02d}",
+                    "year": "2026",
+                    "summary": "Synthetic uncapped personal TV history.",
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 120 * (12 - index),
+                    "watched_status": 1,
+                    "percent_complete": 100,
+                    "group_count": 1,
+                    "parent_media_index": 1,
+                    "media_index": index,
+                    "rating": "8.4" if index != 9 else "",
+                    "rating_image": "imdb://image.rating" if index != 9 else "",
+                }
+                for index in range(1, 12)
+            )
         if scenario in DELETED_HISTORY_SCENARIOS:
             deleted_episode_guid = (
                 "com.plexapp.agents.thetvdb://999/1/2?lang=en"
@@ -800,6 +848,25 @@ class Handler(BaseHTTPRequestHandler):
                 return
             is_episode = "episode" in key
             is_show = key.startswith("selected-show") and not is_episode
+            if scenario == "personal-many" and (key.startswith("personal-movie-") or key.startswith("selected-show-personal-")):
+                intentionally_unrated = key.endswith("-10") if key.startswith("personal-movie-") else key.endswith("-09")
+                self.api_success(
+                    {
+                        "rating_key": key,
+                        "media_type": "show" if is_show else "movie",
+                        "year": "2026",
+                        "summary": "Synthetic uncapped personal-stat metadata.",
+                        "rating": "" if intentionally_unrated else ("8.4" if is_show else "8.7"),
+                        "rating_image": "" if intentionally_unrated else ("imdb://image.rating" if is_show else "rottentomatoes://image.rating.ripe"),
+                        "audience_rating": "" if intentionally_unrated or is_show else "9.1",
+                        "audience_rating_image": "" if intentionally_unrated or is_show else "rottentomatoes://image.rating.upright",
+                        "genres": ["Drama", "Mystery"],
+                        "banner": "",
+                        "art": "",
+                        "thumb": "",
+                    }
+                )
+                return
             if scenario == "optional-hero-metadata" and is_show:
                 # Tautulli may return a successful but sparse metadata object. The
                 # renderer must retain the global-history title and default every
@@ -956,6 +1023,7 @@ def main() -> None:
         "--scenario",
         choices=(
             "active",
+            "personal-many",
             "quiet",
             "tv-only",
             "optional-hero-metadata",

@@ -50,7 +50,7 @@ foreach ($engine in $engines) {
         continue
     }
 
-    foreach ($scenario in @('active', 'quiet', 'tv-only', 'optional-hero-metadata', 'rating-export-fallback') + $directRatingScenarios + $deletedHistoryScenarios) {
+    foreach ($scenario in @('active', 'quiet', 'tv-only', 'personal-many', 'optional-hero-metadata', 'rating-export-fallback') + $directRatingScenarios + $deletedHistoryScenarios) {
         $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-integration-' + [Guid]::NewGuid().ToString('N'))
         $appRoot = Join-Path $tempRoot 'app'
         $dataRoot = Join-Path $tempRoot 'data'
@@ -305,6 +305,7 @@ foreach ($engine in $engines) {
             }
             $indexHtml = Get-Content $indexPath -Raw -Encoding UTF8
             $normalHtml = Get-Content $normalPath -Raw -Encoding UTF8
+            $quietHtml = Get-Content (Join-Path $outputRoot 'preview-all-05-established-quiet.html') -Raw -Encoding UTF8
             $previewThemeMarkers = @(
                 '<meta name="color-scheme" content="light dark">',
                 '<meta name="supported-color-schemes" content="light dark">',
@@ -343,6 +344,15 @@ foreach ($engine in $engines) {
             Assert-True ($normalHtml.Contains('class="email-card"')) "$($engine.Name)/$scenario lost explicit dark card classes."
             Assert-True ($normalHtml.Contains('bgcolor="#181818"')) "$($engine.Name)/$scenario lost the legacy dark card fallback."
             Assert-True ($normalHtml.Contains('background-color:#181818')) "$($engine.Name)/$scenario lost the longhand dark card fallback."
+            Assert-True ($normalHtml.Contains('YOU CLOCKED') -and $normalHtml.Contains('total watch time')) "$($engine.Name)/$scenario lost the personal total-watch-time presentation."
+            Assert-True (-not $normalHtml.Contains('>total watched<')) "$($engine.Name)/$scenario retained the old personal-time label."
+            Assert-True (([regex]::Matches($normalHtml, 'class="stats-summary-cell"')).Count -eq 2) "$($engine.Name)/$scenario did not render exactly two compact desktop summary cells."
+            Assert-True (([regex]::Matches($normalHtml, 'height="178"')).Count -ge 4) "$($engine.Name)/$scenario did not keep both compact summary cards at the same fixed height."
+            Assert-True ($normalHtml.Contains('.stats-summary-cell { display:block !important; width:100% !important;')) "$($engine.Name)/$scenario lost responsive summary-card stacking."
+            Assert-True (-not $normalHtml.Contains('height:356px')) "$($engine.Name)/$scenario still couples summary-card height to four personal media rows."
+            Assert-True ($normalHtml.Contains('colspan="2" width="100%" valign="top"')) "$($engine.Name)/$scenario did not render the populated personal media card at full width."
+            Assert-True ($normalHtml.Contains('class="stats-title-cell" width="50%"') -and $normalHtml.Contains('.stats-title-cell { display:block !important; width:100% !important;')) "$($engine.Name)/$scenario lost the two-column desktop and one-column mobile personal-title layout."
+            Assert-True (-not $quietHtml.Contains('class="stats-summary-cell"') -and -not $quietHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario rendered personal summary cards in the zero-activity state."
             Assert-True (-not $normalHtml.Contains('Ratings unavailable') -and -not $normalHtml.Contains('IMDb unavailable')) "$($engine.Name)/$scenario rendered an unavailable-rating placeholder."
             $expectedMode = if ($scenario -eq 'quiet' -or $scenario -in $deletedHistoryScenarios) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' }
             Assert-True ($indexHtml.Contains($expectedMode)) "$($engine.Name)/$scenario reported the wrong release mode."
@@ -354,8 +364,29 @@ foreach ($engine in $engines) {
             Assert-True ($normalHtml.Contains('1 TV show')) "$($engine.Name)/$scenario lost the unique TV-show breakdown."
             Assert-True (-not $normalHtml.Contains('0 movies')) "$($engine.Name)/$scenario rendered an empty Binge Champion movie category."
             Assert-True (-not $normalHtml.Contains('qualifying plays')) "$($engine.Name)/$scenario retained qualifying-play copy in Total Watched."
-            if ($scenario -notin $deletedHistoryScenarios) {
+            if ($scenario -notin $deletedHistoryScenarios -and $scenario -ne 'personal-many') {
                 Assert-True (-not $normalHtml.Contains('TV SHOWS WATCHED')) "$($engine.Name)/$scenario rendered an empty TV stats card."
+            }
+
+            if ($scenario -eq 'personal-many') {
+                Assert-True ($normalHtml.Contains('Personal Movie 12') -and $normalHtml.Contains('Personal Show 11')) "$($engine.Name)/$scenario capped personal movie or TV rows before the final synthetic title."
+                Assert-True (([regex]::Matches($normalHtml, 'class="stats-title-cell"')).Count -eq 23) "$($engine.Name)/$scenario did not render all 12 movie and 11 TV title cells."
+                Assert-True (([regex]::Matches($normalHtml, 'class="stats-title-spacer"')).Count -eq 1) "$($engine.Name)/$scenario did not preserve the odd TV grid row without a visible empty mobile item."
+                $movieStatsStart = $normalHtml.IndexOf('MOVIES WATCHED', [StringComparison]::Ordinal)
+                $tvStatsStart = $normalHtml.IndexOf('TV SHOWS WATCHED', [StringComparison]::Ordinal)
+                Assert-True ($movieStatsStart -ge 0 -and $tvStatsStart -gt $movieStatsStart) "$($engine.Name)/$scenario did not stack the full-width Movies and TV cards in order."
+                Assert-True ($normalHtml.Substring($movieStatsStart, $tvStatsStart - $movieStatsStart).Contains('Personal Movie 12')) "$($engine.Name)/$scenario did not keep the twelfth movie inside the Movies card."
+                Assert-True ($normalHtml.Substring($tvStatsStart).Contains('Personal Show 11')) "$($engine.Name)/$scenario did not keep the eleventh TV show inside the TV card."
+                Assert-True ($normalHtml.Contains('posters/poster_personal-movie-12.jpg') -and $normalHtml.Contains('posters/poster_selected-show-personal-11.jpg')) "$($engine.Name)/$scenario lost beyond-four poster references."
+                $moviePoster = Join-Path (Join-Path $outputRoot 'posters') 'poster_personal-movie-12.jpg'
+                $showPoster = Join-Path (Join-Path $outputRoot 'posters') 'poster_selected-show-personal-11.jpg'
+                Assert-True ((Test-Path $moviePoster) -and (Get-Item $moviePoster).Length -gt 512) "$($engine.Name)/$scenario did not persist the twelfth movie poster."
+                Assert-True ((Test-Path $showPoster) -and (Get-Item $showPoster).Length -gt 512) "$($engine.Name)/$scenario did not persist the eleventh TV poster."
+                $movieTwelveStart = $normalHtml.IndexOf('Personal Movie 12', [StringComparison]::Ordinal)
+                $showElevenStart = $normalHtml.IndexOf('Personal Show 11', [StringComparison]::Ordinal)
+                Assert-True ($movieTwelveStart -ge 0 -and $normalHtml.Substring($movieTwelveStart, [Math]::Min(1500, $normalHtml.Length - $movieTwelveStart)).Contains('alt="Rotten Tomatoes critic"')) "$($engine.Name)/$scenario lost the twelfth movie rating."
+                Assert-True ($showElevenStart -ge 0 -and $normalHtml.Substring($showElevenStart, [Math]::Min(1500, $normalHtml.Length - $showElevenStart)).Contains('alt="IMDb"')) "$($engine.Name)/$scenario lost the eleventh TV rating."
+                Assert-True ($normalHtml.Contains('2h 51m') -and $normalHtml.Contains('3h 0m watched')) "$($engine.Name)/$scenario did not preserve the intentionally distinct personal and Binge Champion time semantics."
             }
 
             if ($scenario -eq 'tv-only') {

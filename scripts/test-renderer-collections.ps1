@@ -741,6 +741,29 @@ foreach ($relativePath in $rendererPaths) {
     }) -PosterAssets @() -ImageMode Preview
     Assert-True ($unratedTvRows.Contains('Grouped Show') -and $unratedTvRows.Contains('1h 2m watched') -and -not $unratedTvRows.Contains('unavailable')) "$relativePath grouped TV stats did not retain duration while omitting an unavailable rating"
 
+    $manyMovieRowsInput = @(1..12 | ForEach-Object {
+        [PSCustomObject]@{
+            Title = "Uncapped Movie $($_.ToString('00'))"; PosterRatingKey = ''; Genres = @('Drama'); Seconds = (5400 * $_)
+            DesignRtCritic = if ($_ -eq 1) { '91' } else { '' }
+            DesignRtCriticImage = 'rottentomatoes://image.rating.ripe'
+        }
+    })
+    $manyMovieRows = Get-StatsMovieRowsHtml -Items $manyMovieRowsInput -PosterAssets @() -ImageMode Preview
+    Assert-True (([regex]::Matches($manyMovieRows, 'Uncapped Movie \d{2}')).Count -eq 12) "$relativePath did not render every one of twelve personal movie rows"
+    Assert-True ($manyMovieRows.Contains('Uncapped Movie 12') -and $manyMovieRows.Contains('91%')) "$relativePath lost the final movie row or an eligible movie rating"
+    Assert-True (([regex]::Matches($manyMovieRows, 'class="stats-title-cell"')).Count -eq 12 -and -not $manyMovieRows.Contains('stats-title-spacer')) "$relativePath did not pair an even movie count into two desktop columns"
+
+    $manyTvRowsInput = @(1..11 | ForEach-Object {
+        [PSCustomObject]@{
+            ShowTitle = "Uncapped Show $($_.ToString('00'))"; PosterRatingKey = ''; Seconds = (3600 * $_)
+            TotalTimeText = "${_}h 0m"; DesignImdbRating = if ($_ -eq 1) { '8.4' } else { '' }
+        }
+    })
+    $manyTvRows = Get-StatsTvShowRowsHtml -Items $manyTvRowsInput -PosterAssets @() -ImageMode Preview
+    Assert-True (([regex]::Matches($manyTvRows, 'Uncapped Show \d{2}')).Count -eq 11) "$relativePath did not render every one of eleven personal TV rows"
+    Assert-True ($manyTvRows.Contains('Uncapped Show 11') -and $manyTvRows.Contains('IMDb') -and $manyTvRows.Contains('8.4')) "$relativePath lost the final TV row or an eligible show rating"
+    Assert-True (([regex]::Matches($manyTvRows, 'class="stats-title-cell"')).Count -eq 11 -and ([regex]::Matches($manyTvRows, 'class="stats-title-spacer"')).Count -eq 1) "$relativePath did not pair an odd TV count into two desktop columns with one safe spacer"
+
     $preferredShowStats = Get-StatsTvShowRatingHtml -Item $selectedProviderShow -ImageMode Preview
     Assert-True ($preferredShowStats.Contains('IMDb') -and $preferredShowStats.Contains('8.4') -and -not $preferredShowStats.Contains('%')) "$relativePath grouped TV stats did not prefer show-level IMDb over show-level RT"
     $rtShowStats = Get-StatsTvShowRatingHtml -Item $rtProviderShow -ImageMode Preview
@@ -950,6 +973,19 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True (@($script:statsMetadataInput.Movies).Count -eq 1) "$relativePath lost watched movies during personal-stat enrichment"
     Assert-True (@($script:statsMetadataInput.TV).Count -eq 1) "$relativePath omitted watched TV shows from IMDb enrichment"
 
+    $manyMetadataMovies = @(1..12 | ForEach-Object {
+        [PSCustomObject]@{ Type = 'movie'; Title = "Metadata Movie $_"; RatingKey = "metadata-movie-$_" }
+    })
+    $manyMetadataShows = @(1..11 | ForEach-Object {
+        [PSCustomObject]@{ Type = 'show'; Title = "Metadata Show $_"; RatingKey = "metadata-show-$_" }
+    })
+    Add-UserStatsMediaMetadata -Stats ([PSCustomObject]@{
+        MovieItems  = $manyMetadataMovies
+        TvShowItems = $manyMetadataShows
+    })
+    Assert-True (@($script:statsMetadataInput.Movies).Count -eq 12) "$relativePath capped movie metadata enrichment before the final personal-stat row"
+    Assert-True (@($script:statsMetadataInput.TV).Count -eq 11) "$relativePath capped TV metadata enrichment before the final personal-stat row"
+
     $secondEpisode = [PSCustomObject]@{
         media_type             = 'episode'
         play_duration          = 3600
@@ -1031,6 +1067,24 @@ foreach ($relativePath in $rendererPaths) {
     $releasePlainIndex = if ($customPlainIndex -ge 0) { $samplePlainText.IndexOf('1 new movie', $customPlainIndex + 1, [StringComparison]::Ordinal) } else { -1 }
     Assert-True ($customPlainIndex -ge 0 -and $releasePlainIndex -gt $customPlainIndex) "$relativePath placed the plain-text custom card after the release metadata (custom=$customPlainIndex release=$releasePlainIndex)"
 
+    $uncappedPlainText = Build-PlainText `
+        -User ([PSCustomObject]@{ FriendlyName = 'Viewer' }) `
+        -Stats ([PSCustomObject]@{
+            TotalSeconds = 9999; TotalTimeText = '2h 46m'
+            MovieItems = $manyMovieRowsInput
+            TvShowItems = $manyTvRowsInput
+        }) `
+        -ReleaseData $script:activeReleaseData `
+        -HotRelease $null `
+        -TrendingTitle '' `
+        -SystemWarmingUp $false `
+        -RecentAccess $false `
+        -StartLabel 'August 1' `
+        -EndLabel 'August 7'
+    Assert-True ($uncappedPlainText.Contains('12 movies watched') -and $uncappedPlainText.Contains('Uncapped Movie 12')) "$relativePath capped the personal movie list in plain text"
+    Assert-True ($uncappedPlainText.Contains('11 TV shows watched') -and $uncappedPlainText.Contains('Uncapped Show 11')) "$relativePath capped the personal TV list in plain text"
+    Assert-True ($uncappedPlainText.Contains('2h 46m total watch time') -and -not $uncappedPlainText.Contains('total watched')) "$relativePath retained the old personal-time label in plain text"
+
     $threeMovies = Get-UserStats -History @(
         $movie,
         [PSCustomObject]@{
@@ -1090,7 +1144,16 @@ foreach ($relativePath in $rendererPaths) {
 
     $source = Get-Content -LiteralPath $path -Raw
     Assert-True ($source -match '\$hotRelease = if \(@\(\$releaseData\.Movies\)\.Count -gt 0\)') "$relativePath does not fall back from a movie-empty release hero"
-    Assert-True ($source -match 'Select-Object -First 4') "$relativePath does not cap personal title lists at four"
+    Assert-True ($source -notmatch '\$Stats\.MovieItems \| Select-Object -First 4') "$relativePath still caps personal movies before enrichment or rendering"
+    Assert-True ($source -notmatch '\$Stats\.TvShowItems \| Select-Object -First 4') "$relativePath still caps personal TV shows before enrichment or rendering"
+    Assert-True ($source -notmatch '\$stats\.MovieItems \| Select-Object -First 4') "$relativePath still caps personal movie poster preparation"
+    Assert-True ($source -notmatch '\$stats\.TvShowItems \| Select-Object -First 4') "$relativePath still caps personal TV poster preparation"
+    Assert-True ($source -match '\$summaryCardHeight = 178') "$relativePath does not decouple the compact summary-card height from media row counts"
+    Assert-True ($source -notmatch '\$statsCardHeight') "$relativePath still derives compact summary-card height from personal media rows"
+    Assert-True ($source.Contains('colspan="2" width="100%" valign="top"')) "$relativePath does not render personal media cards at full width"
+    Assert-True ($source.Contains('class="stats-title-cell" width="50%"') -and $source.Contains('.stats-title-cell { display:block !important; width:100% !important;')) "$relativePath does not render two desktop personal titles per row and one per row on mobile"
+    Assert-True ($source.Contains('class="stats-summary-cell"') -and $source.Contains('.stats-summary-cell { display:block !important; width:100% !important;')) "$relativePath does not keep desktop summary cards side by side and stack them on mobile"
+    Assert-True ($source.Contains('YOU CLOCKED') -and $source.Contains('total watch time') -and -not $source.Contains('>total watched<')) "$relativePath did not update the personal total-watch-time presentation"
     Assert-True ($source -match 'width="42" height="42" alt="Movies watched"') "$relativePath does not render the movie GIF at the standard stat-icon size"
     Assert-True ($source -match 'width="42" height="42" alt="TV shows watched"') "$relativePath does not render the TV GIF at the standard stat-icon size"
     Assert-True ($source -match 'Get-OptionalStringProperty -InputObject \$item -Name "DesignImdbRating"') "$relativePath does not render enriched TV IMDb ratings in personal stats"
