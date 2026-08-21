@@ -201,9 +201,18 @@ and newsletter schedule settings unchanged.
 Operation records do not retain the supplied user ID, configuration values,
 service addresses, credentials, command line, or raw renderer output. They
 record only sanitized state, timestamps, package version, exit status,
-duration, generated preview identifiers, and a support code when needed. The
+duration, generated preview identifiers, a fixed allowlisted failure category,
+and a support code when needed. Categories distinguish package-lock,
+configuration, Tautulli, Direct Plex, asset, HTML-render, preview-output, SMTP,
+and generic renderer stages; they never contain an exception message, path,
+address, media title, or identity. The
 local history is bounded to 90 days or 500 completed operations, with the
 newest 50 available to the authenticated UI.
+
+Service-package Manager operations make one non-blocking attempt at the shared
+newsletter lock and report `operation-busy` immediately when a scheduled,
+update, or terminal operation owns it. Host CLI, scheduler, updater, and
+shutdown workflows retain their existing package-defined bounded waits.
 
 The latest schedule-operation record is separate and contains only the action
 enum, state, timestamps, exit code, sanitized failure category, and support

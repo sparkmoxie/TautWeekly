@@ -432,7 +432,22 @@ foreach ($relative in @(
         '"/identity"',
         '"/library/sections"',
         'X-Plex-Token',
-        'Direct Plex verification passed'
+        'Direct Plex verification passed',
+        'errorCategory',
+        'TautWeeklyResultErrorCategory = "tautulli-unavailable"',
+        'TautWeeklyResultErrorCategory = "asset-unavailable"',
+        'TautWeeklyResultErrorCategory = "render-failed"',
+        'TautWeeklyResultErrorCategory = "output-failed"'
+    )
+}
+foreach ($relative in @(
+    'platforms/nas-docker/app/bin/run-mode.sh',
+    'platforms/mac-docker/app/bin/run-mode.sh'
+)) {
+    Require-Text $relative @(
+        'lock_args=\( -n 9 \)',
+        'lock_args=\( -w 30 9 \)',
+        'exit 75'
     )
 }
 Require-Text 'platforms/nas-docker/app/User-Exclusions.ps1' @(

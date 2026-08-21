@@ -560,6 +560,21 @@ function scheduleFailureCopy(category, supportCode) {
   }
 }
 
+function rendererFailureCopy(category, supportCode) {
+  const suffix = supportCode ? ` Demo code: ${supportCode}.` : "";
+  switch (category) {
+  case "operation-busy": return "Another fictional package operation owns the demo renderer. Wait for it to finish, then retry." + suffix;
+  case "configuration-invalid": return "The demo renderer could not load its fictional configuration snapshot." + suffix;
+  case "tautulli-unavailable": return "The demo renderer could not complete its fictional Tautulli data stage." + suffix;
+  case "plex-unavailable": return "The fictional Direct Plex verification stage did not complete." + suffix;
+  case "asset-unavailable": return "The demo renderer could not prepare a required bundled media asset." + suffix;
+  case "render-failed": return "Fictional newsletter HTML construction did not complete." + suffix;
+  case "output-failed": return "The fictional newsletter was built, but its in-memory preview could not be replaced." + suffix;
+  case "smtp-failed": return "The fictional SMTP handoff simulation did not complete." + suffix;
+  default: return "The mock renderer did not complete successfully. No private output exists in this demo." + suffix;
+  }
+}
+
 function renderConfig() {
   const config = state.config;
   const grid = byId("config-grid");
@@ -2062,7 +2077,7 @@ function operationSummary(operation) {
     case "queued": return { heading: "Manual Welcome simulation queued", copy: "One fictional welcome workflow is waiting to start in memory." };
     case "running": return { heading: "Modeling one Manual Welcome", copy: "One fictional user is being processed in memory; no message exists." };
     case "succeeded": return { heading: "Manual Welcome simulation passed", copy: "One fictional SMTP accept was modeled. No welcome state or inbox changed." };
-    case "failed": return { heading: "Manual Welcome simulation failed", copy: operation.supportCode ? `The mock renderer failed. Demo code: ${operation.supportCode}.` : "The mock renderer failed without exposing a fictional recipient." };
+    case "failed": return { heading: "Manual Welcome simulation failed", copy: rendererFailureCopy(operation.errorCategory, operation.supportCode) };
     default: return { heading: "Manual Welcome simulation recorded", copy: "Review fictional aggregate evidence without exposing the selected demo user." };
     }
   }
@@ -2075,7 +2090,7 @@ function operationSummary(operation) {
     case "running": return { heading: "Modeling all-recipient delivery", copy: "Fictional eligible recipients are being processed in memory." };
     case "succeeded": return { heading: "All-recipient simulation passed", copy: `${accepted} fictional SMTP accept${accepted === 1 ? " was" : "s were"} modeled and ${skipped} fictional recipient${skipped === 1 ? " was" : "s were"} skipped. No inbox exists.` };
     case "partial": return { heading: "All-recipient simulation completed with failures", copy: `${accepted} fictional accepts, ${skipped} skipped, and ${failed} failed${operation.supportCode ? `; demo code: ${operation.supportCode}` : ""}.` };
-    case "failed": return { heading: "All-recipient simulation failed", copy: operation.supportCode ? `${accepted} fictional accepts were modeled before failure. Demo code: ${operation.supportCode}.` : "The mock renderer failed without exposing fictional recipients." };
+    case "failed": return { heading: "All-recipient simulation failed", copy: `${accepted} fictional accept${accepted === 1 ? " was" : "s were"} modeled before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}` };
     default: return { heading: "All-recipient simulation recorded", copy: `${accepted} fictional accepts, ${skipped} skipped, and ${failed} failed. No inbox exists.` };
     }
   }
@@ -2084,7 +2099,7 @@ function operationSummary(operation) {
     case "queued": return { heading: "Test-delivery simulation queued", copy: "The fictional six-message workflow is waiting to start in memory." };
     case "running": return { heading: "Modeling six test messages", copy: "Fictional TestEmail results are being modeled; no message or mailbox exists." };
     case "succeeded": return { heading: "Test-delivery simulation passed", copy: `${operation.smtpAcceptedCount || 0} fictional SMTP accepts were modeled. No inbox exists.` };
-    case "failed": return { heading: "Test-delivery simulation failed", copy: operation.supportCode ? `${operation.smtpAcceptedCount || 0} fictional accepts were modeled before failure. Demo code: ${operation.supportCode}.` : "The mock renderer failed without contacting a destination." };
+    case "failed": return { heading: "Test-delivery simulation failed", copy: `${operation.smtpAcceptedCount || 0} fictional accept${operation.smtpAcceptedCount === 1 ? " was" : "s were"} modeled before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}` };
     default: return { heading: "Test-delivery simulation recorded", copy: "Review fictional aggregate counts." };
     }
   }
@@ -2094,7 +2109,7 @@ function operationSummary(operation) {
   case "cancelling": return { heading: "Cancelling preview simulation", copy: "The mock Manager is stopping the in-memory operation." };
   case "succeeded": return { heading: "Preview simulation completed", copy: `${Math.max(0, count - 1)} fictional states plus the index are available in the sandboxed frame.` };
   case "cancelled": return { heading: "Preview simulation cancelled", copy: "The in-memory operation stopped before normal completion." };
-  case "failed": return { heading: "Preview simulation failed", copy: operation.supportCode ? `A fictional demo code is available: ${operation.supportCode}.` : "The mock renderer exited without exposing any private output." };
+  case "failed": return { heading: "Preview simulation failed", copy: rendererFailureCopy(operation.errorCategory, operation.supportCode) };
   default: return { heading: "Preview simulation recorded", copy: "Review the temporary state and bundled preview list." };
   }
 }

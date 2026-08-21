@@ -77,6 +77,9 @@ foreach ($engine in $engines) {
         $sendAllStdout = Join-Path $tempRoot 'send-all.stdout.txt'
         $sendAllStderr = Join-Path $tempRoot 'send-all.stderr.txt'
         $managerResultPath = Join-Path $tempRoot 'manager-operation-result.json'
+        $failureResultPath = Join-Path $tempRoot 'manager-operation-failure.json'
+        $failureStdout = Join-Path $tempRoot 'failure.stdout.txt'
+        $failureStderr = Join-Path $tempRoot 'failure.stderr.txt'
         $server = $null
         $smtpServer = $null
         $casePassed = $false
@@ -86,6 +89,34 @@ foreach ($engine in $engines) {
         Copy-Item -Path $sourceContents -Destination $appRoot -Recurse -Force
 
         try {
+            if ($scenario -eq 'active') {
+                $oldFailureDataRoot = $env:TAUTWEEKLY_DATA_DIR
+                $oldFailureConfig = $env:TAUTWEEKLY_CONFIG
+                try {
+                    $missingConfigPath = Join-Path $tempRoot 'missing-config.json'
+                    if ($engine.Container) {
+                        $env:TAUTWEEKLY_DATA_DIR = $dataRoot
+                        $env:TAUTWEEKLY_CONFIG = $missingConfigPath
+                    }
+                    $failureProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
+                        '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                        '-File', (Join-Path $appRoot $engine.Renderer), '-ConfigPath', $missingConfigPath,
+                        '-UserId', '1', '-Mode', 'PreviewAll', '-ResultPath', $failureResultPath, '-NoOpen'
+                    ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $failureStdout -RedirectStandardError $failureStderr
+                }
+                finally {
+                    $env:TAUTWEEKLY_DATA_DIR = $oldFailureDataRoot
+                    $env:TAUTWEEKLY_CONFIG = $oldFailureConfig
+                }
+                Assert-True ($failureProcess.ExitCode -eq 1) "$($engine.Name) missing-config renderer returned $($failureProcess.ExitCode) instead of 1."
+                Assert-True (Test-Path -LiteralPath $failureResultPath) "$($engine.Name) missing-config renderer omitted its structured failure result."
+                $failureResultRaw = Get-Content -LiteralPath $failureResultPath -Raw -Encoding UTF8
+                $failureResult = $failureResultRaw | ConvertFrom-Json
+                Assert-True ($failureResult.outcome -eq 'failed' -and $failureResult.errorCategory -eq 'configuration-invalid') "$($engine.Name) missing-config renderer reported the wrong sanitized failure category."
+                Assert-True (-not $failureResultRaw.Contains($tempRoot)) "$($engine.Name) structured failure exposed its private temporary path."
+                Remove-Item -LiteralPath $failureResultPath -Force
+            }
+
             $port = Get-FreeTcpPort
             $initialScenario = if ($scenario -eq $cacheScenario) { 'cache-prime' } else { $scenario }
             Set-Content -LiteralPath $scenarioState -Value $initialScenario -Encoding ASCII
@@ -262,6 +293,7 @@ foreach ($engine in $engines) {
                 $managerResult = $managerResultRaw | ConvertFrom-Json
                 Assert-True ($managerResult.schemaVersion -eq 1) 'NAS Manager result used the wrong schema version.'
                 Assert-True ($managerResult.mode -eq 'PreviewAll' -and $managerResult.outcome -eq 'succeeded') 'NAS Manager result reported the wrong operation outcome.'
+                Assert-True ([string]::IsNullOrEmpty([string]$managerResult.errorCategory)) 'NAS Manager success retained a renderer failure category.'
                 Assert-True ($managerResult.deliveryScope -eq 'none') 'NAS Manager preview result reported a delivery scope.'
                 Assert-True ($managerResult.generatedPreviewFiles.Count -eq 7) 'NAS Manager result did not report all generated previews.'
                 Assert-True (-not $managerResultRaw.Contains('virtual-api-key')) 'NAS Manager result exposed the synthetic Tautulli API key.'

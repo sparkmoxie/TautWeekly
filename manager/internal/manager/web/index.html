@@ -250,7 +250,7 @@
           <div class="current-operation-meta"><span class="state-chip neutral" id="current-operation-chip">Idle</span><small id="current-operation-time">Not recorded</small><button class="button button-danger" id="preview-cancel-button" type="button" hidden>Cancel preview generation</button></div>
         </section>
         <div class="preview-layout"><div class="preview-list-panel"><div class="panel-heading"><h2>Available previews</h2><small>Scenario order</small></div><div class="preview-list" id="preview-list"></div></div><div class="preview-stage"><div class="preview-placeholder" id="preview-placeholder"><span aria-hidden="true"><svg class="ui-icon" viewBox="0 -960 960 960"><use href="#icon-preview"></use></svg></span><h2>Loading the latest preview</h2><p>The index from the latest successful run opens automatically.</p></div><iframe id="preview-frame" title="Selected newsletter preview" sandbox="allow-same-origin" hidden></iframe></div></div>
-        <div class="section-heading"><div><span class="eyebrow">Private local record</span><h2>Recent Manager operations</h2></div><p>History contains only operation type, timestamps, aggregate counts, package version, exit status, generated preview identifiers, and a sanitized support code on failure.</p></div>
+        <div class="section-heading"><div><span class="eyebrow">Private local record</span><h2>Recent Manager operations</h2></div><p>History contains only operation type, timestamps, aggregate counts, package version, exit status, generated preview identifiers, and an allowlisted failure category with a sanitized support code when needed.</p></div>
         <section class="operation-history" id="operation-history" aria-label="Recent Manager operation history"></section>
       </section>
 

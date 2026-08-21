@@ -272,7 +272,7 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 	case runErr != nil:
 		record.State = "failed"
 		record.Outcome = "failed"
-		record.ErrorCategory = "renderer-failed"
+		record.ErrorCategory = rendererOperationErrorCategory(exitCode, structuredResult, resultErr)
 		record.SupportCode = operationSupportCode(record.ID)
 	case resultErr != nil:
 		record.State = "failed"
@@ -282,7 +282,7 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 	case structuredResult.Outcome != "succeeded":
 		record.State = "failed"
 		record.Outcome = "failed"
-		record.ErrorCategory = "renderer-result-invalid"
+		record.ErrorCategory = rendererOperationErrorCategory(exitCode, structuredResult, resultErr)
 		record.SupportCode = operationSupportCode(record.ID)
 	case record.Type == "preview-all" && len(record.GeneratedPreviewIDs) != len(structuredResult.GeneratedPreviewFiles):
 		record.State = "failed"
@@ -294,6 +294,16 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 		record.Outcome = "success"
 	}
 	_ = c.commitTerminalOperation(record, revision, true, snapshotPath, resultPath)
+}
+
+func rendererOperationErrorCategory(exitCode int, result rendererResult, resultErr error) string {
+	if exitCode == 75 {
+		return "operation-busy"
+	}
+	if resultErr == nil && validRendererErrorCategory(result.ErrorCategory) {
+		return result.ErrorCategory
+	}
+	return "renderer-failed"
 }
 
 func recoverableDeliveryOperation(operationType string) bool {
@@ -355,7 +365,7 @@ func (c *operationCoordinator) finishRecoveredDelivery(record OperationRecord, r
 	default:
 		record.State = "failed"
 		record.Outcome = "failed"
-		record.ErrorCategory = "renderer-failed"
+		record.ErrorCategory = rendererOperationErrorCategory(0, result, nil)
 		record.SupportCode = operationSupportCode(record.ID)
 	}
 	_ = c.commitTerminalOperation(record, revision, true, cleanupPaths...)

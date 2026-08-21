@@ -31,6 +31,7 @@ $script:TautWeeklyResultWriting = $false
 $script:TautWeeklyResultSmtpAcceptedCount = 0
 $script:TautWeeklyResultSkippedCount = 0
 $script:TautWeeklyResultFailedCount = 0
+$script:TautWeeklyResultErrorCategory = "renderer-failed"
 $script:TautWeeklyResultGeneratedPreviewFiles = New-Object System.Collections.Generic.List[string]
 $script:TautWeeklyResultDeliveryScope = switch ($Mode) {
     "SendTest" { "test" }
@@ -73,6 +74,7 @@ function Write-TautWeeklyStructuredResult {
             schemaVersion = 1
             mode = [string]$Mode
             outcome = $Outcome
+            errorCategory = $(if ($Outcome -eq "failed") { [string]$script:TautWeeklyResultErrorCategory } else { "" })
             deliveryScope = [string]$script:TautWeeklyResultDeliveryScope
             startedAtUtc = $script:TautWeeklyResultStartedAtUtc.ToString("o")
             finishedAtUtc = $finishedAtUtc.ToString("o")
@@ -543,6 +545,7 @@ function Mark-UserWelcomed {
     Save-AccessState -State $State
 }
 
+$script:TautWeeklyResultErrorCategory = "configuration-invalid"
 if (-not (Test-Path $ConfigPath)) {
     throw "Config file not found: $ConfigPath`nRun ./tautweekly.sh setup from the NAS project folder first."
 }
@@ -7842,6 +7845,7 @@ if ($Mode -eq "VerifyPlex") {
 # MODE: LIST USERS
 # ---------------------------------------------------------------------------
 if ($Mode -eq "ListUsers") {
+    $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
     Write-Log "Loading Tautulli users..."
     $names = Get-TautulliUserNames
     $rows = New-Object System.Collections.Generic.List[object]
@@ -7882,6 +7886,7 @@ if ($Mode -eq "SendWelcome") {
         throw "SendWelcome is intentionally locked. Re-run with -ConfirmWelcome."
     }
 
+    $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
     $resolvedUserId = Resolve-TautulliUserId -Identifier $UserId
     $user = Get-NewsletterUser -Id $resolvedUserId
     if ([string]::IsNullOrWhiteSpace([string]$user.Email)) {
@@ -7931,6 +7936,7 @@ if ($Mode -eq "SendWelcome") {
         [string]$hotRelease.Item.PosterRatingKey
     } else { "" }
 
+    $script:TautWeeklyResultErrorCategory = "asset-unavailable"
     Write-Log "Preparing release posters and hero assets for welcome email..."
     $posterAssets = Prepare-PosterAssets -ReleaseData $releaseData -FeaturedRatingKey $featuredRatingKey
     $designHero = Get-DesignHeroAssets -HotRelease $hotRelease
@@ -7947,6 +7953,7 @@ if ($Mode -eq "SendWelcome") {
         TvShowItems      = @()
     }
 
+    $script:TautWeeklyResultErrorCategory = "render-failed"
     $html = Build-NewsletterHtml `
         -User $user `
         -Stats $welcomeStats `
@@ -7966,6 +7973,7 @@ if ($Mode -eq "SendWelcome") {
     $plain = Build-WelcomePlainText -User $user -ReleaseData $releaseData
     $subject = Get-OneOffWelcomeSubject -User $user
 
+    $script:TautWeeklyResultErrorCategory = "smtp-failed"
     Write-Log "Sending ONE-OFF welcome to $($user.FriendlyName) <$($user.Email)>..."
     Send-NewsletterMail `
         -To $user.Email `
@@ -7985,16 +7993,20 @@ if ($Mode -eq "SendWelcome") {
 # ---------------------------------------------------------------------------
 # COMMON DATA FOR FRIDAY PREVIEW / TEST / SEND
 # ---------------------------------------------------------------------------
+$script:TautWeeklyResultErrorCategory = "configuration-invalid"
 $tautWeeklyState = Get-TautWeeklyState
 Write-Log ("TautWeekly for Plex age: {0} day(s); warm-up mode: {1}" -f $tautWeeklyState.AgeDays, $tautWeeklyState.IsWarmingUp)
 
+$script:TautWeeklyResultErrorCategory = "configuration-invalid"
 $accessState = if ($Mode -in @("PreviewAll","SendTestAll")) {
     # The all-variant test harness must not change first-seen/welcome tracking.
     Get-AccessState
 }
 else {
+    $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
     Sync-AccessRoster
 }
+$script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
 $daysBack = if ($null -ne $Config.PSObject.Properties["DaysBack"]) { Safe-Int $Config.DaysBack } else { 7 }
 if ($daysBack -lt 1) { $daysBack = 7 }
 
@@ -8066,6 +8078,7 @@ if ($null -ne $script:GlobalTrendingStat -and
     }
 }
 
+$script:TautWeeklyResultErrorCategory = "asset-unavailable"
 Write-Log "Preparing release posters..."
 $activePosterAssets = Prepare-PosterAssets `
     -ReleaseData $activeReleaseData `
@@ -8082,6 +8095,7 @@ function Build-ForUser {
         [string]$ImageMode
     )
 
+    $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
     $resolvedUserId = Resolve-TautulliUserId -Identifier $Id
     $user = Get-NewsletterUser -Id $resolvedUserId
     $recentAccess = Test-UserNeedsWelcome -State $accessState -UserId $user.UserId
@@ -8100,11 +8114,13 @@ function Build-ForUser {
     }
     $statsPosterItems += @($trendingPosterItem)
 
+    $script:TautWeeklyResultErrorCategory = "asset-unavailable"
     $userPosterAssets = Prepare-PosterAssets `
         -ReleaseData $activeReleaseData `
         -FeaturedRatingKey $featuredRatingKey `
         -AdditionalItems $statsPosterItems
 
+    $script:TautWeeklyResultErrorCategory = "render-failed"
     $html = Build-NewsletterHtml `
         -User $user `
         -Stats $stats `
@@ -8269,6 +8285,7 @@ function Build-AllEmailVariants {
         [string]$ImageMode
     )
 
+    $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
     $resolvedUserId = Resolve-TautulliUserId -Identifier $Id
     $user = Get-NewsletterUser -Id $resolvedUserId
 
@@ -8288,6 +8305,7 @@ function Build-AllEmailVariants {
         $populatedPosterItems += @($populatedVariant.Stats.TvShowItems | Select-Object -First 4)
     }
 
+    $script:TautWeeklyResultErrorCategory = "asset-unavailable"
     $populatedPosterAssets = Prepare-PosterAssets `
         -ReleaseData $activeReleaseData `
         -FeaturedRatingKey $featuredRatingKey `
@@ -8314,6 +8332,7 @@ function Build-AllEmailVariants {
     # one-off hero for the manual welcome, then restore the scheduled hero.
     $script:designHero = $oneOffDesignHero
 
+    $script:TautWeeklyResultErrorCategory = "render-failed"
     $oneOffHtml = Build-NewsletterHtml `
         -User $user `
         -Stats $zeroStats `
@@ -8533,6 +8552,7 @@ if ($Mode -eq "PreviewAll") {
     }
 
     $bundle = Build-AllEmailVariants -Id $UserId -ImageMode "Preview"
+    $script:TautWeeklyResultErrorCategory = "output-failed"
     $previewDir = $OutputDir
 
     $files = @(
@@ -8608,6 +8628,7 @@ if ($Mode -eq "SendTestAll") {
     Require-ConfigValue "TestEmail"
 
     $bundle = Build-AllEmailVariants -Id $UserId -ImageMode "Email"
+    $script:TautWeeklyResultErrorCategory = "smtp-failed"
     $delaySeconds = 2
     if ($null -ne $Config.PSObject.Properties["TestSendDelaySeconds"]) {
         $delaySeconds = [Math]::Max(0, (Safe-Int $Config.TestSendDelaySeconds))
@@ -8646,6 +8667,7 @@ if ($Mode -eq "Preview") {
     }
 
     $result = Build-ForUser -Id $UserId -ImageMode "Preview"
+    $script:TautWeeklyResultErrorCategory = "output-failed"
     $safeName = Get-SafeFilePart $result.User.FriendlyName
     $previewPath = Join-Path $OutputDir ("preview_{0}.html" -f $safeName)
     Set-Content -Path $previewPath -Value $result.Html -Encoding UTF8
@@ -8680,6 +8702,7 @@ if ($Mode -eq "SendTest") {
     Require-ConfigValue "TestEmail"
 
     $result = Build-ForUser -Id $UserId -ImageMode "Email"
+    $script:TautWeeklyResultErrorCategory = "smtp-failed"
     $subject = Get-NewsletterSubject -User $result.User -RecentAccess $result.RecentAccess
 
     Write-Log "Sending TEST version for $($result.User.FriendlyName) to $($Config.TestEmail)..."
@@ -8705,6 +8728,7 @@ if ($Mode -eq "SendAll") {
         throw "SendAll is intentionally locked. Re-run with -ConfirmSendAll after reviewing a test email."
     }
 
+    $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
     $names = Get-TautulliUserNames
     $sent = 0
     $skipped = 0
@@ -8724,6 +8748,7 @@ if ($Mode -eq "SendAll") {
             $result = Build-ForUser -Id $user.UserId -ImageMode "Email"
             $subject = Get-NewsletterSubject -User $result.User -RecentAccess $result.RecentAccess
 
+            $script:TautWeeklyResultErrorCategory = "smtp-failed"
             Write-Log "Sending to $($result.User.FriendlyName) <$($result.User.Email)>..."
             Send-NewsletterMail `
                 -To $result.User.Email `

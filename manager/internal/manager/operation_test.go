@@ -15,13 +15,15 @@ import (
 )
 
 type fixturePreviewRunner struct {
-	started        chan struct{}
-	release        chan struct{}
-	once           sync.Once
-	mu             sync.Mutex
-	userID         string
-	runs           int
-	sendAllPartial bool
+	started              chan struct{}
+	release              chan struct{}
+	once                 sync.Once
+	mu                   sync.Mutex
+	userID               string
+	runs                 int
+	sendAllPartial       bool
+	previewExitCode      int
+	previewErrorCategory string
 }
 
 func (r *fixturePreviewRunner) RunPreviewAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error) {
@@ -41,6 +43,29 @@ func (r *fixturePreviewRunner) RunPreviewAll(ctx context.Context, root, configPa
 		case <-ctx.Done():
 			return -1, context.Canceled
 		}
+	}
+	if r.previewExitCode != 0 {
+		if r.previewErrorCategory != "" {
+			started := time.Now().UTC().Add(-time.Second)
+			result := rendererResult{
+				SchemaVersion: 1,
+				Mode:          "PreviewAll",
+				Outcome:       "failed",
+				ErrorCategory: r.previewErrorCategory,
+				DeliveryScope: "none",
+				StartedAtUTC:  started.Format(time.RFC3339Nano),
+				FinishedAtUTC: started.Add(time.Second).Format(time.RFC3339Nano),
+				DurationMS:    1000,
+			}
+			encoded, err := json.Marshal(result)
+			if err != nil {
+				return 14, err
+			}
+			if err := os.WriteFile(resultPath, encoded, 0o600); err != nil {
+				return 15, err
+			}
+		}
+		return r.previewExitCode, errors.New("renderer returned a fixed failure status")
 	}
 	output := filepath.Join(root, "output")
 	if err := os.MkdirAll(output, 0o700); err != nil {
@@ -321,6 +346,40 @@ func TestPreviewOperationCancellationAndBusyGuard(t *testing.T) {
 	}
 	if _, err := coordinator.Cancel(started.ID); !errors.Is(err, ErrOperationTerminal) {
 		t.Fatalf("terminal cancellation error: got %v", err)
+	}
+}
+
+func TestPreviewOperationRetainsSanitizedRendererFailureCategory(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	runner := &fixturePreviewRunner{previewExitCode: 1, previewErrorCategory: "tautulli-unavailable"}
+	coordinator, err := newOperationCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Now: time.Now, operationRunner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	if _, err := coordinator.Start(CreateOperationRequest{Type: "preview-all", ExpectedRevision: view.Revision, UserID: "42", ConfirmNoSend: true}); err != nil {
+		t.Fatal(err)
+	}
+	finished := waitForOperationState(t, coordinator, "failed")
+	if finished.ErrorCategory != "tautulli-unavailable" || finished.SupportCode == "" || finished.ExitCode == nil || *finished.ExitCode != 1 {
+		t.Fatalf("unexpected categorized preview failure: %+v", finished)
+	}
+}
+
+func TestPreviewOperationMapsServiceLockExitToBusy(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	runner := &fixturePreviewRunner{previewExitCode: 75}
+	coordinator, err := newOperationCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Now: time.Now, operationRunner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	if _, err := coordinator.Start(CreateOperationRequest{Type: "preview-all", ExpectedRevision: view.Revision, UserID: "42", ConfirmNoSend: true}); err != nil {
+		t.Fatal(err)
+	}
+	finished := waitForOperationState(t, coordinator, "failed")
+	if finished.ErrorCategory != "operation-busy" || finished.SupportCode == "" || finished.ExitCode == nil || *finished.ExitCode != 75 {
+		t.Fatalf("unexpected busy preview failure: %+v", finished)
 	}
 }
 

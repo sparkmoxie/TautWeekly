@@ -964,10 +964,13 @@ Manual production delivery uses the same fixed renderer contract as the
 schedule, accepts no browser-supplied user or command input, cannot be
 cancelled, and retains aggregate accepted, skipped, and failed counts. All
 three write bounded sanitized current/history records without the user ID,
-configuration, service addresses, command line, or raw process output. The
-renderer's opt-in structured result contains only mode, outcome, timing,
-delivery scope, aggregate counts, and preview basenames; scheduled Windows
-`SendAll` writes this to ignored private `last-run.json` so the dashboard can
+    configuration, service addresses, command line, or raw process output. The
+    renderer's opt-in structured result contains only mode, outcome, one fixed
+    allowlisted failure category, timing, delivery scope, aggregate counts, and
+    preview basenames. Manager-triggered service-package work attempts the
+    shared renderer lock without waiting and maps lock exit 75 to
+    `operation-busy`; host CLI and lifecycle waits are unchanged. Scheduled Windows
+    `SendAll` writes this to ignored private `last-run.json` so the dashboard can
 distinguish process execution, SMTP acceptance, and inbox delivery.
 
 The Windows schedule page reports installed, enabled, runtime, next-run, and
