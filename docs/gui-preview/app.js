@@ -6,6 +6,7 @@ const state = {
   config: null,
   editor: null,
   backups: [],
+  backupMaximum: 10,
   verification: { last: null, smtp: null },
   verificationRunning: false,
   smtpVerificationRunning: false,
@@ -17,6 +18,7 @@ const state = {
   selectedPreviewID: "",
   operation: null,
   history: [],
+  historyMaximum: 20,
   operationStarting: false,
   operationStartingType: "",
   operationCancelling: false,
@@ -25,7 +27,7 @@ const state = {
   scheduleStarting: false,
   authAccess: null,
   about: null,
-  diagnostics: { events: [], maximumEntries: 200, retentionDays: 30 },
+  diagnostics: { events: [], maximumEntries: 20, retentionPolicy: "count-only-fifo" },
   updates: null,
   updateChecking: false,
   updateCheckBackground: false,
@@ -34,6 +36,14 @@ const state = {
 const byId = (id) => document.getElementById(id);
 const titleCase = (value) => String(value || "unknown").replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const guidedConfigFields = new Set(["IncludedLibraryIds", "ExcludedUserIds"]);
+const titleGifChoices = Object.freeze([
+  { id: "none", label: "None", file: "" },
+  { id: "celebrate", label: "Celebrate", file: "celebrate.gif" },
+  { id: "construction", label: "Construction", file: "construction.gif" },
+  { id: "rocket", label: "Rocket", file: "rocket.gif" },
+  { id: "tickets", label: "Tickets", file: "tickets.gif" },
+  { id: "warning", label: "Warning", file: "warning.gif" },
+]);
 const activeSecretReveals = new Map();
 let pendingSecretReveal = null;
 let sessionRecoveryPromise = null;
@@ -232,16 +242,19 @@ async function loadAll() {
     state.config = config;
     state.editor = editor;
     state.setupWorkflow = configurationStatus?.available ? configurationStatus : null;
-    state.backups = backups.backups || [];
+    state.backupMaximum = Number(backups.maximumEntries) || 10;
+    state.backups = (backups.backups || []).slice(0, state.backupMaximum);
     state.verification = verification || { last: null, smtp: null };
     state.discovery = discovery.last || null;
     state.previews = previews.previews || [];
     state.operation = operation.current || null;
-    state.history = history.operations || [];
+    state.historyMaximum = Number(history.maximumEntries) || 20;
+    state.history = (history.operations || []).slice(0, state.historyMaximum);
     state.scheduleOperation = scheduleOperation.current || null;
     state.authAccess = authAccess;
     state.about = about;
-    state.diagnostics = diagnostics;
+    const diagnosticMaximum = Number(diagnostics.maximumEntries) || 20;
+    state.diagnostics = { ...diagnostics, maximumEntries: diagnosticMaximum, events: (diagnostics.events || []).slice(0, diagnosticMaximum) };
     state.updates = updates;
     renderStatus();
     renderFirstTimeSetup();
@@ -631,12 +644,13 @@ function renderConfigEditor() {
     heading.className = "config-section-heading";
     const title = document.createElement("h2");
     title.textContent = group;
+    const visibleFields = fields.filter((field) => field.type !== "synthetic-asset-id");
     const count = document.createElement("small");
-    count.textContent = `${fields.length} ${fields.length === 1 ? "setting" : "settings"}`;
+    count.textContent = `${visibleFields.length} ${visibleFields.length === 1 ? "setting" : "settings"}`;
     heading.append(title, count);
     const grid = document.createElement("div");
     grid.className = "config-editor-grid";
-    for (const field of fields) grid.append(createConfigControl(field));
+    for (const field of visibleFields) grid.append(createConfigControl(field));
     section.append(heading, grid);
     sections.append(section);
   }
@@ -1057,6 +1071,7 @@ function createConfigControl(field) {
   input.id = id;
   input.name = field.name;
   input.setAttribute("aria-labelledby", label.id);
+  if (field.name === "CustomTextCardTitle") attachTitleGifPicker(control, input);
 
   if (field.type === "secret") {
     const secretLine = document.createElement("span");
@@ -1101,6 +1116,147 @@ function createConfigControl(field) {
   error.id = `config-error-${field.name}`;
   control.append(error);
   return control;
+}
+
+function attachTitleGifPicker(control, titleInput) {
+  const configured = String(configEditorValue("CustomTextCardTitleGif") || "none");
+  const selectedID = titleGifChoices.some((choice) => choice.id === configured) ? configured : "none";
+  const assetInput = document.createElement("input");
+  assetInput.type = "hidden";
+  assetInput.id = "config-CustomTextCardTitleGif";
+  assetInput.name = "CustomTextCardTitleGif";
+  assetInput.value = selectedID;
+
+  const shell = document.createElement("div");
+  shell.className = "title-gif-field";
+  titleInput.replaceWith(shell);
+  shell.append(titleInput);
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "title-gif-trigger";
+  trigger.dataset.materialSymbol = "add_reaction";
+  trigger.dataset.fill = "0";
+  trigger.dataset.weight = "400";
+  trigger.dataset.grade = "0";
+  trigger.dataset.opticalSize = "24";
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.setAttribute("aria-controls", "custom-title-gif-picker");
+  trigger.append(createMaterialIcon("add-reaction"));
+
+  const picker = document.createElement("div");
+  picker.className = "title-gif-picker";
+  picker.id = "custom-title-gif-picker";
+  picker.dataset.titleGifPicker = "";
+  picker.setAttribute("role", "listbox");
+  picker.setAttribute("aria-label", "Optional title GIF");
+  picker.hidden = true;
+
+  const heading = document.createElement("div");
+  heading.className = "title-gif-picker-heading";
+  const headingText = document.createElement("strong");
+  headingText.textContent = "Title GIF";
+  const headingHint = document.createElement("small");
+  headingHint.textContent = "Rendered at 18 x 18 px";
+  heading.append(headingText, headingHint);
+  picker.append(heading);
+
+  const grid = document.createElement("div");
+  grid.className = "title-gif-options";
+  const optionButtons = [];
+  const selectChoice = (choice, focus = false) => {
+    assetInput.value = choice.id;
+    trigger.classList.toggle("selected", choice.id !== "none");
+    trigger.setAttribute("aria-label", choice.id === "none" ? "Choose an optional title GIF; none selected" : `Change optional title GIF; ${choice.label} selected`);
+    for (const button of optionButtons) {
+      const selected = button.dataset.titleGifId === choice.id;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      if (selected && focus) button.focus();
+    }
+    const previewButton = document.querySelector(`[data-preview-id="${CSS.escape(state.selectedPreviewID)}"]`);
+    if (previewButton) openPreview(state.selectedPreviewID, previewButton);
+  };
+  const closePicker = (restoreFocus = false) => {
+    picker.hidden = true;
+    shell.classList.remove("open");
+    trigger.setAttribute("aria-expanded", "false");
+    if (restoreFocus) trigger.focus();
+  };
+  const openPicker = () => {
+    document.querySelectorAll("[data-title-gif-picker]").forEach((element) => {
+      if (element !== picker) element.hidden = true;
+    });
+    picker.hidden = false;
+    shell.classList.add("open");
+    trigger.setAttribute("aria-expanded", "true");
+    optionButtons.find((button) => button.getAttribute("aria-selected") === "true")?.focus();
+  };
+
+  for (const choice of titleGifChoices) {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "title-gif-option";
+    option.dataset.titleGifId = choice.id;
+    option.setAttribute("role", "option");
+    const thumbnail = document.createElement("span");
+    thumbnail.className = "title-gif-thumbnail";
+    if (choice.file) {
+      const image = document.createElement("img");
+      image.src = `media/${choice.file}`;
+      image.alt = "";
+      image.width = 42;
+      image.height = 42;
+      thumbnail.append(image);
+    } else {
+      thumbnail.classList.add("none");
+      thumbnail.textContent = "None";
+    }
+    const optionLabel = document.createElement("span");
+    optionLabel.textContent = choice.label;
+    option.append(thumbnail, optionLabel);
+    option.addEventListener("click", () => {
+      selectChoice(choice);
+      closePicker(true);
+    });
+    option.addEventListener("keydown", (event) => {
+      const index = optionButtons.indexOf(option);
+      let target = -1;
+      if (["Enter", " "].includes(event.key)) {
+        event.preventDefault();
+        selectChoice(choice);
+        closePicker(true);
+        return;
+      }
+      if (["ArrowRight", "ArrowDown"].includes(event.key)) target = (index + 1) % optionButtons.length;
+      if (["ArrowLeft", "ArrowUp"].includes(event.key)) target = (index - 1 + optionButtons.length) % optionButtons.length;
+      if (event.key === "Home") target = 0;
+      if (event.key === "End") target = optionButtons.length - 1;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePicker(true);
+        return;
+      }
+      if (target >= 0) {
+        event.preventDefault();
+        optionButtons[target].focus();
+      }
+    });
+    optionButtons.push(option);
+    grid.append(option);
+  }
+  picker.append(grid);
+  trigger.addEventListener("click", () => picker.hidden ? openPicker() : closePicker());
+  trigger.addEventListener("keydown", (event) => {
+    if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+      event.preventDefault();
+      openPicker();
+    }
+  });
+  shell.append(trigger, picker, assetInput);
+  selectChoice(titleGifChoices.find((choice) => choice.id === selectedID) || titleGifChoices[0]);
 }
 
 function updateSecretToggle(field, input, button) {
@@ -1554,7 +1710,7 @@ function clearConfigErrors() {
 function renderBackups() {
   const list = byId("backup-list");
   list.replaceChildren();
-  setText("backup-count", state.backups.length ? `${state.backups.length} fictional` : "None created");
+  setText("backup-count", state.backups.length ? `${state.backups.length} / ${state.backupMaximum} · newest first` : `0 / ${state.backupMaximum}`);
   if (!state.backups.length) {
     const empty = document.createElement("div");
     empty.className = "config-empty";
@@ -2019,6 +2175,7 @@ function renderDashboardOperation(operation) {
 function renderOperationHistory() {
   const container = byId("operation-history");
   container.replaceChildren();
+  setText("operation-history-count", `${state.history.length} / ${state.historyMaximum} completed items shown`);
   if (!state.history.length) {
     const empty = document.createElement("div");
     empty.className = "config-empty";
@@ -2625,8 +2782,9 @@ async function copyUpdateCommand() {
 
 function renderAbout() {
   const events = state.diagnostics?.events || [];
-  setText("diagnostics-count", events.length ? `${events.length} fictional` : "No events");
-  setText("diagnostics-retention", "Bundled demo events; reset on reload.");
+  const maximum = Number(state.diagnostics?.maximumEntries) || 20;
+  setText("diagnostics-count", `${events.length} / ${maximum} · newest first`);
+  setText("diagnostics-retention", `Count-only FIFO keeps ${maximum}; every new overflow event removes the oldest. Reset on reload.`);
   const container = byId("diagnostics-list");
   container.replaceChildren();
   if (!events.length) {
@@ -2919,6 +3077,15 @@ byId("preview-frame").addEventListener("load", initializePreviewIndexNavigation)
 document.addEventListener("pointerdown", (event) => {
   document.querySelectorAll("[data-user-combobox].open").forEach((container) => {
     if (!container.contains(event.target)) setUserComboboxOpen(container, false);
+  });
+  document.querySelectorAll(".title-gif-field.open").forEach((container) => {
+    if (!container.contains(event.target)) {
+      container.classList.remove("open");
+      const picker = container.querySelector("[data-title-gif-picker]");
+      const trigger = container.querySelector(".title-gif-trigger");
+      if (picker) picker.hidden = true;
+      trigger?.setAttribute("aria-expanded", "false");
+    }
   });
 });
 byId("config-form").addEventListener("submit", submitConfig);

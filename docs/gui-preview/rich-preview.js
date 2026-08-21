@@ -30,6 +30,14 @@
     "demo-quiet": "preview-all-05-established-quiet.html",
     "demo-warnings": "preview-all-06-established-warmup.html",
   };
+  const titleGifAssets = Object.freeze({
+    none: "",
+    celebrate: "celebrate.gif",
+    construction: "construction.gif",
+    rocket: "rocket.gif",
+    tickets: "tickets.gif",
+    warning: "warning.gif",
+  });
 
   const styles = `
     :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0f0f0f;color:#fff;font:15px/1.5 Arial,Helvetica,sans-serif}.email-stage{background:#0f0f0f;padding:28px 10px 40px}.email{width:100%;max-width:640px;margin:0 auto}.header{padding:0 20px 18px}.plex{font-size:13px;font-weight:900;letter-spacing:2px;color:#fff}.plex b{color:#e5a00d;font-size:17px}.hello{padding-top:8px;font-size:30px;line-height:1.15;font-weight:800}.intro{padding-top:8px;color:#a9a9a9;line-height:1.55}.release-meta{padding:0 20px 18px}.period{color:#e5a00d;font-size:12px;font-weight:900;letter-spacing:.8px}.date{padding-top:5px;color:#666;font-size:12px}.section-label{margin:6px 20px 10px;color:#e5a00d;font-size:12px;font-weight:900;letter-spacing:1.4px}.section-title{display:block;padding-top:3px;color:#fff;font-size:24px;letter-spacing:0}.panel{margin:0 20px 24px;border:1px solid #2b2b2b;border-radius:10px;background:#181818;overflow:hidden}.welcome{border-color:#e5a00d;padding:20px 22px}.welcome-kicker,.hero-kicker,.custom-title{color:#e5a00d;font-size:11px;font-weight:900;letter-spacing:1.35px}.welcome-heading,.custom-subheading{padding-top:6px;font-size:22px;line-height:1.2;font-weight:800}.welcome-copy,.custom-body{padding-top:6px;color:#9b9b9b;font-size:13px}.custom-text-card{padding:20px 22px}.custom-text-card.no-heading .custom-body{padding-top:0}.hero{display:grid;grid-template-columns:205px minmax(0,1fr);padding:16px}.hero-poster{display:block;width:180px;height:270px;object-fit:cover;border-radius:8px}.hero-copy{min-height:270px;display:flex;flex-direction:column;padding-left:4px}.hero-icon{display:block;width:42px;height:42px;object-fit:contain}.title-logo{display:block;max-width:280px;max-height:86px;width:auto;height:auto;margin-top:8px}.hero-title{padding-top:5px;font-size:25px;line-height:1.1;font-weight:900}.genre{padding-top:5px;color:#969696;font-size:13px}.ratings{display:flex;align-items:center;flex-wrap:wrap;gap:9px;padding-top:11px;color:#e5a00d;font-size:12px;font-weight:800}.score{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}.score img{width:18px;height:18px;object-fit:contain}.summary{padding-top:10px;color:#969696;font-size:13px;line-height:1.45}.plays{margin-top:auto;padding-top:12px;color:#e5a00d;font-size:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 14px 24px}.media-card{min-width:0;border:1px solid #2b2b2b;border-radius:10px;background:#181818;overflow:hidden}.card-art{display:block;width:100%;aspect-ratio:2/1.18;object-fit:cover}.card-copy{min-height:132px;padding:12px 12px 14px}.card-title{font-size:16px;font-weight:800;line-height:1.25}.card-genre{padding-top:5px;color:#969696;font-size:12px}.episodes{padding-top:4px}.episode{padding-top:4px;color:#b0b0b0;font-size:12px;font-weight:600}.imdb{display:inline-flex;align-items:center;gap:5px;margin-left:7px;color:#e5a00d;font-size:11px;white-space:nowrap}.imdb img{width:28px;height:14px;object-fit:contain}.stats-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 20px 24px}.metric{min-height:150px;padding:16px;border:1px solid #2b2b2b;border-radius:10px;background:#181818}.metric.gold{border-color:#e5a00d;background:#211a0d}.metric-icon{display:block;width:42px;height:42px;object-fit:contain}.metric-value{padding-top:9px;font-size:26px;font-weight:900}.metric-label{padding-top:3px;color:#8e8e8e;font-size:11px;text-transform:uppercase;letter-spacing:.6px}.watched-list{margin-top:11px;padding-top:7px;border-top:1px solid #292929}.watched-row{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid #292929}.watched-row img{width:38px;height:56px;object-fit:cover;border-radius:4px}.watched-row strong{display:block;font-size:12px;line-height:1.25}.watched-row small{display:block;color:#929292}.status-panel{display:flex;align-items:center;gap:14px;padding:20px}.status-panel img{width:48px;height:48px;object-fit:contain}.status-panel h2{margin:4px 0 0;font-size:20px}.status-panel p{margin:5px 0 0;color:#969696;font-size:13px}.cta{text-align:center;padding:8px 20px 18px}.cta span{display:inline-block;padding:13px 24px;border-radius:7px;background:#e5a00d;color:#111;font-size:14px;font-weight:900}.fixture-note{max-width:600px;margin:10px auto 0;padding:18px 20px 0;border-top:1px solid #242424;color:#626262;font-size:10px;line-height:1.5;text-align:center}.index{max-width:840px;margin:auto;padding:38px 24px 60px}.index-kicker{color:#e5a00d;font-size:12px;font-weight:900;letter-spacing:2px}.index h1{margin:8px 0 7px;font-size:38px;line-height:1.1}.index>p{margin:0 0 24px;color:#9b9b9b}.index-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.index-card{position:relative;min-height:230px;border:1px solid #303030;border-radius:12px;overflow:hidden;background:#181818}.index-card>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.index-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,8,8,.08),rgba(8,8,8,.97) 82%)}.index-copy{position:absolute;inset:auto 0 0;padding:18px}.index-copy strong,.index-copy small{display:block}.index-copy strong{font-size:19px}.index-copy small{padding:3px 0 13px;color:#b8b8b8}.index-copy a{display:inline-block;padding:9px 13px;border-radius:7px;background:#e5a00d;color:#111;font-weight:900;text-decoration:none}.index-note{margin-top:22px;color:#676767;font-size:11px}
@@ -100,11 +108,15 @@
     const colorValue = String(input("CustomTextCardBorderColor")?.value ?? "#72aef7");
     const color = /^#[0-9a-f]{6}$/i.test(colorValue) ? colorValue : "#72aef7";
     const opacity = Math.max(0, Math.min(100, Number(input("CustomTextCardBorderOpacity")?.value ?? 34)));
+    const requestedTitleGifID = String(input("CustomTextCardTitleGif")?.value ?? "none");
+    const titleGifID = Object.hasOwn(titleGifAssets, requestedTitleGifID) ? requestedTitleGifID : "none";
     return {
       enabled: enabled && body !== "",
       color,
       opacity,
       title: String(input("CustomTextCardTitle")?.value ?? "CUSTOM TITLE").trim(),
+      titleGifID,
+      titleGifFile: titleGifAssets[titleGifID],
       subheading: String(input("CustomTextCardSubheading")?.value ?? "Custom subheading").trim(),
       body,
     };
@@ -113,7 +125,8 @@
   function customTextCard() {
     const card = customTextCardValues();
     if (!card.enabled) return "";
-    const title = card.title ? `<div class="custom-title">${esc(card.title.toUpperCase())}</div>` : "";
+    const titleGif = card.title && card.titleGifFile ? `<img class="custom-title-gif" src="${media(card.titleGifFile)}" width="18" height="18" alt="" style="vertical-align:-4px;margin-left:6px">` : "";
+    const title = card.title ? `<div class="custom-title">${esc(card.title.toUpperCase())}${titleGif}</div>` : "";
     const subheading = card.subheading ? `<div class="custom-subheading" style="padding-top:${card.title ? 6 : 0}px">${esc(card.subheading)}</div>` : "";
     const body = esc(card.body).replace(/\r\n?|\n/g, "<br>");
     const border = card.opacity === 0 ? "border:0" : `border-color:${card.color}${Math.round(card.opacity * 2.55).toString(16).padStart(2, "0")}`;

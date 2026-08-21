@@ -3,7 +3,19 @@
 (() => {
   const now = () => new Date().toISOString();
   const revision = "demo-revision-2026";
-  let backupList = [{ id: "demo-backup", createdAtUtc: new Date(Date.now() - 86400000).toISOString(), sizeBytes: 4812, revision: "demo-backup-revision" }];
+  const BACKUP_LIMIT = 10;
+  const OPERATION_HISTORY_LIMIT = 20;
+  const DIAGNOSTIC_LIMIT = 20;
+  const TITLE_GIF_IDS = new Set(["none", "celebrate", "construction", "rocket", "tickets", "warning"]);
+  const retainNewest = (items, maximum) => items.slice(0, maximum);
+  let backupSequence = 20;
+  let diagnosticSequence = 30;
+  let backupList = retainNewest(Array.from({ length: 12 }, (_, index) => ({
+    id: `demo-backup-${12 - index}`,
+    createdAtUtc: new Date(Date.now() - index * 86400000).toISOString(),
+    sizeBytes: 4812 + index * 37,
+    revision: `demo-backup-revision-${12 - index}`,
+  })), BACKUP_LIMIT);
   const previewDefinitions = [
     ["demo-index", "preview-all-00-INDEX", 42800],
     ["demo-welcome", "preview-all-01-manual-welcome", 96400],
@@ -74,6 +86,7 @@
     field("CustomTextCardBorderColor", "Border color", "Custom text card", "color", "#72aef7", { help: "Choose the card accent color. Border opacity controls whether it is visible." }),
     field("CustomTextCardBorderOpacity", "Border opacity", "Custom text card", "range", 34, { min: 0, max: 100, help: "Set to 0% for no border." }),
     field("CustomTextCardTitle", "Optional title", "Custom text card", "text", "CUSTOM TITLE", { max: 120, help: "Gold uppercase label using the Welcome Aboard title size." }),
+    field("CustomTextCardTitleGif", "Optional title GIF", "Custom text card", "synthetic-asset-id", "none", { help: "A safe local asset ID stored separately from the title text." }),
     field("CustomTextCardSubheading", "Optional subheading", "Custom text card", "text", "Custom subheading", { max: 200, help: "Large white heading using the Welcome Aboard heading size." }),
     field("CustomTextCardBody", "Card body (required when enabled)", "Custom text card", "textarea", "A synthetic announcement for local assessment.\nLine breaks remain plain text and no service is contacted.", { max: 2000, help: "Plain text only. Line breaks are preserved and HTML is always escaped." }),
     field("IncludedLibraryIds", "Included library IDs", "Advanced", "string-list", ["11", "12", "13"]),
@@ -141,11 +154,50 @@
     generatedPreviewIds: previews.map((item) => item.id),
     cancellable: false,
   };
+  const archivedOperations = Array.from({ length: 22 }, (_, index) => {
+    const type = ["send-all", "preview-all", "send-test-all", "send-welcome"][index % 4];
+    const started = Date.now() - (index + 1) * 3600000;
+    return {
+      schemaVersion: 1,
+      id: `demo-operation-archive-${22 - index}`,
+      type,
+      trigger: "gui-preview",
+      packageVersion: "GUI Preview",
+      state: "succeeded",
+      outcome: "succeeded",
+      startedAtUtc: new Date(started).toISOString(),
+      finishedAtUtc: new Date(started + 1200).toISOString(),
+      durationMs: 1200,
+      generatedPreviewIds: type === "preview-all" ? previews.map((item) => item.id) : [],
+      smtpAcceptedCount: type === "send-all" ? 14 : type === "send-test-all" ? 6 : type === "send-welcome" ? 1 : 0,
+      skippedCount: type === "send-all" ? 2 : 0,
+      failedCount: 0,
+      cancellable: false,
+    };
+  });
+  const diagnosticExamples = [
+    ["configuration", "passed", "config-saved", "Synthetic configuration validation completed."],
+    ["tautulli-discovery", "passed", "discovery-completed", "Fictional library and user choices were loaded in memory."],
+    ["lan-verification", "passed", "verification-passed", "Synthetic Tautulli and Plex connection checks passed."],
+    ["smtp-preflight", "passed", "smtp-passed", "Synthetic SMTP connectivity and STARTTLS validation passed."],
+  ];
+  let diagnosticEvents = retainNewest(Array.from({ length: 22 }, (_, index) => {
+    const [area, outcome, code, summary] = diagnosticExamples[index % diagnosticExamples.length];
+    return {
+      schemaVersion: 1,
+      id: `demo-diagnostic-${22 - index}`,
+      recordedAtUtc: new Date(Date.now() - index * 1800000).toISOString(),
+      area,
+      outcome,
+      code,
+      summary,
+    };
+  }), DIAGNOSTIC_LIMIT);
   const model = {
     schedule: { installed: true, enabled: true, owned: true, ownership: "verified", state: "ready" },
     operation: completedPreview,
     operationStartedMS: 0,
-    history: [completedPreview],
+    history: retainNewest([completedPreview, ...archivedOperations], OPERATION_HISTORY_LIMIT),
     scheduleOperation: null,
     scheduleStartedMS: 0,
     lockEnabled: false,
@@ -235,6 +287,25 @@
     };
   }
 
+  function recordBackup(sourceRevision = revision) {
+    backupSequence += 1;
+    const backup = {
+      id: `demo-backup-${backupSequence}`,
+      createdAtUtc: now(),
+      sizeBytes: 5000 + backupSequence * 11,
+      revision: `${sourceRevision}-snapshot-${backupSequence}`,
+    };
+    backupList = retainNewest([backup, ...backupList.filter((item) => item.id !== backup.id)], BACKUP_LIMIT);
+    return backup;
+  }
+
+  function recordDiagnostic(area, outcome, code, summary) {
+    diagnosticSequence += 1;
+    const event = { schemaVersion: 1, id: `demo-diagnostic-${diagnosticSequence}`, recordedAtUtc: now(), area, outcome, code, summary };
+    diagnosticEvents = retainNewest([event, ...diagnosticEvents], DIAGNOSTIC_LIMIT);
+    return event;
+  }
+
   function finishOperationIfReady() {
     if (!model.operation || !["queued", "running", "cancelling"].includes(model.operation.state)) return;
     if (Date.now() - model.operationStartedMS < 900) return;
@@ -248,7 +319,8 @@
     if (operation.type === "send-test-all") operation.smtpAcceptedCount = 6;
     if (operation.type === "send-welcome") operation.smtpAcceptedCount = 1;
     if (operation.type === "send-all") operation.smtpAcceptedCount = 14;
-    model.history = [operation, ...model.history.filter((item) => item.id !== operation.id)].slice(0, 8);
+    model.history = retainNewest([operation, ...model.history.filter((item) => item.id !== operation.id)], OPERATION_HISTORY_LIMIT);
+    recordDiagnostic("manager-operation", operation.outcome, "operation-completed", "A fictional Manager operation completed in memory.");
   }
 
   function startOperation(body) {
@@ -372,6 +444,9 @@
         if (!Number.isInteger(opacity) || opacity < 0 || opacity > 100) {
           fields.CustomTextCardBorderOpacity = "Enter a value from 0 through 100.";
         }
+        if (!TITLE_GIF_IDS.has(String(currentValue("CustomTextCardTitleGif") || "none"))) {
+          fields.CustomTextCardTitleGif = "Choose one of the bundled synthetic title GIFs.";
+        }
         if (Object.keys(fields).length) {
           return json({ error: { code: "configuration-invalid", message: "The fictional configuration needs attention.", fields } }, 400);
         }
@@ -382,6 +457,10 @@
         const changedSecrets = Object.entries(body.secrets || {}).filter(([, change]) => change?.action && change.action !== "preserve").map(([name]) => name);
         const changed = [...new Set([...changedValues, ...changedSecrets])];
         const plan = postSavePlan(changed, values);
+        if (plan.materialChange) {
+          recordBackup(revision);
+          recordDiagnostic("configuration", "passed", "config-saved", "Synthetic configuration validation completed.");
+        }
         for (const [name, value] of Object.entries(body.values || {})) {
           const target = editorFields.find((item) => item.name === name);
           if (target) target.value = value;
@@ -392,8 +471,13 @@
     }
     if (path === "/api/v1/config/editor") return json(editor());
     if (path === "/api/v1/config/status" || path === "/api/v1/config/status/previews/skipped") return json(setupStatus);
-    if (path === "/api/v1/config/backups") return json({ backups: backupList });
-    if (/^\/api\/v1\/config\/backups\/[^/]+\/restore$/.test(path)) return json({ restored: true, sourceId: "demo-backup", safetyBackup: "synthetic-safety-backup", editor: editor() });
+    if (path === "/api/v1/config/backups") return json({ backups: retainNewest(backupList, BACKUP_LIMIT), maximumEntries: BACKUP_LIMIT, retentionPolicy: "newest-first-fifo" });
+    if (/^\/api\/v1\/config\/backups\/[^/]+\/restore$/.test(path)) {
+      const sourceId = decodeURIComponent(path.split("/").at(-2));
+      const safetyBackup = recordBackup(revision);
+      recordDiagnostic("configuration", "passed", "backup-restored", "A fictional configuration backup was restored in memory.");
+      return json({ restored: true, sourceId, safetyBackup: safetyBackup.id, editor: editor() });
+    }
     if (/^\/api\/v1\/config\/backups\/[^/]+$/.test(path) && method === "DELETE") {
       const id = decodeURIComponent(path.split("/").at(-1));
       backupList = backupList.filter((backup) => backup.id !== id);
@@ -408,7 +492,7 @@
     if (path === "/api/v1/operations/current") return json({ current: model.operation });
     if (/^\/api\/v1\/operations\/[^/]+\/cancel$/.test(path)) { if (model.operation) model.operation.state = "cancelling"; return json(model.operation); }
     if (/^\/api\/v1\/operations\/[^/]+$/.test(path)) return json(model.operation);
-    if (path === "/api/v1/history") return json({ operations: model.history });
+    if (path === "/api/v1/history") return json({ operations: retainNewest(model.history, OPERATION_HISTORY_LIMIT), maximumEntries: OPERATION_HISTORY_LIMIT, retentionPolicy: "count-only-fifo" });
     if (path === "/api/v1/schedule/operation") return json({ current: model.scheduleOperation });
     if (/^\/api\/v1\/schedule\/(install|enable|disable|remove)$/.test(path) && method === "POST") return json(startSchedule(path.split("/").at(-1)), 202);
     if (path === "/api/v1/updates" && method === "GET") return json({ ...model.update, observedAtUtc: now() });
@@ -439,12 +523,7 @@
       return json(model.update, 202);
     }
     if (path === "/api/v1/about") return json({ version: "GUI Preview", packageVersion: "Synthetic demonstration" });
-    if (path === "/api/v1/diagnostics") return json({ events: [
-      { schemaVersion: 1, recordedAtUtc: now(), area: "configuration", outcome: "passed", code: "config-saved", summary: "Synthetic configuration validation completed." },
-      { schemaVersion: 1, recordedAtUtc: now(), area: "tautulli-discovery", outcome: "passed", code: "discovery-completed", summary: "Fictional library and user choices were loaded in memory." },
-      { schemaVersion: 1, recordedAtUtc: now(), area: "lan-verification", outcome: "passed", code: "verification-passed", summary: "Synthetic Tautulli and Plex connection checks passed." },
-      { schemaVersion: 1, recordedAtUtc: now(), area: "smtp-preflight", outcome: "passed", code: "smtp-passed", summary: "Synthetic SMTP connectivity and STARTTLS validation passed." },
-    ], maximumEntries: 200, retentionDays: 30 });
+    if (path === "/api/v1/diagnostics") return json({ events: retainNewest(diagnosticEvents, DIAGNOSTIC_LIMIT), maximumEntries: DIAGNOSTIC_LIMIT, retentionPolicy: "count-only-fifo" });
     return json({ error: { code: "demo-route-unavailable", message: "This action is outside the synthetic GUI preview." } }, 404);
   };
 
