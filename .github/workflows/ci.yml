@@ -58,6 +58,9 @@ jobs:
       - name: Test rolling configuration-backup retention on PowerShell 7
         shell: pwsh
         run: ./scripts/test-config-backup-retention.ps1
+      - name: Test production recipient policy on PowerShell 7
+        shell: pwsh
+        run: ./scripts/test-sendall-recipient-policy.ps1 -PythonPath python3
       - name: Test SMTP authentication protocol on PowerShell 7
         run: python3 scripts/test-smtp-transport.py --helper platforms/nas-docker/app/Smtp-Transport.ps1
       - name: Validate NAS Compose configuration
