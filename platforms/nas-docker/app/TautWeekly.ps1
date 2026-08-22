@@ -6098,8 +6098,13 @@ function Get-StatsTvShowRowsHtml {
         }
 
         $cellPadding = if ($columnIndex -eq 0) { "7px 12px 7px 0" } else { "7px 0 7px 12px" }
+        $cellClass = if ($columnIndex -eq 0) {
+            "stats-title-cell stats-tv-title-cell stats-tv-title-left"
+        } else {
+            "stats-title-cell stats-tv-title-cell stats-tv-title-right"
+        }
         [void]$cells.Append(@"
-<td class="stats-title-cell" width="50%" valign="top" style="width:50%;padding:$cellPadding;border-bottom:1px solid #292929;">
+<td class="$cellClass" width="50%" valign="top" style="width:50%;padding:$cellPadding;border-bottom:1px solid #292929;">
   <table width="100%" cellspacing="0" cellpadding="0" border="0">
     <tr>
       <td width="50" valign="middle" style="width:50px;padding:0 8px 0 0;">$posterHtml</td>
@@ -6121,7 +6126,7 @@ function Get-StatsTvShowRowsHtml {
     }
 
     if ($columnIndex -gt 0) {
-        [void]$cells.Append('<td class="stats-title-spacer" width="50%" style="width:50%;border-bottom:1px solid #292929;"></td>')
+        [void]$cells.Append('<td class="stats-title-spacer stats-tv-title-spacer" width="50%" style="width:50%;border-bottom:1px solid #292929;"></td>')
         [void]$rows.Append("<tr>$($cells.ToString())</tr>")
     }
 
@@ -7223,6 +7228,10 @@ $mediaStatsRows
   .design-mobile-logo-overlay { bottom:10px !important; }
   .stats-title-cell { display:block !important; width:100% !important; padding:7px 0 !important; }
   .stats-title-spacer { display:none !important; }
+  .stats-title-cell.stats-tv-title-cell { display:table-cell !important; width:50% !important; }
+  .stats-title-cell.stats-tv-title-left { padding:7px 6px 7px 0 !important; }
+  .stats-title-cell.stats-tv-title-right { padding:7px 0 7px 6px !important; }
+  .stats-title-spacer.stats-tv-title-spacer { display:table-cell !important; width:50% !important; }
   .stats-summary-cell { display:block !important; width:100% !important; padding:0 0 10px !important; }
 }
 </style>

@@ -6,6 +6,16 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Kept the full-width TV watched card at two titles per row on mobile while
+  Movies watched continues to stack one title per mobile row.
+
+### Fixed
+
+- Prevented synthetic personal-stat poster sizing from stretching nested IMDb
+  badges, preserving the production 28-by-14 badge treatment in GUI previews.
+
 ## [0.20.2] - 2026-08-21
 
 ### Fixed

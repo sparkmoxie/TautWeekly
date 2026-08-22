@@ -229,10 +229,11 @@ can prompt when run interactively, but `list-users` does not persist a default.
 
 During preview review, confirm the supplied animated movie/TV icons, uncapped
 qualifying personal titles, separate full-width movie/TV cards, two title
-columns on desktop and one on mobile, compact personal total watch time and
-Binge Champion cards, anonymous nonzero movie/TV-show counts, gold winner
-treatment, and Trending hero fallback. An empty media card stays absent;
-TV-only release weeks retain their TV cards below the hero.
+columns on desktop, one-column mobile movies, two-column mobile TV, compact
+personal total watch time and Binge Champion cards, anonymous nonzero
+movie/TV-show counts, gold winner treatment, and Trending hero fallback. An
+empty media card stays absent; TV-only release weeks retain their TV cards
+below the hero.
 
 Only after the previews and controlled TestEmail messages are approved, enable
 future delivery on Manager **Schedule**. The expert fallback is:
