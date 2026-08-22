@@ -82,9 +82,11 @@ version, stable channel, latest stable release, comparison state, last
 successful check, last sanitized failure, and release-notes link. Authenticated
 entry renders cached status first and makes one non-blocking bounded request
 only when the last success is missing or at least 24 hours old and backoff
-permits. Opening or refreshing the Dashboard does not itself contact GitHub;
-successful results are reused for five minutes, then **Check now** permits an
-explicit refresh. A purple header notification
+permits. The main header **Refresh** reloads local status immediately and then
+starts the same non-blocking request only when that new typed status recommends
+it; it never waits for GitHub, and other refresh controls remain local to their
+own actions. Successful results are reused for five minutes, then **Check now**
+permits an explicit refresh. A purple header notification
 appears only for a validated newer running application and links to this view;
 the status card glows for every non-current state while the green **Current**
 chip remains unchanged. Neither cue starts installation.

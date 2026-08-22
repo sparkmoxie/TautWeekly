@@ -459,10 +459,12 @@ def main() -> int:
         failures.append("header update notification does not route to the consolidated status section")
     if 'addEventListener("popstate", applyLocationRoute)' not in javascript or 'addEventListener("hashchange", applyLocationRoute)' not in javascript:
         failures.append("Manager update route does not preserve browser back and forward navigation")
-    if "function checkForUpdatesInBackground()" not in javascript or "backgroundUpdateCheckAttempted" not in javascript:
-        failures.append("authenticated Manager entry does not bound background checks to one attempt")
-    if 'state.updates?.backgroundCheckRecommended' not in javascript or 'void runUpdateCheck(true);' not in javascript:
+    if "function checkForUpdatesInBackground()" not in javascript or "backgroundUpdateCheckAttempted" in javascript:
+        failures.append("background checks retain a session-wide suppression flag")
+    if 'state.updateChecking || !state.updates?.backgroundCheckRecommended' not in javascript or 'void runUpdateCheck(true);' not in javascript:
         failures.append("background update refresh is not gated by server cache freshness and backoff")
+    if 'async function refreshApplicationStatus()' not in javascript or 'byId("refresh-button").addEventListener("click", refreshApplicationStatus)' not in javascript:
+        failures.append("header Refresh does not run the scoped local-first background update handler")
     if 'Update available — Version' in args.html.read_text(encoding="utf-8"):
         failures.append("static header markup exposes a stale update version before validated state is rendered")
     if ".update-status-button" not in css or "color:var(--violet)" not in css or "animation:hero-pulse" not in css:

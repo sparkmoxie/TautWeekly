@@ -98,6 +98,7 @@ $required = @(
     'scripts/test-windows-installer.ps1',
     'scripts/test-scheduler-timezone.ps1',
     'scripts/test-manager-accessibility.py',
+    'scripts/test-manager-header-refresh.mjs',
     'scripts/test-smtp-transport.py',
     'scripts/test-support/fake-smtp.py',
     'scripts/test-support/fake-tautulli.py',

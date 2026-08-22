@@ -509,8 +509,11 @@ last sanitized failure, release notes, and whether the saved host adapter is
 current, legacy, or mismatched. Authenticated entry renders cached status first
 and makes one non-blocking bounded check only when the last success is missing
 or at least 24 hours old and backoff permits. Successful results are reused for
-five minutes before **Check now** refreshes the same endpoint. Navigation,
-Dashboard rendering, and health remain offline-capable. **Current** retains its
+five minutes before **Check now** refreshes the same endpoint. The main header
+**Refresh** completes its local status reload first and then starts that check
+only when the new typed status recommends it; it never waits for GitHub, and
+scoped refresh controls remain isolated. Navigation, Dashboard rendering, and
+health remain offline-capable. **Current** retains its
 green glow. A passive purple header SVG appears only for a validated newer
 running application, while the card glows for every non-current state; neither
 claims package ownership. The
