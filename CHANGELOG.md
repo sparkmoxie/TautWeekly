@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-08-21
+
 ### Fixed
 
 - Refreshed the shared Manager preview inventory after a successful manual
