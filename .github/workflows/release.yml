@@ -36,7 +36,9 @@ jobs:
         shell: pwsh
         run: ./scripts/test-manager-cross-builds.ps1
       - name: Validate embedded Manager JavaScript
-        run: node --check manager/internal/manager/web/app.js
+        run: |
+          node --check manager/internal/manager/web/app.js
+          node scripts/test-manager-preview-refresh.mjs
       - name: Validate Manager accessibility structure
         run: python scripts/test-manager-accessibility.py
       - name: Test synthetic GUI preview personal statistics

@@ -2355,7 +2355,24 @@ function orderedPreviews() {
   });
 }
 
-function renderPreviews() {
+function preferredPreviewForInventory(previews, selectedID, preferredScenario, generatedPreviewIDs) {
+  const generated = new Set(generatedPreviewIDs || []);
+  const selected = previews.find((preview) => preview.id === selectedID);
+  const scenarioAvailable = Number.isInteger(preferredScenario) && preferredScenario >= 0 && preferredScenario < Number.MAX_SAFE_INTEGER;
+  const sameScenario = scenarioAvailable
+    ? previews.find((preview) => previewScenarioIndex(preview) === preferredScenario)
+    : null;
+  return (selected && generated.has(selected.id) ? selected : null)
+    || (sameScenario && generated.has(sameScenario.id) ? sameScenario : null)
+    || selected
+    || sameScenario
+    || previews.find((preview) => generated.has(preview.id) && /-00-index(?:\.html)?$/i.test(preview.name))
+    || previews.find((preview) => generated.has(preview.id))
+    || previews[0]
+    || null;
+}
+
+function renderPreviews(options = {}) {
   const list = byId("preview-list");
   list.replaceChildren();
   const previews = orderedPreviews();
@@ -2366,6 +2383,7 @@ function renderPreviews() {
     const frame = byId("preview-frame");
     frame.hidden = true;
     frame.removeAttribute("data-preview-id");
+    frame.removeAttribute("data-preview-reload-key");
     frame.src = "about:blank";
     const empty = document.createElement("div");
     empty.className = "config-empty";
@@ -2386,15 +2404,16 @@ function renderPreviews() {
     button.addEventListener("click", () => openPreview(preview.id, button));
     list.append(button);
   }
-  const selected = previews.find((preview) => preview.id === state.selectedPreviewID);
   const latestRun = state.history.find((operation) => operation.type === "preview-all" && operation.state === "succeeded" && operation.generatedPreviewIds?.length);
-  const generated = new Set(latestRun?.generatedPreviewIds || []);
-  const preferred = selected
-    || previews.find((preview) => generated.has(preview.id) && /-00-index(?:\.html)?$/i.test(preview.name))
-    || previews.find((preview) => generated.has(preview.id))
-    || previews[0];
+  const preferred = preferredPreviewForInventory(
+    previews,
+    state.selectedPreviewID,
+    options.preferredScenario,
+    options.generatedPreviewIDs || latestRun?.generatedPreviewIds,
+  );
+  if (!preferred) return;
   const button = list.querySelector(`[data-preview-id="${CSS.escape(preferred.id)}"]`);
-  if (button) openPreview(preferred.id, button);
+  if (button) openPreview(preferred.id, button, { reloadKey: options.reloadKey });
 }
 
 function renderOperations() {
@@ -2760,6 +2779,8 @@ async function cancelPreviewOperation() {
 }
 
 let operationPollTimer;
+let operationPollSequence = 0;
+let operationCompletionProcessedID = "";
 
 function manageDeliveryStatusPolling() {
   clearTimeout(deliveryStatusPollTimer);
@@ -2785,33 +2806,63 @@ async function pollDeliveryStatus() {
 
 function manageOperationPolling() {
   clearTimeout(operationPollTimer);
+  operationPollSequence += 1;
   if (!operationIsActive(state.operation)) return;
-  operationPollTimer = setTimeout(pollOperation, 1000);
+  const expectedOperationID = state.operation?.id || "";
+  const expectedSequence = operationPollSequence;
+  operationPollTimer = setTimeout(() => pollOperation(expectedOperationID, expectedSequence), 1000);
 }
 
-async function pollOperation() {
+function operationPollIsCurrent(expectedOperationID, expectedSequence) {
+  return expectedSequence === operationPollSequence && state.operation?.id === expectedOperationID;
+}
+
+function successfulPreviewGeneration(operation) {
+  return operation?.type === "preview-all" && operation.state === "succeeded";
+}
+
+async function pollOperation(expectedOperationID = state.operation?.id || "", expectedSequence = operationPollSequence) {
+  if (!operationPollIsCurrent(expectedOperationID, expectedSequence)) return;
+  if (!operationIsActive(state.operation) && operationCompletionProcessedID === expectedOperationID) return;
   const priorState = state.operation?.state;
   try {
     const response = await request("/api/v1/operations/current");
-    state.operation = response.current || null;
+    if (!operationPollIsCurrent(expectedOperationID, expectedSequence)) return;
+    if (!response.current || response.current.id !== expectedOperationID) return;
+    state.operation = response.current;
     if (operationIsActive(state.operation)) {
       renderOperations();
       renderStatus();
       manageOperationPolling();
       return;
     }
-    const [previews, history, status, configurationStatus] = await Promise.all([
-      request("/api/v1/previews"),
+    if (operationCompletionProcessedID === state.operation.id) return;
+    const completedOperation = state.operation;
+    const refreshPreviews = successfulPreviewGeneration(completedOperation);
+    const selectedPreview = refreshPreviews
+      ? state.previews.find((preview) => preview.id === state.selectedPreviewID)
+      : null;
+    const requests = [
       request("/api/v1/history"),
       request("/api/v1/status"),
       request("/api/v1/config/status"),
-    ]);
-    state.previews = previews.previews || [];
+    ];
+    if (refreshPreviews) requests.push(request("/api/v1/previews"));
+    const [history, status, configurationStatus, previews] = await Promise.all(requests);
+    if (!operationPollIsCurrent(expectedOperationID, expectedSequence)) return;
+    if (refreshPreviews) state.previews = previews?.previews || [];
     state.historyMaximum = Number(history.maximumEntries) || 20;
     state.history = (history.operations || []).slice(0, state.historyMaximum);
     state.status = status;
     state.setupWorkflow = configurationStatus?.available ? configurationStatus : null;
-    renderPreviews();
+    operationCompletionProcessedID = completedOperation.id;
+    if (refreshPreviews) {
+      renderPreviews({
+        preferredScenario: previewScenarioIndex(selectedPreview),
+        generatedPreviewIDs: completedOperation.generatedPreviewIds,
+        reloadKey: completedOperation.id,
+      });
+    }
     renderOperations();
     renderStatus();
     renderSetupWorkflow();
@@ -2820,10 +2871,11 @@ async function pollOperation() {
       setGlobalStatus(summary.heading + ".", true);
     }
   } catch (error) {
+    if (!operationPollIsCurrent(expectedOperationID, expectedSequence)) return;
     if (error.status === 401) showAuthentication();
     else {
       setGlobalStatus(error.message, true);
-      operationPollTimer = setTimeout(pollOperation, 2500);
+      operationPollTimer = setTimeout(() => pollOperation(expectedOperationID, expectedSequence), 2500);
     }
   }
 }
@@ -3573,15 +3625,20 @@ function diagnosticAreaLabel(area) {
   return area === "lan-verification" ? "Connection Verification" : titleCase(area);
 }
 
-function openPreview(id, button) {
+function openPreview(id, button, options = {}) {
   state.selectedPreviewID = id;
   document.querySelectorAll(".preview-button").forEach((element) => element.classList.remove("active"));
   button.classList.add("active");
   byId("preview-placeholder").hidden = true;
   const frame = byId("preview-frame");
-  if (frame.dataset.previewId !== id) {
-    frame.src = `/preview/${encodeURIComponent(id)}`;
+  const reloadKey = String(options.reloadKey || "");
+  const reloadRequested = reloadKey && frame.dataset.previewReloadKey !== reloadKey;
+  if (frame.dataset.previewId !== id || reloadRequested) {
+    const query = reloadKey ? `?refresh=${encodeURIComponent(reloadKey)}` : "";
+    frame.src = `/preview/${encodeURIComponent(id)}${query}`;
     frame.dataset.previewId = id;
+    if (reloadKey) frame.dataset.previewReloadKey = reloadKey;
+    else frame.removeAttribute("data-preview-reload-key");
   }
   frame.hidden = false;
 }

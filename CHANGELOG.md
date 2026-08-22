@@ -6,6 +6,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Refreshed the shared Manager preview inventory after a successful manual
+  generation and reloaded the selected state's new artifact without a click or
+  browser refresh, while preserving the selected scenario when available.
+
 ## [0.20.1] - 2026-08-21
 
 ### Changed
