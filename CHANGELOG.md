@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.20.3] - 2026-08-21
+
 ### Changed
 
 - Kept the full-width TV watched card at two titles per row on mobile while
