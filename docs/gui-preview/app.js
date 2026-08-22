@@ -49,7 +49,6 @@ const activeSecretReveals = new Map();
 let pendingSecretReveal = null;
 let sessionRecoveryPromise = null;
 let updateInstallPollTimer;
-let backgroundUpdateCheckAttempted = false;
 let lastRoutedURL = "";
 
 function materializeMaterialIcon(svg) {
@@ -212,11 +211,11 @@ async function initialize() {
 async function enterApplication(preferredView = "") {
   byId("auth-shell").hidden = true;
   byId("app-shell").hidden = false;
-  await loadAll();
+  const localStatusLoaded = await loadAll();
   const route = preferredView ? { view: preferredView, section: "" } : window.TautWeeklyUpdateUI.routeFromHash(window.location.hash);
   lastRoutedURL = window.location.href;
   selectView(route.view, { section: route.section, updateHistory: false });
-  checkForUpdatesInBackground();
+  if (localStatusLoaded) checkForUpdatesInBackground();
 }
 
 async function loadAll() {
@@ -272,13 +271,19 @@ async function loadAll() {
     manageOperationPolling();
     manageSchedulePolling();
     setGlobalStatus("Synthetic status refreshed.", true);
+    return true;
   } catch (error) {
     if (error.status === 401) {
       showAuthentication();
-      return;
+      return false;
     }
     setGlobalStatus(error.message, true);
+    return false;
   }
+}
+
+async function refreshApplicationStatus() {
+  if (await loadAll()) checkForUpdatesInBackground();
 }
 
 function renderFirstTimeSetup() {
@@ -2773,8 +2778,7 @@ function checkForUpdates() {
 }
 
 function checkForUpdatesInBackground() {
-  if (backgroundUpdateCheckAttempted || !state.updates?.backgroundCheckRecommended) return;
-  backgroundUpdateCheckAttempted = true;
+  if (state.updateChecking || !state.updates?.backgroundCheckRecommended) return;
   void runUpdateCheck(true);
 }
 
@@ -2973,7 +2977,6 @@ async function logout() {
 }
 
 function showAuthentication() {
-  backgroundUpdateCheckAttempted = false;
   clearAllRevealedSecrets();
   closeSecretRevealDialog();
   concealMaskedInputs(byId("auth-shell"));
@@ -3154,7 +3157,7 @@ byId("update-install-confirm").addEventListener("change", renderUpdates);
 byId("update-install-button").addEventListener("click", installUpdate);
 byId("update-copy-command").addEventListener("click", copyUpdateCommand);
 byId("logout-button").addEventListener("click", logout);
-byId("refresh-button").addEventListener("click", loadAll);
+byId("refresh-button").addEventListener("click", refreshApplicationStatus);
 byId("access-status-button").addEventListener("click", openAccessSettings);
 byId("update-status-button").addEventListener("click", openUpdateSettings);
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => selectView(button.dataset.view)));

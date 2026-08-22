@@ -183,6 +183,15 @@ and exact platform asset plus checksum URLs. `POST /api/v1/updates/install`
 accepts no caller-controlled update arguments. Cached failures contain only
 fixed public messages and support codes.
 
+Authenticated entry and the main header **Refresh** both render the local
+`GET /api/v1/updates` result before consulting its typed
+`backgroundCheckRecommended` field. The header's local refresh completes
+without waiting for GitHub; only an applicable stale or missing result starts
+the same non-blocking check. The five-minute success cache, failure backoff,
+and single active-check lock suppress repeated clicks. Settings **Check now**
+remains the explicit manual action, and no scoped refresh control inherits this
+behavior.
+
 The Windows release build cross-compiles this module as
 `tautweekly-manager.exe`, packages it into the portable Windows ZIP, and embeds
 that verified ZIP in `TautWeekly-Setup.exe`. Setup is the authoritative Windows

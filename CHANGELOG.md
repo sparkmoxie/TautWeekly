@@ -6,6 +6,13 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Made the shared Manager header **Refresh** render local and cached status
+  first, then start an eligible stale or missing stable-release check in the
+  background without delaying or failing the local refresh. Repeated clicks
+  reuse the existing cache, backoff, and active-check guards.
+
 ## [0.20.3] - 2026-08-21
 
 ### Changed

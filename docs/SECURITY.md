@@ -98,13 +98,16 @@ Disabling the feature stops access but does not erase the existing cache.
 - Normal Manager/Dashboard health and `GET /api/v1/updates` are offline-only.
   After authenticated application entry renders that cached result, the GUI
   makes one non-blocking check only when no successful result exists or it is at
-  least 24 hours old and retry backoff permits. Successful results are reused
-  for five minutes before **Check now** can use the same endpoint for another
-  explicit refresh. Both paths use a fixed HTTPS GitHub
+  least 24 hours old and retry backoff permits. The main header **Refresh**
+  likewise completes its local status load first, then starts the same
+  non-blocking check only when the new typed status recommends it. Successful
+  results are reused for five minutes before **Check now** can use the same
+  endpoint for another explicit refresh. All paths use a fixed HTTPS GitHub
   endpoint, reject redirects and unexpected hosts/assets, bound time and
   response size, cache only public release fields plus fixed sanitized
   failures, and back off repeated checks. The login/bootstrap page, navigation,
-  and health endpoints never initiate a check. Update mutations require the
+  scoped refresh controls, and health endpoints never initiate a check. Update
+  mutations require the
   same session, same-origin, CSRF, Host, proxy, and secure-cookie controls as
   every other protected Manager action.
 - Only Windows exposes a GUI install action, and it can start only the fixed

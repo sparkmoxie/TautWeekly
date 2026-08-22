@@ -37,6 +37,7 @@ jobs:
           node --check docs/gui-preview/app.js
           node scripts/test-gui-preview-personal-stats.mjs
           node scripts/test-manager-update-indicator.mjs
+          node scripts/test-manager-header-refresh.mjs
           node scripts/test-manager-preview-refresh.mjs
       - name: Validate shell scripts
         run: ./scripts/validate-shell.sh
