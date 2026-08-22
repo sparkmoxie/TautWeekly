@@ -762,7 +762,7 @@ foreach ($relativePath in $rendererPaths) {
     $manyTvRows = Get-StatsTvShowRowsHtml -Items $manyTvRowsInput -PosterAssets @() -ImageMode Preview
     Assert-True (([regex]::Matches($manyTvRows, 'Uncapped Show \d{2}')).Count -eq 11) "$relativePath did not render every one of eleven personal TV rows"
     Assert-True ($manyTvRows.Contains('Uncapped Show 11') -and $manyTvRows.Contains('IMDb') -and $manyTvRows.Contains('8.4')) "$relativePath lost the final TV row or an eligible show rating"
-    Assert-True (([regex]::Matches($manyTvRows, 'class="stats-title-cell"')).Count -eq 11 -and ([regex]::Matches($manyTvRows, 'class="stats-title-spacer"')).Count -eq 1) "$relativePath did not pair an odd TV count into two desktop columns with one safe spacer"
+    Assert-True (([regex]::Matches($manyTvRows, 'class="stats-title-cell stats-tv-title-cell stats-tv-title-(?:left|right)"')).Count -eq 11 -and ([regex]::Matches($manyTvRows, 'class="stats-title-spacer stats-tv-title-spacer"')).Count -eq 1) "$relativePath did not pair an odd TV count into two desktop/mobile columns with one safe spacer"
 
     $preferredShowStats = Get-StatsTvShowRatingHtml -Item $selectedProviderShow -ImageMode Preview
     Assert-True ($preferredShowStats.Contains('IMDb') -and $preferredShowStats.Contains('8.4') -and -not $preferredShowStats.Contains('%')) "$relativePath grouped TV stats did not prefer show-level IMDb over show-level RT"
@@ -1151,7 +1151,9 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($source -match '\$summaryCardHeight = 178') "$relativePath does not decouple the compact summary-card height from media row counts"
     Assert-True ($source -notmatch '\$statsCardHeight') "$relativePath still derives compact summary-card height from personal media rows"
     Assert-True ($source.Contains('colspan="2" width="100%" valign="top"')) "$relativePath does not render personal media cards at full width"
-    Assert-True ($source.Contains('class="stats-title-cell" width="50%"') -and $source.Contains('.stats-title-cell { display:block !important; width:100% !important;')) "$relativePath does not render two desktop personal titles per row and one per row on mobile"
+    Assert-True ($source.Contains('class="stats-title-cell" width="50%"') -and $source.Contains('.stats-title-cell { display:block !important; width:100% !important;')) "$relativePath does not render two desktop movie titles per row and one per row on mobile"
+    Assert-True ($source.Contains('stats-title-cell stats-tv-title-cell stats-tv-title-left') -and $source.Contains('.stats-title-cell.stats-tv-title-cell { display:table-cell !important; width:50% !important;')) "$relativePath does not preserve two TV titles per row on mobile"
+    Assert-True ($source.Contains('stats-title-spacer stats-tv-title-spacer') -and $source.Contains('.stats-title-spacer.stats-tv-title-spacer { display:table-cell !important; width:50% !important;')) "$relativePath does not preserve the odd TV-row spacer on mobile"
     Assert-True ($source.Contains('class="stats-summary-cell"') -and $source.Contains('.stats-summary-cell { display:block !important; width:100% !important;')) "$relativePath does not keep desktop summary cards side by side and stack them on mobile"
     Assert-True ($source.Contains('YOU CLOCKED') -and $source.Contains('total watch time') -and -not $source.Contains('>total watched<')) "$relativePath did not update the personal total-watch-time presentation"
     Assert-True ($source -match 'width="42" height="42" alt="Movies watched"') "$relativePath does not render the movie GIF at the standard stat-icon size"

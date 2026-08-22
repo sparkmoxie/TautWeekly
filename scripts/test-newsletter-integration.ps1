@@ -351,7 +351,8 @@ foreach ($engine in $engines) {
             Assert-True ($normalHtml.Contains('.stats-summary-cell { display:block !important; width:100% !important;')) "$($engine.Name)/$scenario lost responsive summary-card stacking."
             Assert-True (-not $normalHtml.Contains('height:356px')) "$($engine.Name)/$scenario still couples summary-card height to four personal media rows."
             Assert-True ($normalHtml.Contains('colspan="2" width="100%" valign="top"')) "$($engine.Name)/$scenario did not render the populated personal media card at full width."
-            Assert-True ($normalHtml.Contains('class="stats-title-cell" width="50%"') -and $normalHtml.Contains('.stats-title-cell { display:block !important; width:100% !important;')) "$($engine.Name)/$scenario lost the two-column desktop and one-column mobile personal-title layout."
+            Assert-True ($normalHtml.Contains('class="stats-title-cell" width="50%"') -and $normalHtml.Contains('.stats-title-cell { display:block !important; width:100% !important;')) "$($engine.Name)/$scenario lost the two-column desktop and one-column mobile movie-title layout."
+            Assert-True ($normalHtml.Contains('.stats-title-cell.stats-tv-title-cell { display:table-cell !important; width:50% !important;')) "$($engine.Name)/$scenario lost the two-column mobile TV-title rule."
             Assert-True (-not $quietHtml.Contains('class="stats-summary-cell"') -and -not $quietHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario rendered personal summary cards in the zero-activity state."
             Assert-True (-not $normalHtml.Contains('Ratings unavailable') -and -not $normalHtml.Contains('IMDb unavailable')) "$($engine.Name)/$scenario rendered an unavailable-rating placeholder."
             $expectedMode = if ($scenario -eq 'quiet' -or $scenario -in $deletedHistoryScenarios) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' }
@@ -370,8 +371,9 @@ foreach ($engine in $engines) {
 
             if ($scenario -eq 'personal-many') {
                 Assert-True ($normalHtml.Contains('Personal Movie 12') -and $normalHtml.Contains('Personal Show 11')) "$($engine.Name)/$scenario capped personal movie or TV rows before the final synthetic title."
-                Assert-True (([regex]::Matches($normalHtml, 'class="stats-title-cell"')).Count -eq 23) "$($engine.Name)/$scenario did not render all 12 movie and 11 TV title cells."
-                Assert-True (([regex]::Matches($normalHtml, 'class="stats-title-spacer"')).Count -eq 1) "$($engine.Name)/$scenario did not preserve the odd TV grid row without a visible empty mobile item."
+                Assert-True (([regex]::Matches($normalHtml, 'class="stats-title-cell(?: stats-tv-title-cell stats-tv-title-(?:left|right))?"')).Count -eq 23) "$($engine.Name)/$scenario did not render all 12 movie and 11 TV title cells."
+                Assert-True (([regex]::Matches($normalHtml, 'class="stats-title-cell stats-tv-title-cell stats-tv-title-(?:left|right)"')).Count -eq 11) "$($engine.Name)/$scenario did not identify every TV cell for two-column mobile rendering."
+                Assert-True (([regex]::Matches($normalHtml, 'class="stats-title-spacer stats-tv-title-spacer"')).Count -eq 1) "$($engine.Name)/$scenario did not preserve the odd TV grid row without a visible empty mobile item."
                 $movieStatsStart = $normalHtml.IndexOf('MOVIES WATCHED', [StringComparison]::Ordinal)
                 $tvStatsStart = $normalHtml.IndexOf('TV SHOWS WATCHED', [StringComparison]::Ordinal)
                 Assert-True ($movieStatsStart -ge 0 -and $tvStatsStart -gt $movieStatsStart) "$($engine.Name)/$scenario did not stack the full-width Movies and TV cards in order."

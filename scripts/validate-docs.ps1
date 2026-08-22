@@ -320,6 +320,9 @@ foreach ($pattern in @(
     'class="stats-summary-grid"',
     'stats-media-card \.watched-list\{display:grid;grid-template-columns:repeat\(2',
     'stats-media-card \.watched-list,\.stats-summary-grid\{grid-template-columns:1fr\}',
+    'stats-tv-media-card \.watched-list\{grid-template-columns:repeat\(2',
+    'watched-row>img\{width:38px;height:56px;object-fit:cover',
+    'imdb img\{width:28px;height:14px;object-fit:contain\}',
     'YOU CLOCKED',
     'total watch time'
 )) {
@@ -461,8 +464,10 @@ foreach ($previewCopy in @(
     }
 }
 foreach ($pattern in @(
-    'class="stats-title-cell"',
-    'class="stats-title-spacer"',
+    'stats-title-cell',
+    'stats-title-spacer',
+    'stats-tv-title-cell',
+    'stats-tv-title-spacer',
     'class="stats-summary-cell"',
     'summaryHeight=178',
     'winner||high?movies.length:5',
