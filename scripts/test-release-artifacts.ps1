@@ -39,6 +39,19 @@ function Get-ZipEntrySha256([IO.Compression.ZipArchiveEntry]$Entry) {
     }
 }
 
+function Get-ZipEntryBytes([IO.Compression.ZipArchiveEntry]$Entry) {
+    $stream = $Entry.Open()
+    $memory = New-Object IO.MemoryStream
+    try {
+        $stream.CopyTo($memory)
+        return $memory.ToArray()
+    }
+    finally {
+        $memory.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('[string]$ResultPath = ""')) "$PackageName lacks the Manager structured-result path."
     Assert-True ($Renderer.Contains('function Write-TautWeeklyStructuredResult')) "$PackageName lacks the Manager structured-result writer."
@@ -47,6 +60,13 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('$script:TautWeeklyResultErrorCategory = "tautulli-unavailable"')) "$PackageName lacks the fixed Tautulli failure stage."
     Assert-True ($Renderer.Contains('$script:TautWeeklyResultErrorCategory = "output-failed"')) "$PackageName lacks the fixed preview-output failure stage."
     Assert-True ($Renderer.Contains('Get-OptionalStringProperty -InputObject $Row -Name "section_id"')) "$PackageName lacks the executable library predicate fix."
+    Assert-True ($Renderer.Contains('function Get-NewsletterPlatformCatalog')) "$PackageName lacks the conservative newsletter platform catalog."
+    Assert-True ($Renderer.Contains('function Get-NewsletterPlatform')) "$PackageName lacks grouped-play platform ranking."
+    Assert-True ($Renderer.Contains('-ExpectedUserId $user.UserId')) "$PackageName does not constrain platform selection to the intended recipient."
+    Assert-True ($Renderer.Contains('@{ Expression = { $_.Latest }; Descending = $true }')) "$PackageName lacks the most-recent platform tie-break."
+    Assert-True ($Renderer.Contains('function Get-NewsletterPlatformHeadingHtml')) "$PackageName lacks the accessible weekly-heading platform renderer."
+    Assert-True ($Renderer.Contains('width="21" height="21"') -and $Renderer.Contains('max-height:21px')) "$PackageName does not enforce the 21px platform icon maximum."
+    Assert-True ($Renderer.Contains('MediaType = "image/png"') -and $Renderer.Contains('Get-NewsletterPlatformCatalog')) "$PackageName does not embed local PNG platform resources."
     Assert-True ($Renderer.Contains('$params.section_id = $sectionId')) "$PackageName lacks server-side selected-library scoping."
     Assert-True ($Renderer.Contains('$expectedSectionId = ([string]$ExpectedSectionId).Trim()')) "$PackageName lacks scoped recently-added row handling."
     Assert-True ($Renderer.Contains('if ([string]::IsNullOrWhiteSpace($sectionId)) { return $true }')) "$PackageName rejects selected-library rows that omit redundant section metadata."
@@ -250,6 +270,15 @@ $assetRoots = [ordered]@{
     'TautWeekly-linux.zip'           = 'TautWeekly-linux/app/assets-default'
     'TautWeekly-freebsd-podman.zip'  = 'TautWeekly-freebsd-podman/app/assets-default'
 }
+$platformAssetManifestPath = Join-Path $Root 'assets/platforms/NEWSLETTER-ASSET-SHA256SUMS.txt'
+Assert-True (Test-Path -LiteralPath $platformAssetManifestPath -PathType Leaf) 'Newsletter platform asset checksum manifest is missing.'
+$expectedPlatformHashes = [ordered]@{}
+foreach ($line in Get-Content -LiteralPath $platformAssetManifestPath) {
+    if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith('#')) { continue }
+    Assert-True ($line -match '^(?<hash>[0-9a-f]{64})  (?<name>platform-[a-z0-9-]+[.]png)$') "Invalid newsletter platform asset manifest line: $line"
+    $expectedPlatformHashes[$Matches['name']] = $Matches['hash'].ToUpperInvariant()
+}
+Assert-True ($expectedPlatformHashes.Count -eq 22) "Expected 22 newsletter platform assets, found $($expectedPlatformHashes.Count)."
 $expectedGifHashes = [ordered]@{
     'movies.gif' = '9BCD489463C963C38469771518700308CCADE3965A32EDA18E12DC718950C971'
     'tv.gif'     = '35FFCB45F313953AD0EEF2C7EC852B4B68B0E033E5055BC0926B87EB2EDEF117'
@@ -321,6 +350,12 @@ foreach ($archiveName in $expected.Keys) {
         foreach ($requiredEntry in $expected[$archiveName]) {
             Assert-True ($entryNames -ccontains $requiredEntry) "$archiveName is missing $requiredEntry"
         }
+        $thirdPartyNoticeEntry = @($archive.Entries | Where-Object { $_.FullName.Replace('\', '/') -match '/THIRD_PARTY_NOTICES[.]md$' })
+        Assert-True ($thirdPartyNoticeEntry.Count -eq 1) "$archiveName has no unique third-party notices file."
+        $thirdPartyNoticeReader = New-Object IO.StreamReader($thirdPartyNoticeEntry[0].Open())
+        try { $thirdPartyNoticeText = $thirdPartyNoticeReader.ReadToEnd() }
+        finally { $thirdPartyNoticeReader.Dispose() }
+        Assert-True ($thirdPartyNoticeText.Contains('Simple Icons 9.21.0') -and $thirdPartyNoticeText.Contains('CC0 1.0 Universal')) "$archiveName omits the bundled platform glyph provenance."
 
         if ($archiveName -ne 'TautWeekly-windows.zip') {
             foreach ($entry in $archive.Entries) {
@@ -514,6 +549,21 @@ foreach ($archiveName in $expected.Keys) {
             Assert-True ($gifEntry.Count -eq 1) "$archiveName is missing $gifEntryName"
             $actualGifHash = Get-ZipEntrySha256 -Entry $gifEntry[0]
             Assert-True ($actualGifHash -ceq $expectedGifHashes[$gifName]) "$archiveName contains stale $gifName bytes."
+        }
+        $packagedPlatformEntries = @($archive.Entries | Where-Object {
+            $_.FullName.Replace('\', '/') -match ('^' + [regex]::Escape($assetRoots[$archiveName]) + '/platform-[a-z0-9-]+[.]png$')
+        })
+        Assert-True ($packagedPlatformEntries.Count -eq $expectedPlatformHashes.Count) "$archiveName does not contain the complete newsletter platform asset set."
+        foreach ($platformAssetName in $expectedPlatformHashes.Keys) {
+            $platformEntryName = "$($assetRoots[$archiveName])/$platformAssetName"
+            $platformEntry = @($packagedPlatformEntries | Where-Object { $_.FullName.Replace('\', '/') -ceq $platformEntryName })
+            Assert-True ($platformEntry.Count -eq 1) "$archiveName is missing $platformEntryName"
+            Assert-True ((Get-ZipEntrySha256 -Entry $platformEntry[0]) -ceq $expectedPlatformHashes[$platformAssetName]) "$archiveName contains stale $platformAssetName bytes."
+            $platformBytes = Get-ZipEntryBytes -Entry $platformEntry[0]
+            Assert-True ($platformBytes.Length -gt 24 -and $platformBytes[0] -eq 0x89 -and $platformBytes[1] -eq 0x50 -and $platformBytes[2] -eq 0x4e -and $platformBytes[3] -eq 0x47) "$archiveName $platformAssetName is not a PNG."
+            $platformWidth = [Net.IPAddress]::NetworkToHostOrder([BitConverter]::ToInt32($platformBytes, 16))
+            $platformHeight = [Net.IPAddress]::NetworkToHostOrder([BitConverter]::ToInt32($platformBytes, 20))
+            Assert-True ($platformWidth -eq 42 -and $platformHeight -eq 42) "$archiveName $platformAssetName is not the expected email-safe 2x asset."
         }
         foreach ($brandFile in $expectedBrandFiles[$archiveName].GetEnumerator()) {
             $brandEntry = @($archive.Entries | Where-Object { $_.FullName.Replace('\', '/') -ceq $brandFile.Key })

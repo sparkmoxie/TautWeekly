@@ -21,7 +21,7 @@ DELETED_HISTORY_SCENARIOS = (
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
     old = now - (30 * 86400)
-    movie_added = now if scenario in ("active", "personal-many", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
+    movie_added = now if scenario in ("active", "personal-many", "platform-tie", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
     tv_added = now if scenario in ("active", "personal-many", "tv-only", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
     rows = {
         "10": [
@@ -134,6 +134,70 @@ def configured_users(server: ThreadingHTTPServer) -> dict[str, dict[str, object]
 
 def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
     if section_id == "10":
+        if scenario == "platform-tie":
+            return [
+                {
+                    "section_id": "10",
+                    "media_type": "movie",
+                    "rating_key": "selected-movie",
+                    "title": "Selected Movie",
+                    "year": "2026",
+                    "summary": "Selected-library viewing history.",
+                    "rating": "8.1",
+                    "audience_rating": "9.2",
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 7200,
+                    "watched_status": 1,
+                    "percent_complete": 100,
+                    "group_count": 2,
+                    "platform_name": "chrome",
+                    "platform": "Ignored fallback",
+                    "started": 100,
+                },
+                {
+                    "section_id": "10",
+                    "media_type": "clip",
+                    "rating_key": "platform-tie-newer",
+                    "title": "Platform tie probe",
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 0,
+                    "watched_status": 0,
+                    "percent_complete": 0,
+                    "group_count": 2,
+                    "platform": "Android-TV",
+                    "started": 200,
+                },
+                {
+                    "section_id": "10",
+                    "media_type": "clip",
+                    "rating_key": "platform-unknown",
+                    "title": "Unknown platform probe",
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 0,
+                    "watched_status": 0,
+                    "percent_complete": 0,
+                    "group_count": 500,
+                    "platform": "<script>unsafe-platform</script>",
+                    "started": 400,
+                },
+                {
+                    "section_id": "10",
+                    "media_type": "clip",
+                    "rating_key": "other-user-platform",
+                    "title": "Other user platform probe",
+                    "user_id": "2",
+                    "friendly_name": "Simulated Champion",
+                    "play_duration": 0,
+                    "watched_status": 0,
+                    "percent_complete": 0,
+                    "group_count": 999,
+                    "platform": "Roku",
+                    "started": 999,
+                },
+            ]
         if scenario == "personal-many":
             return [
                 {
@@ -173,6 +237,8 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                 "watched_status": 1,
                 "percent_complete": 100,
                 "group_count": 1,
+                "platform": "Chrome",
+                "started": 100,
             }
         ]
         if scenario in DELETED_HISTORY_SCENARIOS:
@@ -202,12 +268,40 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                 "watched_status": 1,
                 "percent_complete": 100,
                 "group_count": 1,
+                "platform": "Roku",
+                "started": 200,
                 "parent_media_index": 1,
                 "media_index": 1,
                 "rating": "8.9",
                 "rating_image": "imdb://image.rating",
             }
         ]
+        if scenario == "platform-tie":
+            rows.append(
+                {
+                    "section_id": "20",
+                    "media_type": "episode",
+                    "rating_key": "viewer-platform-episode",
+                    "grandparent_rating_key": "selected-show",
+                    "grandparent_title": "Selected Show",
+                    "parent_title": "Season 1",
+                    "title": "Viewer Platform Episode",
+                    "year": "2026",
+                    "summary": "Synthetic recipient television history.",
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 1800,
+                    "watched_status": 1,
+                    "percent_complete": 100,
+                    "group_count": 1,
+                    "platform": "",
+                    "started": 150,
+                    "parent_media_index": 1,
+                    "media_index": 2,
+                    "rating": "8.4",
+                    "rating_image": "imdb://image.rating",
+                }
+            )
         if scenario == "personal-many":
             rows.extend(
                 {
@@ -259,6 +353,8 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                     "watched_status": 1,
                     "percent_complete": 100,
                     "group_count": 1,
+                    "platform": "Chrome",
+                    "started": 150,
                     "parent_media_index": 1,
                     "media_index": 1,
                 }
@@ -810,7 +906,7 @@ class Handler(BaseHTTPRequestHandler):
         if command == "get_history":
             rows = history_rows(query.get("section_id", ""), self.current_scenario())
             user_id = query.get("user_id", "")
-            if user_id:
+            if user_id and self.current_scenario() != "platform-tie":
                 rows = [row for row in rows if str(row.get("user_id", "")) == user_id]
             start = int(query.get("start", "0"))
             length = int(query.get("length", "1000"))
@@ -1024,6 +1120,7 @@ def main() -> None:
         choices=(
             "active",
             "personal-many",
+            "platform-tie",
             "quiet",
             "tv-only",
             "optional-hero-metadata",

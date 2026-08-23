@@ -35,7 +35,7 @@ or endorsement.
 - Use these assets only where the named platform or package is the subject.
 - Keep the product icon on QNAP/Unraid package listings because those listings
   identify the TautWeekly app, not the host platform.
-- Do not add either product or platform marks to generated newsletters.
+- Use the locally bundled client-platform glyphs in generated newsletters only beside the weekly heading, when the selected recipient's report-window activity resolves to a recognized platform.
 - Preserve each source's aspect ratio and documented clear space. Docker's
   mark must render at least 24 CSS pixels; the Windows logo renders above the
   15.5-pixel minimum in the supplied Microsoft guidance.

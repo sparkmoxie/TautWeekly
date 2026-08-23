@@ -9,6 +9,21 @@ TautWeekly for Plex artwork distributed under the repository's
 The Windows asset-repair helper retrieves the canonical custom movie and TV
 animations from this repository rather than from an external artwork project.
 
+## Simple Icons platform glyphs
+
+TautWeekly locally bundles selected platform glyphs derived from
+[Simple Icons 9.21.0](https://github.com/simple-icons/simple-icons/tree/9.21.0)
+(commit `8bd8eeff7defd454663af90af5f181b0ff9d70c8`). The original SVG path
+geometry is rendered as transparent, TautWeekly-gold PNG artwork for reliable
+email-client display. Newsletters embed the PNG selected from recipient-scoped
+Tautulli history; they do not request these images from a remote service.
+
+Simple Icons is dedicated to the public domain under the
+[CC0 1.0 Universal license](https://github.com/simple-icons/simple-icons/blob/9.21.0/LICENSE.md).
+Platform and product marks remain the property of their respective owners. Their
+use identifies the reported playback platform and does not imply sponsorship,
+endorsement, or affiliation.
+
 ## Google Material Symbols
 
 The TautWeekly Manager locally embeds selected SVG path data from

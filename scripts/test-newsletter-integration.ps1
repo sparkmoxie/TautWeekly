@@ -41,7 +41,8 @@ $directEpisodeRtScenario = 'direct-episode-rt-fallback'
 $directImdbRatingScenarios = @($directOptionalRatingScenario, $directXmlRatingScenario)
 $directRatingScenarios = @($directImdbRatingScenarios) + @($directEpisodeRtScenario)
 $deletedHistoryScenarios = @($providerRecoveryScenarios) + @($cacheScenario)
-$sendTestScenarios = @('optional-hero-metadata', 'rating-export-fallback') + @($directRatingScenarios) + @($deletedHistoryScenarios)
+$platformScenario = 'platform-tie'
+$sendTestScenarios = @($platformScenario, 'optional-hero-metadata', 'rating-export-fallback') + @($directRatingScenarios) + @($deletedHistoryScenarios)
 
 $executed = 0
 foreach ($engine in $engines) {
@@ -50,7 +51,7 @@ foreach ($engine in $engines) {
         continue
     }
 
-    foreach ($scenario in @('active', 'quiet', 'tv-only', 'personal-many', 'optional-hero-metadata', 'rating-export-fallback') + $directRatingScenarios + $deletedHistoryScenarios) {
+    foreach ($scenario in @('active', 'quiet', 'tv-only', 'personal-many', $platformScenario, 'optional-hero-metadata', 'rating-export-fallback') + $directRatingScenarios + $deletedHistoryScenarios) {
         $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-integration-' + [Guid]::NewGuid().ToString('N'))
         $appRoot = Join-Path $tempRoot 'app'
         $dataRoot = Join-Path $tempRoot 'data'
@@ -266,7 +267,7 @@ foreach ($engine in $engines) {
                     '-RendererPath', (Join-Path $appRoot $engine.Renderer), '-ConfigPath', $configPath,
                     '-UserId', '1', '-Mode', 'PreviewAll'
                 )
-                if ($engine.Name -eq 'nas-docker-linux-freebsd' -and $scenario -eq 'active') {
+                if ($engine.Name -eq 'nas-docker-linux-freebsd' -and $scenario -in @('active', $platformScenario)) {
                     $previewArguments += @('-ResultPath', $managerResultPath)
                 }
                 $process = Start-Process -FilePath $engine.Host -ArgumentList $previewArguments `
@@ -288,7 +289,7 @@ foreach ($engine in $engines) {
             $normalPath = Join-Path $outputRoot 'preview-all-04-normal-newsletter.html'
             Assert-True (Test-Path $indexPath) "$($engine.Name)/$scenario did not generate the preview index."
             Assert-True ((Get-ChildItem $outputRoot -Filter 'preview-all-*.html').Count -eq 7) "$($engine.Name)/$scenario did not generate all six states plus the index."
-            if ($engine.Name -eq 'nas-docker-linux-freebsd' -and $scenario -eq 'active') {
+            if ($engine.Name -eq 'nas-docker-linux-freebsd' -and $scenario -in @('active', $platformScenario)) {
                 Assert-True (Test-Path -LiteralPath $managerResultPath) 'NAS Manager operation did not produce its structured result.'
                 $managerResultRaw = Get-Content -LiteralPath $managerResultPath -Raw -Encoding UTF8
                 $managerResult = $managerResultRaw | ConvertFrom-Json
@@ -341,6 +342,26 @@ foreach ($engine in $engines) {
                 Assert-True (-not $previewHtml.Contains('background:#181818')) "$($engine.Name)/$scenario $($previewPath.Name) retained the card background shorthand."
                 Assert-True (-not $previewHtml.Contains('color-scheme:dark only')) "$($engine.Name)/$scenario $($previewPath.Name) retained the incompatible dark-only declaration."
             }
+            if ($scenario -eq $platformScenario) {
+                $expectedPlatformPreviewSource = if ($engine.Container) { 'assets/platform-android.png' } else { '../assets/platform-android.png' }
+                foreach ($previewPath in $previewPaths) {
+                    $previewHtml = Get-Content $previewPath.FullName -Raw -Encoding UTF8
+                    if ($previewHtml.Contains('YOUR WEEK ON PLEX')) {
+                        Assert-True ($previewHtml.Contains($expectedPlatformPreviewSource)) "$($engine.Name)/$scenario $($previewPath.Name) did not render the tie-winning Android icon."
+                        Assert-True ($previewHtml.Contains('alt="Most-played platform: Android"')) "$($engine.Name)/$scenario $($previewPath.Name) lost the accessible platform label."
+                        Assert-True ($previewHtml.Contains('width="21" height="21"') -and $previewHtml.Contains('max-height:21px')) "$($engine.Name)/$scenario $($previewPath.Name) did not enforce the 21px platform icon size."
+                        Assert-True (-not $previewHtml.Contains('platform-roku.png') -and -not $previewHtml.Contains('unsafe-platform')) "$($engine.Name)/$scenario $($previewPath.Name) used another user's or an unknown platform."
+                    }
+                    else {
+                        Assert-True (-not $previewHtml.Contains('platform-android.png')) "$($engine.Name)/$scenario $($previewPath.Name) rendered a platform gap where the weekly heading is suppressed."
+                    }
+                }
+                Assert-True (-not $previewLog.Contains('Android-TV') -and -not $previewLog.Contains('Roku') -and -not $previewLog.Contains('unsafe-platform')) "$($engine.Name)/$scenario exposed platform details in renderer logs."
+                if ($engine.Name -eq 'nas-docker-linux-freebsd') {
+                    $platformManagerResult = Get-Content -LiteralPath $managerResultPath -Raw -Encoding UTF8
+                    Assert-True (-not $platformManagerResult.Contains('Android') -and -not $platformManagerResult.Contains('Roku') -and -not $platformManagerResult.Contains('unsafe-platform')) "$($engine.Name)/$scenario exposed platform details in Manager history."
+                }
+            }
             Assert-True ($normalHtml.Contains('class="email-card"')) "$($engine.Name)/$scenario lost explicit dark card classes."
             Assert-True ($normalHtml.Contains('bgcolor="#181818"')) "$($engine.Name)/$scenario lost the legacy dark card fallback."
             Assert-True ($normalHtml.Contains('background-color:#181818')) "$($engine.Name)/$scenario lost the longhand dark card fallback."
@@ -365,7 +386,7 @@ foreach ($engine in $engines) {
             Assert-True ($normalHtml.Contains('1 TV show')) "$($engine.Name)/$scenario lost the unique TV-show breakdown."
             Assert-True (-not $normalHtml.Contains('0 movies')) "$($engine.Name)/$scenario rendered an empty Binge Champion movie category."
             Assert-True (-not $normalHtml.Contains('qualifying plays')) "$($engine.Name)/$scenario retained qualifying-play copy in Total Watched."
-            if ($scenario -notin $deletedHistoryScenarios -and $scenario -ne 'personal-many') {
+            if ($scenario -notin $deletedHistoryScenarios -and $scenario -ne 'personal-many' -and $scenario -ne $platformScenario) {
                 Assert-True (-not $normalHtml.Contains('TV SHOWS WATCHED')) "$($engine.Name)/$scenario rendered an empty TV stats card."
             }
 
@@ -618,7 +639,7 @@ foreach ($engine in $engines) {
 
             if ($scenario -in $sendTestScenarios) {
                 $previewLog = Get-Content $stdout -Raw
-                if ($scenario -notin $directRatingScenarios) {
+                if ($scenario -notin $directRatingScenarios -and $scenario -ne $platformScenario) {
                     Assert-True ($previewLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario did not exercise the recoverable direct Plex 404 fallback."
                 }
                 Assert-True ($normalHtml.Contains('Selected Show')) "$($engine.Name)/$scenario lost the global-history title fallback for sparse hero metadata."
@@ -677,9 +698,10 @@ foreach ($engine in $engines) {
                 }
                 $sendLog = Get-Content $sendStdout -Raw
                 Assert-True ($sendLog.Contains('Test email sent successfully.')) "$($engine.Name)/$scenario SendTest did not complete delivery."
-                if ($scenario -notin $directRatingScenarios) {
+                if ($scenario -notin $directRatingScenarios -and $scenario -ne $platformScenario) {
                     Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
                 }
+
                 if ($scenario -eq 'rating-export-fallback') {
                     Assert-True ($sendLog.Contains('Design rich export result: RT critic=53%, audience=40')) "$($engine.Name)/$scenario SendTest did not recover both ratings through the explicit item export."
                     Assert-True ($sendLog.Contains('Design rich export result: RT critic=n/a, audience=n/a, IMDb=n/a, selected=TMDB 7.4')) "$($engine.Name)/$scenario SendTest did not recover the show selected-provider rating through the explicit item export."
@@ -705,6 +727,17 @@ foreach ($engine in $engines) {
                     '--require-html', 'display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-left:6px;',
                     '--require-cid-sha256', 'custom_title_celebrate=86879C45175F3901A8676D9B0BB5132C7A98B20A9F40487C21E4C896CE196616'
                 )
+                if ($scenario -eq $platformScenario) {
+                    $emailThemeArgs += @(
+                        '--require-html', 'Most-played platform: Android',
+                        '--require-html', 'cid:platform_android',
+                        '--require-html', 'max-height:21px',
+                        '--forbid-html', 'platform_roku',
+                        '--forbid-html', 'unsafe-platform',
+                        '--require-cid-sha256', 'platform_android=2583DF3AE89C5B9707B760698516B3EF5341D67FD435101CD38A7605CC5D16AE'
+                    )
+                    Assert-True (-not $sendLog.Contains('Android-TV') -and -not $sendLog.Contains('Roku') -and -not $sendLog.Contains('unsafe-platform')) "$($engine.Name)/$scenario exposed platform details in SendTest logs."
+                }
                 if ($scenario -eq 'rating-export-fallback') {
                     $emailThemeArgs += @(
                         # Windows PowerShell 5.1 strips embedded quote
@@ -786,6 +819,9 @@ foreach ($engine in $engines) {
                     Assert-True ($sendAllLog.Contains('Sent:    2') -and $sendAllLog.Contains('Failed:  0')) "$($engine.Name)/$scenario SendAll did not complete both normal deliveries."
                     $smtpCommands = @(Get-Content $smtpCallLog | ForEach-Object { ($_ | ConvertFrom-Json).command })
                     Assert-True (@($smtpCommands | Where-Object { $_ -eq 'DATA' }).Count -ge 3) "$($engine.Name)/$scenario did not submit SendTest plus both SendAll messages."
+                    & $PythonPath $emailThemeAssertion $smtpDataFile --require-html 'Most-played platform: Roku' --require-html 'cid:platform_roku' --require-html 'max-height:21px' --require-cid-sha256 'platform_roku=A6C65D1087A5EB22381D50FBAE17BE710E21C575CDA927D2471ABD43D17285AB'
+                    if ($LASTEXITCODE -ne 0) { throw "$($engine.Name)/$scenario production SendAll MIME platform assertion failed." }
+                    Assert-True (-not $sendAllLog.Contains('Chrome') -and -not $sendAllLog.Contains('Roku')) "$($engine.Name)/$scenario exposed platform details in SendAll logs."
                 }
             }
 
