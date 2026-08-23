@@ -6,6 +6,15 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.20.5] - 2026-08-23
+
+### Changed
+
+- Show the selected recipient's most-played recognized platform icon directly
+  after the weekly heading, using most-recent activity to break play-count ties.
+  Icons remain local and embedded; blank, unknown, missing, or mismatched-user
+  platform data is omitted without leaving a gap.
+
 ## [0.20.4] - 2026-08-22
 
 ### Fixed
