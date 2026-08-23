@@ -57,6 +57,12 @@ $requiredFunctions = @(
     'Safe-Int64',
     'New-ReleaseData',
     'Get-HistoryRowPlayCount',
+    'Get-NewsletterPlatformCatalog',
+    'ConvertTo-NewsletterPlatformAlias',
+    'Resolve-NewsletterPlatform',
+    'Get-NewsletterPlatformHistoryTimestamp',
+    'Get-NewsletterPlatform',
+    'Get-NewsletterPlatformHeadingHtml',
     'Format-WatchTime',
     'Get-ConfiguredServerName',
     'Get-ConfiguredPlexWebUrl',
@@ -117,6 +123,74 @@ foreach ($relativePath in $rendererPaths) {
     }
 
     Assert-True ((Get-FileSha256 -Path $path) -eq (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash) "$relativePath portable SHA-256 helper disagrees with the platform cmdlet"
+
+    $platformCatalog = @(Get-NewsletterPlatformCatalog)
+    Assert-True ($platformCatalog.Count -eq 22) "$relativePath does not expose the complete conservative platform catalog"
+    Assert-True (@($platformCatalog.Key | Select-Object -Unique).Count -eq $platformCatalog.Count) "$relativePath duplicates a platform catalog key"
+    Assert-True (@($platformCatalog.Cid | Select-Object -Unique).Count -eq $platformCatalog.Count) "$relativePath duplicates a platform content ID"
+    Assert-True (@($platformCatalog.FileName | Select-Object -Unique).Count -eq $platformCatalog.Count) "$relativePath duplicates a platform asset filename"
+    foreach ($platform in $platformCatalog) {
+        Assert-True (@($platform.Aliases).Count -gt 0) "$relativePath has a platform without a conservative alias"
+        $platformAssetPath = Join-Path $script:AssetsDir ([string]$platform.FileName)
+        Assert-True (Test-Path -LiteralPath $platformAssetPath -PathType Leaf) "$relativePath is missing $($platform.FileName)"
+        $platformBytes = [IO.File]::ReadAllBytes($platformAssetPath)
+        Assert-True ($platformBytes.Length -gt 24 -and $platformBytes[0] -eq 0x89 -and $platformBytes[1] -eq 0x50 -and $platformBytes[2] -eq 0x4e -and $platformBytes[3] -eq 0x47) "$relativePath $($platform.FileName) is not a PNG"
+        $platformWidth = [Net.IPAddress]::NetworkToHostOrder([BitConverter]::ToInt32($platformBytes, 16))
+        $platformHeight = [Net.IPAddress]::NetworkToHostOrder([BitConverter]::ToInt32($platformBytes, 20))
+        Assert-True ($platformWidth -eq 42 -and $platformHeight -eq 42) "$relativePath $($platform.FileName) is not the expected 2x 42px asset"
+    }
+
+    $platformRows = @(
+        [PSCustomObject]@{ user_id = '1'; platform_name = 'chrome'; platform = 'ignored'; group_count = 2; started = 100 },
+        [PSCustomObject]@{ user_id = '1'; platform = ' Android-TV '; group_count = 2; date = 200 },
+        [PSCustomObject]@{ user_id = '1'; platform = 'Windows'; group_count = 1; stopped = 300 },
+        [PSCustomObject]@{ user_id = '1'; platform = '<script>alert(1)</script>'; group_count = 500; started = 500 },
+        [PSCustomObject]@{ user_id = '2'; platform = 'Roku'; group_count = 999; started = 999 },
+        [PSCustomObject]@{ platform = 'Xbox'; group_count = 1000; started = 1000 }
+    )
+    $selectedPlatform = Get-NewsletterPlatform -History $platformRows -ExpectedUserId '1'
+    Assert-True ($null -ne $selectedPlatform -and $selectedPlatform.Key -eq 'android') "$relativePath did not use recency to break a grouped-play tie"
+    Assert-True ((Resolve-NewsletterPlatform -Row ([PSCustomObject]@{ platform_name = 'windows'; platform = 'Android' })).Key -eq 'windows') "$relativePath did not prefer canonical platform_name"
+    Assert-True ((Resolve-NewsletterPlatform -Row ([PSCustomObject]@{ platform_name = 'msedge' })).Key -eq 'microsoft-edge') "$relativePath did not recognize Tautulli's normalized Edge key"
+    Assert-True ((Resolve-NewsletterPlatform -Row ([PSCustomObject]@{ platform_name = 'unknown'; platform = 'Google Chrome' })).Key -eq 'chrome') "$relativePath did not safely fall back from an unknown platform_name"
+    Assert-True ((Get-NewsletterPlatform -History @(
+        [PSCustomObject]@{ user_id = '1'; platform = 'Android'; group_count = 2; started = 500 },
+        [PSCustomObject]@{ user_id = '1'; platform = 'Windows'; group_count = 3; started = 1000 }
+    ) -ExpectedUserId '1').Key -eq 'windows') "$relativePath ranked recency ahead of total grouped plays"
+    Assert-True ((Get-NewsletterPlatform -History @(
+        [PSCustomObject]@{ user_id = '1'; platform = 'Chrome'; group_count = 1; date = '2026-08-22T08:00:00Z' },
+        [PSCustomObject]@{ user_id = '1'; platform = 'Android'; group_count = 1; date = '2026-08-22T09:00:00Z' }
+    ) -ExpectedUserId '1').Key -eq 'android') "$relativePath did not parse a textual history timestamp for tie-breaking"
+    Assert-True ((Get-NewsletterPlatform -History @(
+        [PSCustomObject]@{ user_id = '1'; platform = 'Chrome'; group_count = 1; started = 100 },
+        [PSCustomObject]@{ user_id = '1'; platform = 'Android'; group_count = 1; started = 100 }
+    ) -ExpectedUserId '1').Key -eq 'android') "$relativePath lost its deterministic final tie-break"
+    Assert-True ($null -eq (Get-NewsletterPlatform -History @() -ExpectedUserId '1')) "$relativePath invented a platform for no activity"
+    Assert-True ($null -eq (Get-NewsletterPlatform -History @(
+        [PSCustomObject]@{ user_id = '1'; platform = '   '; group_count = 10; started = 100 },
+        [PSCustomObject]@{ user_id = '1'; platform = '<unknown & unsafe>'; group_count = 10; started = 200 }
+    ) -ExpectedUserId '1')) "$relativePath did not omit blank and unknown platforms"
+
+    $previewAssetBase = if ($relativePath -like 'platforms/windows/*') { '../assets' } else { 'assets' }
+    $previewPlatformHtml = Get-NewsletterPlatformHeadingHtml -Platform $selectedPlatform -ImageMode Preview -PreviewAssetBase $previewAssetBase
+    Assert-True ($previewPlatformHtml.Contains('YOUR WEEK ON PLEX') -and $previewPlatformHtml.Contains($previewAssetBase + '/platform-android.png')) "$relativePath did not render the selected local preview asset immediately after the heading"
+    Assert-True ($previewPlatformHtml.Contains('width="21" height="21"') -and $previewPlatformHtml.Contains('width:21px;height:21px;max-height:21px')) "$relativePath did not normalize the platform icon to a 21px maximum height"
+    Assert-True ($previewPlatformHtml.Contains('alt="Most-played platform: Android"') -and $previewPlatformHtml.Contains('role="presentation"')) "$relativePath platform heading is not accessible or email-table-safe"
+    $emailPlatformHtml = Get-NewsletterPlatformHeadingHtml -Platform $selectedPlatform -ImageMode Email
+    Assert-True ($emailPlatformHtml.Contains('src="cid:platform_android"')) "$relativePath did not render the selected embedded email CID"
+    $encodedPlatform = [PSCustomObject]@{
+        FileName = 'platform-android.png'
+        Cid = 'platform_android'
+        Label = '<Android & unsafe>'
+    }
+    $encodedHeading = Get-NewsletterPlatformHeadingHtml -Platform $encodedPlatform -ImageMode Email
+    Assert-True ($encodedHeading.Contains('Most-played platform: &lt;Android &amp; unsafe&gt;') -and -not $encodedHeading.Contains('alt="Most-played platform: <')) "$relativePath did not HTML-encode the accessible platform label"
+    $missingHeading = Get-NewsletterPlatformHeadingHtml -Platform ([PSCustomObject]@{
+        FileName = 'platform-missing.png'
+        Cid = 'platform_missing'
+        Label = 'Missing'
+    }) -ImageMode Email
+    Assert-True ($missingHeading.Contains('YOUR WEEK ON PLEX') -and -not $missingHeading.Contains('<img') -and -not $missingHeading.Contains('padding-left')) "$relativePath left a gap when a recognized platform asset was unavailable"
 
     # Plex's published metadata contract treats Rating[] as optional. Model a
     # server that returns only the selected IMDb fields by default, but returns

@@ -2010,6 +2010,189 @@ function Get-HistoryRowPlayCount {
     return 1
 }
 
+function Get-NewsletterPlatformCatalog {
+    # Keep aliases conservative and aligned with the platform families Tautulli
+    # reports. Labels, filenames, and CIDs are fixed here so untrusted history
+    # values never flow into HTML attributes or local paths.
+    return @(
+        [PSCustomObject]@{ Key = "android"; Label = "Android"; FileName = "platform-android.png"; Cid = "platform_android"; Aliases = @("android", "android tv", "google tv", "nexus") },
+        [PSCustomObject]@{ Key = "apple-tv"; Label = "Apple TV"; FileName = "platform-apple-tv.png"; Cid = "platform_apple_tv"; Aliases = @("apple tv", "appletv", "atv", "tvos") },
+        [PSCustomObject]@{ Key = "chrome"; Label = "Chrome"; FileName = "platform-chrome.png"; Cid = "platform_chrome"; Aliases = @("chrome", "chrome os", "chromium", "google chrome") },
+        [PSCustomObject]@{ Key = "chromecast"; Label = "Chromecast"; FileName = "platform-chromecast.png"; Cid = "platform_chromecast"; Aliases = @("chromecast", "google cast", "googlecast") },
+        [PSCustomObject]@{ Key = "dlna"; Label = "DLNA"; FileName = "platform-dlna.png"; Cid = "platform_dlna"; Aliases = @("dlna") },
+        [PSCustomObject]@{ Key = "firefox"; Label = "Firefox"; FileName = "platform-firefox.png"; Cid = "platform_firefox"; Aliases = @("firefox", "mozilla firefox") },
+        [PSCustomObject]@{ Key = "internet-explorer"; Label = "Internet Explorer"; FileName = "platform-internet-explorer.png"; Cid = "platform_internet_explorer"; Aliases = @("ie", "internet explorer") },
+        [PSCustomObject]@{ Key = "ios"; Label = "iOS"; FileName = "platform-ios.png"; Cid = "platform_ios"; Aliases = @("ios", "ipad", "ipados", "iphone") },
+        [PSCustomObject]@{ Key = "kodi"; Label = "Kodi"; FileName = "platform-kodi.png"; Cid = "platform_kodi"; Aliases = @("kodi", "xbmc") },
+        [PSCustomObject]@{ Key = "lg"; Label = "LG"; FileName = "platform-lg.png"; Cid = "platform_lg"; Aliases = @("lg", "lg webos", "netcast", "web os", "webos") },
+        [PSCustomObject]@{ Key = "linux"; Label = "Linux"; FileName = "platform-linux.png"; Cid = "platform_linux"; Aliases = @("linux") },
+        [PSCustomObject]@{ Key = "macos"; Label = "macOS"; FileName = "platform-macos.png"; Cid = "platform_macos"; Aliases = @("mac os", "mac os x", "macos", "osx") },
+        [PSCustomObject]@{ Key = "microsoft-edge"; Label = "Microsoft Edge"; FileName = "platform-microsoft-edge.png"; Cid = "platform_microsoft_edge"; Aliases = @("edge", "microsoft edge", "msedge") },
+        [PSCustomObject]@{ Key = "opera"; Label = "Opera"; FileName = "platform-opera.png"; Cid = "platform_opera"; Aliases = @("opera", "vizio") },
+        [PSCustomObject]@{ Key = "playstation"; Label = "PlayStation"; FileName = "platform-playstation.png"; Cid = "platform_playstation"; Aliases = @("playstation", "playstation 3", "playstation 4", "playstation 5", "ps3", "ps4", "ps5") },
+        [PSCustomObject]@{ Key = "plex"; Label = "Plex"; FileName = "platform-plex.png"; Cid = "platform_plex"; Aliases = @("plex", "plex desktop", "plex home theater", "plex htpc", "plex media player") },
+        [PSCustomObject]@{ Key = "roku"; Label = "Roku"; FileName = "platform-roku.png"; Cid = "platform_roku"; Aliases = @("roku") },
+        [PSCustomObject]@{ Key = "safari"; Label = "Safari"; FileName = "platform-safari.png"; Cid = "platform_safari"; Aliases = @("safari") },
+        [PSCustomObject]@{ Key = "samsung"; Label = "Samsung"; FileName = "platform-samsung.png"; Cid = "platform_samsung"; Aliases = @("samsung", "tizen") },
+        [PSCustomObject]@{ Key = "wii-u"; Label = "Wii U"; FileName = "platform-wii-u.png"; Cid = "platform_wii_u"; Aliases = @("wii u", "wiiu") },
+        [PSCustomObject]@{ Key = "windows"; Label = "Windows"; FileName = "platform-windows.png"; Cid = "platform_windows"; Aliases = @("windows", "windows phone", "wp") },
+        [PSCustomObject]@{ Key = "xbox"; Label = "Xbox"; FileName = "platform-xbox.png"; Cid = "platform_xbox"; Aliases = @("xbox", "xbox 360", "xbox one", "xbox series", "xbox series s", "xbox series x") }
+    )
+}
+
+function ConvertTo-NewsletterPlatformAlias {
+    param([AllowNull()][object]$Value)
+
+    if ($null -eq $Value) { return "" }
+    $normalized = ([string]$Value).Trim().ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($normalized)) { return "" }
+    $normalized = $normalized -replace '[^a-z0-9]+', ' '
+    return (($normalized -replace '\s+', ' ').Trim())
+}
+
+function Resolve-NewsletterPlatform {
+    param([AllowNull()][object]$Row)
+
+    if ($null -eq $Row) { return $null }
+    $catalog = @(Get-NewsletterPlatformCatalog)
+    foreach ($propertyName in @("platform_name", "platform")) {
+        $candidate = ConvertTo-NewsletterPlatformAlias (
+            Get-OptionalStringProperty -InputObject $Row -Name $propertyName
+        )
+        if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
+
+        foreach ($platform in $catalog) {
+            if ($candidate -in @($platform.Aliases)) {
+                return $platform
+            }
+        }
+    }
+
+    return $null
+}
+
+function Get-NewsletterPlatformHistoryTimestamp {
+    param([AllowNull()][object]$Row)
+
+    if ($null -eq $Row) { return [int64]0 }
+    [int64]$latest = 0
+    foreach ($propertyName in @("started", "date", "stopped")) {
+        $raw = (Get-OptionalStringProperty -InputObject $Row -Name $propertyName).Trim()
+        if ([string]::IsNullOrWhiteSpace($raw)) { continue }
+
+        [int64]$epoch = 0
+        if ([int64]::TryParse(
+            $raw,
+            [Globalization.NumberStyles]::Integer,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [ref]$epoch
+        )) {
+            if ($epoch -gt $latest) { $latest = $epoch }
+            continue
+        }
+
+        [DateTimeOffset]$parsed = [DateTimeOffset]::MinValue
+        if ([DateTimeOffset]::TryParse(
+            $raw,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::AssumeUniversal,
+            [ref]$parsed
+        )) {
+            $epoch = $parsed.ToUnixTimeSeconds()
+            if ($epoch -gt $latest) { $latest = $epoch }
+        }
+    }
+
+    return $latest
+}
+
+function Get-NewsletterPlatform {
+    param(
+        [object[]]$History,
+        [string]$ExpectedUserId = ""
+    )
+
+    $totals = @{}
+    foreach ($row in @($History)) {
+        if ($null -eq $row) { continue }
+
+        $rowUserId = (Get-OptionalStringProperty -InputObject $row -Name "user_id").Trim()
+        if (-not [string]::IsNullOrWhiteSpace($ExpectedUserId) -and
+            $rowUserId -ne $ExpectedUserId) {
+            continue
+        }
+
+        $platform = Resolve-NewsletterPlatform -Row $row
+        if ($null -eq $platform) { continue }
+
+        $key = [string]$platform.Key
+        if (-not $totals.ContainsKey($key)) {
+            $totals[$key] = [PSCustomObject]@{
+                Platform = $platform
+                Plays = 0
+                Latest = [int64]0
+            }
+        }
+        $totals[$key].Plays += (Get-HistoryRowPlayCount -Row $row)
+        $timestamp = Get-NewsletterPlatformHistoryTimestamp -Row $row
+        if ($timestamp -gt $totals[$key].Latest) {
+            $totals[$key].Latest = $timestamp
+        }
+    }
+
+    $ranked = @(
+        $totals.Values |
+            Sort-Object @{ Expression = { $_.Plays }; Descending = $true }, @{ Expression = { $_.Latest }; Descending = $true }, @{ Expression = { $_.Platform.Key }; Descending = $false } |
+            Select-Object -First 1
+    )
+    if ($ranked.Count -eq 0) { return $null }
+    return $ranked[0].Platform
+}
+
+function Get-NewsletterPlatformHeadingHtml {
+    param(
+        [AllowNull()][object]$Platform,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode,
+        [string]$PreviewAssetBase = ""
+    )
+
+    $heading = '<div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">YOUR WEEK ON PLEX</div>'
+    if ($null -eq $Platform) { return $heading }
+
+    $fileName = Get-OptionalStringProperty -InputObject $Platform -Name "FileName"
+    $cid = Get-OptionalStringProperty -InputObject $Platform -Name "Cid"
+    $label = Get-OptionalStringProperty -InputObject $Platform -Name "Label"
+    if ([string]::IsNullOrWhiteSpace($fileName) -or
+        [string]::IsNullOrWhiteSpace($cid) -or
+        [string]::IsNullOrWhiteSpace($label) -or
+        -not (Test-Path -LiteralPath (Join-Path $AssetsDir $fileName) -PathType Leaf)) {
+        return $heading
+    }
+
+    $imageSource = if ($ImageMode -eq "Email") {
+        "cid:" + $cid
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($PreviewAssetBase)) {
+        $PreviewAssetBase.TrimEnd('/') + '/' + $fileName
+    }
+    else {
+        ""
+    }
+    if ([string]::IsNullOrWhiteSpace($imageSource)) { return $heading }
+
+    $alt = HtmlEncode ("Most-played platform: " + $label)
+    return @"
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
+  <tr>
+    <td valign="middle">$heading</td>
+    <td valign="middle" style="padding-left:8px;line-height:0;"><img src="$(HtmlEncode $imageSource)" width="21" height="21" alt="$alt" style="display:block;width:21px;height:21px;max-height:21px;border:0;outline:none;text-decoration:none;"></td>
+  </tr>
+</table>
+"@
+}
+
+
 function Get-GlobalTitleTotals {
     param([object[]]$GlobalHistory)
 
@@ -6413,6 +6596,7 @@ function Build-NewsletterHtml {
         [bool]$WelcomeOnly = $false,
         [bool]$QuietReleaseMode = $false,
         [object]$BingeChampion = $null,
+        [AllowNull()][object]$RecipientPlatform = $null,
         [object[]]$PosterAssets,
         [ValidateSet("Preview","Email")]
         [string]$ImageMode,
@@ -7136,6 +7320,12 @@ $mediaStatsRows
         $statsBlock = ""
     }
 
+    $platformPreviewAssetBase = if ($moviesIconSrc -like "../assets/*") { "../assets" } else { "assets" }
+    $platformHeadingHtml = Get-NewsletterPlatformHeadingHtml `
+        -Platform $RecipientPlatform `
+        -ImageMode $ImageMode `
+        -PreviewAssetBase $platformPreviewAssetBase
+
     $weeklyHeadingBlock = if ($WelcomeOnly -or ($RecentAccess -and [int64]$Stats.TotalSeconds -le 0)) {
         ""
     }
@@ -7143,7 +7333,7 @@ $mediaStatsRows
         @"
 <tr>
 <td class="pad" style="padding:8px 20px 12px;">
-  <div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">YOUR WEEK ON PLEX</div>
+  $platformHeadingHtml
 </td>
 </tr>
 "@
@@ -7742,6 +7932,13 @@ function Send-NewsletterMail {
             @{ Path = (Join-Path $AssetsDir "rt_spilled.png"); Cid = "rt_spilled"; MediaType = "image/png" },
             @{ Path = (Join-Path $AssetsDir "imdb.png"); Cid = "icon_imdb"; MediaType = "image/png" }
         )
+        foreach ($platformAsset in @(Get-NewsletterPlatformCatalog)) {
+            $uiAssets += @{
+                Path = (Join-Path $AssetsDir ([string]$platformAsset.FileName))
+                Cid = [string]$platformAsset.Cid
+                MediaType = "image/png"
+            }
+        }
 
         foreach ($uiAsset in $uiAssets) {
             if (-not (Test-Path $uiAsset.Path)) { continue }
@@ -8200,6 +8397,7 @@ function Build-ForUser {
     Write-Log "Loading history for $($user.FriendlyName) ($($user.UserId)); recent access: $recentAccess..."
     $history = Get-History -AfterDate $afterDate -BeforeDate $beforeDate -ForUserId $user.UserId
     $stats = Get-UserStats -History $history
+    $recipientPlatform = Get-NewsletterPlatform -History $history -ExpectedUserId $user.UserId
     Add-UserStatsMediaMetadata -Stats $stats
 
     $statsPosterItems = @()
@@ -8229,6 +8427,7 @@ function Build-ForUser {
         -WelcomeOnly $false `
         -QuietReleaseMode $isQuietReleaseWeek `
         -BingeChampion $bingeChampion `
+        -RecipientPlatform $recipientPlatform `
         -PosterAssets $userPosterAssets `
         -ImageMode $ImageMode `
         -StartLabel $startLabel `
@@ -8389,6 +8588,7 @@ function Build-AllEmailVariants {
     Write-Log "Loading real history for six-state email regression: $($user.FriendlyName)..."
     $history = Get-History -AfterDate $afterDate -BeforeDate $beforeDate -ForUserId $user.UserId
     $realStats = Get-UserStats -History $history
+    $recipientPlatform = Get-NewsletterPlatform -History $history -ExpectedUserId $user.UserId
     Add-UserStatsMediaMetadata -Stats $realStats
     $zeroStats = New-ZeroPreviewStats
     $populatedVariant = Get-PopulatedPreviewStats -RealStats $realStats
@@ -8461,6 +8661,7 @@ function Build-AllEmailVariants {
         -WelcomeOnly $false `
         -QuietReleaseMode $isQuietReleaseWeek `
         -BingeChampion $bingeChampion `
+        -RecipientPlatform $recipientPlatform `
         -PosterAssets $activePosterAssets `
         -ImageMode $ImageMode `
         -StartLabel $startLabel `
@@ -8478,6 +8679,7 @@ function Build-AllEmailVariants {
         -WelcomeOnly $false `
         -QuietReleaseMode $isQuietReleaseWeek `
         -BingeChampion $bingeChampion `
+        -RecipientPlatform $recipientPlatform `
         -PosterAssets $populatedPosterAssets `
         -ImageMode $ImageMode `
         -StartLabel $startLabel `
@@ -8496,6 +8698,7 @@ function Build-AllEmailVariants {
         -WelcomeOnly $false `
         -QuietReleaseMode $isQuietReleaseWeek `
         -BingeChampion $bingeChampion `
+        -RecipientPlatform $recipientPlatform `
         -PosterAssets $populatedPosterAssets `
         -ImageMode $ImageMode `
         -StartLabel $startLabel `
@@ -8513,6 +8716,7 @@ function Build-AllEmailVariants {
         -WelcomeOnly $false `
         -QuietReleaseMode $isQuietReleaseWeek `
         -BingeChampion $bingeChampion `
+        -RecipientPlatform $recipientPlatform `
         -PosterAssets $activePosterAssets `
         -ImageMode $ImageMode `
         -StartLabel $startLabel `
@@ -8530,6 +8734,7 @@ function Build-AllEmailVariants {
         -WelcomeOnly $false `
         -QuietReleaseMode $isQuietReleaseWeek `
         -BingeChampion $bingeChampion `
+        -RecipientPlatform $recipientPlatform `
         -PosterAssets $activePosterAssets `
         -ImageMode $ImageMode `
         -StartLabel $startLabel `

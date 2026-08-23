@@ -72,7 +72,7 @@ def main() -> int:
         if len(matches) != 1:
             raise AssertionError(f"expected one MIME part for CID {cid}, found {len(matches)}")
         part = matches[0]
-        if part.get_content_type() != "image/gif":
+        if part.get_content_type() not in ("image/gif", "image/png"):
             raise AssertionError(f"CID {cid} has unsafe MIME type {part.get_content_type()}")
         if part.get_filename() is not None or part.get_param("name", header="content-type") is not None:
             raise AssertionError(f"CID {cid} unexpectedly exposes an attachment filename")
