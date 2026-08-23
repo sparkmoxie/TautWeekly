@@ -13,9 +13,9 @@ notification, **Check now**, and the confirmed updater state entirely in
 memory. It does not contact GitHub, launch a process, request elevation, or
 change a file. Successful synthetic results are reused for five minutes to
 mirror the production duplicate-check guard. The header **Refresh** completes
-its synthetic local-status refresh before starting a recommended in-memory
-background check; the other scoped refresh controls remain isolated. Reload
-resets the demonstration.
+its synthetic local-status refresh before running the same in-memory manual
+check as **Check now**; the other scoped refresh controls remain isolated.
+Reload resets the demonstration.
 
 The newsletter frames intentionally mirror the production email presentation.
 They bundle local copies of public media artwork and title logos plus dated
