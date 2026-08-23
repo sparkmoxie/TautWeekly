@@ -6,6 +6,14 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.20.6] - 2026-08-23
+
+### Fixed
+
+- Made the main header **Refresh** run the same stable-release lookup and visible
+  result handling as Settings **Check now** after local status refresh, instead
+  of waiting for the background release cache to become stale.
+
 ## [0.20.5] - 2026-08-23
 
 ### Changed
