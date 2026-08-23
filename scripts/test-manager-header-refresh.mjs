@@ -97,7 +97,7 @@ function createHarness({ localStatuses = [staleStatus], localGate, localSuccess 
       return localSuccess;
     },
     async request(target, options = {}) {
-      assert.equal(target, "/api/v1/updates/check", "background refresh used an unexpected endpoint");
+      assert.equal(target, "/api/v1/updates/check", "refresh update check used an unexpected endpoint");
       assert.equal(options.method, "POST", "update check method changed");
       assert.equal(options.body, "{}", "update check body changed");
       events.push(state.updateCheckBackground ? "check:background" : "check:manual");
@@ -141,26 +141,27 @@ async function flushAsyncWork() {
   const refresh = harness.context.testAPI.refreshApplicationStatus();
   assert.equal(harness.requests.length, 0, "header Refresh checked before local status completed");
   gate.resolve();
-  await refresh;
-  assert.equal(harness.requests.length, 1, "stale applicable header Refresh did not start exactly one check");
-  assert.deepEqual(harness.events.slice(0, 3), ["local:start", "local:complete", "updates:render"]);
-  assert.ok(harness.events.indexOf("check:background") > harness.events.indexOf("local:complete"), "background check preceded local completion");
-  assert.equal(harness.requests[0].background, true);
-  assert.equal(harness.state.updateChecking, true, "header Refresh waited for the release request");
-  check.resolve(freshStatus);
   await flushAsyncWork();
+  assert.equal(harness.requests.length, 1, "header Refresh did not start exactly one manual check");
+  assert.deepEqual(harness.events.slice(0, 3), ["local:start", "local:complete", "updates:render"]);
+  assert.ok(harness.events.indexOf("check:manual") > harness.events.indexOf("local:complete"), "manual check preceded local completion");
+  assert.equal(harness.requests[0].background, false);
+  assert.equal(harness.state.updateChecking, true, "header Refresh did not share Check now's in-flight state");
+  check.resolve(freshStatus);
+  await refresh;
   assert.equal(harness.state.updateChecking, false);
+  assert.equal(harness.globalStatuses.at(-1).message, "Stable update check completed.");
 }
 
-for (const [name, status] of Object.entries({
-  fresh: freshStatus,
-  backoff: { ...staleStatus, backgroundCheckRecommended: false, nextCheckAllowedAtUtc: "2031-04-18T16:40:00Z" },
-  "in progress": { ...staleStatus, backgroundCheckRecommended: false, checkInProgress: true },
-  unsupported: { ...staleStatus, updateChannel: "unsupported", backgroundCheckRecommended: false },
-})) {
-  const harness = createHarness({ localStatuses: [status] });
+{
+  const harness = createHarness({
+    localStatuses: [freshStatus],
+    checkResults: [{ ...freshStatus, state: "update-available", updateAvailable: true }],
+  });
   await harness.context.testAPI.refreshApplicationStatus();
-  assert.equal(harness.requests.length, 0, `${name} status initiated a header update check`);
+  assert.equal(harness.requests.length, 1, "fresh cached status suppressed the explicit header Refresh check");
+  assert.equal(harness.requests[0].background, false, "header Refresh did not use Check now semantics");
+  assert.equal(harness.globalStatuses.at(-1).message, "Stable update found.");
 }
 
 {
@@ -175,14 +176,14 @@ for (const [name, status] of Object.entries({
     localStatuses: [staleStatus, staleStatus, staleStatus],
     checkResults: [firstCheck.promise, freshStatus],
   });
-  await harness.context.testAPI.refreshApplicationStatus();
+  const firstRefresh = harness.context.testAPI.refreshApplicationStatus();
+  await flushAsyncWork();
   await harness.context.testAPI.refreshApplicationStatus();
   assert.equal(harness.requests.length, 1, "repeated header clicks created concurrent checks");
   firstCheck.resolve(freshStatus);
-  await flushAsyncWork();
+  await firstRefresh;
   await harness.context.testAPI.refreshApplicationStatus();
-  assert.equal(harness.requests.length, 2, "a later newly applicable header refresh was permanently suppressed");
-  await flushAsyncWork();
+  assert.equal(harness.requests.length, 2, "a later header Refresh was permanently suppressed");
 }
 
 {
@@ -191,9 +192,9 @@ for (const [name, status] of Object.entries({
   const harness = createHarness({ checkResults: [Promise.reject(failure)] });
   await harness.context.testAPI.refreshApplicationStatus();
   await flushAsyncWork();
-  assert.equal(harness.globalStatuses.at(-1).message, "Local status refreshed.", "background failure replaced local refresh success");
-  assert.equal(harness.state.updates, staleStatus, "background failure discarded cached local update status");
-  assert.equal(harness.updateMessage.textContent, failure.message, "background failure was not retained in update presentation");
+  assert.equal(harness.globalStatuses.at(-1).message, failure.message, "header Refresh did not expose Check now's failure result");
+  assert.equal(harness.state.updates, staleStatus, "manual failure discarded cached local update status");
+  assert.equal(harness.updateMessage.textContent, failure.message, "manual failure was not retained in update presentation");
 }
 
 {
@@ -216,10 +217,11 @@ for (const [name, status] of Object.entries({
 for (const [name, source] of [["production", productionJS], ["preview", previewJS]]) {
   assert.doesNotMatch(source, /backgroundUpdateCheckAttempted/, `${name} retains a session-wide suppression flag`);
   assert.match(source, /byId\("refresh-button"\)\.addEventListener\("click", refreshApplicationStatus\)/, `${name} header Refresh is not scoped to the new handler`);
+  assert.match(source, /async function refreshApplicationStatus\(\) \{\s+if \(await loadAll\(\)\) await checkForUpdates\(\);\s+\}/, `${name} header Refresh does not share Check now semantics`);
   assert.equal((source.match(/refreshApplicationStatus/g) || []).length, 2, `${name} invokes the header-only handler from another path`);
   assert.equal((source.match(/addEventListener\("click", refreshApplicationStatus\)/g) || []).length, 1, `${name} attached the behavior to another control`);
   assert.match(source, /byId\("update-check-button"\)\.addEventListener\("click", checkForUpdates\)/, `${name} explicit Check now semantics changed`);
   assert.doesNotMatch(source, /byId\("tailscale-refresh-button"\)\.addEventListener\("click", refreshApplicationStatus\)/, `${name} Tailscale verification gained an update check`);
 }
 
-console.log("[PASS] Header Refresh local-first, applicability, concurrency, retry, failure, entry, manual, and isolation contracts.");
+console.log("[PASS] Header Refresh local-first Check now parity, concurrency, retry, failure, entry, and isolation contracts.");

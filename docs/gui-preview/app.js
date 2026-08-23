@@ -283,7 +283,7 @@ async function loadAll() {
 }
 
 async function refreshApplicationStatus() {
-  if (await loadAll()) checkForUpdatesInBackground();
+  if (await loadAll()) await checkForUpdates();
 }
 
 function renderFirstTimeSetup() {
