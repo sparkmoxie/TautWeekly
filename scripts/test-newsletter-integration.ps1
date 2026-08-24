@@ -664,7 +664,7 @@ foreach ($engine in $engines) {
 
             if ($scenario -in $sendTestScenarios) {
                 $previewLog = Get-Content $stdout -Raw
-                if ($scenario -notin $directRatingScenarios -and $scenario -ne $platformScenario) {
+                if ($scenario -notin $directRatingScenarios -and $scenario -notin @($platformScenario, $lastPlatformScenario)) {
                     Assert-True ($previewLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario did not exercise the recoverable direct Plex 404 fallback."
                 }
                 Assert-True ($normalHtml.Contains('Selected Show')) "$($engine.Name)/$scenario lost the global-history title fallback for sparse hero metadata."
@@ -723,7 +723,7 @@ foreach ($engine in $engines) {
                 }
                 $sendLog = Get-Content $sendStdout -Raw
                 Assert-True ($sendLog.Contains('Test email sent successfully.')) "$($engine.Name)/$scenario SendTest did not complete delivery."
-                if ($scenario -notin $directRatingScenarios -and $scenario -ne $platformScenario) {
+                if ($scenario -notin $directRatingScenarios -and $scenario -notin @($platformScenario, $lastPlatformScenario)) {
                     Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
                 }
 

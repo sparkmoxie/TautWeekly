@@ -185,11 +185,13 @@ fixed public messages and support codes.
 
 Authenticated entry renders the local `GET /api/v1/updates` result before
 consulting its typed `backgroundCheckRecommended` field, so only a stale or
-missing result starts a non-blocking check. The main header **Refresh** renders
-local status first and then runs the same manual check path as Settings **Check
-now**, including its visible result. The five-minute success delay, failure
-backoff, and single active-check lock suppress repeated upstream requests. No
-scoped refresh control inherits this behavior.
+missing result starts a non-blocking check. The main header **Refresh**
+attempts to render local status first and then runs the same manual check path
+as Settings **Check now**, including its visible result. A non-authentication
+local-status error cannot suppress that explicit check; an expired Manager
+session still returns to authentication without one. The five-minute success
+delay, failure backoff, and single active-check lock suppress repeated upstream
+requests. No scoped refresh control inherits this behavior.
 
 The Windows release build cross-compiles this module as
 `tautweekly-manager.exe`, packages it into the portable Windows ZIP, and embeds

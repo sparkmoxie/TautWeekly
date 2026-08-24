@@ -16,6 +16,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added an exact-recipient Tautulli Last Platform fallback when report-window
   activity has no recognized platform, and changed all embedded 21px platform
   glyphs to white without exposing platform details in logs or Manager history.
+- Made Manager header **Refresh** invoke the same manual update check as **Check
+  now** even when an unrelated authenticated local-status request fails.
 
 ## [0.20.6] - 2026-08-23
 

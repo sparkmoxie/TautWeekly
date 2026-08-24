@@ -98,7 +98,7 @@ const initializeSource = productionJS.slice(productionJS.indexOf("async function
 const authenticatedEntrySource = productionJS.slice(productionJS.indexOf("async function enterApplication"), productionJS.indexOf("async function loadAll()"));
 assert.doesNotMatch(initializeSource.slice(0, initializeSource.indexOf("await enterApplication()")), /checkForUpdatesInBackground/, "unauthenticated bootstrap can trigger an update check");
 assert.match(authenticatedEntrySource, /const localStatusLoaded = await loadAll\(\);[\s\S]+if \(localStatusLoaded\) checkForUpdatesInBackground\(\);/, "cached status must render before the authenticated background check");
-assert.match(productionJS, /async function refreshApplicationStatus\(\) \{\s+if \(await loadAll\(\)\) await checkForUpdates\(\);\s+\}/, "header Refresh does not sequence local loading before the Check now path");
+assert.match(productionJS, /async function refreshApplicationStatus\(\) \{\s+await loadAll\(\);\s+if \(!byId\("app-shell"\)\.hidden\) await checkForUpdates\(\);\s+\}/, "header Refresh does not sequence local loading before the Check now path");
 assert.match(productionJS, /byId\("refresh-button"\)\.addEventListener\("click", refreshApplicationStatus\)/, "header Refresh is not wired to the scoped update-aware handler");
 assert.equal((productionJS.match(/checkForUpdatesInBackground\(\)/g) || []).length, 2, "background checks escaped authenticated entry");
 assert.match(productionJS, /addEventListener\("click", openUpdateSettings\)/);

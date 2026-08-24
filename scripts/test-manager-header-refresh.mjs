@@ -73,11 +73,12 @@ const freshStatus = Object.freeze({
   nextCheckAllowedAtUtc: "2031-04-18T16:35:00Z",
 });
 
-function createHarness({ localStatuses = [staleStatus], localGate, localSuccess = true, checkResults = [freshStatus] } = {}) {
+function createHarness({ localStatuses = [staleStatus], localGate, localSuccess = true, localShellHidden = false, checkResults = [freshStatus] } = {}) {
   const events = [];
   const requests = [];
   const globalStatuses = [];
   const updateMessage = { textContent: "cached status remains usable" };
+  const appShell = { hidden: false };
   let localIndex = 0;
   let checkIndex = 0;
   const state = {
@@ -93,6 +94,7 @@ function createHarness({ localStatuses = [staleStatus], localGate, localSuccess 
       state.updates = localStatuses[Math.min(localIndex, localStatuses.length - 1)];
       localIndex += 1;
       events.push("local:complete");
+      appShell.hidden = localShellHidden;
       context.setGlobalStatus("Local status refreshed.", true);
       return localSuccess;
     },
@@ -110,7 +112,8 @@ function createHarness({ localStatuses = [staleStatus], localGate, localSuccess 
     setGlobalStatus(message, persistent) { globalStatuses.push({ message, persistent }); },
     byId(id) {
       if (id === "update-settings-message") return updateMessage;
-      if (id === "auth-shell" || id === "app-shell") return { hidden: false };
+      if (id === "auth-shell") return { hidden: false };
+      if (id === "app-shell") return appShell;
       throw new Error(`unexpected element ${id}`);
     },
     async waitForActiveUpdateCheck() {},
@@ -167,7 +170,14 @@ async function flushAsyncWork() {
 {
   const harness = createHarness({ localSuccess: false });
   await harness.context.testAPI.refreshApplicationStatus();
-  assert.equal(harness.requests.length, 0, "failed local refresh initiated an update check from cached state");
+  assert.equal(harness.requests.length, 1, "a non-authentication local refresh failure suppressed the explicit update check");
+  assert.equal(harness.requests[0].background, false);
+}
+
+{
+  const harness = createHarness({ localSuccess: false, localShellHidden: true });
+  await harness.context.testAPI.refreshApplicationStatus();
+  assert.equal(harness.requests.length, 0, "an expired Manager session initiated an unauthenticated update check");
 }
 
 {
@@ -217,7 +227,7 @@ async function flushAsyncWork() {
 for (const [name, source] of [["production", productionJS], ["preview", previewJS]]) {
   assert.doesNotMatch(source, /backgroundUpdateCheckAttempted/, `${name} retains a session-wide suppression flag`);
   assert.match(source, /byId\("refresh-button"\)\.addEventListener\("click", refreshApplicationStatus\)/, `${name} header Refresh is not scoped to the new handler`);
-  assert.match(source, /async function refreshApplicationStatus\(\) \{\s+if \(await loadAll\(\)\) await checkForUpdates\(\);\s+\}/, `${name} header Refresh does not share Check now semantics`);
+  assert.match(source, /async function refreshApplicationStatus\(\) \{\s+await loadAll\(\);\s+if \(!byId\("app-shell"\)\.hidden\) await checkForUpdates\(\);\s+\}/, `${name} header Refresh does not share Check now semantics`);
   assert.equal((source.match(/refreshApplicationStatus/g) || []).length, 2, `${name} invokes the header-only handler from another path`);
   assert.equal((source.match(/addEventListener\("click", refreshApplicationStatus\)/g) || []).length, 1, `${name} attached the behavior to another control`);
   assert.match(source, /byId\("update-check-button"\)\.addEventListener\("click", checkForUpdates\)/, `${name} explicit Check now semantics changed`);

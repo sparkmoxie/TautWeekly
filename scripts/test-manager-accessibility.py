@@ -463,7 +463,7 @@ def main() -> int:
         failures.append("background checks retain a session-wide suppression flag")
     if 'state.updateChecking || !state.updates?.backgroundCheckRecommended' not in javascript or 'void runUpdateCheck(true);' not in javascript:
         failures.append("background update refresh is not gated by server cache freshness and backoff")
-    if 'if (await loadAll()) await checkForUpdates();' not in javascript or 'byId("refresh-button").addEventListener("click", refreshApplicationStatus)' not in javascript:
+    if 'await loadAll();' not in javascript or 'if (!byId("app-shell").hidden) await checkForUpdates();' not in javascript or 'byId("refresh-button").addEventListener("click", refreshApplicationStatus)' not in javascript:
         failures.append("header Refresh does not run the scoped local-first Check now handler")
     if 'Update available — Version' in args.html.read_text(encoding="utf-8"):
         failures.append("static header markup exposes a stale update version before validated state is rendered")

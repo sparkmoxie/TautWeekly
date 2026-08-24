@@ -283,7 +283,8 @@ async function loadAll() {
 }
 
 async function refreshApplicationStatus() {
-  if (await loadAll()) await checkForUpdates();
+  await loadAll();
+  if (!byId("app-shell").hidden) await checkForUpdates();
 }
 
 function renderFirstTimeSetup() {
