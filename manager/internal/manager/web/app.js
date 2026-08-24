@@ -324,7 +324,8 @@ async function loadAll() {
 }
 
 async function refreshApplicationStatus() {
-  if (await loadAll()) await checkForUpdates();
+  await loadAll();
+  if (!byId("app-shell").hidden) await checkForUpdates();
 }
 
 function runtimeMode() {
@@ -3443,7 +3444,7 @@ function renderUpdates() {
   else if (update.installState === "completed") message.textContent = "The verified Windows updater completed. Refreshing local package status.";
   else if (backoffActive) message.textContent = `The next manual check is available after ${formatDate(update.nextCheckAllowedAtUtc)}. This bounded delay prevents repeated upstream requests.`;
   else if (update.lastFailure?.action === "check") message.textContent = "The last check failed safely. Cached local status remains available, and newsletter delivery is unaffected.";
-  else message.textContent = "Normal Manager and dashboard health never depend on Internet availability. Authenticated entry checks only when cached release status is stale or missing. Header Refresh and Check now both request a manual stable-release check after local status loads.";
+  else message.textContent = "Normal Manager and dashboard health never depend on Internet availability. Authenticated entry checks only when cached release status is stale or missing. Header Refresh and Check now both request a manual stable-release check after local status refresh is attempted.";
 }
 
 function renderUpdateStatusButton(update) {

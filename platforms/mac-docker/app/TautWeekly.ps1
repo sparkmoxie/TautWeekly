@@ -2027,7 +2027,7 @@ function Get-NewsletterPlatformCatalog {
         [PSCustomObject]@{ Key = "linux"; Label = "Linux"; FileName = "platform-linux.png"; Cid = "platform_linux"; Aliases = @("linux") },
         [PSCustomObject]@{ Key = "macos"; Label = "macOS"; FileName = "platform-macos.png"; Cid = "platform_macos"; Aliases = @("mac os", "mac os x", "macos", "osx") },
         [PSCustomObject]@{ Key = "microsoft-edge"; Label = "Microsoft Edge"; FileName = "platform-microsoft-edge.png"; Cid = "platform_microsoft_edge"; Aliases = @("edge", "microsoft edge", "msedge") },
-        [PSCustomObject]@{ Key = "opera"; Label = "Opera"; FileName = "platform-opera.png"; Cid = "platform_opera"; Aliases = @("opera", "vizio") },
+        [PSCustomObject]@{ Key = "opera"; Label = "Opera"; FileName = "platform-opera.png"; Cid = "platform_opera"; Aliases = @("opera", "smartcast", "vizio", "vizio smartcast") },
         [PSCustomObject]@{ Key = "playstation"; Label = "PlayStation"; FileName = "platform-playstation.png"; Cid = "platform_playstation"; Aliases = @("playstation", "playstation 3", "playstation 4", "playstation 5", "ps3", "ps4", "ps5") },
         [PSCustomObject]@{ Key = "plex"; Label = "Plex"; FileName = "platform-plex.png"; Cid = "platform_plex"; Aliases = @("plex", "plex desktop", "plex home theater", "plex htpc", "plex media player") },
         [PSCustomObject]@{ Key = "roku"; Label = "Roku"; FileName = "platform-roku.png"; Cid = "platform_roku"; Aliases = @("roku") },
@@ -2148,6 +2148,35 @@ function Get-NewsletterPlatform {
     return $ranked[0].Platform
 }
 
+function Get-NewsletterLastPlatform {
+    param([string]$ExpectedUserId)
+
+    if ([string]::IsNullOrWhiteSpace($ExpectedUserId)) { return $null }
+
+    try {
+        $table = Invoke-TautulliApi -Command "get_users_table" -Parameters @{
+            user_id = $ExpectedUserId
+            start   = 0
+            length  = 1
+        }
+        $rows = @()
+        if ($null -ne $table -and $null -ne $table.PSObject.Properties["data"]) {
+            $rows = @($table.data)
+        }
+        $matches = @(
+            $rows | Where-Object {
+                (Get-OptionalStringProperty -InputObject $_ -Name "user_id").Trim() -eq $ExpectedUserId
+            }
+        )
+    }
+    catch {
+        return $null
+    }
+
+    if ($matches.Count -ne 1) { return $null }
+    return Resolve-NewsletterPlatform -Row $matches[0]
+}
+
 function Get-NewsletterPlatformHeadingHtml {
     param(
         [AllowNull()][object]$Platform,
@@ -2180,7 +2209,7 @@ function Get-NewsletterPlatformHeadingHtml {
     }
     if ([string]::IsNullOrWhiteSpace($imageSource)) { return $heading }
 
-    $alt = HtmlEncode ("Most-played platform: " + $label)
+    $alt = HtmlEncode ("Platform: " + $label)
     return @"
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
   <tr>
@@ -8181,6 +8210,7 @@ if ($Mode -eq "SendWelcome") {
     if ([string]::IsNullOrWhiteSpace([string]$user.Email)) {
         throw "This user does not have an email address available."
     }
+    $recipientPlatform = Get-NewsletterLastPlatform -ExpectedUserId $user.UserId
 
     $accessState = Sync-AccessRoster
 
@@ -8254,6 +8284,7 @@ if ($Mode -eq "SendWelcome") {
         -WelcomeOnly $true `
         -QuietReleaseMode $false `
         -BingeChampion $null `
+        -RecipientPlatform $recipientPlatform `
         -PosterAssets $posterAssets `
         -ImageMode "Email" `
         -StartLabel $startLabel `
@@ -8397,6 +8428,9 @@ function Build-ForUser {
     $history = Get-History -AfterDate $afterDate -BeforeDate $beforeDate -ForUserId $user.UserId
     $stats = Get-UserStats -History $history
     $recipientPlatform = Get-NewsletterPlatform -History $history -ExpectedUserId $user.UserId
+    if ($null -eq $recipientPlatform) {
+        $recipientPlatform = Get-NewsletterLastPlatform -ExpectedUserId $user.UserId
+    }
     Add-UserStatsMediaMetadata -Stats $stats
 
     $statsPosterItems = @()
@@ -8471,106 +8505,17 @@ function New-ZeroPreviewStats {
 }
 
 function Get-PopulatedPreviewStats {
-    param([object]$RealStats)
+    param([AllowNull()][object]$RealStats)
 
-    if ($null -ne $RealStats -and (Safe-Int64 $RealStats.TotalSeconds) -gt 0) {
-        Add-UserStatsMediaMetadata -Stats $RealStats
-        return [PSCustomObject]@{
-            Stats    = $RealStats
-            IsSample = $false
-        }
-    }
-
-    $sampleMovies = New-Object System.Collections.Generic.List[object]
-    foreach ($movie in @($activeReleaseData.Movies | Select-Object -First 2)) {
-        $sampleMovie = [ordered]@{}
-        foreach ($property in $movie.PSObject.Properties) {
-            $sampleMovie[$property.Name] = $property.Value
-        }
-        $sampleMovie["Plays"] = 1
-        $sampleMovie["Seconds"] = [int64](3600 - ($sampleMovies.Count * 900))
-        $sampleMovies.Add([PSCustomObject]$sampleMovie)
-    }
-
-    while ($sampleMovies.Count -lt 2) {
-        $index = $sampleMovies.Count + 1
-        $sampleMovies.Add([PSCustomObject]@{
-            Type="movie"; RatingKey=""; PosterRatingKey="";
-            Title="Sample Movie $index"; Year="";
-            DesignRtCritic=$(if ($index -eq 1) { "87" } else { "66" });
-            DesignRtAudience=$(if ($index -eq 1) { "74" } else { "81" });
-            DesignRtCriticImage="rottentomatoes://image.rating.ripe";
-            DesignRtAudienceImage="rottentomatoes://image.rating.upright";
-            Plays=1; Seconds=[int64](3600 - (($index - 1) * 900))
-        })
-    }
-
-    $sampleEpisodes = New-Object System.Collections.Generic.List[object]
-    foreach ($show in @($activeReleaseData.TV)) {
-        foreach ($episode in @($show.Episodes)) {
-            $sampleEpisodes.Add([PSCustomObject]@{
-                Type="episode"
-                RatingKey=[string]$episode.RatingKey
-                PosterRatingKey=[string]$show.PosterRatingKey
-                ShowTitle=[string]$show.Title
-                EpisodeTitle=[string]$episode.Title
-                Season=Safe-Int $episode.Season
-                Episode=Safe-Int $episode.Episode
-                ImdbRating=[string]$episode.ImdbRating
-                DesignRatingProvider=Get-OptionalStringProperty -InputObject $episode -Name "DesignRatingProvider"
-                DesignRatingValue=Get-OptionalStringProperty -InputObject $episode -Name "DesignRatingValue"
-            })
-            if ($sampleEpisodes.Count -ge 3) { break }
-        }
-        if ($sampleEpisodes.Count -ge 3) { break }
-    }
-
-    while ($sampleEpisodes.Count -lt 3) {
-        $index = $sampleEpisodes.Count + 1
-        $sampleEpisodes.Add([PSCustomObject]@{
-            Type="episode"; RatingKey=""; PosterRatingKey="";
-            ShowTitle="Sample Series"; EpisodeTitle="Sample Episode $index";
-            Season=1; Episode=$index; ImdbRating=$(if ($index -eq 1) { "8.5" } elseif ($index -eq 2) { "8.1" } else { "7.9" })
-        })
-    }
-
-    $sampleTvShows = New-Object System.Collections.Generic.List[object]
-    foreach ($show in @($activeReleaseData.TV | Select-Object -First 3)) {
-        $sampleTvShows.Add([PSCustomObject]@{
-            Type="show"; RatingKey=[string]$show.RatingKey; PosterRatingKey=[string]$show.PosterRatingKey;
-            Title=[string]$show.Title; ShowTitle=[string]$show.Title;
-            Plays=1; Seconds=[int64]3600; TotalTimeText="1h 0m"
-        })
-    }
-    while ($sampleTvShows.Count -lt 3) {
-        $index = $sampleTvShows.Count + 1
-        $sampleTvShows.Add([PSCustomObject]@{
-            Type="show"; RatingKey=""; PosterRatingKey="";
-            Title="Sample Series $index"; ShowTitle="Sample Series $index";
-            Plays=1; Seconds=[int64](3600 - (($index - 1) * 600));
-            TotalTimeText=$(if ($index -eq 1) { "1h 0m" } elseif ($index -eq 2) { "50m" } else { "40m" })
-        })
-    }
-
-    $sampleMost = if ($sampleMovies.Count -gt 0) {
-        [string]$sampleMovies[0].Title
+    $stats = if ($null -eq $RealStats) {
+        New-ZeroPreviewStats
     } else {
-        "Example title"
+        $RealStats
     }
-
+    Add-UserStatsMediaMetadata -Stats $stats
     return [PSCustomObject]@{
-        Stats = [PSCustomObject]@{
-            MoviesWatched    = 2
-            EpisodesStreamed = 3
-            QualifyingPlays  = 5
-            TotalSeconds     = [int64]10980
-            TotalTimeText    = "3h 3m"
-            MostWatched      = $sampleMost
-            MovieItems       = $sampleMovies.ToArray()
-            EpisodeItems     = $sampleEpisodes.ToArray()
-            TvShowItems      = $sampleTvShows.ToArray()
-        }
-        IsSample = $true
+        Stats    = $stats
+        IsSample = $false
     }
 }
 function Build-AllEmailVariants {
@@ -8588,6 +8533,9 @@ function Build-AllEmailVariants {
     $history = Get-History -AfterDate $afterDate -BeforeDate $beforeDate -ForUserId $user.UserId
     $realStats = Get-UserStats -History $history
     $recipientPlatform = Get-NewsletterPlatform -History $history -ExpectedUserId $user.UserId
+    if ($null -eq $recipientPlatform) {
+        $recipientPlatform = Get-NewsletterLastPlatform -ExpectedUserId $user.UserId
+    }
     Add-UserStatsMediaMetadata -Stats $realStats
     $zeroStats = New-ZeroPreviewStats
     $populatedVariant = Get-PopulatedPreviewStats -RealStats $realStats
@@ -8640,6 +8588,7 @@ function Build-AllEmailVariants {
         -WelcomeOnly $true `
         -QuietReleaseMode $false `
         -BingeChampion $null `
+        -RecipientPlatform $recipientPlatform `
         -PosterAssets $oneOffPosterAssets `
         -ImageMode $ImageMode `
         -StartLabel $startLabel `
@@ -8685,7 +8634,7 @@ function Build-AllEmailVariants {
         -EndLabel $endLabel
 
     # 3) Established active user: always force a populated, non-warm-up state.
-    # If the selected user has no activity, sample stats exercise the layout.
+    # Empty selected-user history remains an authentic zero-activity state.
     $normalHtml = Build-NewsletterHtml `
         -User $user `
         -Stats $populatedVariant.Stats `
@@ -8779,11 +8728,22 @@ function Build-AllEmailVariants {
     $oneOffSubject = Get-OneOffWelcomeSubject -User $user
     $newSubject = Get-NewsletterSubject -User $user -RecentAccess $true
     $normalSubject = Get-NewsletterSubject -User $user -RecentAccess $false
+    $hasRealActivity = (Safe-Int64 $realStats.TotalSeconds) -gt 0
+    $newWithHistoryLabel = if ($hasRealActivity) {
+        "New user first scheduled newsletter — with history"
+    } else {
+        "New user first scheduled newsletter — no selected-user activity"
+    }
+    $normalLabel = if ($hasRealActivity) {
+        "Established user — normal newsletter with activity"
+    } else {
+        "Established user — no selected-user activity"
+    }
 
     return [PSCustomObject]@{
         User = $user
         RealStats = $realStats
-        PopulatedStatsAreSample = [bool]$populatedVariant.IsSample
+        HasRealActivity = $hasRealActivity
         Variants = @(
             [PSCustomObject]@{
                 Key="manual-welcome"
@@ -8805,7 +8765,7 @@ function Build-AllEmailVariants {
             },
             [PSCustomObject]@{
                 Key="new-scheduled-with-history"
-                Label="New user first scheduled newsletter — with history"
+                Label=$newWithHistoryLabel
                 Subject=$newSubject
                 Html=$newWithHistoryHtml
                 Plain=$newWithHistoryPlain
@@ -8814,7 +8774,7 @@ function Build-AllEmailVariants {
             },
             [PSCustomObject]@{
                 Key="normal-newsletter"
-                Label="Established user — normal newsletter with activity"
+                Label=$normalLabel
                 Subject=$normalSubject
                 Html=$normalHtml
                 Plain=$normalPlain
@@ -8872,10 +8832,10 @@ if ($Mode -eq "PreviewAll") {
 
     $serverName = HtmlEncode (Get-ConfiguredServerName)
     $userName = HtmlEncode $bundle.User.FriendlyName
-    $sampleNote = if ($bundle.PopulatedStatsAreSample) {
-        "The selected user has no activity in this window, so previews 03 and 04 use sample stats only to exercise the populated-stat layouts. Previews 05 and 06 intentionally remain at zero activity."
-    } else {
+    $historyNote = if ($bundle.HasRealActivity) {
         "Previews 03 and 04 use the selected user's real current-window watch statistics. Previews 05 and 06 intentionally force zero activity."
+    } else {
+        "The selected user has no activity in this window, so previews 03 and 04 render authentic no-history output without fictional viewing data. Previews 05 and 06 intentionally remain at zero activity."
     }
 
     $cards = New-Object System.Text.StringBuilder
@@ -8897,9 +8857,9 @@ body{margin:0;background-color:#0f0f0f;color:#fff;font-family:Arial,Helvetica,sa
 </style></head><body><div class="wrap">
 <div class="eyebrow">TAUTWEEKLY FOR PLEX — ALL EMAIL TYPES</div>
 <h1 style="margin:8px 0 0;font-size:30px;">The real email layout, across every state.</h1>
-<div class="meta">Go ahead, shrink my window.<br>Server / sample recipient: $serverName · $userName<br>Window: $(HtmlEncode $startLabel) – $(HtmlEncode $endLabel)<br>Release mode: $(if ($isQuietReleaseWeek) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' })</div>
+<div class="meta">Go ahead, shrink my window.<br>Server / selected recipient: $serverName · $userName<br>Window: $(HtmlEncode $startLabel) – $(HtmlEncode $endLabel)<br>Release mode: $(if ($isQuietReleaseWeek) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' })</div>
 $($cards.ToString())
-<div class="note">$(HtmlEncode $sampleNote)</div>
+<div class="note">$(HtmlEncode $historyNote)</div>
 <div class="note">Local HTML only. No email was sent. No welcome timestamp was written. Resize a preview below 620px to inspect the mobile hero.</div>
 </div></body></html>
 "@

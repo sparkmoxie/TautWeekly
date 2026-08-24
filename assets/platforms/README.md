@@ -12,7 +12,9 @@ CSS does not recolor, crop, stretch, rotate, or filter the vendor artwork.
 ## Provenance
 
 Assets were retrieved and verified on 2026-08-12. `ASSET-SHA256SUMS.txt`
-records the durable file hashes.
+records the durable documentation-asset hashes. `NEWSLETTER-ASSET-SHA256SUMS.txt`
+records the 42x42 white newsletter glyph derivatives; their source geometry and
+transparency are preserved for reliable rendering on the dark email background.
 
 | Asset | Canonical input | Treatment |
 | --- | --- | --- |
@@ -35,7 +37,7 @@ or endorsement.
 - Use these assets only where the named platform or package is the subject.
 - Keep the product icon on QNAP/Unraid package listings because those listings
   identify the TautWeekly app, not the host platform.
-- Use the locally bundled client-platform glyphs in generated newsletters only beside the weekly heading, when the selected recipient's report-window activity resolves to a recognized platform.
+- Use the locally bundled client-platform glyphs in generated newsletters only beside the weekly heading, when the selected recipient's report-window activity resolves to a recognized platform or that exact recipient's Tautulli Last Platform provides a recognized fallback.
 - Preserve each source's aspect ratio and documented clear space. Docker's
   mark must render at least 24 CSS pixels; the Windows logo renders above the
   15.5-pixel minimum in the supplied Microsoft guidance.
