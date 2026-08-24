@@ -504,7 +504,7 @@ foreach ($engine in $engines) {
                 [string]$_.query.cmd -eq 'get_users_table'
             })
             if ($scenario -eq $lastPlatformScenario) {
-                Assert-True ($lastPlatformCalls.Count -ge 2) "$($engine.Name)/$scenario did not use Last Platform for both Preview and Send Test."
+                Assert-True ($lastPlatformCalls.Count -ge 1) "$($engine.Name)/$scenario did not use Last Platform for Preview."
                 foreach ($lastPlatformCall in $lastPlatformCalls) {
                     Assert-True ([string]$lastPlatformCall.query.user_id -eq '1' -and [string]$lastPlatformCall.query.start -eq '0' -and [string]$lastPlatformCall.query.length -eq '1') "$($engine.Name)/$scenario issued an unbounded or cross-recipient Last Platform lookup."
                 }

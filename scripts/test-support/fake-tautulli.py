@@ -1138,6 +1138,7 @@ def main() -> None:
             "active",
             "personal-many",
             "platform-tie",
+            "last-platform",
             "quiet",
             "tv-only",
             "optional-hero-metadata",
