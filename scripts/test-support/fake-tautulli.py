@@ -21,7 +21,7 @@ DELETED_HISTORY_SCENARIOS = (
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
     old = now - (30 * 86400)
-    movie_added = now if scenario in ("active", "personal-many", "platform-tie", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
+    movie_added = now if scenario in ("active", "personal-many", "platform-tie", "last-platform", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
     tv_added = now if scenario in ("active", "personal-many", "tv-only", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
     rows = {
         "10": [
@@ -104,6 +104,7 @@ USERS = {
         "deleted_user": 0,
         "do_notify": 1,
         "is_owner": 1,
+        "platform": "tvOS",
     },
     "2": {
         "user_id": "2",
@@ -113,6 +114,7 @@ USERS = {
         "is_active": 1,
         "deleted_user": 0,
         "do_notify": 1,
+        "platform": "Roku",
     },
 }
 
@@ -249,6 +251,8 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
             )
             for field in ("year", "summary", "rating", "audience_rating"):
                 rows[0].pop(field, None)
+        if scenario == "last-platform":
+            rows[0]["platform"] = "Unrecognized Platform"
         return rows
     if section_id == "20":
         rows = [
@@ -852,6 +856,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         if command == "get_users":
             self.api_success(list(configured_users(self.server).values()))  # type: ignore[arg-type]
+            return
+        if command == "get_users_table":
+            users = list(configured_users(self.server).values())  # type: ignore[arg-type]
+            user_id = query.get("user_id", "")
+            if user_id:
+                users = [user for user in users if str(user.get("user_id", "")) == user_id]
+            rows = [
+                {"user_id": user.get("user_id", ""), "platform": user.get("platform", "")}
+                for user in users
+            ]
+            start = int(query.get("start", "0"))
+            length = int(query.get("length", "25"))
+            self.api_success({"data": rows[start : start + length], "recordsFiltered": len(rows)})
             return
         if command == "get_user":
             users = configured_users(self.server)  # type: ignore[arg-type]

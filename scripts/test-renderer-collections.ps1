@@ -62,6 +62,7 @@ $requiredFunctions = @(
     'Resolve-NewsletterPlatform',
     'Get-NewsletterPlatformHistoryTimestamp',
     'Get-NewsletterPlatform',
+    'Get-NewsletterLastPlatform',
     'Get-NewsletterPlatformHeadingHtml',
     'Format-WatchTime',
     'Get-ConfiguredServerName',
@@ -75,6 +76,7 @@ $requiredFunctions = @(
     'Get-CustomTextCardPlainText',
     'Get-UserStats',
     'Add-UserStatsMediaMetadata',
+    'New-ZeroPreviewStats',
     'Get-PopulatedPreviewStats',
     'Get-HotNewRelease',
     'Get-DynamicPreheader',
@@ -107,6 +109,10 @@ foreach ($relativePath in $rendererPaths) {
     if ($parseErrors.Count -gt 0) {
         throw "Cannot test renderer with parser errors: $relativePath"
     }
+
+    $rendererSource = [IO.File]::ReadAllText($path)
+    Assert-True (-not $rendererSource.Contains('Title="Sample Movie')) "$relativePath still contains fabricated production preview movie stats"
+    Assert-True (([regex]::Matches($rendererSource, 'Get-NewsletterLastPlatform -ExpectedUserId \$user\.UserId')).Count -eq 3) "$relativePath does not apply Last Platform to manual, preview/test, and standard recipient paths"
 
     foreach ($functionName in $requiredFunctions) {
         $definition = $ast.FindAll({
@@ -170,12 +176,42 @@ foreach ($relativePath in $rendererPaths) {
         [PSCustomObject]@{ user_id = '1'; platform = '   '; group_count = 10; started = 100 },
         [PSCustomObject]@{ user_id = '1'; platform = '<unknown & unsafe>'; group_count = 10; started = 200 }
     ) -ExpectedUserId '1')) "$relativePath did not omit blank and unknown platforms"
+    Assert-True ((Resolve-NewsletterPlatform -Row ([PSCustomObject]@{ platform = 'Vizio SmartCast' })).Key -eq 'opera') "$relativePath did not recognize Tautulli's Vizio SmartCast Last Platform value"
+
+    $script:lastPlatformApiCalls = @()
+    $script:lastPlatformApiResponse = [PSCustomObject]@{
+        data = @(
+            [PSCustomObject]@{ user_id = '1'; platform = 'tvOS' },
+            [PSCustomObject]@{ user_id = '2'; platform = 'Roku' }
+        )
+    }
+    $script:lastPlatformApiThrows = $false
+    function Invoke-TautulliApi {
+        param([string]$Command, [hashtable]$Parameters = @{})
+        $script:lastPlatformApiCalls += [PSCustomObject]@{ Command = $Command; Parameters = $Parameters }
+        if ($script:lastPlatformApiThrows) { throw 'Simulated Last Platform API failure' }
+        return $script:lastPlatformApiResponse
+    }
+    $lastPlatform = Get-NewsletterLastPlatform -ExpectedUserId '1'
+    Assert-True ($null -ne $lastPlatform -and $lastPlatform.Key -eq 'apple-tv') "$relativePath did not resolve the exact recipient's Last Platform"
+    Assert-True ($script:lastPlatformApiCalls.Count -eq 1 -and $script:lastPlatformApiCalls[0].Command -eq 'get_users_table') "$relativePath did not use Tautulli's Users table for the fallback"
+    Assert-True ([string]$script:lastPlatformApiCalls[0].Parameters.user_id -eq '1' -and [int]$script:lastPlatformApiCalls[0].Parameters.start -eq 0 -and [int]$script:lastPlatformApiCalls[0].Parameters.length -eq 1) "$relativePath did not bound Last Platform lookup to the exact recipient"
+
+    $script:lastPlatformApiResponse = [PSCustomObject]@{ data = @([PSCustomObject]@{ user_id = '2'; platform = 'Roku' }) }
+    Assert-True ($null -eq (Get-NewsletterLastPlatform -ExpectedUserId '1')) "$relativePath accepted another user's Last Platform"
+    $script:lastPlatformApiResponse = [PSCustomObject]@{ data = @([PSCustomObject]@{ user_id = '1'; platform = 'Unknown Platform' }) }
+    Assert-True ($null -eq (Get-NewsletterLastPlatform -ExpectedUserId '1')) "$relativePath invented an icon for an unknown Last Platform"
+    $script:lastPlatformApiThrows = $true
+    Assert-True ($null -eq (Get-NewsletterLastPlatform -ExpectedUserId '1')) "$relativePath did not safely omit a failed Last Platform lookup"
+    $callsBeforeBlankId = $script:lastPlatformApiCalls.Count
+    Assert-True ($null -eq (Get-NewsletterLastPlatform -ExpectedUserId ' ')) "$relativePath invented a Last Platform for a blank recipient ID"
+    Assert-True ($script:lastPlatformApiCalls.Count -eq $callsBeforeBlankId) "$relativePath queried Tautulli without an exact recipient ID"
 
     $previewAssetBase = if ($relativePath -like 'platforms/windows/*') { '../assets' } else { 'assets' }
     $previewPlatformHtml = Get-NewsletterPlatformHeadingHtml -Platform $selectedPlatform -ImageMode Preview -PreviewAssetBase $previewAssetBase
     Assert-True ($previewPlatformHtml.Contains('YOUR WEEK ON PLEX') -and $previewPlatformHtml.Contains($previewAssetBase + '/platform-android.png')) "$relativePath did not render the selected local preview asset immediately after the heading"
     Assert-True ($previewPlatformHtml.Contains('width="21" height="21"') -and $previewPlatformHtml.Contains('width:21px;height:21px;max-height:21px')) "$relativePath did not normalize the platform icon to a 21px maximum height"
-    Assert-True ($previewPlatformHtml.Contains('alt="Most-played platform: Android"') -and $previewPlatformHtml.Contains('role="presentation"')) "$relativePath platform heading is not accessible or email-table-safe"
+    Assert-True ($previewPlatformHtml.Contains('alt="Platform: Android"') -and $previewPlatformHtml.Contains('role="presentation"')) "$relativePath platform heading is not accessible or email-table-safe"
     $emailPlatformHtml = Get-NewsletterPlatformHeadingHtml -Platform $selectedPlatform -ImageMode Email
     Assert-True ($emailPlatformHtml.Contains('src="cid:platform_android"')) "$relativePath did not render the selected embedded email CID"
     $encodedPlatform = [PSCustomObject]@{
@@ -184,7 +220,7 @@ foreach ($relativePath in $rendererPaths) {
         Label = '<Android & unsafe>'
     }
     $encodedHeading = Get-NewsletterPlatformHeadingHtml -Platform $encodedPlatform -ImageMode Email
-    Assert-True ($encodedHeading.Contains('Most-played platform: &lt;Android &amp; unsafe&gt;') -and -not $encodedHeading.Contains('alt="Most-played platform: <')) "$relativePath did not HTML-encode the accessible platform label"
+    Assert-True ($encodedHeading.Contains('Platform: &lt;Android &amp; unsafe&gt;') -and -not $encodedHeading.Contains('alt="Platform: <')) "$relativePath did not HTML-encode the accessible platform label"
     $missingHeading = Get-NewsletterPlatformHeadingHtml -Platform ([PSCustomObject]@{
         FileName = 'platform-missing.png'
         Cid = 'platform_missing'
@@ -1117,16 +1153,15 @@ foreach ($relativePath in $rendererPaths) {
         })
         TV = @()
     }
-    $samplePreview = Get-PopulatedPreviewStats -RealStats $empty
-    Assert-True ($samplePreview.IsSample) "$relativePath did not select sample preview stats for empty history"
-    Assert-True ($samplePreview.Stats.MovieItems.Count -eq 2) "$relativePath did not build two sample movie rows"
-    foreach ($sampleMovie in $samplePreview.Stats.MovieItems) {
-        Assert-True ($null -ne $sampleMovie.PSObject.Properties['Seconds']) "$relativePath omitted sample movie watch time"
-        Assert-True ((Safe-Int64 $sampleMovie.Seconds) -gt 0) "$relativePath generated invalid sample movie watch time"
-    }
-    $samplePlainText = Build-PlainText `
+    $emptyPreview = Get-PopulatedPreviewStats -RealStats $empty
+    Assert-True (-not $emptyPreview.IsSample) "$relativePath marked authentic empty history as sample data"
+    Assert-True ((Safe-Int64 $emptyPreview.Stats.TotalSeconds) -eq 0) "$relativePath invented watch time for an empty-history preview"
+    Assert-True ($emptyPreview.Stats.MovieItems.Count -eq 0 -and $emptyPreview.Stats.EpisodeItems.Count -eq 0 -and $emptyPreview.Stats.TvShowItems.Count -eq 0) "$relativePath invented watch rows for an empty-history preview"
+    $nullPreview = Get-PopulatedPreviewStats -RealStats $null
+    Assert-True (-not $nullPreview.IsSample -and (Safe-Int64 $nullPreview.Stats.TotalSeconds) -eq 0) "$relativePath did not safely convert absent real stats to an authentic zero state"
+    $emptyPlainText = Build-PlainText `
         -User ([PSCustomObject]@{ FriendlyName = 'Viewer' }) `
-        -Stats $samplePreview.Stats `
+        -Stats $emptyPreview.Stats `
         -ReleaseData $script:activeReleaseData `
         -HotRelease $null `
         -TrendingTitle '' `
@@ -1134,11 +1169,11 @@ foreach ($relativePath in $rendererPaths) {
         -RecentAccess $false `
         -StartLabel 'August 1' `
         -EndLabel 'August 7'
-    Assert-True ($samplePlainText.Contains('movies watched')) "$relativePath could not render empty-history sample movie stats as plain text"
-    Assert-True ($samplePlainText.Contains('View & Request: https://app.plex.tv/')) "$relativePath did not render the custom button label and URL in plain text"
-    Assert-True ($samplePlainText.Contains("CUSTOM <TITLE>`r`nMaintenance & more`r`nFirst <line> & safe`nSecond line")) "$relativePath did not render the plain-text custom card"
-    $customPlainIndex = $samplePlainText.IndexOf('CUSTOM <TITLE>', [StringComparison]::Ordinal)
-    $releasePlainIndex = if ($customPlainIndex -ge 0) { $samplePlainText.IndexOf('1 new movie', $customPlainIndex + 1, [StringComparison]::Ordinal) } else { -1 }
+    Assert-True (-not $emptyPlainText.Contains('Sample Movie') -and -not $emptyPlainText.Contains('Sample Series')) "$relativePath leaked fabricated viewing stats into an empty-history preview"
+    Assert-True ($emptyPlainText.Contains('View & Request: https://app.plex.tv/')) "$relativePath did not render the custom button label and URL in plain text"
+    Assert-True ($emptyPlainText.Contains("CUSTOM <TITLE>`r`nMaintenance & more`r`nFirst <line> & safe`nSecond line")) "$relativePath did not render the plain-text custom card"
+    $customPlainIndex = $emptyPlainText.IndexOf('CUSTOM <TITLE>', [StringComparison]::Ordinal)
+    $releasePlainIndex = if ($customPlainIndex -ge 0) { $emptyPlainText.IndexOf('1 new movie', $customPlainIndex + 1, [StringComparison]::Ordinal) } else { -1 }
     Assert-True ($customPlainIndex -ge 0 -and $releasePlainIndex -gt $customPlainIndex) "$relativePath placed the plain-text custom card after the release metadata (custom=$customPlainIndex release=$releasePlainIndex)"
 
     $uncappedPlainText = Build-PlainText `

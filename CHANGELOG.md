@@ -6,6 +6,17 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.20.7] - 2026-08-24
+
+### Fixed
+
+- Kept Preview and Send Test all-state layouts authentic by using only the
+  selected recipient's real report-window statistics, including true zero-history
+  states instead of fabricated viewing rows.
+- Added an exact-recipient Tautulli Last Platform fallback when report-window
+  activity has no recognized platform, and changed all embedded 21px platform
+  glyphs to white without exposing platform details in logs or Manager history.
+
 ## [0.20.6] - 2026-08-23
 
 ### Fixed
