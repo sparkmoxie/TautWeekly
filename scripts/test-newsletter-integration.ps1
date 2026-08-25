@@ -668,10 +668,24 @@ foreach ($engine in $engines) {
                 [string]$_.query.cmd -in @('get_history', 'get_recently_added')
             })
             Assert-True ($mediaCalls.Count -gt 0) "$($engine.Name)/$scenario made no media calls."
-            Assert-True (@($mediaCalls | Where-Object {
-                $null -eq $_.query.PSObject.Properties['section_id'] -or
-                [string]$_.query.section_id -notin @('10', '20')
-            }).Count -eq 0) "$($engine.Name)/$scenario issued an unscoped/private media query."
+            if ($scenario -eq $quietNoHistoryScenario) {
+                $unscopedRecentCalls = @($mediaCalls | Where-Object {
+                    [string]$_.query.cmd -eq 'get_recently_added' -and
+                    $null -eq $_.query.PSObject.Properties['section_id']
+                })
+                Assert-True ($unscopedRecentCalls.Count -eq 1) "$($engine.Name)/$scenario did not limit the empty global recently-added hub to weekly quiet detection."
+                $scopedRecentSections = @($mediaCalls | Where-Object {
+                    [string]$_.query.cmd -eq 'get_recently_added' -and
+                    $null -ne $_.query.PSObject.Properties['section_id']
+                } | ForEach-Object { [string]$_.query.section_id } | Sort-Object -Unique)
+                Assert-True (($scopedRecentSections -join ',') -eq '10,20') "$($engine.Name)/$scenario did not query every active movie/TV section for Latest Releases."
+            }
+            else {
+                Assert-True (@($mediaCalls | Where-Object {
+                    $null -eq $_.query.PSObject.Properties['section_id'] -or
+                    [string]$_.query.section_id -notin @('10', '20')
+                }).Count -eq 0) "$($engine.Name)/$scenario issued an unscoped/private media query."
+            }
 
             if ($scenario -in $providerRecoveryScenarios) {
                 $hostedCalls = @($calls | Where-Object { [string]$_.path -like '/hosted/library/metadata/*' })
