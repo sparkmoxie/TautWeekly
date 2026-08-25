@@ -11,6 +11,7 @@ const state = {
   verificationRunning: false,
   smtpVerificationRunning: false,
   discovery: null,
+  discoveryError: "",
   discoveryRunning: false,
   setupWorkflow: null,
   setupWorkflowRunning: false,
@@ -59,7 +60,10 @@ const titleGifChoices = Object.freeze([
 const activeSecretReveals = new Map();
 let pendingSecretReveal = null;
 let sessionRecoveryPromise = null;
+let applicationRefreshPromise = null;
+let authenticationEpoch = 0;
 let updateInstallPollTimer;
+let updateCheckAvailabilityTimer;
 let deliveryStatusPollTimer;
 let deliveryStatusPollInFlight = false;
 let updateInstallExpectedVersion = "";
@@ -249,6 +253,7 @@ async function enterApplication(preferredView = "") {
 }
 
 async function loadAll() {
+  const loadAuthenticationEpoch = authenticationEpoch;
   setGlobalStatus("Refreshing local status…");
   try {
     const [status, config, editor, configurationStatus, backups, verification, discovery, previews, operation, history, scheduleOperation, startup, authAccess, about, diagnostics, capabilities, updates] = await Promise.all([
@@ -270,6 +275,7 @@ async function loadAll() {
       request("/api/v1/capabilities"),
       request("/api/v1/updates"),
     ]);
+    if (loadAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return false;
     state.status = status;
     state.config = config;
     state.editor = editor;
@@ -314,6 +320,7 @@ async function loadAll() {
     void loadTailscaleAccess();
     return true;
   } catch (error) {
+    if (loadAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return false;
     if (error.status === 401) {
       showAuthentication();
       return false;
@@ -323,9 +330,37 @@ async function loadAll() {
   }
 }
 
+function updateCheckIsAvailable(update = state.updates || {}) {
+  const cooldown = window.TautWeeklyUpdateUI.updateCheckCooldown(update);
+  return !state.updateChecking && !update.checkInProgress && !cooldown.active;
+}
+
 async function refreshApplicationStatus() {
-  await loadAll();
-  if (!byId("app-shell").hidden) await checkForUpdates();
+  if (applicationRefreshPromise) return applicationRefreshPromise;
+  const refreshAuthenticationEpoch = authenticationEpoch;
+  const refreshButton = byId("refresh-button");
+  refreshButton.disabled = true;
+  const refreshWork = (async () => {
+    await loadAll();
+    if (refreshAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
+    const refreshes = [];
+    if (state.editor?.state === "ready") {
+      refreshes.push(runTautulliDiscovery({
+        requireConfirmation: false,
+        announceGlobalStatus: false,
+        recoverPendingPreviews: false,
+      }));
+    }
+    if (updateCheckIsAvailable()) refreshes.push(checkForUpdates());
+    await Promise.allSettled(refreshes);
+  })();
+  applicationRefreshPromise = refreshWork;
+  try {
+    return await refreshWork;
+  } finally {
+    if (applicationRefreshPromise === refreshWork) applicationRefreshPromise = null;
+    if (refreshAuthenticationEpoch === authenticationEpoch && !byId("app-shell").hidden) refreshButton.disabled = false;
+  }
 }
 
 function runtimeMode() {
@@ -983,14 +1018,14 @@ function renderDiscovery() {
   setSwappingButtonText("discovery-run-button", state.discoveryRunning ? "Loading choices..." : "Refresh Tautulli choices");
   if (!state.discovery) {
     byId("discovery-results").hidden = true;
-    byId("discovery-message").textContent = ready
+    byId("discovery-message").textContent = state.discoveryError || (ready
       ? "The first valid save or a saved Tautulli connection change loads these choices automatically. Confirm above to repeat the saved service lookup now."
-      : "Save a complete configuration before loading choices.";
+      : "Save a complete configuration before loading choices.");
     renderUserComboboxes();
     return;
   }
   byId("discovery-results").hidden = false;
-  byId("discovery-message").textContent = `Choices loaded ${formatDate(state.discovery.completedAtUtc)} and retained locally for this saved configuration.`;
+  byId("discovery-message").textContent = state.discoveryError || `Choices loaded ${formatDate(state.discovery.completedAtUtc)} and retained locally for this saved configuration.`;
   renderDiscoveredLibraries();
   renderDiscoveredUsers();
   renderUserComboboxes();
@@ -1213,36 +1248,50 @@ function initializeUserCombobox(container) {
   });
 }
 
-async function runTautulliDiscovery() {
-  if (state.discoveryRunning || state.verificationRunning || state.smtpVerificationRunning || state.editor?.state !== "ready" || !byId("discovery-confirm").checked) return;
+async function runTautulliDiscovery(options = {}) {
+  const requireConfirmation = options.requireConfirmation !== false;
+  const announceGlobalStatus = options.announceGlobalStatus !== false;
+  const recoverPendingPreviews = options.recoverPendingPreviews !== false;
+  const discoveryAuthenticationEpoch = authenticationEpoch;
+  if (state.discoveryRunning || state.verificationRunning || state.smtpVerificationRunning || state.editor?.state !== "ready" || (requireConfirmation && !byId("discovery-confirm").checked)) return false;
   let refreshed = false;
+  state.discoveryError = "";
   state.discoveryRunning = true;
   renderDiscovery();
   renderVerification();
-  setGlobalStatus("Loading private Tautulli choices...");
+  if (announceGlobalStatus) setGlobalStatus("Loading private Tautulli choices...");
   try {
-    state.discovery = await request("/api/v1/discovery/tautulli", {
+    const discovery = await request("/api/v1/discovery/tautulli", {
       method: "POST",
       body: JSON.stringify({ expectedRevision: state.editor.revision, confirmRealNetwork: true }),
     });
+    if (discoveryAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return false;
+    state.discovery = discovery;
     refreshed = true;
+    state.discoveryError = "";
     if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
     byId("discovery-confirm").checked = false;
-    setGlobalStatus("Tautulli choices loaded and retained locally.", true);
+    if (announceGlobalStatus) setGlobalStatus("Tautulli choices loaded and retained locally.", true);
   } catch (error) {
-    byId("discovery-message").textContent = error.message;
-    setGlobalStatus(error.message, true);
+    if (discoveryAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return false;
+    state.discoveryError = error.message;
+    if (announceGlobalStatus) setGlobalStatus(error.message, true);
   } finally {
-    state.discoveryRunning = false;
-    try {
-      await refreshConfigurationStatus();
-    } catch (_) {
-      // The manual result remains visible even if the durable summary cannot be refreshed.
+    if (discoveryAuthenticationEpoch === authenticationEpoch && !byId("app-shell").hidden) {
+      try {
+        await refreshConfigurationStatus();
+      } catch (_) {
+        // The manual result remains visible even if the durable summary cannot be refreshed.
+      }
+      if (discoveryAuthenticationEpoch === authenticationEpoch && !byId("app-shell").hidden) {
+        state.discoveryRunning = false;
+        renderDiscovery();
+        renderVerification();
+        if (refreshed && recoverPendingPreviews) await recoverPendingPreviewsFromChoices(discoveryAuthenticationEpoch);
+      }
     }
-    renderDiscovery();
-    renderVerification();
-    if (refreshed) await recoverPendingPreviewsFromChoices();
   }
+  return refreshed;
 }
 
 function createConfigControl(field) {
@@ -1769,6 +1818,7 @@ async function runPostSaveSetup(revision, plan) {
   let discovered = state.discovery?.configRevision === revision ? state.discovery : null;
   let discoveryFailed = false;
   if (plan.runDiscovery) {
+    state.discoveryError = "";
     state.discoveryRunning = true;
     updateSetupWorkflowStep("choices", "running", "Loading active libraries, users, and any explicit owner or administrator role...");
     renderDiscovery();
@@ -1779,10 +1829,12 @@ async function runPostSaveSetup(revision, plan) {
         body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
       });
       state.discovery = discovered;
+      state.discoveryError = "";
       if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
       updateSetupWorkflowStep("choices", "passed", `${discovered.libraries?.length || 0} active libraries and ${discovered.users?.length || 0} users loaded and retained locally.`);
     } catch (error) {
       discoveryFailed = true;
+      state.discoveryError = error.message;
       updateSetupWorkflowStep("choices", "failed", error.message);
     } finally {
       state.discoveryRunning = false;
@@ -1899,7 +1951,8 @@ async function runPostSaveSetup(revision, plan) {
   }
 }
 
-async function recoverPendingPreviewsFromChoices() {
+async function recoverPendingPreviewsFromChoices(expectedAuthenticationEpoch = authenticationEpoch) {
+  if (expectedAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
   const revision = state.editor?.revision || "";
   const previewState = state.setupWorkflow?.steps?.previews?.state || "not-run";
   const suggestedUserID = state.discovery?.configRevision === revision ? state.discovery.suggestedPreviewUserId || "" : "";
@@ -1913,19 +1966,24 @@ async function recoverPendingPreviewsFromChoices() {
   updateSetupWorkflowStep("previews", "running", "Starting six local newsletter previews from the refreshed choices...");
   renderOperations();
   try {
-    state.operation = await request("/api/v1/operations", {
+    const operation = await request("/api/v1/operations", {
       method: "POST",
       body: JSON.stringify({ type: "preview-all", expectedRevision: revision, userId: suggestedUserID, confirmNoSend: true }),
     });
+    if (expectedAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
+    state.operation = operation;
     updateSetupWorkflowStep("previews", "running", "Six-state local preview generation started. No email will be sent; progress is available under Previews.");
     manageOperationPolling();
     setGlobalStatus("Preview generation resumed without another configuration save.", true);
   } catch (error) {
+    if (expectedAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
     updateSetupWorkflowStep("previews", error.code === "operation-busy" || error.code === "schedule-busy" ? "skipped" : "failed", error.message);
   } finally {
-    state.operationStarting = false;
-    state.operationStartingType = "";
-    renderOperations();
+    if (expectedAuthenticationEpoch === authenticationEpoch && !byId("app-shell").hidden) {
+      state.operationStarting = false;
+      state.operationStartingType = "";
+      renderOperations();
+    }
   }
 }
 
@@ -3334,6 +3392,22 @@ async function disableAccessPassword() {
   }
 }
 
+function clearUpdateCheckAvailabilityTimer() {
+  clearTimeout(updateCheckAvailabilityTimer);
+  updateCheckAvailabilityTimer = undefined;
+}
+
+function scheduleUpdateCheckAvailabilityRefresh(cooldown) {
+  clearUpdateCheckAvailabilityTimer();
+  if (!cooldown.active || byId("app-shell").hidden) return;
+  const delayMilliseconds = Math.min(cooldown.delayMilliseconds + 1000, 60 * 60 * 1000);
+  updateCheckAvailabilityTimer = setTimeout(() => {
+    updateCheckAvailabilityTimer = undefined;
+    if (byId("app-shell").hidden) return;
+    renderUpdates();
+  }, delayMilliseconds);
+}
+
 function updateStatePresentation(update = state.updates || {}) {
   switch (update.state) {
   case "current": return { label: "Current", tone: "good", summary: "The running application and every reported package layer match the latest stable release." };
@@ -3419,8 +3493,9 @@ function renderUpdates() {
   notes.hidden = !update.releaseNotesUrl;
   if (update.releaseNotesUrl) notes.href = update.releaseNotesUrl;
 
-  const retryAt = update.nextCheckAllowedAtUtc ? new Date(update.nextCheckAllowedAtUtc) : null;
-  const backoffActive = retryAt && !Number.isNaN(retryAt.getTime()) && retryAt.getTime() > Date.now();
+  const cooldown = window.TautWeeklyUpdateUI.updateCheckCooldown(update);
+  scheduleUpdateCheckAvailabilityRefresh(cooldown);
+  const backoffActive = cooldown.active;
   const checkButton = byId("update-check-button");
   checkButton.disabled = state.updateChecking || Boolean(update.checkInProgress) || Boolean(backoffActive);
   setSwappingButtonText("update-check-button", state.updateChecking || update.checkInProgress ? "Checking..." : backoffActive ? "Check available shortly" : "Check now");
@@ -3444,7 +3519,7 @@ function renderUpdates() {
   else if (update.installState === "completed") message.textContent = "The verified Windows updater completed. Refreshing local package status.";
   else if (backoffActive) message.textContent = `The next manual check is available after ${formatDate(update.nextCheckAllowedAtUtc)}. This bounded delay prevents repeated upstream requests.`;
   else if (update.lastFailure?.action === "check") message.textContent = "The last check failed safely. Cached local status remains available, and newsletter delivery is unaffected.";
-  else message.textContent = "Normal Manager and dashboard health never depend on Internet availability. Authenticated entry checks only when cached release status is stale or missing. Header Refresh and Check now both request a manual stable-release check after local status refresh is attempted.";
+  else message.textContent = "Normal Manager and dashboard health never depend on Internet availability. Header Refresh reloads local status, repeats the saved Tautulli choices lookup when configuration is ready, and performs an eligible stable-release check; Check now remains update-only.";
 }
 
 function renderUpdateStatusButton(update) {
@@ -3456,10 +3531,13 @@ function renderUpdateStatusButton(update) {
   button.dataset.tooltip = indicator.label;
 }
 
-async function waitForActiveUpdateCheck() {
+async function waitForActiveUpdateCheck(expectedAuthenticationEpoch = authenticationEpoch) {
   for (let attempt = 0; attempt < 36; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 250));
-    state.updates = await request("/api/v1/updates");
+    if (expectedAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
+    const updates = await request("/api/v1/updates");
+    if (expectedAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
+    state.updates = updates;
     renderUpdates();
     if (!state.updates.checkInProgress) return;
   }
@@ -3467,25 +3545,36 @@ async function waitForActiveUpdateCheck() {
 
 async function runUpdateCheck(background = false) {
   if (state.updateChecking) return;
+  const updateAuthenticationEpoch = authenticationEpoch;
   state.updateChecking = true;
   state.updateCheckBackground = background;
   renderUpdates();
   try {
-    state.updates = await request("/api/v1/updates/check", { method: "POST", body: "{}" });
+    const updates = await request("/api/v1/updates/check", { method: "POST", body: "{}" });
+    if (updateAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
+    state.updates = updates;
     if (!background) setGlobalStatus(state.updates.state === "update-available" ? "Stable update found." : "Stable update check completed.", true);
   } catch (error) {
+    if (updateAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
     if (background && error.code === "check-in-progress") {
-      try { await waitForActiveUpdateCheck(); } catch (_) { /* A later authenticated refresh can recover local status. */ }
+      try { await waitForActiveUpdateCheck(updateAuthenticationEpoch); } catch (_) { /* A later authenticated refresh can recover local status. */ }
     } else if (background && error.code === "check-backoff") {
-      try { state.updates = await request("/api/v1/updates"); } catch (_) { /* Keep the already rendered cached state. */ }
+      try {
+        const updates = await request("/api/v1/updates");
+        if (updateAuthenticationEpoch === authenticationEpoch && !byId("app-shell").hidden) state.updates = updates;
+      } catch (_) {
+        // Keep the already rendered cached state.
+      }
     } else {
       byId("update-settings-message").textContent = error.message;
       if (!background) setGlobalStatus(error.message, true);
     }
   } finally {
-    state.updateChecking = false;
-    state.updateCheckBackground = false;
-    renderUpdates();
+    if (updateAuthenticationEpoch === authenticationEpoch && !byId("app-shell").hidden) {
+      state.updateChecking = false;
+      state.updateCheckBackground = false;
+      renderUpdates();
+    }
   }
 }
 
@@ -3750,11 +3839,21 @@ async function logout() {
 }
 
 function showAuthentication() {
+  authenticationEpoch += 1;
+  applicationRefreshPromise = null;
+  byId("refresh-button").disabled = false;
   stopUpdateInstallPolling();
+  clearUpdateCheckAvailabilityTimer();
   clearAllRevealedSecrets();
   closeSecretRevealDialog();
   concealMaskedInputs(byId("auth-shell"));
   state.discovery = null;
+  state.discoveryError = "";
+  state.discoveryRunning = false;
+  state.updateChecking = false;
+  state.updateCheckBackground = false;
+  state.operationStarting = false;
+  state.operationStartingType = "";
   byId("discovery-libraries").replaceChildren();
   byId("discovery-users").replaceChildren();
   renderUserComboboxes();

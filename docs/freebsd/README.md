@@ -252,8 +252,13 @@ desktop. On mobile, movies stack one title per row while TV retains two title
 columns; empty media cards remain omitted. Personal total watch time stays
 distinct from the qualifying Binge Champion duration and nonzero unique
 movie/TV-show counts.
-Only new movies qualify for **HOT NEW RELEASE**; movie-empty weeks promote the
-normal Trending result while retaining new TV releases below the hero.
+Only new movies qualify for **HOT NEW RELEASE**; movie-empty weeks promote an
+authentic Trending result when server history supplies one while retaining new
+TV releases.
+With no new movie or TV additions, all lifecycle states share up to four recent
+movies and up to four TV titles strictly less than one calendar month old. When
+authentic server-wide movie history supplies a rich Trending hero, the header
+reports it and the lower server-wide Trending card remains suppressed.
 
 ## Update and pinning
 
@@ -265,10 +270,11 @@ Authenticated entry renders cached status first and makes one non-blocking
 bounded check only when the last success is missing or at least 24 hours old
 and backoff permits. Successful results are reused for five minutes before
 **Check now** refreshes the same endpoint. The main header **Refresh** completes
-its local status reload first and then starts that check only when the new typed
-status recommends it; it never waits for GitHub, and scoped refresh controls
-remain isolated. Navigation, Dashboard rendering, and Manager health stay
-offline-capable. **Current** retains its green glow.
+its local status reload first, repeats the saved-revision LAN-only Tautulli
+choices lookup when configuration is ready, and starts that check when its
+cooldown permits. It never generates previews or contacts Plex/SMTP, and scoped
+refresh controls remain isolated. Navigation, Dashboard rendering, and Manager
+health stay offline-capable. **Current** retains its green glow.
 The passive purple header SVG appears only for a validated newer running
 application; the card glows for every non-current state. The web process cannot
 run `sudo`, Podman, or rc.d; the

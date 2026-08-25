@@ -6,6 +6,23 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Unified Preview, Preview All, Send Test, Send Test All, and one-off welcome
+  rendering around one real active-or-quiet release payload. Quiet weeks now
+  feature a metadata-rich movie-only Trending hero when authentic server-wide
+  history supplies one, up to four other recent movies, and up to four TV titles
+  strictly newer than one calendar month. When present, the hero is not repeated
+  in Latest Releases or the server-wide footer.
+- Preserved authentic personal-stat presentation and metadata fallbacks:
+  movie rows keep poster, genres, and provider-labelled Rotten Tomatoes scores;
+  TV rows keep poster, watch duration, and IMDb when available; recipient
+  platform icons remain intact and previews never synthesize watch activity.
+- Made Manager header **Refresh** repeat the saved-revision LAN-only Tautulli
+  choices lookup and an eligible stable update check after local status, reset
+  cooldown UI automatically, serialize repeated clicks, retain discovery
+  failures, and avoid starting preview generation.
+
 ## [0.20.9] - 2026-08-25
 
 ### Fixed

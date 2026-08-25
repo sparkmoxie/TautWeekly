@@ -463,8 +463,35 @@ def main() -> int:
         failures.append("background checks retain a session-wide suppression flag")
     if 'state.updateChecking || !state.updates?.backgroundCheckRecommended' not in javascript or 'void runUpdateCheck(true);' not in javascript:
         failures.append("background update refresh is not gated by server cache freshness and backoff")
-    if 'await loadAll();' not in javascript or 'if (!byId("app-shell").hidden) await checkForUpdates();' not in javascript or 'byId("refresh-button").addEventListener("click", refreshApplicationStatus)' not in javascript:
-        failures.append("header Refresh does not run the scoped local-first Check now handler")
+    header_refresh_markers = (
+        'if (applicationRefreshPromise) return applicationRefreshPromise;',
+        'const refreshWork = (async () => {\n    await loadAll();',
+        'recoverPendingPreviews: false,',
+        'if (updateCheckIsAvailable()) refreshes.push(checkForUpdates());',
+        'await Promise.allSettled(refreshes);',
+        'scheduleUpdateCheckAvailabilityRefresh(cooldown);',
+        'clearUpdateCheckAvailabilityTimer();',
+        'if (refreshed && recoverPendingPreviews) await recoverPendingPreviewsFromChoices(discoveryAuthenticationEpoch);',
+        'state.discoveryError = error.message;',
+        'authenticationEpoch += 1;',
+        'const loadAuthenticationEpoch = authenticationEpoch;',
+        'const discoveryAuthenticationEpoch = authenticationEpoch;',
+        'applicationRefreshPromise = null;',
+        'byId("refresh-button").disabled = false;',
+        'state.discoveryRunning = false;',
+        'if (updateAuthenticationEpoch === authenticationEpoch && !byId("app-shell").hidden) {',
+        'cooldown.delayMilliseconds + 1000',
+        'byId("refresh-button").addEventListener("click", refreshApplicationStatus)',
+    )
+    if any(marker not in javascript for marker in header_refresh_markers):
+        failures.append("header Refresh does not serialize isolated local-first discovery/update work with dedicated-only preview recovery and safe cooldown/auth cleanup")
+    if 'id="refresh-button" type="button" aria-label="Refresh Manager, Tautulli choices, and update status"' not in html:
+        failures.append("header Refresh accessible name omits its Tautulli or update side effect")
+    preview_html = Path("docs/gui-preview/index.html").read_text(encoding="utf-8")
+    if 'id="refresh-button" type="button" aria-label="Refresh synthetic Manager, Tautulli choices, and update status"' not in preview_html:
+        failures.append("GUI preview Refresh accessible name diverges from combined production behavior")
+    if "No connection is attempted on page load or passive dashboard rendering." not in html or "it does not run this direct-Plex verification." not in html:
+        failures.append("Manager connection-boundary copy still claims Header Refresh performs no network work")
     if 'Update available — Version' in args.html.read_text(encoding="utf-8"):
         failures.append("static header markup exposes a stale update version before validated state is rendered")
     if ".update-status-button" not in css or "color:var(--violet)" not in css or "animation:hero-pulse" not in css:

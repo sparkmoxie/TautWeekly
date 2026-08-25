@@ -99,9 +99,11 @@ Disabling the feature stops access but does not erase the existing cache.
   After authenticated application entry renders that cached result, the GUI
   makes one non-blocking check only when no successful result exists or it is at
   least 24 hours old and retry backoff permits. The main header **Refresh**
-  likewise completes its local status load first, then starts the same
-  non-blocking check only when the new typed status recommends it. Successful
-  results are reused for five minutes before **Check now** can use the same
+  completes its local status load first, repeats the saved-revision LAN-only
+  Tautulli choices lookup when configuration is ready, and starts the same
+  non-blocking update check when its cooldown permits. The lookup cannot start
+  preview generation or contact Plex/SMTP. Successful results are reused for
+  five minutes before **Check now** can use the same
   endpoint for another explicit refresh. All paths use a fixed HTTPS GitHub
   endpoint, reject redirects and unexpected hosts/assets, bound time and
   response size, cache only public release fields plus fixed sanitized

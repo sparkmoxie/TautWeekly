@@ -58,6 +58,15 @@
     return { visible: true, version, label: `Update available — Version ${version}` };
   }
 
+  function updateCheckCooldown(update, nowMilliseconds = Date.now()) {
+    const retryAt = Date.parse(String(update?.nextCheckAllowedAtUtc || ""));
+    if (!Number.isFinite(retryAt) || !Number.isFinite(nowMilliseconds)) {
+      return { active: false, delayMilliseconds: 0 };
+    }
+    const delayMilliseconds = Math.max(0, retryAt - nowMilliseconds);
+    return { active: delayMilliseconds > 0, delayMilliseconds };
+  }
+
   function routeFromHash(hash) {
     let value = String(hash || "").replace(/^#/, "");
     try { value = decodeURIComponent(value); } catch (_) { return { view: "dashboard", section: "" }; }
@@ -74,5 +83,5 @@
     return routedViews.has(view) ? `#${view}` : "#dashboard";
   }
 
-  return Object.freeze({ updateIndicator, routeFromHash, hashForRoute });
+  return Object.freeze({ updateIndicator, updateCheckCooldown, routeFromHash, hashForRoute });
 });

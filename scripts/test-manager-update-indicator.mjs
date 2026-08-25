@@ -31,6 +31,17 @@ const checked = {
 const visible = updateUI.updateIndicator(checked);
 assert.deepEqual(visible, { visible: true, version: "v1.3.0", label: "Update available — Version v1.3.0" });
 assert.equal(updateUI.updateIndicator({ ...checked, checkInProgress: true }).visible, true, "validated cached state disappeared during refresh");
+const cooldownStart = Date.parse("2031-04-18T16:31:00Z");
+assert.deepEqual(updateUI.updateCheckCooldown({ nextCheckAllowedAtUtc: "2031-04-18T16:35:00Z" }, cooldownStart), {
+  active: true,
+  delayMilliseconds: 4 * 60 * 1000,
+});
+assert.deepEqual(updateUI.updateCheckCooldown(
+  { nextCheckAllowedAtUtc: "2031-04-18T16:35:00.987Z" },
+  Date.parse("2031-04-18T16:30:00.500Z"),
+), { active: true, delayMilliseconds: 300487 }, "fixed-millisecond cooldown timestamp lost precision");
+assert.deepEqual(updateUI.updateCheckCooldown({ nextCheckAllowedAtUtc: "2031-04-18T16:35:00Z" }, cooldownStart + 4 * 60 * 1000), { active: false, delayMilliseconds: 0 });
+assert.deepEqual(updateUI.updateCheckCooldown({ nextCheckAllowedAtUtc: "invalid" }, cooldownStart), { active: false, delayMilliseconds: 0 });
 
 const hiddenCases = {
   current: { ...checked, state: "current", latestStableVersion: "1.2.3", updateAvailable: false },
@@ -66,6 +77,7 @@ assert.equal(updateUI.hashForRoute("about", "updates"), "#settings/application-a
 assert.equal(updateUI.hashForRoute("about"), "#settings");
 
 const productionHTML = fs.readFileSync(path.join(repositoryRoot, "manager", "internal", "manager", "web", "index.html"), "utf8");
+const previewHTML = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "index.html"), "utf8");
 const productionCSS = fs.readFileSync(path.join(repositoryRoot, "manager", "internal", "manager", "web", "app.css"), "utf8");
 const productionJS = fs.readFileSync(path.join(repositoryRoot, "manager", "internal", "manager", "web", "app.js"), "utf8");
 const previewCSS = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "app.css"), "utf8");
@@ -86,19 +98,27 @@ for (const [name, css, javascript] of [["production", productionCSS, productionJ
   assert.match(css, /prefers-reduced-motion:reduce.*?update-settings-panel\.update-attention-glow:before/s, `${name} update card glow lacks reduced-motion support`);
   assert.match(css, /forced-colors:active[^}]+\.state-chip\.update-available/, `${name} update chip lacks forced-colors support`);
   assert.match(css, /forced-colors:active.*?\.update-settings-panel\.update-attention-glow/s, `${name} update card glow lacks forced-colors support`);
+  assert.match(javascript, /scheduleUpdateCheckAvailabilityRefresh\(cooldown\)/, `${name} update cooldown has no automatic expiry render`);
+  assert.match(javascript, /function showAuthentication\(\) \{[\s\S]+clearUpdateCheckAvailabilityTimer\(\)/, `${name} authentication boundary retains the update cooldown timer`);
+  assert.match(javascript, /cooldown\.delayMilliseconds \+ 1000/, `${name} cooldown expiry omitted its one-second timing safety buffer`);
+  assert.match(javascript, /updateAuthenticationEpoch !== authenticationEpoch \|\| byId\("app-shell"\)\.hidden/, `${name} in-flight update completion can cross the authentication boundary`);
+  assert.match(javascript, /finally \{\s+if \(updateAuthenticationEpoch === authenticationEpoch && !byId\("app-shell"\)\.hidden\) \{\s+state\.updateChecking = false;/, `${name} stale update completion can clear a new session's in-flight state`);
+  assert.match(javascript, /applicationRefreshPromise = null;[\s\S]+byId\("refresh-button"\)\.disabled = false;/, `${name} authentication transition retains stale Header Refresh state`);
 }
 assert.match(productionCSS, /prefers-reduced-motion:reduce[^}]+update-status-halo/s);
 assert.match(productionCSS, /forced-colors:active/);
 assert.match(productionCSS, /max-width:420px[^}]+topbar \.brand-lockup>div/s);
 assert.match(productionCSS, /max-width:420px[^\n]+access-status-button:before[^\n]+display:none/);
 assert.match(productionJS, /checkForUpdatesInBackground\(\)/);
+assert.match(productionHTML, /id="refresh-button"[^>]+aria-label="Refresh Manager, Tautulli choices, and update status"/);
+assert.match(previewHTML, /id="refresh-button"[^>]+aria-label="Refresh synthetic Manager, Tautulli choices, and update status"/);
 assert.doesNotMatch(productionJS, /backgroundUpdateCheckAttempted/);
 assert.match(productionJS, /request\("\/api\/v1\/updates\/check", \{ method: "POST", body: "\{\}" \}\)/);
 const initializeSource = productionJS.slice(productionJS.indexOf("async function initialize()"), productionJS.indexOf("async function loadAll()"));
 const authenticatedEntrySource = productionJS.slice(productionJS.indexOf("async function enterApplication"), productionJS.indexOf("async function loadAll()"));
 assert.doesNotMatch(initializeSource.slice(0, initializeSource.indexOf("await enterApplication()")), /checkForUpdatesInBackground/, "unauthenticated bootstrap can trigger an update check");
 assert.match(authenticatedEntrySource, /const localStatusLoaded = await loadAll\(\);[\s\S]+if \(localStatusLoaded\) checkForUpdatesInBackground\(\);/, "cached status must render before the authenticated background check");
-assert.match(productionJS, /async function refreshApplicationStatus\(\) \{\s+await loadAll\(\);\s+if \(!byId\("app-shell"\)\.hidden\) await checkForUpdates\(\);\s+\}/, "header Refresh does not sequence local loading before the Check now path");
+assert.match(productionJS, /if \(applicationRefreshPromise\) return applicationRefreshPromise;[\s\S]+recoverPendingPreviews: false,[\s\S]+updateCheckIsAvailable\(\)[\s\S]+Promise\.allSettled\(refreshes\)/, "header Refresh does not serialize and isolate local, Tautulli, and eligible update work");
 assert.match(productionJS, /byId\("refresh-button"\)\.addEventListener\("click", refreshApplicationStatus\)/, "header Refresh is not wired to the scoped update-aware handler");
 assert.equal((productionJS.match(/checkForUpdatesInBackground\(\)/g) || []).length, 2, "background checks escaped authenticated entry");
 assert.match(productionJS, /addEventListener\("click", openUpdateSettings\)/);

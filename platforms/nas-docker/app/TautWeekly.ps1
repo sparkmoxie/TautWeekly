@@ -1097,10 +1097,7 @@ function New-ReleaseData {
 
         if ($type -eq "movie") {
             $ratingKey = Get-OptionalStringProperty -InputObject $item -Name "rating_key"
-            $rating = Get-OptionalStringProperty -InputObject $item -Name "audience_rating"
-            if ([string]::IsNullOrWhiteSpace($rating)) {
-                $rating = Get-OptionalStringProperty -InputObject $item -Name "rating"
-            }
+            $rating = Get-OptionalStringProperty -InputObject $item -Name "rating"
             $movieList.Add([PSCustomObject]@{
                 Type            = "movie"
                 ReleaseKey      = "movie:" + $ratingKey
@@ -1153,6 +1150,33 @@ function New-ReleaseData {
                 $showRatingKey = $showTitle
             }
 
+            $showSummaryField = if ($type -eq "show") { "summary" } else { "grandparent_summary" }
+            $showYearField = if ($type -eq "show") { "year" } else { "grandparent_year" }
+            $showRatingField = if ($type -eq "show") { "rating" } else { "grandparent_rating" }
+            $showRatingImageField = if ($type -eq "show") { "rating_image" } else { "grandparent_rating_image" }
+            $showAudienceField = if ($type -eq "show") { "audience_rating" } else { "grandparent_audience_rating" }
+            $showAudienceImageField = if ($type -eq "show") { "audience_rating_image" } else { "grandparent_audience_rating_image" }
+            $showGenresField = if ($type -eq "show") { "genres" } else { "grandparent_genres" }
+
+            $showSummary = Get-OptionalStringProperty -InputObject $item -Name $showSummaryField
+            $showYear = Get-OptionalStringProperty -InputObject $item -Name $showYearField
+            $showRating = Get-OptionalStringProperty -InputObject $item -Name $showRatingField
+            $showRatingImage = Get-OptionalStringProperty -InputObject $item -Name $showRatingImageField
+            $showAudienceRating = Get-OptionalStringProperty -InputObject $item -Name $showAudienceField
+            $showAudienceRatingImage = Get-OptionalStringProperty -InputObject $item -Name $showAudienceImageField
+            $showGenres = @()
+            if ($null -ne $item.PSObject.Properties[$showGenresField]) {
+                $showGenres = @(ConvertTo-DesignGenreList -Value $item.PSObject.Properties[$showGenresField].Value)
+            }
+            $showRatingPairAvailable = (
+                -not [string]::IsNullOrWhiteSpace($showRating) -and
+                -not [string]::IsNullOrWhiteSpace($showRatingImage)
+            )
+            $showAudiencePairAvailable = (
+                -not [string]::IsNullOrWhiteSpace($showAudienceRating) -and
+                -not [string]::IsNullOrWhiteSpace($showAudienceRatingImage)
+            )
+
             $mapKey = "show:" + $showRatingKey
 
             if (-not $tvMap.ContainsKey($mapKey)) {
@@ -1165,9 +1189,13 @@ function New-ReleaseData {
                     MetadataParentIndex = if ($type -eq "episode") { Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "parent_media_index") } else { 0 }
                     MetadataIndex   = if ($type -in @("episode", "season")) { Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "media_index") } else { 0 }
                     Title           = $showTitle
-                    Year            = Get-OptionalStringProperty -InputObject $item -Name "year"
-                    Rating          = ""
-                    Summary         = ""
+                    Year            = $showYear
+                    Rating          = if ($showRatingPairAvailable) { $showRating } else { "" }
+                    RatingImage     = if ($showRatingPairAvailable) { $showRatingImage } else { "" }
+                    AudienceRating  = if ($showAudiencePairAvailable) { $showAudienceRating } else { "" }
+                    AudienceRatingImage = if ($showAudiencePairAvailable) { $showAudienceRatingImage } else { "" }
+                    Summary         = $showSummary
+                    DesignGenres    = @($showGenres)
                     AddedAt         = Safe-Int64 $item.added_at
                     EpisodeCount    = 0
                     SeasonCount     = 0
@@ -1186,6 +1214,33 @@ function New-ReleaseData {
                 elseif ($type -eq "season") {
                     $entry.MetadataIndex = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "media_index")
                 }
+            }
+            if ([string]::IsNullOrWhiteSpace([string]$entry.Year) -and
+                -not [string]::IsNullOrWhiteSpace($showYear)) {
+                $entry.Year = $showYear
+            }
+            if ([string]::IsNullOrWhiteSpace([string]$entry.Summary) -and
+                -not [string]::IsNullOrWhiteSpace($showSummary)) {
+                $entry.Summary = $showSummary
+            }
+            if (@($entry.DesignGenres).Count -eq 0 -and $showGenres.Count -gt 0) {
+                $entry.DesignGenres = @($showGenres)
+            }
+            $entryRatingPairAvailable = (
+                -not [string]::IsNullOrWhiteSpace([string]$entry.Rating) -and
+                -not [string]::IsNullOrWhiteSpace([string]$entry.RatingImage)
+            )
+            if (-not $entryRatingPairAvailable -and $showRatingPairAvailable) {
+                $entry.Rating = $showRating
+                $entry.RatingImage = $showRatingImage
+            }
+            $entryAudiencePairAvailable = (
+                -not [string]::IsNullOrWhiteSpace([string]$entry.AudienceRating) -and
+                -not [string]::IsNullOrWhiteSpace([string]$entry.AudienceRatingImage)
+            )
+            if (-not $entryAudiencePairAvailable -and $showAudiencePairAvailable) {
+                $entry.AudienceRating = $showAudienceRating
+                $entry.AudienceRatingImage = $showAudienceRatingImage
             }
             if ((Safe-Int64 $item.added_at) -gt $entry.AddedAt) {
                 $entry.AddedAt = Safe-Int64 $item.added_at
@@ -1523,6 +1578,131 @@ function Get-TvEpisodeSnapshotFromTautulli {
     }
 }
 
+function Merge-TvEpisodeSnapshots {
+    param(
+        [object[]]$ExistingEpisodes,
+        [object[]]$SnapshotEpisodes,
+        [int]$Limit = 3
+    )
+
+    $getFallbackIdentity = {
+        param([object]$EpisodeItem)
+        $season = Safe-Int (Get-OptionalStringProperty -InputObject $EpisodeItem -Name "Season")
+        $episodeIndex = Safe-Int (Get-OptionalStringProperty -InputObject $EpisodeItem -Name "Episode")
+        if ($season -gt 0 -and $episodeIndex -gt 0) {
+            return "index:{0}:{1}" -f $season, $episodeIndex
+        }
+        $title = (Get-OptionalStringProperty -InputObject $EpisodeItem -Name "Title").Trim().ToLowerInvariant()
+        $addedAt = Safe-Int64 (Get-OptionalStringProperty -InputObject $EpisodeItem -Name "AddedAt")
+        if (-not [string]::IsNullOrWhiteSpace($title) -and $addedAt -gt 0) {
+            return "title-time:{0}:{1}" -f $title, $addedAt
+        }
+        return ""
+    }
+    $getPreferredIdentity = {
+        param([object]$EpisodeItem)
+        $ratingKey = Get-OptionalStringProperty -InputObject $EpisodeItem -Name "RatingKey"
+        if (-not [string]::IsNullOrWhiteSpace($ratingKey)) {
+            return "key:" + $ratingKey
+        }
+        return (& $getFallbackIdentity $EpisodeItem)
+    }
+
+    $existingByRatingKey = @{}
+    $existingByFallback = @{}
+    foreach ($existingEpisode in @($ExistingEpisodes)) {
+        $ratingKey = Get-OptionalStringProperty -InputObject $existingEpisode -Name "RatingKey"
+        if (-not [string]::IsNullOrWhiteSpace($ratingKey) -and
+            -not $existingByRatingKey.ContainsKey($ratingKey)) {
+            $existingByRatingKey[$ratingKey] = $existingEpisode
+        }
+        $fallbackIdentity = & $getFallbackIdentity $existingEpisode
+        if (-not [string]::IsNullOrWhiteSpace($fallbackIdentity) -and
+            -not $existingByFallback.ContainsKey($fallbackIdentity)) {
+            $existingByFallback[$fallbackIdentity] = $existingEpisode
+        }
+    }
+
+    $merged = New-Object System.Collections.Generic.List[object]
+    $seen = @{}
+    foreach ($snapshotEpisode in @($SnapshotEpisodes)) {
+        $ratingKey = Get-OptionalStringProperty -InputObject $snapshotEpisode -Name "RatingKey"
+        $fallbackIdentity = & $getFallbackIdentity $snapshotEpisode
+        $existingEpisode = $null
+        $matchedExistingIdentity = ""
+        if (-not [string]::IsNullOrWhiteSpace($ratingKey) -and
+            $existingByRatingKey.ContainsKey($ratingKey)) {
+            $existingEpisode = $existingByRatingKey[$ratingKey]
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($fallbackIdentity) -and
+            $existingByFallback.ContainsKey($fallbackIdentity)) {
+            $existingEpisode = $existingByFallback[$fallbackIdentity]
+        }
+
+        if ($null -ne $existingEpisode) {
+            foreach ($fieldName in @("RatingKey", "Title")) {
+                $snapshotValue = Get-OptionalStringProperty -InputObject $snapshotEpisode -Name $fieldName
+                $existingValue = Get-OptionalStringProperty -InputObject $existingEpisode -Name $fieldName
+                if ([string]::IsNullOrWhiteSpace($snapshotValue) -and
+                    -not [string]::IsNullOrWhiteSpace($existingValue)) {
+                    $snapshotEpisode | Add-Member -NotePropertyName $fieldName -NotePropertyValue $existingValue -Force
+                }
+            }
+            foreach ($fieldName in @("Season", "Episode", "AddedAt")) {
+                $snapshotValue = Safe-Int64 (Get-OptionalStringProperty -InputObject $snapshotEpisode -Name $fieldName)
+                $existingValue = Safe-Int64 (Get-OptionalStringProperty -InputObject $existingEpisode -Name $fieldName)
+                if ($snapshotValue -le 0 -and $existingValue -gt 0) {
+                    $snapshotEpisode | Add-Member -NotePropertyName $fieldName -NotePropertyValue $existingValue -Force
+                }
+            }
+
+            $snapshotImdb = Get-OptionalStringProperty -InputObject $snapshotEpisode -Name "ImdbRating"
+            $existingImdb = Get-OptionalStringProperty -InputObject $existingEpisode -Name "ImdbRating"
+            if ([string]::IsNullOrWhiteSpace($snapshotImdb) -and
+                -not [string]::IsNullOrWhiteSpace($existingImdb)) {
+                $snapshotEpisode | Add-Member -NotePropertyName "ImdbRating" -NotePropertyValue $existingImdb -Force
+            }
+
+            $snapshotProvider = Get-OptionalStringProperty -InputObject $snapshotEpisode -Name "DesignRatingProvider"
+            $snapshotProviderValue = Get-OptionalStringProperty -InputObject $snapshotEpisode -Name "DesignRatingValue"
+            $existingProvider = Get-OptionalStringProperty -InputObject $existingEpisode -Name "DesignRatingProvider"
+            $existingProviderValue = Get-OptionalStringProperty -InputObject $existingEpisode -Name "DesignRatingValue"
+            $snapshotPairAvailable = (-not [string]::IsNullOrWhiteSpace($snapshotProvider) -and -not [string]::IsNullOrWhiteSpace($snapshotProviderValue))
+            $existingPairAvailable = (-not [string]::IsNullOrWhiteSpace($existingProvider) -and -not [string]::IsNullOrWhiteSpace($existingProviderValue))
+            $snapshotRatingImage = Get-OptionalStringProperty -InputObject $snapshotEpisode -Name "RatingImage"
+            $existingRatingImage = Get-OptionalStringProperty -InputObject $existingEpisode -Name "RatingImage"
+            if (-not $snapshotPairAvailable -and $existingPairAvailable) {
+                $snapshotEpisode | Add-Member -NotePropertyName "DesignRatingProvider" -NotePropertyValue $existingProvider -Force
+                $snapshotEpisode | Add-Member -NotePropertyName "DesignRatingValue" -NotePropertyValue $existingProviderValue -Force
+                $snapshotEpisode | Add-Member -NotePropertyName "RatingImage" -NotePropertyValue $existingRatingImage -Force
+            }
+            elseif ($snapshotPairAvailable -and [string]::IsNullOrWhiteSpace($snapshotRatingImage) -and
+                $existingPairAvailable -and $snapshotProvider -eq $existingProvider -and
+                -not [string]::IsNullOrWhiteSpace($existingRatingImage)) {
+                $snapshotEpisode | Add-Member -NotePropertyName "RatingImage" -NotePropertyValue $existingRatingImage -Force
+            }
+
+            $matchedExistingIdentity = & $getPreferredIdentity $existingEpisode
+        }
+
+        $identity = & $getPreferredIdentity $snapshotEpisode
+        if ([string]::IsNullOrWhiteSpace($identity) -or -not $seen.ContainsKey($identity)) {
+            if (-not [string]::IsNullOrWhiteSpace($identity)) { $seen[$identity] = $true }
+            $merged.Add($snapshotEpisode)
+        }
+        if (-not [string]::IsNullOrWhiteSpace($matchedExistingIdentity)) { $seen[$matchedExistingIdentity] = $true }
+    }
+    foreach ($existingEpisode in @($ExistingEpisodes)) {
+        $identity = & $getPreferredIdentity $existingEpisode
+        if ([string]::IsNullOrWhiteSpace($identity) -or -not $seen.ContainsKey($identity)) {
+            if (-not [string]::IsNullOrWhiteSpace($identity)) { $seen[$identity] = $true }
+            $merged.Add($existingEpisode)
+        }
+    }
+
+    return @($merged | Sort-Object AddedAt -Descending | Select-Object -First $Limit)
+}
+
 function Enrich-TvEpisodeMetadata {
     param(
         [object]$ReleaseData,
@@ -1563,10 +1743,10 @@ function Enrich-TvEpisodeMetadata {
 
             $snapshotEpisodes = @($snapshot.Episodes)
             if ($snapshotEpisodes.Count -gt 0) {
-                $show.Episodes = @($snapshotEpisodes)
+                $show.Episodes = @(Merge-TvEpisodeSnapshots -ExistingEpisodes $existingEpisodes -SnapshotEpisodes $snapshotEpisodes -Limit 3)
                 Write-Log ("TV episode snapshot: {0} -> {1} displayed episode(s)." -f `
                     [string]$show.Title,
-                    $snapshotEpisodes.Count
+                    @($show.Episodes).Count
                 )
             }
 
@@ -1632,17 +1812,22 @@ function Enrich-TvEpisodeMetadata {
                 -RatingValue $ratingValue `
                 -AudienceImage $audienceImage `
                 -AudienceValue $audienceValue
-            if (-not [string]::IsNullOrWhiteSpace($ratingImage)) {
-                $episode.RatingImage = $ratingImage
+            $selectedRatingAvailable = (
+                -not [string]::IsNullOrWhiteSpace([string]$selectedRating.Provider) -and
+                -not [string]::IsNullOrWhiteSpace([string]$selectedRating.Value)
+            )
+            if ($selectedRatingAvailable) {
+                if (-not [string]::IsNullOrWhiteSpace($ratingImage)) {
+                    $episode.RatingImage = $ratingImage
+                }
+                $episode | Add-Member -NotePropertyName "DesignRatingProvider" -NotePropertyValue $selectedRating.Provider -Force
+                $episode | Add-Member -NotePropertyName "DesignRatingValue" -NotePropertyValue $selectedRating.Value -Force
             }
 
-            $episode.ImdbRating = ""
-            $episode | Add-Member -NotePropertyName "DesignRatingProvider" -NotePropertyValue $selectedRating.Provider -Force
-            $episode | Add-Member -NotePropertyName "DesignRatingValue" -NotePropertyValue $selectedRating.Value -Force
-
             # Fast path: Tautulli explicitly identifies IMDb as the selected
-            # episode rating provider.
-            if ($selectedRating.Provider -eq "IMDb") {
+            # episode rating provider. Otherwise retain an exact IMDb value
+            # already returned by recently-added or child metadata.
+            if ($selectedRating.Provider -eq "IMDb" -and $selectedRatingAvailable) {
                 $episode.ImdbRating = $selectedRating.Value
             }
 
@@ -1704,7 +1889,8 @@ function Enrich-TvEpisodeMetadata {
 function Get-LatestReleaseData {
     param(
         [int]$MovieLimit = 4,
-        [int]$TvLimit = 4
+        [int]$TvLimit = 4,
+        [int64]$TvAddedAfterEpoch = 0
     )
 
     $all = New-Object System.Collections.Generic.List[object]
@@ -1727,7 +1913,8 @@ function Get-LatestReleaseData {
                 }
             }
             $scopeSnapshot = New-ReleaseData -RecentItems $scopeRows.ToArray()
-            $enoughForScope = if ($script:LibraryFilterEnabled) { ($scopeSnapshot.Movies.Count -ge $MovieLimit -or $scopeSnapshot.TV.Count -ge $TvLimit) } else { ($scopeSnapshot.Movies.Count -ge $MovieLimit -and $scopeSnapshot.TV.Count -ge $TvLimit) }
+            $isSectionScope = -not [string]::IsNullOrWhiteSpace($sectionId)
+            $enoughForScope = if ($script:LibraryFilterEnabled -or $isSectionScope) { ($scopeSnapshot.Movies.Count -ge $MovieLimit -or $scopeSnapshot.TV.Count -ge $TvLimit) } else { ($scopeSnapshot.Movies.Count -ge $MovieLimit -and $scopeSnapshot.TV.Count -ge $TvLimit) }
             if ($enoughForScope) { break }
             if ($rows.Count -lt $pageSize) { break }
             $start += $rows.Count
@@ -1735,10 +1922,17 @@ function Get-LatestReleaseData {
     }
 
     $result = New-ReleaseData -RecentItems $all.ToArray()
+    $recentTv = @(
+        $result.TV |
+        Where-Object {
+            $TvAddedAfterEpoch -le 0 -or
+            (Safe-Int64 $_.AddedAt) -gt $TvAddedAfterEpoch
+        }
+    )
 
     return [PSCustomObject]@{
         Movies = @($result.Movies | Select-Object -First $MovieLimit)
-        TV     = @($result.TV | Select-Object -First $TvLimit)
+        TV     = @($recentTv | Select-Object -First $TvLimit)
     }
 }
 
@@ -1791,6 +1985,24 @@ function Get-UserStats {
                     "movie:title:" + $title.ToLowerInvariant()
                 }
 
+                $rowMovieSummary = Get-OptionalStringProperty -InputObject $row -Name "summary"
+                $rowMovieYear = Get-OptionalStringProperty -InputObject $row -Name "year"
+                $rowMovieRating = Get-OptionalStringProperty -InputObject $row -Name "rating"
+                $rowMovieRatingImage = Get-OptionalStringProperty -InputObject $row -Name "rating_image"
+                $rowMovieAudience = Get-OptionalStringProperty -InputObject $row -Name "audience_rating"
+                $rowMovieAudienceImage = Get-OptionalStringProperty -InputObject $row -Name "audience_rating_image"
+                $rowMovieGenres = @(if ($null -ne $row.PSObject.Properties["genres"]) {
+                    ConvertTo-DesignGenreList -Value $row.genres
+                })
+                $rowMovieRatingPairAvailable = (
+                    -not [string]::IsNullOrWhiteSpace($rowMovieRating) -and
+                    -not [string]::IsNullOrWhiteSpace($rowMovieRatingImage)
+                )
+                $rowMovieAudiencePairAvailable = (
+                    -not [string]::IsNullOrWhiteSpace($rowMovieAudience) -and
+                    -not [string]::IsNullOrWhiteSpace($rowMovieAudienceImage)
+                )
+
                 if (-not $movieItemTotals.ContainsKey($dedupeKey)) {
                     $movieItemTotals[$dedupeKey] = [PSCustomObject]@{
                         Type            = "movie"
@@ -1798,14 +2010,47 @@ function Get-UserStats {
                         PosterRatingKey = $ratingKey
                         MetadataGuid    = Get-OptionalStringProperty -InputObject $row -Name "guid"
                         Title           = $title
-                        Summary         = ""
-                        Year            = Get-OptionalStringProperty -InputObject $row -Name "year"
+                        Summary         = $rowMovieSummary
+                        Year            = $rowMovieYear
+                        Rating          = if ($rowMovieRatingPairAvailable) { $rowMovieRating } else { "" }
+                        RatingImage     = if ($rowMovieRatingPairAvailable) { $rowMovieRatingImage } else { "" }
+                        AudienceRating  = if ($rowMovieAudiencePairAvailable) { $rowMovieAudience } else { "" }
+                        AudienceRatingImage = if ($rowMovieAudiencePairAvailable) { $rowMovieAudienceImage } else { "" }
+                        DesignGenres    = @($rowMovieGenres)
                         Plays           = 0
                         Seconds         = [int64]0
                     }
                 }
                 if ([string]::IsNullOrWhiteSpace([string]$movieItemTotals[$dedupeKey].MetadataGuid)) {
                     $movieItemTotals[$dedupeKey].MetadataGuid = Get-OptionalStringProperty -InputObject $row -Name "guid"
+                }
+                $movieEntry = $movieItemTotals[$dedupeKey]
+                if ([string]::IsNullOrWhiteSpace([string]$movieEntry.Summary) -and
+                    -not [string]::IsNullOrWhiteSpace($rowMovieSummary)) {
+                    $movieEntry.Summary = $rowMovieSummary
+                }
+                if ([string]::IsNullOrWhiteSpace([string]$movieEntry.Year) -and
+                    -not [string]::IsNullOrWhiteSpace($rowMovieYear)) {
+                    $movieEntry.Year = $rowMovieYear
+                }
+                if (@($movieEntry.DesignGenres).Count -eq 0 -and $rowMovieGenres.Count -gt 0) {
+                    $movieEntry.DesignGenres = @($rowMovieGenres)
+                }
+                $movieRatingPairAvailable = (
+                    -not [string]::IsNullOrWhiteSpace([string]$movieEntry.Rating) -and
+                    -not [string]::IsNullOrWhiteSpace([string]$movieEntry.RatingImage)
+                )
+                if (-not $movieRatingPairAvailable -and $rowMovieRatingPairAvailable) {
+                    $movieEntry.Rating = $rowMovieRating
+                    $movieEntry.RatingImage = $rowMovieRatingImage
+                }
+                $movieAudiencePairAvailable = (
+                    -not [string]::IsNullOrWhiteSpace([string]$movieEntry.AudienceRating) -and
+                    -not [string]::IsNullOrWhiteSpace([string]$movieEntry.AudienceRatingImage)
+                )
+                if (-not $movieAudiencePairAvailable -and $rowMovieAudiencePairAvailable) {
+                    $movieEntry.AudienceRating = $rowMovieAudience
+                    $movieEntry.AudienceRatingImage = $rowMovieAudienceImage
                 }
                 $movieItemTotals[$dedupeKey].Plays += (Get-HistoryRowPlayCount -Row $row)
                 $movieItemTotals[$dedupeKey].Seconds += $seconds
@@ -1843,6 +2088,23 @@ function Get-UserStats {
                 } else {
                     "show:title:" + $showTitle.ToLowerInvariant()
                 }
+                $rowShowSummary = Get-OptionalStringProperty -InputObject $row -Name "grandparent_summary"
+                $rowShowYear = Get-OptionalStringProperty -InputObject $row -Name "grandparent_year"
+                $rowShowRating = Get-OptionalStringProperty -InputObject $row -Name "grandparent_rating"
+                $rowShowRatingImage = Get-OptionalStringProperty -InputObject $row -Name "grandparent_rating_image"
+                $rowShowAudience = Get-OptionalStringProperty -InputObject $row -Name "grandparent_audience_rating"
+                $rowShowAudienceImage = Get-OptionalStringProperty -InputObject $row -Name "grandparent_audience_rating_image"
+                $rowShowGenres = @(if ($null -ne $row.PSObject.Properties["grandparent_genres"]) {
+                    ConvertTo-DesignGenreList -Value $row.grandparent_genres
+                })
+                $rowShowRatingPairAvailable = (
+                    -not [string]::IsNullOrWhiteSpace($rowShowRating) -and
+                    -not [string]::IsNullOrWhiteSpace($rowShowRatingImage)
+                )
+                $rowShowAudiencePairAvailable = (
+                    -not [string]::IsNullOrWhiteSpace($rowShowAudience) -and
+                    -not [string]::IsNullOrWhiteSpace($rowShowAudienceImage)
+                )
                 if (-not $tvShowTotals.ContainsKey($showDedupeKey)) {
                     $tvShowTotals[$showDedupeKey] = [PSCustomObject]@{
                         Type            = "show"
@@ -1853,8 +2115,13 @@ function Get-UserStats {
                         MetadataIndex   = Safe-Int (Get-OptionalStringProperty -InputObject $row -Name "media_index")
                         Title           = $showTitle
                         ShowTitle       = $showTitle
-                        Summary         = ""
-                        Year            = Get-OptionalStringProperty -InputObject $row -Name "year"
+                        Summary         = $rowShowSummary
+                        Year            = $rowShowYear
+                        Rating          = if ($rowShowRatingPairAvailable) { $rowShowRating } else { "" }
+                        RatingImage     = if ($rowShowRatingPairAvailable) { $rowShowRatingImage } else { "" }
+                        AudienceRating  = if ($rowShowAudiencePairAvailable) { $rowShowAudience } else { "" }
+                        AudienceRatingImage = if ($rowShowAudiencePairAvailable) { $rowShowAudienceImage } else { "" }
+                        DesignGenres    = @($rowShowGenres)
                         Plays           = 0
                         Seconds         = [int64]0
                         TotalTimeText   = ""
@@ -1864,6 +2131,34 @@ function Get-UserStats {
                     $tvShowTotals[$showDedupeKey].MetadataGuid = Get-OptionalStringProperty -InputObject $row -Name "guid"
                     $tvShowTotals[$showDedupeKey].MetadataParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $row -Name "parent_media_index")
                     $tvShowTotals[$showDedupeKey].MetadataIndex = Safe-Int (Get-OptionalStringProperty -InputObject $row -Name "media_index")
+                }
+                $showEntry = $tvShowTotals[$showDedupeKey]
+                if ([string]::IsNullOrWhiteSpace([string]$showEntry.Summary) -and
+                    -not [string]::IsNullOrWhiteSpace($rowShowSummary)) {
+                    $showEntry.Summary = $rowShowSummary
+                }
+                if ([string]::IsNullOrWhiteSpace([string]$showEntry.Year) -and
+                    -not [string]::IsNullOrWhiteSpace($rowShowYear)) {
+                    $showEntry.Year = $rowShowYear
+                }
+                if (@($showEntry.DesignGenres).Count -eq 0 -and $rowShowGenres.Count -gt 0) {
+                    $showEntry.DesignGenres = @($rowShowGenres)
+                }
+                $showRatingPairAvailable = (
+                    -not [string]::IsNullOrWhiteSpace([string]$showEntry.Rating) -and
+                    -not [string]::IsNullOrWhiteSpace([string]$showEntry.RatingImage)
+                )
+                if (-not $showRatingPairAvailable -and $rowShowRatingPairAvailable) {
+                    $showEntry.Rating = $rowShowRating
+                    $showEntry.RatingImage = $rowShowRatingImage
+                }
+                $showAudiencePairAvailable = (
+                    -not [string]::IsNullOrWhiteSpace([string]$showEntry.AudienceRating) -and
+                    -not [string]::IsNullOrWhiteSpace([string]$showEntry.AudienceRatingImage)
+                )
+                if (-not $showAudiencePairAvailable -and $rowShowAudiencePairAvailable) {
+                    $showEntry.AudienceRating = $rowShowAudience
+                    $showEntry.AudienceRatingImage = $rowShowAudienceImage
                 }
                 $tvShowTotals[$showDedupeKey].Plays += (Get-HistoryRowPlayCount -Row $row)
                 $tvShowTotals[$showDedupeKey].Seconds += $seconds
@@ -2004,7 +2299,7 @@ function Get-HotNewRelease {
 
         if (-not [string]::IsNullOrWhiteSpace($key) -and $lookup.ContainsKey($key)) {
             $lookup[$key].Seconds += [int64](Safe-Int $row.play_duration)
-            $lookup[$key].Plays++
+            $lookup[$key].Plays += (Get-HistoryRowPlayCount -Row $row)
         }
     }
 
@@ -2317,6 +2612,14 @@ function Get-GlobalTitleTotals {
             continue
         }
 
+        $metadataRatingPairAvailable = (
+            -not [string]::IsNullOrWhiteSpace($metadataRating) -and
+            -not [string]::IsNullOrWhiteSpace($metadataRatingImage)
+        )
+        $metadataAudiencePairAvailable = (
+            -not [string]::IsNullOrWhiteSpace($metadataAudienceRating) -and
+            -not [string]::IsNullOrWhiteSpace($metadataAudienceRatingImage)
+        )
         if ([string]::IsNullOrWhiteSpace($title)) { continue }
 
         if (-not $totals.ContainsKey($key)) {
@@ -2330,10 +2633,10 @@ function Get-GlobalTitleTotals {
                 MetadataIndex = $metadataIndex
                 Year      = $metadataYear
                 Summary   = $metadataSummary
-                Rating    = $metadataRating
-                RatingImage = $metadataRatingImage
-                AudienceRating = $metadataAudienceRating
-                AudienceRatingImage = $metadataAudienceRatingImage
+                Rating    = if ($metadataRatingPairAvailable) { $metadataRating } else { "" }
+                RatingImage = if ($metadataRatingPairAvailable) { $metadataRatingImage } else { "" }
+                AudienceRating = if ($metadataAudiencePairAvailable) { $metadataAudienceRating } else { "" }
+                AudienceRatingImage = if ($metadataAudiencePairAvailable) { $metadataAudienceRatingImage } else { "" }
                 Genres    = @($metadataGenres)
                 Seconds   = [int64]0
                 Plays     = 0
@@ -2345,14 +2648,29 @@ function Get-GlobalTitleTotals {
             $totals[$key].MetadataGuid = $metadataGuid
             $totals[$key].MetadataParentIndex = $metadataParentIndex
             $totals[$key].MetadataIndex = $metadataIndex
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$totals[$key].Year) -and
+            -not [string]::IsNullOrWhiteSpace($metadataYear)) {
             $totals[$key].Year = $metadataYear
         }
         if ($titleType -eq "movie") {
             if ([string]::IsNullOrWhiteSpace([string]$totals[$key].Summary) -and -not [string]::IsNullOrWhiteSpace($metadataSummary)) { $totals[$key].Summary = $metadataSummary }
-            if ([string]::IsNullOrWhiteSpace([string]$totals[$key].Rating) -and -not [string]::IsNullOrWhiteSpace($metadataRating)) { $totals[$key].Rating = $metadataRating }
-            if ([string]::IsNullOrWhiteSpace([string]$totals[$key].RatingImage) -and -not [string]::IsNullOrWhiteSpace($metadataRatingImage)) { $totals[$key].RatingImage = $metadataRatingImage }
-            if ([string]::IsNullOrWhiteSpace([string]$totals[$key].AudienceRating) -and -not [string]::IsNullOrWhiteSpace($metadataAudienceRating)) { $totals[$key].AudienceRating = $metadataAudienceRating }
-            if ([string]::IsNullOrWhiteSpace([string]$totals[$key].AudienceRatingImage) -and -not [string]::IsNullOrWhiteSpace($metadataAudienceRatingImage)) { $totals[$key].AudienceRatingImage = $metadataAudienceRatingImage }
+            $currentRatingPairAvailable = (
+                -not [string]::IsNullOrWhiteSpace([string]$totals[$key].Rating) -and
+                -not [string]::IsNullOrWhiteSpace([string]$totals[$key].RatingImage)
+            )
+            if (-not $currentRatingPairAvailable -and $metadataRatingPairAvailable) {
+                $totals[$key].Rating = $metadataRating
+                $totals[$key].RatingImage = $metadataRatingImage
+            }
+            $currentAudiencePairAvailable = (
+                -not [string]::IsNullOrWhiteSpace([string]$totals[$key].AudienceRating) -and
+                -not [string]::IsNullOrWhiteSpace([string]$totals[$key].AudienceRatingImage)
+            )
+            if (-not $currentAudiencePairAvailable -and $metadataAudiencePairAvailable) {
+                $totals[$key].AudienceRating = $metadataAudienceRating
+                $totals[$key].AudienceRatingImage = $metadataAudienceRatingImage
+            }
             if (@($totals[$key].Genres).Count -eq 0 -and $metadataGenres.Count -gt 0) { $totals[$key].Genres = @($metadataGenres) }
         }
 
@@ -2368,7 +2686,10 @@ function Get-GlobalTrendingStat {
 
     $top = @(
         Get-GlobalTitleTotals -GlobalHistory $GlobalHistory |
-        Where-Object { $_.Seconds -gt 0 -or $_.Plays -gt 0 } |
+        Where-Object {
+            [string]$_.Type -eq "movie" -and
+            ($_.Seconds -gt 0 -or $_.Plays -gt 0)
+        } |
         Sort-Object Seconds, Plays -Descending |
         Select-Object -First 1
     )
@@ -2421,13 +2742,19 @@ function New-HeroItemFromGlobalStat {
         $metadataSummary = Get-OptionalStringProperty -InputObject $meta -Name "summary"
         if (-not [string]::IsNullOrWhiteSpace($metadataSummary)) { $summary = $metadataSummary }
         $metadataRating = Get-OptionalStringProperty -InputObject $meta -Name "rating"
-        if (-not [string]::IsNullOrWhiteSpace($metadataRating)) { $rating = $metadataRating }
         $metadataRatingImage = Get-OptionalStringProperty -InputObject $meta -Name "rating_image"
-        if (-not [string]::IsNullOrWhiteSpace($metadataRatingImage)) { $ratingImage = $metadataRatingImage }
+        if (-not [string]::IsNullOrWhiteSpace($metadataRating) -and
+            -not [string]::IsNullOrWhiteSpace($metadataRatingImage)) {
+            $rating = $metadataRating
+            $ratingImage = $metadataRatingImage
+        }
         $metadataAudienceRating = Get-OptionalStringProperty -InputObject $meta -Name "audience_rating"
-        if (-not [string]::IsNullOrWhiteSpace($metadataAudienceRating)) { $audienceRating = $metadataAudienceRating }
         $metadataAudienceRatingImage = Get-OptionalStringProperty -InputObject $meta -Name "audience_rating_image"
-        if (-not [string]::IsNullOrWhiteSpace($metadataAudienceRatingImage)) { $audienceRatingImage = $metadataAudienceRatingImage }
+        if (-not [string]::IsNullOrWhiteSpace($metadataAudienceRating) -and
+            -not [string]::IsNullOrWhiteSpace($metadataAudienceRatingImage)) {
+            $audienceRating = $metadataAudienceRating
+            $audienceRatingImage = $metadataAudienceRatingImage
+        }
         if ($null -ne $meta.PSObject.Properties["genres"]) { $metadataGenres = @(ConvertTo-DesignGenreList -Value $meta.genres); if ($metadataGenres.Count -gt 0) { $genres = $metadataGenres } }
         $addedAt = Safe-Int64 (Get-OptionalStringProperty -InputObject $meta -Name "added_at")
         if ([string]::IsNullOrWhiteSpace($posterRatingKey)) {
@@ -2460,18 +2787,93 @@ function New-HeroItemFromGlobalStat {
 }
 
 function Get-GlobalTrendingHero {
-    param([object[]]$GlobalHistory)
+    param(
+        [object[]]$GlobalHistory,
+        [AllowNull()][object]$ReleaseData = $null
+    )
 
     $top = @(
         Get-GlobalTitleTotals -GlobalHistory $GlobalHistory |
-        Where-Object { $_.Seconds -gt 0 -or $_.Plays -gt 0 } |
+        Where-Object {
+            [string]$_.Type -eq "movie" -and
+            ($_.Seconds -gt 0 -or $_.Plays -gt 0)
+        } |
         Sort-Object Seconds, Plays -Descending |
         Select-Object -First 1
     )
 
     if ($top.Count -eq 0) { return $null }
 
-    $item = New-HeroItemFromGlobalStat -Stat $top[0]
+    $historyItem = New-HeroItemFromGlobalStat -Stat $top[0]
+    $item = $historyItem
+    if ($null -ne $ReleaseData -and $null -ne $ReleaseData.PSObject.Properties["Movies"]) {
+        $releaseItem = @(
+            $ReleaseData.Movies |
+            Where-Object {
+                [string]$_.ReleaseKey -eq [string]$top[0].Key -or
+                (
+                    -not [string]::IsNullOrWhiteSpace([string]$top[0].RatingKey) -and
+                    [string]$_.RatingKey -eq [string]$top[0].RatingKey
+                )
+            } |
+            Select-Object -First 1
+        ) | Select-Object -First 1
+
+        if ($null -ne $releaseItem) {
+            $merged = [ordered]@{}
+            foreach ($property in $releaseItem.PSObject.Properties) {
+                $merged[$property.Name] = $property.Value
+            }
+
+            if ($null -ne $historyItem) {
+                foreach ($propertyName in @(
+                    "Type", "ReleaseKey", "RatingKey", "PosterRatingKey",
+                    "MetadataGuid", "Title", "Year", "Summary"
+                )) {
+                    $historyValue = Get-OptionalStringProperty -InputObject $historyItem -Name $propertyName
+                    $releaseValue = if ($merged.Contains($propertyName)) { [string]$merged[$propertyName] } else { "" }
+                    if ([string]::IsNullOrWhiteSpace($releaseValue) -and
+                        -not [string]::IsNullOrWhiteSpace($historyValue)) {
+                        $merged[$propertyName] = $historyValue
+                    }
+                }
+                $releaseRating = if ($merged.Contains("Rating")) { [string]$merged["Rating"] } else { "" }
+                $releaseRatingImage = if ($merged.Contains("RatingImage")) { [string]$merged["RatingImage"] } else { "" }
+                $historyRating = Get-OptionalStringProperty -InputObject $historyItem -Name "Rating"
+                $historyRatingImage = Get-OptionalStringProperty -InputObject $historyItem -Name "RatingImage"
+                if (([string]::IsNullOrWhiteSpace($releaseRating) -or [string]::IsNullOrWhiteSpace($releaseRatingImage)) -and
+                    -not [string]::IsNullOrWhiteSpace($historyRating) -and
+                    -not [string]::IsNullOrWhiteSpace($historyRatingImage)) {
+                    $merged["Rating"] = $historyRating
+                    $merged["RatingImage"] = $historyRatingImage
+                }
+                $releaseAudience = if ($merged.Contains("AudienceRating")) { [string]$merged["AudienceRating"] } else { "" }
+                $releaseAudienceImage = if ($merged.Contains("AudienceRatingImage")) { [string]$merged["AudienceRatingImage"] } else { "" }
+                $historyAudience = Get-OptionalStringProperty -InputObject $historyItem -Name "AudienceRating"
+                $historyAudienceImage = Get-OptionalStringProperty -InputObject $historyItem -Name "AudienceRatingImage"
+                if (([string]::IsNullOrWhiteSpace($releaseAudience) -or [string]::IsNullOrWhiteSpace($releaseAudienceImage)) -and
+                    -not [string]::IsNullOrWhiteSpace($historyAudience) -and
+                    -not [string]::IsNullOrWhiteSpace($historyAudienceImage)) {
+                    $merged["AudienceRating"] = $historyAudience
+                    $merged["AudienceRatingImage"] = $historyAudienceImage
+                }
+
+                $historyGenres = @()
+                if ($null -ne $historyItem.PSObject.Properties["DesignGenres"]) {
+                    $historyGenres = @($historyItem.DesignGenres)
+                }
+                $releaseGenres = @()
+                if ($merged.Contains("DesignGenres")) {
+                    $releaseGenres = @($merged["DesignGenres"])
+                }
+                if ($releaseGenres.Count -eq 0 -and $historyGenres.Count -gt 0) {
+                    $merged["DesignGenres"] = $historyGenres
+                }
+            }
+
+            $item = [PSCustomObject]$merged
+        }
+    }
     if ($null -eq $item) { return $null }
 
     return [PSCustomObject]@{
@@ -3317,7 +3719,19 @@ function Get-ImageMagickTool {
     param([ValidateSet("identify","convert")][string]$Name)
 
     $command = Get-Command $Name -ErrorAction SilentlyContinue
-    if ($null -ne $command) { return [string]$command.Source }
+    if ($null -ne $command) {
+        $isWindowsVolumeConverter = $false
+        if ($Name -eq "convert" -and
+            -not [string]::IsNullOrWhiteSpace([string]$env:SystemRoot)) {
+            $windowsConverter = Join-Path $env:SystemRoot "System32\convert.exe"
+            $isWindowsVolumeConverter = [string]::Equals(
+                [IO.Path]::GetFullPath([string]$command.Source),
+                [IO.Path]::GetFullPath($windowsConverter),
+                [StringComparison]::OrdinalIgnoreCase
+            )
+        }
+        if (-not $isWindowsVolumeConverter) { return [string]$command.Source }
+    }
 
     $magick = Get-Command "magick" -ErrorAction SilentlyContinue
     if ($null -ne $magick) { return [string]$magick.Source }
@@ -3523,6 +3937,62 @@ function Get-DesignBestClearLogoAsset {
             }
 
             $visual = Get-DesignLogoVisualScore -Path $localPath
+            if (-not $visual.Valid -and -not [string]::IsNullOrWhiteSpace($localPath)) {
+                # The container packages ship ImageMagick, but their shared
+                # source is also validated on Windows hosts. If ImageMagick is
+                # unavailable there, use the same managed decoder as the
+                # native Windows package to confirm the candidate is usable.
+                $fallbackBitmap = $null
+                try {
+                    Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+                    $fallbackBitmap = New-Object System.Drawing.Bitmap([string]$localPath)
+                    if ($fallbackBitmap.Width -gt 0 -and $fallbackBitmap.Height -gt 0) {
+                        $visual.Width = $fallbackBitmap.Width
+                        $visual.Height = $fallbackBitmap.Height
+
+                        $largestDimension = [Math]::Max($fallbackBitmap.Width, $fallbackBitmap.Height)
+                        $step = [Math]::Max(1, [int][Math]::Floor($largestDimension / 220.0))
+                        [double]$weightedLuma = 0
+                        [double]$totalWeight = 0
+                        [double]$brightWeight = 0
+
+                        for ($y = 0; $y -lt $fallbackBitmap.Height; $y += $step) {
+                            for ($x = 0; $x -lt $fallbackBitmap.Width; $x += $step) {
+                                $pixel = $fallbackBitmap.GetPixel($x, $y)
+                                if ($pixel.A -lt 32) { continue }
+
+                                $alphaWeight = $pixel.A / 255.0
+                                $luma = (
+                                    (0.2126 * $pixel.R) +
+                                    (0.7152 * $pixel.G) +
+                                    (0.0722 * $pixel.B)
+                                ) / 255.0
+                                $weightedLuma += ($luma * $alphaWeight)
+                                $totalWeight += $alphaWeight
+                                if ($luma -ge 0.62) {
+                                    $brightWeight += $alphaWeight
+                                }
+                            }
+                        }
+
+                        if ($totalWeight -gt 0) {
+                            $averageLuma = $weightedLuma / $totalWeight
+                            $brightFraction = $brightWeight / $totalWeight
+                            $visual.Valid = $true
+                            $visual.AverageLuma = [Math]::Round($averageLuma, 4)
+                            $visual.BrightFraction = [Math]::Round($brightFraction, 4)
+                            $visual.Score = [Math]::Round((($averageLuma * 0.75) + ($brightFraction * 0.25)), 4)
+                            $visual.Error = ""
+                        }
+                    }
+                }
+                catch { }
+                finally {
+                    if ($null -ne $fallbackBitmap) {
+                        $fallbackBitmap.Dispose()
+                    }
+                }
+            }
             $isSelected = ([string]$photo.selected -eq "1")
 
             $entry = [PSCustomObject]@{
@@ -3566,8 +4036,8 @@ function Get-DesignBestClearLogoAsset {
         $result.ReadableCount = $readable.Count
 
         if ($readable.Count -eq 0) {
-            $diag.Decision = "No sufficiently bright clearLogo candidate; use text title fallback."
-            Write-Log "TautWeekly for Plex: clearLogo variants exist, but none are readable enough for the dark email hero. Using text title." "WARN"
+            $diag.Decision = "No sufficiently bright clearLogo candidate; continue alternate logo fallbacks."
+            Write-Log "TautWeekly for Plex: clearLogo variants exist, but none meet the dark-hero readability threshold. Trying alternate logo sources." "WARN"
             return $result
         }
 
@@ -3606,18 +4076,35 @@ function Get-DesignBestClearLogoAsset {
         $finalName = "logo_" + $safeKey + ".png"
         $finalPath = Join-Path $DesignMediaDir $finalName
 
+        $converted = $false
         $convert = Get-ImageMagickTool -Name "convert"
-        if ([string]::IsNullOrWhiteSpace($convert)) {
-            throw "ImageMagick convert command is unavailable."
+        if (-not [string]::IsNullOrWhiteSpace($convert)) {
+            if ([IO.Path]::GetFileName($convert) -match '^magick(?:\.exe)?$') {
+                & $convert "convert" ([string]$chosen.LocalPath) "PNG32:$finalPath" 2>$null
+            }
+            else {
+                & $convert ([string]$chosen.LocalPath) "PNG32:$finalPath" 2>$null
+            }
+            $converted = ($LASTEXITCODE -eq 0 -and (Test-Path $finalPath))
         }
 
-        if ([IO.Path]::GetFileName($convert) -match '^magick(?:\.exe)?$') {
-            & $convert "convert" ([string]$chosen.LocalPath) "PNG32:$finalPath" 2>$null
+        if (-not $converted) {
+            $fallbackBitmap = $null
+            try {
+                Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+                $fallbackBitmap = New-Object System.Drawing.Bitmap([string]$chosen.LocalPath)
+                $fallbackBitmap.Save($finalPath, [System.Drawing.Imaging.ImageFormat]::Png)
+                $converted = (Test-Path $finalPath)
+            }
+            catch { }
+            finally {
+                if ($null -ne $fallbackBitmap) {
+                    $fallbackBitmap.Dispose()
+                }
+            }
         }
-        else {
-            & $convert ([string]$chosen.LocalPath) "PNG32:$finalPath" 2>$null
-        }
-        if ($LASTEXITCODE -ne 0) {
+
+        if (-not $converted) {
             throw "ImageMagick could not convert the chosen clearLogo to PNG."
         }
 
@@ -4490,13 +4977,13 @@ function Add-DesignRatingMetadata {
     $all += @($ReleaseData.TV)
 
     foreach ($item in $all) {
-        $critic = ""
-        $audience = ""
-        $imdb = ""
-        $provider = ""
-        $providerValue = ""
-        $criticImage = ""
-        $audienceImageState = ""
+        $critic = Get-OptionalStringProperty -InputObject $item -Name "DesignRtCritic"
+        $audience = Get-OptionalStringProperty -InputObject $item -Name "DesignRtAudience"
+        $imdb = Get-OptionalStringProperty -InputObject $item -Name "DesignImdbRating"
+        $provider = Get-OptionalStringProperty -InputObject $item -Name "DesignRatingProvider"
+        $providerValue = Get-OptionalStringProperty -InputObject $item -Name "DesignRatingValue"
+        $criticImage = Get-OptionalStringProperty -InputObject $item -Name "DesignRtCriticImage"
+        $audienceImageState = Get-OptionalStringProperty -InputObject $item -Name "DesignRtAudienceImage"
         $genres = @()
         $watchSlug = ""
         $liveMetadataAvailable = $false
@@ -4522,14 +5009,25 @@ function Add-DesignRatingMetadata {
             $providerValue = $sourceSelectedRating.Value
         }
         if ($sourceRatingImage -like 'rottentomatoes://image.rating.*') {
-            $critic = Convert-DesignRatingPercent $sourceRatingValue
-            $criticImage = $sourceRatingImage
+            $sourceCritic = Convert-DesignRatingPercent $sourceRatingValue
+            if (-not [string]::IsNullOrWhiteSpace($sourceCritic)) {
+                $critic = $sourceCritic
+                $criticImage = $sourceRatingImage
+            }
         }
         if ($sourceAudienceImage -like 'rottentomatoes://image.rating.*') {
-            $audience = Convert-DesignRatingPercent $sourceAudienceValue
-            $audienceImageState = $sourceAudienceImage
+            $sourceAudience = Convert-DesignRatingPercent $sourceAudienceValue
+            if (-not [string]::IsNullOrWhiteSpace($sourceAudience)) {
+                $audience = $sourceAudience
+                $audienceImageState = $sourceAudienceImage
+            }
         }
-        if ($mediaType -eq "show" -and $sourceRatingImage -like 'imdb://image.rating*') { $imdb = $sourceRatingValue }
+        if ($mediaType -eq "show" -and
+            $sourceRatingImage -like 'imdb://image.rating*' -and
+            $sourceSelectedRating.Provider -eq "IMDb" -and
+            -not [string]::IsNullOrWhiteSpace([string]$sourceSelectedRating.Value)) {
+            $imdb = $sourceSelectedRating.Value
+        }
 
         # Primary source for the newsletter: Tautulli exposes Plex's selected,
         # provider-labelled rating fields. Keep the dedicated RT/IMDb display
@@ -4577,15 +5075,24 @@ function Add-DesignRatingMetadata {
             }
 
             if ($ratingImage -like 'rottentomatoes://image.rating.*') {
-                $critic = Convert-DesignRatingPercent $ratingValue
-                $criticImage = $ratingImage
+                $metadataCritic = Convert-DesignRatingPercent $ratingValue
+                if (-not [string]::IsNullOrWhiteSpace($metadataCritic)) {
+                    $critic = $metadataCritic
+                    $criticImage = $ratingImage
+                }
             }
             if ($audienceImage -like 'rottentomatoes://image.rating.*') {
-                $audience = Convert-DesignRatingPercent $audienceRatingValue
-                $audienceImageState = $audienceImage
+                $metadataAudience = Convert-DesignRatingPercent $audienceRatingValue
+                if (-not [string]::IsNullOrWhiteSpace($metadataAudience)) {
+                    $audience = $metadataAudience
+                    $audienceImageState = $audienceImage
+                }
             }
-            if ($mediaType -eq "show" -and $ratingImage -like 'imdb://image.rating*') {
-                $imdb = $ratingValue
+            if ($mediaType -eq "show" -and
+                $ratingImage -like 'imdb://image.rating*' -and
+                $selectedRating.Provider -eq "IMDb" -and
+                -not [string]::IsNullOrWhiteSpace([string]$selectedRating.Value)) {
+                $imdb = $selectedRating.Value
             }
         }
         catch {
@@ -4628,30 +5135,38 @@ function Add-DesignRatingMetadata {
                             $value = $ratingEntry.value
                         }
 
+                        $entrySelectedRating = Get-DesignProviderRating -RatingImage $image -RatingValue $value
                         if ($mediaType -eq "show" -and
                             [string]::IsNullOrWhiteSpace($imdb) -and
-                            $image -like "imdb://image.rating*") {
-                            $imdb = [string]$value
+                            $image -like "imdb://image.rating*" -and
+                            $entrySelectedRating.Provider -eq "IMDb") {
+                            $imdb = $entrySelectedRating.Value
                         }
 
-                        if ([string]::IsNullOrWhiteSpace($provider)) {
-                            $selectedRating = Get-DesignProviderRating -RatingImage $image -RatingValue $value
-                            $provider = $selectedRating.Provider
-                            $providerValue = $selectedRating.Value
+                        if ([string]::IsNullOrWhiteSpace($provider) -and
+                            -not [string]::IsNullOrWhiteSpace([string]$entrySelectedRating.Provider)) {
+                            $provider = $entrySelectedRating.Provider
+                            $providerValue = $entrySelectedRating.Value
                         }
 
                         if ([string]::IsNullOrWhiteSpace($critic) -and
                             $image -like "rottentomatoes://image.rating.*" -and
                             $type -eq "critic") {
-                            $critic = Convert-DesignRatingPercent $value
-                            $criticImage = $image
+                            $entryCritic = Convert-DesignRatingPercent $value
+                            if (-not [string]::IsNullOrWhiteSpace($entryCritic)) {
+                                $critic = $entryCritic
+                                $criticImage = $image
+                            }
                         }
 
                         if ([string]::IsNullOrWhiteSpace($audience) -and
                             $image -like "rottentomatoes://image.rating.*" -and
                             $type -eq "audience") {
-                            $audience = Convert-DesignRatingPercent $value
-                            $audienceImageState = $image
+                            $entryAudience = Convert-DesignRatingPercent $value
+                            if (-not [string]::IsNullOrWhiteSpace($entryAudience)) {
+                                $audience = $entryAudience
+                                $audienceImageState = $image
+                            }
                         }
                     }
                 }
@@ -4691,13 +5206,40 @@ function Add-DesignRatingMetadata {
                 $genres = @(ConvertTo-DesignGenreList -Value $cachedEntry.Genres)
             }
             if ($null -ne $cachedEntry.PSObject.Properties["Ratings"]) {
-                if ([string]::IsNullOrWhiteSpace($critic)) { $critic = Get-OptionalStringProperty $cachedEntry.Ratings "RtCritic" }
-                if ([string]::IsNullOrWhiteSpace($audience)) { $audience = Get-OptionalStringProperty $cachedEntry.Ratings "RtAudience" }
-                if ([string]::IsNullOrWhiteSpace($imdb)) { $imdb = Get-OptionalStringProperty $cachedEntry.Ratings "Imdb" }
-                if ([string]::IsNullOrWhiteSpace($criticImage)) { $criticImage = Get-OptionalStringProperty $cachedEntry.Ratings "RtCriticImage" }
-                if ([string]::IsNullOrWhiteSpace($audienceImageState)) { $audienceImageState = Get-OptionalStringProperty $cachedEntry.Ratings "RtAudienceImage" }
-                if ([string]::IsNullOrWhiteSpace($provider)) { $provider = Get-OptionalStringProperty $cachedEntry.Ratings "Provider" }
-                if ([string]::IsNullOrWhiteSpace($providerValue)) { $providerValue = Get-OptionalStringProperty $cachedEntry.Ratings "ProviderValue" }
+                $cachedCritic = Get-OptionalStringProperty $cachedEntry.Ratings "RtCritic"
+                $cachedCriticImage = Get-OptionalStringProperty $cachedEntry.Ratings "RtCriticImage"
+                $criticPairAvailable = (
+                    -not [string]::IsNullOrWhiteSpace($critic) -and
+                    -not [string]::IsNullOrWhiteSpace($criticImage)
+                )
+                if (-not $criticPairAvailable -and
+                    -not [string]::IsNullOrWhiteSpace($cachedCritic) -and
+                    -not [string]::IsNullOrWhiteSpace($cachedCriticImage)) {
+                    $critic = $cachedCritic
+                    $criticImage = $cachedCriticImage
+                }
+                $cachedAudience = Get-OptionalStringProperty $cachedEntry.Ratings "RtAudience"
+                $cachedAudienceImage = Get-OptionalStringProperty $cachedEntry.Ratings "RtAudienceImage"
+                $audiencePairAvailable = (
+                    -not [string]::IsNullOrWhiteSpace($audience) -and
+                    -not [string]::IsNullOrWhiteSpace($audienceImageState)
+                )
+                if (-not $audiencePairAvailable -and
+                    -not [string]::IsNullOrWhiteSpace($cachedAudience) -and
+                    -not [string]::IsNullOrWhiteSpace($cachedAudienceImage)) {
+                    $audience = $cachedAudience
+                    $audienceImageState = $cachedAudienceImage
+                }
+                $cachedImdb = Get-OptionalStringProperty $cachedEntry.Ratings "Imdb"
+                if ([string]::IsNullOrWhiteSpace($imdb) -and -not [string]::IsNullOrWhiteSpace($cachedImdb)) { $imdb = $cachedImdb }
+                $cachedProvider = Get-OptionalStringProperty $cachedEntry.Ratings "Provider"
+                $cachedProviderValue = Get-OptionalStringProperty $cachedEntry.Ratings "ProviderValue"
+                if (([string]::IsNullOrWhiteSpace($provider) -or [string]::IsNullOrWhiteSpace($providerValue)) -and
+                    -not [string]::IsNullOrWhiteSpace($cachedProvider) -and
+                    -not [string]::IsNullOrWhiteSpace($cachedProviderValue)) {
+                    $provider = $cachedProvider
+                    $providerValue = $cachedProviderValue
+                }
             }
         }
         $needsHostedRating = if ($mediaType -eq "movie") {
@@ -4761,29 +5303,37 @@ function Add-DesignRatingMetadata {
                         $hostedAudience = Get-OptionalStringProperty -InputObject $hostedMeta -Name "audience_rating"
                     }
 
+                    $hostedSelectedRating = Get-DesignProviderRating `
+                        -RatingImage $hostedRatingImage `
+                        -RatingValue $hostedRating `
+                        -AudienceImage $hostedAudienceImage `
+                        -AudienceValue $hostedAudience
                     if ([string]::IsNullOrWhiteSpace($critic) -and
                         $hostedRatingImage -like 'rottentomatoes://image.rating.*') {
-                        $critic = Convert-DesignRatingPercent $hostedRating
-                        $criticImage = $hostedRatingImage
+                        $hostedCritic = Convert-DesignRatingPercent $hostedRating
+                        if (-not [string]::IsNullOrWhiteSpace($hostedCritic)) {
+                            $critic = $hostedCritic
+                            $criticImage = $hostedRatingImage
+                        }
                     }
                     if ([string]::IsNullOrWhiteSpace($audience) -and
                         $hostedAudienceImage -like 'rottentomatoes://image.rating.*') {
-                        $audience = Convert-DesignRatingPercent $hostedAudience
-                        $audienceImageState = $hostedAudienceImage
+                        $hostedAudienceValue = Convert-DesignRatingPercent $hostedAudience
+                        if (-not [string]::IsNullOrWhiteSpace($hostedAudienceValue)) {
+                            $audience = $hostedAudienceValue
+                            $audienceImageState = $hostedAudienceImage
+                        }
                     }
                     if ($mediaType -eq "show" -and
                         [string]::IsNullOrWhiteSpace($imdb) -and
-                        $hostedRatingImage -like 'imdb://image.rating*') {
-                        $imdb = $hostedRating
+                        $hostedRatingImage -like 'imdb://image.rating*' -and
+                        $hostedSelectedRating.Provider -eq "IMDb") {
+                        $imdb = $hostedSelectedRating.Value
                     }
-                    if ([string]::IsNullOrWhiteSpace($provider)) {
-                        $selectedRating = Get-DesignProviderRating `
-                            -RatingImage $hostedRatingImage `
-                            -RatingValue $hostedRating `
-                            -AudienceImage $hostedAudienceImage `
-                            -AudienceValue $hostedAudience
-                        $provider = $selectedRating.Provider
-                        $providerValue = $selectedRating.Value
+                    if ([string]::IsNullOrWhiteSpace($provider) -and
+                        -not [string]::IsNullOrWhiteSpace([string]$hostedSelectedRating.Provider)) {
+                        $provider = $hostedSelectedRating.Provider
+                        $providerValue = $hostedSelectedRating.Value
                     }
 
                     if ($null -ne $hostedMeta.PSObject.Properties["Rating"]) {
@@ -4792,27 +5342,35 @@ function Add-DesignRatingMetadata {
                             $type = Get-OptionalStringProperty -InputObject $ratingEntry -Name "type"
                             $value = Get-OptionalStringProperty -InputObject $ratingEntry -Name "value"
 
+                            $hostedEntryRating = Get-DesignProviderRating -RatingImage $image -RatingValue $value
                             if ($mediaType -eq "show" -and
                                 [string]::IsNullOrWhiteSpace($imdb) -and
-                                $image -like 'imdb://image.rating*') {
-                                $imdb = $value
+                                $image -like 'imdb://image.rating*' -and
+                                $hostedEntryRating.Provider -eq "IMDb") {
+                                $imdb = $hostedEntryRating.Value
                             }
-                            if ([string]::IsNullOrWhiteSpace($provider)) {
-                                $selectedRating = Get-DesignProviderRating -RatingImage $image -RatingValue $value
-                                $provider = $selectedRating.Provider
-                                $providerValue = $selectedRating.Value
+                            if ([string]::IsNullOrWhiteSpace($provider) -and
+                                -not [string]::IsNullOrWhiteSpace([string]$hostedEntryRating.Provider)) {
+                                $provider = $hostedEntryRating.Provider
+                                $providerValue = $hostedEntryRating.Value
                             }
                             if ([string]::IsNullOrWhiteSpace($critic) -and
                                 $image -like 'rottentomatoes://image.rating.*' -and
                                 $type -eq "critic") {
-                                $critic = Convert-DesignRatingPercent $value
-                                $criticImage = $image
+                                $hostedEntryCritic = Convert-DesignRatingPercent $value
+                                if (-not [string]::IsNullOrWhiteSpace($hostedEntryCritic)) {
+                                    $critic = $hostedEntryCritic
+                                    $criticImage = $image
+                                }
                             }
                             if ([string]::IsNullOrWhiteSpace($audience) -and
                                 $image -like 'rottentomatoes://image.rating.*' -and
                                 $type -eq "audience") {
-                                $audience = Convert-DesignRatingPercent $value
-                                $audienceImageState = $image
+                                $hostedEntryAudience = Convert-DesignRatingPercent $value
+                                if (-not [string]::IsNullOrWhiteSpace($hostedEntryAudience)) {
+                                    $audience = $hostedEntryAudience
+                                    $audienceImageState = $image
+                                }
                             }
                         }
                     }
@@ -5318,10 +5876,7 @@ function Get-DesignHeroAssets {
     try {
         $logoSelection = Get-DesignBestClearLogoAsset -RatingKey $ratingKey
         $result.LogoSrc = [string]$logoSelection.LogoSrc
-        $result.SuppressLogoFallback = (
-            $logoSelection.CandidateCount -gt 0 -and
-            [string]::IsNullOrWhiteSpace($result.LogoSrc)
-        )
+        $result.SuppressLogoFallback = $false
 
         if (-not [string]::IsNullOrWhiteSpace($result.LogoSrc)) {
             Write-Log "TautWeekly for Plex: email-optimized clearLogo acquired from Plex /clearLogos."
@@ -6024,11 +6579,15 @@ function Prepare-PosterAssets {
     param(
         [object]$ReleaseData,
         [string]$FeaturedRatingKey = "",
+        [AllowNull()][object]$HotRelease = $null,
+        [bool]$QuietReleaseMode = $false,
         [object[]]$AdditionalItems = @()
     )
 
-    $maxMovies = if ($null -ne $Config.PSObject.Properties["MaxMovies"]) { Safe-Int $Config.MaxMovies } else { 8 }
-    $maxTv = if ($null -ne $Config.PSObject.Properties["MaxTv"]) { Safe-Int $Config.MaxTv } else { 8 }
+    $releaseDisplay = Get-NewsletterReleaseDisplayData `
+        -ReleaseData $ReleaseData `
+        -HotRelease $HotRelease `
+        -QuietReleaseMode $QuietReleaseMode
 
     $selected = New-Object System.Collections.Generic.List[object]
 
@@ -6050,10 +6609,10 @@ function Prepare-PosterAssets {
         }
     }
 
-    foreach ($m in @($ReleaseData.Movies | Select-Object -First $maxMovies)) {
+    foreach ($m in @($releaseDisplay.Movies)) {
         $selected.Add($m)
     }
-    foreach ($t in @($ReleaseData.TV | Select-Object -First $maxTv)) {
+    foreach ($t in @($releaseDisplay.TV)) {
         $selected.Add($t)
     }
 
@@ -6734,6 +7293,83 @@ $genreHtml
     return $html.ToString()
 }
 
+function Get-NewsletterReleaseDisplayData {
+    param(
+        [object]$ReleaseData,
+        [AllowNull()][object]$HotRelease,
+        [bool]$QuietReleaseMode
+    )
+
+    $configuredMaxMovies = if ($null -ne $Config.PSObject.Properties["MaxMovies"]) { [Math]::Max(0, (Safe-Int $Config.MaxMovies)) } else { 8 }
+    $configuredMaxTv = if ($null -ne $Config.PSObject.Properties["MaxTv"]) { [Math]::Max(0, (Safe-Int $Config.MaxTv)) } else { 8 }
+    $maxMovies = if ($QuietReleaseMode) { [Math]::Min($configuredMaxMovies, 4) } else { $configuredMaxMovies }
+    $maxTv = if ($QuietReleaseMode) { [Math]::Min($configuredMaxTv, 4) } else { $configuredMaxTv }
+    $trendingHeroMode = (
+        $null -ne $HotRelease -and
+        $null -ne $HotRelease.PSObject.Properties["IsTrending"] -and
+        [bool]$HotRelease.IsTrending
+    )
+
+    $featuredReleaseKey = ""
+    if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) {
+        $featuredReleaseKey = [string]$HotRelease.Item.ReleaseKey
+    }
+
+    $movies = @(
+        $ReleaseData.Movies |
+        Where-Object {
+            [string]::IsNullOrWhiteSpace($featuredReleaseKey) -or
+            [string]$_.ReleaseKey -ne $featuredReleaseKey
+        } |
+        Select-Object -First $maxMovies
+    )
+    $tv = @(
+        $ReleaseData.TV |
+        Where-Object {
+            [string]::IsNullOrWhiteSpace($featuredReleaseKey) -or
+            [string]$_.ReleaseKey -ne $featuredReleaseKey
+        } |
+        Select-Object -First $maxTv
+    )
+
+    if ($QuietReleaseMode) {
+        $countParts = New-Object System.Collections.Generic.List[string]
+        if ($trendingHeroMode -and
+            $null -ne $HotRelease.Item -and
+            [string]$HotRelease.Item.Type -eq "movie") {
+            $countParts.Add("1 TRENDING MOVIE")
+        }
+        if ($movies.Count -gt 0) {
+            $movieWord = if ($movies.Count -eq 1) { "RECENT MOVIE" } else { "RECENT MOVIES" }
+            $countParts.Add("$($movies.Count) $movieWord")
+        }
+        if ($tv.Count -gt 0) {
+            $tvWord = if ($tv.Count -eq 1) { "RECENT TV TITLE" } else { "RECENT TV TITLES" }
+            $countParts.Add("$($tv.Count) $tvWord")
+        }
+        $countLine = if ($countParts.Count -gt 0) {
+            $countParts -join " • "
+        } else {
+            "NO RECENT RELEASES AVAILABLE"
+        }
+    }
+    else {
+        $movieCount = @($ReleaseData.Movies).Count
+        $tvCount = @($ReleaseData.TV).Count
+        $movieWord = if ($movieCount -eq 1) { "NEW MOVIE" } else { "NEW MOVIES" }
+        $tvWord = if ($tvCount -eq 1) { "TV TITLE" } else { "TV TITLES" }
+        $countLine = "$movieCount $movieWord • $tvCount $tvWord"
+    }
+
+    return [PSCustomObject]@{
+        Movies           = $movies
+        TV               = $tv
+        CountLine        = $countLine
+        SectionLabel     = if ($QuietReleaseMode) { "LATEST RELEASES" } else { "NEW RELEASES" }
+        TrendingHeroMode = $trendingHeroMode
+    }
+}
+
 function Build-NewsletterHtml {
     param(
         [object]$User,
@@ -6754,41 +7390,13 @@ function Build-NewsletterHtml {
         [string]$EndLabel
     )
 
-    $maxMovies = if ($QuietReleaseMode) { 4 } elseif ($null -ne $Config.PSObject.Properties["MaxMovies"]) { Safe-Int $Config.MaxMovies } else { 8 }
-    $maxTv = if ($QuietReleaseMode) { 4 } elseif ($null -ne $Config.PSObject.Properties["MaxTv"]) { Safe-Int $Config.MaxTv } else { 8 }
-    $releaseSectionLabel = if ($QuietReleaseMode) { "LATEST RELEASES" } else { "NEW RELEASES" }
-
+    $releaseDisplay = Get-NewsletterReleaseDisplayData -ReleaseData $ReleaseData -HotRelease $HotRelease -QuietReleaseMode $QuietReleaseMode
+    $movies = @($releaseDisplay.Movies)
+    $tv = @($releaseDisplay.TV)
+    $releaseSectionLabel = [string]$releaseDisplay.SectionLabel
+    $trendingHeroMode = [bool]$releaseDisplay.TrendingHeroMode
     $footerServerName = Get-ConfiguredServerName
     $deliveryDay = Get-ConfiguredDeliveryDay
-
-    $featuredReleaseKey = ""
-    $trendingHeroMode = (
-        $null -ne $HotRelease -and
-        $null -ne $HotRelease.PSObject.Properties["IsTrending"] -and
-        [bool]$HotRelease.IsTrending
-    )
-    if ($null -ne $HotRelease -and $null -ne $HotRelease.Item -and
-        -not $trendingHeroMode) {
-        $featuredReleaseKey = [string]$HotRelease.Item.ReleaseKey
-    }
-
-    $movies = @(
-        $ReleaseData.Movies |
-        Where-Object {
-            [string]::IsNullOrWhiteSpace($featuredReleaseKey) -or
-            [string]$_.ReleaseKey -ne $featuredReleaseKey
-        } |
-        Select-Object -First $maxMovies
-    )
-
-    $tv = @(
-        $ReleaseData.TV |
-        Where-Object {
-            [string]::IsNullOrWhiteSpace($featuredReleaseKey) -or
-            [string]$_.ReleaseKey -ne $featuredReleaseKey
-        } |
-        Select-Object -First $maxTv
-    )
 
     $movieCards = Get-ReleaseCardsHtml -Items $movies -PosterAssets $PosterAssets -ImageMode $ImageMode -Kind "Movie"
     $tvCards = Get-ReleaseCardsHtml -Items $tv -PosterAssets $PosterAssets -ImageMode $ImageMode -Kind "TV"
@@ -6798,8 +7406,7 @@ function Build-NewsletterHtml {
     $episodesStreamed = HtmlEncode $Stats.EpisodesStreamed
     $timeText = HtmlEncode $Stats.TotalTimeText
 
-    $movieCount = @($ReleaseData.Movies).Count
-    $tvCount = @($ReleaseData.TV).Count
+    $releaseCountLine = [string]$releaseDisplay.CountLine
 
     $headerIntro = if ($WelcomeOnly) {
         "Welcome to $(HtmlEncode $footerServerName) — you're all set. Here's what's new and what to expect from your $deliveryDay drops."
@@ -6809,15 +7416,6 @@ function Build-NewsletterHtml {
     }
     else {
         "Your $deliveryDay Plex drop is here — fresh releases plus your private weekly recap."
-    }
-
-    $movieWord = if ($movieCount -eq 1) { "NEW MOVIE" } else { "NEW MOVIES" }
-    $tvWord = if ($tvCount -eq 1) { "TV TITLE" } else { "TV TITLES" }
-    $releaseCountLine = if ($QuietReleaseMode) {
-        "NO NEW RELEASES THIS WEEK"
-    }
-    else {
-        "$movieCount $movieWord  •  $tvCount $tvWord"
     }
 
     $preheader = if ($QuietReleaseMode) {
@@ -7195,38 +7793,30 @@ $tvCards
     # - quiet release weeks: Trending is already the featured hero
     $trendingBlock = ""
 
-    if (-not $trendingHeroMode) {
+    if (-not $trendingHeroMode -and
+        -not [string]::IsNullOrWhiteSpace($TrendingTitle) -and
+        $null -ne $script:GlobalTrendingStat) {
         $trendingDisplay = ""
         $trendingDescription = ""
         $trendingPosterHtml = ""
 
-        if ([string]::IsNullOrWhiteSpace($TrendingTitle)) {
-            $trendingDisplay = "Warp core preparing to engage"
-            $trendingDescription = "Trending picks will appear here once the engines are up to speed."
+        $trendingDisplay = HtmlEncode (Truncate-Text $TrendingTitle 70)
+        $trendingPlays = Safe-Int $script:GlobalTrendingStat.Plays
+        $trendingRatingKey = [string]$script:GlobalTrendingStat.RatingKey
+        $trendingPosterSrc = Get-ImageSource `
+            -RatingKey $trendingRatingKey `
+            -PosterAssets $PosterAssets `
+            -ImageMode $ImageMode
+
+        if (-not [string]::IsNullOrWhiteSpace($trendingPosterSrc)) {
+            $trendingPosterHtml = '<img src="' + (HtmlEncode $trendingPosterSrc) + '" width="58" height="86" alt="' + $trendingDisplay + ' poster" style="display:block;width:58px;height:86px;object-fit:cover;border:1px solid #383838;border-radius:6px;">'
         }
-        else {
-            $trendingDisplay = HtmlEncode (Truncate-Text $TrendingTitle 70)
-            $trendingPlays = 0
 
-            if ($null -ne $script:GlobalTrendingStat) {
-                $trendingPlays = Safe-Int $script:GlobalTrendingStat.Plays
-                $trendingRatingKey = [string]$script:GlobalTrendingStat.RatingKey
-                $trendingPosterSrc = Get-ImageSource `
-                    -RatingKey $trendingRatingKey `
-                    -PosterAssets $PosterAssets `
-                    -ImageMode $ImageMode
-
-                if (-not [string]::IsNullOrWhiteSpace($trendingPosterSrc)) {
-                    $trendingPosterHtml = '<img src="' + (HtmlEncode $trendingPosterSrc) + '" width="58" height="86" alt="' + $trendingDisplay + ' poster" style="display:block;width:58px;height:86px;object-fit:cover;border:1px solid #383838;border-radius:6px;">'
-                }
-            }
-
-            $playWord = if ($trendingPlays -eq 1) { "play" } else { "plays" }
-            $trendingDescription = if ($trendingPlays -gt 0) {
-                "Most watched across $footerServerName this week • $trendingPlays $playWord"
-            } else {
-                "Most watched across $footerServerName this week"
-            }
+        $playWord = if ($trendingPlays -eq 1) { "play" } else { "plays" }
+        $trendingDescription = if ($trendingPlays -gt 0) {
+            "Most watched across $footerServerName this week • $trendingPlays $playWord"
+        } else {
+            "Most watched across $footerServerName this week"
         }
 
         $posterCell = if ([string]::IsNullOrWhiteSpace($trendingPosterHtml)) {
@@ -7649,8 +8239,7 @@ function Build-PlainText {
     $plexButtonLabel = Get-ConfiguredPlexButtonLabel
     $customTextCardBlock = Get-CustomTextCardPlainText
 
-    $movieCount = @($ReleaseData.Movies).Count
-    $tvCount = @($ReleaseData.TV).Count
+    $releaseDisplay = Get-NewsletterReleaseDisplayData -ReleaseData $ReleaseData -HotRelease $HotRelease -QuietReleaseMode $QuietReleaseMode
 
     $plainPreheader = if ($QuietReleaseMode) {
         ""
@@ -7666,14 +8255,7 @@ function Build-PlainText {
         $plainPreheader + "`r`n`r`n"
     }
 
-    $releaseMetaText = if ($QuietReleaseMode) {
-        "NO NEW RELEASES THIS WEEK`r`n$StartLabel – $EndLabel"
-    }
-    else {
-        $plainMovieWord = if ($movieCount -eq 1) { "new movie" } else { "new movies" }
-        $plainTvWord = if ($tvCount -eq 1) { "TV title" } else { "TV titles" }
-        "$movieCount $plainMovieWord • $tvCount $plainTvWord`r`n$StartLabel – $EndLabel"
-    }
+    $releaseMetaText = [string]$releaseDisplay.CountLine + [Environment]::NewLine + "$StartLabel – $EndLabel"
 
     $heroLine = ""
     $plainTrendingHero = $false
@@ -7688,20 +8270,15 @@ function Build-PlainText {
 
     $footerFeature = ""
 
-    if (-not $plainTrendingHero) {
-        if ([string]::IsNullOrWhiteSpace($TrendingTitle)) {
-            $footerFeature += "`r`nTRENDING THIS WEEK: Warp core preparing to engage."
-        }
-        else {
-            $trendPlays = if ($null -ne $script:GlobalTrendingStat) {
-                Safe-Int $script:GlobalTrendingStat.Plays
-            } else { 0 }
-            $trendPlayWord = if ($trendPlays -eq 1) { "play" } else { "plays" }
-            $footerFeature += if ($trendPlays -gt 0) {
-                "`r`nTRENDING THIS WEEK: $TrendingTitle — $trendPlays $trendPlayWord across the server"
-            } else {
-                "`r`nTRENDING THIS WEEK: $TrendingTitle"
-            }
+    if (-not $plainTrendingHero -and
+        -not [string]::IsNullOrWhiteSpace($TrendingTitle) -and
+        $null -ne $script:GlobalTrendingStat) {
+        $trendPlays = Safe-Int $script:GlobalTrendingStat.Plays
+        $trendPlayWord = if ($trendPlays -eq 1) { "play" } else { "plays" }
+        $footerFeature += if ($trendPlays -gt 0) {
+            "`r`nTRENDING THIS WEEK: $TrendingTitle — $trendPlays $trendPlayWord across the server"
+        } else {
+            "`r`nTRENDING THIS WEEK: $TrendingTitle"
         }
     }
 
@@ -8316,7 +8893,7 @@ if ($Mode -eq "ListUsers") {
 
 # ---------------------------------------------------------------------------
 # MODE: SEND ONE-OFF WELCOME
-# Quiet-release substitution is intentionally excluded from this mode.
+# This mode uses the same real release-state payload as scheduled and test delivery.
 # ---------------------------------------------------------------------------
 if ($Mode -eq "SendWelcome") {
     if ([string]::IsNullOrWhiteSpace($UserId)) {
@@ -8355,32 +8932,61 @@ if ($Mode -eq "SendWelcome") {
     Add-DesignRatingMetadata -ReleaseData $releaseData
     Enrich-TvEpisodeMetadata -ReleaseData $releaseData -ContextLabel "One-off TV" -StartEpoch $startEpoch -EndEpochExclusive $endEpochExclusive -CountRecentEpisodes $true
 
-    Write-Log ("Found {0} new movies and {1} TV titles." -f $releaseData.Movies.Count, $releaseData.TV.Count)
+    $newReleaseCount = @($releaseData.Movies).Count + @($releaseData.TV).Count
+    $isQuietReleaseWeek = ($newReleaseCount -eq 0)
+    Write-Log ("Found {0} new movies and {1} TV titles; quiet-release mode: {2}." -f $releaseData.Movies.Count, $releaseData.TV.Count, $isQuietReleaseWeek)
+
+    $latestReleaseData = $null
+    if ($isQuietReleaseWeek) {
+        $latestTvCutoffEpoch = [int64]([DateTimeOffset]::UtcNow.AddMonths(-1).ToUnixTimeSeconds())
+        Write-Log "No weekly additions. Loading shared Latest Releases fallback..."
+        $latestReleaseData = Get-LatestReleaseData -MovieLimit 5 -TvLimit 4 -TvAddedAfterEpoch $latestTvCutoffEpoch
+        Add-DesignRatingMetadata -ReleaseData $latestReleaseData
+        Enrich-TvEpisodeMetadata -ReleaseData $latestReleaseData -ContextLabel "Latest TV"
+        Write-Log ("Latest Releases candidates: {0} movies and {1} TV titles." -f $latestReleaseData.Movies.Count, $latestReleaseData.TV.Count)
+    }
 
     $globalHistory = Get-History -AfterDate $afterDate -BeforeDate $beforeDate
     $movieHotRelease = Get-HotNewRelease -ReleaseData $releaseData -GlobalHistory $globalHistory
     $script:GlobalTrendingStat = Get-GlobalTrendingStat -GlobalHistory $globalHistory
     $trendingTitle = if ($null -ne $script:GlobalTrendingStat) { [string]$script:GlobalTrendingStat.Title } else { "" }
-    $trendingHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory
+    $trendingReleaseData = if ($isQuietReleaseWeek) { $latestReleaseData } else { $releaseData }
+    $trendingHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory -ReleaseData $trendingReleaseData
     $hotRelease = if (@($releaseData.Movies).Count -gt 0) { $movieHotRelease } else { $trendingHero }
 
-    if (@($releaseData.Movies).Count -eq 0 -and $null -ne $trendingHero -and $null -ne $trendingHero.Item) {
-        $trendingHeroData = if ([string]$trendingHero.Item.Type -eq "movie") {
-            [PSCustomObject]@{ Movies = @($trendingHero.Item); TV = @() }
-        } else {
-            [PSCustomObject]@{ Movies = @(); TV = @($trendingHero.Item) }
-        }
-        Add-DesignRatingMetadata -ReleaseData $trendingHeroData
+    if (($isQuietReleaseWeek -or @($releaseData.Movies).Count -eq 0) -and $null -ne $trendingHero -and $null -ne $trendingHero.Item) {
+        Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @($trendingHero.Item); TV = @() })
     }
 
-    $featuredRatingKey = if ($null -ne $hotRelease -and $null -ne $hotRelease.Item) {
-        [string]$hotRelease.Item.PosterRatingKey
+    $activeReleaseData = if ($isQuietReleaseWeek) { $latestReleaseData } else { $releaseData }
+    $activeHero = if ($isQuietReleaseWeek) { $trendingHero } else { $hotRelease }
+
+    $trendingPosterItem = $null
+    if ($null -ne $script:GlobalTrendingStat -and
+        -not [string]::IsNullOrWhiteSpace([string]$script:GlobalTrendingStat.RatingKey)) {
+        $trendingPosterItem = [PSCustomObject]@{
+            PosterRatingKey = [string]$script:GlobalTrendingStat.RatingKey
+            MetadataGuid    = Get-OptionalStringProperty -InputObject $script:GlobalTrendingStat -Name "MetadataGuid"
+            MetadataParentIndex = Safe-Int (Get-OptionalStringProperty -InputObject $script:GlobalTrendingStat -Name "MetadataParentIndex")
+            MetadataIndex   = Safe-Int (Get-OptionalStringProperty -InputObject $script:GlobalTrendingStat -Name "MetadataIndex")
+            Type            = [string]$script:GlobalTrendingStat.Type
+            Title           = [string]$script:GlobalTrendingStat.Title
+            Year            = Get-OptionalStringProperty -InputObject $script:GlobalTrendingStat -Name "Year"
+        }
+    }
+    $featuredRatingKey = if ($null -ne $activeHero -and $null -ne $activeHero.Item) {
+        [string]$activeHero.Item.PosterRatingKey
     } else { "" }
 
     $script:TautWeeklyResultErrorCategory = "asset-unavailable"
-    Write-Log "Preparing release posters and hero assets for welcome email..."
-    $posterAssets = Prepare-PosterAssets -ReleaseData $releaseData -FeaturedRatingKey $featuredRatingKey
-    $designHero = Get-DesignHeroAssets -HotRelease $hotRelease
+    Write-Log "Preparing shared release posters and hero assets for welcome email..."
+    $posterAssets = Prepare-PosterAssets `
+        -ReleaseData $activeReleaseData `
+        -FeaturedRatingKey $featuredRatingKey `
+        -HotRelease $activeHero `
+        -QuietReleaseMode $isQuietReleaseWeek `
+        -AdditionalItems @($trendingPosterItem)
+    $designHero = Get-DesignHeroAssets -HotRelease $activeHero
 
     $welcomeStats = [PSCustomObject]@{
         MoviesWatched    = 0
@@ -8398,13 +9004,13 @@ if ($Mode -eq "SendWelcome") {
     $html = Build-NewsletterHtml `
         -User $user `
         -Stats $welcomeStats `
-        -ReleaseData $releaseData `
-        -HotRelease $hotRelease `
+        -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero `
         -TrendingTitle $trendingTitle `
         -SystemWarmingUp $false `
         -RecentAccess $true `
         -WelcomeOnly $true `
-        -QuietReleaseMode $false `
+        -QuietReleaseMode $isQuietReleaseWeek `
         -BingeChampion $null `
         -RecipientPlatform $recipientPlatform `
         -PosterAssets $posterAssets `
@@ -8412,7 +9018,18 @@ if ($Mode -eq "SendWelcome") {
         -StartLabel $startLabel `
         -EndLabel $endLabel
 
-    $plain = Build-WelcomePlainText -User $user -ReleaseData $releaseData
+    $plain = Build-PlainText `
+        -User $user `
+        -Stats $welcomeStats `
+        -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero `
+        -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false `
+        -RecentAccess $true `
+        -QuietReleaseMode $isQuietReleaseWeek `
+        -BingeChampion $null `
+        -StartLabel $startLabel `
+        -EndLabel $endLabel
     $subject = Get-OneOffWelcomeSubject -User $user
 
     $script:TautWeeklyResultErrorCategory = "smtp-failed"
@@ -8478,11 +9095,12 @@ Write-Log ("Found {0} new movies and {1} TV titles; quiet-release mode: {2}." -f
 
 $latestReleaseData = $null
 if ($isQuietReleaseWeek) {
-    Write-Log "No weekly additions. Loading Latest Releases fallback..."
-    $latestReleaseData = Get-LatestReleaseData -MovieLimit 4 -TvLimit 4
+    $latestTvCutoffEpoch = [int64]([DateTimeOffset]::UtcNow.AddMonths(-1).ToUnixTimeSeconds())
+    Write-Log "No weekly additions. Loading shared Latest Releases fallback..."
+    $latestReleaseData = Get-LatestReleaseData -MovieLimit 5 -TvLimit 4 -TvAddedAfterEpoch $latestTvCutoffEpoch
     Add-DesignRatingMetadata -ReleaseData $latestReleaseData
     Enrich-TvEpisodeMetadata -ReleaseData $latestReleaseData -ContextLabel "Latest TV"
-    Write-Log ("Latest Releases: {0} movies and {1} TV titles." -f $latestReleaseData.Movies.Count, $latestReleaseData.TV.Count)
+    Write-Log ("Latest Releases candidates: {0} movies and {1} TV titles." -f $latestReleaseData.Movies.Count, $latestReleaseData.TV.Count)
 }
 
 Write-Log "Loading global history for hero, Trending, and Binge Champion..."
@@ -8490,17 +9108,13 @@ $globalHistory = Get-History -AfterDate $afterDate -BeforeDate $beforeDate
 $movieHotRelease = Get-HotNewRelease -ReleaseData $releaseData -GlobalHistory $globalHistory
 $script:GlobalTrendingStat = Get-GlobalTrendingStat -GlobalHistory $globalHistory
 $trendingTitle = if ($null -ne $script:GlobalTrendingStat) { [string]$script:GlobalTrendingStat.Title } else { "" }
-$quietHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory
+$trendingReleaseData = if ($isQuietReleaseWeek) { $latestReleaseData } else { $releaseData }
+$quietHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory -ReleaseData $trendingReleaseData
 $hotRelease = if (@($releaseData.Movies).Count -gt 0) { $movieHotRelease } else { $quietHero }
 $bingeChampion = Get-BingeChampion -GlobalHistory $globalHistory
 
 if (($isQuietReleaseWeek -or @($releaseData.Movies).Count -eq 0) -and $null -ne $quietHero -and $null -ne $quietHero.Item) {
-    $quietHeroData = if ([string]$quietHero.Item.Type -eq "movie") {
-        [PSCustomObject]@{ Movies = @($quietHero.Item); TV = @() }
-    } else {
-        [PSCustomObject]@{ Movies = @(); TV = @($quietHero.Item) }
-    }
-    Add-DesignRatingMetadata -ReleaseData $quietHeroData
+    Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @($quietHero.Item); TV = @() })
 }
 
 $activeReleaseData = if ($isQuietReleaseWeek) { $latestReleaseData } else { $releaseData }
@@ -8529,6 +9143,8 @@ Write-Log "Preparing release posters..."
 $activePosterAssets = Prepare-PosterAssets `
     -ReleaseData $activeReleaseData `
     -FeaturedRatingKey $featuredRatingKey `
+    -HotRelease $activeHero `
+    -QuietReleaseMode $isQuietReleaseWeek `
     -AdditionalItems @($trendingPosterItem)
 Write-Log "Preparing featured hero artwork..."
 $activeDesignHero = Get-DesignHeroAssets -HotRelease $activeHero
@@ -8568,6 +9184,8 @@ function Build-ForUser {
     $userPosterAssets = Prepare-PosterAssets `
         -ReleaseData $activeReleaseData `
         -FeaturedRatingKey $featuredRatingKey `
+        -HotRelease $activeHero `
+        -QuietReleaseMode $isQuietReleaseWeek `
         -AdditionalItems $statsPosterItems
 
     $script:TautWeeklyResultErrorCategory = "render-failed"
@@ -8675,40 +9293,27 @@ function Build-AllEmailVariants {
     $populatedPosterAssets = Prepare-PosterAssets `
         -ReleaseData $activeReleaseData `
         -FeaturedRatingKey $featuredRatingKey `
+        -HotRelease $activeHero `
+        -QuietReleaseMode $isQuietReleaseWeek `
         -AdditionalItems $populatedPosterItems
 
-    # One-off welcome intentionally does NOT use quiet-release substitution.
-    $oneOffFeaturedRatingKey = if ($null -ne $hotRelease -and $null -ne $hotRelease.Item) {
-        [string]$hotRelease.Item.PosterRatingKey
-    } else { "" }
-
+    # Lifecycle variants share real release-state content; only their intro and
+    # stats-state presentation differ.
     $oneOffPosterAssets = $activePosterAssets
     $oneOffDesignHero = $activeDesignHero
-
-    if ($isQuietReleaseWeek) {
-        Write-Log "Preparing one-off welcome assets without quiet-week substitution..."
-        $oneOffPosterAssets = Prepare-PosterAssets `
-            -ReleaseData $releaseData `
-            -FeaturedRatingKey $oneOffFeaturedRatingKey `
-            -AdditionalItems @($trendingPosterItem)
-        $oneOffDesignHero = Get-DesignHeroAssets -HotRelease $hotRelease
-    }
-
-    # Build-NewsletterHtml reads the prepared hero from script scope. Use the
-    # one-off hero for the manual welcome, then restore the scheduled hero.
     $script:designHero = $oneOffDesignHero
 
     $script:TautWeeklyResultErrorCategory = "render-failed"
     $oneOffHtml = Build-NewsletterHtml `
         -User $user `
         -Stats $zeroStats `
-        -ReleaseData $releaseData `
-        -HotRelease $hotRelease `
+        -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero `
         -TrendingTitle $trendingTitle `
         -SystemWarmingUp $false `
         -RecentAccess $true `
         -WelcomeOnly $true `
-        -QuietReleaseMode $false `
+        -QuietReleaseMode $isQuietReleaseWeek `
         -BingeChampion $null `
         -RecipientPlatform $recipientPlatform `
         -PosterAssets $oneOffPosterAssets `
@@ -8810,7 +9415,12 @@ function Build-AllEmailVariants {
         -StartLabel $startLabel `
         -EndLabel $endLabel
 
-    $oneOffPlain = Build-WelcomePlainText -User $user -ReleaseData $releaseData
+    $oneOffPlain = Build-PlainText `
+        -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -SystemWarmingUp $false -RecentAccess $true `
+        -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $null `
+        -StartLabel $startLabel -EndLabel $endLabel
 
     $newNoHistoryPlain = Build-PlainText `
         -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
