@@ -23,13 +23,36 @@ REQUIRED_HTML = (
     'background-color:#181818',
 )
 
+def scoped_html_region(html: str, specification: str, label: str) -> tuple[str, str]:
+    parts = specification.split("=", 2)
+    if len(parts) != 3 or not all(parts):
+        raise AssertionError(
+            f"invalid bounded HTML {label}: {specification}; expected START=END=VALUE"
+        )
+    start_marker, end_marker, value = parts
+    start_index = html.find(start_marker)
+    if start_index < 0:
+        raise AssertionError(f"delivered HTML lost bounded-region start marker: {start_marker}")
+    end_index = html.find(end_marker, start_index + len(start_marker))
+    if end_index < 0:
+        raise AssertionError(f"delivered HTML lost bounded-region end marker: {end_marker}")
+    if end_index <= start_index:
+        raise AssertionError(
+            f"delivered HTML bounded-region markers are out of order: {start_marker}, {end_marker}"
+        )
+    return html[start_index:end_index], value
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("message", type=Path)
     parser.add_argument("--require-html", action="append", default=[])
     parser.add_argument("--forbid-html", action="append", default=[])
+    parser.add_argument("--forbid-html-after", action="append", default=[])
+    parser.add_argument("--require-html-after", action="append", default=[])
     parser.add_argument("--require-cid-sha256", action="append", default=[])
+    parser.add_argument("--require-html-between", action="append", default=[])
+    parser.add_argument("--forbid-html-between", action="append", default=[])
     args = parser.parse_args()
 
     message = BytesParser(policy=policy.default).parsebytes(args.message.read_bytes())
@@ -47,6 +70,44 @@ def main() -> int:
     for marker in args.forbid_html:
         if marker in html:
             raise AssertionError(f"delivered HTML retained forbidden marker: {marker}")
+    for specification in args.require_html_after:
+        if "=" not in specification:
+            raise AssertionError(f"invalid scoped HTML requirement: {specification}")
+        marker, required = specification.split("=", 1)
+        marker_index = html.find(marker)
+        if marker_index < 0:
+            raise AssertionError(f"delivered HTML lost scoped-region marker: {marker}")
+        if required not in html[marker_index:]:
+            raise AssertionError(
+                f"delivered HTML lost required marker after {marker}: {required}"
+            )
+
+    for specification in args.forbid_html_after:
+        if "=" not in specification:
+            raise AssertionError(f"invalid scoped HTML prohibition: {specification}")
+        marker, forbidden = specification.split("=", 1)
+        marker_index = html.find(marker)
+        if marker_index < 0:
+            raise AssertionError(f"delivered HTML lost scoped-region marker: {marker}")
+        if forbidden in html[marker_index:]:
+            raise AssertionError(
+                f"delivered HTML retained forbidden marker after {marker}: {forbidden}"
+            )
+
+    for specification in args.require_html_between:
+        region, required = scoped_html_region(html, specification, "requirement")
+        if required not in region:
+            raise AssertionError(
+                f"delivered HTML lost required marker in bounded region: {required}"
+            )
+
+    for specification in args.forbid_html_between:
+        region, forbidden = scoped_html_region(html, specification, "prohibition")
+        if forbidden in region:
+            raise AssertionError(
+                f"delivered HTML retained forbidden marker in bounded region: {forbidden}"
+            )
+
     for shorthand in ("background:#0f0f0f", "background:#181818"):
         if shorthand in html:
             raise AssertionError(f"delivered HTML retained unsupported color shorthand: {shorthand}")
@@ -72,7 +133,7 @@ def main() -> int:
         if len(matches) != 1:
             raise AssertionError(f"expected one MIME part for CID {cid}, found {len(matches)}")
         part = matches[0]
-        if part.get_content_type() not in ("image/gif", "image/png"):
+        if part.get_content_type() not in ("image/gif", "image/jpeg", "image/png"):
             raise AssertionError(f"CID {cid} has unsafe MIME type {part.get_content_type()}")
         if part.get_filename() is not None or part.get_param("name", header="content-type") is not None:
             raise AssertionError(f"CID {cid} unexpectedly exposes an attachment filename")

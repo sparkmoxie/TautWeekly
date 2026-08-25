@@ -379,7 +379,7 @@ func TestSuccessfulUpdateChecksReuseFreshResultAcrossPackageKinds(t *testing.T) 
 		currentPackage := currentPackage
 		t.Run(currentPackage.kind, func(t *testing.T) {
 			t.Parallel()
-			checkedAt := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
+			checkedAt := time.Date(2031, 4, 18, 16, 30, 0, 987654321, time.UTC)
 			currentNow := checkedAt
 			checker := &fixtureUpdateChecker{release: updateRelease{Version: "1.1.0", ReleaseNotesURL: stableReleaseBaseURL + "1.1.0"}}
 			coordinator := newUpdateCoordinator(Options{
@@ -395,7 +395,7 @@ func TestSuccessfulUpdateChecksReuseFreshResultAcrossPackageKinds(t *testing.T) 
 			})
 
 			first, err := coordinator.CheckNow(context.Background())
-			if err != nil || checker.callCount() != 1 || first.NextCheckAllowedAtUTC != checkedAt.Add(updateCheckMinimumDelay).Format(time.RFC3339) {
+			if err != nil || checker.callCount() != 1 || first.NextCheckAllowedAtUTC != checkedAt.Add(updateCheckMinimumDelay).Format(updateTimestampLayout) {
 				t.Fatalf("first check: status=%+v calls=%d err=%v", first, checker.callCount(), err)
 			}
 			currentNow = checkedAt.Add(updateCheckMinimumDelay - time.Second)

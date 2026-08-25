@@ -123,14 +123,21 @@ The responsive Manager is the primary workflow on every maintained package:
 - New movie and TV additions with artwork, summaries, genres, ratings, and
   episode details when available.
 - Adaptive **HOT NEW RELEASE** and **TRENDING THIS WEEK** highlights.
-- Quiet weeks remain useful: **Latest Releases** shows up to four real recent
-  movies and four real recent TV titles even when the report window has no new
-  additions.
-- A private personal recap with authentic watch time and most-watched movies
-  and shows; previews never invent recipient activity.
+- Quiet weeks remain useful: when authentic server-wide movie history is
+  available, one real movie-only **TRENDING THIS WEEK** hero is followed by up
+  to four other recent movies. With or without a hero, **Latest Releases** keeps
+  up to four real recent movies, plus up to four real TV titles added strictly
+  less than one calendar month ago, even when the report window is empty.
+- Every lifecycle state shares the same real release payload; the state changes
+  only its introduction, personal-stat presentation, and footer treatment.
+- A private personal recap with authentic watch time, posters, movie genres and
+  Rotten Tomatoes ratings, TV watch duration and IMDb ratings when available;
+  previews never invent recipient activity.
 - A privacy-preserving, server-wide Binge Champion award.
 - Welcome, active-week, quiet-week, and milestone newsletter layouts, including
   recipient platform icons when real history identifies a supported platform.
+- When Trending is the hero, its separate server-wide Trending footer card is
+  suppressed; authentic recipient history remains unchanged.
 - An optional uppercase custom-card title with one allowlisted 18×18 local GIF.
 - Browser previews and controlled TestEmail delivery before scheduling.
 

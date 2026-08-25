@@ -223,10 +223,11 @@ failure, and release notes. Authenticated entry renders cached status first and
 makes one non-blocking bounded check only when the last success is missing or
 at least 24 hours old and backoff permits. Successful results are reused for
 five minutes before **Check now** refreshes the same endpoint. The main header
-**Refresh** completes its local status reload first and then starts that check
-only when the new typed status recommends it; it never waits for GitHub, and
-scoped refresh controls remain isolated. Navigation, Dashboard rendering, and
-Manager health remain offline-capable. **Current**
+**Refresh** completes its local status reload first, repeats the saved-revision
+LAN-only Tautulli choices lookup when configuration is ready, and starts that
+check when its cooldown permits. It never generates previews or contacts
+Plex/SMTP, and scoped refresh controls remain isolated. Navigation,
+Dashboard rendering, and Manager health remain offline-capable. **Current**
 retains its green glow. The passive purple header SVG appears only for a
 validated newer running application; the card glows for every non-current
 state. The containerized web process

@@ -204,12 +204,12 @@
 
     function email(state){
       const moviePool=rotate(movies),showPool=rotate(shows),quiet=state.mode==="latest",tvOnly=state.mode==="tv-only",trendingHero=quiet||tvOnly,many=state.volume==="many";
-      let hero=trendingHero?showPool[0]:moviePool[0];
-      if(trendingHero&&hero&&!hero.year)hero={...hero,year:2026,critic:82,audience:null,summary:quiet?"The week's most-watched series leads a quieter library update.":"The week's most-watched title leads because no new movies were added.",logo:""};
-      const releaseMovies=tvOnly?[]:moviePool.slice(quiet?0:1,quiet?4:(many?7:5));
-      const releaseTv=(quiet?showPool.filter(item=>item!==hero):showPool).slice(0,many?4:3);
-      const movieCount=quiet?0:tvOnly?0:releaseMovies.length+1,tvCount=quiet?0:releaseTv.length;
-      const releaseLine=quiet?"NO NEW RELEASES THIS WEEK":`${movieCount} ${plural(movieCount,"NEW MOVIE","NEW MOVIES")} • ${tvCount} ${plural(tvCount,"TV TITLE","TV TITLES")}`;
+      let hero=moviePool[0];
+      if(trendingHero&&hero&&!hero.year)hero={...hero,year:2026,critic:82,audience:null,summary:quiet?"The week's most-watched movie leads a quieter library update.":"The week's most-watched movie leads because no new movies were added.",logo:""};
+      const releaseMovies=tvOnly?[]:moviePool.slice(1,quiet?5:(many?7:5));
+      const releaseTv=showPool.slice(0,quiet?4:(many?4:3));
+      const movieCount=quiet?releaseMovies.length:tvOnly?0:releaseMovies.length+1,tvCount=releaseTv.length;
+      const releaseLine=quiet?`1 TRENDING MOVIE • ${movieCount} ${plural(movieCount,"RECENT MOVIE","RECENT MOVIES")} • ${tvCount} ${plural(tvCount,"RECENT TV TITLE","RECENT TV TITLES")}`:`${movieCount} ${plural(movieCount,"NEW MOVIE","NEW MOVIES")} • ${tvCount} ${plural(tvCount,"TV TITLE","TV TITLES")}`;
       const intro=state.welcomeOnly?"Welcome to DEMO SERVER — you’re all set. Here’s what’s new and what to expect from your Friday drops.":quiet?"Your Friday Plex drop is here — this week’s server favorites, latest library additions, and your private weekly recap.":"Your Friday Plex drop is here — fresh releases plus your private weekly recap.";
       const headerMeta=(!state.recent&&!state.welcomeOnly)?`<div style="padding-top:10px;font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:.8px">${releaseLine}</div><div style="padding-top:6px;font-size:12px;color:#666">July 31 – August 6, 2026</div>`:"";
       const movedMeta=(state.recent||state.welcomeOnly)?`<tr><td class="pad" style="padding:0 20px 18px"><div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:.8px">${releaseLine}</div><div style="padding-top:6px;font-size:12px;color:#666">July 31 – August 6, 2026</div></td></tr>`:"";

@@ -30,6 +30,8 @@ $requiredFunctions = @(
     'Get-DesignEpisodeImdbRating',
     'Get-DesignEpisodeRtRating',
     'Enrich-TvEpisodeMetadata',
+    'Get-TvEpisodeSnapshotFromTautulli',
+    'Merge-TvEpisodeSnapshots',
     'Get-DesignRatingLine',
     'Get-DesignGenreLine',
     'Get-StatsMovieRatingHtml',
@@ -80,6 +82,11 @@ $requiredFunctions = @(
     'New-ZeroPreviewStats',
     'Get-PopulatedPreviewStats',
     'Get-HotNewRelease',
+    'Get-GlobalTitleTotals',
+    'New-HeroItemFromGlobalStat',
+    'Get-GlobalTrendingHero',
+    'Get-NewsletterReleaseDisplayData',
+    'Prepare-PosterAssets',
     'Get-DynamicPreheader',
     'Build-PlainText'
 )
@@ -631,7 +638,97 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($oneEpisode.TvShowItems[0].MetadataParentIndex -eq 1 -and $oneEpisode.TvShowItems[0].MetadataIndex -eq 1) "$relativePath detached the representative episode indexes from its GUID"
     Assert-True ($oneEpisode.TvShowItems[0].ShowTitle -eq 'Show One') "$relativePath lost the grouped TV show title"
     Assert-True ($oneEpisode.EpisodeItems[0].ImdbRating -eq '8.5') "$relativePath lost an available episode IMDb rating"
+    Assert-True ([string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $oneEpisode.TvShowItems[0] -Name 'Rating')) -and [string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $oneEpisode.TvShowItems[0] -Name 'RatingImage')) -and [string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $oneEpisode.TvShowItems[0] -Name 'DesignImdbRating'))) "$relativePath promoted an episode IMDb rating into unverified show-level metadata"
 
+
+    $sparseMovieRows = @(
+        [PSCustomObject]@{
+            media_type = 'movie'; play_duration = 600; watched_status = 1; percent_complete = 100
+            rating_key = 'sparse-movie'; guid = 'plex://movie/sparse-movie'; title = 'Sparse Movie'
+            year = ''; summary = ''; genres = @(); rating = ''; rating_image = 'rottentomatoes://image.rating.ripe'
+            audience_rating = '7.7'; audience_rating_image = ''; group_count = 1
+        },
+        [PSCustomObject]@{
+            media_type = 'movie'; play_duration = 500; watched_status = 1; percent_complete = 100
+            rating_key = 'sparse-movie'; guid = ''; title = 'Sparse Movie'
+            year = ''; summary = ''; genres = @(); rating = '7.6'; rating_image = ''
+            audience_rating = ''; audience_rating_image = 'rottentomatoes://image.rating.upright'; group_count = 1
+        },
+        [PSCustomObject]@{
+            media_type = 'movie'; play_duration = 400; watched_status = 1; percent_complete = 100
+            rating_key = 'sparse-movie'; guid = ''; title = 'Sparse Movie'
+            year = '2026'; summary = 'Rich movie history metadata.'; genres = @('Drama', 'Mystery')
+            rating = '8.1'; rating_image = 'rottentomatoes://image.rating.ripe'
+            audience_rating = '9.2'; audience_rating_image = 'rottentomatoes://image.rating.upright'; group_count = 1
+        }
+    )
+    $sparseMovieStats = Get-UserStats -History $sparseMovieRows
+    $sparseMovieItem = @($sparseMovieStats.MovieItems)[0]
+    Assert-True ($sparseMovieStats.MovieItems.Count -eq 1) "$relativePath did not group sparse-to-rich rows for one watched movie"
+    Assert-True ($sparseMovieItem.Summary -eq 'Rich movie history metadata.' -and $sparseMovieItem.Year -eq '2026' -and ($sparseMovieItem.DesignGenres -join ',') -eq 'Drama,Mystery') "$relativePath did not backfill rich movie fields from a later authentic row"
+    Assert-True ($sparseMovieItem.Rating -eq '8.1' -and $sparseMovieItem.RatingImage -eq 'rottentomatoes://image.rating.ripe' -and $sparseMovieItem.AudienceRating -eq '9.2' -and $sparseMovieItem.AudienceRatingImage -eq 'rottentomatoes://image.rating.upright') "$relativePath did not backfill complete movie rating pairs atomically"
+    Assert-True ($sparseMovieItem.Rating -ne '7.6' -and $sparseMovieItem.AudienceRating -ne '7.7') "$relativePath combined incompatible movie rating halves across history rows"
+
+    $sparseTvRows = @(
+        [PSCustomObject]@{
+            media_type = 'episode'; play_duration = 1800; watched_status = 0; percent_complete = 50
+            rating_key = 'sparse-episode-1'; guid = 'plex://episode/sparse-episode-1'
+            grandparent_rating_key = 'sparse-show'; grandparent_title = 'Sparse Show'
+            parent_title = 'Season 1'; title = 'Sparse Premiere'; parent_media_index = 1; media_index = 1
+            added_at = 200; rating = '8.7'; rating_image = 'imdb://image.rating'
+            grandparent_year = ''; grandparent_summary = ''; grandparent_genres = @()
+            grandparent_rating = ''; grandparent_rating_image = 'imdb://image.rating'
+            grandparent_audience_rating = '7.3'; grandparent_audience_rating_image = ''
+        },
+        [PSCustomObject]@{
+            media_type = 'episode'; play_duration = 3600; watched_status = 0; percent_complete = 50
+            rating_key = 'sparse-episode-2'; guid = 'plex://episode/sparse-episode-2'
+            grandparent_rating_key = 'sparse-show'; grandparent_title = 'Sparse Show'
+            parent_title = 'Season 1'; title = 'Rich Follow-up'; parent_media_index = 1; media_index = 2
+            added_at = 100; rating = '6.2'; rating_image = 'rottentomatoes://image.rating.ripe'
+            grandparent_year = '2026'; grandparent_summary = 'Rich show-level history metadata.'
+            grandparent_genres = @('Science Fiction', 'Drama')
+            grandparent_rating = '8.4'; grandparent_rating_image = 'imdb://image.rating'
+            grandparent_audience_rating = ''; grandparent_audience_rating_image = 'rottentomatoes://image.rating.upright'
+        }
+    )
+    $sparseTvStats = Get-UserStats -History $sparseTvRows
+    $sparseShowItem = @($sparseTvStats.TvShowItems)[0]
+    Assert-True ($sparseTvStats.TvShowItems.Count -eq 1 -and $sparseTvStats.EpisodeItems.Count -eq 2) "$relativePath lost sparse-to-rich TV history rows"
+    Assert-True ($sparseShowItem.Summary -eq 'Rich show-level history metadata.' -and $sparseShowItem.Year -eq '2026' -and ($sparseShowItem.DesignGenres -join ',') -eq 'Science Fiction,Drama') "$relativePath did not backfill authentic grandparent show fields"
+    Assert-True ($sparseShowItem.Rating -eq '8.4' -and $sparseShowItem.RatingImage -eq 'imdb://image.rating' -and [string]::IsNullOrWhiteSpace([string]$sparseShowItem.AudienceRating)) "$relativePath mixed episode fields or incomplete audience halves into show metadata"
+    Assert-True (@($sparseTvStats.EpisodeItems | Where-Object { $_.RatingKey -eq 'sparse-episode-1' })[0].ImdbRating -eq '8.7') "$relativePath lost the exact episode IMDb value"
+
+    $sparseTvRelease = New-ReleaseData -RecentItems $sparseTvRows
+    $sparseReleaseShow = @($sparseTvRelease.TV)[0]
+    Assert-True ($sparseReleaseShow.Summary -eq 'Rich show-level history metadata.' -and $sparseReleaseShow.Year -eq '2026' -and ($sparseReleaseShow.DesignGenres -join ',') -eq 'Science Fiction,Drama') "$relativePath did not preserve sparse-to-rich show fields in release projection"
+    Assert-True ($sparseReleaseShow.Rating -eq '8.4' -and $sparseReleaseShow.RatingImage -eq 'imdb://image.rating') "$relativePath promoted an episode provider or lost the complete show IMDb pair"
+    Assert-True (@($sparseReleaseShow.Episodes | Where-Object { $_.RatingKey -eq 'sparse-episode-1' })[0].ImdbRating -eq '8.7') "$relativePath lost exact episode IMDb during release projection"
+
+    $globalSparseTotals = @(Get-GlobalTitleTotals -GlobalHistory $sparseMovieRows)
+    Assert-True ($globalSparseTotals.Count -eq 1) "$relativePath did not group global sparse movie history"
+    Assert-True ($globalSparseTotals[0].Year -eq '2026') "$relativePath coupled sparse global year backfill to an unrelated metadata GUID"
+    Assert-True ($globalSparseTotals[0].Rating -eq '8.1' -and $globalSparseTotals[0].RatingImage -eq 'rottentomatoes://image.rating.ripe' -and $globalSparseTotals[0].AudienceRating -eq '9.2' -and $globalSparseTotals[0].AudienceRatingImage -eq 'rottentomatoes://image.rating.upright') "$relativePath manufactured a global rating pair from different sparse rows"
+
+    function Invoke-TautulliApi {
+        param([string]$Command, [hashtable]$Parameters = @{})
+        Assert-True ($Command -eq 'get_metadata' -and [string]$Parameters.rating_key -eq 'sparse-movie') "$relativePath used an unexpected global hero metadata lookup"
+        return [PSCustomObject]@{
+            title = 'Sparse Movie'; year = ''; summary = ''; genres = @()
+            rating = ''; rating_image = 'imdb://image.rating'
+            audience_rating = '7.7'; audience_rating_image = ''
+        }
+    }
+    $partialReleaseMovie = [PSCustomObject]@{
+        Type = 'movie'; ReleaseKey = 'movie:sparse-movie'; RatingKey = 'sparse-movie'; PosterRatingKey = 'sparse-movie'
+        MetadataGuid = 'plex://movie/sparse-movie'; Title = 'Sparse Movie'; Year = '2026'
+        Summary = 'Release summary.'; DesignGenres = @('Drama', 'Mystery')
+        Rating = '7.6'; RatingImage = ''; AudienceRating = ''; AudienceRatingImage = 'rottentomatoes://image.rating.upright'
+        AddedAt = 200; EpisodeCount = 0; SeasonCount = 0; IsNewSeries = $false; Episodes = @()
+    }
+    $atomicGlobalHero = Get-GlobalTrendingHero -GlobalHistory $sparseMovieRows -ReleaseData ([PSCustomObject]@{ Movies = @($partialReleaseMovie); TV = @() })
+    Assert-True ($atomicGlobalHero.Item.Rating -eq '8.1' -and $atomicGlobalHero.Item.RatingImage -eq 'rottentomatoes://image.rating.ripe' -and $atomicGlobalHero.Item.AudienceRating -eq '9.2' -and $atomicGlobalHero.Item.AudienceRatingImage -eq 'rottentomatoes://image.rating.upright') "$relativePath did not preserve complete history pairs through sparse metadata and partial release correlation"
+    Assert-True ($atomicGlobalHero.Item.Summary -eq 'Release summary.' -and ($atomicGlobalHero.Item.DesignGenres -join ',') -eq 'Drama,Mystery') "$relativePath discarded richer correlated release metadata from the global hero"
     Assert-True ((Get-PlexHostedMetadataLookupPath -MetadataGuid 'plex://movie/5d123abc?lang=en' -MediaType 'movie') -eq '/library/metadata/5d123abc') "$relativePath did not normalize a retained Plex GUID"
     Assert-True ((Get-PlexHostedMetadataLookupPath -MetadataGuid 'com.plexapp.agents.themoviedb://12345?lang=en' -MediaType 'movie') -eq '/library/metadata/matches?guid=tmdb%3A%2F%2F12345&type=1') "$relativePath did not normalize a legacy TMDB movie GUID"
     Assert-True ((Get-PlexHostedMetadataLookupPath -MetadataGuid 'com.plexapp.agents.tmdb://54321?lang=en' -MediaType 'movie') -eq '/library/metadata/matches?guid=tmdb%3A%2F%2F54321&type=1') "$relativePath did not normalize the alternate legacy TMDB movie agent"
@@ -896,7 +993,27 @@ foreach ($relativePath in $rendererPaths) {
 
     function Invoke-TautulliApi {
         param([string]$Command, [hashtable]$Parameters = @{})
+        if ($Command -eq 'get_children_metadata' -and [string]$Parameters.rating_key -eq 'sparse-child-show') {
+            return [PSCustomObject]@{
+                children_type = 'episode'
+                children_list = @([PSCustomObject]@{
+                    media_type = 'episode'; rating_key = 'sparse-child-episode'
+                    grandparent_rating_key = 'sparse-child-show'; grandparent_title = 'Sparse Child Show'
+                    title = 'Sparse Snapshot Title'; added_at = 150
+                    parent_media_index = 1; media_index = 1
+                    rating = ''; rating_image = 'imdb://image.rating'
+                    audience_rating = ''; audience_rating_image = ''
+                })
+            }
+        }
         Assert-True ($Command -eq 'get_metadata') "$relativePath used an unexpected episode metadata command"
+        if ([string]$Parameters.rating_key -eq 'sparse-child-episode') {
+            return [PSCustomObject]@{
+                media_index = 1; parent_media_index = 1
+                rating = ''; rating_image = 'imdb://image.rating'
+                audience_rating = ''; audience_rating_image = ''
+            }
+        }
         if ([string]$Parameters.rating_key -eq 'rt-fallback-episode') {
             return [PSCustomObject]@{
                 media_index = 6
@@ -977,6 +1094,27 @@ foreach ($relativePath in $rendererPaths) {
     $episodeHtml = Get-TvEpisodeLinesHtml -Item $episodeShow -ImageMode Preview
     Assert-True ($episodeHtml.Contains('IMDb') -and $episodeHtml.Contains('8.6') -and -not $episodeHtml.Contains('Rotten Tomatoes') -and -not $episodeHtml.Contains('83%') -and -not $episodeHtml.Contains('TMDB') -and -not $episodeHtml.Contains('7.4')) "$relativePath did not keep exact-episode IMDb ahead of RT and generic providers"
 
+    $sparseSeededEpisode = [PSCustomObject]@{
+        RatingKey = 'sparse-child-episode'; Title = 'Exact Seeded Episode'
+        AddedAt = 150; Season = 1; Episode = 1
+        ImdbRating = '8.7'; RatingImage = 'imdb://image.rating'
+        DesignRatingProvider = 'IMDb'; DesignRatingValue = '8.7'
+    }
+    $sparseChildShow = [PSCustomObject]@{
+        RatingKey = 'sparse-child-show'; Title = 'Sparse Child Show'
+        AddedAt = 150; EpisodeCount = 1; IsNewSeries = $false
+        Episodes = @($sparseSeededEpisode)
+    }
+    Enrich-TvEpisodeMetadata `
+        -ReleaseData ([PSCustomObject]@{ TV = @($sparseChildShow) }) `
+        -ContextLabel 'Sparse child success' `
+        -StartEpoch 100 `
+        -EndEpochExclusive 200 `
+        -CountRecentEpisodes $true
+    $mergedSparseEpisode = @($sparseChildShow.Episodes | Where-Object { $_.RatingKey -eq 'sparse-child-episode' })[0]
+    Assert-True ($sparseChildShow.Episodes.Count -eq 1 -and $sparseChildShow.EpisodeCount -eq 1) "$relativePath duplicated or lost the sparse child snapshot episode"
+    Assert-True ($mergedSparseEpisode.Title -eq 'Sparse Snapshot Title' -and $mergedSparseEpisode.ImdbRating -eq '8.7' -and $mergedSparseEpisode.DesignRatingProvider -eq 'IMDb' -and $mergedSparseEpisode.DesignRatingValue -eq '8.7') "$relativePath let sparse child/get_metadata responses erase the exact episode IMDb pair"
+
     $rtFallbackEpisode = [PSCustomObject]@{
         RatingKey = 'rt-fallback-episode'
         Title = 'Sanitized RT Episode'
@@ -1011,6 +1149,45 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($rtAudienceEpisode.RtRating -eq '45' -and $rtAudienceEpisode.RtRatingKind -eq 'audience') "$relativePath did not retain the exact-episode RT audience fallback"
     $rtAudienceHtml = Get-TvEpisodeLinesHtml -Item $rtAudienceShow -ImageMode Preview
     Assert-True ($rtAudienceHtml.Contains('Rotten Tomatoes audience') -and $rtAudienceHtml.Contains('45%') -and $rtAudienceHtml.Contains('rt_spilled.png') -and -not $rtAudienceHtml.Contains('IMDb')) "$relativePath did not render the score-dependent RT audience fallback"
+
+    function Get-TautWeeklyDeletedItemCacheEntry {
+        param([string]$MediaType, [string]$MetadataGuid, [switch]$LogHit)
+        if ($MediaType -eq 'movie' -and $MetadataGuid -eq 'plex://movie/atomic-cache') {
+            return [PSCustomObject]@{
+                Summary = 'Cached summary.'; Year = '2026'; Genres = @('Drama', 'Mystery')
+                Ratings = [PSCustomObject]@{
+                    RtCritic = '81'; RtCriticImage = 'rottentomatoes://image.rating.ripe'
+                    RtAudience = '92'; RtAudienceImage = 'rottentomatoes://image.rating.upright'
+                    Imdb = ''; Provider = ''; ProviderValue = ''
+                }
+            }
+        }
+        return $null
+    }
+    function Invoke-TautulliApi {
+        param([string]$Command, [hashtable]$Parameters = @{})
+        throw 'Simulated sparse local metadata'
+    }
+    function Get-DesignPlexMetadata { param([string]$RatingKey) return $null }
+    function Get-DesignRichExport {
+        param([string]$RatingKey, [string]$MediaType, [switch]$NeedLogo)
+        return [PSCustomObject]@{ RtCritic = ''; RtAudience = ''; Imdb = ''; Provider = ''; ProviderValue = '' }
+    }
+    function Get-PlexHostedMetadata {
+        param([string]$MetadataGuid, [string]$MediaType, [string]$MatchTitle, [string]$MatchYear, [int]$ParentIndex, [int]$Index)
+        return $null
+    }
+    $atomicCacheMovie = [PSCustomObject]@{
+        RatingKey = 'atomic-cache'; MetadataGuid = 'plex://movie/atomic-cache'
+        Type = 'movie'; Title = 'Atomic Cache Movie'; Summary = 'Source summary.'; Year = '2026'
+        DesignGenres = @('Drama', 'Mystery')
+        Rating = '7.6'; RatingImage = ''
+        AudienceRating = ''; AudienceRatingImage = 'rottentomatoes://image.rating.upright'
+    }
+    Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @($atomicCacheMovie); TV = @() })
+    Assert-True ($atomicCacheMovie.DesignRtCritic -eq '81' -and $atomicCacheMovie.DesignRtCriticImage -eq 'rottentomatoes://image.rating.ripe') "$relativePath did not consume the cached critic value/image pair atomically"
+    Assert-True ($atomicCacheMovie.DesignRtAudience -eq '92' -and $atomicCacheMovie.DesignRtAudienceImage -eq 'rottentomatoes://image.rating.upright') "$relativePath did not consume the cached audience value/image pair atomically"
+    Assert-True ($atomicCacheMovie.DesignRtCritic -ne '76') "$relativePath combined a source rating value with a cached provider image"
 
     function Invoke-TautulliApi { param([string]$Command, [hashtable]$Parameters = @{}) throw 'Simulated deleted metadata' }
     function Get-DesignPlexMetadata { param([string]$RatingKey) return $null }
@@ -1174,7 +1351,7 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($samplePlainText.Contains('View & Request: https://app.plex.tv/')) "$relativePath did not render the custom button label and URL in plain text"
     Assert-True ($samplePlainText.Contains("CUSTOM <TITLE>`r`nMaintenance & more`r`nFirst <line> & safe`nSecond line")) "$relativePath did not render the plain-text custom card"
     $customPlainIndex = $samplePlainText.IndexOf('CUSTOM <TITLE>', [StringComparison]::Ordinal)
-    $releasePlainIndex = if ($customPlainIndex -ge 0) { $samplePlainText.IndexOf('1 new movie', $customPlainIndex + 1, [StringComparison]::Ordinal) } else { -1 }
+    $releasePlainIndex = if ($customPlainIndex -ge 0) { $samplePlainText.IndexOf('1 NEW MOVIE', $customPlainIndex + 1, [StringComparison]::Ordinal) } else { -1 }
     Assert-True ($customPlainIndex -ge 0 -and $releasePlainIndex -gt $customPlainIndex) "$relativePath placed the plain-text custom card after the release metadata (custom=$customPlainIndex release=$releasePlainIndex)"
 
     $uncappedPlainText = Build-PlainText `
@@ -1219,15 +1396,101 @@ foreach ($relativePath in $rendererPaths) {
     $releaseFixture = [PSCustomObject]@{ Movies = @($heroMovie); TV = @($tvRelease) }
     $movieOnlyHero = Get-HotNewRelease -ReleaseData $releaseFixture -GlobalHistory @(
         [PSCustomObject]@{ media_type = 'episode'; grandparent_rating_key = 'tv-release'; play_duration = 7200 },
-        [PSCustomObject]@{ media_type = 'movie'; rating_key = 'hero-movie'; play_duration = 600 }
+        [PSCustomObject]@{ media_type = 'movie'; rating_key = 'hero-movie'; play_duration = 600; group_count = 4 }
     )
     Assert-True ($movieOnlyHero.Item.Type -eq 'movie') "$relativePath allowed a TV release to become HOT NEW RELEASE"
     Assert-True (-not $movieOnlyHero.IsTrending) "$relativePath mislabeled a movie release hero as Trending"
+    Assert-True ($movieOnlyHero.Plays -eq 4) "$relativePath did not preserve a grouped HOT movie's authentic play count"
 
     $tvOnlyHero = Get-HotNewRelease -ReleaseData ([PSCustomObject]@{
         Movies = @(); TV = @($tvRelease)
     }) -GlobalHistory @()
     Assert-True ($null -eq $tvOnlyHero) "$relativePath promoted a TV-only release as HOT NEW RELEASE"
+
+    $quietMovies = @(1..6 | ForEach-Object {
+        [PSCustomObject]@{
+            ReleaseKey = "movie:quiet-$($_)"; RatingKey = "quiet-movie-$($_)"; PosterRatingKey = "quiet-movie-$($_)"
+            Title = "Quiet Movie $($_)"; Type = "movie"; AddedAt = (1000 - $_)
+        }
+    })
+    $quietTv = @(1..5 | ForEach-Object {
+        [PSCustomObject]@{
+            ReleaseKey = "show:quiet-$($_)"; RatingKey = "quiet-show-$($_)"; PosterRatingKey = "quiet-show-$($_)"
+            Title = "Quiet Show $($_)"; Type = "show"; AddedAt = (900 - $_)
+        }
+    })
+    $quietReleaseFixture = [PSCustomObject]@{ Movies = $quietMovies; TV = $quietTv }
+    $quietHero = [PSCustomObject]@{ Item = $quietMovies[0]; IsTrending = $true; Plays = 4 }
+    $script:Config | Add-Member -NotePropertyName MaxMovies -NotePropertyValue 2 -Force
+    $script:Config | Add-Member -NotePropertyName MaxTv -NotePropertyValue 1 -Force
+    $limitedQuietDisplay = Get-NewsletterReleaseDisplayData `
+        -ReleaseData $quietReleaseFixture `
+        -HotRelease $quietHero `
+        -QuietReleaseMode $true
+    Assert-True (($limitedQuietDisplay.Movies.ReleaseKey -join ",") -eq "movie:quiet-2,movie:quiet-3") "$relativePath did not exclude the quiet hero before applying MaxMovies=2"
+    Assert-True ($limitedQuietDisplay.TV.Count -eq 1 -and $limitedQuietDisplay.TV[0].ReleaseKey -eq "show:quiet-1") "$relativePath did not honor MaxTv=1 in quiet mode"
+    $quietCountSeparator = " $([char]0x2022) "
+    Assert-True ($limitedQuietDisplay.CountLine -eq ("1 TRENDING MOVIE" + $quietCountSeparator + "2 RECENT MOVIES" + $quietCountSeparator + "1 RECENT TV TITLE")) "$relativePath quiet count line ignored configured shelf caps"
+
+    function Get-PosterPath {
+        param(
+            [string]$RatingKey, [string]$MetadataGuid, [string]$MediaType,
+            [string]$MatchTitle, [string]$MatchYear, [int]$ParentIndex, [int]$Index,
+            [ref]$LivePlexPoster
+        )
+        $LivePlexPoster.Value = $false
+        return [IO.Path]::Combine([IO.Path]::GetTempPath(), ($RatingKey + ".jpg"))
+    }
+    function Get-SafeFilePart {
+        param([string]$Value)
+        return $Value
+    }
+    $limitedPosterAssets = @(Prepare-PosterAssets `
+        -ReleaseData $quietReleaseFixture `
+        -FeaturedRatingKey $quietHero.Item.PosterRatingKey `
+        -HotRelease $quietHero `
+        -QuietReleaseMode $true)
+    Assert-True (($limitedPosterAssets.RatingKey -join ",") -eq "quiet-movie-1,quiet-movie-2,quiet-movie-3,quiet-show-1") "$relativePath did not prepare the hero plus every displayed MaxMovies=2/MaxTv=1 poster"
+
+    $script:Config.MaxMovies = 8
+    $script:Config.MaxTv = 8
+    $defaultQuietDisplay = Get-NewsletterReleaseDisplayData -ReleaseData $quietReleaseFixture -HotRelease $quietHero -QuietReleaseMode $true
+    Assert-True ($defaultQuietDisplay.Movies.Count -eq 4 -and $defaultQuietDisplay.Movies[-1].ReleaseKey -eq "movie:quiet-5") "$relativePath did not cap quiet movies at four after excluding the hero"
+    Assert-True ($defaultQuietDisplay.TV.Count -eq 4 -and $defaultQuietDisplay.TV[-1].ReleaseKey -eq "show:quiet-4") "$relativePath did not cap quiet TV at four"
+    $defaultPosterAssets = @(Prepare-PosterAssets `
+        -ReleaseData $quietReleaseFixture `
+        -FeaturedRatingKey $quietHero.Item.PosterRatingKey `
+        -HotRelease $quietHero `
+        -QuietReleaseMode $true)
+    Assert-True ($defaultPosterAssets.RatingKey -contains "quiet-movie-5" -and $defaultPosterAssets.RatingKey -contains "quiet-show-4") "$relativePath did not prepare the final displayed quiet 4/4 shelf posters"
+    Assert-True ($defaultPosterAssets.RatingKey -notcontains "quiet-movie-6" -and $defaultPosterAssets.RatingKey -notcontains "quiet-show-5") "$relativePath prepared posters beyond the displayed quiet 4/4 shelves"
+
+    $script:Config.MaxMovies = 0
+    $script:Config.MaxTv = 0
+    $zeroQuietDisplay = Get-NewsletterReleaseDisplayData -ReleaseData $quietReleaseFixture -HotRelease $quietHero -QuietReleaseMode $true
+    Assert-True ($zeroQuietDisplay.Movies.Count -eq 0 -and $zeroQuietDisplay.TV.Count -eq 0 -and $zeroQuietDisplay.CountLine -eq "1 TRENDING MOVIE") "$relativePath did not honor valid zero content-card limits in quiet mode"
+    $zeroPosterAssets = @(Prepare-PosterAssets `
+        -ReleaseData $quietReleaseFixture `
+        -FeaturedRatingKey $quietHero.Item.PosterRatingKey `
+        -HotRelease $quietHero `
+        -QuietReleaseMode $true)
+    Assert-True ($zeroPosterAssets.Count -eq 1 -and $zeroPosterAssets[0].RatingKey -eq "quiet-movie-1") "$relativePath prepared shelf posters when configured limits were zero"
+
+    $script:Config.MaxMovies = 8
+    $script:Config.MaxTv = 8
+    $script:GlobalTrendingStat = $null
+    $noHistoryPlainText = Build-PlainText `
+        -User ([PSCustomObject]@{ FriendlyName = "Viewer" }) `
+        -Stats $empty `
+        -ReleaseData $quietReleaseFixture `
+        -HotRelease $null `
+        -TrendingTitle "" `
+        -SystemWarmingUp $false `
+        -RecentAccess $false `
+        -QuietReleaseMode $true `
+        -StartLabel "August 1" `
+        -EndLabel "August 7"
+    Assert-True (-not $noHistoryPlainText.Contains("TRENDING THIS WEEK") -and -not $noHistoryPlainText.Contains("Warp core preparing")) "$relativePath invented a compact Trending footer without authentic global history"
 
     Assert-True ((Get-DynamicPreheader -ReleaseData ([PSCustomObject]@{
         Movies = @(); TV = @($tvRelease, $tvRelease)
@@ -1250,7 +1513,7 @@ foreach ($relativePath in $rendererPaths) {
         -StartLabel 'August 1' `
         -EndLabel 'August 7'
     Assert-True ($plainText.Contains('2 new TV titles!')) "$relativePath plain-text inbox preview lost TV title semantics"
-    Assert-True ($plainText.Contains('0 new movies') -and $plainText.Contains('2 TV titles')) "$relativePath plain-text body counted TV episodes instead of shows"
+    Assert-True ($plainText.Contains('0 NEW MOVIES') -and $plainText.Contains('2 TV TITLES')) "$relativePath plain-text body counted TV episodes instead of shows"
 
     $source = Get-Content -LiteralPath $path -Raw
     Assert-True ($source -match '\$hotRelease = if \(@\(\$releaseData\.Movies\)\.Count -gt 0\)') "$relativePath does not fall back from a movie-empty release hero"

@@ -260,6 +260,27 @@ Trending, the hero, Binge Champion, and each user's personal totals therefore
 share the selected scope. Per-user Plex sharing rules are not queried or
 intersected; this is a single administrator-controlled scope.
 
+When the report window contains at least one new movie or TV title, every
+lifecycle state uses the same active payload and reports the real new-title
+counts. A movie is the **HOT NEW RELEASE** hero when one is available; a
+TV-only active week uses the real movie-only Trending result as its hero when
+authentic server history supplies one, while retaining the new TV cards below
+it.
+
+When neither type has a new addition, every lifecycle state uses the same quiet
+payload. The header reports the sections that are actually present: one
+movie-only Trending hero when authentic server history supplies one, up to four
+other recent movies, and up to four recent TV titles. Quiet TV titles must have
+an `added_at` value strictly newer than one calendar month before generation.
+The Trending movie is removed from **Latest Releases**, and its separate
+server-wide Trending footer card is omitted because the hero already carries
+that result. Authentic recipient watch rows are not removed or fabricated.
+
+Movie and TV personal-stat cards keep their established layout and recipient
+platform icon. When provider metadata exists, movie rows retain poster, genres,
+and Rotten Tomatoes critic/audience ratings; TV rows retain poster, watch
+duration, and IMDb rating.
+
 Normally revise this scope in Manager Config. Recovery/expert fallbacks are
 `15-MANAGE-LIBRARIES.bat` on Windows,
 `./tautweekly.sh manage-libraries` on Docker editions, and
@@ -293,9 +314,11 @@ email, stable-ID exclusions, and legacy email exclusions. It never stores a
 recipient identity in Manager history or reports a zero-recipient run as SMTP
 success.
 
-**Repeat this Tautulli lookup** refreshes only the Manager's saved library and
-user choices. Every manually confirmed or scheduled SendAll instead makes one
-bounded, authenticated `refresh_users_list` request at the start of the shared
+**Repeat this Tautulli lookup** and the main header **Refresh** repeat the same
+saved-revision, LAN-only lookup and refresh only the Manager's library and user
+choices; neither action generates previews or contacts Plex or SMTP. Every
+manually confirmed or scheduled SendAll instead makes one bounded, authenticated
+`refresh_users_list` request at the start of the shared
 production path, then fetches and classifies Tautulli's live roster. A newly
 eligible Plex user is therefore included on the next production send unless
 explicitly excluded; no Config save or daily Manager poll is required. If

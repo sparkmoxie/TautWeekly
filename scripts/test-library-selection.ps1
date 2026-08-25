@@ -143,6 +143,7 @@ foreach ($relative in @(
             -ExpectedSectionId '99') -Expected $false
 
     $nowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $script:tvCutoffEpoch = [DateTimeOffset]::UtcNow.AddMonths(-1).ToUnixTimeSeconds()
     $selectedMovie = [PSCustomObject]@{
         section_id = '10'; media_type = 'movie'; rating_key = 'selected-movie'
         title = 'Selected Movie'; year = '2026'; added_at = $nowEpoch
@@ -172,12 +173,60 @@ foreach ($relative in @(
         $script:scopeCalls.Add("$Command`:$scope")
 
         if ($Command -eq 'get_libraries') {
+            if ($script:simulationPhase -eq 'pagination-unscoped') {
+                return @()
+            }
             return @(
                 [PSCustomObject]@{ section_id = '10'; section_type = 'movie'; is_active = 1 },
                 [PSCustomObject]@{ section_id = '20'; section_type = 'show'; is_active = 1 },
                 [PSCustomObject]@{ section_id = '99'; section_type = 'movie'; is_active = 0 },
                 [PSCustomObject]@{ section_id = '30'; section_type = 'artist'; is_active = 1 }
             )
+        }
+
+        if ($script:simulationPhase -eq 'pagination-filtered-movie' -and
+            $Command -eq 'get_recently_added' -and
+            $scope -eq '10') {
+            $pageNumber = [Math]::Floor((Safe-Int $Parameters.start) / 100)
+            $moviePage = @(
+                1..100 | ForEach-Object {
+                    $ordinal = ($pageNumber * 100) + $_
+                    [PSCustomObject]@{
+                        media_type = 'movie'; rating_key = "page-movie-$ordinal"
+                        title = "Page Movie $ordinal"; year = '2026'; added_at = $nowEpoch - $ordinal
+                    }
+                }
+            )
+            return [PSCustomObject]@{ recently_added = $moviePage }
+        }
+
+        if ($script:simulationPhase -eq 'pagination-unscoped' -and
+            $Command -eq 'get_recently_added' -and
+            [string]::IsNullOrWhiteSpace($scope)) {
+            $start = Safe-Int $Parameters.start
+            if ($start -eq 0) {
+                $moviePage = @(
+                    1..100 | ForEach-Object {
+                        [PSCustomObject]@{
+                            media_type = 'movie'; rating_key = "hub-movie-$_"
+                            title = "Hub Movie $_"; year = '2026'; added_at = $nowEpoch - $_
+                        }
+                    }
+                )
+                return [PSCustomObject]@{ recently_added = $moviePage }
+            }
+            if ($start -eq 100) {
+                $tvPage = @(1..4 | ForEach-Object {
+                    [PSCustomObject]@{
+                        media_type = 'episode'; rating_key = "hub-episode-$_"
+                        grandparent_rating_key = "hub-show-$_"; grandparent_title = "Hub Show $_"
+                        title = 'Premiere'; year = '2026'; added_at = $nowEpoch - (100 + $_)
+                        parent_media_index = 1; media_index = 1
+                    }
+                })
+                return [PSCustomObject]@{ recently_added = $tvPage }
+            }
+            return [PSCustomObject]@{ recently_added = @() }
         }
 
         if ([string]::IsNullOrWhiteSpace($scope)) {
@@ -191,6 +240,32 @@ foreach ($relative in @(
             return [PSCustomObject]@{ recently_added = $privatePage }
         }
 
+
+        if ($script:simulationPhase -eq 'latest-cutoff' -and
+            $Command -eq 'get_recently_added' -and
+            $scope -eq '20') {
+            $boundaryRows = @(
+                [PSCustomObject]@{
+                    media_type = 'episode'; rating_key = 'eligible-after-cutoff-episode'
+                    grandparent_rating_key = 'eligible-after-cutoff-show'; grandparent_title = 'Eligible After Cutoff'
+                    title = 'Premiere'; year = '2026'; added_at = $script:tvCutoffEpoch + 1
+                    parent_media_index = 1; media_index = 1
+                },
+                [PSCustomObject]@{
+                    media_type = 'episode'; rating_key = 'exact-cutoff-episode'
+                    grandparent_rating_key = 'exact-cutoff-show'; grandparent_title = 'Exact Cutoff Must Be Excluded'
+                    title = 'Premiere'; year = '2026'; added_at = $script:tvCutoffEpoch
+                    parent_media_index = 1; media_index = 1
+                },
+                [PSCustomObject]@{
+                    media_type = 'episode'; rating_key = 'before-cutoff-episode'
+                    grandparent_rating_key = 'before-cutoff-show'; grandparent_title = 'Before Cutoff Must Be Excluded'
+                    title = 'Premiere'; year = '2026'; added_at = $script:tvCutoffEpoch - 1
+                    parent_media_index = 1; media_index = 1
+                }
+            )
+            return [PSCustomObject]@{ recently_added = $boundaryRows }
+        }
         if ($script:simulationPhase -eq 'latest' -and
             $Command -eq 'get_recently_added' -and
             $scope -eq '20') {
@@ -272,6 +347,16 @@ foreach ($relative in @(
         -Actual ((@($latest.Movies.Title) + @($latest.TV.Title)) -join ',') `
         -Expected 'Selected Movie,Selected Show,Selected Show 2,Selected Show 3,Selected Show 4'
 
+    $script:simulationPhase = 'latest-cutoff'
+    $boundaryLatest = Get-LatestReleaseData -MovieLimit 4 -TvLimit 4 -TvAddedAfterEpoch $script:tvCutoffEpoch
+    Assert-Equal -Name "$relative includes only TV added strictly after the calendar-month cutoff" `
+        -Actual (@($boundaryLatest.TV.Title) -join ',') `
+        -Expected 'Eligible After Cutoff'
+    Assert-Equal -Name "$relative excludes TV added exactly at or before the calendar-month cutoff" `
+        -Actual (@($boundaryLatest.TV.Title | Where-Object { $_ -in @('Exact Cutoff Must Be Excluded', 'Before Cutoff Must Be Excluded') }).Count) `
+        -Expected 0
+    $script:simulationPhase = 'latest'
+
     $unscopedCalls = @($script:scopeCalls | Where-Object { $_ -match ':$' })
     Assert-Equal -Name "$relative sends no global media query when a library scope is configured" `
         -Actual $unscopedCalls.Count -Expected 0
@@ -291,6 +376,28 @@ foreach ($relative in @(
     Assert-Equal -Name "$relative preserves legacy all-library history" `
         -Actual (($legacyHistory | ForEach-Object rating_key) -join ',') -Expected 'private-movie'
 
+    $script:scopeCalls.Clear()
+
+    $script:LibraryFilterEnabled = $true
+    $script:IncludedLibraryIdSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    [void]$script:IncludedLibraryIdSet.Add('10')
+    $script:scopeCalls.Clear()
+    $script:simulationPhase = 'pagination-filtered-movie'
+    $filteredMovieLatest = Get-LatestReleaseData -MovieLimit 4 -TvLimit 4
+    Assert-Equal -Name "$relative stops a nonempty movie section as soon as its own type reaches the cap" `
+        -Actual (@($script:scopeCalls | Where-Object { $_ -eq 'get_recently_added:10' }).Count) -Expected 1
+    Assert-Equal -Name "$relative retains the requested movie cap after the scoped early stop" `
+        -Actual @($filteredMovieLatest.Movies).Count -Expected 4
+
+    $script:LibraryFilterEnabled = $false
+    $script:scopeCalls.Clear()
+    $script:simulationPhase = 'pagination-unscoped'
+    $unscopedHubLatest = Get-LatestReleaseData -MovieLimit 4 -TvLimit 4
+    Assert-Equal -Name "$relative keeps AND pagination for an empty unscoped mixed hub" `
+        -Actual (@($script:scopeCalls | Where-Object { $_ -eq 'get_recently_added:' }).Count) -Expected 2
+    Assert-Equal -Name "$relative unscoped mixed hub reaches both media caps" `
+        -Actual "$(@($unscopedHubLatest.Movies).Count),$(@($unscopedHubLatest.TV).Count)" -Expected '4,4'
+    $script:simulationPhase = 'latest'
     $script:scopeCalls.Clear()
     $unfilteredLatest = Get-LatestReleaseData -MovieLimit 4 -TvLimit 4
     Assert-Equal -Name "$relative enumerates active movie/TV sections for unfiltered quiet fallback" `

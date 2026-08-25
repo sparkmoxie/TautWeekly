@@ -25,6 +25,7 @@ const (
 	stableReleaseEndpoint     = "https://api.github.com/repos/sparkmoxie/TautWeekly/releases/latest"
 	stableReleaseBaseURL      = "https://github.com/sparkmoxie/TautWeekly/releases/tag/v"
 	stableReleaseDownloadURL  = "https://github.com/sparkmoxie/TautWeekly/releases/download/v"
+	updateTimestampLayout     = "2006-01-02T15:04:05.000Z07:00"
 	updateCheckMinimumDelay   = 5 * time.Minute
 	updateFailureMinimumDelay = 30 * time.Second
 	updateFailureMaximumDelay = 10 * time.Minute
@@ -232,7 +233,7 @@ func (c *updateCoordinator) CheckNow(ctx context.Context) (UpdateStatus, error) 
 		c.cache.FailureCount = 0
 		c.nextCheckAllowed = completedAt.Add(c.minimumCheckDelay)
 	}
-	c.cache.NextCheckAllowedAtUTC = c.nextCheckAllowed.UTC().Format(time.RFC3339)
+	c.cache.NextCheckAllowedAtUTC = c.nextCheckAllowed.UTC().Format(updateTimestampLayout)
 	if err := writePrivateJSON(c.cachePath, c.cache); err != nil {
 		c.cache.LastFailure = newUpdateFailure("check", completedAt, "cache-write-failed")
 	}
@@ -336,7 +337,7 @@ func (c *updateCoordinator) statusLocked(now time.Time) UpdateStatus {
 		status.ImageVersion = applicationVersion
 	}
 	if now.Before(c.nextCheckAllowed) {
-		status.NextCheckAllowedAtUTC = c.nextCheckAllowed.UTC().Format(time.RFC3339)
+		status.NextCheckAllowedAtUTC = c.nextCheckAllowed.UTC().Format(updateTimestampLayout)
 	}
 	status.State, status.UpdateAvailable = classifyUpdateStatus(status)
 	if status.State != "update-available" {

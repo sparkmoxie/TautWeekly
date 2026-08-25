@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import binascii
 import json
+import struct
 import time
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -18,11 +21,47 @@ DELETED_HISTORY_SCENARIOS = (
 )
 
 
+def virtual_clear_logo_png() -> bytes:
+    """Return a deterministic, decodable, bright PNG larger than 256 bytes."""
+    width = 320
+    height = 96
+    scanlines = bytearray()
+    for y in range(height):
+        scanlines.append(0)
+        for x in range(width):
+            # A bright white/gold patterned wordmark surrogate gives the
+            # renderer a realistic transparent-clearLogo decoding path.
+            stripe = ((x // 8) + (y // 8)) % 3
+            if x < 8 or x >= width - 8 or y < 8 or y >= height - 8:
+                scanlines.extend((0, 0, 0, 0))
+            elif stripe == 0:
+                scanlines.extend((255, 255, 255, 255))
+            elif stripe == 1:
+                scanlines.extend((255, 196, 32, 255))
+            else:
+                scanlines.extend((244, 232, 200, 255))
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", binascii.crc32(kind + data) & 0xFFFFFFFF)
+        )
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(bytes(scanlines), 9))
+        + chunk(b"IEND", b"")
+    )
+
+
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
     old = now - (30 * 86400)
     movie_added = now if scenario in ("active", "personal-many", "platform-tie", "last-platform", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
-    tv_added = now if scenario in ("active", "personal-many", "tv-only", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
+    tv_added = now if scenario in ("active", "personal-many", "tv-only", "sparse-episode-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
     rows = {
         "10": [
             {
@@ -71,6 +110,183 @@ def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
             }
         ],
     }
+
+    if scenario == "optional-hero-metadata":
+        rows["10"][0].pop("summary", None)
+        rows["10"][0].pop("genres", None)
+
+    if scenario == "sparse-episode-metadata":
+        rows["20"][0].update(
+            {
+                "grandparent_summary": "Sparse show-level summary survives enrichment.",
+                "grandparent_year": "2026",
+                "grandparent_rating": "8.4",
+                "grandparent_rating_image": "imdb://image.rating",
+                "grandparent_genres": ["Science Fiction", "Drama"],
+            }
+        )
+
+    # These cases isolate Plex optional/XML rating fallback. The separate
+    # sparse-episode fixture proves an authentic recent-row IMDb survives
+    # sparse enrichment, so do not seed an exact rating in fallback cases.
+    if scenario in {
+        "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback"
+    }:
+        rows["20"][0].pop("rating", None)
+        rows["20"][0].pop("rating_image", None)
+
+    if scenario in ("quiet", "quiet-no-global-history"):
+        rows["10"] = [
+            {
+                "section_id": "10",
+                "media_type": "movie",
+                "rating_key": key,
+                "title": title,
+                "year": "2026",
+                "summary": summary,
+                "added_at": now - (age_days * 86400),
+                "rating": rating,
+                "rating_image": "rottentomatoes://image.rating.ripe",
+                "audience_rating": audience_rating,
+                "audience_rating_image": "rottentomatoes://image.rating.upright",
+                "genres": genres,
+            }
+            for key, title, age_days, summary, rating, audience_rating, genres in (
+                (
+                    "quiet-trending-movie",
+                    "Quiet Trending Movie",
+                    8,
+                    "A complete quiet-week hero with real metadata.",
+                    "8.8",
+                    "9.4",
+                    ["Adventure", "Comedy"],
+                ),
+                (
+                    "quiet-recent-movie-01",
+                    "Recent Movie One",
+                    9,
+                    "The newest non-trending quiet-week movie.",
+                    "8.4",
+                    "9.0",
+                    ["Drama", "Mystery"],
+                ),
+                (
+                    "selected-movie",
+                    "Selected Movie",
+                    12,
+                    "A release from the selected movie library.",
+                    "8.1",
+                    "9.2",
+                    ["Drama", "Mystery"],
+                ),
+                (
+                    "quiet-recent-movie-03",
+                    "Recent Movie Three",
+                    15,
+                    "A third genuine recent movie.",
+                    "7.9",
+                    "8.7",
+                    ["Science Fiction", "Adventure"],
+                ),
+                (
+                    "quiet-recent-movie-04",
+                    "Recent Movie Four",
+                    20,
+                    "A fourth genuine recent movie.",
+                    "7.7",
+                    "8.5",
+                    ["Comedy", "Family"],
+                ),
+                (
+                    "quiet-recent-movie-overflow",
+                    "Recent Movie Overflow",
+                    25,
+                    "A real movie beyond the four-card quiet-week cap.",
+                    "7.5",
+                    "8.2",
+                    ["Documentary"],
+                ),
+            )
+        ]
+        rows["20"] = [
+            {
+                "section_id": "20",
+                "media_type": "episode",
+                "rating_key": episode_key,
+                "grandparent_rating_key": show_key,
+                "grandparent_title": show_title,
+                "title": episode_title,
+                "year": "2026",
+                "summary": summary,
+                "added_at": now - (age_days * 86400),
+                "parent_media_index": 1,
+                "media_index": 1,
+                "rating": rating,
+                "rating_image": "imdb://image.rating",
+                "genres": ["Drama", "Mystery"],
+            }
+            for (
+                episode_key,
+                show_key,
+                show_title,
+                episode_title,
+                age_days,
+                summary,
+                rating,
+            ) in (
+                (
+                    "selected-episode",
+                    "selected-show",
+                    "Selected Show",
+                    "Selected Premiere",
+                    8,
+                    "A release from the selected television library.",
+                    "8.7",
+                ),
+                (
+                    "quiet-recent-episode-02",
+                    "selected-show-recent-02",
+                    "Recent Show Two",
+                    "Second Premiere",
+                    14,
+                    "A second recent television title.",
+                    "8.5",
+                ),
+                (
+                    "quiet-recent-episode-03",
+                    "selected-show-recent-03",
+                    "Recent Show Three",
+                    "Third Premiere",
+                    21,
+                    "A third recent television title.",
+                    "8.3",
+                ),
+                (
+                    "quiet-recent-episode-04",
+                    "selected-show-recent-04",
+                    "Recent Show Four",
+                    "Fourth Premiere",
+                    27,
+                    "A fourth recent television title.",
+                    "8.1",
+                ),
+                (
+                    "quiet-stale-episode",
+                    "selected-show-stale",
+                    "Stale Show Beyond One Month",
+                    "Stale Premiere",
+                    40,
+                    "This title is older than one month and must be excluded.",
+                    "7.0",
+                ),
+            )
+        ]
+        for episode in rows["20"]:
+            episode["grandparent_rating"] = episode["rating"]
+            episode["grandparent_rating_image"] = "imdb://image.rating"
+        # Keep the selected episode's IMDb distinct from its show's IMDb so
+        # integration tests prove show cards use show-level get_metadata.
+        rows["20"][1]["rating"] = "6.1"
     if scenario in DELETED_HISTORY_SCENARIOS or scenario == "cache-prime":
         if scenario == "deleted-history-legacy-guid":
             rows["10"][0]["guid"] = "com.plexapp.agents.tmdb://12345?lang=en"
@@ -92,6 +308,56 @@ def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
         for field in ("year", "summary", "rating", "rating_image"):
             rows["20"][0].pop(field, None)
     return rows
+
+
+def quiet_metadata_for_key(rating_key: str) -> dict[str, object] | None:
+    """Resolve every rich quiet fixture key without collapsing item identity."""
+    rows = media_rows("quiet")
+    for movie in rows["10"]:
+        if str(movie.get("rating_key", "")) == rating_key:
+            metadata = dict(movie)
+            metadata.update(
+                {
+                    "media_type": "movie",
+                    "banner": "",
+                    "art": "",
+                    "thumb": "",
+                }
+            )
+            return metadata
+
+    for episode in rows["20"]:
+        if str(episode.get("rating_key", "")) == rating_key:
+            metadata = dict(episode)
+            metadata.update(
+                {
+                    "media_type": "episode",
+                    "grandparent_title": episode.get("grandparent_title", ""),
+                    "banner": "",
+                    "art": "",
+                    "thumb": "",
+                }
+            )
+            return metadata
+        if str(episode.get("grandparent_rating_key", "")) == rating_key:
+            return {
+                "rating_key": rating_key,
+                "media_type": "show",
+                "title": episode.get("grandparent_title", ""),
+                "year": episode.get("year", ""),
+                "summary": episode.get("summary", ""),
+                "added_at": episode.get("added_at", 0),
+                "rating": episode.get("grandparent_rating", ""),
+                "rating_image": episode.get("grandparent_rating_image", ""),
+                "audience_rating": "",
+                "audience_rating_image": "",
+                "genres": episode.get("genres", []),
+                "banner": "",
+                "art": "",
+                "thumb": "",
+            }
+
+    return None
 
 
 USERS = {
@@ -135,6 +401,8 @@ def configured_users(server: ThreadingHTTPServer) -> dict[str, dict[str, object]
 
 
 def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
+    if scenario == "quiet-no-global-history":
+        return []
     if section_id == "10":
         if scenario == "platform-tie":
             return [
@@ -243,6 +511,96 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                 "started": 100,
             }
         ]
+        if scenario == "active":
+            rows[0]["group_count"] = 4
+            # A real, non-release movie leads the movie-only Trending totals.
+            # It is deliberately not a completed watch so Binge Champion
+            # expectations remain independent from the compact Trending card.
+            rows.append(
+                {
+                    "section_id": "10",
+                    "media_type": "movie",
+                    "rating_key": "active-trending-movie",
+                    "title": "Active Trending Movie",
+                    "year": "2025",
+                    "summary": "Authentic server history outside the active release shelf.",
+                    "rating": "8.6",
+                    "rating_image": "rottentomatoes://image.rating.ripe",
+                    "audience_rating": "9.0",
+                    "audience_rating_image": "rottentomatoes://image.rating.upright",
+                    "genres": ["Adventure", "Science Fiction"],
+                    "user_id": "2",
+                    "friendly_name": "Simulated Champion",
+                    "play_duration": 9000,
+                    "watched_status": 0,
+                    "percent_complete": 50,
+                    "group_count": 4,
+                    "platform": "Roku",
+                    "started": 190,
+                }
+            )
+        if scenario == "sparse-episode-metadata":
+            # The first selected-viewer row contains incomplete rating halves
+            # and no descriptive metadata. A later row for the same title is
+            # complete, proving Get-UserStats backfills whole value/provider
+            # pairs plus summary, year, and genres across authentic rows.
+            rows[0].update(
+                {
+                    "year": "",
+                    "summary": "",
+                    "rating": "",
+                    "rating_image": "rottentomatoes://image.rating.ripe",
+                    "audience_rating": "7.7",
+                    "audience_rating_image": "",
+                    "genres": [],
+                }
+            )
+            # An intervening global row supplies the opposite incomplete
+            # halves. Get-GlobalTitleTotals must not manufacture a 7.6/RT or
+            # 7.7/audience-RT pairing from different history rows.
+            rows.append(
+                {
+                    "section_id": "10",
+                    "media_type": "movie",
+                    "rating_key": "selected-movie",
+                    "title": "Selected Movie",
+                    "year": "",
+                    "summary": "",
+                    "rating": "7.6",
+                    "audience_rating_image": "rottentomatoes://image.rating.upright",
+                    "user_id": "2",
+                    "friendly_name": "Simulated Champion",
+                    "play_duration": 300,
+                    "watched_status": 0,
+                    "percent_complete": 10,
+                    "group_count": 1,
+                    "platform": "Roku",
+                    "started": 90,
+                }
+            )
+            rows.append(
+                {
+                    "section_id": "10",
+                    "media_type": "movie",
+                    "rating_key": "selected-movie",
+                    "title": "Selected Movie",
+                    "year": "2026",
+                    "summary": "Selected-library viewing history.",
+                    "rating": "8.1",
+                    "rating_image": "rottentomatoes://image.rating.ripe",
+                    "audience_rating": "9.2",
+                    "audience_rating_image": "rottentomatoes://image.rating.upright",
+                    "genres": ["Drama", "Mystery"],
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 600,
+                    "watched_status": 1,
+                    "percent_complete": 100,
+                    "group_count": 1,
+                    "platform": "Chrome",
+                    "started": 110,
+                }
+            )
         if scenario == "quiet-no-history":
             rows[0]["user_id"] = "2"
             rows[0]["friendly_name"] = "Simulated Champion"
@@ -263,6 +621,49 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
             rows[0]["rating_image"] = "rottentomatoes://image.rating.ripe"
             rows[0]["audience_rating_image"] = "rottentomatoes://image.rating.upright"
             rows[0]["genres"] = ["Drama", "Mystery"]
+
+        if scenario == "quiet":
+            rows[0].update(
+                {
+                    "rating_key": "quiet-trending-movie",
+                    "title": "Quiet Trending Movie",
+                    "summary": "A complete quiet-week hero with real metadata.",
+                    "rating": "8.8",
+                    "rating_image": "rottentomatoes://image.rating.ripe",
+                    "audience_rating": "9.4",
+                    "audience_rating_image": "rottentomatoes://image.rating.upright",
+                    "genres": ["Adventure", "Comedy"],
+                    "play_duration": 14400,
+                    "group_count": 4,
+                }
+            )
+            rows[0]["user_id"] = "2"
+            rows[0]["friendly_name"] = "Simulated Champion"
+            rows[0]["platform"] = "Roku"
+            rows[0]["started"] = 200
+            rows.append(
+                {
+                    "section_id": "10",
+                    "media_type": "movie",
+                    "rating_key": "quiet-recent-movie-01",
+                    "title": "Recent Movie One",
+                    "year": "2026",
+                    "summary": "The newest non-trending quiet-week movie.",
+                    "rating": "8.4",
+                    "rating_image": "rottentomatoes://image.rating.ripe",
+                    "audience_rating": "9.0",
+                    "audience_rating_image": "rottentomatoes://image.rating.upright",
+                    "genres": ["Drama", "Mystery"],
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 7200,
+                    "watched_status": 1,
+                    "percent_complete": 100,
+                    "group_count": 2,
+                    "platform": "Chrome",
+                    "started": 175,
+                }
+            )
         return rows
     if section_id == "20":
         rows = [
@@ -290,6 +691,69 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                 "rating_image": "imdb://image.rating",
             }
         ]
+        if scenario == "sparse-episode-metadata":
+            rows.append(
+                {
+                    "section_id": "20",
+                    "media_type": "episode",
+                    "rating_key": "selected-episode",
+                    "grandparent_rating_key": "selected-show",
+                    "grandparent_title": "Selected Show",
+                    "parent_title": "Season 1",
+                    "title": "Selected Premiere",
+                    "year": "2026",
+                    "summary": "Authentic selected-viewer episode history.",
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 3600,
+                    "watched_status": 1,
+                    "percent_complete": 100,
+                    "group_count": 1,
+                    "platform": "Chrome",
+                    "started": 175,
+                    "parent_media_index": 1,
+                    "media_index": 1,
+                    "rating": "8.7",
+                    "rating_image": "imdb://image.rating",
+                    "grandparent_summary": "",
+                    "grandparent_year": "",
+                    "grandparent_rating": "",
+                    "grandparent_rating_image": "imdb://image.rating",
+                    "grandparent_audience_rating": "7.3",
+                    "grandparent_audience_rating_image": "",
+                    "grandparent_genres": [],
+                }
+            )
+            rows.append(
+                {
+                    "section_id": "20",
+                    "media_type": "episode",
+                    "rating_key": "selected-episode-rich",
+                    "grandparent_rating_key": "selected-show",
+                    "grandparent_title": "Selected Show",
+                    "parent_title": "Season 1",
+                    "title": "Selected Followup",
+                    "year": "2026",
+                    "summary": "Authentic second selected-viewer episode history.",
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 1800,
+                    "watched_status": 1,
+                    "percent_complete": 100,
+                    "group_count": 1,
+                    "platform": "Chrome",
+                    "started": 170,
+                    "parent_media_index": 1,
+                    "media_index": 2,
+                    "rating": "8.7",
+                    "rating_image": "imdb://image.rating",
+                    "grandparent_summary": "Sparse show-level summary survives enrichment.",
+                    "grandparent_year": "2026",
+                    "grandparent_rating": "8.4",
+                    "grandparent_rating_image": "imdb://image.rating",
+                    "grandparent_genres": ["Science Fiction", "Drama"],
+                }
+            )
         if scenario == "platform-tie":
             rows.append(
                 {
@@ -371,6 +835,34 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                     "started": 150,
                     "parent_media_index": 1,
                     "media_index": 1,
+                }
+            )
+        if scenario == "quiet":
+            rows[0]["play_duration"] = 21600
+            rows[0]["group_count"] = 7
+            rows.append(
+                {
+                    "section_id": "20",
+                    "media_type": "episode",
+                    "rating_key": "quiet-recent-episode-02",
+                    "grandparent_rating_key": "selected-show-recent-02",
+                    "grandparent_title": "Recent Show Two",
+                    "parent_title": "Season 1",
+                    "title": "Second Premiere",
+                    "year": "2026",
+                    "summary": "A real selected-viewer television watch.",
+                    "user_id": "1",
+                    "friendly_name": "Virtual Viewer",
+                    "play_duration": 3600,
+                    "watched_status": 1,
+                    "percent_complete": 100,
+                    "group_count": 1,
+                    "platform": "Chrome",
+                    "started": 175,
+                    "parent_media_index": 1,
+                    "media_index": 1,
+                    "rating": "6.1",
+                    "rating_image": "imdb://image.rating",
                 }
             )
         return rows
@@ -734,6 +1226,38 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(payload)
             return
 
+        if parsed.path == "/virtual/clear-logo.png":
+            payload = virtual_clear_logo_png()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+
+        if parsed.path.endswith("/clearLogos"):
+            scenario = self.current_scenario()
+            parts = parsed.path.strip("/").split("/")
+            rating_key = parts[2] if len(parts) == 4 else ""
+            if self.headers.get("X-Plex-Token") != "virtual-plex-token":
+                self.write_json({"error": "invalid virtual Plex token"}, status=401)
+                return
+            eligible_keys = {
+                "active": {"selected-movie"},
+                "quiet": {"quiet-trending-movie"},
+                "sparse-episode-metadata": {"selected-movie"},
+            }
+            if rating_key in eligible_keys.get(scenario, set()):
+                self.write_xml(
+                    '<MediaContainer size="1">'
+                    f'<Photo selected="1" ratingKey="{rating_key}" '
+                    'key="/virtual/clear-logo.png" thumb="/virtual/clear-logo.png" />'
+                    "</MediaContainer>"
+                )
+                return
+            self.write_xml('<MediaContainer size="0"></MediaContainer>')
+            return
+
         if parsed.path.startswith("/library/metadata/"):
             scenario = self.current_scenario()
             if scenario in {"direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback"}:
@@ -956,12 +1480,25 @@ class Handler(BaseHTTPRequestHandler):
             self.api_success({"recently_added": rows[start : start + count]})
             return
         if command == "get_children_metadata":
-            episode = dict(media_rows(self.current_scenario())["20"][0])
-            self.api_success({"children_type": "episode", "children_list": [episode]})
+            current_rows = media_rows(self.current_scenario())["20"]
+            parent_key = query.get("rating_key", "")
+            episodes = [
+                dict(episode)
+                for episode in current_rows
+                if str(episode.get("grandparent_rating_key", "")) == parent_key
+            ]
+            if not episodes:
+                episodes = [dict(current_rows[0])]
+            self.api_success({"children_type": "episode", "children_list": episodes})
             return
         if command == "get_metadata":
             key = query.get("rating_key", "")
             scenario = self.current_scenario()
+            if scenario in ("quiet", "quiet-no-global-history"):
+                metadata = quiet_metadata_for_key(key)
+                if metadata is not None:
+                    self.api_success(metadata)
+                    return
             if scenario in DELETED_HISTORY_SCENARIOS and key in (
                 "selected-movie",
                 "selected-show",
@@ -999,6 +1536,51 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 )
                 return
+            if scenario == "sparse-episode-metadata" and key in {
+                "selected-movie",
+                "selected-show",
+                "selected-episode",
+            }:
+                is_sparse_movie = key == "selected-movie"
+                is_sparse_show = key == "selected-show"
+                self.api_success(
+                    {
+                        "rating_key": key,
+                        "media_type": "movie" if is_sparse_movie else ("show" if is_sparse_show else "episode"),
+                        "title": "Selected Movie" if is_sparse_movie else ("Selected Show" if is_sparse_show else "Selected Premiere"),
+                        "year": "",
+                        "summary": "",
+                        "rating": "",
+                        "rating_image": "rottentomatoes://image.rating.ripe" if is_sparse_movie else "imdb://image.rating",
+                        "audience_rating": "7.7" if is_sparse_movie else "",
+                        "audience_rating_image": "",
+                        "genres": [],
+                        "parent_media_index": 1,
+                        "media_index": 1,
+                    }
+                )
+                return
+
+            if scenario == "active" and key == "active-trending-movie":
+                self.api_success(
+                    {
+                        "rating_key": key,
+                        "media_type": "movie",
+                        "title": "Active Trending Movie",
+                        "year": "2025",
+                        "summary": "Authentic server history outside the active release shelf.",
+                        "rating": "8.6",
+                        "rating_image": "rottentomatoes://image.rating.ripe",
+                        "audience_rating": "9.0",
+                        "audience_rating_image": "rottentomatoes://image.rating.upright",
+                        "genres": ["Adventure", "Science Fiction"],
+                        "banner": "",
+                        "art": "",
+                        "thumb": "",
+                    }
+                )
+                return
+
             if scenario == "optional-hero-metadata" and not is_episode:
                 # Tautulli may return a successful but sparse metadata object. The
                 # renderer must retain the global-history title and default every
@@ -1161,11 +1743,13 @@ def main() -> None:
             "quiet",
             "tv-only",
             "quiet-no-history",
+            "quiet-no-global-history",
             "optional-hero-metadata",
             "rating-export-fallback",
             "direct-rating-optional",
             "direct-rating-xml-fallback",
             "direct-episode-rt-fallback",
+            "sparse-episode-metadata",
             "deleted-history-metadata",
             "deleted-history-legacy-guid",
             "cache-prime",

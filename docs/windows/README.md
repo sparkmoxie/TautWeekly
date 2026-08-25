@@ -82,9 +82,10 @@ version, stable channel, latest stable release, comparison state, last
 successful check, last sanitized failure, and release-notes link. Authenticated
 entry renders cached status first and makes one non-blocking bounded request
 only when the last success is missing or at least 24 hours old and backoff
-permits. The main header **Refresh** reloads local status immediately and then
-starts the same non-blocking request only when that new typed status recommends
-it; it never waits for GitHub, and other refresh controls remain local to their
+permits. The main header **Refresh** reloads local status, repeats the
+saved-revision LAN-only Tautulli choices lookup when configuration is ready,
+and starts the same update check when its cooldown permits. It never generates
+previews or contacts Plex/SMTP, and other refresh controls remain local to their
 own actions. Successful results are reused for five minutes, then **Check now**
 permits an explicit refresh. A purple header notification
 appears only for a validated newer running application and links to this view;
@@ -313,9 +314,11 @@ Open **Previews** after a successful Config validation:
    platform icons, conditional cards, and responsive layout. Every state uses
    the selected user's real activity; an inactive user remains inactive rather
    than receiving sample watch rows.
-3. In a week with no new additions, confirm **Latest Releases** still contains
-   up to four real recent movies and four real recent TV titles from the active
-   library scope.
+3. In a week with no new additions, confirm **Latest Releases** retains up to
+   four real recent movies, plus four real TV titles added strictly less than one
+   calendar month old. When authentic server-wide movie history supplies a rich
+   Trending hero, the header must report it and neither **Latest Releases** nor
+   the server-wide footer may repeat it.
 4. When the previews are correct, select a Tautulli owner/administrator ID and
    use the guarded **Send six test messages** action. All six messages go only
    to the configured `TestEmail`.

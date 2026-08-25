@@ -114,8 +114,13 @@ Desktop/Mac package operations. It suppresses Windows tray, sign-in startup,
 Task Scheduler, and installer language. Its host wrapper is the normal source
 of pairing-token retrieval and narrow access recovery.
 
-Page load and dashboard refresh never contact Tautulli, Plex, or SMTP. A
-successful **Validate, save, and verify** action uses a typed backend impact
+Page load and passive Dashboard rendering never contact Tautulli, Plex, or
+SMTP. The explicit main-header **Refresh** first reloads local state, then
+repeats the same saved-revision, confirmed, LAN-only Tautulli library/user
+discovery when configuration is ready; it never contacts Plex or SMTP and never
+starts newsletter preview work. The dedicated Config discovery control
+continues to require its own confirmation and retains setup-preview recovery.
+A successful **Validate, save, and verify** action uses a typed backend impact
 plan and runs only affected work: Tautulli changes rerun discovery and
 integration checks, Plex changes rerun integration checks, SMTP-card changes
 rerun SMTP preflight, and presentation/content/library changes regenerate six
@@ -186,12 +191,15 @@ fixed public messages and support codes.
 Authenticated entry renders the local `GET /api/v1/updates` result before
 consulting its typed `backgroundCheckRecommended` field, so only a stale or
 missing result starts a non-blocking check. The main header **Refresh**
-attempts to render local status first and then runs the same manual check path
-as Settings **Check now**, including its visible result. A non-authentication
-local-status error cannot suppress that explicit check; an expired Manager
-session still returns to authentication without one. The five-minute success
-delay, failure backoff, and single active-check lock suppress repeated upstream
-requests. No scoped refresh control inherits this behavior.
+attempts to render local status first, repeats eligible saved Tautulli discovery,
+and runs the same manual check path as Settings **Check now** only when its
+five-minute success delay or failure backoff has elapsed. These independent
+actions do not suppress each other on failure. The update button and status copy
+rerender automatically when the delay expires, without a browser reload. A
+non-authentication local-status error cannot suppress an eligible update check;
+an expired Manager session still returns to authentication without one. The
+success delay, failure backoff, and single active-check lock suppress repeated
+upstream requests. No scoped refresh control inherits the update-check behavior.
 
 The Windows release build cross-compiles this module as
 `tautweekly-manager.exe`, packages it into the portable Windows ZIP, and embeds

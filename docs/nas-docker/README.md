@@ -233,7 +233,11 @@ columns on desktop, one-column mobile movies, two-column mobile TV, compact
 personal total watch time and Binge Champion cards, anonymous nonzero
 movie/TV-show counts, gold winner treatment, and Trending hero fallback. An
 empty media card stays absent; TV-only release weeks retain their TV cards
-below the hero.
+below any available Trending hero. With no new additions, all lifecycle states share up to four
+recent movies and up to four TV titles strictly less than one calendar month
+old. When authentic server-wide movie history supplies a rich Trending hero,
+the header reports it and the lower server-wide Trending card remains
+suppressed.
 
 Only after the previews and controlled TestEmail messages are approved, enable
 future delivery on Manager **Schedule**. The expert fallback is:
@@ -510,10 +514,11 @@ current, legacy, or mismatched. Authenticated entry renders cached status first
 and makes one non-blocking bounded check only when the last success is missing
 or at least 24 hours old and backoff permits. Successful results are reused for
 five minutes before **Check now** refreshes the same endpoint. The main header
-**Refresh** completes its local status reload first and then starts that check
-only when the new typed status recommends it; it never waits for GitHub, and
-scoped refresh controls remain isolated. Navigation, Dashboard rendering, and
-health remain offline-capable. **Current** retains its
+**Refresh** completes its local status reload first, repeats the saved-revision
+LAN-only Tautulli choices lookup when configuration is ready, and starts that
+check when its cooldown permits. It never generates previews or contacts
+Plex/SMTP, and scoped refresh controls remain isolated. Navigation,
+Dashboard rendering, and health remain offline-capable. **Current** retains its
 green glow. A passive purple header SVG appears only for a validated newer
 running application, while the card glows for every non-current state; neither
 claims package ownership. The

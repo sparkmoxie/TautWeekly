@@ -31,12 +31,12 @@
     { title: "Harbor Division", genre: "Crime and Thriller", imdb: "7.7", art: "lioness.jpg", episodes: [] },
   ];
   const states = {
-    "demo-welcome": { name: "Manual Welcome", description: "One-off onboarding with two movies and one TV title.", movieCount: 2, showCount: 1, welcome: true, welcomeOnly: true, stats: "none", offset: 1 },
-    "demo-new": { name: "New User - No History", description: "A first weekly drop with one movie, one TV title, and an anonymous award.", movieCount: 1, showCount: 1, welcome: true, stats: "award", offset: 2 },
-    "demo-history": { name: "New User - With History", description: "Five personal movies, one personal TV show, and a compact non-winner recap.", movieCount: 3, showCount: 2, statMovieCount: 5, statShowCount: 1, welcome: true, stats: "detail", winner: false, offset: 3 },
+    "demo-welcome": { name: "Manual Welcome", description: "Shared releases with the one-off onboarding introduction.", movieCount: 4, showCount: 4, welcome: true, welcomeOnly: true, stats: "none", offset: 0 },
+    "demo-new": { name: "New User - No History", description: "Shared releases with first-drop onboarding and an anonymous award.", movieCount: 4, showCount: 4, welcome: true, stats: "award", offset: 0 },
+    "demo-history": { name: "New User - With History", description: "Shared releases with five personal movies, one TV show, and a compact recap.", movieCount: 4, showCount: 4, statMovieCount: 5, statShowCount: 1, welcome: true, stats: "detail", winner: false, offset: 0 },
     "demo-normal": { name: "Normal Newsletter", description: "More than ten uncapped personal movie and TV rows with the winner treatment.", movieCount: 4, showCount: 4, statMovieCount: 12, statShowCount: 11, stats: "detail", winner: true, offset: 0 },
-    "demo-quiet": { name: "Established Quiet", description: "One latest movie, one TV title, and a quiet-week recap.", movieCount: 1, showCount: 1, stats: "quiet", offset: 1, latest: true },
-    "demo-warnings": { name: "Established Warnings", description: "Two movies, one TV title, and a stats warmup notice.", movieCount: 2, showCount: 1, stats: "warmup", offset: 2 },
+    "demo-quiet": { name: "Established Quiet", description: "Shared releases with the no-watch-activity card.", movieCount: 4, showCount: 4, stats: "quiet", offset: 0 },
+    "demo-warnings": { name: "Established Warnings", description: "Shared releases with the stats-warmup notice.", movieCount: 4, showCount: 4, stats: "warmup", offset: 0 },
   };
   const files = {
     "demo-welcome": "preview-all-01-manual-welcome.html",
@@ -90,7 +90,7 @@
     const icon = state.latest ? "popcorn.gif" : "hot.gif";
     const logo = item.logo ? `<img class="title-logo" src="${media(item.logo)}" alt="${esc(item.title)} logo">` : "";
     const title = item.logo ? "" : `<div class="hero-title">${esc(item.title)}</div>`;
-    return `<section class="panel hero"><img class="hero-poster" src="${media(item.art)}" alt="${esc(item.title)} key art"><div class="hero-copy"><img class="hero-icon" src="${media(icon)}" alt=""><div class="hero-kicker">${label}</div>${logo}${title}<div class="genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}</div><div class="summary">${esc(item.summary)}</div><div class="plays">Most-watched ${state.latest ? "title" : "new movie"} this week &middot; ${state.latest ? 11 : 4} fictional plays</div></div></section>`;
+    return `<section class="panel hero"><img class="hero-poster" src="${media(item.art)}" alt="${esc(item.title)} key art"><div class="hero-copy"><img class="hero-icon" src="${media(icon)}" alt=""><div class="hero-kicker">${label}</div>${logo}${title}<div class="genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}</div><div class="summary">${esc(item.summary)}</div><div class="plays">${state.latest ? "Most watched across STARLIGHT CINEMA this week" : "Most-watched new movie this week"} &middot; ${state.latest ? 11 : 4} fictional plays</div></div></section>`;
   }
 
   function personalRating(item, kind) {
@@ -194,7 +194,7 @@
     const statsShowItems = rotate(shows, state.offset).slice(0, state.statShowCount ?? state.showCount);
     const hero = movieItems[0] || movies[0];
     const releaseMovies = movieItems.slice(1);
-    const headerLine = `${state.movieCount} ${plural(state.movieCount, "NEW MOVIE", "NEW MOVIES")} &middot; ${state.showCount} ${plural(state.showCount, "TV TITLE", "TV TITLES")}`;
+    const headerLine = state.latest ? `1 TRENDING MOVIE &middot; ${releaseMovies.length} ${plural(releaseMovies.length, "RECENT MOVIE", "RECENT MOVIES")} &middot; ${state.showCount} ${plural(state.showCount, "RECENT TV TITLE", "RECENT TV TITLES")}` : `${state.movieCount} ${plural(state.movieCount, "NEW MOVIE", "NEW MOVIES")} &middot; ${state.showCount} ${plural(state.showCount, "TV TITLE", "TV TITLES")}`;
     const movieGrid = releaseMovies.length ? `<div class="section-label">${state.latest ? "LATEST RELEASES" : "NEW RELEASES"}<span class="section-title">Movies</span></div><section class="grid">${releaseMovies.map(movieCard).join("")}</section>` : "";
     const showGrid = showItems.length ? `<div class="section-label">${state.latest ? "LATEST RELEASES" : "NEW RELEASES"}<span class="section-title">TV</span></div><section class="grid">${showItems.map(showCard).join("")}</section>` : "";
     const intro = state.welcomeOnly ? "Welcome to the Friday drop - here is what is new and what to expect." : "Your Friday Plex drop is here - real media presentation with a fictional private recap.";
