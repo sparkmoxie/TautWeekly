@@ -185,6 +185,9 @@ foreach ($engine in $engines) {
                 CustomTextCardSubheading = 'Assessment & notes'
                 CustomTextCardBody = "Synthetic <notice> & safe`nSecond line"
             }
+            if ($scenario -eq $quietNoHistoryScenario) {
+                $configOverrides['IncludedLibraryIds'] = @()
+            }
             if ($scenario -in $sendTestScenarios) {
                 $configOverrides['SmtpHost'] = '127.0.0.1'
                 $configOverrides['SmtpPort'] = $smtpPort
@@ -312,7 +315,12 @@ foreach ($engine in $engines) {
             )
             Assert-True (($actualPreviewNames -join '|') -eq ($expectedPreviewNames -join '|')) "$($engine.Name)/$scenario generated the all-state previews in the wrong order or under unexpected names."
             $scenarioHashes = @(Get-ChildItem $outputRoot -Filter 'preview-all-*.html' | Where-Object { $_.Name -ne 'preview-all-00-INDEX.html' } | ForEach-Object { (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash } | Select-Object -Unique)
-            Assert-True ($scenarioHashes.Count -eq 6) "$($engine.Name)/$scenario collapsed distinct lifecycle scenarios into duplicate HTML."
+            if ($scenario -eq $quietNoHistoryScenario) {
+                Assert-True ($scenarioHashes.Count -eq 4) "$($engine.Name)/$scenario fabricated differences between authentic zero-history lifecycle states."
+            }
+            else {
+                Assert-True ($scenarioHashes.Count -eq 6) "$($engine.Name)/$scenario collapsed distinct lifecycle scenarios into duplicate HTML."
+            }
             Assert-True ((Get-ChildItem $outputRoot -Filter 'preview-all-*.html').Count -eq 7) "$($engine.Name)/$scenario did not generate all six states plus the index."
             if ($engine.Name -eq 'nas-docker-linux-freebsd' -and $scenario -in @('active', $platformScenario)) {
                 Assert-True (Test-Path -LiteralPath $managerResultPath) 'NAS Manager operation did not produce its structured result.'
@@ -410,6 +418,7 @@ foreach ($engine in $engines) {
             Assert-True ($normalHtml.Contains('class="email-card"')) "$($engine.Name)/$scenario lost explicit dark card classes."
             Assert-True ($normalHtml.Contains('bgcolor="#181818"')) "$($engine.Name)/$scenario lost the legacy dark card fallback."
             Assert-True ($normalHtml.Contains('background-color:#181818')) "$($engine.Name)/$scenario lost the longhand dark card fallback."
+            if ($scenario -ne $quietNoHistoryScenario) {
             Assert-True ($normalHtml.Contains('YOU CLOCKED') -and $normalHtml.Contains('total watch time')) "$($engine.Name)/$scenario lost the personal total-watch-time presentation."
             Assert-True (-not $normalHtml.Contains('>total watched<')) "$($engine.Name)/$scenario retained the old personal-time label."
             Assert-True (([regex]::Matches($normalHtml, 'class="stats-summary-cell"')).Count -eq 2) "$($engine.Name)/$scenario did not render exactly two compact desktop summary cells."
@@ -419,28 +428,34 @@ foreach ($engine in $engines) {
             Assert-True ($normalHtml.Contains('colspan="2" width="100%" valign="top"')) "$($engine.Name)/$scenario did not render the populated personal media card at full width."
             Assert-True ($normalHtml.Contains('class="stats-title-cell" width="50%"') -and $normalHtml.Contains('.stats-title-cell { display:block !important; width:100% !important;')) "$($engine.Name)/$scenario lost the two-column desktop and one-column mobile movie-title layout."
             Assert-True ($normalHtml.Contains('.stats-title-cell.stats-tv-title-cell { display:table-cell !important; width:50% !important;')) "$($engine.Name)/$scenario lost the two-column mobile TV-title rule."
+            }
             Assert-True (-not $quietHtml.Contains('class="stats-summary-cell"') -and -not $quietHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario rendered personal summary cards in the zero-activity state."
             Assert-True (-not $normalHtml.Contains('Ratings unavailable') -and -not $normalHtml.Contains('IMDb unavailable')) "$($engine.Name)/$scenario rendered an unavailable-rating placeholder."
-            $expectedMode = if ($scenario -in @('quiet', $quietNoHistoryScenario) -or $scenario -in $deletedHistoryScenarios) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' }
+            $expectedMode = if ($scenario -in @('quiet', $quietNoHistoryScenario, 'optional-hero-metadata') -or $scenario -in $deletedHistoryScenarios) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' }
             Assert-True ($indexHtml.Contains($expectedMode)) "$($engine.Name)/$scenario reported the wrong release mode."
             Assert-True ($normalHtml.Contains('Selected Movie')) "$($engine.Name)/$scenario lost the selected movie."
             Assert-True ($normalHtml.Contains('Selected Show')) "$($engine.Name)/$scenario lost the selected TV show."
             Assert-True (-not $normalHtml.Contains('Private Movie')) "$($engine.Name)/$scenario leaked a private-library title."
             Assert-True (-not $normalHtml.Contains('Simulated Champion')) "$($engine.Name)/$scenario leaked the Binge Champion identity."
-            $expectedChampionDuration = if ($scenario -eq $quietNoHistoryScenario) { '5h 0m watched' } else { '3h 0m watched' }
+            $expectedChampionDuration = if ($scenario -eq $quietNoHistoryScenario) { '5h 0m watched' } elseif ($scenario -eq 'optional-hero-metadata') { '4h 0m watched' } else { '3h 0m watched' }
             Assert-True ($normalHtml.Contains($expectedChampionDuration)) "$($engine.Name)/$scenario lost the shared champion duration line."
-            Assert-True ($normalHtml.Contains('1 TV show')) "$($engine.Name)/$scenario lost the unique TV-show breakdown."
-            Assert-True (-not $normalHtml.Contains('0 movies')) "$($engine.Name)/$scenario rendered an empty Binge Champion movie category."
+            $expectedChampionMedia = if ($scenario -eq 'optional-hero-metadata') { '1 movie' } else { '1 TV show' }
+            Assert-True ($normalHtml.Contains($expectedChampionMedia)) "$($engine.Name)/$scenario lost the Binge Champion media breakdown."
+            Assert-True (-not $normalHtml.Contains('0 movies') -and -not $normalHtml.Contains('0 TV shows')) "$($engine.Name)/$scenario rendered an empty Binge Champion media category."
             Assert-True (-not $normalHtml.Contains('qualifying plays')) "$($engine.Name)/$scenario retained qualifying-play copy in Total Watched."
             if ($scenario -notin $deletedHistoryScenarios -and $scenario -ne 'personal-many' -and $scenario -ne $platformScenario -and $scenario -ne $quietNoHistoryScenario) {
                 Assert-True (-not $normalHtml.Contains('TV SHOWS WATCHED')) "$($engine.Name)/$scenario rendered an empty TV stats card."
             }
 
             if ($scenario -eq $quietNoHistoryScenario) {
-                Assert-True ($indexHtml.Contains('previews 03 and 04 use sanitized scenario statistics only')) "$($engine.Name)/$scenario did not disclose the populated all-state fixture."
+                Assert-True ($indexHtml.Contains('render authentic no-history output without fictional viewing data')) "$($engine.Name)/$scenario did not disclose authentic zero-history behavior."
                 Assert-True ($newNoHistoryHtml.Contains('WELCOME ABOARD') -and -not $newNoHistoryHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario lost the intentional new-user/no-history state."
-                Assert-True ($newWithHistoryHtml.Contains('WELCOME ABOARD') -and $newWithHistoryHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario did not preserve the populated new-user state."
-                Assert-True ($normalHtml.Contains('YOU CLOCKED') -and $normalHtml.Contains('Sample Movie 2')) "$($engine.Name)/$scenario did not preserve a populated established lifecycle preview."
+                Assert-True ($newWithHistoryHtml.Contains('WELCOME ABOARD') -and -not $newWithHistoryHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario invented new-user activity."
+                Assert-True (-not $normalHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario invented established-user activity."
+                foreach ($previewPath in $previewPaths) {
+                    $authenticHtml = Get-Content -LiteralPath $previewPath.FullName -Raw -Encoding UTF8
+                    Assert-True (-not $authenticHtml.Contains('Sample Movie') -and -not $authenticHtml.Contains('Sample Series')) "$($engine.Name)/$scenario emitted fabricated watch rows in $($previewPath.Name)."
+                }
                 Assert-True ($quietHtml.Contains('QUIET IN THIS SECTOR') -and -not $quietHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario lost the intentional established quiet state."
                 Assert-True ($warmupHtml.Contains('STATS ARE WARMING UP') -and -not $warmupHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario lost the intentional warm-up state."
                 foreach ($contentRichHtml in @($newWithHistoryHtml, $normalHtml)) {
@@ -453,6 +468,15 @@ foreach ($engine in $engines) {
                 Assert-True ($quietHtml.Contains('Selected Movie') -and ([regex]::Matches($quietHtml, 'Selected Show')).Count -ge 2) "$($engine.Name)/$scenario removed a capped latest title after also selecting it as Trending."
                 Assert-True (-not $quietHtml.Contains('Toy Story 5')) "$($engine.Name)/$scenario substituted an unrelated fallback shell."
                 Assert-True ($previewLog.Contains('Latest Releases: 1 movies and 1 TV titles.')) "$($engine.Name)/$scenario did not load the bounded quiet-week fallback."
+                Assert-True ($previewLog.Contains('Latest Releases will query 2 active movie/TV library section(s).')) "$($engine.Name)/$scenario used the empty global hub instead of enumerated library sections."
+            }
+            if ($scenario -eq 'optional-hero-metadata') {
+                $heroStart = $normalHtml.IndexOf('TRENDING THIS WEEK', [StringComparison]::Ordinal)
+                $latestStart = if ($heroStart -ge 0) { $normalHtml.IndexOf('LATEST RELEASES', $heroStart, [StringComparison]::Ordinal) } else { -1 }
+                Assert-True ($heroStart -ge 0 -and $latestStart -gt $heroStart) "$($engine.Name)/$scenario could not isolate the quiet Trending hero."
+                $heroHtml = $normalHtml.Substring($heroStart, $latestStart - $heroStart)
+                Assert-True ($heroHtml.Contains('Selected-library viewing history.') -and $heroHtml.Contains('Drama, Mystery')) "$($engine.Name)/$scenario projected away the Trending hero summary or genres."
+                Assert-True ($heroHtml.Contains('Rotten Tomatoes critic') -and $heroHtml.Contains('Rotten Tomatoes audience') -and $heroHtml.Contains('2026')) "$($engine.Name)/$scenario projected away the Trending hero year or ratings."
             }
             if ($scenario -eq 'personal-many') {
                 Assert-True ($normalHtml.Contains('Personal Movie 12') -and $normalHtml.Contains('Personal Show 11')) "$($engine.Name)/$scenario capped personal movie or TV rows before the final synthetic title."
@@ -644,10 +668,24 @@ foreach ($engine in $engines) {
                 [string]$_.query.cmd -in @('get_history', 'get_recently_added')
             })
             Assert-True ($mediaCalls.Count -gt 0) "$($engine.Name)/$scenario made no media calls."
-            Assert-True (@($mediaCalls | Where-Object {
-                $null -eq $_.query.PSObject.Properties['section_id'] -or
-                [string]$_.query.section_id -notin @('10', '20')
-            }).Count -eq 0) "$($engine.Name)/$scenario issued an unscoped/private media query."
+            if ($scenario -eq $quietNoHistoryScenario) {
+                $unscopedRecentCalls = @($mediaCalls | Where-Object {
+                    [string]$_.query.cmd -eq 'get_recently_added' -and
+                    $null -eq $_.query.PSObject.Properties['section_id']
+                })
+                Assert-True ($unscopedRecentCalls.Count -eq 1) "$($engine.Name)/$scenario did not limit the empty global recently-added hub to weekly quiet detection."
+                $scopedRecentSections = @($mediaCalls | Where-Object {
+                    [string]$_.query.cmd -eq 'get_recently_added' -and
+                    $null -ne $_.query.PSObject.Properties['section_id']
+                } | ForEach-Object { [string]$_.query.section_id } | Sort-Object -Unique)
+                Assert-True (($scopedRecentSections -join ',') -eq '10,20') "$($engine.Name)/$scenario did not query every active movie/TV section for Latest Releases."
+            }
+            else {
+                Assert-True (@($mediaCalls | Where-Object {
+                    $null -eq $_.query.PSObject.Properties['section_id'] -or
+                    [string]$_.query.section_id -notin @('10', '20')
+                }).Count -eq 0) "$($engine.Name)/$scenario issued an unscoped/private media query."
+            }
 
             if ($scenario -in $providerRecoveryScenarios) {
                 $hostedCalls = @($calls | Where-Object { [string]$_.path -like '/hosted/library/metadata/*' })
@@ -720,7 +758,8 @@ foreach ($engine in $engines) {
                 if ($scenario -notin $directRatingScenarios -and $scenario -notin @($platformScenario, $lastPlatformScenario, $quietNoHistoryScenario)) {
                     Assert-True ($previewLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario did not exercise the recoverable direct Plex 404 fallback."
                 }
-                Assert-True ($normalHtml.Contains('Selected Show')) "$($engine.Name)/$scenario lost the global-history title fallback for sparse hero metadata."
+                $expectedSparseHeroTitle = if ($scenario -eq 'optional-hero-metadata') { 'Selected Movie' } else { 'Selected Show' }
+                Assert-True ($normalHtml.Contains($expectedSparseHeroTitle)) "$($engine.Name)/$scenario lost the global-history title fallback for sparse hero metadata."
 
                 $accessStatePath = if ($engine.Container) {
                     Join-Path $dataRoot 'access-state.json'
@@ -919,13 +958,13 @@ foreach ($engine in $engines) {
                     $stateExpectations = @(
                         [PSCustomObject]@{ Required = @('WELCOME ABOARD'); Forbidden = @('YOU CLOCKED') },
                         [PSCustomObject]@{ Required = @('WELCOME ABOARD', 'LATEST RELEASES'); Forbidden = @('YOU CLOCKED') },
-                        [PSCustomObject]@{ Required = @('WELCOME ABOARD', 'YOU CLOCKED', 'LATEST RELEASES'); Forbidden = @() },
-                        [PSCustomObject]@{ Required = @('YOU CLOCKED', 'LATEST RELEASES'); Forbidden = @('WELCOME ABOARD') },
+                        [PSCustomObject]@{ Required = @('WELCOME ABOARD', 'LATEST RELEASES'); Forbidden = @('YOU CLOCKED') },
+                        [PSCustomObject]@{ Required = @('LATEST RELEASES'); Forbidden = @('WELCOME ABOARD', 'YOU CLOCKED') },
                         [PSCustomObject]@{ Required = @('QUIET IN THIS SECTOR', 'LATEST RELEASES'); Forbidden = @('YOU CLOCKED') },
                         [PSCustomObject]@{ Required = @('STATS ARE WARMING UP', 'LATEST RELEASES'); Forbidden = @('YOU CLOCKED') }
                     )
                     for ($stateIndex = 0; $stateIndex -lt 6; $stateIndex++) {
-                        $stateArgs = @($stateCaptures[$stateIndex].FullName)
+                        $stateArgs = @($stateCaptures[$stateIndex].FullName, '--forbid-html', 'Sample Movie', '--forbid-html', 'Sample Series')
                         foreach ($requiredMarker in $stateExpectations[$stateIndex].Required) {
                             $stateArgs += @('--require-html', $requiredMarker)
                         }

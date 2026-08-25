@@ -122,10 +122,15 @@ The responsive Manager is the primary workflow on every maintained package:
 
 - New movie and TV additions with artwork, summaries, genres, ratings, and
   episode details when available.
-- A private personal recap with watch time and most-watched movies and shows.
 - Adaptive **HOT NEW RELEASE** and **TRENDING THIS WEEK** highlights.
+- Quiet weeks remain useful: **Latest Releases** shows up to four real recent
+  movies and four real recent TV titles even when the report window has no new
+  additions.
+- A private personal recap with authentic watch time and most-watched movies
+  and shows; previews never invent recipient activity.
 - A privacy-preserving, server-wide Binge Champion award.
-- Welcome, active-week, quiet-week, and milestone newsletter layouts.
+- Welcome, active-week, quiet-week, and milestone newsletter layouts, including
+  recipient platform icons when real history identifies a supported platform.
 - An optional uppercase custom-card title with one allowlisted 18×18 local GIF.
 - Browser previews and controlled TestEmail delivery before scheduling.
 

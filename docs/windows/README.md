@@ -309,12 +309,17 @@ Open **Previews** after a successful Config validation:
 1. Inspect the generated index and six HTML states in scenario order: Manual
    Welcome, New User - No History, New User - With History, Normal Newsletter,
    Established Quiet, and Established Warnings.
-2. Confirm artwork, ratings, summaries, personal statistics, conditional cards,
-   and responsive layout.
-3. When the previews are correct, select a Tautulli owner/administrator ID and
+2. Confirm artwork, genres, year, ratings, summaries, personal statistics,
+   platform icons, conditional cards, and responsive layout. Every state uses
+   the selected user's real activity; an inactive user remains inactive rather
+   than receiving sample watch rows.
+3. In a week with no new additions, confirm **Latest Releases** still contains
+   up to four real recent movies and four real recent TV titles from the active
+   library scope.
+4. When the previews are correct, select a Tautulli owner/administrator ID and
    use the guarded **Send six test messages** action. All six messages go only
    to the configured `TestEmail`.
-4. Verify the messages in a real mail client. SMTP acceptance confirms the
+5. Verify the messages in a real mail client. SMTP acceptance confirms the
    server accepted them; it does not prove inbox placement.
 
 This guarded six-message TestEmail action is the only Manager setup workflow
