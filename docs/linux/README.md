@@ -9,6 +9,8 @@ command wrapper.
 
 [Open the Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/)
 
+Current source baseline: **1.3.0**.
+
 ## Supported target
 
 - A current 64-bit Ubuntu, Debian, or RHEL release supported by PowerShell 7.
@@ -286,19 +288,22 @@ delay. Avoid
 Test All or a manual production run near the scheduled batch, and stop retries
 during a provider account lock.
 
-The inherited newsletter payload lists every qualifying unique movie and TV
-show. Movies and TV use separate full-width cards with two title columns on
-desktop. On mobile, movies stack one title per row while TV retains two title
-columns; empty media cards remain omitted. Personal total watch time stays
-distinct from the qualifying Binge Champion duration and nonzero unique
-movie/TV-show counts.
-Only new movies qualify for **HOT NEW RELEASE**; movie-empty weeks promote an
-authentic Trending result when server history supplies one while retaining new
-TV releases.
-With no new movie or TV additions, all lifecycle states share up to four recent
-movies and up to four TV titles strictly less than one calendar month old. When
-authentic server-wide movie history supplies a rich Trending hero, the header
-reports it and the lower server-wide Trending card remains suppressed.
+The inherited newsletter payload lists every qualifying unique personal movie
+and TV show in responsive full-width cards. Personal total watch time remains
+distinct from Binge Champion eligibility; the Binge movie/TV breakdown now uses
+the same supporting typography as total watch time.
+
+Only new movies qualify for **HOT NEW RELEASE**. That hero pairs with the
+server-wide Trending footer. A movie-empty week promotes an authentic Trending
+movie when server history supplies one, excludes it from up to four **Recent
+Releases / Movies** cards, and pairs it with the privacy-preserving Top Genre
+footer. With new TV, up to four series remain **New Releases / TV** and the
+visible count plus inbox preview text say `0 NEW MOVIES • X TV TITLE(S)`.
+Without new TV, up to four series strictly newer than one month become **Recent
+Releases / TV**, while both count locations say
+`1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when the real hero exists. Top
+Genre reports only aggregate qualified movie watch time and unique movie count;
+missing or unsupported artwork uses the neutral local movie animation.
 
 ## Upgrade and rollback
 

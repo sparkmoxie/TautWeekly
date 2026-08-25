@@ -1,6 +1,13 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.5.0 Portable
+---------------
+- adds the privacy-preserving server-wide Top Genre footer with approved animated artwork and a neutral movie fallback
+- makes Trending weeks show up to four recent movies plus new TV or, when no new TV exists, recent TV strictly newer than one month
+- keeps the email count line and preview text synchronized with the Trending shelf contents
+- normalizes Binge Champion and Top Genre supporting typography across split and full-width cards
+
 v1.4.2 Portable
 ---------------
 - restores Manager bootstrap and access-recovery commands to the external NAS host wrapper

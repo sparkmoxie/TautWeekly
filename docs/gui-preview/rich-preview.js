@@ -187,18 +187,31 @@
     return `<section class="panel custom-text-card${card.title || card.subheading ? "" : " no-heading"}" style="${border}">${title}${subheading}<div class="custom-body">${body}</div></section>`;
   }
 
+  function complementaryFooter(state) {
+    if (state.latest) {
+      return `<section class="panel status-panel"><img src="${media("genre-scifi.gif")}" width="42" height="42" alt=""><div><div class="welcome-kicker">TOP GENRE THIS WEEK</div><h2>Science Fiction</h2><p style="font-size:12px;line-height:1.35;font-weight:400;color:#8e8e8e">6h 56m watched across 2 movies</p></div></section>`;
+    }
+    const item = rotate(movies, state.offset)[1] || movies[0];
+    return `<section class="panel status-panel"><img src="${media("popcorn.gif")}" width="42" height="42" alt=""><div><div class="welcome-kicker">TRENDING THIS WEEK</div><h2>${esc(item.title)}</h2><p>Most watched across STARLIGHT CINEMA this week &middot; 11 fictional plays</p></div></section>`;
+  }
+
   function newsletter(state) {
     const movieItems = rotate(movies, state.offset).slice(0, state.movieCount);
     const showItems = rotate(shows, state.offset).slice(0, state.showCount);
     const statsMovieItems = rotate(movies, state.offset).slice(0, state.statMovieCount ?? state.movieCount);
     const statsShowItems = rotate(shows, state.offset).slice(0, state.statShowCount ?? state.showCount);
     const hero = movieItems[0] || movies[0];
-    const releaseMovies = movieItems.slice(1);
-    const headerLine = state.latest ? `1 TRENDING MOVIE &middot; ${releaseMovies.length} ${plural(releaseMovies.length, "RECENT MOVIE", "RECENT MOVIES")} &middot; ${state.showCount} ${plural(state.showCount, "RECENT TV TITLE", "RECENT TV TITLES")}` : `${state.movieCount} ${plural(state.movieCount, "NEW MOVIE", "NEW MOVIES")} &middot; ${state.showCount} ${plural(state.showCount, "TV TITLE", "TV TITLES")}`;
-    const movieGrid = releaseMovies.length ? `<div class="section-label">${state.latest ? "LATEST RELEASES" : "NEW RELEASES"}<span class="section-title">Movies</span></div><section class="grid">${releaseMovies.map(movieCard).join("")}</section>` : "";
-    const showGrid = showItems.length ? `<div class="section-label">${state.latest ? "LATEST RELEASES" : "NEW RELEASES"}<span class="section-title">TV</span></div><section class="grid">${showItems.map(showCard).join("")}</section>` : "";
+    const releaseMovies = movieItems.slice(1, 5);
+    const newTv = state.latest && Boolean(state.newTv);
+    const headerLine = state.latest
+      ? (newTv
+        ? `0 NEW MOVIES &middot; ${showItems.length} ${plural(showItems.length, "TV TITLE", "TV TITLES")}`
+        : `1 TRENDING MOVIE &middot; ${releaseMovies.length} ${plural(releaseMovies.length, "RECENT MOVIE RELEASE", "RECENT MOVIE RELEASES")}`)
+      : `${state.movieCount} ${plural(state.movieCount, "NEW MOVIE", "NEW MOVIES")} &middot; ${state.showCount} ${plural(state.showCount, "TV TITLE", "TV TITLES")}`;
+    const movieGrid = releaseMovies.length ? `<div class="section-label">${state.latest ? "RECENT RELEASES" : "NEW RELEASES"}<span class="section-title">Movies</span></div><section class="grid">${releaseMovies.map(movieCard).join("")}</section>` : "";
+    const showGrid = showItems.length ? `<div class="section-label">${state.latest && !newTv ? "RECENT RELEASES" : "NEW RELEASES"}<span class="section-title">TV</span></div><section class="grid">${showItems.map(showCard).join("")}</section>` : "";
     const intro = state.welcomeOnly ? "Welcome to the Friday drop - here is what is new and what to expect." : "Your Friday Plex drop is here - real media presentation with a fictional private recap.";
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(state.name)}</title><style>${styles}</style></head><body><main class="email-stage"><div class="email"><header class="header"><div class="plex">PLE<b>X</b></div><div class="hello">Hey Demo Viewer,</div><div class="intro">${intro}</div></header>${welcomeBlock(state)}${customTextCard()}<div class="release-meta"><div class="period">${headerLine}</div><div class="date">Aug 8 - Aug 14, 2026</div></div>${heroBlock(hero, state)}${movieGrid}${showGrid}${statsBlock(state, statsMovieItems, statsShowItems)}<div class="cta"><span>OPEN PLEX &middot; DEMO ONLY</span></div><p class="fixture-note">Local visual fixture only. Public media artwork, title logos, and Rotten Tomatoes / IMDb score snapshots are shown as they appeared on Aug 14, 2026. Viewer identity, server name, watch activity, counts, and delivery state are fictional. No affiliation or endorsement is implied; no service is contacted.</p></div></main></body></html>`;
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(state.name)}</title><style>${styles}</style></head><body><div style="display:none;max-height:0;overflow:hidden;opacity:0">${headerLine}</div><main class="email-stage"><div class="email"><header class="header"><div class="plex">PLE<b>X</b></div><div class="hello">Hey Demo Viewer,</div><div class="intro">${intro}</div></header>${welcomeBlock(state)}${customTextCard()}<div class="release-meta"><div class="period">${headerLine}</div><div class="date">Aug 8 - Aug 14, 2026</div></div>${heroBlock(hero, state)}${movieGrid}${showGrid}${statsBlock(state, statsMovieItems, statsShowItems)}${complementaryFooter(state)}<div class="cta"><span>OPEN PLEX &middot; DEMO ONLY</span></div><p class="fixture-note">Local visual fixture only. Public media artwork, title logos, and Rotten Tomatoes / IMDb score snapshots are shown as they appeared on Aug 14, 2026. Viewer identity, server name, watch activity, counts, and delivery state are fictional. No affiliation or endorsement is implied; no service is contacted.</p></div></main></body></html>`;
   }
 
   function index() {

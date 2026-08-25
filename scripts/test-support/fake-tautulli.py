@@ -287,6 +287,10 @@ def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
         # Keep the selected episode's IMDb distinct from its show's IMDb so
         # integration tests prove show cards use show-level get_metadata.
         rows["20"][1]["rating"] = "6.1"
+    if scenario == "tv-only":
+        # A Trending week with new TV still needs enough genuinely recent movie
+        # candidates to render four movie cards after excluding the hero.
+        rows["10"] = [dict(movie) for movie in media_rows("quiet")["10"][:5]]
     if scenario in DELETED_HISTORY_SCENARIOS or scenario == "cache-prime":
         if scenario == "deleted-history-legacy-guid":
             rows["10"][0]["guid"] = "com.plexapp.agents.tmdb://12345?lang=en"

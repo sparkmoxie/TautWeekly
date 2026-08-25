@@ -9,7 +9,7 @@ source of truth for normal setup, verification, previews, controlled TestEmail
 delivery, embedded scheduling, and status. Terminal setup commands are retained
 only for expert recovery.
 
-Current source baseline: **1.3.0**.
+Current source baseline: **1.4.0**.
 
 ## Requirements
 
@@ -196,6 +196,22 @@ includes an optional `compose.tailscale.yaml` userspace sidecar. Follow the
 [NAS/Docker sidecar procedure](../nas-docker/README.md#optional-userspace-compose-sidecar).
 It has no Docker socket, `/dev/net/tun`, added capability, host-network access,
 or public Funnel configuration. The native Mac client is the simpler default.
+
+## Newsletter behavior
+
+A Hot New Release movie hero pairs with the server-wide Trending footer. A
+movie-empty Trending week uses up to four other recent movies and instead pairs
+the hero with the privacy-preserving Top Genre footer. With new TV, up to four
+series appear under **New Releases / TV**, and the visible count plus inbox
+preview text say `0 NEW MOVIES • X TV TITLE(S)`. Without new TV, up to four
+series strictly newer than one month appear under **Recent Releases / TV**, and
+both count locations say
+`1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when the real hero exists.
+
+Top Genre uses only aggregate qualified movie watch time and unique movie
+count; it never includes viewer identity and safely falls back to the neutral
+movie animation. Its supporting line and every Binge Champion movie/TV
+breakdown use the same supporting typography as personal total watch time.
 
 ## Persistent data, permissions, and backup
 

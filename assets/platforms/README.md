@@ -13,8 +13,12 @@ CSS does not recolor, crop, stretch, rotate, or filter the vendor artwork.
 
 Assets were retrieved and verified on 2026-08-12. `ASSET-SHA256SUMS.txt`
 records the durable documentation-asset hashes. `NEWSLETTER-ASSET-SHA256SUMS.txt`
-records the 42x42 white newsletter glyph derivatives; their source geometry and
-transparency are preserved for reliable rendering on the dark email background.
+records both the 42x42 white newsletter glyph derivatives and the approved
+512x512 animated Top Genre artwork. The genre GIFs are stored byte-for-byte as
+validated release inputs, and every package verifies their hashes, dimensions,
+and animation before publication. Unknown or unavailable genre artwork uses the
+existing neutral `movies.gif` asset, so generated mail never references a broken
+image.
 
 | Asset | Canonical input | Treatment |
 | --- | --- | --- |

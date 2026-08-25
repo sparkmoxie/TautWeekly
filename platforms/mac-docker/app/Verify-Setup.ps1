@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$DataRoot = $(if ($env:TAUTWEEKLY_DATA_DIR) { $env:TAUTWEEKLY_DATA_DIR } else { "/data" })
 )
 Set-StrictMode -Version Latest
@@ -232,7 +232,7 @@ function Get-FrameCount([string]$Path) {
     }
 }
 
-$animated = @("movies.gif","tv.gif","clock.gif","trophy.gif","hot.gif","trending.gif","pending.gif","quiet.gif","welcome.gif","action.gif","watched.gif","lockinfo.gif","watchlist.gif","popcorn.gif")
+$animated = @("movies.gif","tv.gif","clock.gif","trophy.gif","hot.gif","trending.gif","pending.gif","quiet.gif","welcome.gif","action.gif","watched.gif","lockinfo.gif","watchlist.gif","popcorn.gif","genre-action.gif","genre-comedy.gif","genre-crime.gif","genre-drama.gif","genre-fantasy.gif","genre-horror.gif","genre-musical.gif","genre-mystery.gif","genre-romance.gif","genre-scifi.gif","genre-thriller.gif","genre-western.gif")
 $assetFailure = $false
 foreach ($name in $animated) {
     $frames = Get-FrameCount (Join-Path $assetsDir $name)

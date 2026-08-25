@@ -324,7 +324,15 @@ foreach ($pattern in @(
     'watched-row>img\{width:38px;height:56px;object-fit:cover',
     'imdb img\{width:28px;height:14px;object-fit:contain\}',
     'YOU CLOCKED',
-    'total watch time'
+    'total watch time',
+    'function complementaryFooter\(',
+    'TOP GENRE THIS WEEK',
+    'genre-scifi[.]gif',
+    '6h 56m watched across 2 movies',
+    '0 NEW MOVIES &middot;',
+    'RECENT MOVIE RELEASE',
+    'state[.]latest \? "RECENT RELEASES" : "NEW RELEASES"',
+    'display:none;max-height:0;overflow:hidden;opacity:0">\$\{headerLine\}'
 )) {
     if ($guiPreviewRich -notmatch $pattern) {
         throw "GUI Preview personal-stat parity is missing: $pattern"
@@ -364,6 +372,14 @@ foreach ($entry in $titleGifHashes.GetEnumerator()) {
     if ($guiPreviewRich -notmatch [regex]::Escape("${assetID}: `"$($entry.Key)`"")) {
         throw "GUI Preview safe title-GIF mapping is missing: $assetID"
     }
+}
+
+$guiGenreAsset = Join-Path $guiPreviewMedia 'genre-scifi.gif'
+if (-not (Test-Path -LiteralPath $guiGenreAsset -PathType Leaf)) {
+    throw 'GUI Preview Top Genre asset is missing.'
+}
+if ((Get-FileHash -LiteralPath $guiGenreAsset -Algorithm SHA256).Hash -ne 'D840C0568F99089DABDCCF926E96F2365731075F2F1A95D7BEC90016090F5E07') {
+    throw 'GUI Preview Top Genre asset differs from the validated Science Fiction GIF.'
 }
 
 foreach ($pattern in @(
@@ -474,7 +490,18 @@ foreach ($pattern in @(
     'winner||high?shows.length:1',
     'YOU CLOCKED',
     'total watch time',
-    'alt="IMDb"'
+    'alt="IMDb"',
+    'releaseMovies=trendingHero\?moviePool\.slice\(1,5\):',
+    'releaseLine=tvOnly\?`0 NEW MOVIES •',
+    'quiet\?`1 TRENDING MOVIE •',
+    'plural\(movieCount,"RECENT MOVIE RELEASE","RECENT MOVIE RELEASES"\)',
+    'display:none;max-height:0;overflow:hidden;opacity:0">\$\{releaseLine\}',
+    'function complementaryFooterBlock',
+    'const item=rotate\(movies\)\[1\]',
+    'TOP GENRE THIS WEEK',
+    'genre-scifi\.gif',
+    '6h 56m watched across 2 movies',
+    'padding-top:3px;font-size:12px;line-height:1\.35;font-weight:400;color:#8e8e8e'
 )) {
     if ($previewGallery -notmatch $pattern) {
         throw "Email States Preview personal-stat parity is missing: $pattern"
@@ -482,6 +509,16 @@ foreach ($pattern in @(
 }
 if ($previewGallery -match 'rowCount=Math\.max' -or $previewGallery -match 'total watched') {
     throw 'Email States Preview retains media-coupled summary height or stale total-watch-time copy.'
+}
+if ($previewGallery -match 'const item=rotate\(shows\)\[0\]') {
+    throw 'Email States Preview incorrectly uses a TV show for the server-wide Trending movie feature.'
+}
+$previewGenreAsset = Join-Path $docs 'assets/genre-scifi.gif'
+if (-not (Test-Path -LiteralPath $previewGenreAsset -PathType Leaf)) {
+    throw 'Email States Preview is missing its local sanitized Top Genre asset.'
+}
+if ((Get-FileHash -LiteralPath $previewGenreAsset -Algorithm SHA256).Hash -ne 'D840C0568F99089DABDCCF926E96F2365731075F2F1A95D7BEC90016090F5E07') {
+    throw 'Email States Preview Top Genre asset differs from the validated Science Fiction GIF.'
 }
 
 if ($terminalPages -lt 3) {
