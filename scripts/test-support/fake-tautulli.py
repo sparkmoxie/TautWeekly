@@ -21,8 +21,8 @@ DELETED_HISTORY_SCENARIOS = (
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
     old = now - (30 * 86400)
-    movie_added = now if scenario in ("active", "personal-many", "platform-tie", "last-platform", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
-    tv_added = now if scenario in ("active", "personal-many", "tv-only", "optional-hero-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
+    movie_added = now if scenario in ("active", "personal-many", "platform-tie", "last-platform", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
+    tv_added = now if scenario in ("active", "personal-many", "tv-only", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
     rows = {
         "10": [
             {
@@ -258,6 +258,11 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                 rows[0].pop(field, None)
         if scenario == "last-platform":
             rows[0]["platform"] = "Unrecognized Platform"
+        if scenario == "optional-hero-metadata":
+            rows[0]["play_duration"] = 14400
+            rows[0]["rating_image"] = "rottentomatoes://image.rating.ripe"
+            rows[0]["audience_rating_image"] = "rottentomatoes://image.rating.upright"
+            rows[0]["genres"] = ["Drama", "Mystery"]
         return rows
     if section_id == "20":
         rows = [
@@ -917,16 +922,21 @@ class Handler(BaseHTTPRequestHandler):
             self.api_success({"pms_url": self.server.base_url})  # type: ignore[attr-defined]
             return
         if command == "get_libraries":
-            self.api_success(
-                [
-                    {"section_id": "10", "section_name": "Selected Movies", "section_type": "movie", "count": 1, "is_active": 1},
-                    {"section_id": "20", "section_name": "Selected TV", "section_type": "show", "count": 1, "is_active": 1},
-                    {"section_id": "99", "section_name": "Private", "section_type": "movie", "count": 1, "is_active": 1},
-                ]
-            )
+            libraries = [
+                {"section_id": "10", "section_name": "Selected Movies", "section_type": "movie", "count": 1, "is_active": 1},
+                {"section_id": "20", "section_name": "Selected TV", "section_type": "show", "count": 1, "is_active": 1},
+                {"section_id": "99", "section_name": "Private", "section_type": "movie", "count": 1, "is_active": 1},
+            ]
+            if self.current_scenario() == "quiet-no-history":
+                libraries = libraries[:2]
+            self.api_success(libraries)
             return
         if command == "get_history":
-            rows = history_rows(query.get("section_id", ""), self.current_scenario())
+            section_id = query.get("section_id", "")
+            if self.current_scenario() == "quiet-no-history" and not section_id:
+                rows = history_rows("10", self.current_scenario()) + history_rows("20", self.current_scenario())
+            else:
+                rows = history_rows(section_id, self.current_scenario())
             user_id = query.get("user_id", "")
             if user_id and self.current_scenario() != "platform-tie":
                 rows = [row for row in rows if str(row.get("user_id", "")) == user_id]
@@ -936,7 +946,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         if command == "get_recently_added":
             current_rows = media_rows(self.current_scenario())
-            rows = current_rows.get(query.get("section_id", ""), current_rows["99"])
+            section_id = query.get("section_id", "")
+            if self.current_scenario() == "quiet-no-history" and not section_id:
+                rows = []
+            else:
+                rows = current_rows.get(section_id, current_rows["99"])
             start = int(query.get("start", "0"))
             count = int(query.get("count", "100"))
             self.api_success({"recently_added": rows[start : start + count]})
@@ -985,7 +999,7 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 )
                 return
-            if scenario == "optional-hero-metadata" and is_show:
+            if scenario == "optional-hero-metadata" and not is_episode:
                 # Tautulli may return a successful but sparse metadata object. The
                 # renderer must retain the global-history title and default every
                 # absent optional hero field without violating strict mode.

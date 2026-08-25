@@ -98,6 +98,7 @@ foreach ($relative in @(
         'Get-DesignProviderRating',
         'Test-IncludedLibraryRow',
         'Get-IncludedLibraryQueryScopes',
+        'Get-LatestReleaseQueryScopes',
         'Get-History',
         'Get-RecentItems',
         'New-ReleaseData',
@@ -114,6 +115,11 @@ foreach ($relative in @(
         Invoke-Expression $definition.Extent.Text
     }
 
+    function Write-Log {
+        param([string]$Message, [string]$Level = 'INFO')
+        [void]$Message
+        [void]$Level
+    }
     $script:LibraryFilterEnabled = $true
     $script:IncludedLibraryIdSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
     [void]$script:IncludedLibraryIdSet.Add('10')
@@ -164,6 +170,15 @@ foreach ($relative in @(
 
         $scope = if ($Parameters.ContainsKey('section_id')) { [string]$Parameters.section_id } else { '' }
         $script:scopeCalls.Add("$Command`:$scope")
+
+        if ($Command -eq 'get_libraries') {
+            return @(
+                [PSCustomObject]@{ section_id = '10'; section_type = 'movie'; is_active = 1 },
+                [PSCustomObject]@{ section_id = '20'; section_type = 'show'; is_active = 1 },
+                [PSCustomObject]@{ section_id = '99'; section_type = 'movie'; is_active = 0 },
+                [PSCustomObject]@{ section_id = '30'; section_type = 'artist'; is_active = 1 }
+            )
+        }
 
         if ([string]::IsNullOrWhiteSpace($scope)) {
             # This emulates a busy private library occupying every globally
@@ -275,6 +290,14 @@ foreach ($relative in @(
         -Actual ($script:scopeCalls -join ',') -Expected 'get_history:'
     Assert-Equal -Name "$relative preserves legacy all-library history" `
         -Actual (($legacyHistory | ForEach-Object rating_key) -join ',') -Expected 'private-movie'
+
+    $script:scopeCalls.Clear()
+    $unfilteredLatest = Get-LatestReleaseData -MovieLimit 4 -TvLimit 4
+    Assert-Equal -Name "$relative enumerates active movie/TV sections for unfiltered quiet fallback" `
+        -Actual ((@($unfilteredLatest.Movies.Title) + @($unfilteredLatest.TV.Title)) -join ',') `
+        -Expected 'Selected Movie,Selected Show,Selected Show 2,Selected Show 3,Selected Show 4'
+    Assert-Equal -Name "$relative avoids the global recently-added hub for unfiltered quiet fallback" `
+        -Actual (@($script:scopeCalls | Where-Object { $_ -eq 'get_recently_added:' }).Count) -Expected 0
 }
 
 foreach ($name in @('Library-Selection.ps1', 'Manage-Library-Selection.ps1')) {

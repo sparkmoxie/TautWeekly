@@ -6,6 +6,19 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored content-rich **Trending** heroes when Tautulli returns sparse
+  secondary metadata, preserving the source title's genres, year, summary, and
+  provider-labelled critic/audience ratings.
+- Made quiet weeks enumerate real active movie/TV libraries when no explicit
+  library filter is configured, so **Latest Releases** still shows up to four
+  recent movies and four recent TV titles instead of trusting an empty global
+  hub.
+- Removed fictional watch time and sample titles from **Preview All** and
+  **Send Test All**; every state now uses only the selected recipient's real
+  activity while retaining the existing stat layout and platform icons.
+
 ## [0.20.8] - 2026-08-25
 
 ### Fixed
