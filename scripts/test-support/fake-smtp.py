@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import threading
 import socketserver
 import time
 from pathlib import Path
@@ -67,8 +68,15 @@ class Handler(socketserver.StreamRequestHandler):
                         data_line = data_line[1:]
                     data_lines.append(data_line)
                 data_file: Path | None = self.server.data_file  # type: ignore[attr-defined]
+                message = ("\r\n".join(data_lines) + "\r\n").encode("utf-8")
                 if data_file is not None:
-                    data_file.write_bytes(("\r\n".join(data_lines) + "\r\n").encode("utf-8"))
+                    data_file.write_bytes(message)
+                data_directory: Path | None = self.server.data_directory  # type: ignore[attr-defined]
+                if data_directory is not None:
+                    with self.server.capture_lock:  # type: ignore[attr-defined]
+                        self.server.message_count += 1  # type: ignore[attr-defined]
+                        capture_number = self.server.message_count  # type: ignore[attr-defined]
+                    (data_directory / f"message-{capture_number:02d}.eml").write_bytes(message)
                 if self.server.drop_after_data:  # type: ignore[attr-defined]
                     return
                 self.send("250 Queued")
@@ -88,6 +96,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--call-log", type=Path, required=True)
     parser.add_argument("--ready-file", type=Path, required=True)
+    parser.add_argument("--data-directory", type=Path)
     parser.add_argument("--data-file", type=Path)
     parser.add_argument("--reject-recipient", action="append", default=[])
     parser.add_argument("--auth-failure", action="store_true")
@@ -96,10 +105,15 @@ def main() -> None:
     parser.add_argument("--reject-policy", action="store_true")
     args = parser.parse_args()
 
+    if args.data_directory is not None:
+        args.data_directory.mkdir(parents=True, exist_ok=True)
     args.call_log.write_text("", encoding="utf-8")
     with Server(("127.0.0.1", args.port), Handler) as server:
         server.call_log = args.call_log  # type: ignore[attr-defined]
         server.data_file = args.data_file  # type: ignore[attr-defined]
+        server.data_directory = args.data_directory  # type: ignore[attr-defined]
+        server.capture_lock = threading.Lock()  # type: ignore[attr-defined]
+        server.message_count = 0  # type: ignore[attr-defined]
         server.reject_recipients = [value.lower() for value in args.reject_recipient]  # type: ignore[attr-defined]
         server.auth_failure = args.auth_failure  # type: ignore[attr-defined]
         server.rate_limit_greeting = args.rate_limit_greeting  # type: ignore[attr-defined]

@@ -111,7 +111,8 @@ foreach ($relativePath in $rendererPaths) {
     }
 
     $rendererSource = [IO.File]::ReadAllText($path)
-    Assert-True (-not $rendererSource.Contains('Title="Sample Movie')) "$relativePath still contains fabricated production preview movie stats"
+    Assert-True ($rendererSource.Contains('Title="Sample Movie')) "$relativePath lacks sanitized populated-state fallback rows for lifecycle regression modes"
+    Assert-True (([regex]::Matches($rendererSource, 'Get-PopulatedPreviewStats -RealStats')).Count -eq 1) "$relativePath allows populated-state fixture statistics outside Build-AllEmailVariants"
     Assert-True (([regex]::Matches($rendererSource, 'Get-NewsletterLastPlatform -ExpectedUserId \$user\.UserId')).Count -eq 3) "$relativePath does not apply Last Platform to manual, preview/test, and standard recipient paths"
 
     foreach ($functionName in $requiredFunctions) {
@@ -1153,15 +1154,16 @@ foreach ($relativePath in $rendererPaths) {
         })
         TV = @()
     }
-    $emptyPreview = Get-PopulatedPreviewStats -RealStats $empty
-    Assert-True (-not $emptyPreview.IsSample) "$relativePath marked authentic empty history as sample data"
-    Assert-True ((Safe-Int64 $emptyPreview.Stats.TotalSeconds) -eq 0) "$relativePath invented watch time for an empty-history preview"
-    Assert-True ($emptyPreview.Stats.MovieItems.Count -eq 0 -and $emptyPreview.Stats.EpisodeItems.Count -eq 0 -and $emptyPreview.Stats.TvShowItems.Count -eq 0) "$relativePath invented watch rows for an empty-history preview"
-    $nullPreview = Get-PopulatedPreviewStats -RealStats $null
-    Assert-True (-not $nullPreview.IsSample -and (Safe-Int64 $nullPreview.Stats.TotalSeconds) -eq 0) "$relativePath did not safely convert absent real stats to an authentic zero state"
-    $emptyPlainText = Build-PlainText `
+    $samplePreview = Get-PopulatedPreviewStats -RealStats $empty
+    Assert-True ($samplePreview.IsSample) "$relativePath did not preserve distinct populated lifecycle scenarios for empty selected-user history"
+    Assert-True ((Safe-Int64 $samplePreview.Stats.TotalSeconds) -gt 0) "$relativePath did not populate the with-history scenario"
+    Assert-True ($samplePreview.Stats.MovieItems.Count -ge 2 -and $samplePreview.Stats.EpisodeItems.Count -ge 3 -and $samplePreview.Stats.TvShowItems.Count -ge 3) "$relativePath did not build content-rich populated scenario rows"
+    foreach ($sampleMovie in $samplePreview.Stats.MovieItems) {
+        Assert-True ((Safe-Int64 $sampleMovie.Seconds) -gt 0) "$relativePath generated invalid populated-scenario movie watch time"
+    }
+    $samplePlainText = Build-PlainText `
         -User ([PSCustomObject]@{ FriendlyName = 'Viewer' }) `
-        -Stats $emptyPreview.Stats `
+        -Stats $samplePreview.Stats `
         -ReleaseData $script:activeReleaseData `
         -HotRelease $null `
         -TrendingTitle '' `
@@ -1169,11 +1171,11 @@ foreach ($relativePath in $rendererPaths) {
         -RecentAccess $false `
         -StartLabel 'August 1' `
         -EndLabel 'August 7'
-    Assert-True (-not $emptyPlainText.Contains('Sample Movie') -and -not $emptyPlainText.Contains('Sample Series')) "$relativePath leaked fabricated viewing stats into an empty-history preview"
-    Assert-True ($emptyPlainText.Contains('View & Request: https://app.plex.tv/')) "$relativePath did not render the custom button label and URL in plain text"
-    Assert-True ($emptyPlainText.Contains("CUSTOM <TITLE>`r`nMaintenance & more`r`nFirst <line> & safe`nSecond line")) "$relativePath did not render the plain-text custom card"
-    $customPlainIndex = $emptyPlainText.IndexOf('CUSTOM <TITLE>', [StringComparison]::Ordinal)
-    $releasePlainIndex = if ($customPlainIndex -ge 0) { $emptyPlainText.IndexOf('1 new movie', $customPlainIndex + 1, [StringComparison]::Ordinal) } else { -1 }
+    Assert-True ($samplePlainText.Contains('movies watched') -and $samplePlainText.Contains('TV shows watched')) "$relativePath could not render populated lifecycle stats as plain text"
+    Assert-True ($samplePlainText.Contains('View & Request: https://app.plex.tv/')) "$relativePath did not render the custom button label and URL in plain text"
+    Assert-True ($samplePlainText.Contains("CUSTOM <TITLE>`r`nMaintenance & more`r`nFirst <line> & safe`nSecond line")) "$relativePath did not render the plain-text custom card"
+    $customPlainIndex = $samplePlainText.IndexOf('CUSTOM <TITLE>', [StringComparison]::Ordinal)
+    $releasePlainIndex = if ($customPlainIndex -ge 0) { $samplePlainText.IndexOf('1 new movie', $customPlainIndex + 1, [StringComparison]::Ordinal) } else { -1 }
     Assert-True ($customPlainIndex -ge 0 -and $releasePlainIndex -gt $customPlainIndex) "$relativePath placed the plain-text custom card after the release metadata (custom=$customPlainIndex release=$releasePlainIndex)"
 
     $uncappedPlainText = Build-PlainText `

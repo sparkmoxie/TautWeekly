@@ -6646,7 +6646,7 @@ function Build-NewsletterHtml {
         [bool]$HotRelease.IsTrending
     )
     if ($null -ne $HotRelease -and $null -ne $HotRelease.Item -and
-        -not ($trendingHeroMode -and -not $QuietReleaseMode)) {
+        -not $trendingHeroMode) {
         $featuredReleaseKey = [string]$HotRelease.Item.ReleaseKey
     }
 
@@ -8507,15 +8507,108 @@ function New-ZeroPreviewStats {
 function Get-PopulatedPreviewStats {
     param([AllowNull()][object]$RealStats)
 
-    $stats = if ($null -eq $RealStats) {
-        New-ZeroPreviewStats
-    } else {
-        $RealStats
+    if ($null -ne $RealStats -and (Safe-Int64 $RealStats.TotalSeconds) -gt 0) {
+        Add-UserStatsMediaMetadata -Stats $RealStats
+        return [PSCustomObject]@{
+            Stats    = $RealStats
+            IsSample = $false
+        }
     }
-    Add-UserStatsMediaMetadata -Stats $stats
+
+    # PreviewAll and SendTestAll are lifecycle regression galleries, so their
+    # explicitly populated states must remain populated even when the selected
+    # recipient has no report-window activity. Reuse current release metadata
+    # where available and add only clearly synthetic, recipient-local rows.
+    $sampleMovies = New-Object System.Collections.Generic.List[object]
+    foreach ($movie in @($activeReleaseData.Movies | Select-Object -First 2)) {
+        $sampleMovie = [ordered]@{}
+        foreach ($property in $movie.PSObject.Properties) {
+            $sampleMovie[$property.Name] = $property.Value
+        }
+        $sampleMovie["Plays"] = 1
+        $sampleMovie["Seconds"] = [int64](3600 - ($sampleMovies.Count * 900))
+        $sampleMovies.Add([PSCustomObject]$sampleMovie)
+    }
+
+    while ($sampleMovies.Count -lt 2) {
+        $index = $sampleMovies.Count + 1
+        $sampleMovies.Add([PSCustomObject]@{
+            Type="movie"; RatingKey=""; PosterRatingKey="";
+            Title="Sample Movie $index"; Year="";
+            DesignRtCritic=$(if ($index -eq 1) { "87" } else { "66" });
+            DesignRtAudience=$(if ($index -eq 1) { "74" } else { "81" });
+            DesignRtCriticImage="rottentomatoes://image.rating.ripe";
+            DesignRtAudienceImage="rottentomatoes://image.rating.upright";
+            Plays=1; Seconds=[int64](3600 - (($index - 1) * 900))
+        })
+    }
+
+    $sampleEpisodes = New-Object System.Collections.Generic.List[object]
+    foreach ($show in @($activeReleaseData.TV)) {
+        foreach ($episode in @($show.Episodes)) {
+            $sampleEpisodes.Add([PSCustomObject]@{
+                Type="episode"
+                RatingKey=[string]$episode.RatingKey
+                PosterRatingKey=[string]$show.PosterRatingKey
+                ShowTitle=[string]$show.Title
+                EpisodeTitle=[string]$episode.Title
+                Season=Safe-Int $episode.Season
+                Episode=Safe-Int $episode.Episode
+                ImdbRating=[string]$episode.ImdbRating
+                DesignRatingProvider=Get-OptionalStringProperty -InputObject $episode -Name "DesignRatingProvider"
+                DesignRatingValue=Get-OptionalStringProperty -InputObject $episode -Name "DesignRatingValue"
+            })
+            if ($sampleEpisodes.Count -ge 3) { break }
+        }
+        if ($sampleEpisodes.Count -ge 3) { break }
+    }
+
+    while ($sampleEpisodes.Count -lt 3) {
+        $index = $sampleEpisodes.Count + 1
+        $sampleEpisodes.Add([PSCustomObject]@{
+            Type="episode"; RatingKey=""; PosterRatingKey="";
+            ShowTitle="Sample Series"; EpisodeTitle="Sample Episode $index";
+            Season=1; Episode=$index; ImdbRating=$(if ($index -eq 1) { "8.5" } elseif ($index -eq 2) { "8.1" } else { "7.9" })
+        })
+    }
+
+    $sampleTvShows = New-Object System.Collections.Generic.List[object]
+    foreach ($show in @($activeReleaseData.TV | Select-Object -First 3)) {
+        $sampleTvShows.Add([PSCustomObject]@{
+            Type="show"; RatingKey=[string]$show.RatingKey; PosterRatingKey=[string]$show.PosterRatingKey;
+            Title=[string]$show.Title; ShowTitle=[string]$show.Title;
+            Plays=1; Seconds=[int64]3600; TotalTimeText="1h 0m"
+        })
+    }
+    while ($sampleTvShows.Count -lt 3) {
+        $index = $sampleTvShows.Count + 1
+        $sampleTvShows.Add([PSCustomObject]@{
+            Type="show"; RatingKey=""; PosterRatingKey="";
+            Title="Sample Series $index"; ShowTitle="Sample Series $index";
+            Plays=1; Seconds=[int64](3600 - (($index - 1) * 600));
+            TotalTimeText=$(if ($index -eq 1) { "1h 0m" } elseif ($index -eq 2) { "50m" } else { "40m" })
+        })
+    }
+
+    $sampleMost = if ($sampleMovies.Count -gt 0) {
+        [string]$sampleMovies[0].Title
+    } else {
+        "Example title"
+    }
+
     return [PSCustomObject]@{
-        Stats    = $stats
-        IsSample = $false
+        Stats = [PSCustomObject]@{
+            MoviesWatched    = 2
+            EpisodesStreamed = 3
+            QualifyingPlays  = 5
+            TotalSeconds     = [int64]10980
+            TotalTimeText    = "3h 3m"
+            MostWatched      = $sampleMost
+            MovieItems       = $sampleMovies.ToArray()
+            EpisodeItems     = $sampleEpisodes.ToArray()
+            TvShowItems      = $sampleTvShows.ToArray()
+        }
+        IsSample = $true
     }
 }
 function Build-AllEmailVariants {
@@ -8634,7 +8727,7 @@ function Build-AllEmailVariants {
         -EndLabel $endLabel
 
     # 3) Established active user: always force a populated, non-warm-up state.
-    # Empty selected-user history remains an authentic zero-activity state.
+    # The explicit populated state uses the sanitized gallery fallback if needed.
     $normalHtml = Build-NewsletterHtml `
         -User $user `
         -Stats $populatedVariant.Stats `
@@ -8728,22 +8821,11 @@ function Build-AllEmailVariants {
     $oneOffSubject = Get-OneOffWelcomeSubject -User $user
     $newSubject = Get-NewsletterSubject -User $user -RecentAccess $true
     $normalSubject = Get-NewsletterSubject -User $user -RecentAccess $false
-    $hasRealActivity = (Safe-Int64 $realStats.TotalSeconds) -gt 0
-    $newWithHistoryLabel = if ($hasRealActivity) {
-        "New user first scheduled newsletter — with history"
-    } else {
-        "New user first scheduled newsletter — no selected-user activity"
-    }
-    $normalLabel = if ($hasRealActivity) {
-        "Established user — normal newsletter with activity"
-    } else {
-        "Established user — no selected-user activity"
-    }
 
     return [PSCustomObject]@{
         User = $user
         RealStats = $realStats
-        HasRealActivity = $hasRealActivity
+        PopulatedStatsAreSample = [bool]$populatedVariant.IsSample
         Variants = @(
             [PSCustomObject]@{
                 Key="manual-welcome"
@@ -8765,7 +8847,7 @@ function Build-AllEmailVariants {
             },
             [PSCustomObject]@{
                 Key="new-scheduled-with-history"
-                Label=$newWithHistoryLabel
+                Label="New user first scheduled newsletter — with history"
                 Subject=$newSubject
                 Html=$newWithHistoryHtml
                 Plain=$newWithHistoryPlain
@@ -8774,7 +8856,7 @@ function Build-AllEmailVariants {
             },
             [PSCustomObject]@{
                 Key="normal-newsletter"
-                Label=$normalLabel
+                Label="Established user — normal newsletter with activity"
                 Subject=$normalSubject
                 Html=$normalHtml
                 Plain=$normalPlain
@@ -8832,10 +8914,10 @@ if ($Mode -eq "PreviewAll") {
 
     $serverName = HtmlEncode (Get-ConfiguredServerName)
     $userName = HtmlEncode $bundle.User.FriendlyName
-    $historyNote = if ($bundle.HasRealActivity) {
-        "Previews 03 and 04 use the selected user's real current-window watch statistics. Previews 05 and 06 intentionally force zero activity."
+    $historyNote = if ($bundle.PopulatedStatsAreSample) {
+        "The selected user has no activity in this window, so previews 03 and 04 use sanitized scenario statistics only to preserve the populated lifecycle layouts. Previews 05 and 06 intentionally remain at zero activity."
     } else {
-        "The selected user has no activity in this window, so previews 03 and 04 render authentic no-history output without fictional viewing data. Previews 05 and 06 intentionally remain at zero activity."
+        "Previews 03 and 04 use the selected user's real current-window watch statistics. Previews 05 and 06 intentionally force zero activity."
     }
 
     $cards = New-Object System.Text.StringBuilder

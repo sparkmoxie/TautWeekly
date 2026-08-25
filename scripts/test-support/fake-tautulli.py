@@ -243,6 +243,11 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                 "started": 100,
             }
         ]
+        if scenario == "quiet-no-history":
+            rows[0]["user_id"] = "2"
+            rows[0]["friendly_name"] = "Simulated Champion"
+            rows[0]["platform"] = "Roku"
+            rows[0]["started"] = 200
         if scenario in DELETED_HISTORY_SCENARIOS:
             rows[0]["guid"] = (
                 "com.plexapp.agents.tmdb://12345?lang=en"
@@ -1141,6 +1146,7 @@ def main() -> None:
             "last-platform",
             "quiet",
             "tv-only",
+            "quiet-no-history",
             "optional-hero-metadata",
             "rating-export-fallback",
             "direct-rating-optional",

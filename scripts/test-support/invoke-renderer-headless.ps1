@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)][string]$RendererPath,
     [Parameter(Mandatory = $true)][string]$ConfigPath,
     [Parameter(Mandatory = $true)][string]$UserId,
-    [ValidateSet('VerifyPlex', 'PreviewAll', 'SendTest', 'SendAll')][string]$Mode = 'PreviewAll',
+    [ValidateSet('VerifyPlex', 'Preview', 'PreviewAll', 'SendTest', 'SendTestAll', 'SendAll')][string]$Mode = 'PreviewAll',
     [string]$ResultPath = '',
     [switch]$NoConfirmSendAll
 )
