@@ -1199,7 +1199,7 @@ foreach ($engine in $engines) {
                         '--require-html', 'cid:platform_chrome',
                         '--require-cid-sha256', 'platform_chrome=AB21A3ABF3DDEDE0A74C2BD0605AB19E73FE4AB369EFD02FB936CED58565C71E',
                         '--require-cid-sha256', 'poster_active-trending-movie=31AC758909ADD2BB42FCE41C0973435FA6705D95A0F8981C4F421A1C6E404817',
-                        '--require-cid-sha256', 'hero_logo=81A4DDF8A2883EC79036FB5CF84730A279AAE22BB737645A1C93E339D4B40FD8'
+                        '--require-cid-png-dimensions', 'hero_logo=320x96'
                     )
                 }
                 if ($scenario -eq 'quiet') {
@@ -1259,7 +1259,7 @@ foreach ($engine in $engines) {
                         '--require-html', 'Platform: Chrome',
                         '--require-html', 'cid:platform_chrome',
                         '--require-cid-sha256', 'platform_chrome=AB21A3ABF3DDEDE0A74C2BD0605AB19E73FE4AB369EFD02FB936CED58565C71E',
-                        '--require-cid-sha256', 'hero_logo=81A4DDF8A2883EC79036FB5CF84730A279AAE22BB737645A1C93E339D4B40FD8'
+                        '--require-cid-png-dimensions', 'hero_logo=320x96'
                     )
                 }
                 if ($scenario -eq $quietNoHistoryScenario) {
@@ -1335,7 +1335,7 @@ foreach ($engine in $engines) {
                         '--require-html', 'cid:poster_selected-show',
                         '--require-html', 'cid:platform_chrome',
                         '--require-cid-sha256', 'platform_chrome=AB21A3ABF3DDEDE0A74C2BD0605AB19E73FE4AB369EFD02FB936CED58565C71E',
-                        '--require-cid-sha256', 'hero_logo=81A4DDF8A2883EC79036FB5CF84730A279AAE22BB737645A1C93E339D4B40FD8'
+                        '--require-cid-png-dimensions', 'hero_logo=320x96'
                     )
                     Assert-True (-not $sendLog.Contains('TV RT fallback:')) "$($engine.Name)/$scenario SendTest invoked RT fallback despite exact episode IMDb."
                 }
@@ -1446,7 +1446,7 @@ foreach ($engine in $engines) {
                             '--forbid-html', 'Toy Story 5',
                             '--require-html', 'cid:hero_logo',
                             '--require-cid-sha256', 'poster_active-trending-movie=31AC758909ADD2BB42FCE41C0973435FA6705D95A0F8981C4F421A1C6E404817',
-                            '--require-cid-sha256', 'hero_logo=81A4DDF8A2883EC79036FB5CF84730A279AAE22BB737645A1C93E339D4B40FD8'
+                            '--require-cid-png-dimensions', 'hero_logo=320x96'
                         )
                     }
                     else {
@@ -1479,7 +1479,7 @@ foreach ($engine in $engines) {
                         '--forbid-html', 'Sample Series',
                         '--forbid-html', 'Toy Story 5',
                         '--forbid-html', 'HOT NEW RELEASE',
-                        '--require-cid-sha256', 'hero_logo=81A4DDF8A2883EC79036FB5CF84730A279AAE22BB737645A1C93E339D4B40FD8'
+                        '--require-cid-png-dimensions', 'hero_logo=320x96'
                         )
                     }
                     for ($stateIndex = 0; $stateIndex -lt 6; $stateIndex++) {
@@ -1634,7 +1634,7 @@ foreach ($engine in $engines) {
                             '--require-html', 'cid:hero_logo',
                             '--require-cid-sha256', 'poster_active-trending-movie=31AC758909ADD2BB42FCE41C0973435FA6705D95A0F8981C4F421A1C6E404817',
                             '--require-cid-sha256', 'poster_selected-movie=31AC758909ADD2BB42FCE41C0973435FA6705D95A0F8981C4F421A1C6E404817',
-                            '--require-cid-sha256', 'hero_logo=81A4DDF8A2883EC79036FB5CF84730A279AAE22BB737645A1C93E339D4B40FD8'
+                            '--require-cid-png-dimensions', 'hero_logo=320x96'
                         )
                     }
                     else {
@@ -1670,7 +1670,7 @@ foreach ($engine in $engines) {
                             '--require-html', 'cid:hero_logo',
                             '--require-cid-sha256', 'poster_quiet-trending-movie=31AC758909ADD2BB42FCE41C0973435FA6705D95A0F8981C4F421A1C6E404817',
                             '--require-cid-sha256', 'poster_quiet-recent-movie-01=31AC758909ADD2BB42FCE41C0973435FA6705D95A0F8981C4F421A1C6E404817',
-                            '--require-cid-sha256', 'hero_logo=81A4DDF8A2883EC79036FB5CF84730A279AAE22BB737645A1C93E339D4B40FD8'
+                            '--require-cid-png-dimensions', 'hero_logo=320x96'
                         )
                     }
                     & $PythonPath $emailThemeAssertion @welcomeArgs

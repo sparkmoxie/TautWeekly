@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import struct
 from email import policy
 from email.parser import BytesParser
 from pathlib import Path
@@ -51,6 +52,7 @@ def main() -> int:
     parser.add_argument("--forbid-html-after", action="append", default=[])
     parser.add_argument("--require-html-after", action="append", default=[])
     parser.add_argument("--require-cid-sha256", action="append", default=[])
+    parser.add_argument("--require-cid-png-dimensions", action="append", default=[])
     parser.add_argument("--require-html-between", action="append", default=[])
     parser.add_argument("--forbid-html-between", action="append", default=[])
     args = parser.parse_args()
@@ -140,6 +142,38 @@ def main() -> int:
         actual_hash = hashlib.sha256(part.get_payload(decode=True) or b"").hexdigest().upper()
         if actual_hash != expected_hash.upper():
             raise AssertionError(f"CID {cid} SHA-256 mismatch: {actual_hash}")
+
+    for specification in args.require_cid_png_dimensions:
+        if "=" not in specification:
+            raise AssertionError(f"invalid CID PNG dimension requirement: {specification}")
+        cid, expected_dimensions = specification.split("=", 1)
+        if "x" not in expected_dimensions.lower():
+            raise AssertionError(
+                f"invalid CID PNG dimensions: {expected_dimensions}; expected WIDTHxHEIGHT"
+            )
+        expected_width_text, expected_height_text = expected_dimensions.lower().split("x", 1)
+        expected_width = int(expected_width_text)
+        expected_height = int(expected_height_text)
+        matches = [
+            part
+            for part in message.walk()
+            if (part.get("Content-ID") or "").strip("<>") == cid
+        ]
+        if len(matches) != 1:
+            raise AssertionError(f"expected one MIME part for CID {cid}, found {len(matches)}")
+        part = matches[0]
+        if part.get_content_type() != "image/png":
+            raise AssertionError(f"CID {cid} has unsafe MIME type {part.get_content_type()}")
+        if part.get_filename() is not None or part.get_param("name", header="content-type") is not None:
+            raise AssertionError(f"CID {cid} unexpectedly exposes an attachment filename")
+        payload = part.get_payload(decode=True) or b""
+        if len(payload) < 24 or payload[:8] != b"\x89PNG\r\n\x1a\n" or payload[12:16] != b"IHDR":
+            raise AssertionError(f"CID {cid} is not a valid PNG with an IHDR header")
+        actual_width, actual_height = struct.unpack(">II", payload[16:24])
+        if (actual_width, actual_height) != (expected_width, expected_height):
+            raise AssertionError(
+                f"CID {cid} PNG dimensions mismatch: {actual_width}x{actual_height}"
+            )
 
     print("[PASS] Captured SMTP HTML advertises Apple-compatible schemes and preserves explicit dark fallbacks.")
     return 0
