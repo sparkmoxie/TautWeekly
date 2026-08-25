@@ -120,6 +120,17 @@ foreach ($renderer in $renderers) {
         Assert-True (-not $state.RatingKeys.ContainsKey($rejectedKey)) "$($renderer.Path) accepted forbidden history row $rejectedKey"
     }
 
+    $otherState = Get-RecipientWatchedMovies -ExpectedUserId '2'
+    Assert-True ($otherState.RatingKeys.Count -eq 1 -and $otherState.RatingKeys.ContainsKey('other-user-key')) "$($renderer.Path) did not isolate a second recipient's state"
+    Assert-True (-not $otherState.RatingKeys.ContainsKey('watched-key') -and $state.RatingKeys.ContainsKey('watched-key')) "$($renderer.Path) reused or mutated another recipient's state"
+    $callsBeforeMissingId = $script:HistoryCalls.Count
+    $missingIdState = Get-RecipientWatchedMovies -ExpectedUserId ''
+    Assert-True ($missingIdState.RatingKeys.Count -eq 0 -and $script:HistoryCalls.Count -eq $callsBeforeMissingId) "$($renderer.Path) queried unscoped history for a missing recipient"
+    $script:Config.WatchedPercent = 90
+    $higherThresholdState = Get-RecipientWatchedMovies -ExpectedUserId '1'
+    Assert-True (-not $higherThresholdState.RatingKeys.ContainsKey('percent-key') -and $higherThresholdState.RatingKeys.ContainsKey('watched-key')) "$($renderer.Path) ignored the configured percentage or definitive watched status"
+    $script:Config.WatchedPercent = 85
+
     $script:HistoryCalls.Clear()
     $script:HistoryPagination = $true
     $pagedState = Get-RecipientWatchedMovies -ExpectedUserId '1'

@@ -1837,7 +1837,9 @@ foreach ($engine in $engines) {
                     Assert-True ($sendAllLog.Contains('Sent:    2') -and $sendAllLog.Contains('Failed:  0')) "$($engine.Name)/$scenario SendAll did not complete both normal deliveries."
                     $smtpCommands = @(Get-Content $smtpCallLog | ForEach-Object { ($_ | ConvertFrom-Json).command })
                     Assert-True (@($smtpCommands | Where-Object { $_ -eq 'DATA' }).Count -ge 3) "$($engine.Name)/$scenario did not submit SendTest plus both SendAll messages."
-                    & $PythonPath $emailThemeAssertion $smtpDataFile --require-html 'Platform: Roku' --require-html 'cid:platform_roku' --require-html 'max-height:21px' --require-cid-sha256 'platform_roku=7E9EA9D59B16F92A5C80C72E1F8E92FB794FE57C4E97EC3A5B55E8943D0ED136'
+                    & $PythonPath $emailThemeAssertion $smtpDataFile --require-html 'Platform: Roku' --require-html 'cid:platform_roku' --require-html 'max-height:21px' --require-cid-sha256 'platform_roku=7E9EA9D59B16F92A5C80C72E1F8E92FB794FE57C4E97EC3A5B55E8943D0ED136' --forbid-html 'cid:recipient_watched' --forbid-plain ' - Watched'
+                    # The last production recipient has no qualifying movie history
+                    # in this fixture; the preceding recipient's state must not leak.
                     if ($LASTEXITCODE -ne 0) { throw "$($engine.Name)/$scenario production SendAll MIME platform assertion failed." }
                     Assert-True (-not $sendAllLog.Contains('Chrome') -and -not $sendAllLog.Contains('Roku')) "$($engine.Name)/$scenario exposed platform details in SendAll logs."
                 }
