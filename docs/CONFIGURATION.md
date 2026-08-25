@@ -255,26 +255,43 @@ displayed scope. At least one active movie or TV library is required for a
 newly saved selection.
 
 `IncludedLibraryIds` is applied to raw Tautulli history and recently-added
-rows before any newsletter calculations. New/latest releases, quiet detection,
+rows before any newsletter calculations. New/recent releases, Trending detection,
 Trending, the hero, Binge Champion, and each user's personal totals therefore
 share the selected scope. Per-user Plex sharing rules are not queried or
 intersected; this is a single administrator-controlled scope.
 
-When the report window contains at least one new movie or TV title, every
-lifecycle state uses the same active payload and reports the real new-title
-counts. A movie is the **HOT NEW RELEASE** hero when one is available; a
-TV-only active week uses the real movie-only Trending result as its hero when
-authentic server history supplies one, while retaining the new TV cards below
-it.
+A new movie produces the **HOT NEW RELEASE** hero. Its footer is the existing
+full-width **TRENDING THIS WEEK** movie card, and new movie/TV shelves retain
+their established behavior.
 
-When neither type has a new addition, every lifecycle state uses the same quiet
-payload. The header reports the sections that are actually present: one
-movie-only Trending hero when authentic server history supplies one, up to four
-other recent movies, and up to four recent TV titles. Quiet TV titles must have
-an `added_at` value strictly newer than one calendar month before generation.
-The Trending movie is removed from **Latest Releases**, and its separate
-server-wide Trending footer card is omitted because the hero already carries
-that result. Authentic recipient watch rows are not removed or fabricated.
+A report window with no new movies is a Trending state. When new TV exists, one
+authentic movie-only **TRENDING THIS WEEK** result is used as the hero when
+server history supplies it. **RECENT RELEASES / Movies** then contains up to
+four different recent movies, and **NEW RELEASES / TV** contains up to four new
+series. The line above the date and the email preview/preheader are the same
+computed string: `0 NEW MOVIES • X TV TITLE(S)`.
+
+When there is no new TV either, the hero and recent movie shelf are unchanged;
+the TV shelf becomes **RECENT RELEASES / TV** with up to four series whose
+`added_at` value is strictly newer than one calendar month before generation.
+The shared count/preheader is
+`1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when the authentic hero exists.
+The hero is excluded from the movie shelf. Its complementary footer is **TOP
+GENRE THIS WEEK**, so Trending never appears in both hero and footer.
+
+Top Genre is calculated server-wide from qualifying movie activity in the same
+report window and included-library scope. Each distinct movie is resolved once;
+only Plex's first returned genre is used. Labels are normalized
+case-insensitively, including `Science Fiction`, `Sci-fi`, `Sci Fi`, and `SciFi`.
+Genres rank by total qualified watch seconds, unique movie count, qualifying
+play count, then normalized genre name. The visible result contains only total
+watch time and unique movie count. Metadata failures and movies without a genre
+are skipped; no usable genre, or a winner without dedicated artwork, uses the
+neutral local movie animation and never exposes an individual viewer.
+
+Authentic recipient watch rows are not removed or fabricated. Preview,
+PreviewAll, SendTest, SendTestAll, scheduled delivery, and confirmed manual
+delivery all use these same computed release and footer values.
 
 Movie and TV personal-stat cards keep their established layout and recipient
 platform icon. When provider metadata exists, movie rows retain poster, genres,

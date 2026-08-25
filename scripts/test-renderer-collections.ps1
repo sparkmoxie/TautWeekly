@@ -1430,7 +1430,7 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True (($limitedQuietDisplay.Movies.ReleaseKey -join ",") -eq "movie:quiet-2,movie:quiet-3") "$relativePath did not exclude the quiet hero before applying MaxMovies=2"
     Assert-True ($limitedQuietDisplay.TV.Count -eq 1 -and $limitedQuietDisplay.TV[0].ReleaseKey -eq "show:quiet-1") "$relativePath did not honor MaxTv=1 in quiet mode"
     $quietCountSeparator = " $([char]0x2022) "
-    Assert-True ($limitedQuietDisplay.CountLine -eq ("1 TRENDING MOVIE" + $quietCountSeparator + "2 RECENT MOVIES" + $quietCountSeparator + "1 RECENT TV TITLE")) "$relativePath quiet count line ignored configured shelf caps"
+    Assert-True ($limitedQuietDisplay.CountLine -eq ("1 TRENDING MOVIE" + $quietCountSeparator + "2 RECENT MOVIE RELEASES")) "$relativePath quiet count line ignored configured movie shelf cap"
 
     function Get-PosterPath {
         param(
@@ -1468,7 +1468,7 @@ foreach ($relativePath in $rendererPaths) {
     $script:Config.MaxMovies = 0
     $script:Config.MaxTv = 0
     $zeroQuietDisplay = Get-NewsletterReleaseDisplayData -ReleaseData $quietReleaseFixture -HotRelease $quietHero -QuietReleaseMode $true
-    Assert-True ($zeroQuietDisplay.Movies.Count -eq 0 -and $zeroQuietDisplay.TV.Count -eq 0 -and $zeroQuietDisplay.CountLine -eq "1 TRENDING MOVIE") "$relativePath did not honor valid zero content-card limits in quiet mode"
+    Assert-True ($zeroQuietDisplay.Movies.Count -eq 0 -and $zeroQuietDisplay.TV.Count -eq 0 -and $zeroQuietDisplay.CountLine -eq ("1 TRENDING MOVIE" + $quietCountSeparator + "0 RECENT MOVIE RELEASES")) "$relativePath did not honor valid zero content-card limits in quiet mode"
     $zeroPosterAssets = @(Prepare-PosterAssets `
         -ReleaseData $quietReleaseFixture `
         -FeaturedRatingKey $quietHero.Item.PosterRatingKey `

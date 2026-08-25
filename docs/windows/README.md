@@ -8,7 +8,7 @@ configuration, verification, preview, update, and scheduling experience. The
 numbered BAT files are retained for portable recovery and advanced diagnostics;
 they are not the normal setup flow.
 
-Current Windows package baseline: **1.9.0**.
+Current Windows package baseline: **1.10.0**.
 
 ## Requirements
 
@@ -314,15 +314,22 @@ Open **Previews** after a successful Config validation:
    platform icons, conditional cards, and responsive layout. Every state uses
    the selected user's real activity; an inactive user remains inactive rather
    than receiving sample watch rows.
-3. In a week with no new additions, confirm **Latest Releases** retains up to
-   four real recent movies, plus four real TV titles added strictly less than one
-   calendar month old. When authentic server-wide movie history supplies a rich
-   Trending hero, the header must report it and neither **Latest Releases** nor
-   the server-wide footer may repeat it.
-4. When the previews are correct, select a Tautulli owner/administrator ID and
+3. In every Trending week, confirm **Recent Releases / Movies** retains up to
+   four real movies different from the hero. With new TV, confirm **New Releases
+   / TV** retains up to four series and both the line above the date and the inbox
+   preview text say `0 NEW MOVIES • X TV TITLE(S)`. Without new TV, confirm
+   **Recent Releases / TV** retains up to four series strictly newer than one
+   month and both locations say
+   `1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)`.
+4. Confirm a Hot New Release hero has the server-wide Trending footer, while a
+   Trending hero has the anonymous Top Genre footer. The Top Genre duration and
+   movie count, and every Binge Champion breakdown, use the same supporting
+   typography as personal total watch time. No hero is repeated in a shelf or
+   footer, and no local/CID image is broken.
+5. When the previews are correct, select a Tautulli owner/administrator ID and
    use the guarded **Send six test messages** action. All six messages go only
    to the configured `TestEmail`.
-5. Verify the messages in a real mail client. SMTP acceptance confirms the
+6. Verify the messages in a real mail client. SMTP acceptance confirms the
    server accepted them; it does not prove inbox placement.
 
 This guarded six-message TestEmail action is the only Manager setup workflow

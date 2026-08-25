@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $assets = Join-Path $PSScriptRoot "assets"
@@ -68,5 +68,17 @@ Ensure-AnimatedGif `
     -Name "tv.gif" `
     -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/tv.gif"
 
+Ensure-AnimatedGif -Name "genre-action.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-action.gif"
+Ensure-AnimatedGif -Name "genre-comedy.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-comedy.gif"
+Ensure-AnimatedGif -Name "genre-crime.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-crime.gif"
+Ensure-AnimatedGif -Name "genre-drama.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-drama.gif"
+Ensure-AnimatedGif -Name "genre-fantasy.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-fantasy.gif"
+Ensure-AnimatedGif -Name "genre-horror.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-horror.gif"
+Ensure-AnimatedGif -Name "genre-musical.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-musical.gif"
+Ensure-AnimatedGif -Name "genre-mystery.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-mystery.gif"
+Ensure-AnimatedGif -Name "genre-romance.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-romance.gif"
+Ensure-AnimatedGif -Name "genre-scifi.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-scifi.gif"
+Ensure-AnimatedGif -Name "genre-thriller.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-thriller.gif"
+Ensure-AnimatedGif -Name "genre-western.gif" -Url "https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/platforms/windows/assets/genre-western.gif"
 Write-Host ""
-Write-Host "Animated movie and TV assets are ready." -ForegroundColor Green
+Write-Host "Animated movie, TV, and Top Genre assets are ready." -ForegroundColor Green

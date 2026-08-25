@@ -273,12 +273,20 @@ $assetRoots = [ordered]@{
 $platformAssetManifestPath = Join-Path $Root 'assets/platforms/NEWSLETTER-ASSET-SHA256SUMS.txt'
 Assert-True (Test-Path -LiteralPath $platformAssetManifestPath -PathType Leaf) 'Newsletter platform asset checksum manifest is missing.'
 $expectedPlatformHashes = [ordered]@{}
+$expectedGenreHashes = [ordered]@{}
 foreach ($line in Get-Content -LiteralPath $platformAssetManifestPath) {
     if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith('#')) { continue }
-    Assert-True ($line -match '^(?<hash>[0-9a-f]{64})  (?<name>platform-[a-z0-9-]+[.]png)$') "Invalid newsletter platform asset manifest line: $line"
-    $expectedPlatformHashes[$Matches['name']] = $Matches['hash'].ToUpperInvariant()
+    Assert-True ($line -match '^(?<hash>[0-9a-f]{64})  (?<name>(?:platform-[a-z0-9-]+[.]png|genre-[a-z0-9-]+[.]gif))$') "Invalid newsletter asset manifest line: $line"
+    $name = $Matches['name']
+    if ($name.StartsWith('platform-', [StringComparison]::Ordinal)) {
+        $expectedPlatformHashes[$name] = $Matches['hash'].ToUpperInvariant()
+    }
+    else {
+        $expectedGenreHashes[$name] = $Matches['hash'].ToUpperInvariant()
+    }
 }
 Assert-True ($expectedPlatformHashes.Count -eq 22) "Expected 22 newsletter platform assets, found $($expectedPlatformHashes.Count)."
+Assert-True ($expectedGenreHashes.Count -eq 12) "Expected 12 Top Genre assets, found $($expectedGenreHashes.Count)."
 $expectedGifHashes = [ordered]@{
     'movies.gif' = '9BCD489463C963C38469771518700308CCADE3965A32EDA18E12DC718950C971'
     'tv.gif'     = '35FFCB45F313953AD0EEF2C7EC852B4B68B0E033E5055BC0926B87EB2EDEF117'
@@ -288,6 +296,9 @@ $expectedGifHashes = [ordered]@{
     'tickets.gif' = '7931191FE094F6BD6605C18F0FDE3E3C68B1441BC946BE6380A7F5AF0BE6DEE5'
     'warning.gif' = '447C12C7F9F8460D30EA914C4F895076DDDFE199386DC74585113DC0DD8910EC'
     'alert.gif' = '403A9C533D5807F8ED9A8DFDE0F1386AB05AE92147A4C586BCA24E8CCE34EE95'
+}
+foreach ($genreName in $expectedGenreHashes.Keys) {
+    $expectedGifHashes[$genreName] = $expectedGenreHashes[$genreName]
 }
 $expectedBrandFiles = [ordered]@{
     'TautWeekly-windows.zip' = [ordered]@{

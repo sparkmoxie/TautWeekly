@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html as html_module
+import re
 import struct
 from email import policy
 from email.parser import BytesParser
@@ -48,6 +50,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("message", type=Path)
     parser.add_argument("--require-html", action="append", default=[])
+    parser.add_argument("--require-preheader")
     parser.add_argument("--forbid-html", action="append", default=[])
     parser.add_argument("--forbid-html-after", action="append", default=[])
     parser.add_argument("--require-html-after", action="append", default=[])
@@ -66,6 +69,28 @@ def main() -> int:
         raise AssertionError(f"expected one plain-text MIME part, found {len(plain_parts)}")
 
     html = html_parts[0].get_content()
+    if args.require_preheader is not None:
+        preheader_match = re.search(
+            r'<div style="display:none!important;[^"<>]*mso-hide:all;">(?P<text>.*?)</div>',
+            html,
+            flags=re.DOTALL,
+        )
+        if preheader_match is None:
+            raise AssertionError("delivered HTML is missing the hidden email preheader")
+        preheader_text = re.sub(r"<[^>]+>", "", preheader_match.group("text"))
+        preheader_text = html_module.unescape(preheader_text)
+        preheader_text = preheader_text.replace("\u200c", "").replace("\u00a0", "").strip()
+        if preheader_text != args.require_preheader:
+            raise AssertionError(
+                f"delivered HTML preheader mismatch: {preheader_text!r} != {args.require_preheader!r}"
+            )
+        plain_text = plain_parts[0].get_content().replace("\r\n", "\n")
+        plain_first_line = plain_text.lstrip("\ufeff").split("\n", 1)[0].strip()
+        if plain_first_line != args.require_preheader:
+            raise AssertionError(
+                f"delivered plain-text preheader mismatch: {plain_first_line!r} != "+
+                f"{args.require_preheader!r}"
+            )
     for marker in (*REQUIRED_HTML, *args.require_html):
         if marker not in html:
             raise AssertionError(f"delivered HTML lost dark-theme marker: {marker}")

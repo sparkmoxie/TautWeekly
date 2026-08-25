@@ -1,5 +1,11 @@
 TautWeekly for Plex native Linux platform changelog
 
+v1.3.0
+- adds the privacy-preserving server-wide Top Genre footer with approved animated artwork and a neutral movie fallback
+- makes Trending weeks show up to four recent movies plus new TV or, when no new TV exists, recent TV strictly newer than one month
+- keeps the email count line and preview text synchronized with the Trending shelf contents
+- normalizes Binge Champion and Top Genre supporting typography across split and full-width cards
+
 v1.2.2
 - Adds a verified stable-package updater to the native tautweekly wrapper while preserving /var/lib/tautweekly.
 - Makes the Manager GUI the documented setup source and records the exact check, backup, upgrade, and acceptance flow.

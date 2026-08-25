@@ -122,22 +122,35 @@ The responsive Manager is the primary workflow on every maintained package:
 
 - New movie and TV additions with artwork, summaries, genres, ratings, and
   episode details when available.
-- Adaptive **HOT NEW RELEASE** and **TRENDING THIS WEEK** highlights.
-- Quiet weeks remain useful: when authentic server-wide movie history is
-  available, one real movie-only **TRENDING THIS WEEK** hero is followed by up
-  to four other recent movies. With or without a hero, **Latest Releases** keeps
-  up to four real recent movies, plus up to four real TV titles added strictly
-  less than one calendar month ago, even when the report window is empty.
+- Complementary server-wide highlights: a **HOT NEW RELEASE** movie hero ends
+  with the existing full-width **TRENDING THIS WEEK** movie card; a
+  **TRENDING THIS WEEK** movie hero ends with **TOP GENRE THIS WEEK**. Trending
+  never appears in both places.
+- A Trending week has no new movies. When new TV exists, the hero is followed
+  by **RECENT RELEASES / Movies** (up to four movies different from the hero)
+  and **NEW RELEASES / TV** (up to four series). Without new TV, both shelves
+  are **RECENT RELEASES**, with up to four TV series added strictly less than
+  one calendar month ago.
+- The line above the release date and the email preview/preheader use the same
+  computed value. Trending with new TV says `0 NEW MOVIES • X TV TITLE(S)`;
+  Trending without new TV says
+  `1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when a real hero exists.
+- Top Genre considers qualifying movie activity only in the configured window
+  and included libraries, uses the first Plex genre for each distinct movie,
+  normalizes aliases case-insensitively, and ranks by total qualified watch
+  time, unique movie count, qualifying plays, then genre name. Its supporting
+  line reports only aggregate duration and movie count. Missing or unsupported
+  art safely uses the neutral movie animation.
 - Every lifecycle state shares the same real release payload; the state changes
   only its introduction, personal-stat presentation, and footer treatment.
 - A private personal recap with authentic watch time, posters, movie genres and
   Rotten Tomatoes ratings, TV watch duration and IMDb ratings when available;
   previews never invent recipient activity.
-- A privacy-preserving, server-wide Binge Champion award.
+- A privacy-preserving, server-wide Binge Champion award whose breakdown uses
+  the same supporting typography as personal total watch time. Manual Welcome
+  remains award-free.
 - Welcome, active-week, quiet-week, and milestone newsletter layouts, including
   recipient platform icons when real history identifies a supported platform.
-- When Trending is the hero, its separate server-wide Trending footer card is
-  suppressed; authentic recipient history remains unchanged.
 - An optional uppercase custom-card title with one allowlisted 18×18 local GIF.
 - Browser previews and controlled TestEmail delivery before scheduling.
 

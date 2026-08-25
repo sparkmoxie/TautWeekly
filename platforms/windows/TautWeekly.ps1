@@ -15,7 +15,7 @@
     [switch]$ConfirmWelcome
 )
 
-# TautWeekly for Plex Windows v1.9.0 — production newsletter engine.
+# TautWeekly for Plex Windows v1.10.0 — production newsletter engine.
 # Includes validated production renderer changes through v1.5.14 plus portable
 # server, SMTP, schedule, preview, and safety controls.
 Set-StrictMode -Version Latest
@@ -552,7 +552,7 @@ function Test-IncludedLibraryRow {
     $expectedSectionId = ([string]$ExpectedSectionId).Trim()
 
     if (-not $script:LibraryFilterEnabled) {
-        # Unfiltered Latest Releases now uses per-section queries. Trust rows
+        # Unfiltered Recent Releases now uses per-section queries. Trust rows
         # that omit redundant section metadata, but never accept an explicit
         # cross-section mismatch from a scoped response.
         if ([string]::IsNullOrWhiteSpace($expectedSectionId) -or [string]::IsNullOrWhiteSpace($sectionId)) { return $true }
@@ -589,7 +589,7 @@ function Get-LatestReleaseQueryScopes {
     # hubs. Those hubs may legitimately return no rows once every addition is
     # older than the hub window, which is exactly when the quiet-week fallback
     # still needs content. Query every active movie/TV section directly so the
-    # bounded Latest Releases shelves use the library's actual newest items.
+    # bounded Recent Releases shelves use the library's actual newest items.
     try {
         $sectionIds = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
         foreach ($library in @(Invoke-TautulliApi -Command "get_libraries")) {
@@ -601,12 +601,12 @@ function Get-LatestReleaseQueryScopes {
             if (-not [string]::IsNullOrWhiteSpace($sectionId)) { [void]$sectionIds.Add($sectionId) }
         }
         if ($sectionIds.Count -gt 0) {
-            Write-Log ("Latest Releases will query {0} active movie/TV library section(s)." -f $sectionIds.Count)
+            Write-Log ("Recent Releases will query {0} active movie/TV library section(s)." -f $sectionIds.Count)
             return @($sectionIds | Sort-Object)
         }
     }
     catch {
-        Write-Log "Could not enumerate movie/TV library sections for Latest Releases; falling back to the global recently-added hub." "WARN"
+        Write-Log "Could not enumerate movie/TV library sections for Recent Releases; falling back to the global recently-added hub." "WARN"
     }
     return @('')
 }
@@ -2684,6 +2684,179 @@ function Get-GlobalTrendingTitle {
     return ""
 }
 
+function ConvertTo-TopMovieGenreLabel {
+    param([AllowNull()][object]$Value)
+
+    $genres = @(ConvertTo-DesignGenreList -Value $Value)
+    if ($genres.Count -eq 0) { return "" }
+
+    $label = ([string]$genres[0]).Trim()
+    if ([string]::IsNullOrWhiteSpace($label)) { return "" }
+
+    $aliasKey = (($label.ToLowerInvariant() -replace '[^a-z0-9]+', ' ').Trim())
+    if ($aliasKey -in @('science fiction', 'sci fi', 'scifi')) { return 'Science Fiction' }
+
+    $knownLabels = @{
+        'action' = 'Action'; 'comedy' = 'Comedy'; 'crime' = 'Crime'
+        'drama' = 'Drama'; 'fantasy' = 'Fantasy'; 'horror' = 'Horror'
+        'musical' = 'Musical'; 'mystery' = 'Mystery'; 'romance' = 'Romance'
+        'thriller' = 'Thriller'; 'western' = 'Western'
+    }
+    if ($knownLabels.ContainsKey($aliasKey)) { return [string]$knownLabels[$aliasKey] }
+
+    # Unknown Plex genres still aggregate case-insensitively. Normalize their
+    # display casing and use the neutral local movie asset at render time.
+    return [Globalization.CultureInfo]::InvariantCulture.TextInfo.ToTitleCase($aliasKey)
+}
+
+function Get-TopMovieGenreAsset {
+    param([string]$Genre)
+
+    $assetMap = @{
+        'action' = [PSCustomObject]@{ FileName = 'genre-action.gif'; Cid = 'genre_action' }
+        'comedy' = [PSCustomObject]@{ FileName = 'genre-comedy.gif'; Cid = 'genre_comedy' }
+        'crime' = [PSCustomObject]@{ FileName = 'genre-crime.gif'; Cid = 'genre_crime' }
+        'drama' = [PSCustomObject]@{ FileName = 'genre-drama.gif'; Cid = 'genre_drama' }
+        'fantasy' = [PSCustomObject]@{ FileName = 'genre-fantasy.gif'; Cid = 'genre_fantasy' }
+        'horror' = [PSCustomObject]@{ FileName = 'genre-horror.gif'; Cid = 'genre_horror' }
+        'musical' = [PSCustomObject]@{ FileName = 'genre-musical.gif'; Cid = 'genre_musical' }
+        'mystery' = [PSCustomObject]@{ FileName = 'genre-mystery.gif'; Cid = 'genre_mystery' }
+        'romance' = [PSCustomObject]@{ FileName = 'genre-romance.gif'; Cid = 'genre_romance' }
+        'science fiction' = [PSCustomObject]@{ FileName = 'genre-scifi.gif'; Cid = 'genre_scifi' }
+        'thriller' = [PSCustomObject]@{ FileName = 'genre-thriller.gif'; Cid = 'genre_thriller' }
+        'western' = [PSCustomObject]@{ FileName = 'genre-western.gif'; Cid = 'genre_western' }
+    }
+
+    $key = ([string]$Genre).Trim().ToLowerInvariant()
+    if ($assetMap.ContainsKey($key)) {
+        $candidate = $assetMap[$key]
+        if (Test-Path -LiteralPath (Join-Path $AssetsDir ([string]$candidate.FileName)) -PathType Leaf) {
+            return [PSCustomObject]@{ FileName = [string]$candidate.FileName; Cid = [string]$candidate.Cid; IsFallback = $false }
+        }
+    }
+
+    return [PSCustomObject]@{ FileName = 'movies.gif'; Cid = 'icon_movies'; IsFallback = $true }
+}
+
+function Get-GlobalTopMovieGenre {
+    param([object[]]$GlobalHistory)
+
+    $watchedThreshold = if ($null -ne $Config.PSObject.Properties['WatchedPercent']) {
+        Safe-Int $Config.WatchedPercent
+    } else { 85 }
+
+    $movieTotals = @{}
+    foreach ($row in @($GlobalHistory)) {
+        if ((Get-OptionalStringProperty -InputObject $row -Name 'media_type').ToLowerInvariant() -ne 'movie') { continue }
+
+        $seconds = [int64](Safe-Int $row.play_duration)
+        $qualified = (
+            $seconds -gt 0 -and
+            ((Safe-Int $row.watched_status) -gt 0 -or (Safe-Int $row.percent_complete) -ge $watchedThreshold)
+        )
+        if (-not $qualified) { continue }
+
+        $ratingKey = (Get-OptionalStringProperty -InputObject $row -Name 'rating_key').Trim()
+        $title = (Get-OptionalStringProperty -InputObject $row -Name 'title').Trim()
+        $movieKey = if (-not [string]::IsNullOrWhiteSpace($ratingKey)) {
+            'movie:' + $ratingKey
+        } elseif (-not [string]::IsNullOrWhiteSpace($title)) {
+            'movie:title:' + $title.ToLowerInvariant()
+        } else { '' }
+        if ([string]::IsNullOrWhiteSpace($movieKey)) { continue }
+
+        if (-not $movieTotals.ContainsKey($movieKey)) {
+            $movieTotals[$movieKey] = [PSCustomObject]@{
+                Key = $movieKey; RatingKey = $ratingKey; Title = $title
+                Seconds = [int64]0; Plays = 0
+            }
+        }
+        $movieTotals[$movieKey].Seconds += $seconds
+        $movieTotals[$movieKey].Plays += (Get-HistoryRowPlayCount -Row $row)
+    }
+
+    $genreTotals = @{}
+    foreach ($movie in @($movieTotals.Values | Sort-Object Key)) {
+        $firstGenre = ''
+
+        # Tautulli get_metadata is the normal Plex metadata bridge. Preserve
+        # Plex's array order and use exactly its first nonblank genre.
+        if (-not [string]::IsNullOrWhiteSpace([string]$movie.RatingKey)) {
+            try {
+                $metadata = Invoke-TautulliApi -Command 'get_metadata' -Parameters @{ rating_key = [string]$movie.RatingKey }
+                foreach ($propertyName in @('genres', 'genre', 'Genre')) {
+                    if ($null -ne $metadata -and $null -ne $metadata.PSObject.Properties[$propertyName]) {
+                        $metadataGenres = @(ConvertTo-DesignGenreList -Value $metadata.PSObject.Properties[$propertyName].Value)
+                        if ($metadataGenres.Count -gt 0) { $firstGenre = [string]$metadataGenres[0]; break }
+                    }
+                }
+            } catch {
+                Write-Log "Top Movie Genre metadata lookup failed for rating key $($movie.RatingKey); trying direct Plex metadata." 'WARN'
+            }
+
+            if ([string]::IsNullOrWhiteSpace($firstGenre)) {
+                try {
+                    $plexMetadata = Get-DesignPlexMetadata -RatingKey ([string]$movie.RatingKey)
+                    foreach ($propertyName in @('Genre', 'genres', 'genre')) {
+                        if ($null -ne $plexMetadata -and $null -ne $plexMetadata.PSObject.Properties[$propertyName]) {
+                            $plexGenres = @(ConvertTo-DesignGenreList -Value $plexMetadata.PSObject.Properties[$propertyName].Value)
+                            if ($plexGenres.Count -gt 0) { $firstGenre = [string]$plexGenres[0]; break }
+                        }
+                    }
+                } catch {
+                    Write-Log "Top Movie Genre direct Plex metadata fallback failed for rating key $($movie.RatingKey)." 'WARN'
+                }
+            }
+        }
+
+        $genre = ConvertTo-TopMovieGenreLabel -Value $firstGenre
+        if ([string]::IsNullOrWhiteSpace($genre)) { continue }
+
+        $genreKey = $genre.ToLowerInvariant()
+        if (-not $genreTotals.ContainsKey($genreKey)) {
+            $genreTotals[$genreKey] = [PSCustomObject]@{ Genre = $genre; Seconds = [int64]0; Plays = 0; MovieKeys = @{} }
+        }
+        $genreTotals[$genreKey].Seconds += [int64]$movie.Seconds
+        $genreTotals[$genreKey].Plays += Safe-Int $movie.Plays
+        $genreTotals[$genreKey].MovieKeys[[string]$movie.Key] = $true
+    }
+
+    # Rank by the displayed qualified watch time, then displayed unique-movie
+    # count, grouped play count, and finally the normalized genre label.
+    $winner = @(
+        $genreTotals.Values |
+            Sort-Object `
+                @{ Expression = { [int64]$_.Seconds }; Descending = $true }, `
+                @{ Expression = { $_.MovieKeys.Count }; Descending = $true }, `
+                @{ Expression = { Safe-Int $_.Plays }; Descending = $true }, `
+                @{ Expression = { ([string]$_.Genre).ToLowerInvariant() }; Descending = $false } |
+            Select-Object -First 1
+    )
+
+    if ($winner.Count -eq 0) {
+        $fallbackAsset = Get-TopMovieGenreAsset -Genre ''
+        return [PSCustomObject]@{
+            Available = $false; Genre = 'No qualifying genre yet'; Seconds = [int64]0
+            Plays = 0; MovieCount = 0; TotalTimeText = '0m'
+            SupportingText = 'No qualifying movie activity with genre metadata this week'
+            AssetFileName = [string]$fallbackAsset.FileName; AssetCid = [string]$fallbackAsset.Cid
+            AssetFallback = $true
+        }
+    }
+
+    $top = $winner[0]
+    $movieCount = $top.MovieKeys.Count
+    $movieWord = if ($movieCount -eq 1) { 'movie' } else { 'movies' }
+    $timeText = Format-WatchTime ([int64]$top.Seconds)
+    $asset = Get-TopMovieGenreAsset -Genre ([string]$top.Genre)
+    return [PSCustomObject]@{
+        Available = $true; Genre = [string]$top.Genre; Seconds = [int64]$top.Seconds
+        Plays = Safe-Int $top.Plays; MovieCount = $movieCount; TotalTimeText = $timeText
+        SupportingText = "$timeText watched across $movieCount $movieWord"
+        AssetFileName = [string]$asset.FileName; AssetCid = [string]$asset.Cid
+        AssetFallback = [bool]$asset.IsFallback
+    }
+}
 function New-HeroItemFromGlobalStat {
     param([object]$Stat)
 
@@ -7261,6 +7434,17 @@ function Get-NewsletterReleaseDisplayData {
         [bool]$HotRelease.IsTrending
     )
 
+    $movieSectionLabel = if ($null -ne $ReleaseData.PSObject.Properties["MovieSectionLabel"] -and
+        -not [string]::IsNullOrWhiteSpace([string]$ReleaseData.MovieSectionLabel)) {
+        [string]$ReleaseData.MovieSectionLabel
+    }
+    elseif ($QuietReleaseMode) { "RECENT RELEASES" } else { "NEW RELEASES" }
+    $tvSectionLabel = if ($null -ne $ReleaseData.PSObject.Properties["TvSectionLabel"] -and
+        -not [string]::IsNullOrWhiteSpace([string]$ReleaseData.TvSectionLabel)) {
+        [string]$ReleaseData.TvSectionLabel
+    }
+    elseif ($QuietReleaseMode) { "RECENT RELEASES" } else { "NEW RELEASES" }
+
     $featuredReleaseKey = ""
     if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) {
         $featuredReleaseKey = [string]$HotRelease.Item.ReleaseKey
@@ -7284,24 +7468,21 @@ function Get-NewsletterReleaseDisplayData {
     )
 
     if ($QuietReleaseMode) {
-        $countParts = New-Object System.Collections.Generic.List[string]
-        if ($trendingHeroMode -and
-            $null -ne $HotRelease.Item -and
-            [string]$HotRelease.Item.Type -eq "movie") {
-            $countParts.Add("1 TRENDING MOVIE")
+        if ($tvSectionLabel -eq "NEW RELEASES") {
+            $weeklyTvCount = @($ReleaseData.TV).Count
+            $weeklyTvWord = if ($weeklyTvCount -eq 1) { "TV TITLE" } else { "TV TITLES" }
+            $countLine = "0 NEW MOVIES • $weeklyTvCount $weeklyTvWord"
         }
-        if ($movies.Count -gt 0) {
-            $movieWord = if ($movies.Count -eq 1) { "RECENT MOVIE" } else { "RECENT MOVIES" }
-            $countParts.Add("$($movies.Count) $movieWord")
-        }
-        if ($tv.Count -gt 0) {
-            $tvWord = if ($tv.Count -eq 1) { "RECENT TV TITLE" } else { "RECENT TV TITLES" }
-            $countParts.Add("$($tv.Count) $tvWord")
-        }
-        $countLine = if ($countParts.Count -gt 0) {
-            $countParts -join " • "
-        } else {
-            "NO RECENT RELEASES AVAILABLE"
+        else {
+            $countParts = New-Object System.Collections.Generic.List[string]
+            if ($trendingHeroMode -and
+                $null -ne $HotRelease.Item -and
+                [string]$HotRelease.Item.Type -eq "movie") {
+                $countParts.Add("1 TRENDING MOVIE")
+            }
+            $movieReleaseWord = if ($movies.Count -eq 1) { "RECENT MOVIE RELEASE" } else { "RECENT MOVIE RELEASES" }
+            $countParts.Add("$($movies.Count) $movieReleaseWord")
+            $countLine = $countParts -join " • "
         }
     }
     else {
@@ -7313,13 +7494,16 @@ function Get-NewsletterReleaseDisplayData {
     }
 
     return [PSCustomObject]@{
-        Movies           = $movies
-        TV               = $tv
-        CountLine        = $countLine
-        SectionLabel     = if ($QuietReleaseMode) { "LATEST RELEASES" } else { "NEW RELEASES" }
-        TrendingHeroMode = $trendingHeroMode
+        Movies            = $movies
+        TV                = $tv
+        CountLine         = $countLine
+        SectionLabel      = $movieSectionLabel
+        MovieSectionLabel = $movieSectionLabel
+        TvSectionLabel    = $tvSectionLabel
+        TrendingHeroMode  = $trendingHeroMode
     }
 }
+
 function Build-NewsletterHtml {
     param(
         [object]$User,
@@ -7327,6 +7511,7 @@ function Build-NewsletterHtml {
         [object]$ReleaseData,
         [object]$HotRelease,
         [string]$TrendingTitle,
+        [AllowNull()][object]$TopMovieGenre = $null,
         [bool]$SystemWarmingUp,
         [bool]$RecentAccess,
         [bool]$WelcomeOnly = $false,
@@ -7343,7 +7528,8 @@ function Build-NewsletterHtml {
     $releaseDisplay = Get-NewsletterReleaseDisplayData -ReleaseData $ReleaseData -HotRelease $HotRelease -QuietReleaseMode $QuietReleaseMode
     $movies = @($releaseDisplay.Movies)
     $tv = @($releaseDisplay.TV)
-    $releaseSectionLabel = [string]$releaseDisplay.SectionLabel
+    $movieReleaseSectionLabel = HtmlEncode ([string]$releaseDisplay.MovieSectionLabel)
+    $tvReleaseSectionLabel = HtmlEncode ([string]$releaseDisplay.TvSectionLabel)
     $trendingHeroMode = [bool]$releaseDisplay.TrendingHeroMode
     $footerServerName = Get-ConfiguredServerName
     $deliveryDay = Get-ConfiguredDeliveryDay
@@ -7369,7 +7555,7 @@ function Build-NewsletterHtml {
     $releaseCountLine = [string]$releaseDisplay.CountLine
 
     $preheader = if ($QuietReleaseMode) {
-        ""
+        $releaseCountLine
     }
     else {
         Get-DynamicPreheader -ReleaseData $ReleaseData
@@ -7435,7 +7621,7 @@ function Build-NewsletterHtml {
         $movieReleaseSection = @"
 <tr>
 <td class="pad" style="padding:0 20px 10px;">
-  <div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">$releaseSectionLabel</div>
+  <div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">$movieReleaseSectionLabel</div>
   <div style="padding-top:3px;font-size:24px;color:#ffffff;font-weight:800;">Movies</div>
 </td>
 </tr>
@@ -7452,12 +7638,10 @@ $movieCards
     $tvReleaseSection = ""
     if ($tv.Count -gt 0) {
         $tvTopPadding = if ($movies.Count -gt 0) { "8px" } else { "0" }
-        $tvHeadingPrefix = if ($movies.Count -gt 0) {
-            ""
+        $tvHeadingPrefix = if ($trendingHeroMode -or $movies.Count -eq 0) {
+            '<div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">' + $tvReleaseSectionLabel + '</div>'
         }
-        else {
-            '<div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:1.4px;">' + $releaseSectionLabel + '</div>'
-        }
+        else { "" }
 
         $tvReleaseSection = @"
 <tr>
@@ -7508,6 +7692,7 @@ $tvCards
     $bingeIconSrc = if ($ImageMode -eq "Email") { "cid:icon_binge" } else { "../assets/watchlist.gif" }
     $popcornIconSrc = if ($ImageMode -eq "Email") { "cid:icon_popcorn" } else { "../assets/popcorn.gif" }
     $imdbIconSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
+    $summarySupportingStyle = 'padding-top:3px;font-size:12px;line-height:1.35;font-weight:400;color:#8e8e8e;'
 
     # Recently accepted access: special welcome banner.
     $welcomeBlock = ""
@@ -7796,6 +7981,51 @@ $tvCards
 "@
     }
 
+    # A Trending hero already occupies the primary server-wide title slot, so
+    # its complementary footer reports the server-wide qualified movie genre.
+    $topGenreBlock = ""
+    if ($trendingHeroMode) {
+        $topGenreName = 'No qualifying genre yet'
+        $topGenreDescription = 'No qualifying movie activity with genre metadata this week'
+        $topGenreFileName = 'movies.gif'
+        $topGenreCid = 'icon_movies'
+        if ($null -ne $TopMovieGenre) {
+            $candidateName = Get-OptionalStringProperty -InputObject $TopMovieGenre -Name 'Genre'
+            $candidateDescription = Get-OptionalStringProperty -InputObject $TopMovieGenre -Name 'SupportingText'
+            $candidateFileName = Get-OptionalStringProperty -InputObject $TopMovieGenre -Name 'AssetFileName'
+            $candidateCid = Get-OptionalStringProperty -InputObject $TopMovieGenre -Name 'AssetCid'
+            if (-not [string]::IsNullOrWhiteSpace($candidateName)) { $topGenreName = $candidateName }
+            if (-not [string]::IsNullOrWhiteSpace($candidateDescription)) { $topGenreDescription = $candidateDescription }
+            if (-not [string]::IsNullOrWhiteSpace($candidateFileName) -and
+                -not [string]::IsNullOrWhiteSpace($candidateCid) -and
+                (Test-Path -LiteralPath (Join-Path $AssetsDir $candidateFileName) -PathType Leaf)) {
+                $topGenreFileName = $candidateFileName
+                $topGenreCid = $candidateCid
+            }
+        }
+        $topGenrePreviewBase = if ($moviesIconSrc -like '../assets/*') { '../assets' } else { 'assets' }
+        $topGenreIconSrc = if ($ImageMode -eq 'Email') { 'cid:' + $topGenreCid } else { $topGenrePreviewBase + '/' + $topGenreFileName }
+
+        $topGenreBlock = @"
+<tr>
+<td class="pad" style="padding:0 20px 26px;">
+  <table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
+    <tr>
+      <td width="70" valign="middle" style="padding:16px 0 16px 20px;">
+        <img src="$(HtmlEncode $topGenreIconSrc)" width="42" height="42" alt="Top genre this week" style="display:block;width:42px;height:42px;border:0;">
+      </td>
+      <td valign="middle" style="padding:16px 18px 16px 10px;">
+        <div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.3px;">TOP GENRE THIS WEEK</div>
+        <div style="padding-top:5px;font-size:18px;line-height:1.25;color:#ffffff;font-weight:800;">$(HtmlEncode $topGenreName)</div>
+        <div style="$summarySupportingStyle">$(HtmlEncode $topGenreDescription)</div>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+"@
+    }
+    $footerFeatureBlock = if ($trendingHeroMode) { $topGenreBlock } else { $trendingBlock }
     # Binge Champion ranks users by qualifying watch time. Every recipient sees
     # the same anonymous watch time and unique movie/TV-show breakdown. Only
     # the winner receives the gold YOU WON treatment.
@@ -7812,7 +8042,7 @@ $tvCards
     $bingeBreakdownHtml = ""
     if (-not [string]::IsNullOrWhiteSpace($bingeTitleBreakdown)) {
         $encodedBingeBreakdown = HtmlEncode $bingeTitleBreakdown
-        $bingeBreakdownHtml = "<div style=`"padding-top:3px;font-size:10px;line-height:1.35;font-weight:400;color:#b0b0b0;`">$encodedBingeBreakdown</div>"
+        $bingeBreakdownHtml = "<div style=`"$summarySupportingStyle`">$encodedBingeBreakdown</div>"
     }
 
     $bingeBorder = if ($isBingeWinner) { "#e5a00d" } else { "#2b2b2b" }
@@ -7955,7 +8185,7 @@ $mediaStatsRows
           <div style="font-size:9px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">YOU CLOCKED</div>
           <img src="$clockIconSrc" width="42" height="42" alt="Personal total watch time" style="display:block;width:42px;height:42px;border:0;margin-top:9px;">
           <div style="padding-top:8px;font-size:27px;font-weight:800;color:#ffffff;line-height:1.1;">$timeText</div>
-          <div style="padding-top:3px;font-size:12px;color:#8e8e8e;">total watch time</div>
+          <div style="$summarySupportingStyle">total watch time</div>
         </td>
       </tr>
     </table>
@@ -8150,7 +8380,7 @@ $welcomeInfoPanelBlock
 
 $bingeStandaloneBlock
 
-$trendingBlock
+$footerFeatureBlock
 
 <tr>
 <td class="pad" align="center" style="padding:8px 20px 18px;">
@@ -8175,10 +8405,12 @@ function Build-PlainText {
         [object]$ReleaseData,
         [object]$HotRelease,
         [string]$TrendingTitle,
+        [AllowNull()][object]$TopMovieGenre = $null,
         [bool]$SystemWarmingUp,
         [bool]$RecentAccess,
         [bool]$QuietReleaseMode = $false,
         [object]$BingeChampion = $null,
+        [bool]$WelcomeOnly = $false,
         [string]$StartLabel,
         [string]$EndLabel
     )
@@ -8192,7 +8424,7 @@ function Build-PlainText {
     $releaseDisplay = Get-NewsletterReleaseDisplayData -ReleaseData $ReleaseData -HotRelease $HotRelease -QuietReleaseMode $QuietReleaseMode
 
     $plainPreheader = if ($QuietReleaseMode) {
-        ""
+        [string]$releaseDisplay.CountLine
     }
     else {
         Get-DynamicPreheader -ReleaseData $ReleaseData
@@ -8232,6 +8464,19 @@ function Build-PlainText {
         }
     }
 
+    if ($plainTrendingHero) {
+        $topGenreName = if ($null -ne $TopMovieGenre) {
+            Get-OptionalStringProperty -InputObject $TopMovieGenre -Name 'Genre'
+        } else { '' }
+        $topGenreDescription = if ($null -ne $TopMovieGenre) {
+            Get-OptionalStringProperty -InputObject $TopMovieGenre -Name 'SupportingText'
+        } else { '' }
+        if ([string]::IsNullOrWhiteSpace($topGenreName)) { $topGenreName = 'No qualifying genre yet' }
+        if ([string]::IsNullOrWhiteSpace($topGenreDescription)) {
+            $topGenreDescription = 'No qualifying movie activity with genre metadata this week'
+        }
+        $footerFeature += "`r`nTOP GENRE THIS WEEK: $topGenreName — $topGenreDescription"
+    }
     if ($null -ne $BingeChampion) {
         $bingeDisplay = Get-BingeChampionDisplay -BingeChampion $BingeChampion -User $User
         $winnerLine = if ($bingeDisplay.IsWinner) {
@@ -8245,7 +8490,7 @@ function Build-PlainText {
             $footerFeature += "`r`n$titleBreakdown"
         }
     }
-    else {
+    elseif (-not $WelcomeOnly) {
         $footerFeature += "`r`nTHIS WEEK'S BINGE CHAMPION: Awaiting the first qualifying stream."
     }
 
@@ -8597,6 +8842,18 @@ function Send-NewsletterMail {
             @{ Path = (Join-Path $AssetsDir "lockinfo.gif"); Cid = "icon_lockinfo"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "watchlist.gif"); Cid = "icon_binge"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "popcorn.gif"); Cid = "icon_popcorn"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-action.gif"); Cid = "genre_action"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-comedy.gif"); Cid = "genre_comedy"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-crime.gif"); Cid = "genre_crime"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-drama.gif"); Cid = "genre_drama"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-fantasy.gif"); Cid = "genre_fantasy"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-horror.gif"); Cid = "genre_horror"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-musical.gif"); Cid = "genre_musical"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-mystery.gif"); Cid = "genre_mystery"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-romance.gif"); Cid = "genre_romance"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-scifi.gif"); Cid = "genre_scifi"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-thriller.gif"); Cid = "genre_thriller"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "genre-western.gif"); Cid = "genre_western"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "celebrate.gif"); Cid = "custom_title_celebrate"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "construction.gif"); Cid = "custom_title_construction"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "rocket.gif"); Cid = "custom_title_rocket"; MediaType = "image/gif" },
@@ -8886,25 +9143,27 @@ if ($Mode -eq "SendWelcome") {
     Add-DesignRatingMetadata -ReleaseData $releaseData
     Enrich-TvEpisodeMetadata -ReleaseData $releaseData -ContextLabel "One-off TV" -StartEpoch $startEpoch -EndEpochExclusive $endEpochExclusive -CountRecentEpisodes $true
 
-    $newReleaseCount = @($releaseData.Movies).Count + @($releaseData.TV).Count
-    $isQuietReleaseWeek = ($newReleaseCount -eq 0)
-    Write-Log ("Found {0} new movies and {1} TV titles; quiet-release mode: {2}." -f $releaseData.Movies.Count, $releaseData.TV.Count, $isQuietReleaseWeek)
+    $isQuietReleaseWeek = (@($releaseData.Movies).Count -eq 0)
+    Write-Log ("Found {0} new movies and {1} TV titles; Trending-release mode: {2}." -f $releaseData.Movies.Count, $releaseData.TV.Count, $isQuietReleaseWeek)
 
     $latestReleaseData = $null
     if ($isQuietReleaseWeek) {
         $latestTvCutoffEpoch = [int64]([DateTimeOffset]::UtcNow.AddMonths(-1).ToUnixTimeSeconds())
-        Write-Log "No weekly additions. Loading shared Latest Releases fallback..."
+        Write-Log "No new movies. Loading shared Recent Releases movie candidates and TV fallback..."
         $latestReleaseData = Get-LatestReleaseData -MovieLimit 5 -TvLimit 4 -TvAddedAfterEpoch $latestTvCutoffEpoch
         Add-DesignRatingMetadata -ReleaseData $latestReleaseData
-        Enrich-TvEpisodeMetadata -ReleaseData $latestReleaseData -ContextLabel "Latest TV"
-        Write-Log ("Latest Releases candidates: {0} movies and {1} TV titles." -f $latestReleaseData.Movies.Count, $latestReleaseData.TV.Count)
+        if (@($releaseData.TV).Count -eq 0) {
+            Enrich-TvEpisodeMetadata -ReleaseData $latestReleaseData -ContextLabel "Recent TV"
+        }
+        Write-Log ("Recent Releases candidates: {0} movies and {1} TV titles." -f $latestReleaseData.Movies.Count, $latestReleaseData.TV.Count)
     }
 
     $globalHistory = Get-History -AfterDate $afterDate -BeforeDate $beforeDate
+    $topMovieGenre = Get-GlobalTopMovieGenre -GlobalHistory $globalHistory
     $movieHotRelease = Get-HotNewRelease -ReleaseData $releaseData -GlobalHistory $globalHistory
     $script:GlobalTrendingStat = Get-GlobalTrendingStat -GlobalHistory $globalHistory
     $trendingTitle = if ($null -ne $script:GlobalTrendingStat) { [string]$script:GlobalTrendingStat.Title } else { "" }
-    $trendingReleaseData = if ($isQuietReleaseWeek) { $latestReleaseData } else { $releaseData }
+    $trendingReleaseData = if ($isQuietReleaseWeek -and @($releaseData.TV).Count -eq 0) { $latestReleaseData } else { $releaseData }
     $trendingHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory -ReleaseData $trendingReleaseData
     $hotRelease = if (@($releaseData.Movies).Count -gt 0) { $movieHotRelease } else { $trendingHero }
 
@@ -8912,7 +9171,16 @@ if ($Mode -eq "SendWelcome") {
         Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @($trendingHero.Item); TV = @() })
     }
 
-    $activeReleaseData = if ($isQuietReleaseWeek) { $latestReleaseData } else { $releaseData }
+    $activeReleaseData = if ($isQuietReleaseWeek) {
+        $trendingTvItems = if (@($releaseData.TV).Count -gt 0) { @($releaseData.TV) } else { @($latestReleaseData.TV) }
+        [PSCustomObject]@{
+            Movies            = @($latestReleaseData.Movies)
+            TV                = $trendingTvItems
+            MovieSectionLabel = "RECENT RELEASES"
+            TvSectionLabel    = if (@($releaseData.TV).Count -gt 0) { "NEW RELEASES" } else { "RECENT RELEASES" }
+        }
+    }
+    else { $releaseData }
     $activeHero = if ($isQuietReleaseWeek) { $trendingHero } else { $hotRelease }
     $trendingPosterItem = $null
     if ($null -ne $script:GlobalTrendingStat -and
@@ -8959,7 +9227,7 @@ if ($Mode -eq "SendWelcome") {
         -Stats $welcomeStats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
-        -TrendingTitle $trendingTitle `
+        -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false `
         -RecentAccess $true `
         -WelcomeOnly $true `
@@ -8976,11 +9244,12 @@ if ($Mode -eq "SendWelcome") {
         -Stats $welcomeStats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
-        -TrendingTitle $trendingTitle `
+        -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false `
         -RecentAccess $true `
         -QuietReleaseMode $isQuietReleaseWeek `
         -BingeChampion $null `
+        -WelcomeOnly $true `
         -StartLabel $startLabel `
         -EndLabel $endLabel
     $subject = Get-OneOffWelcomeSubject -User $user
@@ -9042,26 +9311,28 @@ $releaseData = New-ReleaseData -RecentItems (Get-RecentItems -StartEpoch $startE
 Add-DesignRatingMetadata -ReleaseData $releaseData
 Enrich-TvEpisodeMetadata -ReleaseData $releaseData -ContextLabel "Weekly TV" -StartEpoch $startEpoch -EndEpochExclusive $endEpochExclusive -CountRecentEpisodes $true
 
-$newReleaseCount = @($releaseData.Movies).Count + @($releaseData.TV).Count
-$isQuietReleaseWeek = ($newReleaseCount -eq 0)
-Write-Log ("Found {0} new movies and {1} TV titles; quiet-release mode: {2}." -f $releaseData.Movies.Count, $releaseData.TV.Count, $isQuietReleaseWeek)
+$isQuietReleaseWeek = (@($releaseData.Movies).Count -eq 0)
+Write-Log ("Found {0} new movies and {1} TV titles; Trending-release mode: {2}." -f $releaseData.Movies.Count, $releaseData.TV.Count, $isQuietReleaseWeek)
 
 $latestReleaseData = $null
 if ($isQuietReleaseWeek) {
     $latestTvCutoffEpoch = [int64]([DateTimeOffset]::UtcNow.AddMonths(-1).ToUnixTimeSeconds())
-    Write-Log "No weekly additions. Loading shared Latest Releases fallback..."
+    Write-Log "No new movies. Loading shared Recent Releases movie candidates and TV fallback..."
     $latestReleaseData = Get-LatestReleaseData -MovieLimit 5 -TvLimit 4 -TvAddedAfterEpoch $latestTvCutoffEpoch
     Add-DesignRatingMetadata -ReleaseData $latestReleaseData
-    Enrich-TvEpisodeMetadata -ReleaseData $latestReleaseData -ContextLabel "Latest TV"
-    Write-Log ("Latest Releases candidates: {0} movies and {1} TV titles." -f $latestReleaseData.Movies.Count, $latestReleaseData.TV.Count)
+    if (@($releaseData.TV).Count -eq 0) {
+        Enrich-TvEpisodeMetadata -ReleaseData $latestReleaseData -ContextLabel "Recent TV"
+    }
+    Write-Log ("Recent Releases candidates: {0} movies and {1} TV titles." -f $latestReleaseData.Movies.Count, $latestReleaseData.TV.Count)
 }
 
-Write-Log "Loading global history for hero, Trending, and Binge Champion..."
+Write-Log "Loading global history for hero, Trending, Top Movie Genre, and Binge Champion..."
 $globalHistory = Get-History -AfterDate $afterDate -BeforeDate $beforeDate
+$topMovieGenre = Get-GlobalTopMovieGenre -GlobalHistory $globalHistory
 $movieHotRelease = Get-HotNewRelease -ReleaseData $releaseData -GlobalHistory $globalHistory
 $script:GlobalTrendingStat = Get-GlobalTrendingStat -GlobalHistory $globalHistory
 $trendingTitle = if ($null -ne $script:GlobalTrendingStat) { [string]$script:GlobalTrendingStat.Title } else { "" }
-$trendingReleaseData = if ($isQuietReleaseWeek) { $latestReleaseData } else { $releaseData }
+$trendingReleaseData = if ($isQuietReleaseWeek -and @($releaseData.TV).Count -eq 0) { $latestReleaseData } else { $releaseData }
 $quietHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory -ReleaseData $trendingReleaseData
 $hotRelease = if (@($releaseData.Movies).Count -gt 0) { $movieHotRelease } else { $quietHero }
 $bingeChampion = Get-BingeChampion -GlobalHistory $globalHistory
@@ -9070,7 +9341,16 @@ if (($isQuietReleaseWeek -or @($releaseData.Movies).Count -eq 0) -and $null -ne 
     Add-DesignRatingMetadata -ReleaseData ([PSCustomObject]@{ Movies = @($quietHero.Item); TV = @() })
 }
 
-$activeReleaseData = if ($isQuietReleaseWeek) { $latestReleaseData } else { $releaseData }
+$activeReleaseData = if ($isQuietReleaseWeek) {
+    $trendingTvItems = if (@($releaseData.TV).Count -gt 0) { @($releaseData.TV) } else { @($latestReleaseData.TV) }
+    [PSCustomObject]@{
+        Movies            = @($latestReleaseData.Movies)
+        TV                = $trendingTvItems
+        MovieSectionLabel = "RECENT RELEASES"
+        TvSectionLabel    = if (@($releaseData.TV).Count -gt 0) { "NEW RELEASES" } else { "RECENT RELEASES" }
+    }
+}
+else { $releaseData }
 $activeHero = if ($isQuietReleaseWeek) { $quietHero } else { $hotRelease }
 
 $featuredRatingKey = if ($null -ne $activeHero -and $null -ne $activeHero.Item) {
@@ -9147,7 +9427,7 @@ function Build-ForUser {
         -Stats $stats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
-        -TrendingTitle $trendingTitle `
+        -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $tautWeeklyState.IsWarmingUp `
         -RecentAccess $recentAccess `
         -WelcomeOnly $false `
@@ -9164,7 +9444,7 @@ function Build-ForUser {
         -Stats $stats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
-        -TrendingTitle $trendingTitle `
+        -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $tautWeeklyState.IsWarmingUp `
         -RecentAccess $recentAccess `
         -QuietReleaseMode $isQuietReleaseWeek `
@@ -9262,7 +9542,7 @@ function Build-AllEmailVariants {
         -Stats $zeroStats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
-        -TrendingTitle $trendingTitle `
+        -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false `
         -RecentAccess $true `
         -WelcomeOnly $true `
@@ -9283,7 +9563,7 @@ function Build-AllEmailVariants {
         -Stats $zeroStats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
-        -TrendingTitle $trendingTitle `
+        -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false `
         -RecentAccess $true `
         -WelcomeOnly $false `
@@ -9301,7 +9581,7 @@ function Build-AllEmailVariants {
         -Stats $populatedVariant.Stats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
-        -TrendingTitle $trendingTitle `
+        -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false `
         -RecentAccess $true `
         -WelcomeOnly $false `
@@ -9320,7 +9600,7 @@ function Build-AllEmailVariants {
         -Stats $populatedVariant.Stats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
-        -TrendingTitle $trendingTitle `
+        -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false `
         -RecentAccess $false `
         -WelcomeOnly $false `
@@ -9338,7 +9618,7 @@ function Build-AllEmailVariants {
         -Stats $zeroStats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
-        -TrendingTitle $trendingTitle `
+        -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false `
         -RecentAccess $false `
         -WelcomeOnly $false `
@@ -9356,7 +9636,7 @@ function Build-AllEmailVariants {
         -Stats $zeroStats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
-        -TrendingTitle $trendingTitle `
+        -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $true `
         -RecentAccess $false `
         -WelcomeOnly $false `
@@ -9370,42 +9650,43 @@ function Build-AllEmailVariants {
 
     $oneOffPlain = Build-PlainText `
         -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
-        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false -RecentAccess $true `
         -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $null `
+        -WelcomeOnly $true `
         -StartLabel $startLabel -EndLabel $endLabel
 
     $newNoHistoryPlain = Build-PlainText `
         -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
-        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false -RecentAccess $true `
         -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
         -StartLabel $startLabel -EndLabel $endLabel
 
     $newWithHistoryPlain = Build-PlainText `
         -User $user -Stats $populatedVariant.Stats -ReleaseData $activeReleaseData `
-        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false -RecentAccess $true `
         -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
         -StartLabel $startLabel -EndLabel $endLabel
 
     $normalPlain = Build-PlainText `
         -User $user -Stats $populatedVariant.Stats -ReleaseData $activeReleaseData `
-        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false -RecentAccess $false `
         -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
         -StartLabel $startLabel -EndLabel $endLabel
 
     $quietPlain = Build-PlainText `
         -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
-        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false -RecentAccess $false `
         -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
         -StartLabel $startLabel -EndLabel $endLabel
 
     $warmupPlain = Build-PlainText `
         -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
-        -HotRelease $activeHero -TrendingTitle $trendingTitle `
+        -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $true -RecentAccess $false `
         -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
         -StartLabel $startLabel -EndLabel $endLabel
@@ -9542,7 +9823,7 @@ body{margin:0;background-color:#0f0f0f;color:#fff;font-family:Arial,Helvetica,sa
 </style></head><body><div class="wrap">
 <div class="eyebrow">TAUTWEEKLY FOR PLEX — ALL EMAIL TYPES</div>
 <h1 style="margin:8px 0 0;font-size:30px;">The real email layout, across every state.</h1>
-<div class="meta">Go ahead, shrink my window.<br>Server / selected recipient: $serverName · $userName<br>Window: $(HtmlEncode $startLabel) – $(HtmlEncode $endLabel)<br>Release mode: $(if ($isQuietReleaseWeek) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' })</div>
+<div class="meta">Go ahead, shrink my window.<br>Server / selected recipient: $serverName · $userName<br>Window: $(HtmlEncode $startLabel) – $(HtmlEncode $endLabel)<br>Release mode: $(if ($isQuietReleaseWeek) { 'TRENDING / RECENT MOVIES' } else { 'NORMAL / NEW RELEASES' })</div>
 $($cards.ToString())
 <div class="note">$(HtmlEncode $historyNote)</div>
 <div class="note">Local HTML only. No email was sent. No welcome timestamp was written. Resize a preview below 620px to inspect the mobile hero.</div>

@@ -22,7 +22,8 @@ every temporary change when the page reloads.
 
 The single-file gallery renders nine newsletter lifecycle and density states,
 including high usage, both Binge Champion treatments, onboarding, warmup,
-quiet weeks, and a TV-only release week with the production Trending fallback. Demo counts are
+quiet weeks, a TV-only Trending week, complementary Trending/Top Genre footers,
+and the dynamic inbox-preview/count lines. Demo counts are
 synthetic; real public Plex Discover artwork and dated Rotten Tomatoes movie
 and IMDb episode scores are used only to make the visual regression fixture
 representative. TV cards preserve the production episode-row and IMDb-badge

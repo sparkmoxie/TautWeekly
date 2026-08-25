@@ -1,6 +1,13 @@
 TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
+v1.10.0 Windows
+---------------
+- adds the privacy-preserving server-wide Top Genre footer with approved animated artwork and a neutral movie fallback
+- makes Trending weeks show up to four recent movies plus new TV or, when no new TV exists, recent TV strictly newer than one month
+- keeps the email count line and preview text synchronized with the Trending shelf contents
+- normalizes Binge Champion and Top Genre supporting typography across split and full-width cards
+
 v1.9.0 Windows
 --------------
 - makes TautWeekly-Setup.exe and the loopback-only Manager the supported primary Windows install, configuration, verification, preview, test, schedule, update, and removal workflow

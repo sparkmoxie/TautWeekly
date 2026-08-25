@@ -318,6 +318,31 @@ Browser preview is a structural check; the controlled TestEmail is authoritative
 for MIME, linked images, and the actual client. Retest after changing branding,
 assets, SMTP providers, or email clients.
 
+## Trending shelves or inbox preview text are wrong
+
+Update every maintained package component to v0.21.0 or newer; do not combine a
+new Manager/container wrapper with an older renderer. In a Trending week with
+new TV, **Recent Releases / Movies** holds up to four movies other than the hero,
+**New Releases / TV** holds up to four series, and both the visible count and
+inbox preview text must say `0 NEW MOVIES • X TV TITLE(S)`. Without new TV, the
+TV shelf is **Recent Releases**, limited to series strictly newer than one month,
+and both count locations say
+`1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when the real hero exists.
+
+Regenerate PreviewAll after the metadata refresh finishes; an older saved HTML
+file cannot change in place. Then send a controlled TestEmail and compare its
+inbox preview text with the line above the message date. Preview, PreviewAll,
+SendTest, SendTestAll, scheduled delivery, and confirmed manual delivery use the
+same computed count in the current renderer.
+
+A Trending hero should end with **Top Genre This Week**, not another Trending
+card. A neutral movie animation and **No qualifying genre yet** mean that no
+qualifying movie supplied usable first-genre metadata in the report window. A
+recognized genre with neutral artwork means the genre is valid but has no
+dedicated mapping. In either case, refresh Plex and then Tautulli media info for
+every included movie library before retesting. Never post the generated message,
+configuration, logs, recipient details, or viewing history.
+
 ## Posters render but ratings, backgrounds, or logos do not
 
 These resources do not all use the same path. Posters and hero art can load

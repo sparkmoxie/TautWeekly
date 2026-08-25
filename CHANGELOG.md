@@ -6,6 +6,44 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-08-25
+
+### Added
+
+- Added a privacy-preserving, server-wide **TOP GENRE THIS WEEK** footer for
+  Trending-hero weeks. It aggregates only qualifying movie activity in the
+  configured report window and included libraries, resolves each distinct
+  movie once, and uses only the first genre returned by Plex metadata.
+- Added case-insensitive genre normalization, including `Science Fiction`,
+  `Sci-fi`, `Sci Fi`, and `SciFi` aliases, plus twelve validated animated genre
+  assets. Unsupported winners and weeks without usable genre metadata render
+  the existing neutral movie animation instead of a broken image.
+- Added deterministic coverage for first-genre extraction, aliases, watch-time
+  aggregation, unique movie counts, tie-breaking, missing metadata, neutral
+  fallbacks, complementary hero/footer states, dynamic preview text, packaged
+  GIF integrity, and all maintained renderer mirrors.
+
+### Changed
+
+- Made the hero and full-width footer complementary: **HOT NEW RELEASE** pairs
+  with the existing **TRENDING THIS WEEK** footer, while a **TRENDING THIS
+  WEEK** hero pairs with **TOP GENRE THIS WEEK**. Trending is never duplicated.
+- Refined Trending weeks. When new TV exists, the hero is followed by up to
+  four different recent movies and up to four new TV series; the count line and
+  email preview text read `0 NEW MOVIES • X TV TITLE(S)`. Without new TV, up to
+  four recent movies and four recent TV series strictly newer than one month
+  appear under Recent Releases; the shared count/preheader reads
+  `1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when a real hero is available.
+- Ranked Top Genre by total qualified watch time, then unique movie count, then
+  qualifying play count, and finally normalized genre name. The card reports
+  only aggregate duration and unique movies, never a viewer or recipient.
+- Normalized Binge Champion breakdown typography and the Top Genre duration
+  line to the same supporting font size, weight, line height, and color used by
+  the personal total-watch-time supporting text. Winner eligibility, privacy,
+  treatment, and Manual Welcome omission remain unchanged.
+- Advanced maintained package source baselines to Windows 1.10.0, NAS/Docker
+  1.5.0, macOS 1.4.0, native Linux 1.3.0, and FreeBSD/Podman 1.2.0.
+
 ## [0.20.10] - 2026-08-25
 
 ### Fixed

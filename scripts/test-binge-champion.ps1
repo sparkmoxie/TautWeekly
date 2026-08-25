@@ -146,7 +146,10 @@ foreach ($relativePath in $rendererPaths) {
     $source = Get-Content -LiteralPath $path -Raw
     Assert-True ($source -notmatch 'WinningTitle|TopTitles|YOUR TOP TITLES') "$relativePath retains title-based Binge Champion output"
     Assert-True ($source -notmatch '\$bingeHeadline|\$bingeTitleCount|\$bingeTitleWord') "$relativePath retains the retired one-line Binge Champion metric"
-    Assert-True ($source -match 'font-size:10px;line-height:1\.35;font-weight:400;color:#b0b0b0') "$relativePath does not render the media breakdown in the compact secondary style"
+    $sharedSupportStyle = 'padding-top:3px;font-size:12px;line-height:1.35;font-weight:400;color:#8e8e8e;'
+    Assert-True ($source.Contains("`$summarySupportingStyle = '$sharedSupportStyle'")) "$relativePath does not define the shared supporting typography"
+    Assert-True ($source.Contains('$bingeBreakdownHtml = "<div style=`"$summarySupportingStyle`">')) "$relativePath does not use the shared style for the Binge breakdown"
+    Assert-True ($source.Contains('<div style="$summarySupportingStyle">total watch time</div>')) "$relativePath does not use the shared style for total watch time"
     Assert-True ($source.Contains('$footerFeature += "`r`n${winnerLine}`r`n$($bingeDisplay.TotalTimeText) watched"')) "$relativePath does not use the two-line Binge Champion plain-text format"
     Assert-True ($source -notmatch 'movie/TV play split') "$relativePath retains the retired Binge Champion play-split copy"
     $winnerEyebrow = 'YOU WON ' + [char]0x2022 + ' BINGE CHAMPION'

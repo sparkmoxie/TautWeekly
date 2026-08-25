@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $root = $PSScriptRoot
@@ -298,7 +298,8 @@ function Get-Frames([string]$Path) {
 $animated = @(
     "movies.gif","tv.gif","clock.gif","trophy.gif","hot.gif","trending.gif",
     "pending.gif","quiet.gif","welcome.gif","action.gif","watched.gif",
-    "lockinfo.gif","watchlist.gif","popcorn.gif"
+    "lockinfo.gif","watchlist.gif","popcorn.gif",
+    "genre-action.gif","genre-comedy.gif","genre-crime.gif","genre-drama.gif","genre-fantasy.gif","genre-horror.gif","genre-musical.gif","genre-mystery.gif","genre-romance.gif","genre-scifi.gif","genre-thriller.gif","genre-western.gif"
 )
 $assetFailure = $false
 foreach ($name in $animated) {
@@ -321,7 +322,7 @@ foreach ($name in $staticAssets) {
 
 if ($assetFailure) {
     Write-Host ""
-    WARN "Run REPAIR-MOVIE-TV-ASSETS.bat for movies.gif/tv.gif, or re-extract this ZIP for other missing assets."
+    WARN "Run REPAIR-MOVIE-TV-ASSETS.bat to restore canonical animations, or re-extract this ZIP for other missing assets."
     exit 1
 }
 

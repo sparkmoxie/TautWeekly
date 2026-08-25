@@ -1,6 +1,10 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
-Unreleased
+v1.2.0
+- adds the privacy-preserving server-wide Top Genre footer with approved animated artwork and a neutral movie fallback
+- makes Trending weeks show up to four recent movies plus new TV or, when no new TV exists, recent TV strictly newer than one month
+- keeps the email count line and preview text synchronized with the Trending shelf contents
+- normalizes Binge Champion and Top Genre supporting typography across split and full-width cards
 - Adds the missing Manager bootstrap and narrow access-recovery commands to the installed rc.d host wrapper.
 - Replaces image-only updates with a verified stable host-package and image update path that preserves /var/db/tautweekly.
 - Adds confirmed per-file deletion for obsolete Manager configuration backups.
