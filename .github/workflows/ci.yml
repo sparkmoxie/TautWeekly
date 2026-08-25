@@ -55,6 +55,9 @@ jobs:
       - name: Test renderer collection and poster-probe behavior on Unix
         shell: pwsh
         run: ./scripts/test-renderer-collections.ps1
+      - name: Test recipient-specific movie watched markers on PowerShell 7
+        shell: pwsh
+        run: ./scripts/test-recipient-watched-movies.ps1
       - name: Test bounded deleted-item cache on PowerShell 7
         shell: pwsh
         run: ./scripts/test-deleted-item-cache.ps1
@@ -86,6 +89,9 @@ jobs:
       - name: Test adaptive renderer collection edges
         shell: powershell
         run: .\scripts\test-renderer-collections.ps1
+      - name: Test recipient-specific movie watched markers on Windows PowerShell
+        shell: powershell
+        run: .\scripts\test-recipient-watched-movies.ps1
       - name: Test bounded deleted-item cache on Windows PowerShell
         shell: powershell
         run: .\scripts\test-deleted-item-cache.ps1

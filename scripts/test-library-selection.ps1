@@ -78,7 +78,7 @@ foreach ($relative in @(
     $content = [IO.File]::ReadAllText($rendererPath)
     Assert-Equal -Name "$relative reads IncludedLibraryIds" -Actual ($content -match 'IncludedLibraryIds') -Expected $true
     $filterCalls = [regex]::Matches($content, 'Test-IncludedLibraryRow -Row \$row').Count
-    Assert-Equal -Name "$relative filters history and both release feeds" -Actual $filterCalls -Expected 3
+    Assert-Equal -Name "$relative filters weekly and historical recipient history and both release feeds" -Actual $filterCalls -Expected 4
 
     $tokens = $null
     $parseErrors = $null

@@ -213,6 +213,11 @@ count; it never includes viewer identity and safely falls back to the neutral
 movie animation. Its supporting line and every Binge Champion movie/TV
 breakdown use the same supporting typography as personal total watch time.
 
+Watched marks use only the selected recipient's all-time Tautulli movie history.
+Review the desktop poster shield and the title circles with uniform 6px spacing,
+vertical centering, and `title="Watched"`. Unwatched movies leave no icon gap and
+TV is unchanged. See the [watched-state rule and privacy boundary](../CONFIGURATION.md#recipient-movie-watched-markers).
+
 ## Persistent data, permissions, and backup
 
 The image is read-only. Writable runtime state is limited to the bind-mounted

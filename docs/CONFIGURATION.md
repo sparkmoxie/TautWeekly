@@ -218,7 +218,7 @@ authorization.
 | Key | Default | Purpose |
 |---|---:|---|
 | `DaysBack` | 7 | Activity and recently-added window |
-| `WatchedPercent` | 85 | Completion threshold |
+| `WatchedPercent` | 85 | Completion threshold, including the historical recipient movie marker fallback |
 | `MinimumEpisodeSeconds` | 120 | Filters very short playback |
 | `MaxMovies`, `MaxTv` | 8 | Content-card limits |
 | `IncludedLibraryIds` | `[]` | Stable Tautulli section IDs defining the global newsletter scope; empty means all active movie/TV libraries for backward compatibility |
@@ -305,6 +305,51 @@ Normally revise this scope in Manager Config. Recovery/expert fallbacks are
 `config.json` first. The corresponding `list-libraries` command (or
 `16-LIST-LIBRARIES.bat`) is read-only. Verification warns about stale IDs and
 fails when no configured ID matches an active video library.
+
+### Recipient movie watched markers
+
+A **Watched** mark belongs only to the newsletter recipient. For each included
+library scope, TautWeekly pages through Tautulli `get_history` with
+`grouping=1`, `include_activity=0`, `media_type=movie`, the exact recipient
+`user_id`, and `start`/`length` pages of 1,000. The query deliberately has no
+`after` or `before` filter: a movie watched before the weekly report window
+still qualifies. Active sessions are excluded regardless of Tautulli's history
+table setting.
+
+Every returned row must prove the same recipient ID and movie type and pass
+the selected-library predicate. A row qualifies when Tautulli reports the
+definitive `watched_status=1` (including its credits-aware watched decision),
+or `percent_complete >= WatchedPercent`. Partial Tautulli grades `0.25`,
+`0.5`, and `0.75` do not qualify by themselves. Matching uses only a movie's
+rating key or metadata GUID, never its title, popularity, server-wide plays, or
+another user's state.
+
+This is the most reliable recipient-specific evidence available through the
+configured Tautulli connection. The administrator's optional Plex token is used
+for metadata/artwork, not as a substitute for a recipient token. A movie marked
+watched manually in Plex, or watched before Tautulli began retaining history,
+cannot be inferred without a qualifying Tautulli history row. Missing identity
+or a failed historical lookup omits the marker; it never guesses. The lookup
+is in-memory for that recipient/render and does not add viewing-state files or
+identity-bearing diagnostics.
+
+The desktop full-width movie hero uses the unchanged 26×26 shield, inset 7px
+from the poster's right edge and raised 5px above its top, with an Outlook VML
+group; other clients use a table overlay without CSS positioning. Mobile
+heroes, release cards, personal movie recaps, and compact Trending titles use
+the unchanged 20×20 circle
+immediately after the title with 6px left spacing and vertical centering.
+Both images have `alt="Watched"` and `title="Watched"`; plain text supplies the
+equivalent status. Unwatched movies add neither markup nor a spacer, and TV
+titles are unchanged. Preview, PreviewAll, SendTest, SendTestAll, welcome,
+scheduled delivery, and confirmed manual delivery use the same recipient
+state. Watched semantics are not added to the dynamic inbox preheader.
+
+The consumed API contract was checked against
+[Tautulli v2.18.0](https://github.com/Tautulli/Tautulli/releases/tag/v2.18.0).
+Its SQL-backed history pagination preserves these parameters and fields.
+Synthetic fixtures cover pagination, graded watched status, omitted redundant
+section IDs, and the new HTTP error behavior for invalid metadata.
 
 ### Interactive user exclusions
 

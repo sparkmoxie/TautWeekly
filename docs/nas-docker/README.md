@@ -243,6 +243,11 @@ say `1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when the real hero exists.
 Top Genre exposes only aggregate qualified watch time and unique movie count;
 missing or unsupported art uses the neutral local movie animation.
 
+Watched marks use only the selected recipient's all-time Tautulli movie history.
+Review the desktop poster shield and the title circles with uniform 6px spacing,
+vertical centering, and `title="Watched"`. Unwatched movies leave no icon gap and
+TV is unchanged. See the [watched-state rule and privacy boundary](../CONFIGURATION.md#recipient-movie-watched-markers).
+
 Only after the previews and controlled TestEmail messages are approved, enable
 future delivery on Manager **Schedule**. The expert fallback is:
 

@@ -1053,6 +1053,119 @@ function Get-History {
     return $all.ToArray()
 }
 
+function Get-RecipientWatchedMovies {
+    param([string]$ExpectedUserId)
+
+    $ratingKeys = @{}
+    $metadataGuids = @{}
+    $state = [PSCustomObject]@{
+        ExpectedUserId = $ExpectedUserId
+        RatingKeys     = $ratingKeys
+        MetadataGuids  = $metadataGuids
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ExpectedUserId)) { return $state }
+
+    $watchedThreshold = if ($null -ne $Config.PSObject.Properties["WatchedPercent"]) {
+        Safe-Int $Config.WatchedPercent
+    } else { 85 }
+    $pageSize = 1000
+
+    try {
+        foreach ($sectionId in @(Get-IncludedLibraryQueryScopes)) {
+            $start = 0
+            while ($true) {
+                # This query intentionally omits the newsletter's after/before
+                # window. A movie is marked from the recipient's historical
+                # watched state, while user_id and the selected library scope
+                # keep the lookup private and relevant.
+                $params = @{
+                    grouping         = 1
+                    include_activity = 0
+                    media_type       = "movie"
+                    user_id          = $ExpectedUserId
+                    start            = $start
+                    length           = $pageSize
+                }
+                if (-not [string]::IsNullOrWhiteSpace($sectionId)) {
+                    $params.section_id = $sectionId
+                }
+
+                $data = Invoke-TautulliApi -Command "get_history" -Parameters $params
+                $rows = @($data.data)
+
+                foreach ($row in $rows) {
+                    if (-not (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId)) { continue }
+
+                    # Fail closed when a row does not prove that it belongs to
+                    # the requested recipient, even if an upstream API ever
+                    # ignores its user_id filter.
+                    $rowUserId = (Get-OptionalStringProperty -InputObject $row -Name "user_id").Trim()
+                    if ($rowUserId -ne $ExpectedUserId) { continue }
+                    if ((Get-OptionalStringProperty -InputObject $row -Name "media_type").ToLowerInvariant() -ne "movie") { continue }
+
+                    $qualified = (
+                        # Tautulli v2.18.0 returns graded watched_status values
+                        # (0, .25, .5, .75, 1). Only 1 is definitive; partial
+                        # grades must not mark a movie unless our configured
+                        # percentage threshold independently qualifies it.
+                        (Safe-Int $row.watched_status) -eq 1 -or
+                        (Safe-Int $row.percent_complete) -ge $watchedThreshold
+                    )
+                    if (-not $qualified) { continue }
+
+                    $ratingKey = (Get-OptionalStringProperty -InputObject $row -Name "rating_key").Trim()
+                    if (-not [string]::IsNullOrWhiteSpace($ratingKey)) {
+                        $ratingKeys[$ratingKey] = $true
+                    }
+
+                    $metadataGuid = (Get-OptionalStringProperty -InputObject $row -Name "guid").Trim()
+                    if (-not [string]::IsNullOrWhiteSpace($metadataGuid)) {
+                        $metadataGuids[$metadataGuid] = $true
+                    }
+                }
+
+                if ($rows.Count -lt $pageSize) { break }
+                $start += $rows.Count
+                $total = Safe-Int $data.recordsFiltered
+                if ($total -gt 0 -and $start -ge $total) { break }
+            }
+        }
+    }
+    catch {
+        # The marker is supplementary. If historical state cannot be loaded,
+        # omit it without weakening the normal newsletter delivery.
+        $ratingKeys.Clear()
+        $metadataGuids.Clear()
+        Write-Log "Historical recipient movie state was unavailable; watched markers were omitted." "WARN"
+    }
+
+    return $state
+}
+
+function Test-RecipientHasWatchedMovie {
+    param(
+        [AllowNull()][object]$Item,
+        [AllowNull()][object]$RecipientWatchedMovies
+    )
+
+    if ($null -eq $Item -or $null -eq $RecipientWatchedMovies) { return $false }
+    if ((Get-OptionalStringProperty -InputObject $Item -Name "Type").ToLowerInvariant() -ne "movie") { return $false }
+
+    $ratingKey = (Get-OptionalStringProperty -InputObject $Item -Name "RatingKey").Trim()
+    if (-not [string]::IsNullOrWhiteSpace($ratingKey) -and
+        $RecipientWatchedMovies.RatingKeys.ContainsKey($ratingKey)) {
+        return $true
+    }
+
+    $metadataGuid = (Get-OptionalStringProperty -InputObject $Item -Name "MetadataGuid").Trim()
+    if (-not [string]::IsNullOrWhiteSpace($metadataGuid) -and
+        $RecipientWatchedMovies.MetadataGuids.ContainsKey($metadataGuid)) {
+        return $true
+    }
+
+    return $false
+}
 function Get-RecentItems {
     param(
         [int64]$StartEpoch,
@@ -6865,6 +6978,98 @@ function Get-ImageSource {
     return "posters/" + [string]$asset[0].FileName
 }
 
+function Get-RecipientWatchedAssetSource {
+    param(
+        [string]$FileName,
+        [string]$Cid,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode,
+        [string]$PreviewAssetBase
+    )
+
+    if ($ImageMode -eq "Email") { return "cid:" + $Cid }
+    return $PreviewAssetBase.TrimEnd('/') + "/" + $FileName
+}
+
+function Get-RecipientWatchedTitleIconHtml {
+    param(
+        [AllowNull()][object]$Item,
+        [AllowNull()][object]$RecipientWatchedMovies,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode,
+        [string]$PreviewAssetBase
+    )
+
+    if (-not (Test-RecipientHasWatchedMovie -Item $Item -RecipientWatchedMovies $RecipientWatchedMovies)) {
+        return ""
+    }
+
+    $source = Get-RecipientWatchedAssetSource -FileName "watched.png" -Cid "recipient_watched" -ImageMode $ImageMode -PreviewAssetBase $PreviewAssetBase
+    return '<img class="recipient-watched-title-icon" src="' + (HtmlEncode $source) + '" width="20" height="20" alt="Watched" title="Watched" style="display:inline-block;width:20px;height:20px;border:0;vertical-align:middle;margin-left:6px;">'
+}
+
+function Get-RecipientWatchedDesktopHeroPosterHtml {
+    param(
+        [AllowNull()][object]$Item,
+        [AllowNull()][object]$RecipientWatchedMovies,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode,
+        [string]$PreviewAssetBase,
+        [string]$PosterSource,
+        [string]$PosterAlt
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PosterSource)) { return "" }
+    $encodedPoster = HtmlEncode $PosterSource
+    $encodedAlt = HtmlEncode $PosterAlt
+    $posterHtml = '<img src="' + $encodedPoster + '" width="180" alt="' + $encodedAlt + '" style="display:block;width:180px;max-width:180px;height:auto;border:0;border-radius:8px;">'
+    if (-not (Test-RecipientHasWatchedMovie -Item $Item -RecipientWatchedMovies $RecipientWatchedMovies)) {
+        return $posterHtml
+    }
+
+    $source = Get-RecipientWatchedAssetSource -FileName "watched-desktop.png" -Cid "recipient_watched_desktop" -ImageMode $ImageMode -PreviewAssetBase $PreviewAssetBase
+    $encodedSource = HtmlEncode $source
+    # A zero-height poster layer followed by a transparent table avoids CSS
+    # positioning in webmail. The table grid fixes the badge at x=147, y=0
+    # while the poster starts at y=5: 7px inset, 5px above its top edge.
+    # Classic Outlook receives one fixed VML coordinate system, never a
+    # floating shape anchored relative to a character or line.
+    return @"
+<!--[if mso]>
+<v:group xmlns:v="urn:schemas-microsoft-com:vml" coordorigin="0,0" coordsize="180,275" style="width:135pt;height:206.25pt;">
+  <v:image src="$encodedPoster" alt="$encodedAlt" style="position:absolute;left:0;top:5;width:180;height:270;" />
+  <v:image src="$encodedSource" alt="Watched" title="Watched" style="position:absolute;left:147;top:0;width:26;height:26;" />
+</v:group>
+<![endif]-->
+<!--[if !mso]><!-- -->
+<div class="recipient-watched-desktop-poster" style="width:180px;max-width:180px;line-height:0;">
+  <div style="height:0;max-height:0;overflow:visible;line-height:0;">
+    <table role="presentation" width="180" cellspacing="0" cellpadding="0" border="0" style="width:180px;border-collapse:collapse;"><tr><td style="padding:5px 0 0;">$posterHtml</td></tr></table>
+  </div>
+  <table role="presentation" width="180" height="275" cellspacing="0" cellpadding="0" border="0" style="width:180px;height:275px;border-collapse:collapse;">
+    <tr>
+      <td width="147" height="26" style="width:147px;height:26px;padding:0;font-size:0;line-height:0;"></td>
+      <td width="26" height="26" valign="top" style="width:26px;height:26px;padding:0;"><img class="recipient-watched-desktop-badge" src="$encodedSource" width="26" height="26" alt="Watched" title="Watched" style="display:block;width:26px;height:26px;border:0;"></td>
+      <td width="7" height="26" style="width:7px;height:26px;padding:0;font-size:0;line-height:0;"></td>
+    </tr>
+    <tr><td colspan="3" height="249" style="height:249px;padding:0;font-size:0;line-height:0;"></td></tr>
+  </table>
+</div>
+<!--<![endif]-->
+"@
+}
+
+function Get-RecipientWatchedPlainTextSuffix {
+    param(
+        [AllowNull()][object]$Item,
+        [AllowNull()][object]$RecipientWatchedMovies
+    )
+
+    if (Test-RecipientHasWatchedMovie -Item $Item -RecipientWatchedMovies $RecipientWatchedMovies) {
+        return " - Watched"
+    }
+    return ""
+}
 function Get-StatsMovieRatingHtml {
     param(
         [object]$Item,
@@ -6948,7 +7153,9 @@ function Get-StatsMovieRowsHtml {
         [object[]]$Items,
         [object[]]$PosterAssets,
         [ValidateSet("Preview","Email")]
-        [string]$ImageMode
+        [string]$ImageMode,
+        [AllowNull()][object]$RecipientWatchedMovies = $null,
+        [string]$PreviewAssetBase = '../assets'
     )
 
     $rows = New-Object System.Text.StringBuilder
@@ -6957,6 +7164,10 @@ function Get-StatsMovieRowsHtml {
 
     foreach ($item in @($Items)) {
         $title = HtmlEncode (Truncate-Text ([string]$item.Title) 42)
+        $titleWithStatus = $title
+        if ($null -ne $RecipientWatchedMovies) {
+            $titleWithStatus += Get-RecipientWatchedTitleIconHtml -Item $item -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $PreviewAssetBase
+        }
         $posterSrc = Get-ImageSource `
             -RatingKey ([string]$item.PosterRatingKey) `
             -PosterAssets $PosterAssets `
@@ -6995,7 +7206,7 @@ function Get-StatsMovieRowsHtml {
     <tr>
       <td width="50" valign="middle" style="width:50px;padding:0 8px 0 0;">$posterHtml</td>
       <td valign="middle" style="padding:0;">
-        <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$title</div>
+        <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$titleWithStatus</div>
         $genreHtml
         $ratingLineHtml
       </td>
@@ -7315,6 +7526,8 @@ function Get-ReleaseCardsHtml {
         [object[]]$PosterAssets,
         [ValidateSet("Preview","Email")]
         [string]$ImageMode,
+        [AllowNull()][object]$RecipientWatchedMovies,
+        [string]$PreviewAssetBase,
         [ValidateSet("Movie","TV")]
         [string]$Kind
     )
@@ -7337,6 +7550,8 @@ function Get-ReleaseCardsHtml {
 
             $item = $Items[$index]
             $title = HtmlEncode $item.Title
+            $titleIconHtml = if ($Kind -eq "Movie") { Get-RecipientWatchedTitleIconHtml -Item $item -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $PreviewAssetBase } else { "" }
+            $titleWithStatus = $title + $titleIconHtml
             $posterSrc = Get-ImageSource -RatingKey ([string]$item.PosterRatingKey) -PosterAssets $PosterAssets -ImageMode $ImageMode
             $posterHtml = ""
 
@@ -7376,7 +7591,7 @@ function Get-ReleaseCardsHtml {
                 # beneath the title instead of distributing spare table height
                 # between the genre and rating rows.
                 $contentHtml = @"
-<div style="color:#ffffff;font-size:16px;font-weight:700;line-height:1.25;">$title</div>
+<div style="color:#ffffff;font-size:16px;font-weight:700;line-height:1.25;">$titleWithStatus</div>
 $genreHtml
 <div style="padding-top:${metaTop}px;color:#e5a00d;font-size:12px;font-weight:600;line-height:1.25;">$meta</div>
 <div style="padding-top:9px;color:#9b9b9b;font-size:12px;line-height:1.45;overflow:hidden;">$summaryText</div>
@@ -7563,6 +7778,7 @@ function Build-NewsletterHtml {
         [AllowNull()][object]$TopMovieGenre = $null,
         [bool]$SystemWarmingUp,
         [bool]$RecentAccess,
+        [AllowNull()][object]$RecipientWatchedMovies = $null,
         [bool]$WelcomeOnly = $false,
         [bool]$QuietReleaseMode = $false,
         [object]$BingeChampion = $null,
@@ -7579,12 +7795,13 @@ function Build-NewsletterHtml {
     $tv = @($releaseDisplay.TV)
     $movieReleaseSectionLabel = HtmlEncode ([string]$releaseDisplay.MovieSectionLabel)
     $tvReleaseSectionLabel = HtmlEncode ([string]$releaseDisplay.TvSectionLabel)
+    $previewAssetBase = "assets"
     $trendingHeroMode = [bool]$releaseDisplay.TrendingHeroMode
     $footerServerName = Get-ConfiguredServerName
     $deliveryDay = Get-ConfiguredDeliveryDay
 
-    $movieCards = Get-ReleaseCardsHtml -Items $movies -PosterAssets $PosterAssets -ImageMode $ImageMode -Kind "Movie"
-    $tvCards = Get-ReleaseCardsHtml -Items $tv -PosterAssets $PosterAssets -ImageMode $ImageMode -Kind "TV"
+    $movieCards = Get-ReleaseCardsHtml -Items $movies -PosterAssets $PosterAssets -ImageMode $ImageMode -RecipientWatchedMovies $RecipientWatchedMovies -PreviewAssetBase $previewAssetBase -Kind "Movie"
+    $tvCards = Get-ReleaseCardsHtml -Items $tv -PosterAssets $PosterAssets -ImageMode $ImageMode -RecipientWatchedMovies $RecipientWatchedMovies -PreviewAssetBase $previewAssetBase -Kind "TV"
 
     $friendly = HtmlEncode $User.FriendlyName
     $moviesWatched = HtmlEncode $Stats.MoviesWatched
@@ -7794,12 +8011,12 @@ $tvCards
     if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) {
         $hotItem = $HotRelease.Item
         $hotTitle = HtmlEncode $hotItem.Title
+        $hotTitleIconHtml = Get-RecipientWatchedTitleIconHtml -Item $hotItem -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $previewAssetBase
+        $hotTitleWithStatus = $hotTitle + $hotTitleIconHtml
         $hotPosterSrc = Get-ImageSource -RatingKey ([string]$hotItem.PosterRatingKey) -PosterAssets $PosterAssets -ImageMode $ImageMode
 
-        $hotPosterHtml = ""
-        if (-not [string]::IsNullOrWhiteSpace($hotPosterSrc)) {
-            $hotPosterHtml = '<img src="' + (HtmlEncode $hotPosterSrc) + '" width="180" alt="' + $hotTitle + ' poster" style="display:block;width:180px;max-width:180px;height:auto;border:0;border-radius:8px;">'
-        }
+        $hotPosterHtml = Get-RecipientWatchedDesktopHeroPosterHtml -Item $hotItem -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $previewAssetBase -PosterSource $hotPosterSrc -PosterAlt ($hotItem.Title + ' poster')
+        $hotPosterTopPadding = if (-not [string]::IsNullOrWhiteSpace($hotPosterSrc) -and (Test-RecipientHasWatchedMovie -Item $hotItem -RecipientWatchedMovies $RecipientWatchedMovies)) { 11 } else { 16 }
 
         $hotMeta = Get-DesignRatingLine -Item $hotItem -ImageMode $ImageMode
         if ([string]$hotItem.Type -eq "show" -and $hotItem.EpisodeCount -gt 0) {
@@ -7905,7 +8122,7 @@ $tvCards
 <td class="pad" style="padding:4px 20px 26px;">
   <table class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="background-color:#181818;border:1px solid $hotBorderColor;border-radius:10px;border-collapse:separate;">
     <tr>
-      <td width="205" valign="top" style="padding:16px 0 16px 16px;">
+      <td width="205" valign="top" style="padding:${hotPosterTopPadding}px 0 16px 16px;">
         $hotPosterHtml
       </td>
       <td valign="top" style="padding:16px 20px;">
@@ -7959,7 +8176,7 @@ $tvCards
     </tr>
     <tr>
       <td style="padding:16px 18px 20px;">
-        <div style="font-size:23px;line-height:1.2;color:#ffffff;font-weight:800;text-align:left;">$hotTitle</div>
+        <div style="font-size:23px;line-height:1.2;color:#ffffff;font-weight:800;text-align:left;">$hotTitleWithStatus</div>
         $hotGenreMobileHtml
         <div style="padding-top:${hotMetaMobileTop}px;font-size:12px;color:#e5a00d;font-weight:700;">$hotMeta</div>
         <div style="padding-top:14px;font-size:13px;line-height:1.5;color:#969696;">$hotSummaryText</div>
@@ -7985,6 +8202,7 @@ $tvCards
         $trendingPosterHtml = ""
 
         $trendingDisplay = HtmlEncode (Truncate-Text $TrendingTitle 70)
+        $trendingTitleWithStatus = $trendingDisplay + (Get-RecipientWatchedTitleIconHtml -Item $script:GlobalTrendingStat -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $previewAssetBase)
         $trendingPlays = Safe-Int $script:GlobalTrendingStat.Plays
         $trendingRatingKey = [string]$script:GlobalTrendingStat.RatingKey
         $trendingPosterSrc = Get-ImageSource `
@@ -8020,7 +8238,7 @@ $tvCards
       </td>
       <td valign="middle" style="padding:16px 18px 16px 10px;">
         <div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.3px;">TRENDING THIS WEEK</div>
-        <div style="padding-top:5px;font-size:18px;line-height:1.25;color:#ffffff;font-weight:800;">$trendingDisplay</div>
+        <div style="padding-top:5px;font-size:18px;line-height:1.25;color:#ffffff;font-weight:800;">$trendingTitleWithStatus</div>
         <div style="padding-top:4px;font-size:12px;line-height:1.4;color:#8e8e8e;">$(HtmlEncode $trendingDescription)</div>
       </td>
     </tr>
@@ -8122,7 +8340,9 @@ $tvCards
         Get-StatsMovieRowsHtml `
             -Items $movieItems `
             -PosterAssets $PosterAssets `
-            -ImageMode $ImageMode
+            -ImageMode $ImageMode `
+            -RecipientWatchedMovies $RecipientWatchedMovies `
+            -PreviewAssetBase $previewAssetBase
     } else { "" }
 
     $tvShowRows = if ($tvShowDetailMode) {
@@ -8458,6 +8678,7 @@ function Build-PlainText {
         [bool]$SystemWarmingUp,
         [bool]$RecentAccess,
         [bool]$QuietReleaseMode = $false,
+        [AllowNull()][object]$RecipientWatchedMovies = $null,
         [object]$BingeChampion = $null,
         [bool]$WelcomeOnly = $false,
         [string]$StartLabel,
@@ -8496,7 +8717,8 @@ function Build-PlainText {
             [bool]$HotRelease.IsTrending
         )
         $heroLabel = if ($plainTrendingHero) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }
-        $heroLine = "`r`n${heroLabel}: $($HotRelease.Item.Title)"
+        $heroWatchedSuffix = Get-RecipientWatchedPlainTextSuffix -Item $HotRelease.Item -RecipientWatchedMovies $RecipientWatchedMovies
+        $heroLine = "`r`n${heroLabel}: $($HotRelease.Item.Title)$heroWatchedSuffix"
     }
 
     $footerFeature = ""
@@ -8506,10 +8728,11 @@ function Build-PlainText {
         $null -ne $script:GlobalTrendingStat) {
         $trendPlays = Safe-Int $script:GlobalTrendingStat.Plays
         $trendPlayWord = if ($trendPlays -eq 1) { "play" } else { "plays" }
+        $trendWatchedSuffix = Get-RecipientWatchedPlainTextSuffix -Item $script:GlobalTrendingStat -RecipientWatchedMovies $RecipientWatchedMovies
         $footerFeature += if ($trendPlays -gt 0) {
-            "`r`nTRENDING THIS WEEK: $TrendingTitle — $trendPlays $trendPlayWord across the server"
+            "`r`nTRENDING THIS WEEK: $TrendingTitle$trendWatchedSuffix — $trendPlays $trendPlayWord across the server"
         } else {
-            "`r`nTRENDING THIS WEEK: $TrendingTitle"
+            "`r`nTRENDING THIS WEEK: $TrendingTitle$trendWatchedSuffix"
         }
     }
 
@@ -8560,7 +8783,8 @@ function Build-PlainText {
     if ($plainMovieItems.Count -gt 0) {
         $movieWord = if ($plainMovieTitleCount -eq 1) { "movie" } else { "movies" }
         $movieLines = @($plainMovieItems | ForEach-Object {
-            "- {0} — {1}" -f ([string]$_.Title), (Format-WatchTime ([int64]$_.Seconds))
+            $watchedSuffix = Get-RecipientWatchedPlainTextSuffix -Item $_ -RecipientWatchedMovies $RecipientWatchedMovies
+            "- {0}{1} — {2}" -f ([string]$_.Title), $watchedSuffix, (Format-WatchTime ([int64]$_.Seconds))
         })
         $movieStatsText = "{0} {1} watched`r`n{2}" -f $plainMovieTitleCount, $movieWord, ($movieLines -join "`r`n")
     }
@@ -8886,6 +9110,8 @@ function Send-NewsletterMail {
             @{ Path = (Join-Path $AssetsDir "pending.gif"); Cid = "icon_pending"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "quiet.gif"); Cid = "icon_quiet"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "welcome.gif"); Cid = "icon_welcome"; MediaType = "image/gif" },
+            @{ Path = (Join-Path $AssetsDir "watched.png"); Cid = "recipient_watched"; MediaType = "image/png" },
+            @{ Path = (Join-Path $AssetsDir "watched-desktop.png"); Cid = "recipient_watched_desktop"; MediaType = "image/png" },
             @{ Path = (Join-Path $AssetsDir "action.gif"); Cid = "icon_action"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "watched.gif"); Cid = "icon_watched"; MediaType = "image/gif" },
             @{ Path = (Join-Path $AssetsDir "lockinfo.gif"); Cid = "icon_lockinfo"; MediaType = "image/gif" },
@@ -9166,6 +9392,7 @@ if ($Mode -eq "SendWelcome") {
         throw "This user does not have an email address available."
     }
     $recipientPlatform = Get-NewsletterLastPlatform -ExpectedUserId $user.UserId
+    $recipientWatchedMovies = Get-RecipientWatchedMovies -ExpectedUserId $user.UserId
 
     $accessState = Sync-AccessRoster
 
@@ -9273,6 +9500,7 @@ if ($Mode -eq "SendWelcome") {
         -Stats $welcomeStats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false `
         -RecentAccess $true `
@@ -9289,6 +9517,7 @@ if ($Mode -eq "SendWelcome") {
         -User $user `
         -Stats $welcomeStats `
         -ReleaseData $activeReleaseData `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -HotRelease $activeHero `
         -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false `
@@ -9445,6 +9674,7 @@ function Build-ForUser {
     $history = Get-History -AfterDate $afterDate -BeforeDate $beforeDate -ForUserId $user.UserId
     $stats = Get-UserStats -History $history
     $recipientPlatform = Get-NewsletterPlatform -History $history -ExpectedUserId $user.UserId
+    $recipientWatchedMovies = Get-RecipientWatchedMovies -ExpectedUserId $user.UserId
     if ($null -eq $recipientPlatform) {
         $recipientPlatform = Get-NewsletterLastPlatform -ExpectedUserId $user.UserId
     }
@@ -9470,6 +9700,7 @@ function Build-ForUser {
     $script:TautWeeklyResultErrorCategory = "render-failed"
     $html = Build-NewsletterHtml `
         -User $user `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -Stats $stats `
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
@@ -9486,6 +9717,7 @@ function Build-ForUser {
         -EndLabel $endLabel
 
     $plain = Build-PlainText `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -User $user `
         -Stats $stats `
         -ReleaseData $activeReleaseData `
@@ -9549,6 +9781,7 @@ function Build-AllEmailVariants {
     $user = Get-NewsletterUser -Id $resolvedUserId
 
     Write-Log "Loading real history for six-state email regression: $($user.FriendlyName)..."
+    $recipientWatchedMovies = Get-RecipientWatchedMovies -ExpectedUserId $user.UserId
     $history = Get-History -AfterDate $afterDate -BeforeDate $beforeDate -ForUserId $user.UserId
     $realStats = Get-UserStats -History $history
     $recipientPlatform = Get-NewsletterPlatform -History $history -ExpectedUserId $user.UserId
@@ -9589,6 +9822,7 @@ function Build-AllEmailVariants {
         -ReleaseData $activeReleaseData `
         -HotRelease $activeHero `
         -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -SystemWarmingUp $false `
         -RecentAccess $true `
         -WelcomeOnly $true `
@@ -9619,6 +9853,7 @@ function Build-AllEmailVariants {
         -PosterAssets $activePosterAssets `
         -ImageMode $ImageMode `
         -StartLabel $startLabel `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -EndLabel $endLabel
 
     # 2) New user with activity: personalized stats are visible.
@@ -9637,6 +9872,7 @@ function Build-AllEmailVariants {
         -PosterAssets $populatedPosterAssets `
         -ImageMode $ImageMode `
         -StartLabel $startLabel `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -EndLabel $endLabel
 
     # 3) Established active user: always force a populated, non-warm-up state.
@@ -9654,6 +9890,7 @@ function Build-AllEmailVariants {
         -BingeChampion $bingeChampion `
         -RecipientPlatform $recipientPlatform `
         -PosterAssets $populatedPosterAssets `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -ImageMode $ImageMode `
         -StartLabel $startLabel `
         -EndLabel $endLabel
@@ -9671,6 +9908,7 @@ function Build-AllEmailVariants {
         -QuietReleaseMode $isQuietReleaseWeek `
         -BingeChampion $bingeChampion `
         -RecipientPlatform $recipientPlatform `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -PosterAssets $activePosterAssets `
         -ImageMode $ImageMode `
         -StartLabel $startLabel `
@@ -9684,6 +9922,7 @@ function Build-AllEmailVariants {
         -HotRelease $activeHero `
         -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $true `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -RecentAccess $false `
         -WelcomeOnly $false `
         -QuietReleaseMode $isQuietReleaseWeek `
@@ -9697,12 +9936,14 @@ function Build-AllEmailVariants {
     $oneOffPlain = Build-PlainText `
         -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
         -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -SystemWarmingUp $false -RecentAccess $true `
         -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $null `
         -WelcomeOnly $true `
         -StartLabel $startLabel -EndLabel $endLabel
 
     $newNoHistoryPlain = Build-PlainText `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
         -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false -RecentAccess $true `
@@ -9712,6 +9953,7 @@ function Build-AllEmailVariants {
     $newWithHistoryPlain = Build-PlainText `
         -User $user -Stats $populatedVariant.Stats -ReleaseData $activeReleaseData `
         -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -SystemWarmingUp $false -RecentAccess $true `
         -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
         -StartLabel $startLabel -EndLabel $endLabel
@@ -9720,6 +9962,7 @@ function Build-AllEmailVariants {
         -User $user -Stats $populatedVariant.Stats -ReleaseData $activeReleaseData `
         -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false -RecentAccess $false `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
         -StartLabel $startLabel -EndLabel $endLabel
 
@@ -9727,6 +9970,7 @@ function Build-AllEmailVariants {
         -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
         -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $false -RecentAccess $false `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
         -StartLabel $startLabel -EndLabel $endLabel
 
@@ -9734,6 +9978,7 @@ function Build-AllEmailVariants {
         -User $user -Stats $zeroStats -ReleaseData $activeReleaseData `
         -HotRelease $activeHero -TrendingTitle $trendingTitle -TopMovieGenre $topMovieGenre `
         -SystemWarmingUp $true -RecentAccess $false `
+        -RecipientWatchedMovies $recipientWatchedMovies `
         -QuietReleaseMode $isQuietReleaseWeek -BingeChampion $bingeChampion `
         -StartLabel $startLabel -EndLabel $endLabel
 
