@@ -43,7 +43,8 @@ $directRatingScenarios = @($directImdbRatingScenarios) + @($directEpisodeRtScena
 $deletedHistoryScenarios = @($providerRecoveryScenarios) + @($cacheScenario)
 $platformScenario = 'platform-tie'
 $lastPlatformScenario = 'last-platform'
-$sendTestScenarios = @($platformScenario, $lastPlatformScenario, 'optional-hero-metadata', 'rating-export-fallback') + @($directRatingScenarios) + @($deletedHistoryScenarios)
+$quietNoHistoryScenario = 'quiet-no-history'
+$sendTestScenarios = @($platformScenario, $lastPlatformScenario, $quietNoHistoryScenario, 'optional-hero-metadata', 'rating-export-fallback') + @($directRatingScenarios) + @($deletedHistoryScenarios)
 
 $executed = 0
 foreach ($engine in $engines) {
@@ -52,7 +53,7 @@ foreach ($engine in $engines) {
         continue
     }
 
-    foreach ($scenario in @('active', 'quiet', 'tv-only', 'personal-many', $platformScenario, $lastPlatformScenario, 'optional-hero-metadata', 'rating-export-fallback') + $directRatingScenarios + $deletedHistoryScenarios) {
+    foreach ($scenario in @('active', 'quiet', $quietNoHistoryScenario, 'tv-only', 'personal-many', $platformScenario, $lastPlatformScenario, 'optional-hero-metadata', 'rating-export-fallback') + $directRatingScenarios + $deletedHistoryScenarios) {
         $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-integration-' + [Guid]::NewGuid().ToString('N'))
         $appRoot = Join-Path $tempRoot 'app'
         $dataRoot = Join-Path $tempRoot 'data'
@@ -72,6 +73,7 @@ foreach ($engine in $engines) {
         $smtpCallLog = Join-Path $tempRoot 'smtp-calls.jsonl'
         $smtpDataFile = Join-Path $tempRoot 'smtp-message.eml'
         $smtpReadyFile = Join-Path $tempRoot 'smtp-ready.txt'
+        $smtpDataDirectory = Join-Path $tempRoot 'smtp-messages'
         $smtpStdout = Join-Path $tempRoot 'smtp.stdout.txt'
         $smtpStderr = Join-Path $tempRoot 'smtp.stderr.txt'
         $sendStdout = Join-Path $tempRoot 'send.stdout.txt'
@@ -79,6 +81,9 @@ foreach ($engine in $engines) {
         $sendAllStdout = Join-Path $tempRoot 'send-all.stdout.txt'
         $sendAllStderr = Join-Path $tempRoot 'send-all.stderr.txt'
         $managerResultPath = Join-Path $tempRoot 'manager-operation-result.json'
+        $sendTestAllStdout = Join-Path $tempRoot 'send-test-all.stdout.txt'
+        $sendTestAllStderr = Join-Path $tempRoot 'send-test-all.stderr.txt'
+        $sendTestAllResultPath = Join-Path $tempRoot 'send-test-all-result.json'
         $failureResultPath = Join-Path $tempRoot 'manager-operation-failure.json'
         $failureStdout = Join-Path $tempRoot 'failure.stdout.txt'
         $failureStderr = Join-Path $tempRoot 'failure.stderr.txt'
@@ -142,7 +147,8 @@ foreach ($engine in $engines) {
                 $smtpServer = Start-Process -FilePath $PythonPath -ArgumentList @(
                     '-u', $fakeSmtp, '--port', [string]$smtpPort,
                     '--call-log', $smtpCallLog, '--ready-file', $smtpReadyFile,
-                    '--data-file', $smtpDataFile
+                    '--data-file', $smtpDataFile,
+                    '--data-directory', $smtpDataDirectory
                 ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $smtpStdout -RedirectStandardError $smtpStderr
                 for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $smtpReadyFile); $attempt++) {
                     if ($smtpServer.HasExited) {
@@ -174,6 +180,7 @@ foreach ($engine in $engines) {
                 CustomTextCardBorderColor = '#72aef7'
                 CustomTextCardBorderOpacity = 34
                 CustomTextCardTitle = 'Custom <Title>'
+                TestSendDelaySeconds = 0
                 CustomTextCardTitleGif = 'celebrate'
                 CustomTextCardSubheading = 'Assessment & notes'
                 CustomTextCardBody = "Synthetic <notice> & safe`nSecond line"
@@ -289,6 +296,23 @@ foreach ($engine in $engines) {
             $indexPath = Join-Path $outputRoot 'preview-all-00-INDEX.html'
             $normalPath = Join-Path $outputRoot 'preview-all-04-normal-newsletter.html'
             Assert-True (Test-Path $indexPath) "$($engine.Name)/$scenario did not generate the preview index."
+            $expectedPreviewNames = @(
+                'preview-all-00-INDEX.html',
+                'preview-all-01-manual-welcome.html',
+                'preview-all-02-new-user-no-history.html',
+                'preview-all-03-new-user-with-history.html',
+                'preview-all-04-normal-newsletter.html',
+                'preview-all-05-established-quiet.html',
+                'preview-all-06-established-warmup.html'
+            )
+            $actualPreviewNames = @(
+                Get-ChildItem $outputRoot -Filter 'preview-all-*.html' |
+                    Sort-Object Name |
+                    Select-Object -ExpandProperty Name
+            )
+            Assert-True (($actualPreviewNames -join '|') -eq ($expectedPreviewNames -join '|')) "$($engine.Name)/$scenario generated the all-state previews in the wrong order or under unexpected names."
+            $scenarioHashes = @(Get-ChildItem $outputRoot -Filter 'preview-all-*.html' | Where-Object { $_.Name -ne 'preview-all-00-INDEX.html' } | ForEach-Object { (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash } | Select-Object -Unique)
+            Assert-True ($scenarioHashes.Count -eq 6) "$($engine.Name)/$scenario collapsed distinct lifecycle scenarios into duplicate HTML."
             Assert-True ((Get-ChildItem $outputRoot -Filter 'preview-all-*.html').Count -eq 7) "$($engine.Name)/$scenario did not generate all six states plus the index."
             if ($engine.Name -eq 'nas-docker-linux-freebsd' -and $scenario -in @('active', $platformScenario)) {
                 Assert-True (Test-Path -LiteralPath $managerResultPath) 'NAS Manager operation did not produce its structured result.'
@@ -306,6 +330,15 @@ foreach ($engine in $engines) {
                 Assert-True (-not $managerResultRaw.Contains($configPath)) 'NAS Manager result exposed its configuration path.'
             }
             $indexHtml = Get-Content $indexPath -Raw -Encoding UTF8
+            $previousScenarioLinkIndex = -1
+            foreach ($scenarioPreviewName in @($expectedPreviewNames[1..6])) {
+                $scenarioLinkIndex = $indexHtml.IndexOf(('href="' + $scenarioPreviewName + '"'), [StringComparison]::Ordinal)
+                Assert-True ($scenarioLinkIndex -gt $previousScenarioLinkIndex) "$($engine.Name)/$scenario preview index listed lifecycle scenarios out of order."
+                $previousScenarioLinkIndex = $scenarioLinkIndex
+            }
+            $newNoHistoryHtml = Get-Content (Join-Path $outputRoot 'preview-all-02-new-user-no-history.html') -Raw -Encoding UTF8
+            $newWithHistoryHtml = Get-Content (Join-Path $outputRoot 'preview-all-03-new-user-with-history.html') -Raw -Encoding UTF8
+            $warmupHtml = Get-Content (Join-Path $outputRoot 'preview-all-06-established-warmup.html') -Raw -Encoding UTF8
             $normalHtml = Get-Content $normalPath -Raw -Encoding UTF8
             $quietHtml = Get-Content (Join-Path $outputRoot 'preview-all-05-established-quiet.html') -Raw -Encoding UTF8
             $previewThemeMarkers = @(
@@ -388,23 +421,43 @@ foreach ($engine in $engines) {
             Assert-True ($normalHtml.Contains('.stats-title-cell.stats-tv-title-cell { display:table-cell !important; width:50% !important;')) "$($engine.Name)/$scenario lost the two-column mobile TV-title rule."
             Assert-True (-not $quietHtml.Contains('class="stats-summary-cell"') -and -not $quietHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario rendered personal summary cards in the zero-activity state."
             Assert-True (-not $normalHtml.Contains('Ratings unavailable') -and -not $normalHtml.Contains('IMDb unavailable')) "$($engine.Name)/$scenario rendered an unavailable-rating placeholder."
-            $expectedMode = if ($scenario -eq 'quiet' -or $scenario -in $deletedHistoryScenarios) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' }
+            $expectedMode = if ($scenario -in @('quiet', $quietNoHistoryScenario) -or $scenario -in $deletedHistoryScenarios) { 'QUIET / LATEST RELEASES' } else { 'NORMAL / NEW RELEASES' }
             Assert-True ($indexHtml.Contains($expectedMode)) "$($engine.Name)/$scenario reported the wrong release mode."
             Assert-True ($normalHtml.Contains('Selected Movie')) "$($engine.Name)/$scenario lost the selected movie."
             Assert-True ($normalHtml.Contains('Selected Show')) "$($engine.Name)/$scenario lost the selected TV show."
             Assert-True (-not $normalHtml.Contains('Private Movie')) "$($engine.Name)/$scenario leaked a private-library title."
             Assert-True (-not $normalHtml.Contains('Simulated Champion')) "$($engine.Name)/$scenario leaked the Binge Champion identity."
-            Assert-True ($normalHtml.Contains('3h 0m watched')) "$($engine.Name)/$scenario lost the shared champion duration line."
+            $expectedChampionDuration = if ($scenario -eq $quietNoHistoryScenario) { '5h 0m watched' } else { '3h 0m watched' }
+            Assert-True ($normalHtml.Contains($expectedChampionDuration)) "$($engine.Name)/$scenario lost the shared champion duration line."
             Assert-True ($normalHtml.Contains('1 TV show')) "$($engine.Name)/$scenario lost the unique TV-show breakdown."
             Assert-True (-not $normalHtml.Contains('0 movies')) "$($engine.Name)/$scenario rendered an empty Binge Champion movie category."
             Assert-True (-not $normalHtml.Contains('qualifying plays')) "$($engine.Name)/$scenario retained qualifying-play copy in Total Watched."
-            if ($scenario -notin $deletedHistoryScenarios -and $scenario -ne 'personal-many' -and $scenario -ne $platformScenario) {
+            if ($scenario -notin $deletedHistoryScenarios -and $scenario -ne 'personal-many' -and $scenario -ne $platformScenario -and $scenario -ne $quietNoHistoryScenario) {
                 Assert-True (-not $normalHtml.Contains('TV SHOWS WATCHED')) "$($engine.Name)/$scenario rendered an empty TV stats card."
             }
 
+            if ($scenario -eq $quietNoHistoryScenario) {
+                Assert-True ($indexHtml.Contains('previews 03 and 04 use sanitized scenario statistics only')) "$($engine.Name)/$scenario did not disclose the populated all-state fixture."
+                Assert-True ($newNoHistoryHtml.Contains('WELCOME ABOARD') -and -not $newNoHistoryHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario lost the intentional new-user/no-history state."
+                Assert-True ($newWithHistoryHtml.Contains('WELCOME ABOARD') -and $newWithHistoryHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario did not preserve the populated new-user state."
+                Assert-True ($normalHtml.Contains('YOU CLOCKED') -and $normalHtml.Contains('Sample Movie 2')) "$($engine.Name)/$scenario did not preserve a populated established lifecycle preview."
+                Assert-True ($quietHtml.Contains('QUIET IN THIS SECTOR') -and -not $quietHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario lost the intentional established quiet state."
+                Assert-True ($warmupHtml.Contains('STATS ARE WARMING UP') -and -not $warmupHtml.Contains('YOU CLOCKED')) "$($engine.Name)/$scenario lost the intentional warm-up state."
+                foreach ($contentRichHtml in @($newWithHistoryHtml, $normalHtml)) {
+                    Assert-True ($contentRichHtml.Contains('Selected Movie') -and $contentRichHtml.Contains('Selected Show')) "$($engine.Name)/$scenario lost real latest-release titles from a populated lifecycle state."
+                    Assert-True ($contentRichHtml.Contains('A release from the selected movie library.') -and $contentRichHtml.Contains('Drama, Mystery')) "$($engine.Name)/$scenario lost latest movie summary or genres."
+                    Assert-True ($contentRichHtml.Contains('Rotten Tomatoes critic') -and $contentRichHtml.Contains('Rotten Tomatoes audience')) "$($engine.Name)/$scenario lost latest movie ratings."
+                    Assert-True ($contentRichHtml.Contains('posters/poster_selected-movie.jpg') -and $contentRichHtml.Contains('posters/poster_selected-show.jpg')) "$($engine.Name)/$scenario lost latest release posters."
+                }
+                Assert-True ($quietHtml.Contains('TRENDING THIS WEEK') -and $quietHtml.Contains('LATEST RELEASES')) "$($engine.Name)/$scenario did not render Trending plus the latest-release fallback."
+                Assert-True ($quietHtml.Contains('Selected Movie') -and ([regex]::Matches($quietHtml, 'Selected Show')).Count -ge 2) "$($engine.Name)/$scenario removed a capped latest title after also selecting it as Trending."
+                Assert-True (-not $quietHtml.Contains('Toy Story 5')) "$($engine.Name)/$scenario substituted an unrelated fallback shell."
+                Assert-True ($previewLog.Contains('Latest Releases: 1 movies and 1 TV titles.')) "$($engine.Name)/$scenario did not load the bounded quiet-week fallback."
+            }
             if ($scenario -eq 'personal-many') {
                 Assert-True ($normalHtml.Contains('Personal Movie 12') -and $normalHtml.Contains('Personal Show 11')) "$($engine.Name)/$scenario capped personal movie or TV rows before the final synthetic title."
                 Assert-True (([regex]::Matches($normalHtml, 'class="stats-title-cell(?: stats-tv-title-cell stats-tv-title-(?:left|right))?"')).Count -eq 23) "$($engine.Name)/$scenario did not render all 12 movie and 11 TV title cells."
+
                 Assert-True (([regex]::Matches($normalHtml, 'class="stats-title-cell stats-tv-title-cell stats-tv-title-(?:left|right)"')).Count -eq 11) "$($engine.Name)/$scenario did not identify every TV cell for two-column mobile rendering."
                 Assert-True (([regex]::Matches($normalHtml, 'class="stats-title-spacer stats-tv-title-spacer"')).Count -eq 1) "$($engine.Name)/$scenario did not preserve the odd TV grid row without a visible empty mobile item."
                 $movieStatsStart = $normalHtml.IndexOf('MOVIES WATCHED', [StringComparison]::Ordinal)
@@ -664,7 +717,7 @@ foreach ($engine in $engines) {
 
             if ($scenario -in $sendTestScenarios) {
                 $previewLog = Get-Content $stdout -Raw
-                if ($scenario -notin $directRatingScenarios -and $scenario -notin @($platformScenario, $lastPlatformScenario)) {
+                if ($scenario -notin $directRatingScenarios -and $scenario -notin @($platformScenario, $lastPlatformScenario, $quietNoHistoryScenario)) {
                     Assert-True ($previewLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario did not exercise the recoverable direct Plex 404 fallback."
                 }
                 Assert-True ($normalHtml.Contains('Selected Show')) "$($engine.Name)/$scenario lost the global-history title fallback for sparse hero metadata."
@@ -723,7 +776,7 @@ foreach ($engine in $engines) {
                 }
                 $sendLog = Get-Content $sendStdout -Raw
                 Assert-True ($sendLog.Contains('Test email sent successfully.')) "$($engine.Name)/$scenario SendTest did not complete delivery."
-                if ($scenario -notin $directRatingScenarios -and $scenario -notin @($platformScenario, $lastPlatformScenario)) {
+                if ($scenario -notin $directRatingScenarios -and $scenario -notin @($platformScenario, $lastPlatformScenario, $quietNoHistoryScenario)) {
                     Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
                 }
 
@@ -774,6 +827,15 @@ foreach ($engine in $engines) {
                     )
                     Assert-True (-not $sendLog.Contains('tvOS') -and -not $sendLog.Contains('Roku') -and -not $sendLog.Contains('Unrecognized Platform')) "$($engine.Name)/$scenario exposed Last Platform details in SendTest logs."
                 }
+                if ($scenario -eq $quietNoHistoryScenario) {
+                    $emailThemeArgs += @(
+                        '--require-html', 'TRENDING THIS WEEK',
+                        '--require-html', 'LATEST RELEASES',
+                        '--require-html', 'Selected Movie',
+                        '--require-html', 'Selected Show',
+                        '--forbid-html', 'Toy Story 5'
+                    )
+                }
                 if ($scenario -eq 'rating-export-fallback') {
                     $emailThemeArgs += @(
                         # Windows PowerShell 5.1 strips embedded quote
@@ -819,6 +881,65 @@ foreach ($engine in $engines) {
                 }
                 & $PythonPath $emailThemeAssertion @emailThemeArgs
                 Assert-True ($LASTEXITCODE -eq 0) "$($engine.Name)/$scenario delivered HTML lost the dark email contract."
+                if ($scenario -eq $quietNoHistoryScenario) {
+                    $capturesBeforeSendTestAll = @(Get-ChildItem -LiteralPath $smtpDataDirectory -Filter 'message-*.eml').Count
+                    Assert-True ($capturesBeforeSendTestAll -eq 1) "$($engine.Name)/$scenario expected exactly one captured SendTest message before SendTestAll."
+                    $oldDataRoot = $env:TAUTWEEKLY_DATA_DIR
+                    $oldConfig = $env:TAUTWEEKLY_CONFIG
+                    try {
+                        if ($engine.Container) {
+                            $env:TAUTWEEKLY_DATA_DIR = $dataRoot
+                            $env:TAUTWEEKLY_CONFIG = $configPath
+                        }
+                        $sendTestAllProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
+                            '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
+                            '-RendererPath', (Join-Path $appRoot $engine.Renderer), '-ConfigPath', $configPath,
+                            '-UserId', '1', '-Mode', 'SendTestAll', '-ResultPath', $sendTestAllResultPath
+                        ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $sendTestAllStdout -RedirectStandardError $sendTestAllStderr
+                    }
+                    finally {
+                        $env:TAUTWEEKLY_DATA_DIR = $oldDataRoot
+                        $env:TAUTWEEKLY_CONFIG = $oldConfig
+                    }
+                    if ($sendTestAllProcess.ExitCode -ne 0) {
+                        throw "$($engine.Name)/$scenario SendTestAll failed ($($sendTestAllProcess.ExitCode))."
+                    }
+                    $sendTestAllLog = Get-Content -LiteralPath $sendTestAllStdout -Raw -Encoding UTF8
+                    Assert-True ($sendTestAllLog.Contains('All six email-state tests were sent to TestEmail only.')) "$($engine.Name)/$scenario SendTestAll did not complete its test-only delivery."
+                    Assert-True (Test-Path -LiteralPath $sendTestAllResultPath) "$($engine.Name)/$scenario SendTestAll omitted its structured result."
+                    $sendTestAllResultRaw = Get-Content -LiteralPath $sendTestAllResultPath -Raw -Encoding UTF8
+                    $sendTestAllResult = $sendTestAllResultRaw | ConvertFrom-Json
+                    Assert-True ($sendTestAllResult.mode -eq 'SendTestAll' -and $sendTestAllResult.outcome -eq 'succeeded') "$($engine.Name)/$scenario SendTestAll reported the wrong outcome."
+                    Assert-True ($sendTestAllResult.deliveryScope -eq 'test' -and $sendTestAllResult.smtpAcceptedCount -eq 6) "$($engine.Name)/$scenario SendTestAll did not report six test-only SMTP acceptances."
+                    Assert-True (-not $sendTestAllResultRaw.Contains('viewer@example.com') -and -not $sendTestAllResultRaw.Contains('virtual-api-key')) "$($engine.Name)/$scenario SendTestAll structured result exposed private fixture data."
+
+                    $allCaptures = @(Get-ChildItem -LiteralPath $smtpDataDirectory -Filter 'message-*.eml' | Sort-Object Name)
+                    Assert-True ($allCaptures.Count -eq 7) "$($engine.Name)/$scenario SendTestAll did not add exactly six captured messages after SendTest."
+                    $stateCaptures = @($allCaptures | Select-Object -Last 6)
+                    $stateExpectations = @(
+                        [PSCustomObject]@{ Required = @('WELCOME ABOARD'); Forbidden = @('YOU CLOCKED') },
+                        [PSCustomObject]@{ Required = @('WELCOME ABOARD', 'LATEST RELEASES'); Forbidden = @('YOU CLOCKED') },
+                        [PSCustomObject]@{ Required = @('WELCOME ABOARD', 'YOU CLOCKED', 'LATEST RELEASES'); Forbidden = @() },
+                        [PSCustomObject]@{ Required = @('YOU CLOCKED', 'LATEST RELEASES'); Forbidden = @('WELCOME ABOARD') },
+                        [PSCustomObject]@{ Required = @('QUIET IN THIS SECTOR', 'LATEST RELEASES'); Forbidden = @('YOU CLOCKED') },
+                        [PSCustomObject]@{ Required = @('STATS ARE WARMING UP', 'LATEST RELEASES'); Forbidden = @('YOU CLOCKED') }
+                    )
+                    for ($stateIndex = 0; $stateIndex -lt 6; $stateIndex++) {
+                        $stateArgs = @($stateCaptures[$stateIndex].FullName)
+                        foreach ($requiredMarker in $stateExpectations[$stateIndex].Required) {
+                            $stateArgs += @('--require-html', $requiredMarker)
+                        }
+                        foreach ($forbiddenMarker in $stateExpectations[$stateIndex].Forbidden) {
+                            $stateArgs += @('--forbid-html', $forbiddenMarker)
+                        }
+                        if ($stateIndex -gt 0) {
+                            $stateArgs += @('--require-html', 'Selected Movie', '--require-html', 'Selected Show', '--forbid-html', 'Toy Story 5')
+                        }
+                        & $PythonPath $emailThemeAssertion @stateArgs
+                        Assert-True ($LASTEXITCODE -eq 0) "$($engine.Name)/$scenario SendTestAll message $($stateIndex + 1) did not match its PreviewAll lifecycle counterpart."
+                    }
+                }
+
 
                 if ($scenario -eq $cacheScenario) {
                     Remove-Item -LiteralPath (Join-Path $outputRoot 'posters') -Recurse -Force -ErrorAction SilentlyContinue

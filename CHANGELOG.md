@@ -6,6 +6,16 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored distinct populated lifecycle states in **Preview All** and **Send Test
+  All** when the selected recipient has no report-window activity, using
+  sanitized scenario-only statistics while ordinary Preview and Send Test keep
+  using the recipient's real state.
+- Kept the **Trending** hero in the quiet-week **Latest Releases** shelves, capped
+  at four movies and four TV titles, so newsletters still contain recent library
+  choices when no titles were added during the report window.
+
 ## [0.20.7] - 2026-08-24
 
 ### Fixed
