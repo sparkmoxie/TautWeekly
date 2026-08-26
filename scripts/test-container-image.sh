@@ -222,7 +222,9 @@ if [[ "$manager_runtime_profile" == nas || "$manager_runtime_profile" == mac ]];
   grep -Fq "\"packageKind\":\"$package_kind\"" <<<"$capabilities_json" || fail "$runtime_profile Manager did not report package kind $package_kind."
   grep -Fq "\"runtimeProfile\":\"$active_runtime_profile\"" <<<"$capabilities_json" || fail "$runtime_profile Manager did not report active profile $active_runtime_profile."
   if [[ "$active_runtime_profile" == desktop ]]; then
-    grep -Fq '"pathStyle":"container-volume"' <<<"$capabilities_json" || fail 'Desktop Manager did not report persistent-volume path semantics.'
+    expected_path_style="container-volume"
+    [[ "$package_kind" == mac-docker ]] && expected_path_style="mac-bind-mount"
+    grep -Fq "\"pathStyle\":\"$expected_path_style\"" <<<"$capabilities_json" || fail "Desktop Manager did not report $expected_path_style path semantics."
     grep -Fq '"networkScope":"host-loopback"' <<<"$capabilities_json" || fail 'Desktop Manager did not report loopback-first network semantics.'
   fi
   setup_json="$(docker exec "$container_name" curl -fsS http://127.0.0.1:8080/api/v1/setup)"
