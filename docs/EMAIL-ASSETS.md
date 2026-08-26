@@ -3,7 +3,7 @@
 ## Update and customization behavior
 
 Starting with v0.21.4, Docker/Podman startup (NAS, Unraid, macOS, and FreeBSD)
-and native Linux service startup fingerprint the complete bundled email asset
+and native Linux installation/service startup fingerprint the complete bundled email asset
 set. A missing marker, including migration from an older installation, or a
 changed bundle replaces **every shipped filename** in persistent `assets/`,
 even if the existing file was customized. This includes the shipped PNGs as
@@ -28,6 +28,9 @@ Linked source/destination paths are refused rather than followed. The one
 supported legacy `output/assets` directory symlink is unlinked and replaced
 with a real directory without touching its target. Custom-only links and
 subdirectories are preserved but not mirrored.
+
+Native Linux also applies the transition during installation/upgrade, including
+when the service stays stopped; the next service start sees the same marker.
 
 Windows Setup and the verified packaged updater already replace shipped
 filenames on installation/update, including customized stock assets, while

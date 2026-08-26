@@ -67,6 +67,7 @@ Require-Text 'platforms/linux/tautweekly.env.example' @(
 )
 Require-Text 'platforms/linux/install-linux.sh' @(
     'PowerShell 7\.2 or newer',
+    'runuser -u tautweekly -- python3 /opt/tautweekly/refresh-assets\.py --data-root /var/lib/tautweekly',
     'convert curl flock identify',
     'program-\$stamp\.tar\.gz',
     'Preserved existing /etc/tautweekly/tautweekly\.env',
