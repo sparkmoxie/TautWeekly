@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
+v1.10.4 Windows
+---------------
+- optimizes all 32 email GIFs at twice their email display size while preserving frames, timing, loops, and transparency
+- ships refreshed assets through the existing verified updater, replacing same-name custom artwork while preserving custom-only filenames
+- leaves PNG artwork, dynamic media, configuration, private data, and the accepted email layout unchanged
+
 v1.10.3 Windows
 ---------------
 - displays main TV episode IMDb numbers and show-level fallback IMDb numbers at 12px, matching footer rating text

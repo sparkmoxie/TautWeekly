@@ -53,6 +53,9 @@ function New-TestRelease([string]$Version, [string]$Marker) {
     [IO.File]::WriteAllBytes((Join-Path $packageRoot 'tautweekly-manager.exe'), [byte[]](0x4d, 0x5a, 0x00, 0x00))
     [IO.File]::WriteAllText((Join-Path $packageRoot 'README.md'), "Test release $Version`n", [Text.UTF8Encoding]::new($false))
     Write-ReleaseMetadata -Path (Join-Path $packageRoot 'RELEASE-METADATA.txt') -Version $Version
+    New-Item -ItemType Directory -Path (Join-Path $packageRoot 'assets') -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $packageRoot 'assets/movies.gif'), "bundled GIF $Version", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $packageRoot 'assets/watched.png'), "bundled PNG $Version", [Text.UTF8Encoding]::new($false))
     Write-ReleaseManifest -PackageRoot $packageRoot
 
     $archive = Join-Path $releaseRoot 'TautWeekly-windows.zip'
@@ -99,6 +102,8 @@ try {
     [IO.File]::WriteAllText((Join-Path $installRoot 'output/private.html'), 'private output', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'cache/deleted-items/artwork/private.jpg'), 'private cached poster', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'assets/custom.gif'), 'custom asset', [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $installRoot 'assets/movies.gif'), 'customized shipped GIF', [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $installRoot 'assets/watched.png'), 'customized shipped PNG', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot '.manager-data/auth.json'), '{"private":"manager-pairing-state"}', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'TautWeekly.ps1'), "# old engine`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $installRoot 'deprecated-owned.txt'), "remove me`n", [Text.UTF8Encoding]::new($false))
@@ -131,10 +136,13 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'output/private.html')) 'Verified update removed private output.'
     Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'cache/deleted-items/artwork/private.jpg')) 'Verified update removed the private deleted-item cache.'
     Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'assets/custom.gif')) 'Verified update removed a custom-named asset.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'assets/movies.gif') -Raw) -eq 'bundled GIF 0.5.6') 'Verified update did not overwrite a customized shipped GIF.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'assets/watched.png') -Raw) -eq 'bundled PNG 0.5.6') 'Verified update did not overwrite a customized shipped PNG.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot '.manager-data/auth.json') -Raw) -match 'manager-pairing-state') 'Verified update changed private Manager pairing state.'
     $backups = @(Get-ChildItem -LiteralPath $testRoot -Directory -Filter 'installed.backup-v0.5.4-*')
     Assert-True ($backups.Count -eq 1) 'Verified update did not create one private sibling backup.'
     Assert-True (Test-Path -LiteralPath (Join-Path $backups[0].FullName 'deprecated-owned.txt')) 'Rollback backup did not preserve the previous owned files.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $backups[0].FullName 'assets/movies.gif') -Raw) -eq 'customized shipped GIF') 'Rollback backup did not preserve the replaced customized GIF.'
 
     $release057 = New-TestRelease -Version '0.5.7' -Marker 'candidate engine 0.5.7'
     $rollbackFailedAsExpected = $false

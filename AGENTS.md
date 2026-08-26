@@ -39,3 +39,10 @@ These instructions apply to the entire repository.
 - Diagnose failures before retrying. For demonstrated infrastructure failures, prefer failed-job-only retries. Monitor required existing CI/release runs instead of adding duplicate manual runs.
 - Docs-only changes need relevant documentation/link checks. Presentation changes need focused renderer, parity, and static checks plus representative desktop/mobile visual QA. Recipient, data, or security changes justify broader integration and privacy coverage.
 - Keep required CI/release gates, privacy/isolation checks, package/checksum integrity, and publication verification. Never disable tests to get green, conceal omitted coverage, or claim unsupported email-client testing. Briefly explain any necessary expansion of validation.
+
+## Local asset optimization before deployment
+
+- Automatically optimize new or changed bundled/local static assets before deployment, using deterministic, format-appropriate lossless tooling.
+- Lossless means preserving decoded pixels at the original dimensions, including every composited animation frame, frame timing, loop behavior, transparency, and first-frame fallback. Do not resize, reduce palettes, remove frames, or use lossy compression unless the user explicitly authorizes that exception for the active delivery.
+- Verify equivalence and measure before/after byte counts. Keep the original when a verified lossless candidate is not smaller; never inflate an asset merely to claim it was optimized.
+- Keep maintained platform copies, aliases, preview mirrors, package manifests, and integrity checks aligned. Perform optimization at development/build time; do not add runtime optimization dependencies or modify fetched Plex/Tautulli artwork.

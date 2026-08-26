@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.5.4 Portable
+---------------
+- optimizes all 32 email GIFs at twice their email display size while preserving frames, timing, loops, and transparency
+- refreshes every shipped persistent asset and the preview mirror on bundle change or legacy migration; preserves custom-only files and same-bundle restart edits
+- leaves PNG artwork, dynamic media, configuration, private data, and the accepted email layout unchanged
+
 v1.5.3 Portable
 ---------------
 - displays main TV episode IMDb numbers and show-level fallback IMDb numbers at 12px, matching footer rating text

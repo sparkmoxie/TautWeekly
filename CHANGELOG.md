@@ -6,6 +6,32 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.21.4] - 2026-08-25
+
+### Changed
+
+- Optimized all 32 bundled email GIFs at an explicitly approved 2x email
+  display resolution, followed by lossless compression: 21,435,442 to
+  2,704,515 bytes (87.38% smaller). Preserved all animation frames, timing,
+  loops, transparency, first-frame fallback, and every email PNG byte.
+- Added reproducible development-only optimization, complete asset metadata,
+  mirror/archive integrity coverage, and a standing AGENTS policy requiring
+  automatic lossless optimization of future local assets before deployment.
+- Advanced source baselines to Windows 1.10.4, NAS/Docker 1.5.4, macOS 1.4.4,
+  native Linux 1.3.4, and FreeBSD/Podman 1.2.4. Kept the accepted layout and
+  v0.21.0 feature spotlight unchanged.
+
+### Fixed
+
+- Refresh every shipped persistent asset filename on a bundled-content
+  transition or missing-marker migration, including customized stock files.
+  Refresh the browser-preview mirror too; preserve custom-only filenames and
+  unrelated runtime data without wiping directories.
+- Preserve later edits across ordinary same-bundle restarts, restore missing
+  assets, fail safely on linked paths, and leave failed copies retryable.
+  Explicit repair restores all stock files. Verified the existing Windows
+  updater's same-name overwrite, custom-only preservation, and rollback path.
+
 ## [0.21.3] - 2026-08-25
 
 ### Fixed

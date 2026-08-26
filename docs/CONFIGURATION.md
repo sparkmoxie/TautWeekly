@@ -20,6 +20,15 @@ Manager operation history and configuration diagnostics each use count-only
 FIFO retention of the newest 20 completed records. Each new overflow record
 removes the oldest; record age does not otherwise expire an entry.
 
+## Bundled artwork and updates
+
+Bundled email assets are release-owned. An asset-bundle transition (including
+the v0.21.4 migration) replaces every shipped persistent filename, even if you
+customized it; custom-only filenames and dynamic artwork are preserved.
+Ordinary restarts with the same bundle keep later edits. Windows packaged
+updates replace shipped assets through their existing verified updater.
+See [bundled asset behavior](EMAIL-ASSETS.md) before customizing stock files.
+
 ## Tautulli and Plex
 
 | Key | Required | Purpose |

@@ -4,7 +4,11 @@ Releases are created by the tagged-release workflow and must originate from a
 reviewed commit on `main`.
 
 1. Confirm CI, Pages, and Container workflows are green on `main`.
-2. Update `CHANGELOG.md` and move the intended entries from `Unreleased` into a
+2. Optimize new/changed bundled local assets losslessly before deployment,
+   verify equivalence, and record measured sizes (see `AGENTS.md`). Resizing
+   requires explicit authorization. Verify GIF mirrors with
+   `python3 -B scripts/optimize-email-gifs.py --check`.
+   Update `CHANGELOG.md` and move the intended entries from `Unreleased` into a
    semantic version heading.
 3. Choose local checks proportionate to the patch (see AGENTS.md). Reuse passing
    CI evidence for the exact commit or identical tree instead of duplicating
