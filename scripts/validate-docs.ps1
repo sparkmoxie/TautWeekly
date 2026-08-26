@@ -352,12 +352,12 @@ foreach ($reference in $mediaReferences) {
 }
 
 $titleGifHashes = [ordered]@{
-    'alert.gif'        = '403A9C533D5807F8ED9A8DFDE0F1386AB05AE92147A4C586BCA24E8CCE34EE95'
-    'celebrate.gif'    = '86879C45175F3901A8676D9B0BB5132C7A98B20A9F40487C21E4C896CE196616'
-    'construction.gif' = '2266492FFE1F5FDF87B41C81388A00D5844598304E8FDC8157255D1998C9B788'
-    'rocket.gif'       = 'D644D67D81484688452B5D4BC1F79E98333A33B4FE4C03283839DD9008F19A5F'
-    'tickets.gif'      = '7931191FE094F6BD6605C18F0FDE3E3C68B1441BC946BE6380A7F5AF0BE6DEE5'
-    'warning.gif'      = '447C12C7F9F8460D30EA914C4F895076DDDFE199386DC74585113DC0DD8910EC'
+    'alert.gif'        = '5519D94DEAAA5F0CEE21F5F2F2CBB589145820C86E47FCAA423C5A1A58561B37'
+    'celebrate.gif'    = 'A142E1EB25D6277BF95A3086221BA141700E1EF96FC47C3B6A3E1919A4D18FB1'
+    'construction.gif' = '08B3B20C4240E4EEA16F3E72645B0D49A705314B8396BF2D7B8D853926855638'
+    'rocket.gif'       = '38FC98792F107C94ECCB9DE2B4561AF9837644978E8FD35AA9950B4598D4522A'
+    'tickets.gif'      = '332193167C44D5B73DE43DB86B8AD11064EEF61744DF043A26A768E020EAF669'
+    'warning.gif'      = 'AE9913885C0B0579A9548F30C0D06629A007175628F24D715E63E572FEB749B8'
 }
 foreach ($entry in $titleGifHashes.GetEnumerator()) {
     $assetPath = Join-Path $guiPreviewMedia $entry.Key
@@ -378,7 +378,7 @@ $guiGenreAsset = Join-Path $guiPreviewMedia 'genre-scifi.gif'
 if (-not (Test-Path -LiteralPath $guiGenreAsset -PathType Leaf)) {
     throw 'GUI Preview Top Genre asset is missing.'
 }
-if ((Get-FileHash -LiteralPath $guiGenreAsset -Algorithm SHA256).Hash -ne 'D840C0568F99089DABDCCF926E96F2365731075F2F1A95D7BEC90016090F5E07') {
+if ((Get-FileHash -LiteralPath $guiGenreAsset -Algorithm SHA256).Hash -ne '0C4063723C707AE71D41AE9121A5329A91C59532DABE707F406A272138C4DD94') {
     throw 'GUI Preview Top Genre asset differs from the validated Science Fiction GIF.'
 }
 
@@ -517,7 +517,7 @@ $previewGenreAsset = Join-Path $docs 'assets/genre-scifi.gif'
 if (-not (Test-Path -LiteralPath $previewGenreAsset -PathType Leaf)) {
     throw 'Email States Preview is missing its local sanitized Top Genre asset.'
 }
-if ((Get-FileHash -LiteralPath $previewGenreAsset -Algorithm SHA256).Hash -ne 'D840C0568F99089DABDCCF926E96F2365731075F2F1A95D7BEC90016090F5E07') {
+if ((Get-FileHash -LiteralPath $previewGenreAsset -Algorithm SHA256).Hash -ne '0C4063723C707AE71D41AE9121A5329A91C59532DABE707F406A272138C4DD94') {
     throw 'Email States Preview Top Genre asset differs from the validated Science Fiction GIF.'
 }
 
