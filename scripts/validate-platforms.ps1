@@ -313,7 +313,7 @@ Require-Text 'docs/nas-docker/README.md' @(
     "Unraid's Docker controls"
 )
 Require-Text 'docs/nas-docker/index.html' @('url=manager\.html', 'location\.replace\("manager\.html"')
-Require-Text 'docs/nas-docker/index.html' @('authenticated Manager is the setup source', 'controlled TestEmail delivery, scheduling, updates, recovery')
+Require-Text 'docs/nas-docker/index.html' @('authenticated Manager is the setup source', 'controlled TestEmail delivery, scheduling, unified-image profile/status, v0\.22\.0 migration, rollback, recovery')
 Forbid-Text 'docs/nas-docker/index.html' @('Setup-First\.ps1', '\.\/tautweekly\.sh setup', 'read-only preview viewer')
 Require-Text 'docs/nas-docker/manager.html' @(
     'Manager authentication',

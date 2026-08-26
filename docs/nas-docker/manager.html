@@ -63,7 +63,7 @@ Pair once, then create the admin password.
     <section class="metrics searchable" data-search="facts authentication session csrf health volume"><div><strong>required</strong><span>Manager authentication</span></div><div><strong>8 hours</strong><span>in-memory session lifetime</span></div><div><strong>/health/live</strong><span>minimal public liveness</span></div><div><strong>30 min</strong><span>Compose shutdown grace</span></div></section>
 
     <section id="install" class="section searchable" data-search="install unraid apps community applications qnap container station compose linux docker desktop">
-      <div class="section-heading"><div><div class="eyebrow">Installation</div><h2>Use the adapter your host owns.</h2></div><p>Every path runs <code>ghcr.io/sparkmoxie/tautweekly</code> and the same Manager core. New definitions explicitly select <code>server</code>, <code>unraid</code>, or <code>desktop</code>; the host remains responsible for semver/digest pins, pulls, ports, TLS, volumes, UID/GID/UMASK, and container start/stop behavior.</p></div>
+      <div class="section-heading"><div><div class="eyebrow">Installation</div><h2>Use the adapter your host owns.</h2></div><p>Every path runs the same image and Manager core from <code>ghcr.io/sparkmoxie/tautweekly</code>. New definitions explicitly select <code>server</code>, <code>unraid</code>, or <code>desktop</code>; the host remains responsible for semver/digest pins, pulls, ports, TLS, volumes, UID/GID/UMASK, and container start/stop behavior.</p></div>
       <div class="guide-grid">
         <article class="guide-card"><h3>Unraid Apps</h3><p>Install the maintained Community Applications template, review the appdata path, host port, timezone, PUID, and PGID, then start the container.</p><div class="command"># Docker &gt; TautWeekly for Plex &gt; Console
 /opt/tautweekly/bin/run-as-user.sh \
@@ -77,7 +77,7 @@ mv TautWeekly-compose.yaml compose.yaml
 mkdir -p data
 # Set private .env values for TZ, PUID, PGID, UMASK, bind/port, and host policy.
 docker compose pull tautweekly
-docker compose up -d tautweekly</div><p>The no-clone asset pins full semver and selects <code>server</code>. Append the release manifest digest for immutable automation; never promote mutable minor, <code>latest</code>, or <code>edge</code> tags unattended. The verified archive wrapper remains a recovery/local-build fallback.</p></article>
+docker compose up -d tautweekly</div><p>The no-clone asset pins full semver and selects <code>server</code>. Append the release manifest digest for immutable automation; never promote mutable minor, <code>latest</code>, or <code>edge</code> tags unattended. The verified archive wrapper remains a recovery/local-build fallback. For an audited break-fix source build only, use <code>docker build -f platforms/nas-docker/Dockerfile .</code>; the published semver/digest image remains preferred.</p></article>
         <article class="guide-card"><h3>Other Docker hosts</h3><p>Compatible hosts need Linux containers, Compose-compatible service settings, amd64 or arm64, a writable persistent mount at <code>/data</code>, and a non-root UID/GID. Docker Desktop can use the PowerShell wrapper:</p><div class="command">docker compose pull
 docker compose up -d
 .\tautweekly-docker.ps1 manager-bootstrap</div><p>For host-published Tautulli on Docker Desktop, use the platform's host gateway name or a shared private Docker network—not container-local <code>localhost</code>.</p></article>
