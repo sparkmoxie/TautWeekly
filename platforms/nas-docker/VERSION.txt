@@ -1,3 +1,3 @@
-TautWeekly for Plex NAS Portable v1.5.0
+TautWeekly for Plex NAS Portable v1.5.1
 Platforms: QNAP, Unraid, Docker Desktop, generic Linux Docker
 Distribution: GHCR image, Unraid Community Apps template, and Docker Compose source

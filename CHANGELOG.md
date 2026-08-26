@@ -6,6 +6,31 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-08-25
+
+### Fixed
+
+- Marked movie titles from only the recipient's qualifying all-time Tautulli
+  history, including watches outside the weekly window. Exact recipient ID,
+  movie type, selected-library scope, and rating-key/GUID identity are required;
+  another user's activity and global popularity never mark a movie.
+- Used definitive `watched_status=1` or the configured `WatchedPercent`
+  threshold, explicitly excluded active sessions, and retained full historical
+  pagination. Partial Tautulli watched grades do not qualify by themselves.
+- Added the supplied transparent desktop poster shield and title-circle assets
+  across maintained renderers and packages. Circular marks use uniform 6px
+  spacing and vertical centering, both assets expose `title="Watched"` and
+  accessible text, and unwatched movies leave no gap. TV is unchanged.
+- Kept the same recipient state across all preview, test, welcome, scheduled,
+  and confirmed manual delivery paths, with local preview paths, conditional
+  CID/MIME resources, plain-text status, and an Outlook desktop fallback.
+- Verified the consumed Tautulli v2.18.0 history and metadata contracts with
+  deterministic partial-status, pagination, privacy, and HTTP-error fixtures.
+  Preserved dynamic Trending shelves/preheaders, Top Genre, Binge Champion
+  typography/privacy, and the v0.21.0 Quickstart feature spotlight.
+- Advanced maintained package source baselines to Windows 1.10.1, NAS/Docker
+  1.5.1, macOS 1.4.1, native Linux 1.3.1, and FreeBSD/Podman 1.2.1.
+
 ## [0.21.0] - 2026-08-25
 
 ### Added

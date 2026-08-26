@@ -332,6 +332,11 @@ Open **Previews** after a successful Config validation:
 6. Verify the messages in a real mail client. SMTP acceptance confirms the
    server accepted them; it does not prove inbox placement.
 
+Watched marks use only the selected recipient's all-time Tautulli movie history.
+Review the desktop poster shield and the title circles with uniform 6px spacing,
+vertical centering, and `title="Watched"`. Unwatched movies leave no icon gap and
+TV is unchanged. See the [watched-state rule and privacy boundary](../CONFIGURATION.md#recipient-movie-watched-markers).
+
 This guarded six-message TestEmail action is the only Manager setup workflow
 that authenticates to SMTP or sends mail.
 

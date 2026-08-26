@@ -53,6 +53,8 @@ def main() -> int:
     parser.add_argument("--require-preheader")
     parser.add_argument("--forbid-html", action="append", default=[])
     parser.add_argument("--forbid-html-after", action="append", default=[])
+    parser.add_argument("--require-plain", action="append", default=[])
+    parser.add_argument("--forbid-plain", action="append", default=[])
     parser.add_argument("--require-html-after", action="append", default=[])
     parser.add_argument("--require-cid-sha256", action="append", default=[])
     parser.add_argument("--require-cid-png-dimensions", action="append", default=[])
@@ -68,7 +70,50 @@ def main() -> int:
     if len(plain_parts) != 1:
         raise AssertionError(f"expected one plain-text MIME part, found {len(plain_parts)}")
 
+    plain_text = plain_parts[0].get_content().replace("\r\n", "\n")
     html = html_parts[0].get_content()
+    referenced_cids = set(re.findall(r"""cid:([^"'\s<>]+)""", html))
+    cid_parts: dict[str, list] = {}
+    for part in message.walk():
+        cid = (part.get("Content-ID") or "").strip("<>")
+        if cid:
+            cid_parts.setdefault(cid, []).append(part)
+    for cid in referenced_cids:
+        if len(cid_parts.get(cid, [])) != 1:
+            raise AssertionError(f"broken or duplicated HTML CID reference: {cid}")
+
+    # Watched resources are linked only when used. Verify exact approved bytes
+    # whenever rendered, and require no unused watched MIME parts otherwise.
+    watched_assets = {
+        "recipient_watched": (
+            "26744BE4A08445006673CEE9757E88937FF6A98406ECA4ACF6C4DA4FC2B20498", "20x20"
+        ),
+        "recipient_watched_desktop": (
+            "714BBB0D84C41A22AD38717A52BF177029F8854EC3ACE48E753C162D7E97A52E", "26x26"
+        ),
+    }
+    for cid, (expected_hash, dimensions) in watched_assets.items():
+        if cid in referenced_cids:
+            # Parse semantics here instead of passing quote-bearing HTML through
+            # Windows PowerShell 5.1's legacy native-argument quoting.
+            icon_tags = re.findall(
+                rf"""<(?:img|v:image)\b[^>]*\bsrc=["']cid:{re.escape(cid)}["'][^>]*>""",
+                html,
+                flags=re.IGNORECASE,
+            )
+            if not icon_tags or any(
+                not re.search(r"""\balt=["']Watched["']""", tag)
+                or not re.search(r"""\btitle=["']Watched["']""", tag)
+                for tag in icon_tags
+            ):
+                raise AssertionError(f"watched CID {cid} lost accessible text or tooltip")
+            args.require_cid_sha256.append(f"{cid}={expected_hash}")
+            args.require_cid_png_dimensions.append(f"{cid}={dimensions}")
+            payload = cid_parts[cid][0].get_payload(decode=True) or b""
+            if len(payload) < 26 or payload[24:26] != bytes((8, 6)):
+                raise AssertionError(f"watched CID {cid} lost 8-bit RGBA transparency")
+        elif cid in cid_parts:
+            raise AssertionError(f"unused watched MIME resource was attached: {cid}")
     if args.require_preheader is not None:
         preheader_match = re.search(
             r'<div style="display:none!important;[^"<>]*mso-hide:all;">(?P<text>.*?)</div>',
@@ -84,7 +129,6 @@ def main() -> int:
             raise AssertionError(
                 f"delivered HTML preheader mismatch: {preheader_text!r} != {args.require_preheader!r}"
             )
-        plain_text = plain_parts[0].get_content().replace("\r\n", "\n")
         plain_first_line = plain_text.lstrip("\ufeff").split("\n", 1)[0].strip()
         if plain_first_line != args.require_preheader:
             raise AssertionError(
@@ -97,6 +141,12 @@ def main() -> int:
     for marker in args.forbid_html:
         if marker in html:
             raise AssertionError(f"delivered HTML retained forbidden marker: {marker}")
+    for marker in args.require_plain:
+        if marker not in plain_text:
+            raise AssertionError(f"delivered plain text lost required marker: {marker}")
+    for marker in args.forbid_plain:
+        if marker in plain_text:
+            raise AssertionError(f"delivered plain text retained forbidden marker: {marker}")
     for specification in args.require_html_after:
         if "=" not in specification:
             raise AssertionError(f"invalid scoped HTML requirement: {specification}")

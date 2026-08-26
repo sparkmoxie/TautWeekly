@@ -36,6 +36,8 @@ $requiredFunctions = @(
     'Get-DesignGenreLine',
     'Get-StatsMovieRatingHtml',
     'Get-StatsMovieRowsHtml',
+    'Test-RecipientHasWatchedMovie',
+    'Get-RecipientWatchedPlainTextSuffix',
     'Get-StatsEpisodeRowsHtml',
     'Get-StatsTvShowRatingHtml',
     'Get-StatsTvShowRowsHtml',

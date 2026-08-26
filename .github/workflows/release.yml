@@ -38,6 +38,7 @@ jobs:
       - name: Validate embedded Manager JavaScript
         run: |
           node --check manager/internal/manager/web/app.js
+          node --check scripts/test-recipient-watched-visuals.mjs
           node scripts/test-manager-header-refresh.mjs
           node scripts/test-manager-preview-refresh.mjs
       - name: Validate Manager accessibility structure
@@ -57,6 +58,7 @@ jobs:
           ./scripts/test-deleted-item-cache.ps1
           ./scripts/test-config-backup-retention.ps1
           ./scripts/test-renderer-collections.ps1
+          ./scripts/test-recipient-watched-movies.ps1
           ./scripts/test-sendall-recipient-policy.ps1
       - name: Validate shell scripts
         run: ./scripts/validate-shell.sh

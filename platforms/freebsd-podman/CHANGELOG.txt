@@ -1,5 +1,11 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
+v1.2.1
+- marks movies only from the recipient's qualifying all-time Tautulli history, never another user's activity
+- uses the supplied desktop poster shield and consistently spaced, vertically centered title circles with accessible Watched labels
+- preserves all newsletter lifecycle, Trending/preheader, Top Genre, Binge Champion, and TV behavior
+- verifies the Tautulli v2.18.0 history contract, partial-status exclusion, pagination, and invalid-metadata recovery
+
 v1.2.0
 - adds the privacy-preserving server-wide Top Genre footer with approved animated artwork and a neutral movie fallback
 - makes Trending weeks show up to four recent movies plus new TV or, when no new TV exists, recent TV strictly newer than one month

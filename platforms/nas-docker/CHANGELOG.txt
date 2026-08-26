@@ -1,6 +1,13 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.5.1 Portable
+---------------
+- marks movies only from the recipient's qualifying all-time Tautulli history, never another user's activity
+- uses the supplied desktop poster shield and consistently spaced, vertically centered title circles with accessible Watched labels
+- preserves all newsletter lifecycle, Trending/preheader, Top Genre, Binge Champion, and TV behavior
+- verifies the Tautulli v2.18.0 history contract, partial-status exclusion, pagination, and invalid-metadata recovery
+
 v1.5.0 Portable
 ---------------
 - adds the privacy-preserving server-wide Top Genre footer with approved animated artwork and a neutral movie fallback

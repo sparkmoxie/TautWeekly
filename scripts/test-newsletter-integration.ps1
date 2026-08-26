@@ -2,7 +2,10 @@
 param(
     [string]$Root = '',
     [string]$PythonPath = 'python',
-    [switch]$KeepFailedArtifacts
+    [switch]$KeepFailedArtifacts,
+    [switch]$KeepArtifacts,
+    [string[]]$EngineFilter = @(),
+    [string[]]$ScenarioFilter = @()
 )
 
 Set-StrictMode -Version Latest
@@ -89,12 +92,14 @@ $sendTestScenarios = @('active', 'quiet', 'tv-only', $quietNoHistoryScenario, $q
 
 $executed = 0
 foreach ($engine in $engines) {
+    if ($EngineFilter.Count -gt 0 -and $engine.Name -notin $EngineFilter) { continue }
     if ([string]::IsNullOrWhiteSpace([string]$engine.Host)) {
         Write-Warning "Skipping $($engine.Name) locally because PowerShell 7 is unavailable; hosted CI runs it."
         continue
     }
 
     foreach ($scenario in @('active', 'quiet', $quietNoHistoryScenario, $quietNoGlobalHistoryScenario, 'tv-only', 'personal-many', $platformScenario, $lastPlatformScenario, $sparseEpisodeMetadataScenario, 'optional-hero-metadata', 'rating-export-fallback') + $directRatingScenarios + $deletedHistoryScenarios) {
+        if ($ScenarioFilter.Count -gt 0 -and $scenario -notin $ScenarioFilter) { continue }
         $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-integration-' + [Guid]::NewGuid().ToString('N'))
         $appRoot = Join-Path $tempRoot 'app'
         $dataRoot = Join-Path $tempRoot 'data'
@@ -341,6 +346,22 @@ foreach ($engine in $engines) {
                 throw "$($engine.Name)/$scenario renderer failed ($($process.ExitCode)).`nSTDOUT:`n$(Get-Content $stdout -Raw)`nSTDERR:`n$(Get-Content $stderr -Raw)"
             }
             $previewLog = Get-Content $stdout -Raw
+            $historicalMovieCalls = @(
+                Get-Content -LiteralPath $callLog |
+                    ForEach-Object { $_ | ConvertFrom-Json } |
+                    Where-Object {
+                        $null -ne $_.query.PSObject.Properties['cmd'] -and
+                        [string]$_.query.cmd -eq 'get_history' -and
+                        $null -ne $_.query.PSObject.Properties['media_type'] -and
+                        [string]$_.query.media_type -eq 'movie'
+                    }
+            )
+            Assert-True ($historicalMovieCalls.Count -ge 1) "$($engine.Name)/$scenario did not request historical movie state."
+            foreach ($historyCall in $historicalMovieCalls) {
+                Assert-True ([string]$historyCall.query.user_id -eq '1') "$($engine.Name)/$scenario did not scope watched state to the recipient."
+                Assert-True ([string]$historyCall.query.include_activity -eq '0') "$($engine.Name)/$scenario included active sessions in historical watched state."
+                Assert-True ($null -eq $historyCall.query.PSObject.Properties['after'] -and $null -eq $historyCall.query.PSObject.Properties['before']) "$($engine.Name)/$scenario limited watched state to the newsletter window."
+            }
 
             $indexPath = Join-Path $outputRoot 'preview-all-00-INDEX.html'
             $normalPath = Join-Path $outputRoot 'preview-all-04-normal-newsletter.html'
@@ -529,10 +550,11 @@ foreach ($engine in $engines) {
             }
 
             if ($scenario -eq 'active') {
+                $watchedPreviewBase = if ($engine.Container) { 'assets' } else { '../assets' }
                 foreach ($stateHtml in $scenarioPreviewHtml) {
                     Assert-True ($stateHtml.Contains('1 NEW MOVIE') -and $stateHtml.Contains('1 TV TITLE')) "$($engine.Name)/$scenario did not share the active release-count line across all six states."
                     Assert-True ($stateHtml.Contains('HOT NEW RELEASE') -and $stateHtml.Contains('NEW RELEASES')) "$($engine.Name)/$scenario did not preserve HOT/new-release behavior across all six states."
-                    $heroStart = $stateHtml.IndexOf('HOT NEW RELEASE', [StringComparison]::Ordinal)
+                    $heroStart = $stateHtml.IndexOf('<tr class="design-hot-desktop">', [StringComparison]::Ordinal)
                     $releaseStart = if ($heroStart -ge 0) { $stateHtml.IndexOf('NEW RELEASES', $heroStart + 1, [StringComparison]::Ordinal) } else { -1 }
                     Assert-True ($heroStart -ge 0 -and $releaseStart -gt $heroStart) "$($engine.Name)/$scenario could not isolate the active hero from its release shelves."
                     $heroHtml = $stateHtml.Substring($heroStart, $releaseStart - $heroStart)
@@ -540,12 +562,19 @@ foreach ($engine in $engines) {
                     Assert-True ($heroHtml.Contains('A release from the selected movie library.') -and $heroHtml.Contains('Drama, Mystery') -and $heroHtml.Contains('2026')) "$($engine.Name)/$scenario lost active hero summary, genres, or year."
                     Assert-True ($heroHtml.Contains('Rotten Tomatoes critic') -and $heroHtml.Contains('Rotten Tomatoes audience')) "$($engine.Name)/$scenario lost active hero ratings."
                     Assert-True ($heroHtml.Contains('81%</span>') -and $heroHtml.Contains('92%</span>')) "$($engine.Name)/$scenario swapped or lost exact active hero critic/audience values."
+                    Assert-True (([regex]::Matches($heroHtml, 'class="recipient-watched-title-icon"')).Count -eq 1) "$($engine.Name)/$scenario did not render exactly one circular hero marker."
+                    Assert-True (([regex]::Matches($stateHtml, 'class="recipient-watched-desktop-badge"')).Count -eq 1) "$($engine.Name)/$scenario did not render exactly one desktop hero badge."
+                    Assert-True ($heroHtml.Contains('<span style="vertical-align:middle;">Selected </span><span class="recipient-watched-title-tail" style="white-space:nowrap;"><span style="vertical-align:middle;">Movie</span><img class="recipient-watched-title-icon"')) "$($engine.Name)/$scenario did not place the circular marker immediately after the mobile hero title."
+                    Assert-True ($heroHtml.Contains('alt="Watched" title="Watched"') -and $heroHtml.Contains('vertical-align:middle;margin-left:6px;')) "$($engine.Name)/$scenario lost accessible, centered, consistently spaced hero markup."
+                    Assert-True ($heroHtml.Contains("src=`"$watchedPreviewBase/watched.png`"") -and $heroHtml.Contains("src=`"$watchedPreviewBase/watched-desktop.png`"")) "$($engine.Name)/$scenario used broken watched preview asset paths."
+                    Assert-True ($heroHtml.Contains('<v:group') -and $heroHtml.Contains('coordsize="180,275"') -and $heroHtml.Contains('left:147;top:0;width:26;height:26;') -and $heroHtml.Contains('width="7" height="26"') -and $heroHtml.Contains('padding:5px 0 0;')) "$($engine.Name)/$scenario lost Outlook or standard desktop overlay placement."
                     Assert-True ($heroHtml.Contains('4 plays')) "$($engine.Name)/$scenario collapsed the grouped HOT history row to one play."
                     $activeReleaseHtml = Get-HtmlSection -Html $stateHtml -StartMarker 'NEW RELEASES' -EndMarkers @('YOUR WEEK ON PLEX', 'FRIDAY DROPS')
                     Assert-True (-not [string]::IsNullOrWhiteSpace($activeReleaseHtml)) "$($engine.Name)/$scenario could not bound the active release shelf."
                     Assert-True (-not $activeReleaseHtml.Contains('Selected Movie') -and $activeReleaseHtml.Contains('Selected Show')) "$($engine.Name)/$scenario duplicated the HOT movie in New Releases or lost the TV shelf."
+                    Assert-True (-not $activeReleaseHtml.Contains('recipient-watched-title-icon')) "$($engine.Name)/$scenario marked a TV release."
                     $afterActiveHeroHtml = $stateHtml.Substring($releaseStart)
-                    Assert-True ($afterActiveHeroHtml.Contains('Active Trending Movie') -and $afterActiveHeroHtml.Contains('posters/poster_active-trending-movie.jpg')) "$($engine.Name)/$scenario lost the distinct compact Trending title or poster."
+                    Assert-True ($afterActiveHeroHtml.Contains('<span style="vertical-align:middle;">Active Trending </span><span class="recipient-watched-title-tail" style="white-space:nowrap;"><span style="vertical-align:middle;">Movie</span><img class="recipient-watched-title-icon"') -and $afterActiveHeroHtml.Contains('posters/poster_active-trending-movie.jpg')) "$($engine.Name)/$scenario lost the recipient-specific compact Trending marker or poster."
                 }
                 $activeLogoPath = Join-Path (Join-Path $outputRoot 'media') 'logo_selected-movie.png'
                 Assert-True ((Test-Path -LiteralPath $activeLogoPath) -and (Get-Item -LiteralPath $activeLogoPath).Length -gt 256) "$($engine.Name)/$scenario did not persist the active clearLogo asset."
@@ -553,7 +582,7 @@ foreach ($engine in $engines) {
                 Assert-True ($activeStatsStart -ge 0) "$($engine.Name)/$scenario could not isolate active real-history stats."
                 $activeStatsHtml = $normalHtml.Substring($activeStatsStart)
                 $expectedChromePreviewSource = if ($engine.Container) { 'assets/platform-chrome.png' } else { '../assets/platform-chrome.png' }
-                Assert-True ($activeStatsHtml.Contains('MOVIES WATCHED') -and $activeStatsHtml.Contains('Selected Movie')) "$($engine.Name)/$scenario lost the real watched-movie stat row."
+                Assert-True ($activeStatsHtml.Contains('MOVIES WATCHED') -and $activeStatsHtml.Contains('<span style="vertical-align:middle;">Selected </span><span class="recipient-watched-title-tail" style="white-space:nowrap;"><span style="vertical-align:middle;">Movie</span><img class="recipient-watched-title-icon"')) "$($engine.Name)/$scenario lost the recipient watched marker in the personal movie recap."
                 Assert-True ($activeStatsHtml.Contains('Drama, Mystery') -and $activeStatsHtml.Contains('Rotten Tomatoes critic') -and $activeStatsHtml.Contains('Rotten Tomatoes audience')) "$($engine.Name)/$scenario lost watched-movie genres or critic/audience ratings."
                 Assert-True ($activeStatsHtml.Contains('81%</span>') -and $activeStatsHtml.Contains('92%</span>')) "$($engine.Name)/$scenario swapped or lost exact watched-movie critic/audience values."
                 Assert-True ($activeStatsHtml.Contains('posters/poster_selected-movie.jpg')) "$($engine.Name)/$scenario lost the watched-movie stat poster."
@@ -561,11 +590,12 @@ foreach ($engine in $engines) {
             }
 
             if ($scenario -eq 'quiet') {
+                $watchedPreviewBase = if ($engine.Container) { 'assets' } else { '../assets' }
                 foreach ($stateHtml in $scenarioPreviewHtml) {
                     Assert-True ($stateHtml.Contains('1 TRENDING MOVIE') -and $stateHtml.Contains('4 RECENT MOVIE RELEASES')) "$($engine.Name)/$scenario did not share the exact quiet count line across all six states."
                     Assert-True ($stateHtml.Contains('mso-hide:all;">1 TRENDING MOVIE • 4 RECENT MOVIE RELEASES')) "$($engine.Name)/$scenario did not inherit the quiet count line into email preview text."
                     Assert-True ($stateHtml.Contains('TRENDING THIS WEEK') -and $stateHtml.Contains('RECENT RELEASES') -and -not $stateHtml.Contains('HOT NEW RELEASE')) "$($engine.Name)/$scenario did not share quiet Trending/latest behavior across all six states."
-                    $heroStart = $stateHtml.IndexOf('TRENDING THIS WEEK', [StringComparison]::Ordinal)
+                    $heroStart = $stateHtml.IndexOf('<tr class="design-hot-desktop">', [StringComparison]::Ordinal)
                     $releaseStart = if ($heroStart -ge 0) { $stateHtml.IndexOf('RECENT RELEASES', $heroStart + 1, [StringComparison]::Ordinal) } else { -1 }
                     Assert-True ($heroStart -ge 0 -and $releaseStart -gt $heroStart) "$($engine.Name)/$scenario could not isolate the quiet hero from its release shelves."
                     $heroHtml = $stateHtml.Substring($heroStart, $releaseStart - $heroStart)
@@ -575,6 +605,16 @@ foreach ($engine in $engines) {
                     Assert-True ($heroHtml.Contains('Rotten Tomatoes critic') -and $heroHtml.Contains('Rotten Tomatoes audience')) "$($engine.Name)/$scenario lost quiet hero ratings."
                     Assert-True ($heroHtml.Contains('88%</span>') -and $heroHtml.Contains('94%</span>')) "$($engine.Name)/$scenario swapped or lost exact quiet hero critic/audience values."
                     Assert-True ($heroHtml.Contains('Most watched across Virtual Plex this week') -and $heroHtml.Contains('4 plays')) "$($engine.Name)/$scenario lost authentic trending watch statistics."
+                    $watchedShelfHtml = Get-HtmlSection -Html $stateHtml -StartMarker 'RECENT RELEASES' -EndMarkers @('YOUR WEEK ON PLEX', 'FRIDAY DROPS')
+                    Assert-True (([regex]::Matches(($heroHtml + $watchedShelfHtml), 'class="recipient-watched-title-icon"')).Count -eq 2) "$($engine.Name)/$scenario did not render exactly one circular hero marker and one watched movie-card marker."
+                    Assert-True (([regex]::Matches($stateHtml, 'class="recipient-watched-desktop-badge"')).Count -eq 1) "$($engine.Name)/$scenario did not render exactly one desktop hero badge."
+                    Assert-True ($heroHtml.Contains('<span style="vertical-align:middle;">Quiet Trending </span><span class="recipient-watched-title-tail" style="white-space:nowrap;"><span style="vertical-align:middle;">Movie</span><img class="recipient-watched-title-icon"')) "$($engine.Name)/$scenario did not place the circular marker immediately after the mobile hero title."
+                    Assert-True ($releaseHtml.Contains('<span style="vertical-align:middle;">Recent Movie </span><span class="recipient-watched-title-tail" style="white-space:nowrap;"><span style="vertical-align:middle;">One</span><img class="recipient-watched-title-icon"')) "$($engine.Name)/$scenario did not place the circular marker immediately after a watched card title."
+                    Assert-True ($stateHtml.Contains('alt="Watched" title="Watched"') -and $stateHtml.Contains('vertical-align:middle;margin-left:6px;')) "$($engine.Name)/$scenario lost accessible, centered, consistently spaced marker markup."
+                    Assert-True ($stateHtml.Contains("src=`"$watchedPreviewBase/watched.png`"") -and $heroHtml.Contains("src=`"$watchedPreviewBase/watched-desktop.png`"")) "$($engine.Name)/$scenario used broken watched preview asset paths."
+                    Assert-True ($heroHtml.Contains('<v:group') -and $heroHtml.Contains('coordsize="180,275"') -and $heroHtml.Contains('left:147;top:0;width:26;height:26;') -and $heroHtml.Contains('width="7" height="26"') -and $heroHtml.Contains('padding:5px 0 0;')) "$($engine.Name)/$scenario lost Outlook or standard desktop overlay placement."
+                    Assert-True ($releaseHtml.Contains('>Selected Movie</div>') -and -not $releaseHtml.Contains('<span style="vertical-align:middle;">Selected </span><span class="recipient-watched-title-tail" style="white-space:nowrap;"><span style="vertical-align:middle;">Movie</span><img class="recipient-watched-title-icon"')) "$($engine.Name)/$scenario left a gap or leaked another user's watched state into Selected Movie."
+                    Assert-True (-not $releaseHtml.Contains('Selected Show<img class="recipient-watched-title-icon"')) "$($engine.Name)/$scenario changed TV card rendering."
                     foreach ($movieTitle in @('Recent Movie One', 'Selected Movie', 'Recent Movie Three', 'Recent Movie Four')) {
                         Assert-True ($releaseHtml.Contains($movieTitle)) "$($engine.Name)/$scenario lost capped quiet movie: $movieTitle"
                     }
@@ -1147,6 +1187,7 @@ foreach ($engine in $engines) {
                     '--require-html', 'cid:custom_title_celebrate',
                     '--require-html', 'display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-left:6px;',
                     '--require-cid-sha256', 'custom_title_celebrate=86879C45175F3901A8676D9B0BB5132C7A98B20A9F40487C21E4C896CE196616',
+                    '--forbid-plain', 'Selected Show - Watched',
                     '--forbid-html', 'Sample Movie',
                     '--forbid-html', 'Sample Series',
                     '--forbid-html', 'Toy Story 5'
@@ -1187,6 +1228,10 @@ foreach ($engine in $engines) {
                         '--require-html', '81%</span>',
                         '--require-html', '92%</span>',
                         '--require-html', 'cid:hero_logo',
+                        '--require-html', 'cid:recipient_watched',
+                        '--require-html', 'cid:recipient_watched_desktop',
+                        '--require-html', 'vertical-align:middle;margin-left:6px;',
+                        '--require-plain', 'HOT NEW RELEASE: Selected Movie - Watched',
                         '--require-html', 'Selected Show',
                         '--require-html', 'Active Trending Movie',
                         '--require-html', 'cid:poster_active-trending-movie',
@@ -1228,6 +1273,10 @@ foreach ($engine in $engines) {
                         '--require-html', 'Most watched across Virtual Plex this week',
                         '--require-html', '4 plays',
                         '--require-html', 'cid:hero_logo',
+                        '--require-html', 'cid:recipient_watched',
+                        '--require-html', 'cid:recipient_watched_desktop',
+                        '--require-html', 'vertical-align:middle;margin-left:6px;',
+                        '--require-plain', 'TRENDING THIS WEEK: Quiet Trending Movie - Watched',
                         '--require-html', 'Recent Movie One',
                         '--require-html', 'Selected Movie',
                         '--require-html', 'Recent Movie Three',
@@ -1472,6 +1521,10 @@ foreach ($engine in $engines) {
                             '--require-html', 'cid:poster_active-trending-movie',
                             '--forbid-html', 'Toy Story 5',
                             '--require-html', 'cid:hero_logo',
+                            '--require-html', 'cid:recipient_watched',
+                            '--require-html', 'cid:recipient_watched_desktop',
+                            '--require-html', 'vertical-align:middle;margin-left:6px;',
+                            '--require-plain', 'HOT NEW RELEASE: Selected Movie - Watched',
                             '--require-cid-sha256', 'poster_active-trending-movie=31AC758909ADD2BB42FCE41C0973435FA6705D95A0F8981C4F421A1C6E404817',
                             '--require-cid-png-dimensions', 'hero_logo=320x96'
                         )
@@ -1492,6 +1545,10 @@ foreach ($engine in $engines) {
                         '--require-html', 'Most watched across Virtual Plex this week',
                         '--require-html', '4 plays',
                         '--require-html', 'cid:hero_logo',
+                        '--require-html', 'cid:recipient_watched',
+                        '--require-html', 'cid:recipient_watched_desktop',
+                        '--require-html', 'vertical-align:middle;margin-left:6px;',
+                        '--require-plain', 'TRENDING THIS WEEK: Quiet Trending Movie - Watched',
                         '--require-html', 'Recent Movie One',
                         '--require-html', 'Selected Movie',
                         '--require-html', 'Recent Movie Three',
@@ -1527,6 +1584,9 @@ foreach ($engine in $engines) {
                     }
                     for ($stateIndex = 0; $stateIndex -lt 6; $stateIndex++) {
                         $stateArgs = @($stateCaptures[$stateIndex].FullName, '--forbid-html', 'Sample Movie', '--forbid-html', 'Sample Series')
+                        $stateArgs += @(
+                            '--forbid-plain', 'Selected Show - Watched'
+                        )
                         foreach ($requiredMarker in $stateExpectations[$stateIndex].Required) {
                             $stateArgs += @('--require-html', $requiredMarker)
                         }
@@ -1666,6 +1726,9 @@ foreach ($engine in $engines) {
                         '--forbid-html', 'Sample Series',
                         '--forbid-html', 'Toy Story 5'
                     )
+                    $welcomeArgs += @(
+                        '--forbid-plain', 'Selected Show - Watched'
+                    )
                     if ($scenario -eq 'active') {
                         $welcomeArgs += @(
                             '--require-html', '1 NEW MOVIE',
@@ -1686,6 +1749,10 @@ foreach ($engine in $engines) {
                             '--require-html', 'cid:poster_active-trending-movie',
                             '--require-html', 'cid:poster_selected-movie',
                             '--require-html', 'cid:hero_logo',
+                            '--require-html', 'cid:recipient_watched',
+                            '--require-html', 'cid:recipient_watched_desktop',
+                            '--require-html', 'vertical-align:middle;margin-left:6px;',
+                            '--require-plain', 'HOT NEW RELEASE: Selected Movie - Watched',
                             '--require-cid-sha256', 'poster_active-trending-movie=31AC758909ADD2BB42FCE41C0973435FA6705D95A0F8981C4F421A1C6E404817',
                             '--require-cid-sha256', 'poster_selected-movie=31AC758909ADD2BB42FCE41C0973435FA6705D95A0F8981C4F421A1C6E404817',
                             '--require-cid-png-dimensions', 'hero_logo=320x96'
@@ -1721,6 +1788,10 @@ foreach ($engine in $engines) {
                             '--require-html', 'cid:poster_quiet-trending-movie',
                             '--require-html', 'cid:poster_quiet-recent-movie-01',
                             '--require-html', 'cid:hero_logo',
+                            '--require-html', 'cid:recipient_watched',
+                            '--require-html', 'cid:recipient_watched_desktop',
+                            '--require-html', 'vertical-align:middle;margin-left:6px;',
+                            '--require-plain', 'TRENDING THIS WEEK: Quiet Trending Movie - Watched',
                             '--require-cid-sha256', 'poster_quiet-trending-movie=31AC758909ADD2BB42FCE41C0973435FA6705D95A0F8981C4F421A1C6E404817',
                             '--require-cid-sha256', 'poster_quiet-recent-movie-01=31AC758909ADD2BB42FCE41C0973435FA6705D95A0F8981C4F421A1C6E404817',
                             '--require-cid-png-dimensions', 'hero_logo=320x96'
@@ -1765,7 +1836,9 @@ foreach ($engine in $engines) {
                     Assert-True ($sendAllLog.Contains('Sent:    2') -and $sendAllLog.Contains('Failed:  0')) "$($engine.Name)/$scenario SendAll did not complete both normal deliveries."
                     $smtpCommands = @(Get-Content $smtpCallLog | ForEach-Object { ($_ | ConvertFrom-Json).command })
                     Assert-True (@($smtpCommands | Where-Object { $_ -eq 'DATA' }).Count -ge 3) "$($engine.Name)/$scenario did not submit SendTest plus both SendAll messages."
-                    & $PythonPath $emailThemeAssertion $smtpDataFile --require-html 'Platform: Roku' --require-html 'cid:platform_roku' --require-html 'max-height:21px' --require-cid-sha256 'platform_roku=7E9EA9D59B16F92A5C80C72E1F8E92FB794FE57C4E97EC3A5B55E8943D0ED136'
+                    & $PythonPath $emailThemeAssertion $smtpDataFile --require-html 'Platform: Roku' --require-html 'cid:platform_roku' --require-html 'max-height:21px' --require-cid-sha256 'platform_roku=7E9EA9D59B16F92A5C80C72E1F8E92FB794FE57C4E97EC3A5B55E8943D0ED136' --forbid-html 'cid:recipient_watched' --forbid-plain ' - Watched'
+                    # The last production recipient has no qualifying movie history
+                    # in this fixture; the preceding recipient's state must not leak.
                     if ($LASTEXITCODE -ne 0) { throw "$($engine.Name)/$scenario production SendAll MIME platform assertion failed." }
                     Assert-True (-not $sendAllLog.Contains('Chrome') -and -not $sendAllLog.Contains('Roku')) "$($engine.Name)/$scenario exposed platform details in SendAll logs."
                 }
@@ -1784,11 +1857,11 @@ foreach ($engine in $engines) {
                 Stop-Process -Id $smtpServer.Id -Force -ErrorAction SilentlyContinue
                 $smtpServer.WaitForExit()
             }
-            if ($casePassed -or -not $KeepFailedArtifacts) {
+            if (-not $KeepArtifacts -and ($casePassed -or -not $KeepFailedArtifacts)) {
                 Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
             }
             else {
-                Write-Warning "Retained failed integration artifacts: $tempRoot"
+                Write-Warning "Retained synthetic integration artifacts ($($engine.Name)/$scenario): $tempRoot"
             }
         }
     }

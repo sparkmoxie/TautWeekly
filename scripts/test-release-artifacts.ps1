@@ -51,6 +51,15 @@ function Get-ZipEntryBytes([IO.Compression.ZipArchiveEntry]$Entry) {
         $stream.Dispose()
     }
 }
+function Assert-WatchedPngBytes([string]$PackageName, [string]$AssetName, [byte[]]$Bytes, [hashtable]$Expected) {
+    Assert-True ($Bytes.Length -gt 25 -and
+        [BitConverter]::ToString($Bytes, 0, 8) -eq '89-50-4E-47-0D-0A-1A-0A') "$PackageName $AssetName is not a PNG."
+    $width = [Net.IPAddress]::NetworkToHostOrder([BitConverter]::ToInt32($Bytes, 16))
+    $height = [Net.IPAddress]::NetworkToHostOrder([BitConverter]::ToInt32($Bytes, 20))
+    Assert-True ($width -eq $Expected.Width -and $height -eq $Expected.Height) "$PackageName $AssetName has wrong dimensions."
+    Assert-True ($Bytes[24] -eq 8 -and $Bytes[25] -eq 6) "$PackageName $AssetName is not 8-bit RGBA with transparency."
+}
+
 
 function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('[string]$ResultPath = ""')) "$PackageName lacks the Manager structured-result path."
@@ -115,6 +124,18 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('DeletedItemCache.ps1')) "$PackageName does not load the persistent deleted-item cache."
     Assert-True ($Renderer.Contains('Restore-TautWeeklyDeletedItemCachePoster')) "$PackageName does not reuse exact cached artwork."
     Assert-True ($Renderer.Contains('Update-TautWeeklyDeletedItemCache')) "$PackageName does not capture live presentation assets."
+    Assert-True ($Renderer.Contains('function Get-RecipientWatchedMovies')) "$PackageName lacks historical recipient movie watched-state collection."
+    Assert-True ($Renderer.Contains('grouping         = 1') -and $Renderer.Contains('include_activity = 0') -and $Renderer.Contains('media_type       = "movie"') -and $Renderer.Contains('user_id          = $ExpectedUserId')) "$PackageName lacks recipient/movie-scoped historical Tautulli parameters."
+    Assert-True ($Renderer.Contains('(Safe-Int $row.watched_status) -eq 1') -and $Renderer.Contains('(Safe-Int $row.percent_complete) -ge $watchedThreshold')) "$PackageName does not distinguish definitive Tautulli v2.18 watched state from partial grades."
+    Assert-True ($Renderer.Contains('if ($rowUserId -ne $ExpectedUserId) { continue }')) "$PackageName does not fail closed on cross-user history rows."
+    Assert-True ($Renderer.Contains('function Test-RecipientHasWatchedMovie') -and $Renderer.Contains('MetadataGuids.ContainsKey($metadataGuid)')) "$PackageName lacks exact movie key/GUID watched-state matching."
+    Assert-True ($Renderer.Contains('function Get-RecipientWatchedTitleIconHtml') -and $Renderer.Contains('function Get-RecipientWatchedDesktopHeroPosterHtml')) "$PackageName lacks shared watched-marker rendering helpers."
+    Assert-True ($Renderer.Contains('width="20" height="20" alt="Watched" title="Watched"')) "$PackageName lacks accessible circular watched-icon markup."
+    Assert-True ($Renderer.Contains('vertical-align:middle;margin-left:6px;') -and $Renderer.Contains('function Get-RecipientWatchedTitleHtml') -and $Renderer.Contains('class="recipient-watched-title-tail" style="white-space:nowrap;"')) "$PackageName has inconsistent circular watched-icon centering, spacing, or wrapping."
+    Assert-True ($Renderer.Contains('width="26" height="26" alt="Watched" title="Watched"') -and $Renderer.Contains('width="147" height="26"') -and $Renderer.Contains('width="7" height="26"') -and $Renderer.Contains('padding:5px 0 0;')) "$PackageName lacks the approved table-based desktop poster-badge placement."
+    Assert-True ($Renderer.Contains('<v:group') -and $Renderer.Contains('coordsize="180,275"') -and $Renderer.Contains('left:147;top:0;width:26;height:26;')) "$PackageName lacks the fixed-coordinate Outlook poster-badge fallback."
+    Assert-True ($Renderer.Contains('Cid = "recipient_watched"; MediaType = "image/png"') -and $Renderer.Contains('Cid = "recipient_watched_desktop"; MediaType = "image/png"')) "$PackageName does not MIME-link both watched assets."
+    Assert-True ($Renderer.Contains('function Get-RecipientWatchedPlainTextSuffix')) "$PackageName lacks plain-text watched semantics."
 }
 
 function Assert-DeletedItemCacheContract([string]$PackageName, [string]$CacheModule) {
@@ -300,6 +321,11 @@ $expectedGifHashes = [ordered]@{
 foreach ($genreName in $expectedGenreHashes.Keys) {
     $expectedGifHashes[$genreName] = $expectedGenreHashes[$genreName]
 }
+$expectedWatchedPngs = [ordered]@{
+    'watched.png' = @{ Hash='26744BE4A08445006673CEE9757E88937FF6A98406ECA4ACF6C4DA4FC2B20498'; Width=20; Height=20 }
+    'watched-desktop.png' = @{ Hash='714BBB0D84C41A22AD38717A52BF177029F8854EC3ACE48E753C162D7E97A52E'; Width=26; Height=26 }
+}
+
 $expectedBrandFiles = [ordered]@{
     'TautWeekly-windows.zip' = [ordered]@{
         'TautWeekly-windows/TautWeekly.ico' = 'A77AA803DFE9D026DB37744FF646A6197C0C3C402CA03DA8EEA76962212B892C'
@@ -561,6 +587,15 @@ foreach ($archiveName in $expected.Keys) {
             $actualGifHash = Get-ZipEntrySha256 -Entry $gifEntry[0]
             Assert-True ($actualGifHash -ceq $expectedGifHashes[$gifName]) "$archiveName contains stale $gifName bytes."
         }
+        foreach ($watchedAssetName in $expectedWatchedPngs.Keys) {
+            $expectedWatchedAsset = $expectedWatchedPngs[$watchedAssetName]
+            $watchedEntryName = "$($assetRoots[$archiveName])/$watchedAssetName"
+            $watchedEntry = @($archive.Entries | Where-Object { $_.FullName.Replace('\', '/') -ceq $watchedEntryName })
+            Assert-True ($watchedEntry.Count -eq 1) "$archiveName is missing $watchedEntryName"
+            Assert-True ((Get-ZipEntrySha256 -Entry $watchedEntry[0]) -ceq $expectedWatchedAsset.Hash) "$archiveName contains stale $watchedAssetName bytes."
+            $watchedBytes = Get-ZipEntryBytes -Entry $watchedEntry[0]
+            Assert-WatchedPngBytes -PackageName $archiveName -AssetName $watchedAssetName -Bytes $watchedBytes -Expected $expectedWatchedAsset
+        }
         $packagedPlatformEntries = @($archive.Entries | Where-Object {
             $_.FullName.Replace('\', '/') -match ('^' + [regex]::Escape($assetRoots[$archiveName]) + '/platform-[a-z0-9-]+[.]png$')
         })
@@ -717,6 +752,16 @@ foreach ($tarArchive in $tarArchives) {
             Assert-True (Test-Path -LiteralPath $gifPath -PathType Leaf) "$($tarArchive.Name) is missing $assetRoot/$gifName"
             $actualGifHash = (Get-FileHash -LiteralPath $gifPath -Algorithm SHA256).Hash
             Assert-True ($actualGifHash -ceq $expectedGifHashes[$gifName]) "$($tarArchive.Name) contains stale $gifName bytes."
+        }
+        foreach ($watchedAssetName in $expectedWatchedPngs.Keys) {
+            $expectedWatchedAsset = $expectedWatchedPngs[$watchedAssetName]
+            $assetRoot = $assetRoots[$zipName].Substring($packageName.Length + 1)
+            $watchedPath = Join-Path $packageRoot (Join-Path $assetRoot $watchedAssetName)
+            Assert-True (Test-Path -LiteralPath $watchedPath -PathType Leaf) "$($tarArchive.Name) is missing $assetRoot/$watchedAssetName"
+            $actualWatchedHash = (Get-FileHash -LiteralPath $watchedPath -Algorithm SHA256).Hash
+            Assert-True ($actualWatchedHash -ceq $expectedWatchedAsset.Hash) "$($tarArchive.Name) contains stale $watchedAssetName bytes."
+            $watchedBytes = [IO.File]::ReadAllBytes($watchedPath)
+            Assert-WatchedPngBytes -PackageName $tarArchive.Name -AssetName $watchedAssetName -Bytes $watchedBytes -Expected $expectedWatchedAsset
         }
         foreach ($brandFile in $expectedBrandFiles[$zipName].GetEnumerator()) {
             $relativeBrandPath = $brandFile.Key.Substring($packageName.Length + 1)

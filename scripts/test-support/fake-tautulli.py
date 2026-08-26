@@ -404,6 +404,72 @@ def configured_users(server: ThreadingHTTPServer) -> dict[str, dict[str, object]
     return users
 
 
+def watched_history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
+    """Return recipient history that predates every synthetic newsletter window."""
+    if section_id != "10":
+        return []
+    if scenario in ("quiet", "quiet-no-global-history", "tv-only"):
+        return [
+            {
+                "section_id": "10",
+                "media_type": "movie",
+                "rating_key": "quiet-trending-movie",
+                "guid": "plex://movie/quiet-trending-movie",
+                "title": "Quiet Trending Movie",
+                "user_id": "1",
+                "watched_status": 1,
+                "percent_complete": 100,
+                "started": 1,
+            },
+            {
+                "section_id": "10",
+                "media_type": "movie",
+                "rating_key": "quiet-recent-movie-01",
+                "guid": "plex://movie/quiet-recent-movie-01",
+                "title": "Recent Movie One",
+                "user_id": "1",
+                "watched_status": 0,
+                "percent_complete": 85,
+                "started": 2,
+            },
+            {
+                "section_id": "10",
+                "media_type": "movie",
+                "rating_key": "selected-movie",
+                "guid": "plex://movie/selected-movie",
+                "title": "Selected Movie",
+                "user_id": "2",
+                "watched_status": 1,
+                "percent_complete": 100,
+                "started": 3,
+            },
+        ]
+    return [
+        {
+            "section_id": "10",
+            "media_type": "movie",
+            "rating_key": "selected-movie",
+            "guid": "plex://movie/selected-movie",
+            "title": "Selected Movie",
+            "user_id": "1",
+            "watched_status": 1,
+            "percent_complete": 100,
+            "started": 1,
+        },
+        {
+            "section_id": "10",
+            "media_type": "movie",
+            "rating_key": "active-trending-movie",
+            "guid": "plex://movie/active-trending-movie",
+            "title": "Active Trending Movie",
+            "user_id": "1",
+            "watched_status": 1,
+            "percent_complete": 100,
+            "started": 2,
+        },
+    ]
+
+
 def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
     if scenario == "quiet-no-global-history":
         return []
@@ -1444,7 +1510,7 @@ class Handler(BaseHTTPRequestHandler):
             self.api_success({})
             return
         if command == "get_tautulli_info":
-            self.api_success({"tautulli_version": "2.16.0-virtual"})
+            self.api_success({"tautulli_version": "2.18.0-virtual"})
             return
         if command == "get_server_info":
             self.api_success({"pms_url": self.server.base_url})  # type: ignore[attr-defined]
@@ -1461,7 +1527,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         if command == "get_history":
             section_id = query.get("section_id", "")
-            if self.current_scenario() == "quiet-no-history" and not section_id:
+            historical_movie_query = (
+                query.get("media_type", "") == "movie"
+                and not query.get("after", "")
+                and not query.get("before", "")
+            )
+            if historical_movie_query:
+                rows = watched_history_rows(section_id, self.current_scenario())
+            elif self.current_scenario() == "quiet-no-history" and not section_id:
                 rows = history_rows("10", self.current_scenario()) + history_rows("20", self.current_scenario())
             else:
                 rows = history_rows(section_id, self.current_scenario())
@@ -1516,7 +1589,9 @@ class Handler(BaseHTTPRequestHandler):
                             "message": "sanitized deleted Plex metadata",
                             "data": {},
                         }
-                    }
+                    },
+                    # v2.18.0 returns proper HTTP errors for invalid metadata.
+                    status=400,
                 )
                 return
             is_episode = "episode" in key

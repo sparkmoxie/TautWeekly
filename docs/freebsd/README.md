@@ -265,6 +265,11 @@ Releases / TV**, while both count locations say
 Genre reports only aggregate qualified movie watch time and unique movie count;
 missing or unsupported artwork uses the neutral local movie animation.
 
+Watched marks use only the selected recipient's all-time Tautulli movie history.
+Review the desktop poster shield and the title circles with uniform 6px spacing,
+vertical centering, and `title="Watched"`. Unwatched movies leave no icon gap and
+TV is unchanged. See the [watched-state rule and privacy boundary](../CONFIGURATION.md#recipient-movie-watched-markers).
+
 ## Update and pinning
 
 Manager **Settings > Updates** is the primary FreeBSD status source. It
