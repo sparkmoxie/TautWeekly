@@ -94,6 +94,19 @@ def main() -> int:
     }
     for cid, (expected_hash, dimensions) in watched_assets.items():
         if cid in referenced_cids:
+            # Parse semantics here instead of passing quote-bearing HTML through
+            # Windows PowerShell 5.1's legacy native-argument quoting.
+            icon_tags = re.findall(
+                rf"""<(?:img|v:image)\b[^>]*\bsrc=["']cid:{re.escape(cid)}["'][^>]*>""",
+                html,
+                flags=re.IGNORECASE,
+            )
+            if not icon_tags or any(
+                not re.search(r"""\balt=["']Watched["']""", tag)
+                or not re.search(r"""\btitle=["']Watched["']""", tag)
+                for tag in icon_tags
+            ):
+                raise AssertionError(f"watched CID {cid} lost accessible text or tooltip")
             args.require_cid_sha256.append(f"{cid}={expected_hash}")
             args.require_cid_png_dimensions.append(f"{cid}={dimensions}")
             payload = cid_parts[cid][0].get_payload(decode=True) or b""
