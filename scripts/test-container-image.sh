@@ -40,6 +40,38 @@ fail() {
   exit 1
 }
 
+manager_password='TautWeekly-CI-Only-2026!'
+manager_cookie_path='/tmp/tautweekly-ci.cookies'
+
+pair_manager() {
+  local target="$1"
+  local token="$2"
+  printf '{"token":"%s","password":"%s"}' "$token" "$manager_password" |
+    docker exec -i "$target" curl -fsS \
+      -c "$manager_cookie_path" \
+      -H 'Content-Type: application/json' \
+      --data-binary @- \
+      http://127.0.0.1:8080/api/v1/auth/pair \
+      >/dev/null || fail "$runtime_profile Manager rejected first-run pairing."
+}
+
+login_manager() {
+  local target="$1"
+  printf '{"password":"%s"}' "$manager_password" |
+    docker exec -i "$target" curl -fsS \
+      -c "$manager_cookie_path" \
+      -H 'Content-Type: application/json' \
+      --data-binary @- \
+      http://127.0.0.1:8080/api/v1/auth/login \
+      >/dev/null || fail "$runtime_profile Manager credentials did not survive the container lifecycle."
+}
+
+manager_capabilities() {
+  docker exec "$1" curl -fsS \
+    -b "$manager_cookie_path" \
+    http://127.0.0.1:8080/api/v1/capabilities
+}
+
 case "$runtime_profile" in
   nas)
     manager_runtime_profile=nas
@@ -158,16 +190,21 @@ if [[ "$manager_runtime_profile" == nas || "$manager_runtime_profile" == mac ]];
   setup_json="$(docker exec "$container_name" curl -fsS http://127.0.0.1:8080/api/v1/setup)"
   grep -Fq '"authenticationRequired":true' <<<"$setup_json" || fail "$runtime_profile Manager authentication is not mandatory."
   grep -Fq "\"runtimeMode\":\"$manager_runtime_profile\"" <<<"$setup_json" || fail "$runtime_profile Manager did not report its container runtime profile."
-  grep -Fq "\"packageKind\":\"$package_kind\"" <<<"$setup_json" || fail "$runtime_profile Manager did not report package kind $package_kind."
-  if [[ "$runtime_profile" == mac-registry ]]; then
-    grep -Fq '"updateProvider":"mac-registry"' <<<"$setup_json" || fail 'Mac registry Manager did not report registry update ownership.'
-    grep -Fq '"pathStyle":"container-volume"' <<<"$setup_json" || fail 'Mac registry Manager did not report persistent-volume path semantics.'
-  fi
   bootstrap_token="$(docker exec "$container_name" /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager)"
   [[ "$bootstrap_token" =~ ^[A-Za-z0-9_-]{32,}$ ]] || fail 'Explicit bootstrap command did not return a one-time token.'
   if docker logs "$container_name" 2>&1 | grep -Fq "$bootstrap_token"; then
     fail 'The one-time Manager bootstrap token was exposed in container logs.'
   fi
+  pair_manager "$container_name" "$bootstrap_token"
+  capabilities_json="$(manager_capabilities "$container_name")" || fail "$runtime_profile Manager capabilities were unavailable after pairing."
+  grep -Fq "\"runtimeMode\":\"$manager_runtime_profile\"" <<<"$capabilities_json" || fail "$runtime_profile protected capabilities did not report the runtime profile."
+  grep -Fq "\"packageKind\":\"$package_kind\"" <<<"$capabilities_json" || fail "$runtime_profile Manager did not report package kind $package_kind."
+  if [[ "$runtime_profile" == mac-registry ]]; then
+    grep -Fq '"updateProvider":"mac-registry"' <<<"$capabilities_json" || fail 'Mac registry Manager did not report registry update ownership.'
+    grep -Fq '"pathStyle":"container-volume"' <<<"$capabilities_json" || fail 'Mac registry Manager did not report persistent-volume path semantics.'
+  fi
+  setup_json="$(docker exec "$container_name" curl -fsS http://127.0.0.1:8080/api/v1/setup)"
+  grep -Fq '"paired":true' <<<"$setup_json" || fail "$runtime_profile Manager did not persist first-run pairing."
 fi
 
 # A normal docker exec bypasses entrypoint.sh and therefore begins as root.
@@ -215,6 +252,11 @@ done
 [[ "$healthy" == true ]] || fail 'Container did not recover after the same-bundle restart.'
 [[ "$(docker exec "$container_name" cat /data/assets/movies.gif)" == 'post-update edit' ]] || fail 'Same-bundle restart replaced a custom edit.'
 docker exec "$container_name" cmp /data/assets/movies.gif /data/output/assets/movies.gif || fail 'Restart did not refresh the preview mirror.'
+if [[ "$manager_runtime_profile" == nas || "$manager_runtime_profile" == mac ]]; then
+  login_manager "$container_name"
+  capabilities_json="$(manager_capabilities "$container_name")" || fail "$runtime_profile Manager capabilities were unavailable after restart."
+  grep -Fq "\"packageKind\":\"$package_kind\"" <<<"$capabilities_json" || fail "$runtime_profile package identity did not survive restart."
+fi
 
 if [[ "$runtime_profile" == mac-registry ]]; then
   docker volume create "$named_volume" >/dev/null
@@ -236,6 +278,7 @@ if [[ "$runtime_profile" == mac-registry ]]; then
   done
   [[ "$named_healthy" == true ]] || fail 'Mac registry image did not become healthy with a named /data volume.'
   named_bootstrap_token="$(docker exec "$named_container" /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager)"
+  pair_manager "$named_container" "$named_bootstrap_token"
   docker exec "$named_container" /opt/tautweekly/bin/run-as-user.sh sh -c \
     'printf "%s" "registry-recreate-persistence" > /data/registry-recreate-sentinel'
   [[ "$(docker exec "$named_container" stat -c '%u:%g' /data/registry-recreate-sentinel)" == "$host_uid:$host_gid" ]] || fail 'Named-volume state was not owned by the configured identity.'
@@ -258,8 +301,14 @@ if [[ "$runtime_profile" == mac-registry ]]; then
   done
   [[ "$named_healthy" == true ]] || fail 'Mac registry image did not recover after named-volume recreation.'
   [[ "$(docker exec "$named_container" cat /data/registry-recreate-sentinel)" == registry-recreate-persistence ]] || fail 'Named-volume state did not survive service recreation.'
-  recreated_bootstrap_token="$(docker exec "$named_container" /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager)"
-  [[ "$recreated_bootstrap_token" == "$named_bootstrap_token" ]] || fail 'Manager access bootstrap state did not survive named-volume recreation.'
+  login_manager "$named_container"
+  named_capabilities="$(manager_capabilities "$named_container")" || fail 'Mac registry capabilities were unavailable after named-volume recreation.'
+  grep -Fq '"packageKind":"mac-docker-registry"' <<<"$named_capabilities" || fail 'Mac registry package identity did not survive named-volume recreation.'
+  named_setup="$(docker exec "$named_container" curl -fsS http://127.0.0.1:8080/api/v1/setup)"
+  grep -Fq '"paired":true' <<<"$named_setup" || fail 'Manager credentials did not survive named-volume recreation.'
+  if docker exec "$named_container" /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager >/dev/null 2>&1; then
+    fail 'A paired Manager unexpectedly exposed a new bootstrap token after named-volume recreation.'
+  fi
 fi
 
 printf '[PASS] Container boot, health, runtime, persistence, and root-refusal checks (%s): %s\n' "$runtime_profile" "$image"
