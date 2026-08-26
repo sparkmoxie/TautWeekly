@@ -336,10 +336,12 @@ identity-bearing diagnostics.
 The desktop full-width movie hero uses the unchanged 26×26 shield, inset 7px
 from the poster's right edge and raised 5px above its top, with an Outlook VML
 group; other clients use a table overlay without CSS positioning. Mobile
-heroes, release cards, personal movie recaps, and compact Trending titles use
-the unchanged 20×20 circle immediately after the title with 6px left spacing
+heroes and main movie release cards display the original circle PNG at 16×16px
+immediately after the title with 8px left spacing
 and shared text/icon vertical centering. Only the final title word stays with
 its icon; preceding words wrap normally without orphaning the marker.
+Footer statistics, including personal movie recaps and compact Trending, have
+no watched markers. Both original PNG files remain byte-identical.
 Both images have `alt="Watched"` and `title="Watched"`; plain text supplies the
 equivalent status. Unwatched movies add neither markup nor a spacer, and TV
 titles are unchanged. Preview, PreviewAll, SendTest, SendTestAll, welcome,

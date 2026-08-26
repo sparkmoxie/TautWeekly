@@ -30,7 +30,8 @@ $requiredFunctions = @(
     'Test-IncludedLibraryRow', 'Get-IncludedLibraryQueryScopes',
     'Test-RecipientHasWatchedMovie', 'Get-RecipientWatchedAssetSource',
     'Get-RecipientWatchedTitleIconHtml', 'Get-RecipientWatchedTitleHtml', 'Get-RecipientWatchedDesktopHeroPosterHtml',
-    'Get-RecipientWatchedPlainTextSuffix', 'Get-ReleaseCardsHtml', 'Get-StatsMovieRowsHtml'
+    'Get-RecipientWatchedPlainTextSuffix', 'Get-ReleaseCardsHtml', 'Get-StatsMovieRowsHtml',
+    'Get-StatsMovieRatingHtml', 'Get-StatsTvShowRowsHtml', 'Get-StatsTvShowRatingHtml', 'Get-StatsEpisodeRowsHtml'
 )
 
 $sharedDefinitions = @{}
@@ -42,9 +43,9 @@ foreach ($renderer in $renderers) {
     Assert-True ($parseErrors.Count -eq 0) "Parser errors prevent watched-state testing: $($renderer.Path)"
     foreach ($name in $requiredFunctions) {
         $definition = Get-RendererFunctionDefinition -Ast $ast -Name $name -Renderer $renderer.Path
-        if ($name -like '*Recipient*Watched*') {
+        if ($name -like '*Recipient*Watched*' -or $name -like 'Get-Stats*') {
             if ($sharedDefinitions.ContainsKey($name)) {
-                Assert-True ($definition -ceq $sharedDefinitions[$name]) "Renderer drift in shared $name"
+                Assert-True ($definition.Replace('../assets/', 'assets/') -ceq $sharedDefinitions[$name].Replace('../assets/', 'assets/')) "Renderer drift in shared $name"
             } else { $sharedDefinitions[$name] = $definition }
         }
         Invoke-Expression $definition
@@ -155,8 +156,8 @@ foreach ($renderer in $renderers) {
 
     $previewIcon = Get-RecipientWatchedTitleIconHtml $watched $state Preview $renderer.PreviewBase
     Assert-True ($previewIcon.Contains("src=`"$($renderer.PreviewBase)/watched.png`"")) "$($renderer.Path) used the wrong preview path"
-    Assert-True ($previewIcon.Contains('width="20" height="20" alt="Watched" title="Watched"')) "$($renderer.Path) lost circular icon dimensions/accessibility"
-    Assert-True ($previewIcon.Contains('vertical-align:middle;margin-left:6px;')) "$($renderer.Path) lost consistent icon centering/spacing"
+    Assert-True ($previewIcon.Contains('width="16" height="16" alt="Watched" title="Watched"')) "$($renderer.Path) lost circular icon dimensions/accessibility"
+    Assert-True ($previewIcon.Contains('vertical-align:middle;margin-left:8px;')) "$($renderer.Path) lost consistent icon centering/spacing"
     $emailIcon = Get-RecipientWatchedTitleIconHtml $watched $state Email $renderer.PreviewBase
     Assert-True ($emailIcon.Contains('src="cid:recipient_watched"')) "$($renderer.Path) lost the circular CID"
     Assert-True ((Get-RecipientWatchedTitleIconHtml $unwatched $state Preview $renderer.PreviewBase) -eq '') "$($renderer.Path) left an unwatched title gap"
@@ -181,23 +182,29 @@ foreach ($renderer in $renderers) {
     Assert-True ((Get-RecipientWatchedTitleHtml 'TV Title' $tv $state Preview $renderer.PreviewBase) -ceq 'TV Title') "$($renderer.Path) changed TV title markup"
     $watchedCard = Get-ReleaseCardsHtml @($watched) @() Preview $state $renderer.PreviewBase Movie
     Assert-True ($watchedCard.Contains($previewTitle)) "$($renderer.Path) did not place the icon immediately after the card title"
-    Assert-True ($watchedCard.Contains('vertical-align:middle;margin-left:6px;')) "$($renderer.Path) card spacing differs from hero spacing"
+    Assert-True ($watchedCard.Contains('vertical-align:middle;margin-left:8px;')) "$($renderer.Path) card spacing differs from hero spacing"
     $unwatchedCard = Get-ReleaseCardsHtml @($unwatched) @() Preview $state $renderer.PreviewBase Movie
     Assert-True (-not $unwatchedCard.Contains('recipient-watched-title-icon')) "$($renderer.Path) left watched markup in an unwatched card"
     $tvCard = Get-ReleaseCardsHtml @($tv) @() Preview $state $renderer.PreviewBase TV
     Assert-True (-not $tvCard.Contains('recipient-watched-title-icon')) "$($renderer.Path) changed TV card rendering"
 
-    $statsRow = Get-StatsMovieRowsHtml @($watched) @() Preview $state $renderer.PreviewBase
-    Assert-True ($statsRow.Contains($previewTitle)) "$($renderer.Path) omitted the identical marker from the personal movie recap"
-    $unwatchedStats = Get-StatsMovieRowsHtml @($unwatched) @() Preview $state $renderer.PreviewBase
+    $statsRow = Get-StatsMovieRowsHtml @($watched) @() Preview
+    Assert-True ($statsRow.Contains('>Watched Movie</div>') -and -not $statsRow.Contains('recipient-watched')) "$($renderer.Path) marked a personal movie recap"
+    $unwatchedStats = Get-StatsMovieRowsHtml @($unwatched) @() Preview
     Assert-True (-not $unwatchedStats.Contains('recipient-watched-title-icon')) "$($renderer.Path) marked an unwatched recap item"
 
     $source = [IO.File]::ReadAllText($path)
+    $footerStart = $source.IndexOf('    $trendingBlock = ""')
+    $footerEnd = $source.IndexOf('    # Suppress empty weekly recap', $footerStart)
+    $footerDefinition = $source.Substring($footerStart, $footerEnd - $footerStart)
+    if ($sharedDefinitions.ContainsKey('Footer')) {
+        Assert-True ($footerDefinition -ceq $sharedDefinitions['Footer']) "$($renderer.Path) has footer markup drift"
+    } else { $sharedDefinitions['Footer'] = $footerDefinition }
     Assert-True ($source.Contains('$hotTitleWithStatus = Get-RecipientWatchedTitleHtml -EncodedTitle $hotTitle')) "$($renderer.Path) lost mobile hero placement"
     Assert-True ($source.Contains('$hotPosterHtml = Get-RecipientWatchedDesktopHeroPosterHtml')) "$($renderer.Path) lost desktop hero placement"
-    Assert-True ($source.Contains('$trendingTitleWithStatus = Get-RecipientWatchedTitleHtml -EncodedTitle $trendingDisplay -Item $script:GlobalTrendingStat')) "$($renderer.Path) omitted the compact Trending movie marker"
-    Assert-True ($source.Contains('$trendWatchedSuffix = Get-RecipientWatchedPlainTextSuffix -Item $script:GlobalTrendingStat')) "$($renderer.Path) omitted compact Trending plain-text status"
-    Assert-True ($source.Contains('$watchedSuffix = Get-RecipientWatchedPlainTextSuffix -Item $_')) "$($renderer.Path) omitted personal movie plain-text status"
+    Assert-True (-not $source.Contains('$trendingTitleWithStatus')) "$($renderer.Path) marked compact footer Trending"
+    Assert-True (-not $source.Contains('$trendWatchedSuffix')) "$($renderer.Path) marked compact footer Trending in plain text"
+    Assert-True ($source.Contains('$watchedSuffix = Get-RecipientWatchedPlainTextSuffix -Item $_')) "$($renderer.Path) omitted main movie-card plain-text status"
     Assert-True ($source.Contains('Cid = "recipient_watched"; MediaType = "image/png"')) "$($renderer.Path) omitted circular MIME registration"
     Assert-True ($source.Contains('Cid = "recipient_watched_desktop"; MediaType = "image/png"')) "$($renderer.Path) omitted desktop MIME registration"
     Assert-True (([regex]::Matches($source, [regex]::Escape('Get-RecipientWatchedMovies -ExpectedUserId $user.UserId'))).Count -eq 3) "$($renderer.Path) omitted a recipient-state lifecycle"

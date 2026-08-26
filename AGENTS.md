@@ -31,3 +31,11 @@ These instructions apply to the entire repository.
 - A release qualifies when its changelog has an `Added` section describing a new end-user capability. Maintenance-only fixes, hardening, documentation, internal tooling, minor visual polish, and other tweaks do not replace the featured release.
 - When a qualifying feature release is published, update the spotlight's `data-feature-release` value, version label, explanation, capability summary, configuration link, and release-notes link together.
 - Keep repository validation aligned with this policy so a later maintenance release cannot silently displace the latest feature release.
+
+## Risk-based validation
+
+- Choose the smallest sufficient checks for the actual change. Use targeted tests while editing; do not automatically run the full baseline suite or repeat a full suite after each small edit.
+- Reuse passing CI evidence for the exact commit or identical tree. Do not duplicate comprehensive suites locally and in CI without a concrete risk or failure; rerun only checks invalidated by later changes.
+- Diagnose failures before retrying. For demonstrated infrastructure failures, prefer failed-job-only retries. Monitor required existing CI/release runs instead of adding duplicate manual runs.
+- Docs-only changes need relevant documentation/link checks. Presentation changes need focused renderer, parity, and static checks plus representative desktop/mobile visual QA. Recipient, data, or security changes justify broader integration and privacy coverage.
+- Keep required CI/release gates, privacy/isolation checks, package/checksum integrity, and publication verification. Never disable tests to get green, conceal omitted coverage, or claim unsupported email-client testing. Briefly explain any necessary expansion of validation.

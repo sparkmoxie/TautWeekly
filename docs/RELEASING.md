@@ -6,7 +6,9 @@ reviewed commit on `main`.
 1. Confirm CI, Pages, and Container workflows are green on `main`.
 2. Update `CHANGELOG.md` and move the intended entries from `Unreleased` into a
    semantic version heading.
-3. Run local validation and packaging:
+3. Choose local checks proportionate to the patch (see AGENTS.md). Reuse passing
+   CI evidence for the exact commit or identical tree instead of duplicating
+   comprehensive suites locally. The relevant commands include:
 
    ```powershell
    pwsh ./scripts/validate-repository.ps1

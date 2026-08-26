@@ -6,6 +6,32 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.21.2] - 2026-08-25
+
+### Fixed
+
+- Displayed watched title circles at 16x16px with 8px left spacing only in
+  main movie heroes and release cards. Kept centered, safely wrapping titles,
+  accessible Watched labels, unchanged PNG bytes, no unwatched gap, and the
+  existing 26x26px desktop poster shield. Removed all footer watched markers.
+- Matched footer recap labels, titles, genres, ratings (including TV IMDb
+  numbers), and TV watch durations at 12px; count numbers remain 18px/800/1.
+  Footer Rotten Tomatoes icons now display at 16x16px.
+- Normalized Watch Time, Binge Champion, Top Genre, and compact Trending
+  headings to 12px/900 with 1.1px letter spacing, support to 12px/400/1.35,
+  and all four primary values to exactly 27px/800/1.1, including Binge winner,
+  non-winner, and standalone variants.
+- Preserved the intended outer stats padding of 0px 20px 0px and TV label
+  margin-bottom of -7px, artwork/card dimensions, and winner highlighting.
+  Recipient logic, privacy, lifecycle behavior, and inbox preheaders are unchanged.
+- Advanced source baselines to Windows 1.10.2, NAS/Docker 1.5.2, macOS 1.4.2,
+  native Linux 1.3.2, and FreeBSD/Podman 1.2.2. Retained the v0.21.0 feature spotlight.
+
+### Changed
+
+- Documented proportionate risk-based validation and reuse of exact-tree CI
+  evidence in the repository instructions, without changing required workflows.
+
 ## [0.21.1] - 2026-08-25
 
 ### Fixed
