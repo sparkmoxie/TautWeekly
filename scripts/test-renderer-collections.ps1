@@ -955,7 +955,7 @@ foreach ($relativePath in $rendererPaths) {
 
     $manyMovieRowsInput = @(1..12 | ForEach-Object {
         [PSCustomObject]@{
-            Title = "Uncapped Movie $($_.ToString('00'))"; PosterRatingKey = ''; Genres = @('Drama'); Seconds = (5400 * $_)
+            Title = "Uncapped Movie $($_.ToString('00'))"; PosterRatingKey = ''; Genres = @('Drama'); DesignGenres = @('Drama'); Seconds = (5400 * $_)
             DesignRtCritic = if ($_ -eq 1) { '91' } else { '' }
             DesignRtCriticImage = 'rottentomatoes://image.rating.ripe'
         }
@@ -975,6 +975,14 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True (([regex]::Matches($manyTvRows, 'Uncapped Show \d{2}')).Count -eq 11) "$relativePath did not render every one of eleven personal TV rows"
     Assert-True ($manyTvRows.Contains('Uncapped Show 11') -and $manyTvRows.Contains('IMDb') -and $manyTvRows.Contains('8.4')) "$relativePath lost the final TV row or an eligible show rating"
     Assert-True (([regex]::Matches($manyTvRows, 'class="stats-title-cell stats-tv-title-cell stats-tv-title-(?:left|right)"')).Count -eq 11 -and ([regex]::Matches($manyTvRows, 'class="stats-title-spacer stats-tv-title-spacer"')).Count -eq 1) "$relativePath did not pair an odd TV count into two desktop/mobile columns with one safe spacer"
+
+    # Recap text uses the approved 12px sizes without changing each role's weight/leading.
+    Assert-True ($manyMovieRows.Contains('font-size:12px;line-height:1.3;color:#9b9b9b;font-weight:500;')) "$relativePath changed movie genre typography"
+    Assert-True ($manyMovieRows.Contains('font-size:12px;line-height:1.35;color:#e5a00d;font-weight:700;')) "$relativePath changed movie rating typography"
+    Assert-True ($manyTvRows.Contains('font-size:12px;line-height:1.35;color:#e5a00d;font-weight:700;">' + '<span style="display:inline-block;white-space:nowrap;"><img')) "$relativePath did not apply 12px to the TV IMDb number"
+    Assert-True ($manyTvRows.Contains('font-size:12px;line-height:1.35;color:#9b9b9b;font-weight:600;')) "$relativePath changed TV watch-duration typography"
+    Assert-True (-not ($manyMovieRows + $manyTvRows).Contains('recipient-watched')) "$relativePath marked a footer recap"
+    Assert-True (($preferredMovieStats -split 'width="16" height="16"').Count -eq 3) "$relativePath did not size both footer Rotten Tomatoes icons at 16px"
 
     $preferredShowStats = Get-StatsTvShowRatingHtml -Item $selectedProviderShow -ImageMode Preview
     Assert-True ($preferredShowStats.Contains('IMDb') -and $preferredShowStats.Contains('8.4') -and -not $preferredShowStats.Contains('%')) "$relativePath grouped TV stats did not prefer show-level IMDb over show-level RT"

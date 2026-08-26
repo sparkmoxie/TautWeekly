@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
+v1.10.2 Windows
+---------------
+- refines footer typography, including 12px IMDb scores and 27px/800/1.1 primary summary values
+- displays unchanged watched circles at 16x16 with 8px spacing only in main movie content; preserves the 26x26 desktop shield
+- removes footer watched markers and preserves deliberate recap spacing, dynamic data, privacy, and lifecycle behavior
+
 v1.10.1 Windows
 ---------------
 - marks movies only from the recipient's qualifying all-time Tautulli history, never another user's activity

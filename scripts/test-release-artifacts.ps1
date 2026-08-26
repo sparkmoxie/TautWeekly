@@ -130,11 +130,24 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('if ($rowUserId -ne $ExpectedUserId) { continue }')) "$PackageName does not fail closed on cross-user history rows."
     Assert-True ($Renderer.Contains('function Test-RecipientHasWatchedMovie') -and $Renderer.Contains('MetadataGuids.ContainsKey($metadataGuid)')) "$PackageName lacks exact movie key/GUID watched-state matching."
     Assert-True ($Renderer.Contains('function Get-RecipientWatchedTitleIconHtml') -and $Renderer.Contains('function Get-RecipientWatchedDesktopHeroPosterHtml')) "$PackageName lacks shared watched-marker rendering helpers."
-    Assert-True ($Renderer.Contains('width="20" height="20" alt="Watched" title="Watched"')) "$PackageName lacks accessible circular watched-icon markup."
-    Assert-True ($Renderer.Contains('vertical-align:middle;margin-left:6px;') -and $Renderer.Contains('function Get-RecipientWatchedTitleHtml') -and $Renderer.Contains('class="recipient-watched-title-tail" style="white-space:nowrap;"')) "$PackageName has inconsistent circular watched-icon centering, spacing, or wrapping."
+    Assert-True ($Renderer.Contains('width="16" height="16" alt="Watched" title="Watched"')) "$PackageName lacks accessible circular watched-icon markup."
+    Assert-True ($Renderer.Contains('vertical-align:middle;margin-left:8px;') -and $Renderer.Contains('function Get-RecipientWatchedTitleHtml') -and $Renderer.Contains('class="recipient-watched-title-tail" style="white-space:nowrap;"')) "$PackageName has inconsistent circular watched-icon centering, spacing, or wrapping."
     Assert-True ($Renderer.Contains('width="26" height="26" alt="Watched" title="Watched"') -and $Renderer.Contains('width="147" height="26"') -and $Renderer.Contains('width="7" height="26"') -and $Renderer.Contains('padding:5px 0 0;')) "$PackageName lacks the approved table-based desktop poster-badge placement."
     Assert-True ($Renderer.Contains('<v:group') -and $Renderer.Contains('coordsize="180,275"') -and $Renderer.Contains('left:147;top:0;width:26;height:26;')) "$PackageName lacks the fixed-coordinate Outlook poster-badge fallback."
     Assert-True ($Renderer.Contains('Cid = "recipient_watched"; MediaType = "image/png"') -and $Renderer.Contains('Cid = "recipient_watched_desktop"; MediaType = "image/png"')) "$PackageName does not MIME-link both watched assets."
+    Assert-True (-not $Renderer.Contains('$trendingTitleWithStatus') -and -not $Renderer.Contains('$trendWatchedSuffix')) "$PackageName marks compact footer Trending."
+    $recapSource = [regex]::Match($Renderer, '(?s)function Get-StatsMovieRowsHtml.*?(?=function Get-StatsTvShowRatingHtml)').Value
+    Assert-True ($recapSource.Length -gt 0 -and -not $recapSource.Contains('RecipientWatched')) "$PackageName marks personal footer movies."
+    foreach ($value in @('$timeText', '$(HtmlEncode $bingeTimeLine)', '$(HtmlEncode $topGenreName)', '$trendingDisplay')) {
+        $valueMatches = [regex]::Matches($Renderer, '<div style="([^"]+)">' + [regex]::Escape($value) + '</div>')
+        $expectedCount = if ($value -eq '$(HtmlEncode $bingeTimeLine)') { 2 } else { 1 }
+        Assert-True ($valueMatches.Count -eq $expectedCount) "$PackageName is missing a footer primary-value variant."
+        foreach ($valueMatch in $valueMatches) {
+            foreach ($style in @('font-size:27px;', 'font-weight:800;', 'line-height:1.1;')) {
+                Assert-True ($valueMatch.Groups[1].Value.Contains($style)) "$PackageName footer value lost $style"
+            }
+        }
+    }
     Assert-True ($Renderer.Contains('function Get-RecipientWatchedPlainTextSuffix')) "$PackageName lacks plain-text watched semantics."
 }
 

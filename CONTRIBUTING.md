@@ -59,8 +59,13 @@ The check uses a temporary browser profile, blocks non-local requests, validates
 all six lifecycle previews plus Index at 1280px, 390px, and 320px, and saves
 synthetic screenshots and geometry outside the repository. Signature-only JPEG
 test probes are displayed as code-native poster surrogates; missing files still
-fail. It checks native icon sizes, the 6px gap, text centering within one pixel,
-orphan-free wrapping, desktop overlay geometry, and broken image references.
+fail. It checks displayed icon sizes, the 8px gap, text centering within one pixel,
+orphan-free wrapping, desktop overlay geometry, footer typography (including TV
+IMDb numbers), absence of footer markers, and broken image references.
+For a presentation patch, append a preview-name filter and widths, for example
+`04-normal,05-established-quiet 1280,390,320`, to use representative states.
+Choose active, quiet, and winner fixtures as needed; deterministic tests check
+renderer parity. Reuse exact-tree CI coverage instead of duplicating full suites.
 Classic Outlook VML is checked structurally by the focused renderer tests;
 browser results are not a native Outlook-client certification.
 

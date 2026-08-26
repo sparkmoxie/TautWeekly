@@ -7005,7 +7005,7 @@ function Get-RecipientWatchedTitleIconHtml {
     }
 
     $source = Get-RecipientWatchedAssetSource -FileName "watched.png" -Cid "recipient_watched" -ImageMode $ImageMode -PreviewAssetBase $PreviewAssetBase
-    return '<img class="recipient-watched-title-icon" src="' + (HtmlEncode $source) + '" width="20" height="20" alt="Watched" title="Watched" style="display:inline-block;width:20px;height:20px;border:0;vertical-align:middle;margin-left:6px;">'
+    return '<img class="recipient-watched-title-icon" src="' + (HtmlEncode $source) + '" width="16" height="16" alt="Watched" title="Watched" style="display:inline-block;width:16px;height:16px;border:0;vertical-align:middle;margin-left:8px;">'
 }
 
 function Get-RecipientWatchedTitleHtml {
@@ -7126,7 +7126,7 @@ function Get-StatsMovieRatingHtml {
         $icon = Get-DesignRtIconUrl -ImageState $criticImage -Kind "critic" -ImageMode $ImageMode
         $pieces.Add(
             '<span style="display:inline-block;white-space:nowrap;">' +
-            '<img src="' + (HtmlEncode $icon) + '" alt="Rotten Tomatoes critic" width="14" height="14" style="display:inline-block;width:14px;height:14px;border:0;vertical-align:-3px;margin-right:3px;">' +
+            '<img src="' + (HtmlEncode $icon) + '" alt="Rotten Tomatoes critic" width="16" height="16" style="display:inline-block;width:16px;height:16px;border:0;vertical-align:-3px;margin-right:3px;">' +
             (HtmlEncode ($critic + "%")) +
             '</span>'
         )
@@ -7143,7 +7143,7 @@ function Get-StatsMovieRatingHtml {
         $icon = Get-DesignRtIconUrl -ImageState $audienceImage -Kind "audience" -ImageMode $ImageMode
         $pieces.Add(
             '<span style="display:inline-block;white-space:nowrap;">' +
-            '<img src="' + (HtmlEncode $icon) + '" alt="Rotten Tomatoes audience" width="14" height="14" style="display:inline-block;width:14px;height:14px;border:0;vertical-align:-3px;margin-right:3px;">' +
+            '<img src="' + (HtmlEncode $icon) + '" alt="Rotten Tomatoes audience" width="16" height="16" style="display:inline-block;width:16px;height:16px;border:0;vertical-align:-3px;margin-right:3px;">' +
             (HtmlEncode ($audience + "%")) +
             '</span>'
         )
@@ -7176,9 +7176,7 @@ function Get-StatsMovieRowsHtml {
         [object[]]$Items,
         [object[]]$PosterAssets,
         [ValidateSet("Preview","Email")]
-        [string]$ImageMode,
-        [AllowNull()][object]$RecipientWatchedMovies = $null,
-        [string]$PreviewAssetBase = '../assets'
+        [string]$ImageMode
     )
 
     $rows = New-Object System.Text.StringBuilder
@@ -7187,10 +7185,6 @@ function Get-StatsMovieRowsHtml {
 
     foreach ($item in @($Items)) {
         $title = HtmlEncode (Truncate-Text ([string]$item.Title) 42)
-        $titleWithStatus = $title
-        if ($null -ne $RecipientWatchedMovies) {
-            $titleWithStatus = Get-RecipientWatchedTitleHtml -EncodedTitle $title -Item $item -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $PreviewAssetBase
-        }
         $posterSrc = Get-ImageSource `
             -RatingKey ([string]$item.PosterRatingKey) `
             -PosterAssets $PosterAssets `
@@ -7208,7 +7202,7 @@ function Get-StatsMovieRowsHtml {
         $genreText = Get-DesignGenreLine -Item $item
         $genreHtml = ""
         if (-not [string]::IsNullOrWhiteSpace($genreText)) {
-            $genreHtml = '<div style="padding-top:3px;font-size:10px;line-height:1.3;color:#9b9b9b;font-weight:500;">' +
+            $genreHtml = '<div style="padding-top:3px;font-size:12px;line-height:1.3;color:#9b9b9b;font-weight:500;">' +
                 (HtmlEncode $genreText) +
                 '</div>'
         }
@@ -7217,7 +7211,7 @@ function Get-StatsMovieRowsHtml {
         $ratingPadding = if ([string]::IsNullOrWhiteSpace($genreHtml)) { "5px" } else { "4px" }
         $ratingLineHtml = ""
         if (-not [string]::IsNullOrWhiteSpace($ratingHtml)) {
-            $ratingLineHtml = '<div style="padding-top:' + $ratingPadding + ';font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700;">' +
+            $ratingLineHtml = '<div style="padding-top:' + $ratingPadding + ';font-size:12px;line-height:1.35;color:#e5a00d;font-weight:700;">' +
                 $ratingHtml +
                 '</div>'
         }
@@ -7229,7 +7223,7 @@ function Get-StatsMovieRowsHtml {
     <tr>
       <td width="50" valign="middle" style="width:50px;padding:0 8px 0 0;">$posterHtml</td>
       <td valign="middle" style="padding:0;">
-        <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$titleWithStatus</div>
+        <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$title</div>
         $genreHtml
         $ratingLineHtml
       </td>
@@ -7292,7 +7286,7 @@ function Get-StatsTvShowRatingHtml {
     $rtIcon = Get-DesignRtIconUrl -ImageState $rtImage -Kind $rtKind -ImageMode $ImageMode
     $rtAlt = if ($rtKind -eq "audience") { "Rotten Tomatoes audience" } else { "Rotten Tomatoes critic" }
     return '<span style="display:inline-block;white-space:nowrap;">' +
-        '<img src="' + (HtmlEncode $rtIcon) + '" alt="' + $rtAlt + '" width="14" height="14" style="display:inline-block;width:14px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:4px;">' +
+        '<img src="' + (HtmlEncode $rtIcon) + '" alt="' + $rtAlt + '" width="16" height="16" style="display:inline-block;width:16px;height:16px;object-fit:contain;border:0;vertical-align:-3px;margin-right:4px;">' +
         (HtmlEncode ($rtValue + "%")) +
         '</span>'
 }
@@ -7334,7 +7328,7 @@ function Get-StatsEpisodeRowsHtml {
         $imdbLineHtml = if ([string]::IsNullOrWhiteSpace($imdb)) {
             ""
         } else {
-            '<div style="padding-top:4px;font-size:10px;line-height:1.3;color:#e5a00d;font-weight:700;">' +
+            '<div style="padding-top:4px;font-size:12px;line-height:1.3;color:#e5a00d;font-weight:700;">' +
             '<span style="display:inline-block;white-space:nowrap;">' +
             '<img src="' + (HtmlEncode $ImdbIconSrc) + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
             (HtmlEncode $imdb) +
@@ -7345,8 +7339,8 @@ function Get-StatsEpisodeRowsHtml {
 <tr>
   <td width="50" valign="middle" style="width:50px;padding:7px 8px 7px 0;border-bottom:1px solid #292929;">$posterHtml</td>
   <td valign="middle" style="padding:7px 0;border-bottom:1px solid #292929;">
-    <div style="font-size:11px;line-height:1.25;color:#ffffff;font-weight:800;">$showTitle</div>
-    <div style="padding-top:3px;font-size:10px;line-height:1.3;color:#9b9b9b;">$(HtmlEncode $prefix)$episodeTitle</div>
+    <div style="font-size:12px;line-height:1.25;color:#ffffff;font-weight:800;">$showTitle</div>
+    <div style="padding-top:3px;font-size:12px;line-height:1.3;color:#9b9b9b;">$(HtmlEncode $prefix)$episodeTitle</div>
     $imdbLineHtml
   </td>
 </tr>
@@ -7391,7 +7385,7 @@ function Get-StatsTvShowRowsHtml {
         $ratingLineHtml = if ([string]::IsNullOrWhiteSpace($ratingHtml)) {
             ""
         } else {
-            '<div style="padding-top:4px;font-size:10px;line-height:1.35;color:#e5a00d;font-weight:700;">' +
+            '<div style="padding-top:4px;font-size:12px;line-height:1.35;color:#e5a00d;font-weight:700;">' +
             $ratingHtml +
             '</div>'
         }
@@ -7410,7 +7404,7 @@ function Get-StatsTvShowRowsHtml {
       <td valign="middle" style="padding:0;">
         <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$showTitle</div>
         $ratingLineHtml
-        <div style="padding-top:3px;font-size:10px;line-height:1.35;color:#9b9b9b;font-weight:600;">$(HtmlEncode $watchTime) watched</div>
+        <div style="padding-top:3px;font-size:12px;line-height:1.35;color:#9b9b9b;font-weight:600;">$(HtmlEncode $watchTime) watched</div>
       </td>
     </tr>
   </table>
@@ -8223,7 +8217,6 @@ $tvCards
         $trendingPosterHtml = ""
 
         $trendingDisplay = HtmlEncode (Truncate-Text $TrendingTitle 70)
-        $trendingTitleWithStatus = Get-RecipientWatchedTitleHtml -EncodedTitle $trendingDisplay -Item $script:GlobalTrendingStat -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $previewAssetBase
         $trendingPlays = Safe-Int $script:GlobalTrendingStat.Plays
         $trendingRatingKey = [string]$script:GlobalTrendingStat.RatingKey
         $trendingPosterSrc = Get-ImageSource `
@@ -8258,9 +8251,9 @@ $tvCards
         <img src="$trendingIconSrc" width="42" height="42" alt="Trending this week" style="display:block;width:42px;height:42px;border:0;">
       </td>
       <td valign="middle" style="padding:16px 18px 16px 10px;">
-        <div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.3px;">TRENDING THIS WEEK</div>
-        <div style="padding-top:5px;font-size:18px;line-height:1.25;color:#ffffff;font-weight:800;">$trendingTitleWithStatus</div>
-        <div style="padding-top:4px;font-size:12px;line-height:1.4;color:#8e8e8e;">$(HtmlEncode $trendingDescription)</div>
+        <div style="font-size:12px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">TRENDING THIS WEEK</div>
+        <div style="padding-top:5px;font-size:27px;line-height:1.1;color:#ffffff;font-weight:800;overflow-wrap:anywhere;word-break:break-word;">$trendingDisplay</div>
+        <div style="padding-top:4px;font-size:12px;line-height:1.35;font-weight:400;color:#8e8e8e;">$(HtmlEncode $trendingDescription)</div>
       </td>
     </tr>
   </table>
@@ -8303,8 +8296,8 @@ $tvCards
         <img src="$(HtmlEncode $topGenreIconSrc)" width="42" height="42" alt="Top genre this week" style="display:block;width:42px;height:42px;border:0;">
       </td>
       <td valign="middle" style="padding:16px 18px 16px 10px;">
-        <div style="font-size:11px;color:#e5a00d;font-weight:800;letter-spacing:1.3px;">TOP GENRE THIS WEEK</div>
-        <div style="padding-top:5px;font-size:18px;line-height:1.25;color:#ffffff;font-weight:800;">$(HtmlEncode $topGenreName)</div>
+        <div style="font-size:12px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">TOP GENRE THIS WEEK</div>
+        <div style="padding-top:5px;font-size:27px;line-height:1.1;color:#ffffff;font-weight:800;">$(HtmlEncode $topGenreName)</div>
         <div style="$summarySupportingStyle">$(HtmlEncode $topGenreDescription)</div>
       </td>
     </tr>
@@ -8361,9 +8354,7 @@ $tvCards
         Get-StatsMovieRowsHtml `
             -Items $movieItems `
             -PosterAssets $PosterAssets `
-            -ImageMode $ImageMode `
-            -RecipientWatchedMovies $RecipientWatchedMovies `
-            -PreviewAssetBase $previewAssetBase
+            -ImageMode $ImageMode
     } else { "" }
 
     $tvShowRows = if ($tvShowDetailMode) {
@@ -8383,7 +8374,7 @@ $tvCards
       <table cellspacing="0" cellpadding="0" border="0">
         <tr>
           <td valign="middle" style="padding-right:8px;"><img src="$moviesIconSrc" width="42" height="42" alt="Movies watched" style="display:block;width:42px;height:42px;border:0;"></td>
-          <td valign="middle"><div style="font-size:18px;font-weight:800;color:#ffffff;line-height:1;">$movieTitleCount</div><div style="padding-top:3px;font-size:10px;color:#8e8e8e;letter-spacing:.6px;">MOVIES WATCHED</div></td>
+          <td valign="middle"><div style="font-size:18px;font-weight:800;color:#ffffff;line-height:1;">$movieTitleCount</div><div style="padding-top:3px;font-size:12px;color:#8e8e8e;letter-spacing:.6px;">MOVIES WATCHED</div></td>
         </tr>
       </table>
     </td>
@@ -8401,7 +8392,7 @@ $tvCards
       <table cellspacing="0" cellpadding="0" border="0">
         <tr>
           <td valign="middle" style="padding-right:8px;"><img src="$tvIconSrc" width="42" height="42" alt="TV shows watched" style="display:block;width:42px;height:42px;border:0;"></td>
-          <td valign="middle"><div style="font-size:18px;font-weight:800;color:#ffffff;line-height:1;">$tvShowTitleCount</div><div style="padding-top:3px;font-size:10px;color:#8e8e8e;letter-spacing:.6px;">TV SHOWS WATCHED</div></td>
+          <td valign="middle"><div style="font-size:18px;font-weight:800;color:#ffffff;line-height:1;">$tvShowTitleCount</div><div style="padding-top:3px;font-size:12px;color:#8e8e8e;letter-spacing:.6px;margin-bottom:-7px;">TV SHOWS WATCHED</div></td>
         </tr>
       </table>
     </td>
@@ -8464,7 +8455,7 @@ $tvCards
     else {
         $statsBlock = @"
 <tr>
-<td class="pad" style="padding:0 20px 24px;">
+<td class="pad" style="padding:0px 20px 0px;">
 <table width="100%" cellspacing="0" cellpadding="0" border="0">
 $mediaStatsRows
 <tr>
@@ -8472,7 +8463,7 @@ $mediaStatsRows
     <table class="email-card" width="100%" height="$summaryCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="#181818" style="width:100%;height:${summaryCardHeight}px;background-color:#181818;border:1px solid #2b2b2b;border-radius:10px;border-collapse:separate;">
       <tr>
         <td height="$summaryCardHeight" valign="middle" style="height:${summaryCardHeight}px;padding:17px;">
-          <div style="font-size:9px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">YOU CLOCKED</div>
+          <div style="font-size:12px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">YOU CLOCKED</div>
           <img src="$clockIconSrc" width="42" height="42" alt="Personal total watch time" style="display:block;width:42px;height:42px;border:0;margin-top:9px;">
           <div style="padding-top:8px;font-size:27px;font-weight:800;color:#ffffff;line-height:1.1;">$timeText</div>
           <div style="$summarySupportingStyle">total watch time</div>
@@ -8484,9 +8475,9 @@ $mediaStatsRows
     <table width="100%" height="$summaryCardHeight" cellspacing="0" cellpadding="0" border="0" bgcolor="$bingeBackground" style="width:100%;height:${summaryCardHeight}px;background-color:$bingeBackground;border:1px solid $bingeBorder;border-radius:10px;border-collapse:separate;">
       <tr>
         <td height="$summaryCardHeight" valign="middle" style="height:${summaryCardHeight}px;padding:17px;">
-          <div style="font-size:9px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">$(HtmlEncode $bingeEyebrow)</div>
+          <div style="font-size:12px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">$(HtmlEncode $bingeEyebrow)</div>
           <img src="$trophyIconSrc" width="$(if ($isBingeWinner) { 54 } else { 42 })" height="$(if ($isBingeWinner) { 54 } else { 42 })" alt="Binge Champion award" style="display:block;width:$(if ($isBingeWinner) { 54 } else { 42 })px;height:$(if ($isBingeWinner) { 54 } else { 42 })px;border:0;margin-top:9px;">
-          <div style="padding-top:8px;font-size:$(if ($isBingeWinner) { 18 } else { 16 })px;line-height:1.25;font-weight:900;color:#ffffff;">$(HtmlEncode $bingeTimeLine)</div>
+          <div style="padding-top:8px;font-size:27px;line-height:1.1;font-weight:800;color:#ffffff;">$(HtmlEncode $bingeTimeLine)</div>
           $bingeBreakdownHtml
         </td>
       </tr>
@@ -8511,8 +8502,8 @@ $mediaStatsRows
         <img src="$trophyIconSrc" width="$(if ($isBingeWinner) { 54 } else { 42 })" height="$(if ($isBingeWinner) { 54 } else { 42 })" alt="Binge Champion award" style="display:block;width:$(if ($isBingeWinner) { 54 } else { 42 })px;height:$(if ($isBingeWinner) { 54 } else { 42 })px;border:0;">
       </td>
       <td valign="middle" style="padding:18px 20px 18px 12px;">
-        <div style="font-size:10px;color:#e5a00d;font-weight:900;letter-spacing:1.2px;">$(HtmlEncode $bingeEyebrow)</div>
-        <div style="padding-top:5px;font-size:20px;line-height:1.25;color:#ffffff;font-weight:900;">$(HtmlEncode $bingeTimeLine)</div>
+        <div style="font-size:12px;color:#e5a00d;font-weight:900;letter-spacing:1.1px;">$(HtmlEncode $bingeEyebrow)</div>
+        <div style="padding-top:5px;font-size:27px;line-height:1.1;color:#ffffff;font-weight:800;">$(HtmlEncode $bingeTimeLine)</div>
         $bingeBreakdownHtml
       </td>
     </tr>
@@ -8749,11 +8740,10 @@ function Build-PlainText {
         $null -ne $script:GlobalTrendingStat) {
         $trendPlays = Safe-Int $script:GlobalTrendingStat.Plays
         $trendPlayWord = if ($trendPlays -eq 1) { "play" } else { "plays" }
-        $trendWatchedSuffix = Get-RecipientWatchedPlainTextSuffix -Item $script:GlobalTrendingStat -RecipientWatchedMovies $RecipientWatchedMovies
         $footerFeature += if ($trendPlays -gt 0) {
-            "`r`nTRENDING THIS WEEK: $TrendingTitle$trendWatchedSuffix — $trendPlays $trendPlayWord across the server"
+            "`r`nTRENDING THIS WEEK: $TrendingTitle — $trendPlays $trendPlayWord across the server"
         } else {
-            "`r`nTRENDING THIS WEEK: $TrendingTitle$trendWatchedSuffix"
+            "`r`nTRENDING THIS WEEK: $TrendingTitle"
         }
     }
 

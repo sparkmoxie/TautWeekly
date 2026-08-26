@@ -124,8 +124,9 @@ The responsive Manager is the primary workflow on every maintained package:
   episode details when available.
 - Recipient-specific **Watched** marks identify movies from that recipient's
   all-time Tautulli history, never another user's activity. Desktop heroes use
-  the poster shield; mobile heroes and movie cards use a consistently spaced,
-  vertically centered title circle. Unwatched movies leave no gap and TV is unchanged.
+  the 26px poster shield; mobile heroes and main movie cards use a centered
+  16px title circle with 8px left spacing. Footer stats have no watched markers.
+  Unwatched movies leave no gap and TV watched-state behavior is unchanged.
 - Complementary server-wide highlights: a **HOT NEW RELEASE** movie hero ends
   with the existing full-width **TRENDING THIS WEEK** movie card; a
   **TRENDING THIS WEEK** movie hero ends with **TOP GENRE THIS WEEK**. Trending
