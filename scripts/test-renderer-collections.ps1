@@ -1102,6 +1102,7 @@ foreach ($relativePath in $rendererPaths) {
     Enrich-TvEpisodeMetadata -ReleaseData ([PSCustomObject]@{ TV = @($episodeShow) })
     Assert-True ($selectedProviderEpisode.ImdbRating -eq '8.6') "$relativePath let a selected TMDB score prevent exact-episode IMDb recovery"
     $episodeHtml = Get-TvEpisodeLinesHtml -Item $episodeShow -ImageMode Preview
+    Assert-True ($episodeHtml.Contains('font-size:12px;font-weight:700;white-space:nowrap;')) "$relativePath main TV episode IMDb number is not 12px"
     Assert-True ($episodeHtml.Contains('IMDb') -and $episodeHtml.Contains('8.6') -and -not $episodeHtml.Contains('Rotten Tomatoes') -and -not $episodeHtml.Contains('83%') -and -not $episodeHtml.Contains('TMDB') -and -not $episodeHtml.Contains('7.4')) "$relativePath did not keep exact-episode IMDb ahead of RT and generic providers"
 
     $sparseSeededEpisode = [PSCustomObject]@{

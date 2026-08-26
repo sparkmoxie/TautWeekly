@@ -148,6 +148,7 @@ function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
             }
         }
     }
+    Assert-True (([regex]::Matches($Renderer, 'margin-left:8px;color:#e5a00d;font-size:12px;font-weight:700;white-space:nowrap;')).Count -eq 2) "$PackageName does not size both main TV IMDb paths at 12px."
     Assert-True ($Renderer.Contains('function Get-RecipientWatchedPlainTextSuffix')) "$PackageName lacks plain-text watched semantics."
 }
 

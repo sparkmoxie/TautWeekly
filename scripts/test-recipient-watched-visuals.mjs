@@ -94,12 +94,13 @@ try {
           return { heading:typography(heading), value:typography(value), support:value.nextElementSibling ? typography(value.nextElementSibling) : null };
         });
         const recap = [...document.querySelectorAll('.stats-title-cell div')].filter(visible).map(typography);
+        const imdbRatings = [...document.querySelectorAll('img[alt="IMDb"]')].filter(visible).map(icon => typography(icon.parentElement));
         const labels = [...document.querySelectorAll('div')].filter(element => /^(MOVIES WATCHED|TV SHOWS WATCHED)$/.test(element.textContent.trim())).map(element => ({ ...typography(element), count:typography(element.previousElementSibling) }));
         const rtIcons = [...document.querySelectorAll('.stats-title-cell img[alt^="Rotten Tomatoes"]')].filter(visible).map(rect);
         const statsGrid = document.querySelector('.stats-summary-cell')?.closest('td.pad');
         const statsPadding = statsGrid ? getComputedStyle(statsGrid).paddingBottom : null;
         return {
-          circles, badges, summaries, recap, labels, rtIcons, statsPadding,
+          circles, badges, summaries, recap, imdbRatings, labels, rtIcons, statsPadding,
           footerMarkers:[...document.querySelectorAll('.recipient-watched-title-icon,.recipient-watched-desktop-badge')].filter(inFooter).length,
           broken:[...document.images].filter(image => !image.naturalWidth).map(image => image.getAttribute('src')),
           overflow:document.documentElement.scrollWidth > innerWidth,
@@ -127,6 +128,10 @@ try {
         }
       }
       for (const text of geometry.recap) assert.equal(text.size, '12px', 'Recap/IMDb text size: ' + text.text);
+      for (const rating of geometry.imdbRatings) {
+        assert.equal(rating.size, '12px', 'Main/footer IMDb number: ' + rating.text);
+        assert.equal(rating.weight, '700');
+      }
       for (const label of geometry.labels) {
         assert.equal(label.size, '12px');
         assert.equal(label.count.size, '18px');

@@ -1,5 +1,9 @@
 TautWeekly for Plex native Linux platform changelog
 
+v1.3.3
+- displays main TV episode IMDb numbers and show-level fallback IMDb numbers at 12px, matching footer rating text
+- preserves the existing score weight, icon dimensions, spacing, and all v0.21.2 footer/watched-marker refinements
+
 v1.3.2
 - refines footer typography, including 12px IMDb scores and 27px/800/1.1 primary summary values
 - displays unchanged watched circles at 16x16 with 8px spacing only in main movie content; preserves the 26x26 desktop shield

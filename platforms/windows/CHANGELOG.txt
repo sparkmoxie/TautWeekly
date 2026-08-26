@@ -1,6 +1,11 @@
 TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
+v1.10.3 Windows
+---------------
+- displays main TV episode IMDb numbers and show-level fallback IMDb numbers at 12px, matching footer rating text
+- preserves the existing score weight, icon dimensions, spacing, and all v0.21.2 footer/watched-marker refinements
+
 v1.10.2 Windows
 ---------------
 - refines footer typography, including 12px IMDb scores and 27px/800/1.1 primary summary values
