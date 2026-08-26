@@ -36,6 +36,7 @@ const (
 	packageKindWindows          = "windows-installer"
 	packageKindLinux            = "linux-native"
 	packageKindMac              = "mac-docker"
+	packageKindMacRegistry      = "mac-docker-registry"
 	packageKindFreeBSD          = "freebsd-podman"
 	packageKindNAS              = "nas-docker"
 	packageKindQNAP             = "qnap-container-station"
@@ -776,6 +777,9 @@ func normalizedPackageKind(value, mode string) string {
 	case runtimeModeLinux:
 		return packageKindLinux
 	case runtimeModeMac:
+		if value == packageKindMacRegistry {
+			return value
+		}
 		return packageKindMac
 	case runtimeModeNAS:
 		switch value {
@@ -790,7 +794,7 @@ func normalizedPackageKind(value, mode string) string {
 
 func isContainerPackage(kind string) bool {
 	switch kind {
-	case packageKindMac, packageKindFreeBSD, packageKindNAS, packageKindQNAP, packageKindUnraid, packageKindCompatibleDocker:
+	case packageKindMac, packageKindMacRegistry, packageKindFreeBSD, packageKindNAS, packageKindQNAP, packageKindUnraid, packageKindCompatibleDocker:
 		return true
 	default:
 		return false
@@ -799,7 +803,7 @@ func isContainerPackage(kind string) bool {
 
 func requiresHostAdapter(kind string) bool {
 	switch kind {
-	case packageKindMac, packageKindFreeBSD, packageKindNAS, packageKindQNAP, packageKindUnraid:
+	case packageKindMac, packageKindMacRegistry, packageKindFreeBSD, packageKindNAS, packageKindQNAP, packageKindUnraid:
 		return true
 	default:
 		return false
@@ -814,6 +818,8 @@ func expectedReleaseAsset(kind string) string {
 		return "TautWeekly-linux.tar.gz"
 	case packageKindMac:
 		return "TautWeekly-mac-docker.tar.gz"
+	case packageKindMacRegistry:
+		return "TautWeekly-mac-compose.yaml"
 	case packageKindFreeBSD:
 		return "TautWeekly-freebsd-podman.tar.gz"
 	case packageKindNAS, packageKindQNAP:
@@ -831,6 +837,8 @@ func packageLabel(kind string) string {
 		return "Native Linux package"
 	case packageKindMac:
 		return "macOS Docker Desktop package"
+	case packageKindMacRegistry:
+		return "macOS registry Compose deployment"
 	case packageKindFreeBSD:
 		return "FreeBSD Podman package"
 	case packageKindNAS:
@@ -853,6 +861,8 @@ func updateGuidance(kind string) UpdateGuidance {
 		return UpdateGuidance{Owner: "Linux host administrator", Summary: "The web process does not elevate or change systemd files. Run the verified package updater from the host.", Command: "sudo tautweekly update", Steps: []string{"Back up /var/lib/tautweekly.", "Run the host command.", "Return here to verify the new application and package versions."}, DocsURL: docsBase + "linux/#updates"}
 	case packageKindMac:
 		return UpdateGuidance{Owner: "Mac administrator and Docker Desktop", Summary: "Docker Desktop and the extracted Mac package own updates; the containerized web process cannot change the host.", Command: "./tautweekly.sh update", Steps: []string{"Back up the package data directory.", "Run the command in the extracted package directory.", "Return here after Docker Desktop recreates the service."}, DocsURL: docsBase + "mac/#updates"}
+	case packageKindMacRegistry:
+		return UpdateGuidance{Owner: "Mac administrator and Docker Desktop", Summary: "The standalone Compose file pins the registry image. The containerized web process cannot pull images or change the host deployment.", Command: "docker compose pull tautweekly && docker compose up -d --force-recreate tautweekly", Steps: []string{"Back up the persistent /data volume or mount.", "Replace the image reference with the reviewed full-semver tag or digest.", "Pull and recreate the service, then return here to verify the running image and schedule."}, DocsURL: docsBase + "mac/#registry-updates"}
 	case packageKindFreeBSD:
 		return UpdateGuidance{Owner: "FreeBSD host administrator", Summary: "The root-owned rc.d/Podman wrapper owns package and image updates. The Manager never invokes sudo or Podman.", Command: "sudo tautweekly update", Steps: []string{"Back up /var/db/tautweekly.", "Run the host command.", "Return through the SSH tunnel or TLS proxy to verify the result."}, DocsURL: docsBase + "freebsd/#updates"}
 	case packageKindQNAP:

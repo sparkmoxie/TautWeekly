@@ -79,7 +79,9 @@ jobs:
           docker compose -f platforms/nas-docker/compose.yaml config --quiet
           docker compose -f platforms/nas-docker/compose.qnap.yaml config --quiet
       - name: Validate macOS Compose configuration
-        run: docker compose -f platforms/mac-docker/compose.yaml config --quiet
+        run: |
+          docker compose -f platforms/mac-docker/compose.yaml config --quiet
+          docker compose -f platforms/mac-docker/compose.registry.yaml config --quiet
       - name: Build and boot-test the macOS Docker image
         run: ./scripts/test-container-image.sh tautweekly-mac-ci platforms/mac-docker mac
 

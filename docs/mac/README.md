@@ -2,55 +2,74 @@
 
 [Open the macOS Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/)
 
-The Mac archive provides a GUI-first TautWeekly package in Docker Desktop on Intel and Apple-silicon
-Macs. It ships the same authenticated Manager core as the other maintained GUI
-packages with a macOS-specific capability profile. Manager **Config** is the
-source of truth for normal setup, verification, previews, controlled TestEmail
-delivery, embedded scheduling, and status. Terminal setup commands are retained
-only for expert recovery.
+The supported first-choice Mac deployment is one standalone Compose file backed
+by the public `ghcr.io/sparkmoxie/tautweekly-mac` image. It needs no repository
+clone and no local application build on either Intel or Apple-silicon Macs. The
+image keeps the proven Mac-specific Manager, embedded scheduler, health check,
+graceful shutdown, and read-only security profile. Manager **Config** remains
+the source of truth for setup, verification, previews, controlled TestEmail
+delivery, scheduling, and status.
 
-Current source baseline: **1.4.0**.
+The verified Mac archive and local image build remain available as a temporary
+fallback and break-fix path while the registry deployment matures.
+
+Current source baseline: **1.5.0**.
 
 ## Requirements
 
 - Intel (`x86_64`) or Apple silicon (`arm64`) macOS host.
 - Current Docker Desktop with Docker Compose available in Terminal.
-- A permanent extracted package directory writable by the current Mac user.
+- A private working directory for the standalone Compose file and backups.
 - Network access from the container to Tautulli, Plex, and an SMTP STARTTLS
   endpoint. No real service is contacted during package validation.
 
-## Install
+## Registry-first install
 
-1. Download `TautWeekly-mac-docker.tar.gz` or the matching ZIP and
-   `SHA256SUMS.txt` from the same stable GitHub release.
-2. Verify the archive SHA-256 checksum before extracting it.
-3. Extract it to a permanent directory. Do not run it from Downloads and later
-   move the directory; the bind-mounted `data/` path belongs to this package.
-4. Open Terminal in the extracted directory and run:
+The release Compose asset pins a full semantic version. `latest` is published
+only as a convenience and is not the supported automation pin. For v0.22.0:
 
 ```bash
-chmod +x INSTALL-MAC.command mac-install.sh tautweekly.sh mac-update.sh check-release.sh package-update.sh app/*.sh app/bin/*.sh
-./mac-install.sh
+mkdir -p ~/TautWeekly && cd ~/TautWeekly
+TAUTWEEKLY_VERSION=0.22.0
+curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/TautWeekly-mac-compose.yaml"
+curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/SHA256SUMS.txt"
+grep '  TautWeekly-mac-compose.yaml$' SHA256SUMS.txt | shasum -a 256 -c -
+mv TautWeekly-mac-compose.yaml compose.yaml
+docker compose pull tautweekly
+docker compose up -d tautweekly
+docker compose ps
 ```
 
-The installer verifies Docker Desktop, detects the Mac UID/GID, creates a
-mode-0600 `.env`, builds the correct amd64 or arm64 image, starts it, and checks
-authenticated Manager liveness. Existing `.env`, `data/`, configuration,
-schedules, output, and Manager credentials are preserved. The installer does
-not generate or print a default password.
+The Compose file pulls the matching public amd64 or arm64 manifest, publishes
+Manager only on `127.0.0.1:8787`, and stores all private state in the named
+`tautweekly-data` volume mounted at `/data`. It does not generate or print a
+default password. `docker compose ps` should report the service as healthy;
+startup may take up to the configured 90-second health start period.
+
+For CI/CD, keep the full tag or pin the same manifest by digest:
+
+```yaml
+image: ghcr.io/sparkmoxie/tautweekly-mac:0.22.0@sha256:<manifest-digest>
+```
+
+Inspect the release manifest with
+`docker buildx imagetools inspect ghcr.io/sparkmoxie/tautweekly-mac:0.22.0`.
+A digest pin is immutable; a full-semver pin is the readable supported default.
+The `0.22`, `latest`, and `edge` tags are mutable and unsuitable for unattended
+promotion.
 
 ## First-run Manager setup
 
 The Manager is published only at `http://localhost:8787/` by default.
 
-1. Retrieve the one-time pairing token from the package directory:
+1. Retrieve the one-time pairing token from the working directory:
 
    ```bash
-   ./tautweekly.sh manager-bootstrap
+   docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
+     /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager
    ```
 
-2. Run `./tautweekly.sh open-manager` or open
-   `http://localhost:8787/` in a Mac browser.
+2. Open `http://localhost:8787/` in a Mac browser.
 3. Enter the token and create a unique administrator password. The token is
    read only by that explicit command, never written to Docker logs or
    diagnostics, and invalidated after pairing.
@@ -137,33 +156,42 @@ stops accepting new work, the supervisor waits for an active newsletter
 operation to finish, and only then stops the scheduler. The bounded grace
 prevents an ordinary Docker Desktop restart from silently cancelling delivery.
 
-Use the Mac wrapper for lifecycle status:
+Use Compose from the working directory for lifecycle status:
 
 ```bash
-./tautweekly.sh status
-./tautweekly.sh logs
-./tautweekly.sh start
-./tautweekly.sh stop
-./tautweekly.sh restart
+docker compose ps
+docker compose logs -f --tail=200 tautweekly
+docker compose up -d tautweekly
+docker compose down
+docker compose up -d --force-recreate tautweekly
 ```
 
-`restart` recreates only the `tautweekly` service with the existing image and
-volumes, so current `.env` values are applied. It preserves `.env`, `data/`,
-configuration, Manager access state, schedules, and generated output.
+Recreation replaces only the service container. The named `/data` volume—and
+therefore configuration, credentials, Manager access state, schedules, output,
+and delivery history—remains attached. The archive fallback offers equivalent
+commands through `./tautweekly.sh`.
 
 ## Network, reverse proxy, and TLS
 
-The generated `.env` keeps `PREVIEW_BIND=127.0.0.1`; that compatibility name
-now controls the authenticated Manager host port. Keep loopback unless trusted
-LAN access is intentional. The Manager always requires authentication.
+The standalone Compose default keeps `PREVIEW_BIND=127.0.0.1`; that variable
+controls the authenticated Manager host port. Keep loopback unless trusted LAN
+access is intentional. The Manager always requires authentication. Put explicit
+overrides in a private `.env` beside `compose.yaml`, for example:
+
+```dotenv
+PREVIEW_BIND=0.0.0.0
+PREVIEW_PORT=8787
+MANAGER_ALLOWED_HOSTS=weekly.example.com
+MANAGER_SECURE_COOKIES=true
+```
 
 For a deliberate DNS name, add the hostname only (for example,
 `weekly.example.com`, with no scheme, port, wildcard, path, or trailing value)
 to `MANAGER_ALLOWED_HOSTS`. For HTTPS behind a trusted reverse proxy, preserve
 that exact original `Host` header, set `MANAGER_SECURE_COOKIES=true`, terminate
 TLS at the proxy, and do not publish the plain HTTP backend. Run
-`./tautweekly.sh restart` after either `.env` change so Compose recreates the
-service. `Forwarded` and `X-Forwarded-*` never override Host, origin, or TLS
+`docker compose up -d --force-recreate tautweekly` after an `.env` change.
+`Forwarded` and `X-Forwarded-*` never override Host, origin, or TLS
 checks. `GET /health/live` is unauthenticated and exposes only liveness;
 configuration, paths, versions, credentials, and newsletter state remain
 authenticated.
@@ -191,7 +219,7 @@ and remote sessions have full administration. For optional mobile access,
 install and sign in to Tailscale on the phone or tablet, then open the private
 address shown by Manager.
 
-For Docker-only hosts that cannot install the native client, the archive also
+For Docker-only hosts that cannot install the native client, the fallback archive also
 includes an optional `compose.tailscale.yaml` userspace sidecar. Follow the
 [NAS/Docker sidecar procedure](../nas-docker/README.md#optional-userspace-compose-sidecar).
 It has no Docker socket, `/dev/net/tun`, added capability, host-network access,
@@ -220,74 +248,110 @@ TV is unchanged. See the [watched-state rule and privacy boundary](../CONFIGURAT
 
 ## Persistent data, permissions, and backup
 
-The image is read-only. Writable runtime state is limited to the bind-mounted
-package `data/` directory and a bounded in-memory `/tmp`. The entrypoint maps
-the non-root container account to the Mac user's `PUID`/`PGID`, creates private
-paths, and repairs only legacy ownership within `/data`.
+The image is read-only. Writable runtime state is limited to `/data` and a
+bounded in-memory `/tmp`. The standalone Compose file uses a Docker named volume
+by default, so no host-path permissions or repository checkout are required.
+The entrypoint runs the service as the non-root `PUID`/`PGID` identity (1000:1000
+by default), creates private paths, and repairs only legacy ownership within
+the dedicated `/data` filesystem.
+
+For a visible host bind mount, create `data/`, replace
+`tautweekly-data:/data` with `./data:/data`, and set the Mac identity in a
+mode-0600 `.env` before the first start:
+
+```bash
+mkdir -p data
+printf 'PUID=%s\nPGID=%s\nUMASK=077\n' "$(id -u)" "$(id -g)" > .env
+chmod 600 .env
+docker compose up -d --force-recreate tautweekly
+```
+
+Do not use UID/GID 0. The container refuses a root runtime identity. Docker
+Desktop file sharing must allow the chosen bind path. Named volumes are the
+recommended no-clone default; bind mounts are supported when host-visible files
+are an explicit requirement.
 
 Back up before updates or recovery:
 
 ```bash
-./tautweekly.sh backup
+umask 077
+docker compose exec -T tautweekly tar -C /data -czf - . > "tautweekly-data-$(date +%Y%m%d-%H%M%S).tar.gz"
 ```
 
-The archive contains configuration, credentials, Manager authentication state,
+The backup contains configuration, credentials, Manager authentication state,
 schedules, output, and the bounded deleted-item cache; keep it private. For a
-filesystem-level backup, stop the service and copy both `.env` and `data/`.
+bind mount, a stopped copy of `.env` and `data/` is also a complete private
+filesystem backup.
 
-## Stable update and rollback
+## Registry updates and rollback
 
 Manager **Settings > Updates** is the primary Mac status source. It separately
-reports the container application/image, extracted Mac package, host-adapter
-compatibility, stable channel, latest stable release, check history, sanitized
-failure, and release notes. Authenticated entry renders cached status first and
-makes one non-blocking bounded check only when the last success is missing or
-at least 24 hours old and backoff permits. Successful results are reused for
-five minutes before **Check now** refreshes the same endpoint. The main header
-**Refresh** completes its local status reload first, repeats the saved-revision
-LAN-only Tautulli choices lookup when configuration is ready, and starts that
-check when its cooldown permits. It never generates previews or contacts
-Plex/SMTP, and scoped refresh controls remain isolated. Navigation,
-Dashboard rendering, and Manager health remain offline-capable. **Current**
-retains its green glow. The passive purple header SVG appears only for a
-validated newer running application; the card glows for every non-current
-state. The containerized web process
-cannot invoke Docker Desktop or change host package files, so the card exposes
-the copyable `./tautweekly.sh update` host command but no install button.
+reports the container application/image, registry Compose deployment,
+host-adapter compatibility, stable channel, latest stable release, check
+history, sanitized failure, and release notes. A stable release is accepted
+only when it contains the matching standalone Compose asset. Authenticated
+entry renders cached status first and makes one non-blocking bounded check only
+when the last success is missing or at least 24 hours old and backoff permits.
+Successful results are reused for five minutes before **Check now** refreshes
+the same endpoint. Navigation, Dashboard rendering, and Manager health remain
+offline-capable. The containerized web process cannot invoke Docker Desktop or
+change Compose, so the card exposes a copyable pull/recreate command but no
+install button.
 
-`./tautweekly.sh check-update` remains a terminal-only comparison of the installed package
-against the latest stable GitHub release and never applies or schedules an
-update. macOS does not enable unattended updates.
+The release workflow publishes both the NAS and Mac multi-architecture
+manifests before it can publish the GitHub release and its Compose asset. This
+prevents a successful release from silently advertising a Mac image that did
+not publish. macOS does not enable unattended updates.
 
 To upgrade:
 
-1. Run `./tautweekly.sh backup` and keep the previous verified archive.
-2. Run `./tautweekly.sh update`. It downloads the matching stable TAR archive
-   and `SHA256SUMS.txt`, verifies the published checksum and internal
-   `RELEASE-FILES.txt`, and replaces only release-owned files.
-3. Open Manager, sign in again if the service restart invalidated the session,
-   and verify **Settings > Updates**, Manager/scheduler health, Config status,
-   all six previews, and controlled TestEmail result.
+1. Create a private `/data` backup and record the current exact image reference.
+2. Review the new release notes. Set both the readable version and, for an
+   immutable CI/CD pin, the reviewed manifest digest in `.env`:
 
-The updater takes the same operation lock as the renderer, preserves `.env`,
-`data/`, and unrelated administrator files, removes only retired files owned by
-the previous release manifest, verifies the running image version and health,
-and restores both prior package files and the previous local image automatically
-if the candidate fails. Keep the private data backup for independent recovery.
-Manager-triggered preview and delivery operations make one non-blocking lock
-attempt and report **Operation busy** immediately; host CLI, scheduler, updater,
-and shutdown waits retain their existing bounds.
+   ```dotenv
+   TAUTWEEKLY_VERSION=0.22.0
+   TAUTWEEKLY_IMAGE=ghcr.io/sparkmoxie/tautweekly-mac:0.22.0@sha256:<manifest-digest>
+   ```
 
-### One-time update from an image-only host wrapper
+3. Pull and recreate only the service:
 
-Packages at or before v0.14.0 can update the image without replacing the Mac
-host wrapper. If container startup warns that the host adapter is `legacy`,
-download the current stable **Mac Docker** archive and `SHA256SUMS.txt`, verify
-the published checksum, and extract the archive over the existing package
-directory. Do not delete or replace `.env` or `data/`. Then run
-`./tautweekly.sh update`. This one-time overlay installs the verified shared
-package updater; later update commands advance the host files and image
-together and roll both back on a failed health check.
+   ```bash
+   docker compose pull tautweekly
+   docker compose up -d --force-recreate tautweekly
+   docker compose ps
+   ```
+
+4. Open Manager, sign in again if recreation invalidated the session, and
+   verify **Settings > Updates**, Manager/scheduler health, Config status, all
+   six previews, and the controlled TestEmail result.
+
+Compose never replaces the named or bind-mounted `/data`. If a pull is
+interrupted, rerun it; the old container continues until recreate. If recreate
+is interrupted, rerun `docker compose up -d --force-recreate tautweekly` and
+check health. If the candidate is unhealthy, restore the previous
+`TAUTWEEKLY_VERSION` and `TAUTWEEKLY_IMAGE`, pull if needed, and recreate. The
+same `/data` then attaches to the previous image. Do not delete the volume or
+run `docker compose down -v` during upgrade or rollback.
+
+## Archive/local-build fallback
+
+Download `TautWeekly-mac-docker.tar.gz` or the matching ZIP plus
+`SHA256SUMS.txt` from one stable release when registry access is unavailable or
+the standalone path needs break-fix isolation. Verify SHA-256, extract to a
+permanent directory, and run `./mac-install.sh`. The installer detects the Mac
+UID/GID, creates a private `.env`, builds the architecture-specific image
+locally, and keeps private state in the package `data/` bind mount.
+
+The fallback `./tautweekly.sh update` path still verifies the release checksum
+and internal `RELEASE-FILES.txt`, coordinates the operation lock, rebuilds the
+local image, verifies health/version, and rolls package files plus the previous
+image back together on failure. Existing archive installations may remain on
+this path; no migration or private-data move is required for v0.22.0.
+
+For packages at or before v0.14.0 whose Manager reports a `legacy` host adapter,
+verify and extract the current Mac archive over the same directory without
+deleting `.env` or `data/`, then run `./tautweekly.sh update` once.
 
 Manager **Config > Configuration backups** can permanently delete one selected
 configuration backup only after **Confirm delete**. This leaves the live
@@ -298,28 +362,35 @@ configuration unchanged and cannot be undone.
 If the Manager password is lost:
 
 ```bash
-./tautweekly.sh manager-reset-access
-./tautweekly.sh manager-bootstrap
+docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
+  /opt/tautweekly/bin/tautweekly-manager access-recover --data-dir /data/manager --confirm
+docker compose restart tautweekly
+docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
+  /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager
 ```
 
 Recovery resets only the administrator password and active sessions, waits for
 any active newsletter during the controlled restart, and preserves
 configuration, schedules, history, output, and delivery state.
 
-For repair/reinstall, verify and extract the same stable archive over the
-package, preserve `.env` and `data/`, then run `./tautweekly.sh update`. To
-uninstall the application but retain data, run `./tautweekly.sh stop` and keep
-the package's `.env` and `data/` in a private backup. Delete the local
-`tautweekly-mac:stable` image only after confirming no other project uses it.
-Delete `.env`, `data/`, and private backups only when the user explicitly wants
-all configuration, credentials, schedules, history, output, and cache removed;
-the package never deletes them implicitly.
+For repair/reinstall, pull the same exact tag or digest and run
+`docker compose up -d --force-recreate tautweekly`; `/data` remains attached.
+To uninstall the service but retain data, run `docker compose down` without
+`-v` and keep the private backup plus `.env`/Compose files. Delete the Docker
+volume, bind-mounted `data/`, `.env`, and backups only when the user explicitly
+wants all configuration, credentials, schedules, history, output, and cache
+removed. Neither deployment path deletes them implicitly.
+
+Archive fallback users may use `./tautweekly.sh manager-reset-access`,
+`manager-bootstrap`, `update`, and `stop` for the same scoped operations.
 
 ## Expert/recovery commands
 
-`./tautweekly.sh setup`, `verify`, `preview-all USER_ID`, `send-test-all
-USER_ID`, library/user selectors, and schedule commands remain available for
-recovery or scripted administration. They are not the normal Mac setup source.
+Registry users can invoke the allowlisted `/opt/tautweekly/bin/run-script.sh`
+and `run-mode.sh` helpers through `docker compose exec tautweekly`; the archive
+fallback exposes the same `setup`, `verify`, `preview-all USER_ID`,
+`send-test-all USER_ID`, library/user selectors, and schedule commands through
+`./tautweekly.sh`. They are not the normal Mac setup source.
 Real-recipient `welcome` and `send-all` commands retain explicit confirmation.
 Manager's **Repeat this Tautulli lookup** refreshes only the displayed choices;
 every manual or scheduled SendAll performs one bounded Tautulli/Plex user-list

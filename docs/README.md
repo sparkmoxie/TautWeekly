@@ -72,7 +72,7 @@ full-card glow so the additional remote administration boundary remains visible.
 
 - [Windows installation](windows/README.md)
 - [NAS / Docker installation](nas-docker/README.md)
-- [macOS installation](mac/README.md)
+- [macOS registry-first installation and archive fallback](mac/README.md)
 - [Native Linux installation](linux/README.md)
 - [FreeBSD Podman installation](freebsd/README.md)
 - [Configuration reference](CONFIGURATION.md)

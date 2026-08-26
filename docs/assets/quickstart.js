@@ -199,4 +199,5 @@
   if (clear) clear.hidden = true;
   syncViewport();
   updateSearch();
+  window.requestAnimationFrame(() => page.classList.add('quickstart-interactive'));
 })();

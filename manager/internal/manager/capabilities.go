@@ -77,6 +77,12 @@ func capabilitiesFor(options Options) Capabilities {
 		}
 	}
 	if mode == runtimeModeMac {
+		updateProvider := "mac-package"
+		pathStyle := "mac-bind-mount"
+		if packageKind == packageKindMacRegistry {
+			updateProvider = "mac-registry"
+			pathStyle = "container-volume"
+		}
 		return Capabilities{
 			RuntimeMode:       runtimeModeMac,
 			PackageKind:       packageKind,
@@ -87,8 +93,8 @@ func capabilitiesFor(options Options) Capabilities {
 			ScheduleProvider:  "embedded-container",
 			ScheduleActions:   []string{"enable", "disable"},
 			LifecycleProvider: "docker-desktop",
-			UpdateProvider:    "mac-package",
-			PathStyle:         "mac-bind-mount",
+			UpdateProvider:    updateProvider,
+			PathStyle:         pathStyle,
 			SecureCookies:     options.SecureCookies,
 		}
 	}

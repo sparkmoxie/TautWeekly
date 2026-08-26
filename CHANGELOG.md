@@ -6,6 +6,44 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-08-26
+
+### Added
+
+- Published the first supported registry-first macOS / Docker Desktop image as
+  `ghcr.io/sparkmoxie/tautweekly-mac` for both amd64 and arm64. Mac users can
+  now install one service without cloning the repository or building locally.
+- Added `TautWeekly-mac-compose.yaml` as a checksummed standalone release asset.
+  It pins the full release semver, exposes the authenticated Manager only on
+  Mac loopback by default, and persists private runtime state under `/data` in
+  a named volume.
+- Added a truthful `mac-docker-registry` Manager package profile with image,
+  package, host-adapter, pull/recreate, digest-pin, and rollback guidance.
+
+### Changed
+
+- Made the container workflow reusable by the tag release workflow. A GitHub
+  release now waits for successful NAS and Mac amd64/arm64 image publication,
+  preventing release assets and advertised registry images from silently
+  diverging.
+- Documented full-semver and immutable manifest-digest pins for automation;
+  mutable `latest`, minor, and `edge` tags are not recommended CI/CD pins.
+- Extended container checks across Mac registry boot/health, authentication,
+  version/profile metadata, bind ownership, named-volume ownership, recreation,
+  persisted Manager bootstrap state, and the existing read-only/non-root
+  boundary.
+- Advanced the macOS source baseline to 1.5.0. Windows packaging and the native
+  Linux/FreeBSD deployment choices are unchanged.
+
+### Compatibility
+
+- Existing Mac archive installations keep their `.env`, bind-mounted `data/`,
+  verified local build, coordinated updater, health verification, and rollback
+  path. Registry migration is optional and no private data is moved or deleted.
+- The registry image keeps the established Mac Manager mode, embedded scheduler,
+  health check, 30-minute delivery shutdown grace, `host.docker.internal`
+  behavior, and hardened container settings.
+
 ## [0.21.4] - 2026-08-25
 
 ### Changed

@@ -1,0 +1,64 @@
+FROM golang:1.26.6-bookworm AS manager-build
+
+ARG TARGETARCH
+ARG BUILD_VERSION=dev
+WORKDIR /src/manager
+COPY manager/ ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH:-amd64}" \
+    go build -trimpath -buildvcs=false -ldflags "-s -w -X main.version=${BUILD_VERSION}" \
+    -o /out/tautweekly-manager ./cmd/tautweekly-manager
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim
+
+ARG BUILD_VERSION=dev
+
+LABEL org.opencontainers.image.title="TautWeekly for Plex macOS / Docker Desktop" \
+      org.opencontainers.image.version="$BUILD_VERSION" \
+      org.opencontainers.image.description="TautWeekly for Plex newsletter service for Docker Desktop on macOS" \
+      org.opencontainers.image.url="https://github.com/sparkmoxie/TautWeekly" \
+      org.opencontainers.image.source="https://github.com/sparkmoxie/TautWeekly" \
+      org.opencontainers.image.documentation="https://sparkmoxie.github.io/TautWeekly/mac/" \
+      org.opencontainers.image.licenses="MIT" \
+      io.tautweekly.runtime-profile="mac" \
+      io.tautweekly.host-adapter-api="3"
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gosu \
+        imagemagick \
+        python3 \
+        tini \
+        tzdata \
+        util-linux \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid 1000 tautweekly \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash tautweekly
+
+WORKDIR /opt/tautweekly
+COPY platforms/mac-docker/app/ /opt/tautweekly/
+COPY --from=manager-build /out/tautweekly-manager /opt/tautweekly/bin/tautweekly-manager
+RUN chmod +x /opt/tautweekly/entrypoint.sh \
+    /opt/tautweekly/run-service.sh \
+    /opt/tautweekly/healthcheck.sh \
+    /opt/tautweekly/bin/*.sh \
+    /opt/tautweekly/bin/tautweekly-manager
+
+ENV TAUTWEEKLY_DATA_DIR=/data \
+    TAUTWEEKLY_CONFIG=/data/config.json \
+    TAUTWEEKLY_MANAGER_LISTEN=0.0.0.0:8080 \
+    HOME=/tmp/tautweekly/home \
+    XDG_CONFIG_HOME=/tmp/tautweekly/config \
+    XDG_CACHE_HOME=/tmp/tautweekly/cache \
+    XDG_DATA_HOME=/tmp/tautweekly/share \
+    DOTNET_BUNDLE_EXTRACT_BASE_DIR=/tmp/tautweekly/dotnet \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    POWERSHELL_TELEMETRY_OPTOUT=1
+
+VOLUME ["/data"]
+EXPOSE 8080
+ENTRYPOINT ["/usr/bin/tini","--","/opt/tautweekly/entrypoint.sh"]

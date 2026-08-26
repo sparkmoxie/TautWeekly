@@ -1,0 +1,45 @@
+services:
+  tautweekly:
+    image: ${TAUTWEEKLY_IMAGE:-ghcr.io/sparkmoxie/tautweekly-mac:__TAUTWEEKLY_RELEASE_VERSION__}
+    container_name: tautweekly
+    restart: unless-stopped
+    read_only: true
+    environment:
+      TZ: ${TZ:-Etc/UTC}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      UMASK: ${UMASK:-077}
+      TAUTWEEKLY_DATA_DIR: /data
+      TAUTWEEKLY_CONFIG: /data/config.json
+      TAUTWEEKLY_PREVIEW_BASE_URL: ${PREVIEW_BASE_URL:-http://localhost:8787}
+      TAUTWEEKLY_MANAGER_ALLOWED_HOSTS: ${MANAGER_ALLOWED_HOSTS:-}
+      TAUTWEEKLY_MANAGER_SECURE_COOKIES: ${MANAGER_SECURE_COOKIES:-false}
+      TAUTWEEKLY_PACKAGE_KIND: "mac-docker-registry"
+      TAUTWEEKLY_PACKAGE_VERSION: "${TAUTWEEKLY_VERSION:-__TAUTWEEKLY_RELEASE_VERSION__}"
+      TAUTWEEKLY_HOST_ADAPTER_API: "3"
+    volumes:
+      - tautweekly-data:/data
+    ports:
+      - "${PREVIEW_BIND:-127.0.0.1}:${PREVIEW_PORT:-8787}:8080"
+    healthcheck:
+      test: ["CMD", "/opt/tautweekly/healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    stop_grace_period: 30m
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+
+volumes:
+  tautweekly-data:

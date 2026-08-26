@@ -626,6 +626,7 @@ func TestUpdatePackageLanguageAndLegacyAdapterMatrix(t *testing.T) {
 		{packageKindWindows, runtimeModeWindows, "", "Windows", false},
 		{packageKindLinux, runtimeModeLinux, "sudo tautweekly update", "Linux", false},
 		{packageKindMac, runtimeModeMac, "./tautweekly.sh update", "Mac", true},
+		{packageKindMacRegistry, runtimeModeMac, "docker compose pull", "Mac", true},
 		{packageKindFreeBSD, runtimeModeNAS, "sudo tautweekly update", "FreeBSD", true},
 		{packageKindNAS, runtimeModeNAS, "./tautweekly.sh update", "Docker Compose", true},
 		{packageKindQNAP, runtimeModeNAS, "./tautweekly.sh update", "QNAP Container Station", true},

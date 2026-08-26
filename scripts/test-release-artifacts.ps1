@@ -794,11 +794,25 @@ foreach ($tarArchive in $tarArchives) {
 Assert-True ($releaseVersions.Count -eq 9) "Expected repository version metadata from all nine packages, found $($releaseVersions.Count)."
 Assert-True (@($releaseVersions | Select-Object -Unique).Count -eq 1) 'Release packages do not identify one consistent repository version.'
 
+$repositoryVersion = @($releaseVersions | Select-Object -Unique)[0]
+$macComposePath = Join-Path $DistPath 'TautWeekly-mac-compose.yaml'
+Assert-True (Test-Path -LiteralPath $macComposePath -PathType Leaf) 'The standalone Mac Compose release asset is missing.'
+$macCompose = Get-Content -LiteralPath $macComposePath -Raw
+Assert-True (-not $macCompose.Contains('__TAUTWEEKLY_RELEASE_VERSION__')) 'The standalone Mac Compose asset contains an unresolved release token.'
+Assert-True ($macCompose.Contains("ghcr.io/sparkmoxie/tautweekly-mac:$repositoryVersion")) 'The standalone Mac Compose asset does not default to the release semver image.'
+Assert-True ($macCompose.Contains("TAUTWEEKLY_VERSION:-$repositoryVersion")) 'The standalone Mac Compose asset does not report the same package version.'
+Assert-True ($macCompose.Contains('TAUTWEEKLY_PACKAGE_KIND: "mac-docker-registry"')) 'The standalone Mac Compose asset does not identify registry update ownership.'
+Assert-True ($macCompose.Contains('${PREVIEW_BIND:-127.0.0.1}:${PREVIEW_PORT:-8787}:8080')) 'The standalone Mac Compose asset is not loopback-first.'
+Assert-True ($macCompose.Contains('tautweekly-data:/data') -and $macCompose.Contains('volumes:')) 'The standalone Mac Compose asset does not persist /data in a named volume.'
+Assert-True ($macCompose.Contains('read_only: true') -and $macCompose.Contains('no-new-privileges:true') -and $macCompose.Contains('cap_drop:')) 'The standalone Mac Compose asset is missing the read-only security boundary.'
+Assert-True ($macCompose.Contains('stop_grace_period: 30m')) 'The standalone Mac Compose asset does not preserve the delivery shutdown grace.'
+Assert-True ($macCompose -notmatch '(?m)^\s*build\s*:') 'The standalone Mac Compose asset unexpectedly requires a local source build.'
+
 $checksumPath = Join-Path $DistPath 'SHA256SUMS.txt'
 Assert-True (Test-Path -LiteralPath $checksumPath) 'SHA256SUMS.txt is missing.'
 $checksumLines = @(Get-Content -LiteralPath $checksumPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 $artifacts = @(Get-ChildItem -LiteralPath $DistPath -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' })
-Assert-True ($artifacts.Count -eq 10) "Expected ten release artifacts, found $($artifacts.Count)."
+Assert-True ($artifacts.Count -eq 11) "Expected eleven release artifacts, found $($artifacts.Count)."
 Assert-True ($checksumLines.Count -eq $artifacts.Count) 'Checksum manifest does not cover every artifact exactly once.'
 foreach ($artifact in $artifacts) {
     $line = @($checksumLines | Where-Object { $_ -match ('\s\s' + [regex]::Escape($artifact.Name) + '$') })

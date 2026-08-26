@@ -151,6 +151,12 @@ func TestMacCapabilitiesRequireAuthenticationAndDescribeDockerDesktop(t *testing
 		strings.Join(capabilities.ScheduleActions, ",") != "enable,disable" || !capabilities.SecureCookies {
 		t.Fatalf("unexpected macOS capability boundary: %+v", capabilities)
 	}
+	registryCapabilities := capabilitiesFor(Options{RuntimeMode: runtimeModeMac, PackageKind: packageKindMacRegistry})
+	if registryCapabilities.PackageKind != packageKindMacRegistry ||
+		registryCapabilities.UpdateProvider != "mac-registry" ||
+		registryCapabilities.PathStyle != "container-volume" {
+		t.Fatalf("unexpected macOS registry capability boundary: %+v", registryCapabilities)
+	}
 
 	server, err := New(Options{
 		DataDir:        t.TempDir(),

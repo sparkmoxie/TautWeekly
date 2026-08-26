@@ -69,18 +69,17 @@
       </div>
     </section>
 
-    <section class="section searchable" id="feature-spotlight" data-feature-release="v0.21.0" data-search="feature release top genre trending recent releases movies television tv email preview preheader privacy animation binge champion packages">
+    <section class="section searchable" id="feature-spotlight" data-feature-release="v0.22.0" data-search="feature release macos docker desktop registry ghcr compose no clone semver digest amd64 arm64 persistent data rollback packages">
       <div class="section-heading">
-        <div><div class="eyebrow">v0.21.0 Top Genre</div><h2>A complementary finish for every release week</h2></div>
-        <p>The newest feature release adds a private server-wide Top Genre footer, clarifies Trending movie and TV shelves, and keeps the visible count line synchronized with inbox preview text.</p>
+        <div><div class="eyebrow">v0.22.0 Mac registry deployment</div><h2>One Compose file. No clone. No local build.</h2></div>
+        <p>The newest feature release publishes the Mac-specific Manager image for Intel and Apple silicon and pairs it with a checksummed standalone Compose asset.</p>
       </div>
       <article class="card featured">
-        <span class="tag">Every maintained package</span>
-        <img src="assets/genre-scifi.gif" width="42" height="42" alt="" loading="lazy">
-        <h3>Hot pairs with Trending; Trending pairs with Top Genre</h3>
-        <p>v0.21.0 uses first-genre Plex metadata and qualified movie watch time to select one anonymous weekly genre. During Trending weeks, up to four recent movies stay visible beside either new TV or recent TV, while the count above the date and the email preheader describe the same state.</p>
-        <ul><li>No viewer or recipient identity in Top Genre</li><li>Deterministic watch-time, movie-count, play-count, then name ranking</li><li>Twelve validated genre animations with a neutral fallback</li><li>Matching Binge Champion and Top Genre supporting typography</li></ul>
-        <div class="card-actions"><a href="CONFIGURATION.md#content-and-eligibility">Content and eligibility</a><a href="examples/preview-all-00-INDEX.html">View the sanitized example</a><a href="releases/v0.21.0.md">v0.21.0 release notes</a></div>
+        <span class="tag">macOS · Docker Desktop</span>
+        <h3>Registry-first without giving the container Docker control</h3>
+        <p>v0.22.0 adds <code>ghcr.io/sparkmoxie/tautweekly-mac</code> and a standalone release Compose file. It keeps loopback-first Manager access, persistent <code>/data</code>, the embedded scheduler, health checks, and rollback under the Mac administrator.</p>
+        <ul><li>Public amd64 and arm64 image manifest</li><li>Full-semver and immutable digest guidance for CI/CD</li><li>Named-volume default plus UID/GID-aware bind mounts</li><li>Release publication gated on NAS and Mac image publication</li><li>Verified archive/local-build fallback retained</li></ul>
+        <div class="card-actions"><a href="mac/#install">Registry install</a><a href="mac/README.md#registry-updates-and-rollback">Update and rollback</a><a href="releases/v0.22.0.md">v0.22.0 release notes</a></div>
       </article>
     </section>
 
@@ -153,9 +152,9 @@
           <div class="platform-logo-card"><img class="apple-logo" src="assets/platforms/apple.svg" alt="" width="814" height="1000"></div>
           <span class="tag">Docker Desktop</span>
           <h3>macOS</h3>
-          <p>Intel and Apple silicon setup with host UID/GID discovery and
-            localhost-only previews by default.</p>
-          <ul><li>Source baseline 1.4.0</li><li>Authenticated Mac Manager</li><li>Intel + Apple silicon</li></ul>
+          <p>Registry-first Intel and Apple silicon deployment with a standalone
+            Compose file and loopback-only Manager by default.</p>
+          <ul><li>Source baseline 1.5.0</li><li>Mac-specific GHCR image + authenticated Manager</li><li>Intel + Apple silicon</li></ul>
           <div class="card-actions"><a href="mac/">macOS Quickstart</a><a href="mac/README.md">Documentation</a></div>
         </article>
         <article class="card">

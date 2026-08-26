@@ -7,8 +7,24 @@ on:
 
 permissions:
   contents: write
+  packages: write
+  attestations: write
+  id-token: write
 
 jobs:
+  container-images:
+    name: Publish release container images
+    needs: [build, windows-installer]
+    uses: ./.github/workflows/container.yml
+    with:
+      release_tag: ${{ github.ref_name }}
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
   build:
     name: Build and validate release candidates
     runs-on: ubuntu-latest
@@ -78,6 +94,7 @@ jobs:
           docker compose -f platforms/nas-docker/compose.yaml config --quiet
           docker compose -f platforms/nas-docker/compose.qnap.yaml config --quiet
           docker compose -f platforms/mac-docker/compose.yaml config --quiet
+          docker compose -f platforms/mac-docker/compose.registry.yaml config --quiet
       - name: Build release archives and checksums
         shell: pwsh
         run: ./scripts/build-releases.ps1
@@ -135,7 +152,7 @@ jobs:
   publish:
     name: Publish verified release
     runs-on: ubuntu-latest
-    needs: [build, windows-installer]
+    needs: [build, windows-installer, container-images]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v4

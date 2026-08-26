@@ -1,6 +1,13 @@
 TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 ================================
 
+v1.5.0 Portable
+---------------
+- publishes a dedicated public amd64/arm64 macOS Docker Desktop image at ghcr.io/sparkmoxie/tautweekly-mac
+- adds a standalone, full-semver-pinned Compose release asset with loopback Manager access and persistent named /data storage
+- reports registry-owned update, pull/recreate, and rollback guidance in Manager without granting Docker control to the container
+- keeps the verified archive/local-build installer and coordinated rollback path as a supported fallback for existing installations
+
 v1.4.4 Portable
 ---------------
 - optimizes all 32 email GIFs at twice their email display size while preserving frames, timing, loops, and transparency
