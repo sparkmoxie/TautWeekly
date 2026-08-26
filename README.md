@@ -196,6 +196,6 @@ licensed under the [MIT License](LICENSE). Asset provenance is recorded in
 [Third-party notices](THIRD_PARTY_NOTICES.md).
 
 TautWeekly for Plex is an independent community project. It is not affiliated
-with, endorsed by, or sponsored by Plex, Tautulli, or the other platforms and
+with, endorsed by, or sponsored by Plex, [Tautulli](https://github.com/tautulli/tautulli), or the other platforms and
 providers it integrates with. All product names and marks belong to their
 respective owners.
