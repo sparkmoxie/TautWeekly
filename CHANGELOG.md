@@ -6,6 +6,20 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.21.3] - 2026-08-25
+
+### Fixed
+
+- Completed the 12px IMDb-number refinement in main TV cards: exact episode
+  scores and show-level fallback scores now match the 12px footer rating text.
+  Preserved weight 700, existing spacing, icon dimensions, rating selection,
+  and all other main-card typography. v0.21.2 had only updated footer recaps.
+- Extended existing renderer, visual, and package assertions to cover main TV
+  IMDb numbers as well as footer ratings.
+- Advanced source baselines to Windows 1.10.3, NAS/Docker 1.5.3, macOS 1.4.3,
+  native Linux 1.3.3, and FreeBSD/Podman 1.2.3. All v0.21.2 footer values,
+  marker placement, privacy, lifecycle behavior, and validation policy remain.
+
 ## [0.21.2] - 2026-08-25
 
 ### Fixed

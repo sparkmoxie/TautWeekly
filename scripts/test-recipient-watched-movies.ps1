@@ -185,8 +185,10 @@ foreach ($renderer in $renderers) {
     Assert-True ($watchedCard.Contains('vertical-align:middle;margin-left:8px;')) "$($renderer.Path) card spacing differs from hero spacing"
     $unwatchedCard = Get-ReleaseCardsHtml @($unwatched) @() Preview $state $renderer.PreviewBase Movie
     Assert-True (-not $unwatchedCard.Contains('recipient-watched-title-icon')) "$($renderer.Path) left watched markup in an unwatched card"
+    $tv | Add-Member -NotePropertyName DesignImdbRating -NotePropertyValue '8.4'
     $tvCard = Get-ReleaseCardsHtml @($tv) @() Preview $state $renderer.PreviewBase TV
     Assert-True (-not $tvCard.Contains('recipient-watched-title-icon')) "$($renderer.Path) changed TV card rendering"
+    Assert-True ($tvCard.Contains('alt="IMDb"') -and $tvCard.Contains('8.4') -and $tvCard.Contains('font-size:12px;font-weight:700;white-space:nowrap;')) "$($renderer.Path) main TV show-level IMDb fallback is not 12px"
 
     $statsRow = Get-StatsMovieRowsHtml @($watched) @() Preview
     Assert-True ($statsRow.Contains('>Watched Movie</div>') -and -not $statsRow.Contains('recipient-watched')) "$($renderer.Path) marked a personal movie recap"

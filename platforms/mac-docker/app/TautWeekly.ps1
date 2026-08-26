@@ -7469,7 +7469,7 @@ function Get-TvEpisodeLinesHtml {
         $ratingHtml = ""
         if (-not [string]::IsNullOrWhiteSpace($imdb)) {
             $imdbSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "assets/imdb.png" }
-            $ratingHtml = '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:11px;font-weight:700;white-space:nowrap;">' +
+            $ratingHtml = '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:12px;font-weight:700;white-space:nowrap;">' +
             '<img src="' + $imdbSrc + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
             (HtmlEncode $imdb) +
             '</span>'
@@ -7619,7 +7619,7 @@ $genreHtml
                     $showImdb = Get-OptionalStringProperty -InputObject $item -Name "DesignImdbRating"
                     if (-not [string]::IsNullOrWhiteSpace($showImdb)) {
                         $imdbSrc = if ($ImageMode -eq "Email") { "cid:icon_imdb" } else { "../assets/imdb.png" }
-                        $showRatingHtml = '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:11px;font-weight:700;white-space:nowrap;">' +
+                        $showRatingHtml = '<span style="display:inline-block;margin-left:8px;color:#e5a00d;font-size:12px;font-weight:700;white-space:nowrap;">' +
                             '<img src="' + $imdbSrc + '" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px;">' +
                             (HtmlEncode $showImdb) +
                             '</span>'
