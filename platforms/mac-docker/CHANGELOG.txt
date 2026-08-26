@@ -1,6 +1,13 @@
 TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 ================================
 
+v1.6.0 Portable
+---------------
+- migrates the preferred Docker Desktop route to ghcr.io/sparkmoxie/tautweekly with the desktop profile
+- keeps loopback-first Manager access, host.docker.internal, named-volume persistence, semver/digest pins, and host-owned rollback
+- retains ghcr.io/sparkmoxie/tautweekly-mac:0.22.0 as a documented rollback source and the verified local-build archive as a break-fix fallback
+- shares the canonical container application payload instead of maintaining a second Mac-specific copy
+
 v1.5.0 Portable
 ---------------
 - publishes a dedicated public amd64/arm64 macOS Docker Desktop image at ghcr.io/sparkmoxie/tautweekly-mac

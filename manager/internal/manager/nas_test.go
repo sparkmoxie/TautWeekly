@@ -372,3 +372,31 @@ func TestNASStatusUsesEmbeddedSchedulerHeartbeatAndState(t *testing.T) {
 		t.Fatalf("active embedded delivery retained stale terminal evidence: %+v", snapshot.Delivery)
 	}
 }
+func TestContainerProfilesReportExplicitHostBoundaries(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name               string
+		options            Options
+		wantProfile        string
+		wantPackage        string
+		wantLifecycle      string
+		wantNetworkScope   string
+		wantUpdateProvider string
+	}{
+		{"desktop", Options{RuntimeMode: runtimeModeMac, RuntimeProfile: runtimeProfileDesktop, PackageKind: packageKindContainerDesktop}, runtimeProfileDesktop, packageKindContainerDesktop, "docker-desktop", "host-loopback", packageKindContainerDesktop},
+		{"server", Options{RuntimeMode: runtimeModeNAS, RuntimeProfile: runtimeProfileServer, PackageKind: packageKindContainerCompose}, runtimeProfileServer, packageKindContainerCompose, "container-host", "trusted-lan", packageKindContainerCompose},
+		{"unraid", Options{RuntimeMode: runtimeModeNAS, RuntimeProfile: runtimeProfileUnraid, PackageKind: packageKindUnraid}, runtimeProfileUnraid, packageKindUnraid, "unraid-host", "trusted-lan", packageKindUnraid},
+		{"legacy NAS default", Options{RuntimeMode: runtimeModeNAS, PackageKind: packageKindNAS}, runtimeProfileServer, packageKindNAS, "container-host", "trusted-lan", packageKindNAS},
+		{"legacy Mac default", Options{RuntimeMode: runtimeModeMac, PackageKind: packageKindMacRegistry}, runtimeProfileDesktop, packageKindMacRegistry, "docker-desktop", "host-loopback", "mac-registry"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := capabilitiesFor(test.options)
+			if got.RuntimeProfile != test.wantProfile || got.PackageKind != test.wantPackage ||
+				got.LifecycleProvider != test.wantLifecycle || got.NetworkScope != test.wantNetworkScope ||
+				got.UpdateProvider != test.wantUpdateProvider || got.Authentication != "required" {
+				t.Fatalf("profile capability boundary: got %+v", got)
+			}
+		})
+	}
+}

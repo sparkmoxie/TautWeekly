@@ -3,13 +3,14 @@
 [Open the NAS/Docker/QNAP/Unraid Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
 · [Install from the published Unraid Apps listing](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb)
 
-This is one NAS / Docker distribution. It runs TautWeekly for Plex as a
-dedicated service beside Tautulli and targets QNAP Container Station, Unraid,
-general Linux Docker hosts, and Docker Desktop on x86-64 or ARM64. Docker
-Compose is the deployment mechanism for manual installations, not a separate
-edition or package.
+TautWeekly publishes one shared `ghcr.io/sparkmoxie/tautweekly` OCI image for
+QNAP Container Station, Unraid, general Linux Docker hosts, Docker Desktop,
+FreeBSD/Podman, and compatible x86-64 or ARM64 container systems. The explicit
+`server`, `unraid`, or `desktop` runtime profile preserves each host's Manager,
+network, persistence, permission, health, scheduling, and lifecycle contract
+without duplicating the application payload.
 
-Current source baseline: **1.5.0**.
+Current source baseline: **1.6.0**.
 
 > [!IMPORTANT]
 > The authenticated Manager is the setup source for every target in this
@@ -54,8 +55,11 @@ not change the password, newsletter schedule, or a newsletter already running.
 
 In Unraid Community Applications, search for **TautWeekly for Plex**, review
 the port and appdata path, and select **Install**. The maintained template is
-[`templates/tautweekly.xml`](../../templates/tautweekly.xml) and pulls
-`ghcr.io/sparkmoxie/tautweekly:latest` for amd64 or arm64 automatically.
+[`templates/tautweekly.xml`](../../templates/tautweekly.xml), selects the
+validated `unraid` profile, and pulls `ghcr.io/sparkmoxie/tautweekly:latest`
+for amd64 or arm64. This mutable reference is an Unraid Apps lifecycle
+exception, not the recommended CI/CD reference; review the digest change in
+Docker/Apps before applying it.
 
 After installation, open **Docker > TautWeekly for Plex > Console** and run:
 
@@ -106,7 +110,34 @@ The guided SSH installer remains available from the release archive:
 ./qnap-install.sh
 ```
 
-## Install from a release on another Docker host
+## Preferred no-clone Compose install
+
+Download and verify the release's standalone server Compose asset. It pins the
+full semantic version, explicitly selects `TAUTWEEKLY_RUNTIME_PROFILE=server`,
+uses the `container-compose` package identity, exposes the Manager on the
+trusted LAN by default, and bind-mounts `./data` at `/data`:
+
+```bash
+mkdir -p TautWeekly && cd TautWeekly
+TAUTWEEKLY_VERSION=0.23.0
+curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/TautWeekly-compose.yaml"
+curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/SHA256SUMS.txt"
+grep '  TautWeekly-compose.yaml$' SHA256SUMS.txt | sha256sum -c -
+mv TautWeekly-compose.yaml compose.yaml
+mkdir -p data
+# Set a private .env with TZ, PUID, PGID, UMASK, bind/port, and host policy.
+docker compose pull tautweekly
+docker compose up -d tautweekly
+docker compose ps
+```
+
+For reviewed deployments use
+`ghcr.io/sparkmoxie/tautweekly:0.23.0`. For unattended automation append the
+published manifest digest. Minor, `latest`, and `edge` are mutable and are not
+recommended promotion pins. The host owns every pull and recreate; the Manager
+has no Docker socket or engine credentials.
+
+## Archive/host-wrapper fallback on another Docker host
 
 Download the latest
 [`TautWeekly-nas-docker.tar.gz`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.tar.gz)
@@ -516,10 +547,11 @@ progress. NAS, QNAP, and general Compose deployments share this behavior.
 ## Updates and recovery
 
 Manager **Settings > Updates** is the primary container update-status source.
-It distinguishes the running application/image from the release host package,
-reports the stable channel, latest verified release, last successful check,
-last sanitized failure, release notes, and whether the saved host adapter is
-current, legacy, or mismatched. Authenticated entry renders cached status first
+It identifies the running application/image, active runtime profile, unified
+image repository, recommended semver reference, immutable digest policy,
+migration state, release host package, stable channel, latest verified release,
+last successful check, sanitized failure, release notes, and whether the saved
+host adapter is current, legacy, or mismatched. Authenticated entry renders cached status first
 and makes one non-blocking bounded check only when the last success is missing
 or at least 24 hours old and backoff permits. Successful results are reused for
 five minutes before **Check now** refreshes the same endpoint. The main header
@@ -555,9 +587,12 @@ If the deployment tool uses another service name or is not Compose, use that
 tool's equivalent pull-and-recreate operation; do not copy a command into an
 unrelated stack.
 
-`ghcr.io/sparkmoxie/tautweekly:latest` advances only when a stable repository
-release is tagged. The `edge` tag follows `main`; no packaged Compose or Unraid
-default uses it.
+Release Compose and FreeBSD/Podman packages default to the full release semver.
+The `latest` tag advances only for a stable release, the minor tag can move
+within its line, and `edge` follows `main`; none is the recommended automation
+pin. Use full semver for a reviewed deployment or append the published manifest
+digest for an immutable reference. Unraid retains `latest` only because its
+host-owned Apps workflow detects and presents digest changes.
 
 For release-archive Compose and QNAP installations, checking and applying are
 separate host actions:
@@ -613,6 +648,27 @@ GUI can restore a selected backup or permanently delete one individual backup
 after a separate **Confirm delete** action. Deletion does not change the current
 `config.json`, is authenticated and CSRF-protected, and cannot be undone; keep
 any required private retention copy first.
+
+### Migrate the v0.22.0 NAS/generic image
+
+The image repository remains `ghcr.io/sparkmoxie/tautweekly`; migrate from
+`:0.22.0` by adding `TAUTWEEKLY_RUNTIME_PROFILE=server` and retaining the
+appropriate `container-compose`, `nas-docker`, or `qnap-container-station`
+package identity. Back up `/data`, record the old digest, and preserve the exact
+bind mount or named volume, PUID, PGID, UMASK, timezone, ports, allowed hosts,
+secure-cookie setting, and Docker networks. Pull before replacing the healthy
+container, recreate with the original host tool, and wait for health. Then sign
+in with the existing Manager password and confirm profile/image status, Config,
+schedule and history persistence, all six previews, and TestEmail.
+
+If a pull is interrupted, rerun it; the running container and `/data` remain.
+If a recreate is interrupted, rerun it against the same mount. If health fails,
+restore the recorded `:0.22.0` semver/digest and recreate. An unexpected pairing
+screen means the old `/data` is not attached; stop rather than pairing an empty
+volume. Never use `docker compose down -v` or delete Unraid appdata. See the
+[complete unified image migration contract](../CONTAINER-MIGRATION.md#migrate-the-v0220-nas-or-generic-image)
+for named-volume backup, permissions, networking, rollback, interrupted
+delivery, and Manager recovery details.
 
 ### Password recovery
 

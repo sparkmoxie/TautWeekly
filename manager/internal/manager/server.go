@@ -32,6 +32,7 @@ type Options struct {
 	RuntimeRoot               string
 	Version                   string
 	RuntimeMode               string
+	RuntimeProfile            string
 	PackageKind               string
 	PackageVersion            string
 	HostAdapterVersion        string
@@ -469,6 +470,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, _ *http.Request) {
 		"authenticationRequired": access.AuthenticationRequired,
 		"pairingRequired":        access.PairingRequired,
 		"runtimeMode":            s.capabilities.RuntimeMode,
+		"runtimeProfile":         s.capabilities.RuntimeProfile,
 		"networkScope":           s.capabilities.NetworkScope,
 	})
 }

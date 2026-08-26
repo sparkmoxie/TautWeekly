@@ -1,6 +1,6 @@
 services:
   tautweekly:
-    image: ${TAUTWEEKLY_IMAGE:-ghcr.io/sparkmoxie/tautweekly:latest}
+    image: ${TAUTWEEKLY_IMAGE:-ghcr.io/sparkmoxie/tautweekly:__TAUTWEEKLY_RELEASE_VERSION__}
     container_name: tautweekly
     restart: unless-stopped
     read_only: true
@@ -9,6 +9,7 @@ services:
       PUID: 1000
       PGID: 1000
       UMASK: "077"
+      TAUTWEEKLY_RUNTIME_PROFILE: "server"
       TAUTWEEKLY_DATA_DIR: /data
       TAUTWEEKLY_CONFIG: /data/config.json
       TAUTWEEKLY_PREVIEW_BASE_URL: ""

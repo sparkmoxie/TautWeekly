@@ -626,6 +626,8 @@ func TestUpdatePackageLanguageAndLegacyAdapterMatrix(t *testing.T) {
 		{packageKindWindows, runtimeModeWindows, "", "Windows", false},
 		{packageKindLinux, runtimeModeLinux, "sudo tautweekly update", "Linux", false},
 		{packageKindMac, runtimeModeMac, "./tautweekly.sh update", "Mac", true},
+		{packageKindContainerDesktop, runtimeModeMac, "docker compose pull", "Desktop", true},
+		{packageKindContainerCompose, runtimeModeNAS, "docker compose pull", "Docker Compose", true},
 		{packageKindMacRegistry, runtimeModeMac, "docker compose pull", "Mac", true},
 		{packageKindFreeBSD, runtimeModeNAS, "sudo tautweekly update", "FreeBSD", true},
 		{packageKindNAS, runtimeModeNAS, "./tautweekly.sh update", "Docker Compose", true},
@@ -642,6 +644,20 @@ func TestUpdatePackageLanguageAndLegacyAdapterMatrix(t *testing.T) {
 			status := newUpdateCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: t.TempDir(), Version: "1.0.0", RuntimeMode: test.mode, PackageKind: test.kind, PackageVersion: "1.0.0", HostAdapterVersion: "2", updateChecker: &fixtureUpdateChecker{}}).Status()
 			if (status.ImageVersion != "") != test.container {
 				t.Fatalf("image version presence for %s: %+v", test.kind, status)
+			}
+			if test.container {
+				if status.ImageRepository != unifiedContainerImageRepository ||
+					status.RecommendedImageReference != unifiedContainerImageRepository+":1.0.0" ||
+					status.ImagePinningPolicy == "" || status.RuntimeProfile == "" {
+					t.Fatalf("unified image metadata for %s: %+v", test.kind, status)
+				}
+				wantMigration := "unified-image"
+				if test.kind == packageKindMac || test.kind == packageKindMacRegistry {
+					wantMigration = "legacy-mac-image"
+				}
+				if status.MigrationState != wantMigration {
+					t.Fatalf("migration state for %s: %+v", test.kind, status)
+				}
 			}
 			if requiresHostAdapter(test.kind) && status.HostAdapterState != "legacy" {
 				t.Fatalf("legacy adapter was not identified for %s: %+v", test.kind, status)

@@ -39,7 +39,7 @@ and milestone emails. Preview locally, send controlled tests, then schedule deli
 | Platform | Best fit | Start here |
 |---|---|---|
 | Windows Manager | Always-on Windows 10/11 host | [Windows Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/) · [Documentation](docs/windows/README.md) · [Download Setup](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-Setup.exe) |
-| NAS / Docker | QNAP, Unraid, Linux NAS, or another Docker host | [NAS/Docker/QNAP/Unraid Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.tar.gz) |
+| NAS / Docker | QNAP, Unraid, Linux NAS, or another Docker host | [NAS/Docker/QNAP/Unraid Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Standalone Compose](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-compose.yaml) · [Archive fallback](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.tar.gz) |
 | macOS | Docker Desktop on Intel or Apple silicon | [macOS Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/) · [Documentation](docs/mac/README.md) · [Standalone Compose](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-compose.yaml) · [Archive fallback](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.tar.gz) |
 | Native Linux | Current Ubuntu, Debian, or RHEL host with systemd | [Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-linux.tar.gz) |
 | FreeBSD / Podman **beta** | FreeBSD 15.1+ amd64 host | [FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-freebsd-podman.tar.gz) |
@@ -72,18 +72,19 @@ can start the existing verified elevated updater.
 
 ### NAS / Docker Manager
 
-Install through the QNAP, Unraid, or Compose path, bootstrap the authenticated
-Manager, and keep private state under `/data`. The GUI owns configuration,
-preview, and scheduling workflows; QNAP/Compose wrappers and Unraid Apps retain
+Use the unified `ghcr.io/sparkmoxie/tautweekly` image with the explicit
+`server` or `unraid` profile, bootstrap the authenticated Manager, and keep
+private state under `/data`. QNAP/Compose wrappers and Unraid Apps retain
 their host-owned verified update and recovery paths.
 
 ### macOS Manager
 
-Pull the dedicated public amd64/arm64 Mac image with one checksummed standalone
-Compose file—no clone or local build—then bootstrap Manager access and complete
-setup in the GUI. Private state persists under `/data`; Mac-owned semver/digest
-pull, recreate, and rollback keep Docker control outside the container. The
-verified archive/local-build wrapper remains a supported fallback.
+Pull that same public amd64/arm64 image with the `desktop` profile and one
+checksummed standalone Compose file—no clone or local build—then bootstrap
+Manager access. Private state persists under `/data`; Mac-owned
+semver/digest pull, recreate, and rollback keep Docker control outside the
+container. The verified archive/local-build wrapper remains a supported
+break-fix fallback.
 
 ### Native Linux Manager
 
@@ -97,6 +98,10 @@ recovery authority.
 Install the beta Podman package, bootstrap Manager access through the documented
 tunnel, and use the same guided GUI. rc.d and the host wrapper retain service,
 backup, verified update, health-check, and rollback ownership.
+
+Container users upgrading from either v0.22.0 image should follow the
+[unified image and migration guide](docs/CONTAINER-MIGRATION.md); it preserves
+existing data and documents the old Mac-image compatibility window.
 
 ## GUI Manager
 

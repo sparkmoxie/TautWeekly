@@ -3,17 +3,18 @@
 [Open the macOS Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/)
 
 The supported first-choice Mac deployment is one standalone Compose file backed
-by the public `ghcr.io/sparkmoxie/tautweekly-mac` image. It needs no repository
-clone and no local application build on either Intel or Apple-silicon Macs. The
-image keeps the proven Mac-specific Manager, embedded scheduler, health check,
-graceful shutdown, and read-only security profile. Manager **Config** remains
-the source of truth for setup, verification, previews, controlled TestEmail
-delivery, scheduling, and status.
+by the shared public `ghcr.io/sparkmoxie/tautweekly` image and its explicit
+`desktop` profile. It needs no repository clone and no local application build
+on either Intel or Apple-silicon Macs. The profile keeps the proven loopback
+Manager, `host.docker.internal` behavior, embedded scheduler, health check,
+graceful shutdown, named-volume persistence, and read-only security boundary.
+Manager **Config** remains the source of truth for setup, verification, previews,
+controlled TestEmail delivery, scheduling, profile/image status, and recovery.
 
-The verified Mac archive and local image build remain available as a temporary
-fallback and break-fix path while the registry deployment matures.
+The verified Mac archive and local image build remain a supported break-fix
+fallback. The unified registry deployment is the preferred installation.
 
-Current source baseline: **1.5.0**.
+Current source baseline: **1.6.0**.
 
 ## Requirements
 
@@ -26,11 +27,11 @@ Current source baseline: **1.5.0**.
 ## Registry-first install
 
 The release Compose asset pins a full semantic version. `latest` is published
-only as a convenience and is not the supported automation pin. For v0.22.0:
+only as a convenience and is not the supported automation pin. For v0.23.0:
 
 ```bash
 mkdir -p ~/TautWeekly && cd ~/TautWeekly
-TAUTWEEKLY_VERSION=0.22.0
+TAUTWEEKLY_VERSION=0.23.0
 curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/TautWeekly-mac-compose.yaml"
 curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/SHA256SUMS.txt"
 grep '  TautWeekly-mac-compose.yaml$' SHA256SUMS.txt | shasum -a 256 -c -
@@ -49,13 +50,13 @@ startup may take up to the configured 90-second health start period.
 For CI/CD, keep the full tag or pin the same manifest by digest:
 
 ```yaml
-image: ghcr.io/sparkmoxie/tautweekly-mac:0.22.0@sha256:<manifest-digest>
+image: ghcr.io/sparkmoxie/tautweekly:0.23.0@sha256:<manifest-digest>
 ```
 
 Inspect the release manifest with
-`docker buildx imagetools inspect ghcr.io/sparkmoxie/tautweekly-mac:0.22.0`.
+`docker buildx imagetools inspect ghcr.io/sparkmoxie/tautweekly:0.23.0`.
 A digest pin is immutable; a full-semver pin is the readable supported default.
-The `0.22`, `latest`, and `edge` tags are mutable and unsuitable for unattended
+The `0.23`, `latest`, and `edge` tags are mutable and unsuitable for unattended
 promotion.
 
 ## First-run Manager setup
@@ -283,7 +284,7 @@ schedules, output, and the bounded deleted-item cache; keep it private. For a
 bind mount, a stopped copy of `.env` and `data/` is also a complete private
 filesystem backup.
 
-## Registry updates and rollback
+## Unified image updates and rollback
 
 Manager **Settings > Updates** is the primary Mac status source. It separately
 reports the container application/image, registry Compose deployment,
@@ -310,8 +311,8 @@ To upgrade:
    immutable CI/CD pin, the reviewed manifest digest in `.env`:
 
    ```dotenv
-   TAUTWEEKLY_VERSION=0.22.0
-   TAUTWEEKLY_IMAGE=ghcr.io/sparkmoxie/tautweekly-mac:0.22.0@sha256:<manifest-digest>
+   TAUTWEEKLY_VERSION=0.23.0
+   TAUTWEEKLY_IMAGE=ghcr.io/sparkmoxie/tautweekly:0.23.0@sha256:<manifest-digest>
    ```
 
 3. Pull and recreate only the service:
@@ -334,6 +335,27 @@ check health. If the candidate is unhealthy, restore the previous
 same `/data` then attaches to the previous image. Do not delete the volume or
 run `docker compose down -v` during upgrade or rollback.
 
+## Migrate the v0.22.0 Mac-specific image
+
+The old `ghcr.io/sparkmoxie/tautweekly-mac:0.22.0` manifest remains pullable
+for rollback but receives no v0.23.0 or later tags. Back up `/data`, record the
+old digest, preserve the exact named volume or bind mount and
+`PUID`/`PGID`/`UMASK`, then replace only the image reference and add
+`TAUTWEEKLY_RUNTIME_PROFILE=desktop` plus
+`TAUTWEEKLY_PACKAGE_KIND=container-desktop`. Pull before recreation, wait for
+healthy status, sign in with the existing Manager password, and verify Config,
+schedule/history persistence, all six previews, and TestEmail. If the pull or
+recreate is interrupted, rerun it against the same mount; if health fails,
+restore the recorded v0.22.0 image reference and recreate. Never use
+`docker compose down -v`.
+
+The transitional `TautWeekly-mac-compose.yaml` remains through v0.24.x and may
+be retired no earlier than v0.25.0 with release-note notice. See the
+[complete unified image migration contract](../CONTAINER-MIGRATION.md#migrate-the-v0220-mac-specific-image)
+for named-volume and bind-mount backups, intentional LAN exposure,
+`host.docker.internal`, permission recovery, pairing, rollback, and
+interrupted-delivery guidance.
+
 ## Archive/local-build fallback
 
 Download `TautWeekly-mac-docker.tar.gz` or the matching ZIP plus
@@ -346,8 +368,9 @@ locally, and keeps private state in the package `data/` bind mount.
 The fallback `./tautweekly.sh update` path still verifies the release checksum
 and internal `RELEASE-FILES.txt`, coordinates the operation lock, rebuilds the
 local image, verifies health/version, and rolls package files plus the previous
-image back together on failure. Existing archive installations may remain on
-this path; no migration or private-data move is required for v0.22.0.
+image back together on failure. Existing archive installations may remain on this supported break-fix path.
+Migration to the unified registry image is recommended but never requires a
+private-data move when the same bind mount is reused.
 
 For packages at or before v0.14.0 whose Manager reports a `legacy` host adapter,
 verify and extract the current Mac archive over the same directory without

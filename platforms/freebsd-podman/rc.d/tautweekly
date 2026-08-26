@@ -28,7 +28,8 @@ tautweekly_load_env()
     # The file is root-owned mode 0600 and contains only service assignments.
     # shellcheck source=/dev/null
     . "$tautweekly_env"
-    : "${TAUTWEEKLY_IMAGE:=ghcr.io/sparkmoxie/tautweekly:latest}"
+    : "${TAUTWEEKLY_IMAGE:=ghcr.io/sparkmoxie/tautweekly:__TAUTWEEKLY_RELEASE_VERSION__}"
+    : "${TAUTWEEKLY_RUNTIME_PROFILE:=server}"
     : "${TAUTWEEKLY_CONTAINER:=tautweekly}"
     : "${TAUTWEEKLY_DATA_DIR:=/var/db/tautweekly}"
     : "${TAUTWEEKLY_TIMEZONE:=Etc/UTC}"
@@ -73,6 +74,7 @@ tautweekly_start()
         -e "TAUTWEEKLY_CONFIG=/data/config.json" \
         -e "TAUTWEEKLY_PREVIEW_BASE_URL=$TAUTWEEKLY_PREVIEW_BASE_URL" \
         -e "TAUTWEEKLY_MANAGER_RUNTIME_MODE=nas" \
+        -e "TAUTWEEKLY_RUNTIME_PROFILE=$TAUTWEEKLY_RUNTIME_PROFILE" \
         -e "TAUTWEEKLY_MANAGER_LISTEN=0.0.0.0:8080" \
         -e "TAUTWEEKLY_MANAGER_ALLOWED_HOSTS=$TAUTWEEKLY_MANAGER_ALLOWED_HOSTS" \
         -e "TAUTWEEKLY_MANAGER_SECURE_COOKIES=$TAUTWEEKLY_MANAGER_SECURE_COOKIES" \
