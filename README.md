@@ -4,7 +4,7 @@
 
 # TautWeekly for Plex
 
-**A portable, preview-first weekly Plex activity newsletter powered by Tautulli.**
+**A portable, preview-first weekly Plex activity newsletter powered by Tautulli [🩷 JonnyWong16](https://github.com/JonnyWong16).** 
 
 [![CI](https://github.com/sparkmoxie/TautWeekly/actions/workflows/ci.yml/badge.svg)](https://github.com/sparkmoxie/TautWeekly/actions/workflows/ci.yml)
 [![Pages](https://github.com/sparkmoxie/TautWeekly/actions/workflows/pages.yml/badge.svg)](https://sparkmoxie.github.io/TautWeekly/)
