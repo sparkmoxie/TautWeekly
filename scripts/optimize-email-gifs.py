@@ -129,8 +129,11 @@ def rebuild(executable, diff_executable, output, apply, resize_for_email):
         raise ValueError(f"Reproducibility requires LCDF Gifsicle 1.95, got {version}")
     originals = {}
     for name in DISPLAY:
-        originals[name] = subprocess.check_output(
+        # Ordinary lossless optimization starts from the current assets, never
+        # resurrects the historical 512px originals over an approved resize.
+        originals[name] = (subprocess.check_output(
             ["git", "show", f"{SOURCE_REF}:platforms/windows/assets/{name}"], cwd=ROOT)
+            if resize_for_email else (ASSETS / name).read_bytes())
     # Identical original aliases share the largest target, not merely their own use.
     targets = {}
     for name, data in originals.items():
@@ -188,7 +191,7 @@ def rebuild(executable, diff_executable, output, apply, resize_for_email):
     pngs = [{"name": p.name, "sha256": sha(subprocess.check_output(
         ["git", "show", f"{SOURCE_REF}:platforms/windows/assets/{p.name}"], cwd=ROOT))}
         for p in sorted(ASSETS.glob("*.png"))]
-    manifest = {"sourceRef": SOURCE_REF, "pixelPolicy": "authorized-email-resize" if resize_for_email else "identical-original", "tool": version, "resizeFlags": RESIZE_FLAGS, "optimizeFlags": OPTIMIZE_FLAGS,
+    manifest = {"sourceRef": SOURCE_REF if resize_for_email else "working-tree", "pixelPolicy": "authorized-email-resize" if resize_for_email else "identical-original", "tool": version, "resizeFlags": RESIZE_FLAGS, "optimizeFlags": OPTIMIZE_FLAGS,
                 "assets": records, "unchangedPngs": pngs}
     import re
     encoded = json.dumps(manifest, indent=2)

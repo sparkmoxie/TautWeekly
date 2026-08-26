@@ -126,7 +126,7 @@ python3 -B scripts/optimize-email-gifs.py --gifsicle /path/to/gifsicle \
   --gifdiff /path/to/gifdiff --output-dir /tmp/tautweekly-gifs \
   --resize-for-email --apply
 
-# Without --resize-for-email, preserve original pixels and dimensions.
+# Without --resize-for-email, preserve the CURRENT assets' pixels/dimensions.
 # Verify committed assets and Windows/NAS/macOS/Manager/Pages mirrors:
 python3 -B scripts/optimize-email-gifs.py --check
 python3 -B scripts/test-asset-refresh.py
