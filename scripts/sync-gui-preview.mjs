@@ -24,6 +24,7 @@ export function generatedPreviewFiles(base = root) {
   let html = read(web + "index.html")
     .replace(/(src|href)="\/([^"]+)"/g, '$1="$2"')
     .replaceAll("https://sparkmoxie.github.io/TautWeekly/", "../")
+    .replace('aria-label="Refresh Manager, Tautulli choices, and update status"', 'aria-label="Refresh synthetic Manager, Tautulli choices, and update status"')
     .replaceAll("https://github.com/sparkmoxie/TautWeekly/releases", `../releases/v${version}.md`)
     .replace(/autocomplete="(?:current-password|new-password|one-time-code)"/g, 'autocomplete="off"');
   html = replaceOnce(html, "<title>TautWeekly Manager</title>", `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
