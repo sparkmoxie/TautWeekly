@@ -632,14 +632,21 @@ $macQuickstart = [IO.File]::ReadAllText((Join-Path $docs 'mac/index.html'))
 $macReadme = [IO.File]::ReadAllText((Join-Path $docs 'mac/README.md'))
 foreach ($source in @($macQuickstart, $macReadme)) {
     foreach ($pattern in @(
-        'GUI-first|Manager is the setup source',
+        'registry-first|Manager.*source of truth|Manager is the setup source',
         'manager-bootstrap',
-        'manager-reset-access',
+        'manager-reset-access|access-recover',
         'http://localhost:8787/',
         'Validate, save, and verify',
         'all six',
         'TestEmail',
         'SHA256SUMS\.txt',
+        'ghcr\.io/sparkmoxie/tautweekly-mac',
+        'TautWeekly-mac-compose\.yaml',
+        'semver|semantic version',
+        'digest',
+        'named volume',
+        'host\.docker\.internal',
+        'archive.*fallback|fallback archive',
         '\.env',
         'data/',
         '30 minutes'

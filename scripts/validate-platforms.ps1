@@ -587,6 +587,16 @@ Require-Text 'platforms/mac-docker/Dockerfile' @(
     'HOME=/tmp/tautweekly/home',
     'XDG_DATA_HOME=/tmp/tautweekly/share'
 )
+Require-Text 'platforms/mac-docker/Dockerfile.registry' @(
+    'FROM golang:1\.26\.6-bookworm AS manager-build',
+    'GOARCH="\$\{TARGETARCH:-amd64\}"',
+    'FROM mcr\.microsoft\.com/dotnet/sdk:8\.0-bookworm-slim',
+    'COPY platforms/mac-docker/app/ /opt/tautweekly/',
+    'org\.opencontainers\.image\.version="\$BUILD_VERSION"',
+    'io\.tautweekly\.runtime-profile="mac"',
+    'io\.tautweekly\.host-adapter-api="3"',
+    'TAUTWEEKLY_MANAGER_LISTEN=0\.0\.0\.0:8080'
+)
 Require-Text 'platforms/mac-docker/compose.yaml' @(
     'image:\s*tautweekly-mac:stable',
     'read_only:\s*true',
@@ -601,6 +611,38 @@ Require-Text 'platforms/mac-docker/compose.yaml' @(
     'TAUTWEEKLY_HOST_ADAPTER_API'
 )
 Forbid-Text 'platforms/mac-docker/compose.yaml' @('(?m)^\s*build:')
+Require-Text 'platforms/mac-docker/compose.registry.yaml' @(
+    'ghcr\.io/sparkmoxie/tautweekly-mac:__TAUTWEEKLY_RELEASE_VERSION__',
+    'TAUTWEEKLY_PACKAGE_KIND:\s*"mac-docker-registry"',
+    'TAUTWEEKLY_PACKAGE_VERSION.*TAUTWEEKLY_VERSION:-__TAUTWEEKLY_RELEASE_VERSION__',
+    'TAUTWEEKLY_HOST_ADAPTER_API:\s*"3"',
+    'PREVIEW_BIND:-127\.0\.0\.1',
+    'tautweekly-data:/data',
+    'read_only:\s*true',
+    'stop_grace_period:\s*30m',
+    'no-new-privileges:true',
+    'cap_drop:'
+)
+Forbid-Text 'platforms/mac-docker/compose.registry.yaml' @(
+    '(?m)^\s*build:',
+    'ghcr\.io/sparkmoxie/tautweekly-mac:latest'
+)
+Require-Text '.github/workflows/container.yml' @(
+    'workflow_call:',
+    'release_tag:',
+    'ghcr\.io/sparkmoxie/tautweekly-mac',
+    'platforms/mac-docker/Dockerfile\.registry',
+    'linux/amd64,linux/arm64',
+    'mac-registry',
+    'provenance:\s*mode=max',
+    'sbom:\s*true'
+)
+Require-Text '.github/workflows/release.yml' @(
+    'needs:\s*\[build, windows-installer\]',
+    'uses:\s*\./\.github/workflows/container\.yml',
+    'release_tag:\s*\$\{\{ github\.ref_name \}\}',
+    'needs:\s*\[build, windows-installer, container-images\]'
+)
 Forbid-Text 'platforms/mac-docker/tautweekly.sh' @('docker compose build --pull', 'docker-compose build --pull')
 Require-Text 'platforms/mac-docker/tautweekly.sh' @(
     'run-script\.sh Verify-Setup\.ps1',

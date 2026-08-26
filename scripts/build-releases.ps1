@@ -640,9 +640,20 @@ try {
         (New-TarGz -FolderName 'TautWeekly-freebsd-podman' -ArchiveName 'TautWeekly-freebsd-podman.tar.gz')
     )
 
-    $checksumLines = foreach ($archive in ($archives | Sort-Object)) {
-        $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-        "$hash  $([IO.Path]::GetFileName($archive))"
+    $macCompose = Join-Path $dist 'TautWeekly-mac-compose.yaml'
+    $macComposeContent = [IO.File]::ReadAllText((Join-Path $Root 'platforms/mac-docker/compose.registry.yaml'))
+    $macComposeContent = $macComposeContent.Replace('__TAUTWEEKLY_RELEASE_VERSION__', $Version)
+    if ($macComposeContent.Contains('__TAUTWEEKLY_RELEASE_VERSION__')) {
+        throw 'The standalone Mac Compose release asset contains an unresolved release-version token.'
+    }
+    [IO.File]::WriteAllText($macCompose, $macComposeContent, [Text.UTF8Encoding]::new($false))
+    (Get-Item -LiteralPath $macCompose).LastWriteTimeUtc = $sourceTimestamp
+
+    $releaseArtifacts = @($archives) + @($macCompose)
+
+    $checksumLines = foreach ($artifact in ($releaseArtifacts | Sort-Object)) {
+        $hash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLowerInvariant()
+        "$hash  $([IO.Path]::GetFileName($artifact))"
     }
     [IO.File]::WriteAllLines((Join-Path $dist 'SHA256SUMS.txt'), $checksumLines, [Text.UTF8Encoding]::new($false))
 

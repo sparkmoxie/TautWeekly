@@ -456,6 +456,10 @@
     background: #0b0b0d;
     box-shadow: 28px 0 70px rgba(0, 0, 0, .55);
     transform: translateX(-105%);
+    transition: none;
+  }
+
+  .quickstart-ready .quickstart.quickstart-interactive .qs-sidebar {
     transition: transform .22s ease;
   }
 

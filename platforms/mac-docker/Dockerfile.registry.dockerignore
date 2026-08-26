@@ -1,0 +1,7 @@
+**
+!manager
+!manager/**
+!platforms
+!platforms/mac-docker
+!platforms/mac-docker/app
+!platforms/mac-docker/app/**

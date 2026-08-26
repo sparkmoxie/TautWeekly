@@ -2,8 +2,8 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.21.4";
-  const PREVIOUS_VERSION = "0.21.3";
+  const DEMO_VERSION = "0.22.0";
+  const PREVIOUS_VERSION = "0.21.4";
   const PROFILES = {
     windows: { runtimeMode: "windows", packageKind: "windows", label: "Windows" },
     nas: { runtimeMode: "nas", packageKind: "nas-docker", label: "NAS / Docker" },
