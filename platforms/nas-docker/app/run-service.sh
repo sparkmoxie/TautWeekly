@@ -6,6 +6,11 @@ manager_listen="${TAUTWEEKLY_MANAGER_LISTEN:-0.0.0.0:8080}"
 manager_runtime_mode="${TAUTWEEKLY_MANAGER_RUNTIME_MODE:-nas}"
 service_heartbeat="$data_root/service-heartbeat.json"
 shutdown_grace="${TAUTWEEKLY_SHUTDOWN_DELIVERY_GRACE_SECONDS:-1740}"
+# Native Linux does not use the container entrypoint. Refresh as the service
+# account before launching consumers; the bundle marker keeps restarts idempotent.
+if [[ "$manager_runtime_mode" == linux ]]; then
+  python3 "$app_root/refresh-assets.py" --data-root "$data_root"
+fi
 mkdir -p "$data_root/logs" "$data_root/manager" "$data_root/output"
 MANAGER_PID=""
 SCHED_PID=""

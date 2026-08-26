@@ -403,3 +403,10 @@ sudo systemctl daemon-reload
 
 TautWeekly for Plex is an independent community project and is not affiliated
 with, endorsed by, or sponsored by Plex or Tautulli.
+
+## Bundled asset updates
+
+Shipped email asset filenames are release-owned: updates may replace same-name
+custom artwork. Custom-only filenames and unrelated private/runtime data are
+preserved. For the bundle marker, restart behavior, explicit repair, and Windows
+update differences, see [bundled email assets](../EMAIL-ASSETS.md).

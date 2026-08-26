@@ -65,6 +65,10 @@ jobs:
       - name: Test scheduler timezone behavior
         shell: pwsh
         run: ./scripts/test-scheduler-timezone.ps1
+      - name: Test bundled email assets and persistent refresh
+        run: |
+          python3 -B scripts/optimize-email-gifs.py --check
+          python3 -B scripts/test-asset-refresh.py
       - name: Test update detection and application guards
         run: |
           ./scripts/test-update-management.sh

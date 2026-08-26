@@ -515,3 +515,10 @@ can contain private names and email addresses; do not publish it.
 See the full [configuration reference](../CONFIGURATION.md),
 [security guidance](../SECURITY.md), and
 [troubleshooting reference](../TROUBLESHOOTING.md).
+
+## Bundled asset updates
+
+Shipped email asset filenames are release-owned: updates may replace same-name
+custom artwork. Custom-only filenames and unrelated private/runtime data are
+preserved. For the bundle marker, restart behavior, explicit repair, and Windows
+update differences, see [bundled email assets](../EMAIL-ASSETS.md).

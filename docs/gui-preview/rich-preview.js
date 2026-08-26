@@ -2,6 +2,9 @@
 
 (() => {
   const media = (name) => `media/${name}`;
+  let releaseScenario = "new";
+  const fictionalWatchedMovies = new Set(["Spider-Man: Brand New Day", "Hadestown: The Musical"]);
+  const hasWatchedMovie = (item, state) => state.hasHistory && fictionalWatchedMovies.has(item.title);
   const movies = [
     { title: "Spider-Man: Brand New Day", year: 2026, genre: "Action, Adventure, and more", critic: 89, audience: 98, art: "spider-man-brand-new-day.jpg", logo: "spider-man-brand-new-day-logo.png", summary: "Peter Parker begins a new chapter in this latest big-screen adventure." },
     { title: "The Odyssey", year: 2026, genre: "Adventure, Action, and Fantasy", critic: 94, audience: 97, art: "the-odyssey.jpg", logo: "the-odyssey-logo.png", summary: "A sweeping journey home unfolds across mythic seas and impossible trials." },
@@ -62,6 +65,10 @@
     .stats-media-card .watched-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px}
     @media(max-width:560px){.email-stage{padding:20px 0 32px}.header{padding-inline:14px}.hello{font-size:26px}.panel{margin-inline:12px}.section-label{margin-inline:12px}.hero{grid-template-columns:1fr;padding:0}.hero-poster{width:100%;height:188px;border-radius:0;object-position:center 28%}.hero-copy{min-height:0;padding:17px 18px 20px}.title-logo{display:none}.hero-title{font-size:23px}.grid,.stats-grid,.index-grid{grid-template-columns:1fr}.grid{margin-inline:12px}.stats-grid{margin-inline:12px}.card-art{aspect-ratio:1.75/1}.metric{min-height:136px}.index{padding:28px 14px 46px}.index h1{font-size:32px}}
     @media(max-width:560px){.stats-media-stack,.stats-summary-grid{margin-inline:12px}.stats-media-card .watched-list,.stats-summary-grid{grid-template-columns:1fr}.stats-tv-media-card .watched-list{grid-template-columns:repeat(2,minmax(0,1fr))}.metric.compact{min-height:164px}}
+
+    .imdb{font-size:12px;font-weight:700}.personal-ratings{font-size:12px}.personal-ratings .score img{width:16px;height:16px}.stats-heading-label,.watched-row small{font-size:12px}.stats-tv-media-card .stats-heading-label{margin-bottom:-7px}.stats-time-eyebrow,.stats-summary-grid .welcome-kicker,.summary-card .welcome-kicker{font-size:12px;font-weight:900;letter-spacing:1.1px}.metric-value,.summary-card h2{font-size:27px;font-weight:800;line-height:1.1}.metric-label,.summary-card p{font-size:12px;font-weight:400;line-height:1.35;text-transform:none;letter-spacing:normal}.metric.gold .metric-icon{width:54px;height:54px}
+    .hero-poster-wrap{position:relative;width:180px}.hero-poster-wrap.is-watched{padding-top:5px}.recipient-watched-desktop-badge{position:absolute;right:7px;top:0;width:26px;height:26px}.hero-title.has-logo{display:none}.hero-copy .recipient-watched-title-icon{display:none!important}.recipient-watched-title-tail{white-space:nowrap}
+    @media(max-width:560px){.hero-poster-wrap,.hero-poster-wrap.is-watched{width:100%;padding-top:0}.recipient-watched-desktop-badge{display:none}.hero-title.has-logo{display:block}.hero-copy .recipient-watched-title-icon{display:inline-block!important}}
   `;
 
   const entities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" };
@@ -70,18 +77,31 @@
   const plural = (count, singular, multiple) => count === 1 ? singular : multiple;
 
   function score(kind, value) {
+    if (!Number.isFinite(value)) return "";
     const critic = kind === "critic";
     const icon = critic ? (value >= 60 ? "rt_ripe.png" : "rt_rotten.png") : (value >= 60 ? "rt_upright.png" : "rt_spilled.png");
     const label = critic ? "Rotten Tomatoes critic score" : "Rotten Tomatoes audience score";
     return `<span class="score"><img src="${media(icon)}" alt="${label}">${value}%</span>`;
   }
 
-  function movieCard(item) {
-    return `<article class="media-card"><img class="card-art" src="${media(item.art)}" alt="${esc(item.title)} key art"><div class="card-copy"><div class="card-title">${esc(item.title)}</div><div class="card-genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}</div></div></article>`;
+  function watchedTitle(item, state) {
+    const title = esc(item.title);
+    if (!hasWatchedMovie(item, state)) return title;
+    const split = title.lastIndexOf(" ");
+    const prefix = split >= 0 ? `<span style="vertical-align:middle;">${title.slice(0, split + 1)}</span>` : "";
+    const tail = split >= 0 ? title.slice(split + 1) : title;
+    return `${prefix}<span class="recipient-watched-title-tail"><span style="vertical-align:middle;">${tail}</span><img class="recipient-watched-title-icon" src="${media("watched.png")}" width="16" height="16" alt="Watched" title="Watched" style="display:inline-block;width:16px;height:16px;border:0;vertical-align:middle;margin-left:8px;"></span>`;
+  }
+
+  function movieCard(item, state) {
+    return `<article class="media-card"><img class="card-art" src="${media(item.art)}" alt="${esc(item.title)} key art"><div class="card-copy"><div class="card-title">${watchedTitle(item, state)}</div><div class="card-genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}</div></div></article>`;
   }
 
   function showCard(item) {
-    const episodes = item.episodes.slice(0, 3).map(([number, title, rating]) => `<div class="episode">${esc(number)}: ${esc(title)} <span class="imdb"><img src="${media("imdb.png")}" alt="IMDb">${rating}</span></div>`).join("");
+    const badge = (rating) => rating ? `<span class="imdb"><img src="${media("imdb.png")}" alt="IMDb">${esc(rating)}</span>` : "";
+    const episodes = item.episodes.length
+      ? item.episodes.slice(0, 3).map(([number, title, rating]) => `<div class="episode">${esc(number)}: ${esc(title)} ${badge(rating || item.imdb)}</div>`).join("")
+      : badge(item.imdb);
     return `<article class="media-card"><img class="card-art" src="${media(item.art)}" alt="${esc(item.title)} key art"><div class="card-copy"><div class="card-title">${esc(item.title)}</div><div class="card-genre">${esc(item.genre)}</div><div class="episodes">${episodes}</div></div></article>`;
   }
 
@@ -89,8 +109,10 @@
     const label = state.latest ? "TRENDING THIS WEEK" : "HOT NEW RELEASE";
     const icon = state.latest ? "popcorn.gif" : "hot.gif";
     const logo = item.logo ? `<img class="title-logo" src="${media(item.logo)}" alt="${esc(item.title)} logo">` : "";
-    const title = item.logo ? "" : `<div class="hero-title">${esc(item.title)}</div>`;
-    return `<section class="panel hero"><img class="hero-poster" src="${media(item.art)}" alt="${esc(item.title)} key art"><div class="hero-copy"><img class="hero-icon" src="${media(icon)}" alt=""><div class="hero-kicker">${label}</div>${logo}${title}<div class="genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}</div><div class="summary">${esc(item.summary)}</div><div class="plays">${state.latest ? "Most watched across STARLIGHT CINEMA this week" : "Most-watched new movie this week"} &middot; ${state.latest ? 11 : 4} fictional plays</div></div></section>`;
+    const title = `<div class="hero-title${item.logo ? " has-logo" : ""}">${watchedTitle(item, state)}</div>`;
+    const watched = hasWatchedMovie(item, state);
+    const poster = `<div class="hero-poster-wrap${watched ? " is-watched" : ""}"><img class="hero-poster" src="${media(item.art)}" alt="${esc(item.title)} key art">${watched ? `<img class="recipient-watched-desktop-badge" src="${media("watched-desktop.png")}" width="26" height="26" alt="Watched" title="Watched">` : ""}</div>`;
+    return `<section class="panel hero">${poster}<div class="hero-copy"><img class="hero-icon" src="${media(icon)}" alt=""><div class="hero-kicker">${label}</div>${logo}${title}<div class="genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}</div><div class="summary">${esc(item.summary)}</div><div class="plays">${state.latest ? "Most watched across STARLIGHT CINEMA this week" : "Most-watched new movie this week"} &middot; ${state.latest ? 11 : 4} fictional plays</div></div></section>`;
   }
 
   function personalRating(item, kind) {
@@ -134,19 +156,23 @@
   }
 
   function awardCard(winner) {
-    return `<section class="panel status-panel" style="${winner ? "border-color:#e5a00d;background:#211a0d" : ""}"><img src="${media("trophy.gif")}" alt=""><div><div class="welcome-kicker">${winner ? "YOU WON" : "THIS WEEK'S"} &middot; BINGE CHAMPION</div><h2>6h 4m watched</h2><p>5 movies &middot; 2 TV shows &middot; fictional aggregate</p></div></section>`;
+    return `<section class="panel status-panel summary-card" style="${winner ? "border-color:#e5a00d;background:#211a0d" : ""}"><img src="${media("trophy.gif")}" alt=""><div><div class="welcome-kicker">${winner ? "YOU WON" : "THIS WEEK'S"} &middot; BINGE CHAMPION</div><h2>6h 4m watched</h2><p>5 movies &middot; 2 TV shows &middot; fictional aggregate</p></div></section>`;
+  }
+
+  function platformIcon(state) {
+    return state.hasHistory ? `<img class="recipient-platform-icon" src="${media("platform-chrome.png")}" width="21" height="21" alt="Chrome" title="Chrome" style="display:inline-block;width:21px;height:21px;vertical-align:middle;margin-left:6px;">` : "";
   }
 
   function statsBlock(state, movieItems, showItems) {
     if (state.stats === "none") return "";
     if (state.stats === "quiet" || state.stats === "warmup") {
       const warmup = state.stats === "warmup";
-      return `<div class="section-label">YOUR WEEK ON PLEX</div><section class="panel status-panel"><img src="${media("quiet.gif")}" alt=""><div><div class="welcome-kicker">${warmup ? "STATS ARE WARMING UP" : "QUIET IN THIS SECTOR"}</div><h2>${warmup ? "The sensors are online." : "No watch activity this week."}</h2><p>${warmup ? "The fictional private recap will fill in after viewing activity appears." : "The fictional recap will be ready when Demo Viewer streams again."}</p></div></section>${awardCard(false)}`;
+      return `<div class="section-label">YOUR WEEK ON PLEX${platformIcon(state)}</div><section class="panel status-panel"><img src="${media(warmup ? "pending.gif" : "quiet.gif")}" alt=""><div><div class="welcome-kicker">${warmup ? "STATS ARE WARMING UP" : "QUIET IN THIS SECTOR"}</div><h2>${warmup ? "The sensors are online." : "No watch activity this week."}</h2><p>${warmup ? "The fictional private recap will fill in after viewing activity appears." : "The fictional recap will be ready when Demo Viewer streams again."}</p></div></section>${awardCard(false)}`;
     }
     if (state.stats === "award") return awardCard(false);
     const mediaCards = `${statsMediaCard(movieItems, "movie")}${statsMediaCard(showItems, "show")}`;
     const mediaStack = mediaCards ? `<section class="stats-media-stack">${mediaCards}</section>` : "";
-    return `<div class="section-label">YOUR WEEK ON PLEX</div>${mediaStack}<section class="stats-summary-grid">${timeMetric(state)}${awardMetric(Boolean(state.winner))}</section>`;
+    return `<div class="section-label">YOUR WEEK ON PLEX${platformIcon(state)}</div>${mediaStack}<section class="stats-summary-grid">${timeMetric(state)}${awardMetric(Boolean(state.winner))}</section>`;
   }
 
   function welcomeBlock(state) {
@@ -189,10 +215,10 @@
 
   function complementaryFooter(state) {
     if (state.latest) {
-      return `<section class="panel status-panel"><img src="${media("genre-scifi.gif")}" width="42" height="42" alt=""><div><div class="welcome-kicker">TOP GENRE THIS WEEK</div><h2>Science Fiction</h2><p style="font-size:12px;line-height:1.35;font-weight:400;color:#8e8e8e">6h 56m watched across 2 movies</p></div></section>`;
+      return `<section class="panel status-panel summary-card"><img src="${media("genre-scifi.gif")}" width="42" height="42" alt=""><div><div class="welcome-kicker">TOP GENRE THIS WEEK</div><h2>Science Fiction</h2><p style="font-size:12px;line-height:1.35;font-weight:400;color:#8e8e8e">6h 56m watched across 2 movies</p></div></section>`;
     }
     const item = rotate(movies, state.offset)[1] || movies[0];
-    return `<section class="panel status-panel"><img src="${media("popcorn.gif")}" width="42" height="42" alt=""><div><div class="welcome-kicker">TRENDING THIS WEEK</div><h2>${esc(item.title)}</h2><p>Most watched across STARLIGHT CINEMA this week &middot; 11 fictional plays</p></div></section>`;
+    return `<section class="panel status-panel summary-card"><img src="${media("popcorn.gif")}" width="42" height="42" alt=""><div><div class="welcome-kicker">TRENDING THIS WEEK</div><h2>${esc(item.title)}</h2><p>Most watched across STARLIGHT CINEMA this week &middot; 11 fictional plays</p></div></section>`;
   }
 
   function newsletter(state) {
@@ -208,7 +234,7 @@
         ? `0 NEW MOVIES &middot; ${showItems.length} ${plural(showItems.length, "TV TITLE", "TV TITLES")}`
         : `1 TRENDING MOVIE &middot; ${releaseMovies.length} ${plural(releaseMovies.length, "RECENT MOVIE RELEASE", "RECENT MOVIE RELEASES")}`)
       : `${state.movieCount} ${plural(state.movieCount, "NEW MOVIE", "NEW MOVIES")} &middot; ${state.showCount} ${plural(state.showCount, "TV TITLE", "TV TITLES")}`;
-    const movieGrid = releaseMovies.length ? `<div class="section-label">${state.latest ? "RECENT RELEASES" : "NEW RELEASES"}<span class="section-title">Movies</span></div><section class="grid">${releaseMovies.map(movieCard).join("")}</section>` : "";
+    const movieGrid = releaseMovies.length ? `<div class="section-label">${state.latest ? "RECENT RELEASES" : "NEW RELEASES"}<span class="section-title">Movies</span></div><section class="grid">${releaseMovies.map((item) => movieCard(item, state)).join("")}</section>` : "";
     const showGrid = showItems.length ? `<div class="section-label">${state.latest && !newTv ? "RECENT RELEASES" : "NEW RELEASES"}<span class="section-title">TV</span></div><section class="grid">${showItems.map(showCard).join("")}</section>` : "";
     const intro = state.welcomeOnly ? "Welcome to the Friday drop - here is what is new and what to expect." : "Your Friday Plex drop is here - real media presentation with a fictional private recap.";
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(state.name)}</title><style>${styles}</style></head><body><div style="display:none;max-height:0;overflow:hidden;opacity:0">${headerLine}</div><main class="email-stage"><div class="email"><header class="header"><div class="plex">PLE<b>X</b></div><div class="hello">Hey Demo Viewer,</div><div class="intro">${intro}</div></header>${welcomeBlock(state)}${customTextCard()}<div class="release-meta"><div class="period">${headerLine}</div><div class="date">Aug 8 - Aug 14, 2026</div></div>${heroBlock(hero, state)}${movieGrid}${showGrid}${statsBlock(state, statsMovieItems, statsShowItems)}${complementaryFooter(state)}<div class="cta"><span>OPEN PLEX &middot; DEMO ONLY</span></div><p class="fixture-note">Local visual fixture only. Public media artwork, title logos, and Rotten Tomatoes / IMDb score snapshots are shown as they appeared on Aug 14, 2026. Viewer identity, server name, watch activity, counts, and delivery state are fictional. No affiliation or endorsement is implied; no service is contacted.</p></div></main></body></html>`;
@@ -224,11 +250,18 @@
 
   window.TautWeeklyPreviewDemo = {
     signature() {
-      return JSON.stringify(customTextCardValues());
+      return JSON.stringify({ releaseScenario, card: customTextCardValues() });
+    },
+    setReleaseScenario(value) {
+      if (!["new", "tv-only", "quiet"].includes(value)) throw new Error("Unknown fictional release scenario.");
+      releaseScenario = value;
     },
     html(id) {
       if (id === "demo-index") return index();
-      return newsletter(states[id] || states["demo-normal"]);
+      const state = states[id] || states["demo-normal"];
+      return newsletter({ ...state, hasHistory: ["detail", "quiet"].includes(state.stats),
+        latest: releaseScenario !== "new", newTv: releaseScenario === "tv-only",
+        movieCount: releaseScenario === "new" ? 4 : 5 });
     },
   };
 })();

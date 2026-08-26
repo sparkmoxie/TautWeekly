@@ -204,20 +204,14 @@ foreach ($relativePath in $rendererPaths) {
     Write-Host "[PASS] Top Movie Genre algorithm, privacy model, rendering contract: $relativePath"
 }
 
-$expectedAssets = [ordered]@{
-    'genre-action.gif' = @{ Hash='3f188e9b06241c51c74523e1f8e9ffe9f3e133822d58926021031fc8d7cd36bb'; Frames=38 }
-    'genre-comedy.gif' = @{ Hash='af593d5a1f24576b03ff47bf984b6d00deef753c66f28a7aa5d100e48ba1b36e'; Frames=30 }
-    'genre-drama.gif' = @{ Hash='31a9c658e173d39349835f14e9dae2f0eb66e10e0fd5c14e68b716857802ca0e'; Frames=66 }
-    'genre-horror.gif' = @{ Hash='668aca2461e850f223f71cbcce63e8af3fc9839cbf1e8e2578c260a2b5576b8f'; Frames=96 }
-    'genre-scifi.gif' = @{ Hash='d840c0568f99089dabdccf926e96f2365731075f2f1a95d7bec90016090f5e07'; Frames=133 }
-    'genre-romance.gif' = @{ Hash='33a58ed903ddb64930c2793b764c8027424213927e3eb4a707bd1b41a8065375'; Frames=56 }
-    'genre-thriller.gif' = @{ Hash='f9c813552a9b456e8f392d9a4d9843c3bbf7d255c63257abbbb8dfcf9665bc1a'; Frames=49 }
-    'genre-fantasy.gif' = @{ Hash='c7fbf6845f42d96d2d103780743dbe63ae3365c5f3e20f2eace18ce3140812d8'; Frames=91 }
-    'genre-mystery.gif' = @{ Hash='f0a0c17008b9645ad1d51474095dac72974ac7c6f11342007218417d18e991d7'; Frames=63 }
-    'genre-western.gif' = @{ Hash='ad87252f8504b549ab0ea6e3377ddbffe23b14e8b7413ad923dff8996654a0ce'; Frames=43 }
-    'genre-musical.gif' = @{ Hash='b82c8bc490a1b3c1adce8b6e2d3c58d69ddb87faf0c0c73dba0d3748d4dfb1fd'; Frames=48 }
-    'genre-crime.gif' = @{ Hash='2cbc58b1b4ea1bbbb88460a4ad29ab31cd934cd2a473a0b2910b1b40ce54ad45'; Frames=54 }
+$gifManifest = Get-Content -LiteralPath (Join-Path $Root 'assets/email-gifs.json') -Raw | ConvertFrom-Json
+$expectedAssets = [ordered]@{}
+foreach ($asset in $gifManifest.assets) {
+    if ($asset.name -like 'genre-*.gif') {
+        $expectedAssets[$asset.name] = @{ Hash=$asset.sha256; Frames=$asset.gif.frames.Count; Width=$asset.gif.width; Height=$asset.gif.height }
+    }
 }
+Assert-True ($expectedAssets.Count -eq 12) 'Expected all twelve optimized genre GIFs.'
 $assetRoots = @('platforms/windows/assets','platforms/nas-docker/app/assets-default','platforms/mac-docker/app/assets-default')
 Add-Type -AssemblyName System.Drawing
 foreach ($assetRoot in $assetRoots) {
@@ -226,8 +220,8 @@ foreach ($assetRoot in $assetRoots) {
         Assert-True (Test-Path -LiteralPath $assetPath -PathType Leaf) "Missing genre asset: $assetRoot/$assetName"
         $bytes = [IO.File]::ReadAllBytes($assetPath)
         Assert-True ([Text.Encoding]::ASCII.GetString($bytes,0,6) -eq 'GIF89a') "$assetRoot/$assetName is not GIF89a"
-        Assert-True ([BitConverter]::ToUInt16($bytes,6) -eq 512 -and [BitConverter]::ToUInt16($bytes,8) -eq 512) "$assetRoot/$assetName is not 512x512"
-        Assert-True ((Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash.ToLowerInvariant() -eq $expectedAssets[$assetName].Hash) "$assetRoot/$assetName changed from the validated original"
+        Assert-True ([BitConverter]::ToUInt16($bytes,6) -eq $expectedAssets[$assetName].Width -and [BitConverter]::ToUInt16($bytes,8) -eq $expectedAssets[$assetName].Height) "$assetRoot/$assetName does not match the optimized dimensions"
+        Assert-True ((Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash.ToLowerInvariant() -eq $expectedAssets[$assetName].Hash) "$assetRoot/$assetName changed from the validated optimized GIF"
         $image = [Drawing.Image]::FromFile($assetPath)
         try {
             $dimension = [Drawing.Imaging.FrameDimension]::new($image.FrameDimensionsList[0])
@@ -235,4 +229,4 @@ foreach ($assetRoot in $assetRoots) {
         } finally { $image.Dispose() }
     }
 }
-Write-Host '[PASS] Validated source GIF type, 512x512 dimensions, animation, hashes, and package parity.'
+Write-Host '[PASS] Validated optimized GIF type, email-sized dimensions, animation, hashes, and package parity.'

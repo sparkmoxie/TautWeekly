@@ -21,16 +21,10 @@ fi
 
 mkdir -p /tmp/tautweekly/home /tmp/tautweekly/config /tmp/tautweekly/cache /tmp/tautweekly/share /tmp/tautweekly/dotnet
 chown -R "$PUID:$PGID" /tmp/tautweekly
-mkdir -p /data/assets /data/logs /data/manager /data/output/posters /data/output/media
-cp -an /opt/tautweekly/assets-default/. /data/assets/ 2>/dev/null || true
-
-# Browser previews are served from /data/output. Remove the old community
-# symlink workaround when present, then maintain a real mirrored directory.
-if [[ -L /data/output/assets ]]; then
-  rm -f /data/output/assets
-fi
-mkdir -p /data/output/assets
-cp -af /data/assets/. /data/output/assets/
+# Refresh shipped filenames only when the bundled content changes (or no marker
+# exists), before any Manager/scheduler process can use persistent artwork.
+python3 /opt/tautweekly/refresh-assets.py --data-root /data
+mkdir -p /data/logs /data/manager /data/output/posters /data/output/media
 mkdir -p /data/output/product-branding
 cp -af /opt/tautweekly/product-branding/. /data/output/product-branding/
 if [[ ! -f /data/config.example.json ]]; then

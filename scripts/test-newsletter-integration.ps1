@@ -1217,7 +1217,7 @@ foreach ($engine in $engines) {
                     '--require-html', 'CUSTOM &lt;TITLE&gt;</span><img',
                     '--require-html', 'cid:custom_title_celebrate',
                     '--require-html', 'display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-left:6px;',
-                    '--require-cid-sha256', 'custom_title_celebrate=86879C45175F3901A8676D9B0BB5132C7A98B20A9F40487C21E4C896CE196616',
+                    '--require-cid-sha256', 'custom_title_celebrate=A142E1EB25D6277BF95A3086221BA141700E1EF96FC47C3B6A3E1919A4D18FB1',
                     '--forbid-plain', 'Selected Show - Watched',
                     '--forbid-html', 'Sample Movie',
                     '--forbid-html', 'Sample Series',

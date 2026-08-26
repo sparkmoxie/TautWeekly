@@ -72,6 +72,13 @@ security_args=(
   --cap-add SETUID
 )
 
+# Existing installations may have healthy customized stock assets and no marker.
+mkdir -p "$data_root/assets" "$data_root/output/assets"
+printf '%s' 'old customized stock' >"$data_root/assets/movies.gif"
+printf '%s' 'old customized PNG' >"$data_root/assets/watched.png"
+printf '%s' 'custom-only sentinel' >"$data_root/assets/custom-only.gif"
+printf '%s' 'unrelated output' >"$data_root/output/keep.txt"
+
 docker run --detach \
   --name "$container_name" \
   "${security_args[@]}" \
@@ -97,6 +104,14 @@ done
 
 docker exec "$container_name" /opt/tautweekly/bin/run-as-user.sh pwsh -NoLogo -NoProfile -NonInteractive -Command \
   'if ($PSVersionTable.PSVersion -lt [Version]"7.2") { exit 1 }' || fail 'PowerShell 7.2+ is unavailable in the runtime image.'
+docker exec "$container_name" test -s /data/.tautweekly-asset-bundle || fail 'Asset migration marker is missing.'
+for name in movies.gif watched.png; do
+  docker exec "$container_name" cmp "/opt/tautweekly/assets-default/$name" "/data/assets/$name" || fail "Stock asset was not refreshed: $name"
+  docker exec "$container_name" cmp "/data/assets/$name" "/data/output/assets/$name" || fail "Preview asset was not refreshed: $name"
+done
+[[ "$(docker exec "$container_name" cat /data/assets/custom-only.gif)" == 'custom-only sentinel' ]] || fail 'Custom-only asset was overwritten.'
+[[ "$(docker exec "$container_name" cat /data/output/keep.txt)" == 'unrelated output' ]] || fail 'Unrelated output was changed.'
+
 docker exec "$container_name" test -s /data/config.example.json || fail 'Persistent config example was not initialized.'
 if [[ "$runtime_profile" == mac ]]; then
   docker exec "$container_name" test ! -e /data/output/index.html || fail 'Mac first run created a stale static output index instead of using Manager.'
@@ -146,5 +161,20 @@ root_status=$?
 set -e
 [[ "$root_status" -eq 64 ]] || fail "Root-identity rejection exited $root_status instead of 64."
 grep -Fq 'PUID/PGID 0 is refused' <<<"$root_output" || fail 'Root-identity rejection was not actionable.'
+
+# A normal restart must not reapply an unchanged bundle over a later edit.
+docker exec "$container_name" sh -c 'printf "%s" "post-update edit" > /data/assets/movies.gif'
+docker restart "$container_name" >/dev/null
+healthy=false
+for _ in {1..100}; do
+  if docker exec "$container_name" /opt/tautweekly/healthcheck.sh >/dev/null 2>&1; then
+    healthy=true
+    break
+  fi
+  sleep 0.2
+done
+[[ "$healthy" == true ]] || fail 'Container did not recover after the same-bundle restart.'
+[[ "$(docker exec "$container_name" cat /data/assets/movies.gif)" == 'post-update edit' ]] || fail 'Same-bundle restart replaced a custom edit.'
+docker exec "$container_name" cmp /data/assets/movies.gif /data/output/assets/movies.gif || fail 'Restart did not refresh the preview mirror.'
 
 printf '[PASS] Container boot, health, runtime, persistence, and root-refusal checks (%s): %s\n' "$runtime_profile" "$image"

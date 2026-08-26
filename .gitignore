@@ -18,6 +18,7 @@
 **/configuration-status.json
 **/last-run.json
 **/.tautweekly-operation.lock
+**/.tautweekly-asset-bundle
 **/logs/
 **/output/
 **/cache/

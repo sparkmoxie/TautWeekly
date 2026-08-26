@@ -134,6 +134,10 @@ if [[ ! -f /var/lib/tautweekly/config.example.json ]]; then
   install -m 0600 -o tautweekly -g tautweekly "$app_source/config.example.json" /var/lib/tautweekly/config.example.json
 fi
 
+# Apply bundle transitions even when an upgrade leaves the service stopped.
+# The subsequent service start sees the same marker and preserves later edits.
+runuser -u tautweekly -- python3 /opt/tautweekly/refresh-assets.py --data-root /var/lib/tautweekly
+
 systemctl daemon-reload
 systemctl enable tautweekly.service >/dev/null
 if [[ "$fresh_install" == true || "$was_active" == true ]]; then

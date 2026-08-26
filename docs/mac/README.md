@@ -350,3 +350,10 @@ during a provider account lock.
 
 See [configuration](../CONFIGURATION.md), [security](../SECURITY.md), and
 [troubleshooting](../TROUBLESHOOTING.md).
+
+## Bundled asset updates
+
+Shipped email asset filenames are release-owned: updates may replace same-name
+custom artwork. Custom-only filenames and unrelated private/runtime data are
+preserved. For the bundle marker, restart behavior, explicit repair, and Windows
+update differences, see [bundled email assets](../EMAIL-ASSETS.md).

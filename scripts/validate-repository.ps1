@@ -108,6 +108,11 @@ $required = @(
     'scripts/test-manager-accessibility.py',
     'scripts/test-manager-header-refresh.mjs',
     'scripts/test-smtp-transport.py',
+    'scripts/optimize-email-gifs.py',
+    'scripts/test-asset-refresh.py',
+    'assets/email-gifs.json',
+    'platforms/nas-docker/app/refresh-assets.py',
+    'platforms/mac-docker/app/refresh-assets.py',
     'scripts/test-support/fake-smtp.py',
     'scripts/test-support/fake-tautulli.py',
     'scripts/test-update-checks.ps1',
@@ -164,6 +169,7 @@ if (-not ($failures | Where-Object { $_ -like '*contributor*' -or $_ -like '*Con
 }
 
 $forbiddenNames = @(
+    '.tautweekly-asset-bundle',
     'config.json', '.env', 'state.json', 'access-state.json', 'remote-access.json',
     'scheduler-state.json', 'scheduler-heartbeat.json', 'service-heartbeat.json',
     'configuration-status.json', 'last-run.json', 'deleted-item-cache.json',
