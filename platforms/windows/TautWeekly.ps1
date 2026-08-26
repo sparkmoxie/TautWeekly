@@ -6959,6 +6959,29 @@ function Get-RecipientWatchedTitleIconHtml {
     return '<img class="recipient-watched-title-icon" src="' + (HtmlEncode $source) + '" width="20" height="20" alt="Watched" title="Watched" style="display:inline-block;width:20px;height:20px;border:0;vertical-align:middle;margin-left:6px;">'
 }
 
+function Get-RecipientWatchedTitleHtml {
+    param(
+        [string]$EncodedTitle,
+        [AllowNull()][object]$Item,
+        [AllowNull()][object]$RecipientWatchedMovies,
+        [ValidateSet("Preview","Email")]
+        [string]$ImageMode,
+        [string]$PreviewAssetBase
+    )
+
+    $icon = Get-RecipientWatchedTitleIconHtml -Item $Item -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $PreviewAssetBase
+    if ([string]::IsNullOrWhiteSpace($icon)) { return $EncodedTitle }
+
+    # Align both text and icon to the same middle, rather than aligning an
+    # image to the font's x-height alone. Keep only the final word with the
+    # icon; the preceding title remains free to wrap at every normal space.
+    $lastSpace = $EncodedTitle.LastIndexOf(' ')
+    $prefix = if ($lastSpace -ge 0) { $EncodedTitle.Substring(0, $lastSpace + 1) } else { '' }
+    $tail = if ($lastSpace -ge 0) { $EncodedTitle.Substring($lastSpace + 1) } else { $EncodedTitle }
+    $prefixHtml = if ($prefix.Length -gt 0) { '<span style="vertical-align:middle;">' + $prefix + '</span>' } else { '' }
+    return $prefixHtml + '<span class="recipient-watched-title-tail" style="white-space:nowrap;"><span style="vertical-align:middle;">' + $tail + '</span>' + $icon + '</span>'
+}
+
 function Get-RecipientWatchedDesktopHeroPosterHtml {
     param(
         [AllowNull()][object]$Item,
@@ -7117,7 +7140,7 @@ function Get-StatsMovieRowsHtml {
         $title = HtmlEncode (Truncate-Text ([string]$item.Title) 42)
         $titleWithStatus = $title
         if ($null -ne $RecipientWatchedMovies) {
-            $titleWithStatus += Get-RecipientWatchedTitleIconHtml -Item $item -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $PreviewAssetBase
+            $titleWithStatus = Get-RecipientWatchedTitleHtml -EncodedTitle $title -Item $item -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $PreviewAssetBase
         }
         $posterSrc = Get-ImageSource `
             -RatingKey ([string]$item.PosterRatingKey) `
@@ -7501,8 +7524,7 @@ function Get-ReleaseCardsHtml {
 
             $item = $Items[$index]
             $title = HtmlEncode $item.Title
-            $titleIconHtml = if ($Kind -eq "Movie") { Get-RecipientWatchedTitleIconHtml -Item $item -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $PreviewAssetBase } else { "" }
-            $titleWithStatus = $title + $titleIconHtml
+            $titleWithStatus = if ($Kind -eq "Movie") { Get-RecipientWatchedTitleHtml -EncodedTitle $title -Item $item -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $PreviewAssetBase } else { $title }
             $posterSrc = Get-ImageSource -RatingKey ([string]$item.PosterRatingKey) -PosterAssets $PosterAssets -ImageMode $ImageMode
             $posterHtml = ""
 
@@ -7962,8 +7984,7 @@ $tvCards
     if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) {
         $hotItem = $HotRelease.Item
         $hotTitle = HtmlEncode $hotItem.Title
-        $hotTitleIconHtml = Get-RecipientWatchedTitleIconHtml -Item $hotItem -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $previewAssetBase
-        $hotTitleWithStatus = $hotTitle + $hotTitleIconHtml
+        $hotTitleWithStatus = Get-RecipientWatchedTitleHtml -EncodedTitle $hotTitle -Item $hotItem -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $previewAssetBase
         $hotPosterSrc = Get-ImageSource -RatingKey ([string]$hotItem.PosterRatingKey) -PosterAssets $PosterAssets -ImageMode $ImageMode
 
         $hotPosterHtml = Get-RecipientWatchedDesktopHeroPosterHtml -Item $hotItem -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $previewAssetBase -PosterSource $hotPosterSrc -PosterAlt ($hotItem.Title + ' poster')
@@ -8153,7 +8174,7 @@ $tvCards
         $trendingPosterHtml = ""
 
         $trendingDisplay = HtmlEncode (Truncate-Text $TrendingTitle 70)
-        $trendingTitleWithStatus = $trendingDisplay + (Get-RecipientWatchedTitleIconHtml -Item $script:GlobalTrendingStat -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $previewAssetBase)
+        $trendingTitleWithStatus = Get-RecipientWatchedTitleHtml -EncodedTitle $trendingDisplay -Item $script:GlobalTrendingStat -RecipientWatchedMovies $RecipientWatchedMovies -ImageMode $ImageMode -PreviewAssetBase $previewAssetBase
         $trendingPlays = Safe-Int $script:GlobalTrendingStat.Plays
         $trendingRatingKey = [string]$script:GlobalTrendingStat.RatingKey
         $trendingPosterSrc = Get-ImageSource `

@@ -29,7 +29,7 @@ $requiredFunctions = @(
     'Get-OptionalStringProperty', 'Safe-Int', 'Get-RecipientWatchedMovies',
     'Test-IncludedLibraryRow', 'Get-IncludedLibraryQueryScopes',
     'Test-RecipientHasWatchedMovie', 'Get-RecipientWatchedAssetSource',
-    'Get-RecipientWatchedTitleIconHtml', 'Get-RecipientWatchedDesktopHeroPosterHtml',
+    'Get-RecipientWatchedTitleIconHtml', 'Get-RecipientWatchedTitleHtml', 'Get-RecipientWatchedDesktopHeroPosterHtml',
     'Get-RecipientWatchedPlainTextSuffix', 'Get-ReleaseCardsHtml', 'Get-StatsMovieRowsHtml'
 )
 
@@ -175,8 +175,12 @@ foreach ($renderer in $renderers) {
     Assert-True ((Get-RecipientWatchedPlainTextSuffix $watched $state) -eq ' - Watched') "$($renderer.Path) lost plain-text semantics"
     Assert-True ((Get-RecipientWatchedPlainTextSuffix $tv $state) -eq '') "$($renderer.Path) changed plain-text TV"
 
+    $previewTitle = Get-RecipientWatchedTitleHtml 'Watched Movie' $watched $state Preview $renderer.PreviewBase
+    Assert-True ($previewTitle.Contains('<span style="vertical-align:middle;">Watched </span>') -and $previewTitle.Contains('<span class="recipient-watched-title-tail" style="white-space:nowrap;"><span style="vertical-align:middle;">Movie</span>' + $previewIcon)) "$($renderer.Path) lost centered text or orphan-free wrapping"
+    Assert-True ((Get-RecipientWatchedTitleHtml 'Unwatched Movie' $unwatched $state Preview $renderer.PreviewBase) -ceq 'Unwatched Movie') "$($renderer.Path) changed unwatched title markup or spacing"
+    Assert-True ((Get-RecipientWatchedTitleHtml 'TV Title' $tv $state Preview $renderer.PreviewBase) -ceq 'TV Title') "$($renderer.Path) changed TV title markup"
     $watchedCard = Get-ReleaseCardsHtml @($watched) @() Preview $state $renderer.PreviewBase Movie
-    Assert-True ($watchedCard.Contains('Watched Movie<img class="recipient-watched-title-icon"')) "$($renderer.Path) did not place the icon immediately after the card title"
+    Assert-True ($watchedCard.Contains($previewTitle)) "$($renderer.Path) did not place the icon immediately after the card title"
     Assert-True ($watchedCard.Contains('vertical-align:middle;margin-left:6px;')) "$($renderer.Path) card spacing differs from hero spacing"
     $unwatchedCard = Get-ReleaseCardsHtml @($unwatched) @() Preview $state $renderer.PreviewBase Movie
     Assert-True (-not $unwatchedCard.Contains('recipient-watched-title-icon')) "$($renderer.Path) left watched markup in an unwatched card"
@@ -184,14 +188,14 @@ foreach ($renderer in $renderers) {
     Assert-True (-not $tvCard.Contains('recipient-watched-title-icon')) "$($renderer.Path) changed TV card rendering"
 
     $statsRow = Get-StatsMovieRowsHtml @($watched) @() Preview $state $renderer.PreviewBase
-    Assert-True ($statsRow.Contains('Watched Movie' + $previewIcon)) "$($renderer.Path) omitted the identical marker from the personal movie recap"
+    Assert-True ($statsRow.Contains($previewTitle)) "$($renderer.Path) omitted the identical marker from the personal movie recap"
     $unwatchedStats = Get-StatsMovieRowsHtml @($unwatched) @() Preview $state $renderer.PreviewBase
     Assert-True (-not $unwatchedStats.Contains('recipient-watched-title-icon')) "$($renderer.Path) marked an unwatched recap item"
 
     $source = [IO.File]::ReadAllText($path)
-    Assert-True ($source.Contains('$hotTitleWithStatus = $hotTitle + $hotTitleIconHtml')) "$($renderer.Path) lost mobile hero placement"
+    Assert-True ($source.Contains('$hotTitleWithStatus = Get-RecipientWatchedTitleHtml -EncodedTitle $hotTitle')) "$($renderer.Path) lost mobile hero placement"
     Assert-True ($source.Contains('$hotPosterHtml = Get-RecipientWatchedDesktopHeroPosterHtml')) "$($renderer.Path) lost desktop hero placement"
-    Assert-True ($source.Contains('$trendingTitleWithStatus = $trendingDisplay + (Get-RecipientWatchedTitleIconHtml -Item $script:GlobalTrendingStat')) "$($renderer.Path) omitted the compact Trending movie marker"
+    Assert-True ($source.Contains('$trendingTitleWithStatus = Get-RecipientWatchedTitleHtml -EncodedTitle $trendingDisplay -Item $script:GlobalTrendingStat')) "$($renderer.Path) omitted the compact Trending movie marker"
     Assert-True ($source.Contains('$trendWatchedSuffix = Get-RecipientWatchedPlainTextSuffix -Item $script:GlobalTrendingStat')) "$($renderer.Path) omitted compact Trending plain-text status"
     Assert-True ($source.Contains('$watchedSuffix = Get-RecipientWatchedPlainTextSuffix -Item $_')) "$($renderer.Path) omitted personal movie plain-text status"
     Assert-True ($source.Contains('Cid = "recipient_watched"; MediaType = "image/png"')) "$($renderer.Path) omitted circular MIME registration"

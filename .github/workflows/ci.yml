@@ -35,6 +35,7 @@ jobs:
           node --check docs/gui-preview/rich-preview.js
           node --check docs/gui-preview/update-ui.js
           node --check docs/gui-preview/app.js
+          node --check scripts/test-recipient-watched-visuals.mjs
           node scripts/test-gui-preview-personal-stats.mjs
           node scripts/test-manager-update-indicator.mjs
           node scripts/test-manager-header-refresh.mjs
