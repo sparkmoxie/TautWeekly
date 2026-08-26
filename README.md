@@ -120,44 +120,18 @@ The responsive Manager is the primary workflow on every maintained package:
 
 ## Current newsletter behavior
 
-- New movie and TV additions with artwork, summaries, genres, ratings, and
-  episode details when available.
-- Recipient-specific **Watched** marks identify movies from that recipient's
-  all-time Tautulli history, never another user's activity. Desktop heroes use
-  the 26px poster shield; mobile heroes and main movie cards use a centered
-  16px title circle with 8px left spacing. Footer stats have no watched markers.
-  Unwatched movies leave no gap and TV watched-state behavior is unchanged.
-- Complementary server-wide highlights: a **HOT NEW RELEASE** movie hero ends
-  with the existing full-width **TRENDING THIS WEEK** movie card; a
-  **TRENDING THIS WEEK** movie hero ends with **TOP GENRE THIS WEEK**. Trending
-  never appears in both places.
-- A Trending week has no new movies. When new TV exists, the hero is followed
-  by **RECENT RELEASES / Movies** (up to four movies different from the hero)
-  and **NEW RELEASES / TV** (up to four series). Without new TV, both shelves
-  are **RECENT RELEASES**, with up to four TV series added strictly less than
-  one calendar month ago.
-- The line above the release date and the email preview/preheader use the same
-  computed value. Trending with new TV says `0 NEW MOVIES • X TV TITLE(S)`;
-  Trending without new TV says
-  `1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when a real hero exists.
-- Top Genre considers qualifying movie activity only in the configured window
-  and included libraries, uses the first Plex genre for each distinct movie,
-  normalizes aliases case-insensitively, and ranks by total qualified watch
-  time, unique movie count, qualifying plays, then genre name. Its supporting
-  line reports only aggregate duration and movie count. Missing or unsupported
-  art safely uses the neutral movie animation.
-- Every lifecycle state shares the same real release payload; the state changes
-  only its introduction, personal-stat presentation, and footer treatment.
-- A private personal recap with authentic watch time, posters, movie genres and
-  Rotten Tomatoes ratings, TV watch duration and IMDb ratings when available;
-  previews never invent recipient activity.
-- A privacy-preserving, server-wide Binge Champion award whose breakdown uses
-  the same supporting typography as personal total watch time. Manual Welcome
-  remains award-free.
-- Welcome, active-week, quiet-week, and milestone newsletter layouts, including
-  recipient platform icons when real history identifies a supported platform.
-- An optional uppercase custom-card title with one allowlisted 18×18 local GIF.
-- Browser previews and controlled TestEmail delivery before scheduling.
+- **New releases:** Movie and TV additions with artwork, summaries, ratings,
+  and episode details.
+- **Weekly highlights:** Hot new releases, trending movies, and the week's
+  top movie genre keep discovery useful even during quieter weeks.
+- **Personal recaps:** Each recipient sees their own watch time, viewing
+  highlights, and movie **Watched** marks.
+- **Binge Champion:** A privacy-preserving award celebrates the week's
+  leading viewer.
+- **Adaptive layouts:** Welcome, active-week, quiet-week, and milestone
+  newsletters fit each recipient's activity.
+- **Custom announcements:** Add an optional branded text card for your own
+  message.
 
 Tautulli is the required activity source. Optional direct Plex access enriches
 ratings and artwork when the server exposes them. Detailed provider, privacy,

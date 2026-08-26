@@ -10,6 +10,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Simplified the repository README's newsletter summary to its main user-facing
+  features, leaving detailed rendering rules in the reference documentation.
 - Optimized all 32 bundled email GIFs at an explicitly approved 2x email
   display resolution, followed by lossless compression: 21,435,442 to
   2,704,515 bytes (87.38% smaller). Preserved all animation frames, timing,
