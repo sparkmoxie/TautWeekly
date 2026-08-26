@@ -9,7 +9,9 @@ reviewed commit on `main`.
    requires explicit authorization. Verify GIF mirrors with
    `python3 -B scripts/optimize-email-gifs.py --check`.
    Update `CHANGELOG.md` and move the intended entries from `Unreleased` into a
-   semantic version heading.
+   semantic version heading. Synchronize the public Manager preview with
+   `node scripts/sync-gui-preview.mjs` after frontend/version changes;
+   documentation validation checks the generated copy and release label.
 3. Choose local checks proportionate to the patch (see AGENTS.md). Reuse passing
    CI evidence for the exact commit or identical tree instead of duplicating
    comprehensive suites locally. The relevant commands include:

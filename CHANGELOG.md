@@ -10,6 +10,13 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Refreshed the public GUI Preview from the current Manager frontend and release
+  metadata, including package-specific startup, private-access, login, update,
+  and refresh behavior with an isolated fictional API. Added a synchronization
+  gate to prevent future frontend/version drift.
+- Aligned both public newsletter previews with current watched markers, rating
+  and summary typography, platform glyphs, and TV-only/quiet-week behavior.
+  The email gallery now uses the same optimized local stock artwork.
 - Simplified the repository README's newsletter summary to its main user-facing
   features, leaving detailed rendering rules in the reference documentation.
 - Optimized all 32 bundled email GIFs at an explicitly approved 2x email

@@ -1,53 +1,50 @@
 # TautWeekly GUI Preview boundary
 
-The rendered [GUI Preview](https://sparkmoxie.github.io/TautWeekly/gui-preview/)
-is a static, package-neutral demonstration of the Manager interface. It uses a
-synthetic in-memory API. Users, libraries, endpoints, email addresses,
-schedules, viewer activity, counts, diagnostics, and operation results are
-fictional.
+The [GUI Preview](https://sparkmoxie.github.io/TautWeekly/gui-preview/) mirrors the
+current Manager interface and release. Its banner identifies the represented
+version. The app, styles, and update UI are generated from the maintained
+Manager source by `node scripts/sync-gui-preview.mjs`; documentation validation
+rejects stale copies or release metadata.
 
-Settings also includes the production-shaped capability-aware update card. Its
-Windows example uses bundled fictional application/package/release metadata and
-simulates authenticated background discovery, the passive purple header
-notification, **Check now**, and the confirmed updater state entirely in
-memory. It does not contact GitHub, launch a process, request elevation, or
-change a file. Successful synthetic results are reused for five minutes to
-mirror the production duplicate-check guard. The header **Refresh** completes
-its synthetic local-status refresh before running the same in-memory manual
-check as **Check now**; the other scoped refresh controls remain isolated.
-Reload resets the demonstration.
+## Fictional package examples
 
-The newsletter frames intentionally mirror the production email presentation.
-They bundle local copies of public media artwork and title logos plus dated
-Rotten Tomatoes and IMDb visual-score snapshots. Those media fixtures remain
-property of their respective owners, may change at their sources, and imply no
-affiliation or endorsement. The score snapshot date is shown inside each frame.
+Choose Windows, NAS/Docker, macOS Docker, native Linux, or FreeBSD/Podman to
+explore the corresponding controls. Windows includes optional sign-in startup
+and password lock. Service packages require login and leave installation with
+the host. Tailscale setup, verification, scheduling, backups, diagnostics,
+configuration saves, credential reveal, and delivery are simulations only.
 
-Config also includes an in-memory custom text card demonstration immediately
-after Cache. Its toggle, border color/opacity, optional headings, and plain-text
-body feed the bundled newsletter frames without writing a configuration file.
-The Optional title field has a locally packaged `add_reaction` control inside
-its right edge. Its picker offers Celebrate, Construction, Rocket, Tickets,
-Warning, and Alert. The six user-supplied GIFs are copied without visual modification and
-are selected by a separate allowlisted synthetic asset ID; the title remains
-plain text and uppercase. The selected GIF replaces the empty-state reaction
-glyph inside the title field at 24 x 24 pixels, so the field presents its text
-and current visual choice together. The same selection renders immediately
-after the title at 18 x 18 pixels in all six newsletter states. Selecting the
-active GIF again removes it without a redundant None tile. Delete or Backspace
-also clears the selection while the in-field GIF control is focused.
-Synthetic saves consume the same typed, card-scoped impact plan shape as the
-production Manager, so presentation changes preserve fictional connection
-evidence, cache-only saves show a concise confirmation, and no-op saves run no
-simulated work.
+The initial update status represents the current release. **Simulate an
+available update** demonstrates upgrading from the previous release to the
+current one; it does not advertise an unpublished future release or contact
+GitHub. Only the Windows example offers a simulated browser-owned install.
 
-The recovery and activity surfaces demonstrate rolling count caps entirely in
-memory. Configuration backups retain the newest 10. Recent completed Manager
-operations and configuration diagnostics each use count-only FIFO retention of
-the newest 20. Every new overflow item removes the oldest, and seeded excess is
-normalized before it is returned to the interface.
+All users, endpoints, addresses, activity, counts, schedules, credentials, and
+results are fictional. Do not enter real credentials. The mock API intercepts
+requests in memory, the content security policy blocks network connections,
+and reload discards all changes. Private-address links do not navigate to a
+service. No host process, file, scheduler, container, email, or account changes.
 
-The page never contacts Plex, Tautulli, SMTP, a scheduler, or another external
-service; it writes no files and stores no credentials or entered values. Its
-content security policy disables network connections, all simulated checks
-pass, and every temporary edit or operation resets on reload.
+## Newsletter examples
+
+The six lifecycle states retain separate fictional activity scenarios.
+**Release activity** switches their shared library payload between new movies
+plus TV, TV-only additions, and no new additions. Trending heroes, recent
+shelves, matching preheaders, and complementary Top Genre/Trending summaries
+follow the current newsletter behavior.
+
+Examples include recipient-specific movie watched marks, white platform glyphs,
+uncapped personal recaps, the current 12px footer/rating text and 27px summary
+values, and the accepted mobile TV pairing. Watched marks remain absent from
+footer recaps; no-history fixtures do not invent watched marks.
+
+The custom text card retains its toggle, headings, plain-text body, border
+controls, and six local title GIF choices. The optimized GIF bytes are mirrored
+from the email bundle; watched PNGs and other tiny PNGs stay unchanged.
+The explicit 2x email sizing exception and lossless compression are documented
+in [Email assets](../EMAIL-ASSETS.md).
+
+Public media artwork and rating snapshots retain their stated historical dates.
+Only viewing activity and operational data are synthetic. No affiliation or
+endorsement is implied. Configuration backups retain the newest 10; completed
+operations and diagnostics retain the newest 20, all in memory.

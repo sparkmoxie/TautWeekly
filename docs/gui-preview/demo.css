@@ -84,3 +84,8 @@
 @media (prefers-reduced-motion: reduce) {
   .demo-banner-dot { animation: none; }
 }
+
+.demo-banner { flex-wrap: wrap; }
+.demo-banner label { display: flex; align-items: center; gap: .5rem; font-weight: 700; }
+.demo-banner select { max-width: 100%; padding: .45rem; color: #fff; background: #171d23; border: 1px solid #526271; border-radius: 6px; }
+.demo-banner .button { font-size: .78rem; padding: .5rem .7rem; }

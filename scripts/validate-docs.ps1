@@ -245,6 +245,9 @@ foreach ($relative in $expandedPlatformPages) {
     Write-Host "[PASS] Quickstart feature/troubleshooting coverage: $relative"
 }
 
+& node (Join-Path $Root 'scripts/sync-gui-preview.mjs') --check
+if ($LASTEXITCODE -ne 0) { throw 'GUI preview differs from the current Manager/release. Regenerate it before deployment.' }
+
 $guiPreview = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/index.html'))
 $guiPreviewApp = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/app.js'))
 $guiPreviewAPI = [IO.File]::ReadAllText((Join-Path $docs 'gui-preview/mock-api.js'))
@@ -275,6 +278,12 @@ foreach ($pattern in @(
     }
 }
 
+foreach ($pattern in @('id="demo-profile"', 'id="demo-update-scenario"', 'id="demo-release-scenario"',
+    'supportsStartup', 'remote-access/tailscale', 'const DEMO_VERSION', 'TautWeeklyDemoControls',
+    'No services, email, files, credentials, or schedulers are contacted')) {
+    if ($guiPreviewCombined -notmatch [regex]::Escape($pattern)) { throw "Current GUI preview capability is missing: $pattern" }
+}
+
 foreach ($forbiddenPattern in @(
     '(?i)\blocalStorage\b',
     '(?i)\bsessionStorage\b',
@@ -282,13 +291,10 @@ foreach ($forbiddenPattern in @(
     '(?i)\bXMLHttpRequest\b',
     '(?i)\bWebSocket\b',
     '(?i)\bEventSource\b',
-    '(?i)sendBeacon',
-    '(?i)\bWindows\b',
-    '(?i)\bUAC\b',
-    '(?i)\bSYSTEM principal\b'
+    '(?i)sendBeacon'
 )) {
     if ($guiPreviewCombined -match $forbiddenPattern) {
-        throw "GUI Preview contains a forbidden persistence, network, or platform-specific pattern: $forbiddenPattern"
+        throw "GUI Preview contains a forbidden persistence or network pattern: $forbiddenPattern"
     }
 }
 
@@ -383,7 +389,7 @@ if ((Get-FileHash -LiteralPath $guiGenreAsset -Algorithm SHA256).Hash -ne '0C406
 }
 
 foreach ($pattern in @(
-    'CustomTextCardTitleGif.+synthetic-asset-id.+none',
+    'CustomTextCardTitleGif.+asset-id.+none',
     'TITLE_GIF_IDS = new Set\(\["none", "celebrate", "construction", "rocket", "tickets", "warning", "alert"\]\)',
     'const titleGifAssets = Object\.freeze',
     'Object\.hasOwn\(titleGifAssets, requestedTitleGifID\)',
@@ -453,9 +459,9 @@ foreach ($pattern in @(
     'slice\(0, state\.backupMaximum\)',
     'slice\(0, state\.historyMaximum\)',
     'slice\(0, diagnosticMaximum\)',
-    'newest 10 fictional backups',
+    'Rolling retention keeps the newest 10',
     'Count-only FIFO keeps the newest 20 completed items',
-    'Count-only FIFO keeps the newest 20 fictional events'
+    'Count-only FIFO keeps the newest 20 events'
 )) {
     if ($guiPreviewCombined -notmatch $pattern) {
         throw "GUI Preview rolling-retention contract is missing: $pattern"
@@ -468,7 +474,7 @@ if ($guiPreviewRich -match 'CustomTextCardTitle[^\r\n]+(?:celebrate|construction
 
 Write-Host '[PASS] GUI Preview title-GIF selector, safe mapping, six-state output, accessibility, and rolling FIFO caps are covered.'
 
-Write-Host '[PASS] GUI Preview is static, relative, package-neutral, locally enriched, non-persistent, and network-blocked.'
+Write-Host '[PASS] GUI Preview is static, relative, package-aware, locally enriched, non-persistent, and network-blocked.'
 
 $previewGallery = [IO.File]::ReadAllText((Join-Path $docs 'examples/preview-all-00-INDEX.html'))
 foreach ($previewCopy in @(

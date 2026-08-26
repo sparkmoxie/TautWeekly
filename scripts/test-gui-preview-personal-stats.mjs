@@ -11,7 +11,7 @@ const context = vm.createContext({
   window: {},
   document: { getElementById: () => null },
 });
-vm.runInContext(source, context, { filename: rendererPath });
+vm.runInContext(source.replace("  function showCard(item) {", "  window.fixtureShowCard = showCard;\n  function showCard(item) {"), context, { filename: rendererPath });
 
 const preview = context.window.TautWeeklyPreviewDemo;
 assert.ok(preview && typeof preview.html === "function", "synthetic preview renderer was not registered");
@@ -57,3 +57,80 @@ assert.ok(!quiet.includes('class="stats-summary-grid"') && !quiet.includes("YOU 
 assert.ok(!source.match(/https?:\/\//i), "synthetic preview renderer contains an external URL");
 
 console.log("[PASS] GUI preview personal stats are uncapped, rated when eligible, responsively paired, and network-local.");
+
+
+// Current-release feature parity: use the existing synthetic renderer fixture.
+assert.equal(occurrences(normal, 'alt="Watched"'), 3, "history fixture lost its hero/title movie markers");
+assert.equal(occurrences(preview.html("demo-new"), 'alt="Watched"'), 0, "no-history fixture invented watched movies");
+const recap = normal.slice(normal.indexOf('<section class="stats-media-stack">'));
+assert.ok(!recap.includes('alt="Watched"'), "watched marks leaked into footer statistics");
+assert.ok(normal.includes('width="16" height="16" alt="Watched"') && normal.includes("margin-left:8px"), "title marker no longer matches accepted sizing");
+assert.ok(normal.includes('width="26" height="26" alt="Watched"'), "desktop shield size drifted");
+assert.ok(normal.includes(".imdb{font-size:12px;font-weight:700}") && normal.includes("font-size:27px;font-weight:800;line-height:1.1"), "current type scale is missing");
+assert.ok(normal.includes('class="recipient-platform-icon"') && normal.includes('width="21" height="21"'), "white platform glyph is missing");
+preview.setReleaseScenario("tv-only");
+const tvOnly = preview.html("demo-normal");
+assert.ok(tvOnly.includes("0 NEW MOVIES &middot; 4 TV TITLES") && tvOnly.includes("TOP GENRE THIS WEEK"), "TV-only release scenario drifted");
+preview.setReleaseScenario("quiet");
+const noAdditions = preview.html("demo-normal");
+assert.ok(noAdditions.includes("1 TRENDING MOVIE &middot; 4 RECENT MOVIE RELEASES"), "quiet release header/shelf count drifted");
+preview.setReleaseScenario("new");
+
+for (const episodes of [[], [["S01 EP01", "Episode", null]]]) {
+  const card = context.window.fixtureShowCard({title:"Fictional fallback", art:"local.jpg", genre:"Drama", imdb:"8.1", episodes});
+  assert.ok(card.includes('alt="IMDb">8.1'), "GUI lost show-level IMDb fallback");
+  assert.ok(!context.window.fixtureShowCard({title:"Unrated", art:"local.jpg", episodes, imdb:null}).includes('alt="IMDb"'), "GUI invented an unavailable rating");
+}
+
+const gallerySource = fs.readFileSync(path.join(root, "docs/examples/preview-all-00-INDEX.html"), "utf8");
+const galleryScript = gallerySource.match(/<script>([\s\S]*?)<\/script>/)[1];
+const galleryContext = vm.createContext({ window: {} });
+vm.runInContext(galleryScript.slice(0, galleryScript.indexOf("    function nav(){")) +
+  "window.gallery = { states, email, statsBlock, heroBlock, tvCard, asset };})();", galleryContext);
+const gallery = galleryContext.window.gallery;
+const galleryNormal = gallery.email(gallery.states[3]);
+assert.ok(galleryNormal.includes('width="26" height="26" alt="Watched"') && galleryNormal.includes('width="16" height="16" alt="Watched"'), "gallery watched markers are stale");
+assert.ok(!gallery.statsBlock(gallery.states[3]).includes('alt="Watched"'), "gallery footer contains a watched mark");
+assert.ok(gallery.statsBlock(gallery.states[3]).includes("font-size:27px;line-height:1.1;font-weight:800"), "gallery Binge value is stale");
+assert.ok(gallery.tvCard({title:"Fictional fallback",poster:"local.jpg",episodes:[["S01 EP01","Episode",null]],imdb:"8.1"}).includes(">8.1</span>"), "gallery lost show-level IMDb fallback");
+assert.ok(gallery.tvCard({title:"Fictional fallback",poster:"local.jpg",episodes:[],imdb:"8.1"}).includes(">8.1</span>"), "gallery lost no-episode IMDb fallback");
+assert.equal(gallery.asset("movies.gif"), "../gui-preview/media/movies.gif", "gallery uses remote or stale stock artwork");
+assert.ok(!gallerySource.includes("raw.githubusercontent.com"), "gallery still fetches bundled art from a separate source revision");
+
+let clock = Date.now();
+class FixtureDate extends Date {
+  constructor(...args) { super(...(args.length ? args : [clock])); }
+  static now() { return clock; }
+}
+const mockContext = vm.createContext({
+  window: { location: { href: "https://preview.demo.invalid/TautWeekly/gui-preview/" } },
+  URL, Response, Date: FixtureDate, setTimeout: (callback) => { callback(); return 1; },
+});
+const mockSource = fs.readFileSync(path.join(root, "docs/gui-preview/mock-api.js"), "utf8");
+vm.runInContext(mockSource, mockContext);
+const controls = mockContext.window.TautWeeklyDemoControls;
+const expectedVersion = fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8").match(/^## \[(\d+\.\d+\.\d+)\]/m)[1];
+assert.equal(controls.version, expectedVersion, "GUI preview represents an old release");
+const api = async (route, method = "GET", body = {}) => {
+  const response = await mockContext.window.fetch(route, { method, body: JSON.stringify(body) });
+  return { status: response.status, data: await response.json() };
+};
+assert.equal((await api("/api/v1/updates/check", "POST")).data.state, "current", "initial demo advertises an outdated upgrade");
+controls.offerUpdate();
+assert.equal((await api("/api/v1/updates")).data.latestStableVersion, expectedVersion);
+assert.equal((await api("/api/v1/updates/install", "POST")).status, 202);
+clock += 1000;
+assert.equal((await api("/api/v1/updates")).data.applicationVersion, expectedVersion, "simulated upgrade never completes");
+for (const name of ["windows", "nas", "mac", "linux", "freebsd"]) {
+  controls.setProfile(name);
+  assert.equal((await api("/api/v1/capabilities")).data.supportsStartup, name === "windows");
+  assert.equal((await api("/api/v1/auth/access")).data.runtimeRequired, name !== "windows");
+  controls.offerUpdate();
+  assert.equal((await api("/api/v1/updates")).data.installSupported, name === "windows", "demo grants a host-owned updater to the browser");
+  const remote = await api("/api/v1/remote-access/tailscale", "PUT", { enabled: true, confirmedPrivate: true });
+  assert.equal(remote.data.active, true);
+  assert.equal(remote.data.url, "https://manager.demo.invalid");
+}
+assert.equal((await api("/api/v1/updates/install", "POST")).status, 409, "service profile offered browser-owned installation");
+assert.equal((await api("https://unrelated.demo.invalid/no-route")).status, 404, "unmatched request escaped the mock boundary");
+console.log("[PASS] Current release/package simulations, watched markers, type scale, weekly scenarios, and gallery parity.");

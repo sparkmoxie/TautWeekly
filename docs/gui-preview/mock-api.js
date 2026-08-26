@@ -2,6 +2,18 @@
 
 (() => {
   const now = () => new Date().toISOString();
+  const DEMO_VERSION = "0.21.4";
+  const PREVIOUS_VERSION = "0.21.3";
+  const PROFILES = {
+    windows: { runtimeMode: "windows", packageKind: "windows", label: "Windows" },
+    nas: { runtimeMode: "nas", packageKind: "nas-docker", label: "NAS / Docker" },
+    mac: { runtimeMode: "mac", packageKind: "mac-docker", label: "macOS Docker" },
+    linux: { runtimeMode: "linux", packageKind: "linux", label: "Native Linux" },
+    freebsd: { runtimeMode: "nas", packageKind: "freebsd-podman", label: "FreeBSD / Podman" },
+  };
+  let profileName = "windows";
+  const profile = () => PROFILES[profileName];
+  const serviceProfile = () => profileName !== "windows";
   const revision = "demo-revision-2026";
   const BACKUP_LIMIT = 10;
   const OPERATION_HISTORY_LIMIT = 20;
@@ -86,7 +98,7 @@
     field("CustomTextCardBorderColor", "Border color", "Custom text card", "color", "#72aef7", { help: "Choose the card accent color. Border opacity controls whether it is visible." }),
     field("CustomTextCardBorderOpacity", "Border opacity", "Custom text card", "range", 34, { min: 0, max: 100, help: "Set to 0% for no border." }),
     field("CustomTextCardTitle", "Optional title", "Custom text card", "text", "CUSTOM TITLE", { max: 120, help: "Gold uppercase label using the Welcome Aboard title size." }),
-    field("CustomTextCardTitleGif", "Optional title GIF", "Custom text card", "synthetic-asset-id", "none", { help: "A safe local asset ID stored separately from the title text." }),
+    field("CustomTextCardTitleGif", "Optional title GIF", "Custom text card", "asset-id", "none", { help: "A safe local asset ID stored separately from the title text." }),
     field("CustomTextCardSubheading", "Optional subheading", "Custom text card", "text", "Custom subheading", { max: 200, help: "Large white heading using the Welcome Aboard heading size." }),
     field("CustomTextCardBody", "Card body (required when enabled)", "Custom text card", "textarea", "A synthetic announcement for local assessment.\nLine breaks remain plain text and no service is contacted.", { max: 2000, help: "Plain text only. Line breaks are preserved and HTML is always escaped." }),
     field("IncludedLibraryIds", "Included library IDs", "Advanced", "string-list", ["11", "12", "13"]),
@@ -194,6 +206,8 @@
     };
   }), DIAGNOSTIC_LIMIT);
   const model = {
+    startup: { supported: true, state: "disabled", startManager: false, openDashboard: false },
+    tailscale: { supported: true, installed: true, enabled: false, active: false, state: "disabled", management: "managed", url: "" },
     schedule: { installed: true, enabled: true, owned: true, ownership: "verified", state: "ready" },
     operation: completedPreview,
     operationStartedMS: 0,
@@ -206,10 +220,10 @@
       schemaVersion: 2,
       observedAtUtc: now(),
       state: "unknown",
-      managerVersion: "0.15.2",
-      applicationVersion: "0.15.2",
-      packageVersion: "0.15.2",
-      packageKind: "supported-host-updater",
+      managerVersion: DEMO_VERSION,
+      applicationVersion: DEMO_VERSION,
+      packageVersion: DEMO_VERSION,
+      packageKind: "windows",
       packageLabel: "Synthetic supported package",
       hostAdapterState: "not-applicable",
       updateChannel: "stable",
@@ -229,6 +243,40 @@
       },
     },
   };
+
+  function access() {
+    const required = serviceProfile() || model.lockEnabled;
+    return { mode: required ? "optional-lock" : "trusted-local", authenticationRequired: required,
+      passwordConfigured: required, passwordLockEnabled: required, pairingRequired: false,
+      runtimeRequired: serviceProfile(), canDisable: !serviceProfile() && model.lockEnabled };
+  }
+
+  window.TautWeeklyDemoControls = Object.freeze({
+    version: DEMO_VERSION,
+    setProfile(name) {
+      if (!Object.hasOwn(PROFILES, name)) throw new Error("Unknown fictional package profile.");
+      profileName = name;
+      model.startup.supported = !serviceProfile();
+      Object.assign(model.tailscale, { enabled: false, active: false, state: "disabled", url: "",
+        management: ["nas", "mac", "freebsd"].includes(name) ? "external" : "managed" });
+      Object.assign(model.update, { managerVersion: DEMO_VERSION, applicationVersion: DEMO_VERSION,
+        packageVersion: DEMO_VERSION, packageKind: profile().packageKind, packageLabel: profile().label + " (fictional)",
+        imageVersion: ["nas", "mac", "freebsd"].includes(name) ? DEMO_VERSION : "",
+        state: "current", latestStableVersion: DEMO_VERSION, updateAvailable: false, installSupported: false,
+        installState: "idle", nextCheckAllowedAtUtc: "", lastSuccessfulCheckUtc: now(), backgroundCheckRecommended: false });
+      model.update.guidance.owner = serviceProfile() ? "Package host (simulated)" : "Verified Windows updater (simulated)";
+      model.update.guidance.summary = serviceProfile()
+        ? "This example keeps installation with the package host. No browser action changes a host, service, or container."
+        : "The Windows example simulates the verified updater; it never launches a process or changes a file.";
+    },
+    offerUpdate() {
+      Object.assign(model.update, { managerVersion: PREVIOUS_VERSION, applicationVersion: PREVIOUS_VERSION,
+        packageVersion: PREVIOUS_VERSION, imageVersion: model.update.imageVersion ? PREVIOUS_VERSION : "",
+        latestStableVersion: DEMO_VERSION, state: "update-available", updateAvailable: true,
+        installSupported: !serviceProfile(), installState: "idle", lastSuccessfulCheckUtc: now(),
+        nextCheckAllowedAtUtc: "", backgroundCheckRecommended: false });
+    },
+  });
 
   function editor() {
     return {
@@ -251,8 +299,8 @@
       schemaVersion: 1,
       observedAtUtc,
       overall: "healthy",
-      platform: "demo",
-      version: "GUI Preview",
+      platform: profile().label + " (fictional)",
+      version: DEMO_VERSION,
       runtime: { manager: "healthy", preview: "ready", scheduler: model.schedule.installed ? "ready" : "not-installed" },
       readiness: { configuration: "ready", privateData: "ready" },
       schedule: {
@@ -369,6 +417,7 @@
       managerVersion: version,
       applicationVersion: version,
       packageVersion: version,
+      imageVersion: model.update.imageVersion ? version : "",
       updateAvailable: false,
       installSupported: false,
       installState: "completed",
@@ -422,12 +471,35 @@
     finishScheduleIfReady();
     finishUpdateIfReady();
 
-    if (path === "/api/v1/setup") return json({ paired: true, authenticationRequired: false, pairingRequired: false });
+    if (path === "/api/v1/setup") return json({ paired: true, authenticationRequired: serviceProfile(), pairingRequired: false, runtimeMode: profile().runtimeMode });
     if (path === "/api/v1/auth/session" || path === "/api/v1/auth/login" || path === "/api/v1/auth/pair") return json({ authenticated: true, csrfToken: "synthetic-demo-token", expiresAtUtc: new Date(Date.now() + 86400000).toISOString() });
     if (path === "/api/v1/auth/logout") return json({ signedOut: true });
-    if (path === "/api/v1/auth/access" && method === "GET") return json({ mode: "trusted-local", authenticationRequired: model.lockEnabled, passwordConfigured: model.lockEnabled, passwordLockEnabled: model.lockEnabled, pairingRequired: false, runtimeRequired: false, canDisable: model.lockEnabled });
-    if (path === "/api/v1/auth/access/password") { model.lockEnabled = true; return json({ mode: "optional-lock", authenticationRequired: true, passwordConfigured: true, passwordLockEnabled: true, pairingRequired: false, runtimeRequired: false, canDisable: true }); }
-    if (path === "/api/v1/auth/access/disable") { model.lockEnabled = false; return json({ mode: "trusted-local", authenticationRequired: false, passwordConfigured: false, passwordLockEnabled: false, pairingRequired: false, runtimeRequired: false, canDisable: false }); }
+    if (path === "/api/v1/auth/access" && method === "GET") return json(access());
+    if (path === "/api/v1/auth/access/password") { model.lockEnabled = true; return json(access()); }
+    if (path === "/api/v1/auth/access/disable") {
+      if (serviceProfile()) return json({ error: { code: "authentication-required", message: "This package example requires login." } }, 409);
+      model.lockEnabled = false; return json(access());
+    }
+    if (path === "/api/v1/capabilities") return json({ ...profile(), supportsStartup: !serviceProfile(),
+      accessLabel: serviceProfile() ? "Required login (fictional)" : "Optional lock (fictional)",
+      scheduleActions: serviceProfile() ? ["enable", "disable"] : ["install", "enable", "disable", "remove"] });
+    if (path === "/api/v1/startup") {
+      if (method === "PUT" && !serviceProfile()) Object.assign(model.startup, {
+        startManager: Boolean(body.startManager), openDashboard: Boolean(body.startManager && body.openDashboard),
+        state: body.startManager ? "enabled" : "disabled" });
+      return json(model.startup);
+    }
+    if (path === "/api/v1/remote-access/tailscale" || path === "/api/v1/remote-access/tailscale/verify") {
+      if (method === "PUT") {
+        if (body.enabled && model.tailscale.management === "external" && !body.confirmedPrivate)
+          return json({ error: { code: "private-confirmation-required", message: "Confirm the fictional private-access boundary." } }, 400);
+        Object.assign(model.tailscale, { enabled: Boolean(body.enabled), active: Boolean(body.enabled),
+          state: body.enabled ? "enabled" : "disabled", url: body.enabled ? "https://manager.demo.invalid" : "" });
+      }
+      return json(model.tailscale);
+    }
+    if (/^\/api\/v1\/config\/secrets\/[^/]+\/reveal$/.test(path) && method === "POST")
+      return json({ value: "synthetic-not-a-credential" });
     if (path === "/api/v1/status") return json(status());
     if (path === "/api/v1/config") {
       if (method === "PUT") {
@@ -503,10 +575,10 @@
       return new Promise((resolve) => setTimeout(() => {
         const completedAt = new Date();
         Object.assign(model.update, {
-          state: "update-available",
-          latestStableVersion: "0.16.0",
-          updateAvailable: true,
-          installSupported: true,
+          state: model.update.applicationVersion === DEMO_VERSION ? "current" : "update-available",
+          latestStableVersion: DEMO_VERSION,
+          updateAvailable: model.update.applicationVersion !== DEMO_VERSION,
+          installSupported: !serviceProfile() && model.update.applicationVersion !== DEMO_VERSION,
           checkInProgress: false,
           backgroundCheckRecommended: false,
           lastSuccessfulCheckUtc: completedAt.toISOString(),
@@ -517,12 +589,14 @@
       }, 450));
     }
     if (path === "/api/v1/updates/install" && method === "POST") {
+      if (serviceProfile() || !model.update.updateAvailable)
+        return json({ error: { code: "install-unavailable", message: "No simulated browser-owned install is available." } }, 409);
       model.updateStartedMS = Date.now();
       model.update.installState = "running";
       model.update.observedAtUtc = now();
       return json(model.update, 202);
     }
-    if (path === "/api/v1/about") return json({ version: "GUI Preview", packageVersion: "Synthetic demonstration" });
+    if (path === "/api/v1/about") return json({ version: DEMO_VERSION, packageVersion: DEMO_VERSION });
     if (path === "/api/v1/diagnostics") return json({ events: retainNewest(diagnosticEvents, DIAGNOSTIC_LIMIT), maximumEntries: DIAGNOSTIC_LIMIT, retentionPolicy: "count-only-fifo" });
     return json({ error: { code: "demo-route-unavailable", message: "This action is outside the synthetic GUI preview." } }, 404);
   };
