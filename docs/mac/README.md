@@ -77,7 +77,7 @@ The Manager is published only at `http://localhost:8787/` by default.
 4. Open **Config**, enter the Tautulli, Plex, SMTP, content, and schedule
    settings, then select **Validate, save, and verify**.
 5. Confirm the saved setup results for libraries/users, Tautulli and Plex,
-   non-sending SMTP preflight, and local previews.
+   non-sending SMTP preflight, local previews, and deleted-item cache health.
 6. In **Previews**, review all six newsletter states. In **Operations**, send
    the explicit controlled TestEmail check. Enable **Schedule** only after the
    configured timezone, next run, previews, and SMTP result are correct.
@@ -412,7 +412,7 @@ Archive fallback users may use `./tautweekly.sh manager-reset-access`,
 Registry users can invoke the allowlisted `/opt/tautweekly/bin/run-script.sh`
 and `run-mode.sh` helpers through `docker compose exec tautweekly`; the archive
 fallback exposes the same `setup`, `verify`, `preview-all USER_ID`,
-`send-test-all USER_ID`, library/user selectors, and schedule commands through
+`cache-status`, `send-test-all USER_ID`, library/user selectors, and schedule commands through
 `./tautweekly.sh`. They are not the normal Mac setup source.
 Real-recipient `welcome` and `send-all` commands retain explicit confirmation.
 Manager's **Repeat this Tautulli lookup** refreshes only the displayed choices;

@@ -50,6 +50,7 @@ case "$cmd" in
   shell) compose_cmd exec tautweekly /opt/tautweekly/bin/run-as-user.sh bash ;;
   setup) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Setup-First.ps1 ;;
   verify) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Verify-Setup.ps1 ;;
+  cache-status) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Cache-Diagnostics.ps1 -DataRoot /data "$@" ;;
   list-users) compose_cmd exec tautweekly /opt/tautweekly/bin/run-mode.sh ListUsers ;;
   exclude-users|manage-exclusions) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Manage-User-Exclusions.ps1 ;;
   list-libraries) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Manage-Library-Selection.ps1 -ListOnly ;;
@@ -122,6 +123,7 @@ TautWeekly for Plex NAS Portable commands
   ./tautweekly.sh install
   ./tautweekly.sh setup
   ./tautweekly.sh verify
+  ./tautweekly.sh cache-status
   ./tautweekly.sh list-users
   ./tautweekly.sh exclude-users
   ./tautweekly.sh list-libraries

@@ -11,6 +11,8 @@ const state = {
   verification: { last: null, smtp: null },
   verificationRunning: false,
   smtpVerificationRunning: false,
+  cacheVerificationRunning: false,
+  cache: null,
   discovery: null,
   discoveryError: "",
   discoveryRunning: false,
@@ -281,6 +283,7 @@ async function loadAll() {
     state.config = config;
     state.editor = editor;
     state.setupWorkflow = configurationStatus?.available ? configurationStatus : null;
+    state.cache = configurationStatus?.cache || null;
     state.backupMaximum = Number(backups.maximumEntries) || 10;
     state.backups = (backups.backups || []).slice(0, state.backupMaximum);
     state.verification = verification || { last: null, smtp: null };
@@ -534,10 +537,10 @@ function setupWorkflowPresentation(workflow = state.setupWorkflow) {
   const active = state.setupWorkflowRunning || states.includes("running");
   if (active) return { label: "Running", tone: "pending", summary: "Safe setup checks are running and each result is retained as it completes." };
   if (states.includes("failed")) return { label: "Needs review", tone: "bad", summary: "One or more saved setup checks need review before live delivery." };
-  if (states.every((stepState) => stepState === "not-run")) return { label: "Not run", tone: "neutral", summary: "Validate and save to run the four safe setup checks." };
+  if (states.every((stepState) => stepState === "not-run")) return { label: "Not run", tone: "neutral", summary: "Validate and save to run the five safe setup checks." };
   if (states.includes("waiting")) return { label: "Pending", tone: "pending", summary: "One or more setup checks are waiting to run for this configuration." };
   if (states.some((stepState) => ["warning", "skipped"].includes(stepState))) return { label: "Completed with notes", tone: "neutral", summary: "The saved configuration was checked; review the noted result before live delivery." };
-  if (states.length === setupWorkflowSteps.length && states.every((stepState) => stepState === "passed")) return { label: "Passed", tone: "good", summary: "All four safe setup checks passed for the saved configuration." };
+  if (states.length === setupWorkflowSteps.length && states.every((stepState) => stepState === "passed")) return { label: "Passed", tone: "good", summary: "All five safe setup checks passed for the saved configuration." };
   return { label: "Incomplete", tone: "neutral", summary: "Some setup checks have not completed for the saved configuration." };
 }
 
@@ -1761,7 +1764,7 @@ function collectConfigSaveRequest() {
   return { expectedRevision: state.editor.revision, values, secrets };
 }
 
-const setupWorkflowSteps = ["choices", "lan", "smtp", "previews"];
+const setupWorkflowSteps = ["choices", "lan", "smtp", "previews", "cache"];
 
 function beginSetupWorkflow(plan) {
   state.setupWorkflowRunning = Boolean(plan?.runDiscovery || plan?.runIntegration || plan?.runSmtp || plan?.generatePreviews);
@@ -1786,7 +1789,7 @@ function renderSetupWorkflow() {
   setChip("setup-workflow-chip", presentation.label, presentation.tone);
   setText("setup-workflow-summary", presentation.summary);
   for (const name of setupWorkflowSteps) {
-    const step = state.setupWorkflow.steps[name];
+    const step = state.setupWorkflow.steps[name] || { state: "not-run", summary: "This check has not been recorded for the saved configuration." };
     setText(`setup-${name}-summary`, step.summary);
     const tone = step.state === "passed" ? "good" : step.state === "failed" ? "bad" : ["running", "waiting"].includes(step.state) ? "pending" : "neutral";
     setChip(`setup-${name}-chip`, titleCase(step.state), tone);
@@ -1799,6 +1802,7 @@ function renderSetupWorkflow() {
 async function refreshConfigurationStatus() {
   const configurationStatus = await request("/api/v1/config/status");
   state.setupWorkflow = configurationStatus?.available ? configurationStatus : null;
+  state.cache = configurationStatus?.cache || null;
   renderSetupWorkflow();
 }
 
@@ -1809,6 +1813,7 @@ async function retainSkippedPreviewStatus(revision, reason) {
       body: JSON.stringify({ expectedRevision: revision, reason }),
     });
     state.setupWorkflow = configurationStatus?.available ? configurationStatus : state.setupWorkflow;
+    state.cache = configurationStatus?.cache || state.cache;
   } catch (_) {
     // The local result remains visible; a later refresh will load the durable server record.
   }
@@ -2263,24 +2268,31 @@ function appendVerificationResult(container, heading, checkState, summaryText) {
 function renderVerification() {
   const last = state.verification?.last || null;
   const smtp = state.verification?.smtp || null;
+  const cache = state.cache;
   const ready = state.editor?.state === "ready";
-  const networkBusy = state.verificationRunning || state.smtpVerificationRunning || state.discoveryRunning;
+  const networkBusy = state.verificationRunning || state.smtpVerificationRunning || state.discoveryRunning || state.cacheVerificationRunning;
   const results = byId("verification-results");
   const smtpResults = byId("smtp-verification-results");
+  const cacheResults = byId("cache-verification-results");
   const confirm = byId("verification-confirm");
   const smtpConfirm = byId("smtp-verification-confirm");
   const runButton = byId("verification-run-button");
   const smtpRunButton = byId("smtp-verification-run-button");
+  const cacheRunButton = byId("cache-verification-run-button");
   results.replaceChildren();
   smtpResults.replaceChildren();
+  cacheResults.replaceChildren();
   runButton.disabled = networkBusy || !confirm.checked || !ready;
   smtpRunButton.disabled = networkBusy || !smtpConfirm.checked || !ready;
+  cacheRunButton.disabled = networkBusy || !ready || cache?.enabled === false;
   setSwappingButtonText("verification-run-button", state.verificationRunning ? "Testing saved services..." : "Run connection test");
   setSwappingButtonText("smtp-verification-run-button", state.smtpVerificationRunning ? "Testing SMTP..." : "Run SMTP preflight");
+  setSwappingButtonText("cache-verification-run-button", state.cacheVerificationRunning ? "Checking cache..." : "Check deleted-item cache");
 
   if (!ready) {
     byId("verification-message").textContent = "Complete and save configuration before running a connection test.";
     byId("smtp-verification-message").textContent = "Complete and save configuration before running SMTP preflight.";
+    byId("cache-verification-message").textContent = "Complete and save configuration before checking local cache storage.";
   } else {
     byId("verification-message").textContent = state.verificationRunning
       ? "Contacting the saved Tautulli and direct Plex services. This may take up to 45 seconds."
@@ -2288,6 +2300,11 @@ function renderVerification() {
     byId("smtp-verification-message").textContent = state.smtpVerificationRunning
       ? "Contacting the saved SMTP endpoint without authenticating or sending. This may take up to 45 seconds."
       : "No SMTP request occurs until the confirmation is checked and the button is pressed.";
+    byId("cache-verification-message").textContent = cache?.enabled === false
+      ? "Enable the deleted-item cache and validate and save before running this local check."
+      : state.cacheVerificationRunning
+        ? "Checking the bounded manifest, local write access, and cached artwork without contacting any service."
+        : "The current summary is read-only. Press the button to test writability and hash every cached artwork file.";
   }
 
   const retainedLANState = retainedSetupCheckState("lan");
@@ -2322,8 +2339,69 @@ function renderVerification() {
     smtpResults.append(empty);
   }
 
-  const { overallLabel, overallTone } = renderIntegrationStatus();
+  if (cache) {
+    const mode = cache.verification === "full" ? "full local verification" : "read-only status";
+    setText("cache-verification-observed", `Checked ${formatDate(cache.checkedAtUtc)} · ${mode}.`);
+    appendVerificationResult(cacheResults, "Deleted-item cache", cache.state, cache.summary);
+    const cleanupPending = cache.expiredEntryCount > 0 || cache.orphanArtworkCount > 0
+      || cache.entryCount > cache.maxItems || cache.artworkBytes > cache.maxBytesMb * 1024 * 1024;
+    const storageState = cache.writability === "failed" ? "failed"
+      : ["passed", "previously-evidenced"].includes(cache.writability) && !cleanupPending ? "passed" : cache.state === "skipped" ? "skipped" : "warning";
+    appendVerificationResult(cacheResults, "Storage and bounds", storageState,
+      `${titleCase(cache.writability)} · ${cache.entryCount} of ${cache.maxItems} entries · ${formatBytes(cache.artworkBytes)} of ${cache.maxBytesMb} MB cache ceiling · ${cache.retentionDays}-day retention.`);
+    const integrityState = cache.integrityState === "failed" ? "failed"
+      : ["verified", "structural"].includes(cache.integrityState) ? "passed" : cache.integrityState === "skipped" ? "skipped" : "warning";
+    appendVerificationResult(cacheResults, "Manifest and artwork", integrityState,
+      `${titleCase(cache.manifestState)} · backup ${titleCase(cache.backupState)} · ${cache.artworkCount} artwork files · ${cache.missingArtworkCount} missing · ${cache.orphanArtworkCount} orphaned · ${cache.hashMismatchCount} hash mismatches · ${cache.expiredEntryCount} expired.`);
+  } else {
+    setText("cache-verification-observed", "No deleted-item cache status is available for this saved configuration.");
+    const empty = document.createElement("div");
+    empty.className = "config-empty";
+    empty.textContent = "Validate and save, then use this local check to verify cache initialization and artwork integrity.";
+    cacheResults.append(empty);
+  }
+
+  const integration = renderIntegrationStatus();
+  let overallLabel = integration.overallLabel;
+  let overallTone = integration.overallTone;
+  if (state.cacheVerificationRunning) {
+    overallLabel = "Running";
+    overallTone = "pending";
+  } else if (cache?.state === "failed") {
+    overallLabel = "Needs review";
+    overallTone = "bad";
+  } else if (cache?.state === "warning" && overallTone !== "bad") {
+    overallLabel = "Completed with notes";
+    overallTone = "neutral";
+  } else if (["passed", "skipped"].includes(cache?.state) && integration.overallLabel === "Passed") {
+    overallLabel = "Passed";
+    overallTone = "good";
+  }
   setChip("verification-chip", overallLabel, overallTone);
+}
+
+async function runCacheVerification() {
+  if (state.verificationRunning || state.smtpVerificationRunning || state.discoveryRunning || state.cacheVerificationRunning || state.editor?.state !== "ready" || state.cache?.enabled === false) return;
+  state.cacheVerificationRunning = true;
+  renderVerification();
+  setGlobalStatus("Checking deleted-item cache storage and artwork locally...");
+  try {
+    const result = await request("/api/v1/checks/deleted-item-cache", {
+      method: "POST",
+      body: JSON.stringify({ expectedRevision: state.editor.revision }),
+    });
+    state.cache = result;
+    if (state.setupWorkflow?.steps) {
+      state.setupWorkflow.steps.cache = { state: result.state, summary: result.summary, updatedAtUtc: result.checkedAtUtc };
+    }
+    renderSetupWorkflow();
+    setGlobalStatus(result.state === "failed" ? "Deleted-item cache check found a problem." : "Deleted-item cache check completed.", true);
+  } catch (error) {
+    setGlobalStatus(error.message, true);
+  } finally {
+    state.cacheVerificationRunning = false;
+    renderVerification();
+  }
 }
 
 async function runVerification() {
@@ -2920,6 +2998,7 @@ async function pollOperation(expectedOperationID = state.operation?.id || "", ex
     state.history = (history.operations || []).slice(0, state.historyMaximum);
     state.status = status;
     state.setupWorkflow = configurationStatus?.available ? configurationStatus : null;
+    state.cache = configurationStatus?.cache || null;
     operationCompletionProcessedID = completedOperation.id;
     if (refreshPreviews) {
       renderPreviews({
@@ -4035,6 +4114,7 @@ byId("verification-confirm").addEventListener("change", renderVerification);
 byId("verification-run-button").addEventListener("click", runVerification);
 byId("smtp-verification-confirm").addEventListener("change", renderVerification);
 byId("smtp-verification-run-button").addEventListener("click", runSMTPVerification);
+byId("cache-verification-run-button").addEventListener("click", runCacheVerification);
 byId("preview-user-id").addEventListener("input", renderOperations);
 byId("preview-confirm").addEventListener("change", renderOperations);
 byId("preview-run-button").addEventListener("click", startPreviewOperation);

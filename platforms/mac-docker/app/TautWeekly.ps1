@@ -54,6 +54,10 @@ function Write-TautWeeklyStructuredResult {
         [string]$Outcome
     )
 
+    if (Get-Command Write-TautWeeklyDeletedItemCacheActivitySummary -ErrorAction SilentlyContinue) {
+        Write-TautWeeklyDeletedItemCacheActivitySummary
+    }
+
     if ([string]::IsNullOrWhiteSpace($ResultPath) -or
         $script:TautWeeklyResultWritten -or
         $script:TautWeeklyResultWriting) {
@@ -6937,10 +6941,16 @@ function Prepare-PosterAssets {
             -ParentIndex $matchParentIndex `
             -Index $matchIndex `
             -LivePlexPoster ([ref]$livePlexPoster)
+        if ($cacheCaptureEligible -and $livePlexPoster -and -not [string]::IsNullOrWhiteSpace($path)) {
+            [void](Update-TautWeeklyDeletedItemCache -Item $item -PosterPath $path)
+        }
+        elseif (-not $cacheCaptureEligible) {
+            Register-TautWeeklyDeletedItemCacheCaptureSkip -Reason metadata
+        }
+        else {
+            Register-TautWeeklyDeletedItemCacheCaptureSkip -Reason poster
+        }
         if (-not [string]::IsNullOrWhiteSpace($path)) {
-            if ($cacheCaptureEligible -and $livePlexPoster) {
-                [void](Update-TautWeeklyDeletedItemCache -Item $item -PosterPath $path)
-            }
             $assets.Add([PSCustomObject]@{
                 RatingKey = $rk
                 Cid       = "poster_" + (Get-SafeFilePart $rk)

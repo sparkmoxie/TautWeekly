@@ -483,17 +483,86 @@ before v0.9.0 observed it live, TautWeekly cannot recover it reliably and will
 not guess by title. This is expected for already-deleted items and is not fixed
 by changing the cache settings.
 
-For future items, look for an exact-GUID cache-hit message. A miss means the
-item was never captured live, has no supported stable GUID, expired, or was
-evicted by a configured item/byte limit. A SHA-256 warning means damaged poster
-bytes were removed. A manifest warning reports backup recovery or a clean
-empty-cache reset; rendering continues without cached data.
+Enabling the cache and saving configuration does not crawl the library or copy
+all current Plex metadata. A qualifying item must be selected by Preview,
+PreviewAll, SendTest, SendTestAll, a scheduled delivery, or a confirmed manual
+delivery while its live metadata, stable GUID, and non-generic poster are still
+available. Manager now starts its existing no-email PreviewAll after an enabled
+cache setting changes when it has one unambiguous owner/administrator and no
+operation conflict. If that workflow is skipped, run PreviewAll manually.
 
-Confirm that the runtime account can write `cache/deleted-items` under the
-platform's private data root and that the cache is enabled. Do not post the
-manifest or artwork publicly. If a clean rebuild is appropriate, stop
-TautWeekly, move or remove only that directory, restart, and run PreviewAll
-while current library items are still available so new entries can be created.
+Start with Manager Dashboard **Config status → Deleted-item cache**, then open
+**Verify → Check deleted-item cache**. The manual check validates configuration,
+initialization, manifest/backup structure, current entry and artwork counts,
+retention/bounds, write access, and artwork hashes without contacting Plex,
+Tautulli, SMTP, or recipients.
+
+The same share-safe summary is available from each package:
+
+```text
+Windows:        19-CACHE-DIAGNOSTICS.bat
+NAS/Compose:    ./tautweekly.sh cache-status
+macOS Docker:   ./tautweekly.sh cache-status
+native Linux:   sudo tautweekly cache-status
+FreeBSD Podman: sudo tautweekly cache-status
+```
+
+For generic Compose without the packaged wrapper:
+
+```bash
+docker compose exec tautweekly /opt/tautweekly/bin/run-script.sh \
+  Cache-Diagnostics.ps1 -DataRoot /data
+```
+
+In an Unraid container Console, omit the `docker compose exec tautweekly`
+prefix. Append `-VerifyArtworkHashes` to hash every cached artwork file.
+Append `-ProbeMediaType movie` or `-ProbeMediaType show` for a hidden prompt
+that tests one exact GUID locally and prints only `hit`, `miss`, or `invalid`.
+Never paste or share the GUID entered at that prompt.
+
+Interpret the summary as follows:
+
+- `Enabled: false` means saved configuration has intentionally stopped cache
+  reads and writes.
+- `Manifest: unseeded` with `Available: true` means local storage works but no
+  qualifying live render has captured an entry. Run PreviewAll, then run the
+  status command again and compare only the aggregate counts.
+- `Writability: failed` means the runtime identity cannot safely initialize or
+  update the private cache volume.
+- `backup-recovered` or `reset-after-corruption` records bounded automatic
+  recovery. The latter starts empty because neither manifest generation was
+  valid.
+- expired entries are removed at initialization and after writes; the newest
+  remaining entries are retained within the item/byte limits, so older excess
+  entries are evicted. The summary shows current counts and configured bounds;
+  it does not expose which item was evicted.
+- an exact probe `miss` means that exact movie/show GUID is absent. The item may
+  never have been captured live, may have lacked an eligible poster/GUID, or may
+  have expired or been evicted. Titles and rating keys are never substitutes.
+- a hash mismatch means damaged artwork fails closed. Rendering continues
+  without using those bytes.
+
+To prove that a container recreate keeps the same private data mount, create a
+non-sensitive persistence marker, perform the package's normal restart/recreate,
+verify it, and clear it:
+
+```bash
+./tautweekly.sh cache-status -Action SetPersistenceProbe
+./tautweekly.sh restart
+./tautweekly.sh cache-status -Action VerifyPersistenceProbe
+./tautweekly.sh cache-status -Action ClearPersistenceProbe
+```
+
+Use `sudo tautweekly ...` on Linux/FreeBSD, or pass the same `-Action` values to
+`19-CACHE-DIAGNOSTICS.bat` on Windows. A missing marker after recreation means
+the runtime is attached to different or ephemeral storage. Do not delete the
+old volume or pair/configure an empty replacement while investigating.
+
+The command output is designed to share verbatim. Never post the cache
+manifest, cached artwork, `config.json`, GUID input, tokens, viewing history,
+recipient data, raw logs, generated output, or private paths. If a clean rebuild
+is appropriate, stop TautWeekly and remove only the cache directory under the
+private data root; do not do this merely to hide a mount or permission problem.
 
 When requesting help, share the platform, source/release version, failing
 command, and sanitized error text. Never attach configuration, state, logs, or

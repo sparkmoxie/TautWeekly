@@ -347,7 +347,7 @@ def main() -> int:
         failures.append("automatic preview skips are not retained by the Manager")
     if 'id="configuration-status-card"' not in combined or "function renderDashboardConfigStatus()" not in javascript:
         failures.append("Dashboard has no durable Config status health card")
-    for step in ("choices", "lan", "smtp", "previews"):
+    for step in ("choices", "lan", "smtp", "previews", "cache"):
         if f'id="configuration-status-{step}"' not in combined:
             failures.append(f"Dashboard Config status omits step: {step}")
         if f'id="setup-{step}-step"' not in combined:

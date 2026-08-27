@@ -208,6 +208,7 @@ sudo tautweekly manager-bootstrap      retrieve the one-time pairing token
 sudo tautweekly manager-reset-access   reset only Manager authentication
 sudo tautweekly setup                 expert fallback: replace private configuration
 sudo tautweekly verify                validate API, mail, storage, and schedule
+sudo tautweekly cache-status          report share-safe deleted-item cache health
 sudo tautweekly list-users            inspect Tautulli recipients
 sudo tautweekly exclude-users         revise stable user exclusions
 sudo tautweekly list-libraries         inspect the global movie/TV scope

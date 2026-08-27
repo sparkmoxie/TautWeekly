@@ -104,6 +104,11 @@ try {
     Assert-Equal $status.RetentionDays 365 'Unexpected default retention.'
     Assert-Equal $status.MaxItems 1000 'Unexpected default item bound.'
     Assert-Equal $status.MaxBytes (256MB) 'Unexpected default byte bound.'
+    Assert-Equal $status.Writability 'passed' 'Initialization did not prove cache writability.'
+    Assert-Equal $status.ManifestState 'unseeded' 'Fresh cache did not report an unseeded manifest.'
+    $diagnostics = Get-TautWeeklyDeletedItemCacheDiagnostics -VerifyArtworkHashes
+    Assert-Equal $diagnostics.ItemCount 0 'Fresh diagnostic entry count was not zero.'
+    Assert-Equal $diagnostics.HashMismatchCount 0 'Fresh diagnostic hash count was not zero.'
 
     $poster = Join-Path $testRoot 'live-poster.jpg'
     New-TestPoster -Path $poster
@@ -130,6 +135,35 @@ try {
     Assert-True ($null -eq (Get-TautWeeklyDeletedItemCacheEntry -MediaType movie -MetadataGuid 'plex://movie/different-id')) 'Same-title data must not match a different GUID.'
     Assert-True ($null -eq (Get-TautWeeklyDeletedItemCacheEntry -MediaType movie -MetadataGuid '')) 'A missing GUID must fail closed.'
     Assert-True (-not (Update-TautWeeklyDeletedItemCache -Item (New-TestItem -Guid '' -Title 'Future Deleted Movie') -PosterPath $poster)) 'A missing GUID must not be cached by title or rating key.'
+    Write-TautWeeklyDeletedItemCacheActivitySummary
+    $activity = @($script:TestLogs | Where-Object { $_ -like '*Deleted-item cache activity:*' })
+    Assert-Equal $activity.Count 1 'Cache activity summary was not emitted exactly once.'
+    Assert-True ($activity[0] -like '*captures=1*exact-misses=1*invalid-lookups=1*') 'Cache activity summary omitted aggregate capture or lookup evidence.'
+    Write-TautWeeklyDeletedItemCacheActivitySummary
+    Assert-Equal @($script:TestLogs | Where-Object { $_ -like '*Deleted-item cache activity:*' }).Count 1 'Cache activity summary repeated within one run.'
+
+    $invalidConfigRoot = Join-Path $testRoot 'invalid-config'
+    Initialize-TautWeeklyDeletedItemCache -CacheRoot $invalidConfigRoot -Configuration ([PSCustomObject]@{
+        DeletedItemCacheEnabled = 'not-a-boolean'
+        DeletedItemCacheRetentionDays = -5
+        DeletedItemCacheMaxItems = 0
+        DeletedItemCacheMaxBytesMB = 99999
+    })
+    $invalidConfigStatus = Get-TautWeeklyDeletedItemCacheStatus
+    Assert-True ($invalidConfigStatus.Enabled -and $invalidConfigStatus.Available) 'Invalid cache config did not fall back safely.'
+    Assert-Equal $invalidConfigStatus.RetentionDays 365 'Invalid retention did not use its bounded default.'
+    Assert-Equal $invalidConfigStatus.MaxItems 1000 'Invalid item bound did not use its default.'
+    Assert-Equal $invalidConfigStatus.MaxBytes (256MB) 'Invalid byte bound did not use its default.'
+
+    $originalWriteProbe = (Get-Item Function:\Test-TwDeletedCacheWritable).ScriptBlock
+    Set-Item Function:\Test-TwDeletedCacheWritable { return $false }
+    try {
+        Initialize-TautWeeklyDeletedItemCache -CacheRoot (Join-Path $testRoot 'write-probe-failure') -Configuration ([PSCustomObject]@{})
+        $writeProbeFailure = Get-TautWeeklyDeletedItemCacheStatus
+        Assert-True (-not $writeProbeFailure.Available) 'Failed write probe did not disable cache availability.'
+        Assert-Equal $writeProbeFailure.Writability 'failed' 'Failed write probe state was not retained.'
+    }
+    finally { Set-Item Function:\Test-TwDeletedCacheWritable $originalWriteProbe }
 
     $boundedRoot = Join-Path $testRoot 'bounded'
     $boundedConfig = [PSCustomObject]@{

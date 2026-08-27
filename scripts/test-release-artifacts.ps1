@@ -161,7 +161,9 @@ function Assert-DeletedItemCacheContract([string]$PackageName, [string]$CacheMod
         'Get-TwDeletedCacheFileSha256',
         'Move-TwDeletedCacheCorruptManifest',
         'Restore-TautWeeklyDeletedItemCachePoster',
-        'Update-TautWeeklyDeletedItemCache'
+        'Update-TautWeeklyDeletedItemCache',
+        'Get-TautWeeklyDeletedItemCacheDiagnostics',
+        'Test-TwDeletedCacheWritable'
     )) {
         Assert-True ($CacheModule.Contains($required)) "$PackageName cache module is missing: $required"
     }
@@ -169,6 +171,24 @@ function Assert-DeletedItemCacheContract([string]$PackageName, [string]$CacheMod
     foreach ($forbidden in @('PlexToken', 'ApiKey', 'SmtpPassword', 'RecipientEmail', 'play_duration', 'watched_status')) {
         Assert-True (-not $CacheModule.Contains($forbidden)) "$PackageName cache module accepts a forbidden private field: $forbidden"
     }
+}
+
+function Assert-CacheDiagnosticContract([string]$PackageName, [string]$Diagnostic) {
+    foreach ($required in @(
+        'Write-CacheDiagnosticLine "ShareSafe" $true',
+        'Get-TautWeeklyDeletedItemCacheDiagnostics',
+        'Write-CacheDiagnosticLine "Backup"',
+        'Write-CacheDiagnosticLine "ExactGuidProbe"',
+        'Write-CacheDiagnosticLine "PersistenceProbe"',
+        'Read-Host "Enter the exact Plex metadata GUID (input is hidden and never printed)" -AsSecureString',
+        'ZeroFreeBSTR',
+        'SetPersistenceProbe',
+        'VerifyPersistenceProbe',
+        'ClearPersistenceProbe'
+    )) {
+        Assert-True ($Diagnostic.Contains($required)) "$PackageName cache diagnostic is missing: $required"
+    }
+    Assert-True ($Diagnostic -notmatch '(?im)Write-(?:Output|Host)[^\r\n]*\$(?:guid|resolvedRoot|configPath|cacheRoot|probePath)\b') "$PackageName cache diagnostic can print a private input or path."
 }
 
 function Assert-MetadataReadinessContract([string]$PackageName, [string]$Content) {
@@ -187,6 +207,7 @@ $expected = [ordered]@{
     'TautWeekly-windows.zip' = @(
         'TautWeekly-windows/TautWeekly.ps1',
         'TautWeekly-windows/DeletedItemCache.ps1',
+        'TautWeekly-windows/Cache-Diagnostics.ps1',
         'TautWeekly-windows/Configuration-Backups.ps1',
         'TautWeekly-windows/Smtp-Transport.ps1',
         'TautWeekly-windows/config.example.json',
@@ -200,6 +221,7 @@ $expected = [ordered]@{
         'TautWeekly-windows/00-OPEN-MANAGER.bat',
         'TautWeekly-windows/START-MANAGER.ps1',
         'TautWeekly-windows/18-RESET-MANAGER-ACCESS.bat',
+        'TautWeekly-windows/19-CACHE-DIAGNOSTICS.bat',
         'TautWeekly-windows/RESET-MANAGER-ACCESS.ps1',
         'TautWeekly-windows/SCHEDULE-HELPER.ps1',
         'TautWeekly-windows/TAILSCALE-HELPER.ps1',
@@ -214,6 +236,7 @@ $expected = [ordered]@{
         'TautWeekly-nas-docker/app/TautWeekly.ps1',
         'TautWeekly-nas-docker/app/refresh-assets.py',
         'TautWeekly-nas-docker/app/DeletedItemCache.ps1',
+        'TautWeekly-nas-docker/app/Cache-Diagnostics.ps1',
         'TautWeekly-nas-docker/app/Configuration-Backups.ps1',
         'TautWeekly-nas-docker/app/Smtp-Transport.ps1',
         'TautWeekly-nas-docker/app/Schedule-Time.ps1',
@@ -236,6 +259,7 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/app/TautWeekly.ps1',
         'TautWeekly-mac-docker/app/refresh-assets.py',
         'TautWeekly-mac-docker/app/DeletedItemCache.ps1',
+        'TautWeekly-mac-docker/app/Cache-Diagnostics.ps1',
         'TautWeekly-mac-docker/app/Configuration-Backups.ps1',
         'TautWeekly-mac-docker/app/Smtp-Transport.ps1',
         'TautWeekly-mac-docker/app/Schedule-Time.ps1',
@@ -260,6 +284,7 @@ $expected = [ordered]@{
         'TautWeekly-linux/app/TautWeekly.ps1',
         'TautWeekly-linux/app/refresh-assets.py',
         'TautWeekly-linux/app/DeletedItemCache.ps1',
+        'TautWeekly-linux/app/Cache-Diagnostics.ps1',
         'TautWeekly-linux/app/Configuration-Backups.ps1',
         'TautWeekly-linux/app/Smtp-Transport.ps1',
         'TautWeekly-linux/app/Schedule-Time.ps1',
@@ -285,6 +310,7 @@ $expected = [ordered]@{
         'TautWeekly-freebsd-podman/app/TautWeekly.ps1',
         'TautWeekly-freebsd-podman/app/refresh-assets.py',
         'TautWeekly-freebsd-podman/app/DeletedItemCache.ps1',
+        'TautWeekly-freebsd-podman/app/Cache-Diagnostics.ps1',
         'TautWeekly-freebsd-podman/app/Configuration-Backups.ps1',
         'TautWeekly-freebsd-podman/app/Smtp-Transport.ps1',
         'TautWeekly-freebsd-podman/app/Schedule-Time.ps1',
@@ -583,6 +609,13 @@ foreach ($archiveName in $expected.Keys) {
         finally { $cacheReader.Dispose() }
         Assert-DeletedItemCacheContract -PackageName $archiveName -CacheModule $cacheModule
 
+        $cacheDiagnosticEntry = @($archive.Entries | Where-Object { $_.FullName -match '/(?:app/)?Cache-Diagnostics\.ps1$' } | Select-Object -First 1)
+        Assert-True ($cacheDiagnosticEntry.Count -eq 1) "$archiveName has no share-safe cache diagnostic."
+        $cacheDiagnosticReader = New-Object IO.StreamReader($cacheDiagnosticEntry[0].Open())
+        try { $cacheDiagnostic = $cacheDiagnosticReader.ReadToEnd() }
+        finally { $cacheDiagnosticReader.Dispose() }
+        Assert-CacheDiagnosticContract -PackageName $archiveName -Diagnostic $cacheDiagnostic
+
         $readinessEntries = @($archive.Entries | Where-Object {
             $_.FullName -match '/(?:app/)?(?:Setup-First|Verify-Setup)\.ps1$'
         })
@@ -755,6 +788,10 @@ foreach ($tarArchive in $tarArchives) {
         $cacheFiles = @($files | Where-Object { $_.Name -ceq 'DeletedItemCache.ps1' })
         Assert-True ($cacheFiles.Count -eq 1) "$($tarArchive.Name) has no unique persistent cache module."
         Assert-DeletedItemCacheContract -PackageName $tarArchive.Name -CacheModule (Get-Content -LiteralPath $cacheFiles[0].FullName -Raw)
+
+        $cacheDiagnosticFiles = @($files | Where-Object { $_.Name -ceq 'Cache-Diagnostics.ps1' })
+        Assert-True ($cacheDiagnosticFiles.Count -eq 1) "$($tarArchive.Name) has no unique share-safe cache diagnostic."
+        Assert-CacheDiagnosticContract -PackageName $tarArchive.Name -Diagnostic (Get-Content -LiteralPath $cacheDiagnosticFiles[0].FullName -Raw)
 
         $readinessFiles = @($files | Where-Object { $_.Name -in @('Setup-First.ps1', 'Verify-Setup.ps1') })
         Assert-True ($readinessFiles.Count -eq 2) "$($tarArchive.Name) does not contain one setup and one verification readiness surface."

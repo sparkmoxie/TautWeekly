@@ -51,10 +51,10 @@ func TestEveryConfigFieldHasExplicitSaveImpact(t *testing.T) {
 		"MaxTv":                         {category: "newsletter", preview: true},
 		"SendDelaySeconds":              {category: "newsletter"},
 		"TestSendDelaySeconds":          {category: "newsletter"},
-		"DeletedItemCacheEnabled":       {category: "cache"},
-		"DeletedItemCacheRetentionDays": {category: "cache"},
-		"DeletedItemCacheMaxItems":      {category: "cache"},
-		"DeletedItemCacheMaxBytesMB":    {category: "cache"},
+		"DeletedItemCacheEnabled":       {category: "cache", preview: true},
+		"DeletedItemCacheRetentionDays": {category: "cache", preview: true},
+		"DeletedItemCacheMaxItems":      {category: "cache", preview: true},
+		"DeletedItemCacheMaxBytesMB":    {category: "cache", preview: true},
 		"CustomTextCardEnabled":         {category: "custom-text-card", preview: true},
 		"CustomTextCardBorderColor":     {category: "custom-text-card", preview: true},
 		"CustomTextCardBorderOpacity":   {category: "custom-text-card", preview: true},
@@ -162,6 +162,13 @@ func TestConfigPostSavePlanInvalidatesOnlyAffectedCategories(t *testing.T) {
 				request.Values["DeletedItemCacheEnabled"] = json.RawMessage(`false`)
 			},
 			want: ConfigPostSavePlan{MaterialChange: true, ConfirmationCode: "cache-disabled"},
+		},
+		{
+			name: "enabled cache bounds warm local previews",
+			mutate: func(request *ConfigSaveRequest) {
+				request.Values["DeletedItemCacheMaxItems"] = json.RawMessage(`1200`)
+			},
+			want: ConfigPostSavePlan{MaterialChange: true, GeneratePreviews: true, ConfirmationCode: "cache-updated"},
 		},
 		{
 			name: "schedule only",
