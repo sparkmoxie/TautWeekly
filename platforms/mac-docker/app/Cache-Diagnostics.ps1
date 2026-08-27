@@ -42,8 +42,8 @@ function Get-PersistenceProbeState {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return "absent" }
     try {
-        if ((Get-Item -LiteralPath $Path).Length -gt 4KB) { return "invalid-size" }
-        $probe = (Get-Content -LiteralPath $Path -Raw -Encoding UTF8).Trim()
+        if ((Get-Item -LiteralPath $Path -Force).Length -gt 4KB) { return "invalid-size" }
+        $probe = (Get-Content -LiteralPath $Path -Raw -Encoding UTF8 -Force).Trim()
         if (-not [string]::Equals($probe, "tautweekly-cache-persistence-v1", [StringComparison]::Ordinal)) {
             return "invalid-content"
         }

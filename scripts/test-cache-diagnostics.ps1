@@ -54,8 +54,8 @@ try {
     Assert-True $set.Contains('PersistenceProbe: created') 'Persistence probe was not created.'
     $probePath = Join-Path $testRoot 'cache/deleted-items/.persistence-probe'
     $probeExists = Test-Path -LiteralPath $probePath -PathType Leaf
-    $probeLengthValid = $probeExists -and (Get-Item -LiteralPath $probePath).Length -le 4KB
-    $probeContentValid = $probeExists -and [string]::Equals((Get-Content -LiteralPath $probePath -Raw -Encoding UTF8).Trim(), 'tautweekly-cache-persistence-v1', [StringComparison]::Ordinal)
+    $probeLengthValid = $probeExists -and (Get-Item -LiteralPath $probePath -Force).Length -le 4KB
+    $probeContentValid = $probeExists -and [string]::Equals((Get-Content -LiteralPath $probePath -Raw -Encoding UTF8 -Force).Trim(), 'tautweekly-cache-persistence-v1', [StringComparison]::Ordinal)
     Assert-True ($probeExists -and $probeLengthValid -and $probeContentValid) "Synthetic persistence marker shape was invalid (exists=$probeExists; lengthValid=$probeLengthValid; contentValid=$probeContentValid)."
     $verify = (Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','VerifyPersistenceProbe','-VerifyArtworkHashes')) -join "`n"
     Assert-True $verify.Contains('PersistenceProbe: preserved') "Persistence verification did not report its safe state. Share-safe output: $verify"
