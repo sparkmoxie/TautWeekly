@@ -3560,7 +3560,12 @@ function Test-TautWeeklyDirectPlexConnection {
             throw "PlexServerUrl must not contain credentials, a query string, or a fragment."
         }
         if ($serverUri.IsLoopback -and [string]$env:TAUTWEEKLY_MANAGER_RUNTIME_MODE -ne "linux") {
-            Write-Log "PlexServerUrl resolves to this container's loopback. Use a shared-network Plex service name or another trusted LAN URL when Plex runs outside TautWeekly." "WARN"
+            if ([string]$env:TAUTWEEKLY_RUNTIME_PROFILE -eq "desktop") {
+                Write-Log "PlexServerUrl resolves to this container's loopback. Use host.docker.internal, a shared-network service name, or another trusted URL when Plex runs outside TautWeekly." "WARN"
+            }
+            else {
+                Write-Log "PlexServerUrl resolves to this container's loopback. Use a shared-network service name or another trusted LAN URL when Plex runs outside TautWeekly." "WARN"
+            }
         }
 
         $headers = @{

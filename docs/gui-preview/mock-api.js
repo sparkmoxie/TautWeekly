@@ -2,14 +2,14 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.22.0";
-  const PREVIOUS_VERSION = "0.21.4";
+  const DEMO_VERSION = "0.23.0";
+  const PREVIOUS_VERSION = "0.22.0";
   const PROFILES = {
-    windows: { runtimeMode: "windows", packageKind: "windows", label: "Windows" },
-    nas: { runtimeMode: "nas", packageKind: "nas-docker", label: "NAS / Docker" },
-    mac: { runtimeMode: "mac", packageKind: "mac-docker", label: "macOS Docker" },
-    linux: { runtimeMode: "linux", packageKind: "linux", label: "Native Linux" },
-    freebsd: { runtimeMode: "nas", packageKind: "freebsd-podman", label: "FreeBSD / Podman" },
+    windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows" },
+    nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker" },
+    mac: { runtimeMode: "mac", runtimeProfile: "desktop", packageKind: "container-desktop", label: "macOS Docker" },
+    linux: { runtimeMode: "linux", runtimeProfile: "native-linux", packageKind: "linux-native", label: "Native Linux" },
+    freebsd: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "freebsd-podman", label: "FreeBSD / Podman" },
   };
   let profileName = "windows";
   const profile = () => PROFILES[profileName];
@@ -217,13 +217,14 @@
     lockEnabled: false,
     updateStartedMS: 0,
     update: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       observedAtUtc: now(),
       state: "unknown",
       managerVersion: DEMO_VERSION,
       applicationVersion: DEMO_VERSION,
       packageVersion: DEMO_VERSION,
-      packageKind: "windows",
+      runtimeProfile: "native-windows",
+      packageKind: "windows-installer",
       packageLabel: "Synthetic supported package",
       hostAdapterState: "not-applicable",
       updateChannel: "stable",
@@ -260,8 +261,12 @@
       Object.assign(model.tailscale, { enabled: false, active: false, state: "disabled", url: "",
         management: ["nas", "mac", "freebsd"].includes(name) ? "external" : "managed" });
       Object.assign(model.update, { managerVersion: DEMO_VERSION, applicationVersion: DEMO_VERSION,
-        packageVersion: DEMO_VERSION, packageKind: profile().packageKind, packageLabel: profile().label + " (fictional)",
+        packageVersion: DEMO_VERSION, runtimeProfile: profile().runtimeProfile, packageKind: profile().packageKind, packageLabel: profile().label + " (fictional)",
         imageVersion: ["nas", "mac", "freebsd"].includes(name) ? DEMO_VERSION : "",
+        imageRepository: ["nas", "mac", "freebsd"].includes(name) ? "ghcr.io/sparkmoxie/tautweekly" : "",
+        recommendedImageReference: ["nas", "mac", "freebsd"].includes(name) ? "ghcr.io/sparkmoxie/tautweekly:" + DEMO_VERSION : "",
+        imagePinningPolicy: ["nas", "mac", "freebsd"].includes(name) ? "Use full semver or append the manifest digest; mutable minor, latest, and edge tags are not automation pins." : "",
+        migrationState: name === "mac" ? "unified-image" : (["nas", "freebsd"].includes(name) ? "unified-image" : ""),
         state: "current", latestStableVersion: DEMO_VERSION, updateAvailable: false, installSupported: false,
         installState: "idle", nextCheckAllowedAtUtc: "", lastSuccessfulCheckUtc: now(), backgroundCheckRecommended: false });
       model.update.guidance.owner = serviceProfile() ? "Package host (simulated)" : "Verified Windows updater (simulated)";

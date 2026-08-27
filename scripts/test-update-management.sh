@@ -226,8 +226,8 @@ grep -Fq 'retired-release-file' "$rollback_root/retired.txt" || fail 'failed upd
 grep -Fq 'private-env-sentinel' "$rollback_root/.env" || fail 'failed update changed private .env'
 grep -Fq 'private-config-sentinel' "$rollback_root/data/config.json" || fail 'failed update changed private data'
 
-grep -Fq 'image: ${TAUTWEEKLY_IMAGE:-ghcr.io/sparkmoxie/tautweekly:latest}' \
-  "$repo_root/platforms/nas-docker/compose.yaml" || fail 'NAS Compose no longer defaults to stable latest'
+grep -Fq 'image: ${TAUTWEEKLY_IMAGE:-ghcr.io/sparkmoxie/tautweekly:__TAUTWEEKLY_RELEASE_VERSION__}' \
+  "$repo_root/platforms/nas-docker/compose.yaml" || fail 'NAS release Compose no longer defaults to the full-semver release token'
 if grep -Fq 'io.containers.autoupdate' "$repo_root/platforms/freebsd-podman/rc.d/tautweekly"; then
   fail 'FreeBSD rc.d service still advertises systemd-only Podman auto-update'
 fi

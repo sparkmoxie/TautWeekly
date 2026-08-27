@@ -69,17 +69,17 @@
       </div>
     </section>
 
-    <section class="section searchable" id="feature-spotlight" data-feature-release="v0.22.0" data-search="feature release macos docker desktop registry ghcr compose no clone semver digest amd64 arm64 persistent data rollback packages">
+    <section class="section searchable" id="feature-spotlight" data-feature-release="v0.23.0" data-search="feature release unified container image profiles desktop server unraid compose migration semver digest amd64 arm64 rollback">
       <div class="section-heading">
-        <div><div class="eyebrow">v0.22.0 Mac registry deployment</div><h2>One Compose file. No clone. No local build.</h2></div>
-        <p>The newest feature release publishes the Mac-specific Manager image for Intel and Apple silicon and pairs it with a checksummed standalone Compose asset.</p>
+        <div><div class="eyebrow">v0.23.0 unified container platform</div><h2>One image. Three explicit profiles. Existing data stays put.</h2></div>
+        <p>The newest feature release consolidates Docker Desktop, Compose, NAS, QNAP, Unraid, and compatible container systems on one amd64/arm64 image.</p>
       </div>
       <article class="card featured">
-        <span class="tag">macOS · Docker Desktop</span>
-        <h3>Registry-first without giving the container Docker control</h3>
-        <p>v0.22.0 adds <code>ghcr.io/sparkmoxie/tautweekly-mac</code> and a standalone release Compose file. It keeps loopback-first Manager access, persistent <code>/data</code>, the embedded scheduler, health checks, and rollback under the Mac administrator.</p>
-        <ul><li>Public amd64 and arm64 image manifest</li><li>Full-semver and immutable digest guidance for CI/CD</li><li>Named-volume default plus UID/GID-aware bind mounts</li><li>Release publication gated on NAS and Mac image publication</li><li>Verified archive/local-build fallback retained</li></ul>
-        <div class="card-actions"><a href="mac/#install">Registry install</a><a href="mac/README.md#registry-updates-and-rollback">Update and rollback</a><a href="releases/v0.22.0.md">v0.22.0 release notes</a></div>
+        <span class="tag">Containers · Docker Desktop · NAS · Unraid</span>
+        <h3>Shared payload, preserved platform behavior</h3>
+        <p>v0.23.0 publishes <code>ghcr.io/sparkmoxie/tautweekly</code> with validated <code>desktop</code>, <code>server</code>, and <code>unraid</code> profiles. Manager reports the active profile, unified repository, stable semver/digest guidance, migration state, and host-owned recovery without receiving Docker control.</p>
+        <ul><li>One public amd64 and arm64 manifest with provenance and SBOM</li><li>Checksummed no-clone server and transitional Mac Compose assets</li><li>Named-volume, bind-mount, PUID/PGID/UMASK, networking, and credential preservation</li><li>Release publication gated on the unified image and artifact validation</li><li>Old Mac image retained for rollback; native Windows/Linux routes unchanged</li></ul>
+        <div class="card-actions"><a href="CONTAINER-MIGRATION.md#profile-contract">Profile contract</a><a href="CONTAINER-MIGRATION.md#before-either-migration">Migration and rollback</a><a href="releases/v0.23.0.md">v0.23.0 release notes</a></div>
       </article>
     </section>
 

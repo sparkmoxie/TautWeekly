@@ -10,6 +10,12 @@ const (
 	runtimeModeNAS     = "nas"
 	runtimeModeLinux   = "linux"
 	runtimeModeMac     = "mac"
+
+	runtimeProfileDesktop     = "desktop"
+	runtimeProfileServer      = "server"
+	runtimeProfileUnraid      = "unraid"
+	runtimeProfileNativeLinux = "native-linux"
+	runtimeProfileWindows     = "native-windows"
 )
 
 // Capabilities describes the package that owns the shared Manager core. The
@@ -17,6 +23,7 @@ const (
 // presenting controls that cannot work in the current package.
 type Capabilities struct {
 	RuntimeMode       string   `json:"runtimeMode"`
+	RuntimeProfile    string   `json:"runtimeProfile"`
 	PackageKind       string   `json:"packageKind"`
 	Platform          string   `json:"platform"`
 	AccessLabel       string   `json:"accessLabel"`
@@ -41,9 +48,31 @@ func normalizedRuntimeMode(value string) string {
 	return runtimeModeWindows
 }
 
+func normalizedRuntimeProfile(value, mode, packageKind string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch normalizedRuntimeMode(mode) {
+	case runtimeModeMac:
+		return runtimeProfileDesktop
+	case runtimeModeNAS:
+		if value == runtimeProfileUnraid || packageKind == packageKindUnraid {
+			return runtimeProfileUnraid
+		}
+		return runtimeProfileServer
+	case runtimeModeLinux:
+		return runtimeProfileNativeLinux
+	default:
+		return runtimeProfileWindows
+	}
+}
+
 func capabilitiesFor(options Options) Capabilities {
 	mode := normalizedRuntimeMode(options.RuntimeMode)
 	packageKind := normalizedPackageKind(options.PackageKind, mode)
+	runtimeProfile := normalizedRuntimeProfile(options.RuntimeProfile, mode, packageKind)
+	lifecycleProvider := "container-host"
+	if runtimeProfile == runtimeProfileUnraid {
+		lifecycleProvider = "unraid-host"
+	}
 	if mode == runtimeModeNAS {
 		return Capabilities{
 			RuntimeMode:       runtimeModeNAS,
@@ -51,10 +80,11 @@ func capabilitiesFor(options Options) Capabilities {
 			Platform:          runtime.GOOS,
 			AccessLabel:       "Container access",
 			NetworkScope:      "trusted-lan",
+			RuntimeProfile:    runtimeProfile,
 			Authentication:    "required",
 			ScheduleProvider:  "embedded-container",
 			ScheduleActions:   []string{"enable", "disable"},
-			LifecycleProvider: "container-host",
+			LifecycleProvider: lifecycleProvider,
 			UpdateProvider:    packageKind,
 			PathStyle:         "container-volume",
 			SecureCookies:     options.SecureCookies,
@@ -67,6 +97,7 @@ func capabilitiesFor(options Options) Capabilities {
 			Platform:          runtime.GOOS,
 			AccessLabel:       "Linux service access",
 			NetworkScope:      "host-loopback",
+			RuntimeProfile:    runtimeProfile,
 			Authentication:    "required",
 			ScheduleProvider:  "embedded-service",
 			ScheduleActions:   []string{"enable", "disable"},
@@ -79,7 +110,10 @@ func capabilitiesFor(options Options) Capabilities {
 	if mode == runtimeModeMac {
 		updateProvider := "mac-package"
 		pathStyle := "mac-bind-mount"
-		if packageKind == packageKindMacRegistry {
+		if packageKind == packageKindContainerDesktop {
+			updateProvider = packageKindContainerDesktop
+			pathStyle = "container-volume"
+		} else if packageKind == packageKindMacRegistry {
 			updateProvider = "mac-registry"
 			pathStyle = "container-volume"
 		}
@@ -90,6 +124,7 @@ func capabilitiesFor(options Options) Capabilities {
 			AccessLabel:       "macOS Docker Desktop access",
 			NetworkScope:      "host-loopback",
 			Authentication:    "required",
+			RuntimeProfile:    runtimeProfile,
 			ScheduleProvider:  "embedded-container",
 			ScheduleActions:   []string{"enable", "disable"},
 			LifecycleProvider: "docker-desktop",
@@ -105,6 +140,7 @@ func capabilitiesFor(options Options) Capabilities {
 		AccessLabel:       "Browser access",
 		NetworkScope:      "loopback",
 		Authentication:    "optional",
+		RuntimeProfile:    runtimeProfile,
 		ScheduleProvider:  "windows-task-scheduler",
 		ScheduleActions:   []string{"install", "enable", "disable", "remove"},
 		LifecycleProvider: "windows-manager",

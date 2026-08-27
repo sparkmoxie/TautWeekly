@@ -8,7 +8,8 @@ $configPath = Join-Path $DataRoot "config.json"
 $assetsDir = Join-Path $DataRoot "assets"
 $previewAssetsDir = Join-Path (Join-Path $DataRoot "output") "assets"
 $isNativeLinux = [string]$env:TAUTWEEKLY_MANAGER_RUNTIME_MODE -eq "linux"
-$runtimeName = if ($isNativeLinux) { "native Linux service" } else { "NAS container" }
+$isDesktopContainer = [string]$env:TAUTWEEKLY_RUNTIME_PROFILE -eq "desktop"
+$runtimeName = if ($isNativeLinux) { "native Linux service" } elseif ($isDesktopContainer) { "desktop container" } else { "server container" }
 $managerListen = if (-not [string]::IsNullOrWhiteSpace([string]$env:TAUTWEEKLY_MANAGER_LISTEN)) {
     ([string]$env:TAUTWEEKLY_MANAGER_LISTEN).Trim()
 }
@@ -28,7 +29,7 @@ function WARN([string]$Text) { Write-Host "[WARN] $Text" -ForegroundColor Yellow
 function FAIL([string]$Text) { Write-Host "[FAIL] $Text" -ForegroundColor Red }
 
 Write-Host ""
-Write-Host $(if ($isNativeLinux) { "TAUTWEEKLY FOR PLEX NATIVE LINUX VERIFICATION" } else { "TAUTWEEKLY FOR PLEX NAS SETUP VERIFICATION" }) -ForegroundColor Cyan
+Write-Host $(if ($isNativeLinux) { "TAUTWEEKLY FOR PLEX NATIVE LINUX VERIFICATION" } elseif ($isDesktopContainer) { "TAUTWEEKLY FOR PLEX DESKTOP CONTAINER VERIFICATION" } else { "TAUTWEEKLY FOR PLEX SERVER CONTAINER VERIFICATION" }) -ForegroundColor Cyan
 Write-Host "================================="
 
 if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
@@ -116,7 +117,12 @@ else { OK "SMTP authentication is disabled" }
 try {
     $base = ([string]$config.TautulliUrl).TrimEnd('/')
     if (-not $isNativeLinux -and $base -match '127\.0\.0\.1|localhost') {
-        WARN "TautulliUrl points to localhost. In a separate container, use the QNAP LAN IP, a shared-network service name, or another reachable address."
+        if ($isDesktopContainer) {
+            WARN "TautulliUrl points to container localhost. Use host.docker.internal for a desktop-host service, a shared-network service name, or another reachable address."
+        }
+        else {
+            WARN "TautulliUrl points to container localhost. Use the NAS/server LAN address, a shared-network service name, or another reachable address."
+    }
     }
     $key = [Uri]::EscapeDataString([string]$config.ApiKey)
     $info = Invoke-RestMethod -Uri "$base/api/v2?apikey=$key&cmd=get_tautulli_info" -TimeoutSec 20

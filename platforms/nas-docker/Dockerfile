@@ -22,6 +22,8 @@ LABEL org.opencontainers.image.title="TautWeekly for Plex" \
     org.opencontainers.image.documentation="https://sparkmoxie.github.io/TautWeekly/nas-docker/" \
     org.opencontainers.image.licenses="MIT" \
     org.opencontainers.image.version="$BUILD_VERSION" \
+    io.tautweekly.image-repository="ghcr.io/sparkmoxie/tautweekly" \
+    io.tautweekly.runtime-profiles="desktop,server,unraid" \
     io.tautweekly.host-adapter-api="3"
 
 RUN apt-get update \

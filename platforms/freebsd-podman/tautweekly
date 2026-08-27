@@ -10,7 +10,7 @@ fi
 . "$env_file"
 : "${TAUTWEEKLY_CONTAINER:=tautweekly}"
 : "${TAUTWEEKLY_DATA_DIR:=/var/db/tautweekly}"
-: "${TAUTWEEKLY_IMAGE:=ghcr.io/sparkmoxie/tautweekly:latest}"
+: "${TAUTWEEKLY_IMAGE:=ghcr.io/sparkmoxie/tautweekly:__TAUTWEEKLY_RELEASE_VERSION__}"
 podman="${TAUTWEEKLY_PODMAN_BIN:-/usr/local/bin/podman}"
 lock_container_id=""
 

@@ -485,7 +485,7 @@ foreach ($archiveName in $expected.Keys) {
             $composeReader = New-Object IO.StreamReader($composeEntry[0].Open())
             try { $composeText = $composeReader.ReadToEnd() } finally { $composeReader.Dispose() }
             Assert-True ($wrapperText -match 'manager-bootstrap' -and $wrapperText -match 'manager-reset-access' -and $wrapperText -match 'open-manager') 'Mac archive omits Manager bootstrap, recovery, or browser launch.'
-            Assert-True ($serviceText -match '--runtime-mode mac' -and $serviceText -match 'health/live' -and $serviceText -match 'wait_for_delivery') 'Mac archive omits the tailored Manager runtime or graceful delivery drain.'
+            Assert-True ($serviceText -match 'runtime-profile\.sh' -and $serviceText -match '--runtime-mode "\$manager_runtime_mode"' -and $serviceText -match '--runtime-profile' -and $serviceText -match 'health/live' -and $serviceText -match 'wait_for_delivery') 'Mac archive omits unified profile selection, the tailored Manager runtime, or graceful delivery drain.'
             Assert-True ($composeText -match 'read_only:\s*true' -and $composeText -match 'stop_grace_period:\s*30m' -and $composeText -match 'no-new-privileges:true') 'Mac archive omits container hardening or graceful stop configuration.'
             foreach ($architecture in @('amd64', 'arm64')) {
                 $path = "TautWeekly-mac-docker/manager/tautweekly-manager-linux-$architecture"
@@ -799,20 +799,56 @@ $macComposePath = Join-Path $DistPath 'TautWeekly-mac-compose.yaml'
 Assert-True (Test-Path -LiteralPath $macComposePath -PathType Leaf) 'The standalone Mac Compose release asset is missing.'
 $macCompose = Get-Content -LiteralPath $macComposePath -Raw
 Assert-True (-not $macCompose.Contains('__TAUTWEEKLY_RELEASE_VERSION__')) 'The standalone Mac Compose asset contains an unresolved release token.'
-Assert-True ($macCompose.Contains("ghcr.io/sparkmoxie/tautweekly-mac:$repositoryVersion")) 'The standalone Mac Compose asset does not default to the release semver image.'
+Assert-True ($macCompose.Contains("ghcr.io/sparkmoxie/tautweekly:$repositoryVersion")) 'The standalone Mac Compose asset does not default to the unified release-semver image.'
 Assert-True ($macCompose.Contains("TAUTWEEKLY_VERSION:-$repositoryVersion")) 'The standalone Mac Compose asset does not report the same package version.'
-Assert-True ($macCompose.Contains('TAUTWEEKLY_PACKAGE_KIND: "mac-docker-registry"')) 'The standalone Mac Compose asset does not identify registry update ownership.'
+Assert-True ($macCompose.Contains('TAUTWEEKLY_RUNTIME_PROFILE: "desktop"')) 'The standalone Mac Compose asset does not select the desktop profile.'
+Assert-True ($macCompose.Contains('TAUTWEEKLY_PACKAGE_KIND: "container-desktop"')) 'The standalone Mac Compose asset does not identify unified desktop ownership.'
 Assert-True ($macCompose.Contains('${PREVIEW_BIND:-127.0.0.1}:${PREVIEW_PORT:-8787}:8080')) 'The standalone Mac Compose asset is not loopback-first.'
 Assert-True ($macCompose.Contains('tautweekly-data:/data') -and $macCompose.Contains('volumes:')) 'The standalone Mac Compose asset does not persist /data in a named volume.'
 Assert-True ($macCompose.Contains('read_only: true') -and $macCompose.Contains('no-new-privileges:true') -and $macCompose.Contains('cap_drop:')) 'The standalone Mac Compose asset is missing the read-only security boundary.'
 Assert-True ($macCompose.Contains('stop_grace_period: 30m')) 'The standalone Mac Compose asset does not preserve the delivery shutdown grace.'
 Assert-True ($macCompose -notmatch '(?m)^\s*build\s*:') 'The standalone Mac Compose asset unexpectedly requires a local source build.'
 
+$serverComposePath = Join-Path $DistPath 'TautWeekly-compose.yaml'
+Assert-True (Test-Path -LiteralPath $serverComposePath -PathType Leaf) 'The standalone server Compose release asset is missing.'
+$serverCompose = Get-Content -LiteralPath $serverComposePath -Raw
+Assert-True (-not $serverCompose.Contains('__TAUTWEEKLY_RELEASE_VERSION__')) 'The standalone server Compose asset contains an unresolved release token.'
+Assert-True ($serverCompose.Contains("ghcr.io/sparkmoxie/tautweekly:$repositoryVersion")) 'The standalone server Compose asset does not default to the unified release-semver image.'
+Assert-True ($serverCompose.Contains('TAUTWEEKLY_RUNTIME_PROFILE: "server"')) 'The standalone server Compose asset does not select the server profile.'
+Assert-True ($serverCompose.Contains('TAUTWEEKLY_PACKAGE_KIND: "container-compose"')) 'The standalone server Compose asset does not report unified Compose ownership.'
+Assert-True ($serverCompose.Contains('${PREVIEW_BIND:-0.0.0.0}:${PREVIEW_PORT:-8787}:8080')) 'The standalone server Compose asset does not preserve intentional trusted-LAN binding.'
+Assert-True ($serverCompose.Contains('./data:/data')) 'The standalone server Compose asset does not preserve its bind-mounted /data path.'
+Assert-True ($serverCompose.Contains('read_only: true') -and $serverCompose.Contains('no-new-privileges:true') -and $serverCompose.Contains('stop_grace_period: 30m')) 'The standalone server Compose asset is missing security or graceful-stop controls.'
+Assert-True ($serverCompose -notmatch '(?m)^\s*build\s*:') 'The standalone server Compose asset unexpectedly requires a local source build.'
+
+$nasZip = [IO.Compression.ZipFile]::OpenRead((Join-Path $DistPath 'TautWeekly-nas-docker.zip'))
+$macZip = [IO.Compression.ZipFile]::OpenRead((Join-Path $DistPath 'TautWeekly-mac-docker.zip'))
+try {
+    $nasPayload = @($nasZip.Entries | Where-Object { -not [string]::IsNullOrEmpty($_.Name) -and $_.FullName.StartsWith('TautWeekly-nas-docker/app/') })
+    foreach ($nasEntry in $nasPayload) {
+        $relative = $nasEntry.FullName.Substring('TautWeekly-nas-docker/app/'.Length)
+        $macEntry = $macZip.GetEntry('TautWeekly-mac-docker/app/' + $relative)
+        Assert-True ($null -ne $macEntry) "The Mac fallback is missing canonical app payload entry $relative."
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try {
+            $nasStream = $nasEntry.Open()
+            try { $nasHash = [Convert]::ToHexString($sha.ComputeHash($nasStream)) } finally { $nasStream.Dispose() }
+            $macStream = $macEntry.Open()
+            try { $macHash = [Convert]::ToHexString($sha.ComputeHash($macStream)) } finally { $macStream.Dispose() }
+        }
+        finally { $sha.Dispose() }
+        Assert-True ($nasHash -ceq $macHash) "The Mac fallback diverges from canonical app payload entry $relative."
+    }
+}
+finally {
+    $nasZip.Dispose()
+    $macZip.Dispose()
+}
 $checksumPath = Join-Path $DistPath 'SHA256SUMS.txt'
 Assert-True (Test-Path -LiteralPath $checksumPath) 'SHA256SUMS.txt is missing.'
 $checksumLines = @(Get-Content -LiteralPath $checksumPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 $artifacts = @(Get-ChildItem -LiteralPath $DistPath -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' })
-Assert-True ($artifacts.Count -eq 11) "Expected eleven release artifacts, found $($artifacts.Count)."
+Assert-True ($artifacts.Count -eq 12) "Expected twelve release artifacts, found $($artifacts.Count)."
 Assert-True ($checksumLines.Count -eq $artifacts.Count) 'Checksum manifest does not cover every artifact exactly once.'
 foreach ($artifact in $artifacts) {
     $line = @($checksumLines | Where-Object { $_ -match ('\s\s' + [regex]::Escape($artifact.Name) + '$') })

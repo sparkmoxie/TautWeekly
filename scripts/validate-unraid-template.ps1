@@ -58,7 +58,7 @@ if ([string]$profile.CommunityApplications.Icon -cne $expectedIcon -or [string]$
 }
 
 $configs = @($container.Config)
-$requiredTargets = @('8080','/data','TZ','PUID','PGID','UMASK','TAUTWEEKLY_PREVIEW_BASE_URL','TAUTWEEKLY_MANAGER_ALLOWED_HOSTS','TAUTWEEKLY_MANAGER_SECURE_COOKIES','TAUTWEEKLY_PACKAGE_KIND','TAUTWEEKLY_HOST_ADAPTER_API')
+$requiredTargets = @('8080','/data','TZ','PUID','PGID','UMASK','TAUTWEEKLY_RUNTIME_PROFILE','TAUTWEEKLY_PREVIEW_BASE_URL','TAUTWEEKLY_MANAGER_ALLOWED_HOSTS','TAUTWEEKLY_MANAGER_SECURE_COOKIES','TAUTWEEKLY_PACKAGE_KIND','TAUTWEEKLY_HOST_ADAPTER_API')
 foreach ($target in $requiredTargets) {
     if (-not ($configs | Where-Object { [string]$_.Target -ceq $target })) {
         Add-Failure "Missing Unraid Config target: $target"
@@ -79,6 +79,10 @@ if ($null -ne $webPort -and ([string]$webPort.Name -cne 'Manager Web UI' -or [st
 $packageKind = $configs | Where-Object { [string]$_.Target -ceq 'TAUTWEEKLY_PACKAGE_KIND' } | Select-Object -First 1
 if ($null -ne $packageKind -and [string]$packageKind.Default -cne 'unraid') {
     Add-Failure 'Unraid package identity must remain unraid.'
+}
+$runtimeProfile = $configs | Where-Object { [string]$_.Target -ceq 'TAUTWEEKLY_RUNTIME_PROFILE' } | Select-Object -First 1
+if ($null -ne $runtimeProfile -and [string]$runtimeProfile.Default -cne 'unraid') {
+    Add-Failure 'Unraid runtime profile must remain unraid.'
 }
 $hostAdapter = $configs | Where-Object { [string]$_.Target -ceq 'TAUTWEEKLY_HOST_ADAPTER_API' } | Select-Object -First 1
 if ($null -ne $hostAdapter -and [string]$hostAdapter.Default -cne '3') {

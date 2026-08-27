@@ -6,6 +6,61 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-08-26
+
+### Added
+
+- Published one shared multi-architecture OCI image at
+  `ghcr.io/sparkmoxie/tautweekly` for Docker Desktop, generic Compose, NAS,
+  QNAP, Unraid, FreeBSD/Podman, and compatible container systems. Explicit
+  `desktop`, `server`, and `unraid` profiles preserve each host's proven
+  network, storage, Manager, scheduling, health, and lifecycle behavior.
+- Added the checksummed `TautWeekly-compose.yaml` no-clone server asset and
+  converted `TautWeekly-mac-compose.yaml` into a transitional desktop-profile
+  entrypoint to the same unified image.
+- Added authenticated Manager reporting for the active runtime profile, unified
+  image repository, recommended semver reference, immutable digest policy, and
+  old-Mac-image migration state without granting Docker control to the web
+  process.
+- Added a canonical migration guide covering the v0.22.0 Mac-specific and
+  NAS/generic images, named volumes, bind mounts, PUID/PGID/UMASK, networking,
+  backups, health acceptance, interrupted recovery, rollback, and Manager
+  credential persistence.
+
+### Changed
+
+- Consolidated the Mac and NAS release image workflows into one release-gated
+  amd64/arm64 build with Buildx/QEMU boot coverage for every supported profile.
+- Made release Compose and FreeBSD/Podman defaults full-semver pinned. Mutable
+  minor, `latest`, and `edge` tags remain available where appropriate but
+  are not the recommended automation reference.
+- Made the canonical NAS application tree the shared container payload used by
+  the Mac fallback archive, eliminating duplicated runtime implementations.
+- Preserved Windows native packaging, native systemd Linux, the FreeBSD Podman
+  beta route, and verified archive/local-build fallbacks where appropriate.
+- Advanced the NAS and Mac container source baselines to 1.6.0.
+
+### Compatibility
+
+- Existing definitions without an explicit profile keep a bounded migration
+  bridge: Mac package identities infer `desktop`, Unraid infers `unraid`,
+  and supported NAS/generic identities infer `server`. Unknown or
+  incompatible explicit combinations refuse startup with status 64.
+- `ghcr.io/sparkmoxie/tautweekly-mac:0.22.0` remains pullable for rollback
+  but receives no v0.23.0 or later tags. The transitional Mac Compose asset
+  remains through v0.24.x and may be retired no earlier than v0.25.0 with
+  release-note notice.
+- Existing `/data` configuration, credentials, Manager pairing, schedules,
+  state, history, output, backups, named volumes, bind mounts, and non-root
+  ownership settings are preserved when users recreate against the same mount.
+
+### Security
+
+- Preserved the read-only filesystem, non-root identity and root refusal,
+  capability drop, no-new-privileges, credential privacy, authenticated
+  Manager, liveness-only health endpoint, host-owned updates, and 30-minute
+  graceful-stop boundary across all unified profiles.
+
 ## [0.22.0] - 2026-08-26
 
 ### Added

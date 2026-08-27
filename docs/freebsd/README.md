@@ -303,7 +303,7 @@ backup and record the current image ID:
 
 ```sh
 sudo tautweekly backup
-sudo podman image inspect ghcr.io/sparkmoxie/tautweekly:latest --format '{{.Id}}'
+sudo podman image inspect ghcr.io/sparkmoxie/tautweekly:0.23.0 --format '{{.Id}}'
 sudo tautweekly check-update
 sudo tautweekly update
 # sign back in; verify Settings > Updates, then Verify, PreviewAll, and TestEmail
@@ -346,9 +346,10 @@ Manager **Config > Configuration backups** can permanently delete one selected
 configuration backup only after **Confirm delete**. The current configuration
 is unchanged and the deleted backup cannot be recovered.
 
-For deterministic production updates, set `TAUTWEEKLY_IMAGE` in
-`/usr/local/etc/tautweekly/tautweekly.env` to a version tag rather than
-`latest`, then restart the service. The release archive also contains the
+The v0.23.0 package defaults `TAUTWEEKLY_IMAGE` to the full release semver and
+sets `TAUTWEEKLY_RUNTIME_PROFILE=server`. For immutable automation, append the
+published manifest digest in
+`/usr/local/etc/tautweekly/tautweekly.env`, then restart the service. The release archive also contains the
 Dockerfile and complete application source for local inspection or building:
 
 ```sh
@@ -358,10 +359,11 @@ sudo podman build --os=linux -t localhost/tautweekly:local .
 Set `TAUTWEEKLY_IMAGE=localhost/tautweekly:local` and restart only after the
 local image build succeeds.
 
-The default is stable `latest`. The `edge` tag follows unreleased `main` and is
-not a packaged default. Administrators who intentionally want unattended
-updates may schedule `tautweekly update` with a FreeBSD host facility, but that
-is an explicit local policy and is not installed by this package.
+The packaged default is full semver. The minor, `latest`, and `edge` tags are
+mutable and are not recommended automation references. Administrators who
+intentionally want unattended updates may schedule `tautweekly update` with a
+FreeBSD host facility, but that is an explicit local policy and is not installed
+by this package.
 
 The package defaults to `/usr/local/bin/podman`. If Podman is installed in a
 different administrator-managed location, set `TAUTWEEKLY_PODMAN_BIN` in the

@@ -6,6 +6,11 @@ UMASK_VALUE="${UMASK:-077}"
 HOST_ADAPTER_API="${TAUTWEEKLY_HOST_ADAPTER_API:-legacy}"
 umask "$UMASK_VALUE"
 
+# shellcheck source=bin/runtime-profile.sh
+source /opt/tautweekly/bin/runtime-profile.sh
+tautweekly_select_runtime_profile
+echo "[INFO] Unified container profile '$TAUTWEEKLY_RUNTIME_PROFILE' selected for package '$TAUTWEEKLY_PACKAGE_KIND'."
+
 if [[ "$HOST_ADAPTER_API" != 3 ]]; then
   echo "[WARN] Host adapter API ${HOST_ADAPTER_API} is older than image API 3. The Manager can start, but Settings > Updates will report the legacy adapter until the host package or saved container template is current." >&2
 fi

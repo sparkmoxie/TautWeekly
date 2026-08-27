@@ -12,6 +12,7 @@ if ($PSVersionTable.PSVersion -lt [Version]"7.2") {
 $configPath = Join-Path $DataRoot "config.json"
 $examplePath = "/opt/tautweekly/config.example.json"
 $isNativeLinux = [string]$env:TAUTWEEKLY_MANAGER_RUNTIME_MODE -eq "linux"
+$isDesktopContainer = [string]$env:TAUTWEEKLY_RUNTIME_PROFILE -eq "desktop"
 . (Join-Path $PSScriptRoot "User-Exclusions.ps1")
 . (Join-Path $PSScriptRoot "Library-Selection.ps1")
 . (Join-Path $PSScriptRoot "Configuration-Backups.ps1")
@@ -120,7 +121,7 @@ function Write-ManagerNextSteps {
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor DarkYellow
-Write-Host $(if ($isNativeLinux) { "TAUTWEEKLY FOR PLEX NATIVE LINUX SETUP" } else { "TAUTWEEKLY FOR PLEX NAS PORTABLE SETUP" }) -ForegroundColor Yellow
+Write-Host $(if ($isNativeLinux) { "TAUTWEEKLY FOR PLEX NATIVE LINUX SETUP" } elseif ($isDesktopContainer) { "TAUTWEEKLY FOR PLEX DESKTOP CONTAINER SETUP" } else { "TAUTWEEKLY FOR PLEX SERVER CONTAINER SETUP" }) -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor DarkYellow
 Write-Host ""
 Write-Host "This expert fallback writes $configPath in protected persistent storage."
@@ -189,9 +190,13 @@ Write-Host "Tautulli connection" -ForegroundColor Cyan
 if ($isNativeLinux) {
     Write-Host "Use a URL reachable from the tautweekly systemd service, for example http://127.0.0.1:8181 for a host-local Tautulli service."
 }
+elseif ($isDesktopContainer) {
+    Write-Host "For Tautulli running on the desktop host, use http://host.docker.internal:8181."
+    Write-Host "For another container on a shared network, use its service name. Do not use 127.0.0.1."
+}
 else {
-    Write-Host "For a Tautulli container with port 8181 published, use the QNAP LAN IP,"
-    Write-Host "for example http://media.example.test:8181. Do not use 127.0.0.1."
+    Write-Host "Use the NAS/server LAN address or a shared-network service name,"
+    Write-Host "for example http://media.example.test:8181. Container 127.0.0.1 is TautWeekly."
 }
 $tautulliUrl = Read-Default "Tautulli URL" ([string]$defaults.TautulliUrl)
 $apiKey = Read-Default "Tautulli API key"
@@ -244,10 +249,16 @@ Write-Host "logos. For movie RT output, set each Plex Movie library's Advanced >
 Write-Host "Rotten Tomatoes, then refresh affected metadata. This is library-wide."
 Write-Host "The URL must be reachable from inside this runtime."
 if ($isNativeLinux) { Write-Host "A host-local Plex service may use loopback when its listener permits it." }
-else { Write-Host "Localhost points to TautWeekly, not a separate Plex server/container." }
+elseif ($isDesktopContainer) {
+    Write-Host "For Plex on the desktop host, use http://host.docker.internal:32400."
+    Write-Host "Container localhost points to TautWeekly, not the host."
+}
+else {
+    Write-Host "Use the NAS/server LAN address or a shared-network service name."
+    Write-Host "Container localhost points to TautWeekly, not a separate Plex server/container."
+}
 Write-Host "Leaving either value unresolved uses flattened Tautulli fallbacks and may omit richer"
 Write-Host "metadata. Verification tests the resolved connection without printing the token."
-$plexServerUrl = Read-Default "Direct Plex URL, e.g. http://media.example.test:32400"
 $plexToken = Read-SecretPlainText "Plex token (optional; press Enter to use Tautulli fallbacks)" $true
 
 Write-Host ""

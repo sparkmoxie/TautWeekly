@@ -572,6 +572,9 @@ try {
     $nasDestination = Copy-Platform -SourceName 'nas-docker' -FolderName 'TautWeekly-nas-docker' -GuidePath 'docs/nas-docker/README.md'
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/shared/package-update.sh') -Destination (Join-Path $nasDestination 'package-update.sh') -Force
     $macDestination = Copy-Platform -SourceName 'mac-docker' -FolderName 'TautWeekly-mac-docker' -GuidePath 'docs/mac/README.md'
+    Remove-Item -LiteralPath (Join-Path $macDestination 'app') -Recurse -Force
+    Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/app') -Destination (Join-Path $macDestination 'app') -Recurse -Force
+    # The Mac fallback keeps its host wrapper while sharing the canonical container payload.
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/shared/package-update.sh') -Destination (Join-Path $macDestination 'package-update.sh') -Force
     Build-LinuxManagers -Destination $macDestination
 
@@ -640,16 +643,24 @@ try {
         (New-TarGz -FolderName 'TautWeekly-freebsd-podman' -ArchiveName 'TautWeekly-freebsd-podman.tar.gz')
     )
 
-    $macCompose = Join-Path $dist 'TautWeekly-mac-compose.yaml'
-    $macComposeContent = [IO.File]::ReadAllText((Join-Path $Root 'platforms/mac-docker/compose.registry.yaml'))
-    $macComposeContent = $macComposeContent.Replace('__TAUTWEEKLY_RELEASE_VERSION__', $Version)
-    if ($macComposeContent.Contains('__TAUTWEEKLY_RELEASE_VERSION__')) {
-        throw 'The standalone Mac Compose release asset contains an unresolved release-version token.'
+    $composeArtifacts = @()
+    $composeSources = [ordered]@{
+        'TautWeekly-compose.yaml' = 'platforms/nas-docker/compose.yaml'
+        'TautWeekly-mac-compose.yaml' = 'platforms/mac-docker/compose.registry.yaml'
     }
-    [IO.File]::WriteAllText($macCompose, $macComposeContent, [Text.UTF8Encoding]::new($false))
-    (Get-Item -LiteralPath $macCompose).LastWriteTimeUtc = $sourceTimestamp
+    foreach ($composeSource in $composeSources.GetEnumerator()) {
+        $composeArtifact = Join-Path $dist $composeSource.Key
+        $composeContent = [IO.File]::ReadAllText((Join-Path $Root $composeSource.Value))
+        $composeContent = $composeContent.Replace('__TAUTWEEKLY_RELEASE_VERSION__', $Version)
+        if ($composeContent.Contains('__TAUTWEEKLY_RELEASE_VERSION__')) {
+            throw "The standalone Compose release asset $($composeSource.Key) contains an unresolved release-version token."
+        }
+        [IO.File]::WriteAllText($composeArtifact, $composeContent, [Text.UTF8Encoding]::new($false))
+        (Get-Item -LiteralPath $composeArtifact).LastWriteTimeUtc = $sourceTimestamp
+        $composeArtifacts += $composeArtifact
+    }
 
-    $releaseArtifacts = @($archives) + @($macCompose)
+    $releaseArtifacts = @($archives) + @($composeArtifacts)
 
     $checksumLines = foreach ($artifact in ($releaseArtifacts | Sort-Object)) {
         $hash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLowerInvariant()

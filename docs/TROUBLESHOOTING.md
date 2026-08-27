@@ -108,6 +108,24 @@ generated output reports missing packaged assets. Scheduler progress remains
 visible through Manager, `./tautweekly.sh schedule-status`, and
 `scheduler-heartbeat.json`, but it no longer controls Docker health.
 
+## Unified container profile is refused or Manager looks new
+
+v0.23.0 accepts only `desktop`, `server`, or `unraid`. Exit status 64 with a
+profile/package error means the host definition is invalid; correct
+`TAUTWEEKLY_RUNTIME_PROFILE` and its package kind instead of removing the
+refusal. Desktop uses `container-desktop`, generic Compose normally uses
+`container-compose`, and Unraid requires `unraid`.
+
+If a recreated container unexpectedly asks for first-run pairing, stop it and
+verify the original named volume or bind mount is still attached at `/data`.
+Do not pair an empty replacement or delete the old volume. Once the correct data
+is attached, the existing password, configuration, schedule, state, history,
+and backups should return. Settings > Updates should then report the active
+profile and `ghcr.io/sparkmoxie/tautweekly`. Follow the
+[unified migration and interrupted-recovery guide](CONTAINER-MIGRATION.md) for
+v0.22.0 Mac/NAS image transitions, permissions, rollback, and safe recreate
+steps.
+
 ## Manager or preview does not open
 
 ### Private Tailscale address does not open

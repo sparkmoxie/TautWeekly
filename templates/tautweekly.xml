@@ -17,8 +17,8 @@
   <Category>MediaApp:Other Tools:Utilities</Category>
   <ExtraSearchTerms>Tautulli Plex newsletter email activity digest</ExtraSearchTerms>
   <Requires>A reachable Tautulli server, an SMTP STARTTLS account, and a trusted LAN port for the authenticated Manager.</Requires>
-  <Changes>2026-08-18: Added capability-aware Manager update status with Unraid-owned Docker/Apps guidance and host-adapter compatibility detection. 2026-08-16: Replaced the read-only preview listener with the authenticated NAS Manager and embedded schedule controls. 2026-08-13: Applied canonical branding and safe PUID/PGID recovery.</Changes>
-  <Date>2026-08-18</Date>
+  <Changes>2026-08-26: Selected the unified image's explicit Unraid profile while preserving appdata, Manager authentication, hardening, scheduling, health, and Apps-owned updates. 2026-08-18: Added capability-aware Manager update status and host-adapter compatibility detection.</Changes>
+  <Date>2026-08-26</Date>
   <MinVer>6.12.0</MinVer>
   <License>MIT</License>
   <Config Name="Manager Web UI" Target="8080" Default="8787" Mode="tcp" Description="Authenticated Manager for a trusted LAN. Do not expose plain HTTP publicly; use an explicitly configured TLS reverse proxy when remote access is required." Type="Port" Display="always" Required="true" Mask="false"/>
@@ -27,6 +27,7 @@
   <Config Name="PUID" Target="PUID" Default="99" Description="Non-root Unraid user ID used for appdata ownership." Type="Variable" Display="advanced" Required="true" Mask="false"/>
   <Config Name="PGID" Target="PGID" Default="100" Description="Non-root Unraid group ID used for appdata ownership." Type="Variable" Display="advanced" Required="true" Mask="false"/>
   <Config Name="UMASK" Target="UMASK" Default="077" Description="Restrictive file-creation mask for configuration and output." Type="Variable" Display="advanced" Required="true" Mask="false"/>
+  <Config Name="Runtime profile" Target="TAUTWEEKLY_RUNTIME_PROFILE" Default="unraid" Description="Validated unified-image behavior profile. Keep unraid for this template." Type="Variable" Display="advanced-hide" Required="true" Mask="false"/>
   <Config Name="Preview Base URL" Target="TAUTWEEKLY_PREVIEW_BASE_URL" Default="" Description="Optional LAN URL embedded in preview links, for example http://tower:8787. Never use a public URL." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Manager Allowed Hosts" Target="TAUTWEEKLY_MANAGER_ALLOWED_HOSTS" Default="" Description="Optional comma-separated DNS hostnames accepted by the Manager, for example tower,tautweekly.example.test. IP-literal access needs no entry. Do not include schemes, paths, ports, or wildcards." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Secure Manager Cookies" Target="TAUTWEEKLY_MANAGER_SECURE_COOKIES" Default="false" Description="Set true only when every browser connection uses HTTPS through a correctly configured TLS reverse proxy. Plain HTTP login cannot work while enabled." Type="Variable" Display="advanced" Required="true" Mask="false"/>

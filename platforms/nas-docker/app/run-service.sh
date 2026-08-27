@@ -3,9 +3,18 @@ set -euo pipefail
 data_root="${TAUTWEEKLY_DATA_DIR:-/data}"
 app_root="${TAUTWEEKLY_APP_DIR:-/opt/tautweekly}"
 manager_listen="${TAUTWEEKLY_MANAGER_LISTEN:-0.0.0.0:8080}"
-manager_runtime_mode="${TAUTWEEKLY_MANAGER_RUNTIME_MODE:-nas}"
+manager_runtime_mode="${TAUTWEEKLY_MANAGER_RUNTIME_MODE:-}"
 service_heartbeat="$data_root/service-heartbeat.json"
 shutdown_grace="${TAUTWEEKLY_SHUTDOWN_DELIVERY_GRACE_SECONDS:-1740}"
+# Native Linux intentionally reuses this service supervisor without entering a
+# container profile. Container entrypoints resolve and export the profile first;
+# direct supervisor tests and expert launches resolve it here as a safeguard.
+if [[ "$manager_runtime_mode" != "linux" ]]; then
+  # shellcheck source=bin/runtime-profile.sh
+  source "$app_root/bin/runtime-profile.sh"
+  tautweekly_select_runtime_profile
+  manager_runtime_mode="$TAUTWEEKLY_MANAGER_RUNTIME_MODE"
+fi
 # Native Linux does not use the container entrypoint. Refresh as the service
 # account before launching consumers; the bundle marker keeps restarts idempotent.
 if [[ "$manager_runtime_mode" == linux ]]; then
@@ -16,8 +25,8 @@ MANAGER_PID=""
 SCHED_PID=""
 SHUTTING_DOWN=false
 
-if [[ "$manager_runtime_mode" != nas && "$manager_runtime_mode" != linux ]]; then
-  echo "[ERROR] TAUTWEEKLY_MANAGER_RUNTIME_MODE must be nas or linux." >&2
+if [[ "$manager_runtime_mode" != nas && "$manager_runtime_mode" != linux && "$manager_runtime_mode" != mac ]]; then
+  echo "[ERROR] TAUTWEEKLY_MANAGER_RUNTIME_MODE must be nas, mac, or linux." >&2
   exit 64
 fi
 
@@ -86,6 +95,7 @@ trap term TERM INT EXIT
 
 "$app_root/bin/tautweekly-manager" serve \
   --runtime-mode "$manager_runtime_mode" \
+  --runtime-profile "${TAUTWEEKLY_RUNTIME_PROFILE:-native-linux}" \
   --listen "$manager_listen" \
   --tautweekly-root "$app_root" \
   --runtime-root "$data_root" \
@@ -112,8 +122,12 @@ if [[ "$manager_ready" != true ]]; then
 fi
 if [[ "$manager_runtime_mode" == linux ]]; then
   echo "[INFO] Authenticated Linux Manager listening on ${manager_listen}; use the documented SSH tunnel or TLS reverse proxy."
+elif [[ "${TAUTWEEKLY_RUNTIME_PROFILE:-}" == desktop ]]; then
+  echo "[INFO] Authenticated desktop-container Manager listening on ${manager_listen}; publish it to host loopback unless LAN access is intentional."
+elif [[ "${TAUTWEEKLY_RUNTIME_PROFILE:-}" == unraid ]]; then
+  echo "[INFO] Authenticated Unraid Manager listening on ${manager_listen}; Unraid owns the mapped trusted-LAN port and image lifecycle."
 else
-  echo "[INFO] Authenticated Manager listening on ${manager_listen}; use the mapped trusted-LAN host port."
+  echo "[INFO] Authenticated server-container Manager listening on ${manager_listen}; use the mapped trusted-LAN host port."
 fi
 
 pwsh -NoLogo -NoProfile -NonInteractive -File "$app_root/Scheduler.ps1" -DataRoot "$data_root" &

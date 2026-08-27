@@ -99,6 +99,7 @@ func serve(args []string) error {
 	openBrowserOnStart := flags.Bool("open-browser", false, "open the local Manager after the listener is ready")
 	requireAuthentication := flags.Bool("require-auth", false, "require password authentication and pairing for this runtime mode")
 	runtimeMode := flags.String("runtime-mode", "windows", "package runtime profile: windows, nas, linux, or mac")
+	runtimeProfile := flags.String("runtime-profile", os.Getenv("TAUTWEEKLY_RUNTIME_PROFILE"), "container behavior profile: desktop, server, or unraid")
 	packageKind := flags.String("package-kind", os.Getenv("TAUTWEEKLY_PACKAGE_KIND"), "package identity supplied by the trusted host wrapper")
 	packageVersion := flags.String("package-version", os.Getenv("TAUTWEEKLY_PACKAGE_VERSION"), "host package release version supplied by the trusted wrapper")
 	hostAdapterVersion := flags.String("host-adapter-version", os.Getenv("TAUTWEEKLY_HOST_ADAPTER_API"), "host adapter compatibility version")
@@ -150,6 +151,7 @@ func serve(args []string) error {
 		RuntimeRoot:           *runtimeRoot,
 		Version:               version,
 		RuntimeMode:           mode,
+		RuntimeProfile:        *runtimeProfile,
 		PackageKind:           *packageKind,
 		PackageVersion:        *packageVersion,
 		HostAdapterVersion:    *hostAdapterVersion,

@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   container-images:
-    name: Publish release container images
+    name: Publish unified release container image
     needs: [build, windows-installer]
     uses: ./.github/workflows/container.yml
     with:
@@ -87,6 +87,7 @@ jobs:
           python3 -B scripts/test-asset-refresh.py
       - name: Test update detection and application guards
         run: |
+          ./scripts/test-container-profiles.sh
           ./scripts/test-update-management.sh
           pwsh ./scripts/test-update-checks.ps1
       - name: Validate Compose files
@@ -110,10 +111,12 @@ jobs:
         run: |
           tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/tautweekly.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/app/bin/run-as-user.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/app/bin/runtime-profile.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/app/bin/run-script.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-nas-docker.tar.gz TautWeekly-nas-docker/container-update.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/tautweekly.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/app/bin/run-as-user.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/app/bin/runtime-profile.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/app/bin/run-script.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/check-release.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-mac-docker.tar.gz TautWeekly-mac-docker/mac-update.sh | grep -q '^-rwx'
@@ -121,12 +124,14 @@ jobs:
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/tautweekly | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/check-release.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/app/bin/run-as-user.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/app/bin/runtime-profile.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/app/bin/run-script.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/manager/tautweekly-manager-linux-amd64 | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-linux.tar.gz TautWeekly-linux/manager/tautweekly-manager-linux-arm64 | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/install-freebsd.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/rc.d/tautweekly | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/app/bin/run-as-user.sh | grep -q '^-rwx'
+          tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/app/bin/runtime-profile.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/app/bin/run-script.sh | grep -q '^-rwx'
       - name: Upload release candidates
         uses: actions/upload-artifact@v4

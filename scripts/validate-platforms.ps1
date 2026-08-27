@@ -155,7 +155,7 @@ Require-Text 'platforms/freebsd-podman/tautweekly' @(
     'run-as-user\.sh /bin/bash'
 )
 Require-Text 'platforms/nas-docker/app/run-service.sh' @(
-    'Authenticated Manager listening',
+    'Authenticated (?:Linux|desktop-container|Unraid|server-container) Manager listening',
     'tautweekly-manager.*serve',
     '--runtime-mode "\$manager_runtime_mode"',
     'TAUTWEEKLY_MANAGER_RUNTIME_MODE',
@@ -313,7 +313,7 @@ Require-Text 'docs/nas-docker/README.md' @(
     "Unraid's Docker controls"
 )
 Require-Text 'docs/nas-docker/index.html' @('url=manager\.html', 'location\.replace\("manager\.html"')
-Require-Text 'docs/nas-docker/index.html' @('authenticated Manager is the setup source', 'controlled TestEmail delivery, scheduling, updates, recovery')
+Require-Text 'docs/nas-docker/index.html' @('authenticated Manager is the setup source', 'controlled TestEmail delivery, scheduling, unified-image profile/status, v0\.22\.0 migration, rollback, recovery')
 Forbid-Text 'docs/nas-docker/index.html' @('Setup-First\.ps1', '\.\/tautweekly\.sh setup', 'read-only preview viewer')
 Require-Text 'docs/nas-docker/manager.html' @(
     'Manager authentication',
@@ -498,7 +498,7 @@ Require-Text 'platforms/nas-docker/container-update.sh' @(
 Forbid-Text 'platforms/nas-docker/compose.yaml' @('image:\s*.*:edge')
 foreach ($relative in @('platforms/nas-docker/compose.yaml', 'platforms/nas-docker/compose.qnap.yaml')) {
     Require-Text $relative @(
-        'ghcr\.io/sparkmoxie/tautweekly:latest',
+        'ghcr\.io/sparkmoxie/tautweekly:__TAUTWEEKLY_RELEASE_VERSION__',
         'no-new-privileges:true',
         'read_only: true',
         '\/tmp:rw,noexec,nosuid,size=256m,mode=1777',
@@ -508,6 +508,7 @@ foreach ($relative in @('platforms/nas-docker/compose.yaml', 'platforms/nas-dock
         'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
         'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
         'TAUTWEEKLY_PACKAGE_KIND',
+        'TAUTWEEKLY_RUNTIME_PROFILE',
         'TAUTWEEKLY_PACKAGE_VERSION.*__TAUTWEEKLY_RELEASE_VERSION__',
         'TAUTWEEKLY_HOST_ADAPTER_API'
     )
@@ -548,18 +549,24 @@ Require-Text 'platforms/nas-docker/Dockerfile' @(
     'HOME=/tmp/tautweekly/home',
     'XDG_DATA_HOME=/tmp/tautweekly/share',
     'EXPOSE 8080',
-    'io\.tautweekly\.host-adapter-api="3"'
+    'io\.tautweekly\.host-adapter-api="3"',
+    'io\.tautweekly\.image-repository="ghcr\.io/sparkmoxie/tautweekly"',
+    'io\.tautweekly\.runtime-profiles="desktop,server,unraid"'
 )
 Require-Text 'platforms/nas-docker/app/entrypoint.sh' @(
     '/tmp/tautweekly/home',
     '/tmp/tautweekly/share',
-    'host adapter API'
+    'host adapter API',
+    'runtime-profile\.sh',
+    'tautweekly_select_runtime_profile',
+    'Unified container profile'
 )
 Require-Text 'templates/tautweekly.xml' @(
     '--read-only',
     '--stop-timeout 1800',
     'TAUTWEEKLY_PACKAGE_KIND',
     'TAUTWEEKLY_HOST_ADAPTER_API',
+    'TAUTWEEKLY_RUNTIME_PROFILE',
     '--security-opt no-new-privileges:true',
     '--cap-drop ALL'
 )
@@ -612,8 +619,9 @@ Require-Text 'platforms/mac-docker/compose.yaml' @(
 )
 Forbid-Text 'platforms/mac-docker/compose.yaml' @('(?m)^\s*build:')
 Require-Text 'platforms/mac-docker/compose.registry.yaml' @(
-    'ghcr\.io/sparkmoxie/tautweekly-mac:__TAUTWEEKLY_RELEASE_VERSION__',
-    'TAUTWEEKLY_PACKAGE_KIND:\s*"mac-docker-registry"',
+    'ghcr\.io/sparkmoxie/tautweekly:__TAUTWEEKLY_RELEASE_VERSION__',
+    'TAUTWEEKLY_RUNTIME_PROFILE:\s*"desktop"',
+    'TAUTWEEKLY_PACKAGE_KIND:\s*"container-desktop"',
     'TAUTWEEKLY_PACKAGE_VERSION.*TAUTWEEKLY_VERSION:-__TAUTWEEKLY_RELEASE_VERSION__',
     'TAUTWEEKLY_HOST_ADAPTER_API:\s*"3"',
     'PREVIEW_BIND:-127\.0\.0\.1',
@@ -625,17 +633,25 @@ Require-Text 'platforms/mac-docker/compose.registry.yaml' @(
 )
 Forbid-Text 'platforms/mac-docker/compose.registry.yaml' @(
     '(?m)^\s*build:',
-    'ghcr\.io/sparkmoxie/tautweekly-mac:latest'
+    'ghcr\.io/sparkmoxie/tautweekly-mac'
 )
 Require-Text '.github/workflows/container.yml' @(
     'workflow_call:',
     'release_tag:',
-    'ghcr\.io/sparkmoxie/tautweekly-mac',
-    'platforms/mac-docker/Dockerfile\.registry',
+    'ghcr\.io/sparkmoxie/tautweekly',
+    'platforms/nas-docker/Dockerfile',
+    'test-container-profiles\.sh',
+    "'' server",
+    "'' desktop",
+    "'' unraid",
+    'platforms:\s*linux/arm64',
     'linux/amd64,linux/arm64',
-    'mac-registry',
     'provenance:\s*mode=max',
     'sbom:\s*true'
+)
+Forbid-Text '.github/workflows/container.yml' @(
+    'ghcr\.io/sparkmoxie/tautweekly-mac',
+    'platforms/mac-docker/Dockerfile\.registry'
 )
 Require-Text '.github/workflows/release.yml' @(
     'needs:\s*\[build, windows-installer\]',
@@ -678,6 +694,20 @@ Require-Text 'platforms/mac-docker/app/entrypoint.sh' @(
 Forbid-Text 'platforms/mac-docker/app/entrypoint.sh' @('groupmod', 'usermod')
 Forbid-Text 'platforms/mac-docker/app/preview-home.html' @('not an admin Web UI', 'Unraid container Console', 'preview-all-00-INDEX\.html')
 
+Require-Text 'platforms/nas-docker/app/bin/runtime-profile.sh' @(
+    'desktop',
+    'server',
+    'unraid',
+    'container-desktop',
+    'container-compose',
+    'docker-compatible',
+    'mac-docker-registry',
+    'return 64'
+)
+Require-Text 'scripts/build-releases.ps1' @(
+    'platforms/nas-docker/app',
+    'TautWeekly-compose\.yaml'
+)
 Require-Text 'platforms/windows/Check-Update.ps1' @(
     'releases/latest',
     'Latest stable release',

@@ -3456,6 +3456,10 @@ function renderUpdates() {
   setText("update-manager-version", displayUpdateVersion(update.managerVersion || state.about?.version));
   setText("update-latest-version", displayUpdateVersion(update.latestStableVersion, "Not checked"));
   setText("update-platform", titleCase(state.status?.platform));
+  setText("update-runtime-profile", titleCase(update.runtimeProfile || state.capabilities?.runtimeProfile));
+  setText("update-image-repository", update.imageRepository || "Not applicable");
+  setText("update-image-reference", update.recommendedImageReference || "Not applicable");
+  setText("update-migration-state", titleCase(update.migrationState || "not-applicable"));
   setText("update-release-alignment", releaseAlignmentSummary(update));
   const hostAdapterApplicable = Boolean(update.hostAdapterState) && update.hostAdapterState !== "not-applicable";
   const hostAdapterRow = byId("update-host-adapter-row");

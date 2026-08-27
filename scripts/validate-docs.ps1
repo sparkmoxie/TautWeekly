@@ -640,7 +640,9 @@ foreach ($source in @($macQuickstart, $macReadme)) {
         'all six',
         'TestEmail',
         'SHA256SUMS\.txt',
+        'ghcr\.io/sparkmoxie/tautweekly(?!-mac)',
         'ghcr\.io/sparkmoxie/tautweekly-mac',
+        'TAUTWEEKLY_RUNTIME_PROFILE|desktop.*profile',
         'TautWeekly-mac-compose\.yaml',
         'semver|semantic version',
         'digest',
@@ -649,6 +651,8 @@ foreach ($source in @($macQuickstart, $macReadme)) {
         'archive.*fallback|fallback archive',
         '\.env',
         'data/',
+        'docker compose down -v',
+        'v0\.24\.x',
         '30 minutes'
     )) {
         if ($source -notmatch $pattern) {
@@ -660,12 +664,33 @@ foreach ($source in @($macQuickstart, $macReadme)) {
     }
 }
 
+$containerMigration = [IO.File]::ReadAllText((Join-Path $docs 'CONTAINER-MIGRATION.md'))
+foreach ($pattern in @(
+    'desktop[\s\S]+server[\s\S]+unraid',
+    'ghcr\.io/sparkmoxie/tautweekly:0\.23\.0',
+    'ghcr\.io/sparkmoxie/tautweekly-mac:0\.22\.0',
+    'named volume',
+    'bind mount',
+    'PUID.*PGID.*UMASK',
+    'host\.docker\.internal',
+    'interrupted pull',
+    'pairing',
+    'docker compose down -v',
+    'v0\.24\.x',
+    'v0\.25\.0',
+    'not transactional|not transactional'
+)) {
+    if ($containerMigration -notmatch $pattern) {
+        throw "Unified container migration guidance is missing: $pattern"
+    }
+}
+
 $nasRedirect = [IO.File]::ReadAllText((Join-Path $docs 'nas-docker/index.html'))
 foreach ($pattern in @(
     'url=manager\.html',
     'location\.replace\("manager\.html"',
     'authenticated Manager is the setup source',
-    'Config, verification, six previews, controlled TestEmail delivery, scheduling, updates, recovery'
+    'Config, verification, six previews, controlled TestEmail delivery, scheduling, unified-image profile/status, v0\.22\.0 migration, rollback, recovery'
 )) {
     if ($nasRedirect -notmatch $pattern) {
         throw "NAS canonical redirect is missing Manager source-of-truth guidance: $pattern"

@@ -1,6 +1,13 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.6.0 Portable
+---------------
+- publishes one shared amd64/arm64 OCI image for desktop, server, and Unraid profiles
+- adds explicit fail-closed profile selection while retaining legacy package inference for migration
+- adds full-semver release Compose defaults, profile-aware Manager status, and shared migration/rollback guidance
+- preserves /data, PUID/PGID/UMASK, health, scheduling, graceful stop, hardening, and host-owned updates
+
 v1.5.4 Portable
 ---------------
 - optimizes all 32 email GIFs at twice their email display size while preserving frames, timing, loops, and transparency
