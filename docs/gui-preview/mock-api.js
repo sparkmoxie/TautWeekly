@@ -2,8 +2,8 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.23.0";
-  const PREVIOUS_VERSION = "0.22.0";
+  const DEMO_VERSION = "0.23.1";
+  const PREVIOUS_VERSION = "0.23.0";
   const PROFILES = {
     windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows" },
     nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker" },
@@ -94,6 +94,7 @@
     field("DeletedItemCacheEnabled", "Enable deleted-item cache", "Cache", "boolean", true),
     field("DeletedItemCacheRetentionDays", "Cache retention days", "Cache", "integer", 365, { required: true, min: 1, max: 3650 }),
     field("DeletedItemCacheMaxItems", "Maximum cached items", "Cache", "integer", 1000, { required: true, min: 1, max: 10000 }),
+    field("DeletedItemCacheMaxBytesMB", "Maximum cache size (MB)", "Cache", "integer", 256, { required: true, min: 16, max: 2048 }),
     field("CustomTextCardEnabled", "Enable custom text card", "Custom text card", "boolean", true, { help: "When enabled, the synthetic card appears before the newsletter release-count and date block in every state." }),
     field("CustomTextCardBorderColor", "Border color", "Custom text card", "color", "#72aef7", { help: "Choose the card accent color. Border opacity controls whether it is visible." }),
     field("CustomTextCardBorderOpacity", "Border opacity", "Custom text card", "range", 34, { min: 0, max: 100, help: "Set to 0% for no border." }),
@@ -127,6 +128,29 @@
     configRevision: revision,
     summary: "Synthetic SMTP greeting, EHLO, and certificate-validated STARTTLS checks passed.",
   };
+  const cacheStatus = {
+    schemaVersion: 1,
+    enabled: true,
+    state: "passed",
+    summary: "Synthetic deleted-item cache has 12 restorable entries and 12 artwork files.",
+    manifestState: "primary-valid",
+    backupState: "valid",
+    writability: "passed",
+    integrityState: "structural",
+    verification: "read-only",
+    entryCount: 12,
+    artworkCount: 12,
+    artworkBytes: 1866240,
+    missingArtworkCount: 0,
+    orphanArtworkCount: 0,
+    artworkSizeMismatchCount: 0,
+    hashMismatchCount: 0,
+    expiredEntryCount: 0,
+    retentionDays: 365,
+    maxItems: 1000,
+    maxBytesMb: 256,
+    checkedAtUtc: now(),
+  };
   const setupStatus = {
     schemaVersion: 1,
     available: true,
@@ -138,9 +162,11 @@
       lan: { state: "passed", summary: "Synthetic Tautulli and direct Plex verification passed." },
       smtp: { state: "passed", summary: "Synthetic SMTP reachability and STARTTLS validation passed." },
       previews: { state: "passed", summary: "Six production-faithful newsletter states are available for review." },
+      cache: { state: "passed", summary: cacheStatus.summary, updatedAtUtc: cacheStatus.checkedAtUtc },
     },
     lastVerification: integration,
     lastSmtpCheck: smtp,
+    cache: cacheStatus,
   };
   const discovery = {
     mode: "synthetic-demo",
@@ -449,7 +475,13 @@
       else if (["PlexWebUrl", "PlexButtonLabel", "ServerLabel", "FooterServerName"].includes(name)) { categories.add("identity"); plan.generatePreviews = true; }
       else if (["FromName", "FromEmail", "ReplyToEmail", "TestEmail"].includes(name)) categories.add("email");
       else if (name.startsWith("Schedule") || name === "ScheduledTaskName") categories.add("schedule");
-      else if (name.startsWith("DeletedItemCache")) categories.add("cache");
+      else if (name.startsWith("DeletedItemCache")) {
+        categories.add("cache");
+        const enabled = "DeletedItemCacheEnabled" in values
+          ? Boolean(values.DeletedItemCacheEnabled)
+          : Boolean(editorFields.find((item) => item.name === "DeletedItemCacheEnabled")?.value);
+        if (enabled) plan.generatePreviews = true;
+      }
       else if (name.startsWith("CustomTextCard")) { categories.add("custom-text-card"); plan.generatePreviews = true; }
       else if (["IncludedLibraryIds", "ExcludedUserIds", "ExcludedEmails"].includes(name)) { categories.add("libraries"); plan.generatePreviews = true; }
       else if (["DaysBack", "RecentAccessDays", "WatchedPercent", "MinimumEpisodeSeconds", "MaxMovies", "MaxTv"].includes(name)) { categories.add("newsletter"); plan.generatePreviews = true; }
@@ -563,6 +595,7 @@
     if (/^\/api\/v1\/config\/secrets\/[^/]+\/reveal$/.test(path)) return json({ name: decodeURIComponent(path.split("/").at(-2)), value: "FICTIONAL-DEMO-VALUE" });
     if (path === "/api/v1/checks/integrations") return json(integration);
     if (path === "/api/v1/checks/smtp-network") return json(smtp);
+    if (path === "/api/v1/checks/deleted-item-cache") return json({ ...cacheStatus, verification: "full", integrityState: "verified", checkedAtUtc: now() });
     if (path === "/api/v1/discovery/tautulli") return json(method === "POST" ? discovery : { last: discovery });
     if (path === "/api/v1/previews") return json({ previews });
     if (path === "/api/v1/operations" && method === "POST") return json(startOperation(body), 202);

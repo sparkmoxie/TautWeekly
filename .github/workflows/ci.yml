@@ -67,7 +67,9 @@ jobs:
         run: ./scripts/test-recipient-watched-movies.ps1
       - name: Test bounded deleted-item cache on PowerShell 7
         shell: pwsh
-        run: ./scripts/test-deleted-item-cache.ps1
+        run: |
+          ./scripts/test-deleted-item-cache.ps1
+          ./scripts/test-cache-diagnostics.ps1
       - name: Test rolling configuration-backup retention on PowerShell 7
         shell: pwsh
         run: ./scripts/test-config-backup-retention.ps1
@@ -103,7 +105,9 @@ jobs:
         run: .\scripts\test-recipient-watched-movies.ps1
       - name: Test bounded deleted-item cache on Windows PowerShell
         shell: powershell
-        run: .\scripts\test-deleted-item-cache.ps1
+        run: |
+          .\scripts\test-deleted-item-cache.ps1
+          .\scripts\test-cache-diagnostics.ps1
       - name: Test rolling configuration-backup retention on Windows PowerShell
         shell: powershell
         run: .\scripts\test-config-backup-retention.ps1

@@ -126,6 +126,11 @@ Disabling the feature stops access but does not erase the existing cache.
 - Hosted recovery cannot reliably reconstruct artwork already discarded by
   Plex/Tautulli. The persistent cache protects future items only after a live
   run captured them; it does not create a retroactive title-matching path.
+- Manager and CLI cache diagnostics return aggregate health, bounds, and counts
+  only. Their write/persistence probes contain no media or account data, and
+  exact-GUID input is hidden and reduced locally to `hit`, `miss`, or `invalid`.
+  They never return paths, titles, identifiers, hashes, artwork, recipients,
+  viewing metrics, tokens, or manifest contents.
 - Hosted artwork returned on a different origin is fetched without the Plex
   token. The token is attached only to Plex server and Plex metadata-provider
   requests.

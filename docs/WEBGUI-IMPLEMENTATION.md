@@ -677,11 +677,13 @@ Group typed controls by Connections, Branding, Sender, Schedule, Newsletter,
 Libraries, Recipients, Cache, and Advanced. Provide search, changed-field
 review, inline validation, backup creation, and rollback.
 
-Keep the four safe setup result cards permanently visible for every valid
-configuration. Update each card as automatic or manual checks complete, retain
-the sanitized results in private Manager state, and show their aggregate state
-as the Dashboard Config status health card. Results from an older configuration
-revision must never update the current summary.
+Keep the four persisted setup results plus the live deleted-item cache result
+permanently visible for every valid configuration. Update each result as
+automatic or manual checks complete, retain only the four revision-scoped
+results in private Manager state, and show all five in the Dashboard Config
+status health card. Cache health is recomputed locally from aggregate state.
+Results from an older configuration revision must never update the current
+summary.
 
 ### 12.5 Diagnostics
 
@@ -936,17 +938,19 @@ pre-restore safety backup. A successful save now consumes a typed backend
 impact plan: Tautulli changes rerun discovery and integration checks, Plex
 changes rerun integration checks, SMTP-card changes rerun only SMTP preflight,
 and identity/newsletter-content/custom-card/library changes regenerate local
-previews. Cache, email, schedule, and delivery-delay-only saves retain all
-applicable results and run no setup check or preview work. Each check remains
+previews. Enabled cache-setting changes also regenerate local previews; cache
+disable, email, schedule, and delivery-delay-only saves retain all applicable
+results and run no setup check or preview work. Each check remains
 manually repeatable under Verify; page load and status refresh never contact
 external services. Local loopback fixtures cover the adapters in automated
 tests and explicit live-LAN acceptance has passed.
-The four sanitized setup results are persisted in private, revision-scoped
-Manager state and are rendered both as permanent Config cards and an aggregate
-Dashboard Config status card. A save safely rebases unaffected sanitized
-results when their relevant inputs are unchanged; a restore resets them to
-not-run. Manual retests update the same record, and late results from an older
-revision are rejected.
+The four sanitized discovery/network/SMTP/preview results are persisted in
+private, revision-scoped Manager state and rendered with the live aggregate
+cache result as permanent Config rows and a Dashboard Config status card. The
+cache result is never added to that evidence file. A save safely rebases
+unaffected sanitized results when their relevant inputs are unchanged; a
+restore resets them to not-run. Manual retests update the same record, and late
+results from an older revision are rejected.
 Guided Tautulli discovery returns only stable numeric IDs, sanitized library
 names, user display names, media types, counts, eligibility enums, and explicit
 owner/administrator roles. Its private local cache is revision-scoped; API keys,

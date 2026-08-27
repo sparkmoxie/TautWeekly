@@ -72,6 +72,7 @@ jobs:
           ./scripts/validate-docs.ps1
           ./scripts/validate-powershell.ps1
           ./scripts/test-deleted-item-cache.ps1
+          ./scripts/test-cache-diagnostics.ps1
           ./scripts/test-config-backup-retention.ps1
           ./scripts/test-renderer-collections.ps1
           ./scripts/test-recipient-watched-movies.ps1

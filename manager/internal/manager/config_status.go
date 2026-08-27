@@ -46,6 +46,7 @@ type ConfigurationStatus struct {
 	Steps            map[string]ConfigurationStatusStep `json:"steps"`
 	LastVerification *IntegrationCheckResult            `json:"lastVerification,omitempty"`
 	LastSMTPCheck    *SMTPNetworkCheckResult            `json:"lastSmtpCheck,omitempty"`
+	Cache            *DeletedItemCacheStatus            `json:"cache,omitempty"`
 }
 
 type configurationStatusStore struct {

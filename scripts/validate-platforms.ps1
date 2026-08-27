@@ -377,6 +377,10 @@ foreach ($relative in @(
         'File\]::Replace',
         'index\.backup\.json',
         'Get-TwDeletedCacheFileSha256 -Path \$source',
+        'Get-TautWeeklyDeletedItemCacheDiagnostics',
+        'Test-TwDeletedCacheWritable',
+        'BackupState',
+        'Deleted-item cache activity:',
         '\$fileName -eq \(\$id \+ "\.jpg"\)'
     )
 }
@@ -391,6 +395,17 @@ foreach ($relative in @(
     }
 }
 Write-Host '[PASS] Deleted-item cache schema and implementation remain identical across renderers.'
+$cacheDiagnosticReference = (Read-RepoFile 'platforms/windows/Cache-Diagnostics.ps1') -replace "`r`n", "`n"
+foreach ($relative in @(
+    'platforms/nas-docker/app/Cache-Diagnostics.ps1',
+    'platforms/mac-docker/app/Cache-Diagnostics.ps1'
+)) {
+    $candidate = (Read-RepoFile $relative) -replace "`r`n", "`n"
+    if ($candidate.TrimEnd() -cne $cacheDiagnosticReference.TrimEnd()) {
+        throw "Cache diagnostic implementation drifted across renderers: $relative"
+    }
+}
+Write-Host '[PASS] Share-safe cache diagnostics remain identical across renderers.'
 foreach ($relative in @(
     'platforms/windows/SETUP-FIRST.ps1',
     'platforms/nas-docker/app/Setup-First.ps1',
@@ -470,6 +485,8 @@ Require-Text 'platforms/nas-docker/tautweekly.sh' @(
     'manager-bootstrap',
     'access-recover',
     'run-script\.sh Verify-Setup\.ps1',
+    'cache-status',
+    'Cache-Diagnostics\.ps1',
     'run-as-user\.sh bash'
 )
 Require-Text 'platforms/nas-docker/app/bin/run-as-user.sh' @(
@@ -481,6 +498,7 @@ Require-Text 'platforms/nas-docker/app/bin/run-as-user.sh' @(
 Require-Text 'platforms/nas-docker/app/bin/run-script.sh' @(
     'Verify-Setup\.ps1',
     'Schedule-Control\.ps1',
+    'Cache-Diagnostics\.ps1',
     'Unsupported TautWeekly helper script',
     'run-as-user\.sh'
 )
@@ -667,6 +685,8 @@ Require-Text 'platforms/mac-docker/tautweekly.sh' @(
     'manager-reset-access',
     'access-recover',
     'open-manager',
+    'cache-status',
+    'Cache-Diagnostics\.ps1',
     'package-update\.sh'
 )
 Require-Text 'platforms/shared/package-update.sh' @(
@@ -740,6 +760,7 @@ Require-Text 'platforms/windows/START-MANAGER.ps1' @(
 Require-Text 'platforms/windows/00-OPEN-MANAGER.bat' @('START-MANAGER\.ps1', 'NoProfile', 'NonInteractive')
 Require-Text 'platforms/windows/RESET-MANAGER-ACCESS.ps1' @('access-reset', 'Manager access', 'START-MANAGER\.ps1')
 Require-Text 'platforms/windows/18-RESET-MANAGER-ACCESS.bat' @('RESET-MANAGER-ACCESS\.ps1', 'NoProfile')
+Require-Text 'platforms/windows/19-CACHE-DIAGNOSTICS.bat' @('Cache-Diagnostics\.ps1', 'NoProfile')
 Require-Text 'platforms/windows/Operation-Lock.ps1' @(
     '\.tautweekly-operation\.lock',
     'FileShare\]::None',
@@ -757,8 +778,8 @@ foreach ($relative in @(
     Require-Text $relative @('check', 'stable', 'rollback|restore')
 }
 
-Require-Text 'platforms/linux/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1')
-Require-Text 'platforms/freebsd-podman/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1')
+Require-Text 'platforms/linux/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1', 'cache-status', 'Cache-Diagnostics\.ps1')
+Require-Text 'platforms/freebsd-podman/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1', 'cache-status', 'Cache-Diagnostics\.ps1')
 
 foreach ($relative in @(
     'platforms/windows/Library-Selection.ps1',

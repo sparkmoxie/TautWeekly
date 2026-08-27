@@ -404,6 +404,15 @@ func classifyConfigPostSave(current, next map[string]any, existed bool) ConfigPo
 			category["schedule"] = true
 		case strings.HasPrefix(name, "DeletedItemCache"):
 			category["cache"] = true
+			cacheEnabled := true
+			if value, exists := next["DeletedItemCacheEnabled"]; exists {
+				if parsed, ok := value.(bool); ok {
+					cacheEnabled = parsed
+				}
+			}
+			if cacheEnabled {
+				plan.GeneratePreviews = true
+			}
 		case strings.HasPrefix(name, "CustomTextCard"):
 			category["custom-text-card"] = true
 			plan.GeneratePreviews = true

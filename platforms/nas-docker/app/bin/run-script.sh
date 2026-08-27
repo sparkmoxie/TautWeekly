@@ -7,7 +7,7 @@ script_name="${1:-}"
 shift || true
 
 case "$script_name" in
-  Setup-First.ps1|Verify-Setup.ps1|Manage-Library-Selection.ps1|Manage-User-Exclusions.ps1|View-Access-Roster.ps1|Repair-Assets.ps1|Schedule-Control.ps1) ;;
+  Setup-First.ps1|Verify-Setup.ps1|Manage-Library-Selection.ps1|Manage-User-Exclusions.ps1|View-Access-Roster.ps1|Repair-Assets.ps1|Schedule-Control.ps1|Cache-Diagnostics.ps1) ;;
   *)
     echo "Unsupported TautWeekly helper script: ${script_name:-<missing>}" >&2
     exit 64

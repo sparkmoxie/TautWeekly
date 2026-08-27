@@ -15,6 +15,18 @@ $script:TwDeletedCacheRetentionDays = 365
 $script:TwDeletedCacheMaxItems = 1000
 $script:TwDeletedCacheMaxBytes = [int64](256MB)
 $script:TwDeletedCacheHitIds = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+$script:TwDeletedCacheSeenHitIds = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+$script:TwDeletedCacheSeenMissIds = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+$script:TwDeletedCacheManifestState = "not-initialized"
+$script:TwDeletedCacheWritability = "not-checked"
+$script:TwDeletedCacheCaptureAccepted = 0
+$script:TwDeletedCacheCaptureSkippedMetadata = 0
+$script:TwDeletedCacheCaptureSkippedPoster = 0
+$script:TwDeletedCacheCaptureRejectedGuid = 0
+$script:TwDeletedCacheCaptureRejectedArtwork = 0
+$script:TwDeletedCacheCaptureWriteFailed = 0
+$script:TwDeletedCacheInvalidLookups = 0
+$script:TwDeletedCacheActivityWritten = $false
 
 function Write-TwDeletedCacheLog {
     param([string]$Message, [string]$Level = "INFO")
@@ -24,6 +36,52 @@ function Write-TwDeletedCacheLog {
     else {
         Write-Warning $Message
     }
+}
+
+function Test-TwDeletedCacheWritable {
+    $probePath = Join-Path $script:TwDeletedCacheRoot (".cache-write-probe." + [Guid]::NewGuid().ToString("N") + ".tmp")
+    $stream = $null
+    try {
+        $bytes = [Text.Encoding]::UTF8.GetBytes("tautweekly-cache-write-probe`n")
+        $stream = New-Object IO.FileStream($probePath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        $stream.Write($bytes, 0, $bytes.Length)
+        try { $stream.Flush($true) } catch { $stream.Flush() }
+        $stream.Dispose()
+        $stream = $null
+        Remove-Item -LiteralPath $probePath -Force
+        return $true
+    }
+    catch { return $false }
+    finally {
+        if ($null -ne $stream) { $stream.Dispose() }
+        Remove-Item -LiteralPath $probePath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Register-TautWeeklyDeletedItemCacheCaptureSkip {
+    param([ValidateSet("metadata","poster")][string]$Reason)
+    if ($Reason -eq "metadata") { $script:TwDeletedCacheCaptureSkippedMetadata++ }
+    else { $script:TwDeletedCacheCaptureSkippedPoster++ }
+}
+
+function Write-TautWeeklyDeletedItemCacheActivitySummary {
+    if ($script:TwDeletedCacheActivityWritten) { return }
+    $script:TwDeletedCacheActivityWritten = $true
+    $itemCount = if ($script:TwDeletedCacheEnabled -and $script:TwDeletedCacheAvailable) { @((Get-TwDeletedCacheIndex).Entries).Count } else { 0 }
+    Write-TwDeletedCacheLog ("Deleted-item cache activity: enabled={0}; available={1}; manifest={2}; entries={3}; captures={4}; skipped-metadata={5}; skipped-poster={6}; rejected-guid={7}; rejected-artwork={8}; write-failures={9}; exact-hits={10}; exact-misses={11}; invalid-lookups={12}." -f `
+        $script:TwDeletedCacheEnabled.ToString().ToLowerInvariant(),
+        $script:TwDeletedCacheAvailable.ToString().ToLowerInvariant(),
+        $script:TwDeletedCacheManifestState,
+        $itemCount,
+        $script:TwDeletedCacheCaptureAccepted,
+        $script:TwDeletedCacheCaptureSkippedMetadata,
+        $script:TwDeletedCacheCaptureSkippedPoster,
+        $script:TwDeletedCacheCaptureRejectedGuid,
+        $script:TwDeletedCacheCaptureRejectedArtwork,
+        $script:TwDeletedCacheCaptureWriteFailed,
+        $script:TwDeletedCacheSeenHitIds.Count,
+        $script:TwDeletedCacheSeenMissIds.Count,
+        $script:TwDeletedCacheInvalidLookups)
 }
 
 function Get-TwDeletedCacheFileSha256 {
@@ -185,6 +243,7 @@ function Get-TwDeletedCacheIndex {
         if (Test-Path -LiteralPath $script:TwDeletedCacheIndexPath) {
             try {
                 $script:TwDeletedCacheIndex = Read-TwDeletedCacheIndexFile $script:TwDeletedCacheIndexPath
+                $script:TwDeletedCacheManifestState = "primary-valid"
                 return $script:TwDeletedCacheIndex
             }
             catch {
@@ -192,6 +251,7 @@ function Get-TwDeletedCacheIndex {
                     try {
                         $backupIndex = Read-TwDeletedCacheIndexFile $script:TwDeletedCacheBackupPath
                         $script:TwDeletedCacheIndex = Restore-TwDeletedCacheBackup $backupIndex
+                        $script:TwDeletedCacheManifestState = "backup-recovered"
                         return $script:TwDeletedCacheIndex
                     }
                     catch { }
@@ -200,13 +260,19 @@ function Get-TwDeletedCacheIndex {
                 Move-TwDeletedCacheCorruptManifest
                 Remove-Item -LiteralPath $script:TwDeletedCacheBackupPath -Force -ErrorAction SilentlyContinue
                 Write-TwDeletedCacheLog "The deleted-item cache manifest and backup were unreadable; retained one bounded corrupt copy when small enough and started an empty cache." "WARN"
+                $script:TwDeletedCacheManifestState = "reset-after-corruption"
             }
         }
         $script:TwDeletedCacheIndex = New-TwDeletedCacheIndex
+        if ($script:TwDeletedCacheManifestState -eq "not-initialized") {
+            $script:TwDeletedCacheManifestState = "unseeded"
+        }
         return $script:TwDeletedCacheIndex
     }
     catch {
         $script:TwDeletedCacheAvailable = $false
+        $script:TwDeletedCacheManifestState = "unavailable"
+        $script:TwDeletedCacheWritability = "failed"
         Write-TwDeletedCacheLog "Deleted-item cache reads are unavailable for this run: $($_.Exception.Message)" "WARN"
         $script:TwDeletedCacheIndex = New-TwDeletedCacheIndex
         return $script:TwDeletedCacheIndex
@@ -349,8 +415,24 @@ function Initialize-TautWeeklyDeletedItemCache {
     $script:TwDeletedCacheBackupPath = Join-Path $script:TwDeletedCacheRoot "index.backup.json"
     $script:TwDeletedCacheIndex = $null
     $script:TwDeletedCacheHitIds.Clear()
+    $script:TwDeletedCacheSeenHitIds.Clear()
+    $script:TwDeletedCacheSeenMissIds.Clear()
+    $script:TwDeletedCacheManifestState = "not-initialized"
+    $script:TwDeletedCacheWritability = "not-checked"
+    $script:TwDeletedCacheCaptureAccepted = 0
+    $script:TwDeletedCacheCaptureSkippedMetadata = 0
+    $script:TwDeletedCacheCaptureSkippedPoster = 0
+    $script:TwDeletedCacheCaptureRejectedGuid = 0
+    $script:TwDeletedCacheCaptureRejectedArtwork = 0
+    $script:TwDeletedCacheCaptureWriteFailed = 0
+    $script:TwDeletedCacheInvalidLookups = 0
+    $script:TwDeletedCacheActivityWritten = $false
     $script:TwDeletedCacheAvailable = $script:TwDeletedCacheEnabled
-    if (-not $script:TwDeletedCacheEnabled) { return }
+    if (-not $script:TwDeletedCacheEnabled) {
+        $script:TwDeletedCacheManifestState = "disabled"
+        $script:TwDeletedCacheWritability = "not-applicable"
+        return
+    }
 
     try {
         New-Item -ItemType Directory -Force -Path $script:TwDeletedCacheAssetRoot | Out-Null
@@ -358,11 +440,17 @@ function Initialize-TautWeeklyDeletedItemCache {
             -not (Test-Path -LiteralPath $script:TwDeletedCacheAssetRoot -PathType Container)) {
             throw "The deleted-item cache path is not a writable directory."
         }
+        if (-not (Test-TwDeletedCacheWritable)) {
+            throw "The deleted-item cache directory did not pass its local write probe."
+        }
+        $script:TwDeletedCacheWritability = "passed"
         [void](Get-TwDeletedCacheIndex)
         Invoke-TwDeletedCacheCleanup
     }
     catch {
         $script:TwDeletedCacheAvailable = $false
+        $script:TwDeletedCacheWritability = "failed"
+        $script:TwDeletedCacheManifestState = "unavailable"
         Write-TwDeletedCacheLog "Deleted-item cache initialization failed; newsletter rendering will continue: $($_.Exception.Message)" "WARN"
     }
 }
@@ -374,6 +462,8 @@ function Get-TautWeeklyDeletedItemCacheStatus {
         Available     = $script:TwDeletedCacheAvailable
         SchemaVersion = $script:TwDeletedCacheSchemaVersion
         Root          = $script:TwDeletedCacheRoot
+        ManifestState = $script:TwDeletedCacheManifestState
+        Writability   = $script:TwDeletedCacheWritability
         RetentionDays = $script:TwDeletedCacheRetentionDays
         MaxItems      = $script:TwDeletedCacheMaxItems
         MaxBytes      = $script:TwDeletedCacheMaxBytes
@@ -381,17 +471,102 @@ function Get-TautWeeklyDeletedItemCacheStatus {
     }
 }
 
+function Get-TautWeeklyDeletedItemCacheDiagnostics {
+    param([switch]$VerifyArtworkHashes)
+
+    $index = Get-TwDeletedCacheIndex
+    $backupState = if (-not $script:TwDeletedCacheEnabled) { "not-applicable" } elseif (-not $script:TwDeletedCacheAvailable) { "unavailable" } else { "missing" }
+    if ($script:TwDeletedCacheEnabled -and $script:TwDeletedCacheAvailable -and (Test-Path -LiteralPath $script:TwDeletedCacheBackupPath -PathType Leaf)) {
+        try {
+            [void](Read-TwDeletedCacheIndexFile -Path $script:TwDeletedCacheBackupPath)
+            $backupState = "valid"
+        }
+        catch { $backupState = "invalid" }
+    }
+    if ($script:TwDeletedCacheManifestState -eq "unseeded" -and $backupState -eq "valid") {
+        $backupState = "stale-ignored"
+    }
+    $integrityState = if (-not $script:TwDeletedCacheEnabled) { "not-applicable" } elseif (-not $script:TwDeletedCacheAvailable) { "unavailable" } elseif ($VerifyArtworkHashes) { "hash-verified" } else { "structural" }
+    $referenced = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    [int64]$artworkBytes = 0
+    [int]$missing = 0
+    [int]$orphaned = 0
+    [int]$sizeMismatch = 0
+    [int]$hashMismatch = 0
+    [int]$expired = 0
+    $cutoff = [DateTime]::UtcNow.AddDays(-$script:TwDeletedCacheRetentionDays)
+
+    foreach ($entry in @($index.Entries)) {
+        $fileName = if ($null -ne $entry.PSObject.Properties["Poster"]) { Get-OptionalStringProperty $entry.Poster "FileName" } else { "" }
+        if (-not [string]::IsNullOrWhiteSpace($fileName)) { [void]$referenced.Add($fileName) }
+        $assetPath = if (-not [string]::IsNullOrWhiteSpace($fileName)) { Join-Path $script:TwDeletedCacheAssetRoot $fileName } else { "" }
+        if ([string]::IsNullOrWhiteSpace($assetPath) -or -not (Test-Path -LiteralPath $assetPath -PathType Leaf)) {
+            $missing++
+        }
+        else {
+            $asset = Get-Item -LiteralPath $assetPath
+            if ([int64](Safe-Int64 (Get-OptionalStringProperty $entry.Poster "Bytes")) -ne [int64]$asset.Length) { $sizeMismatch++ }
+            if ($VerifyArtworkHashes) {
+                try {
+                    if ((Get-TwDeletedCacheFileSha256 -Path $assetPath) -ne (Get-OptionalStringProperty $entry.Poster "Sha256").ToLowerInvariant()) { $hashMismatch++ }
+                }
+                catch { $hashMismatch++ }
+            }
+        }
+        if ((Get-TwDeletedCacheEntryDate $entry) -lt $cutoff) { $expired++ }
+    }
+
+    $assets = @(
+        if (Test-Path -LiteralPath $script:TwDeletedCacheAssetRoot -PathType Container) {
+            Get-ChildItem -LiteralPath $script:TwDeletedCacheAssetRoot -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -match '^[0-9a-f]{64}\.jpg$' }
+        }
+    )
+    foreach ($asset in $assets) {
+        $artworkBytes += [int64]$asset.Length
+        if (-not $referenced.Contains($asset.Name)) { $orphaned++ }
+    }
+
+    return [PSCustomObject]@{
+        SchemaVersion            = 1
+        Enabled                  = $script:TwDeletedCacheEnabled
+        Available                = $script:TwDeletedCacheAvailable
+        ManifestState            = $script:TwDeletedCacheManifestState
+        BackupState              = $backupState
+        Writability              = $script:TwDeletedCacheWritability
+        Integrity                = $integrityState
+        RetentionDays            = $script:TwDeletedCacheRetentionDays
+        MaxItems                 = $script:TwDeletedCacheMaxItems
+        MaxBytes                 = $script:TwDeletedCacheMaxBytes
+        ItemCount                = @($index.Entries).Count
+        ArtworkCount             = $assets.Count
+        ArtworkBytes             = $artworkBytes
+        MissingArtworkCount      = $missing
+        OrphanArtworkCount       = $orphaned
+        ArtworkSizeMismatchCount = $sizeMismatch
+        HashMismatchCount        = $hashMismatch
+        ExpiredEntryCount        = $expired
+    }
+}
+
 function Get-TautWeeklyDeletedItemCacheEntry {
     param([string]$MediaType, [string]$MetadataGuid, [switch]$LogHit)
     if (-not $script:TwDeletedCacheEnabled -or -not $script:TwDeletedCacheAvailable) { return $null }
     $id = Get-TwDeletedCacheId $MediaType $MetadataGuid
-    if ([string]::IsNullOrWhiteSpace($id)) { return $null }
+    if ([string]::IsNullOrWhiteSpace($id)) {
+        $script:TwDeletedCacheInvalidLookups++
+        return $null
+    }
     $entry = @((Get-TwDeletedCacheIndex).Entries | Where-Object {
         (Get-OptionalStringProperty $_ "Id") -eq $id -and
         (Get-OptionalStringProperty $_ "Guid") -eq (Get-TwDeletedCacheStableGuid $MetadataGuid) -and
         (Get-OptionalStringProperty $_ "MediaType") -eq $MediaType
     } | Select-Object -First 1)
-    if ($entry.Count -eq 0) { return $null }
+    if ($entry.Count -eq 0) {
+        [void]$script:TwDeletedCacheSeenMissIds.Add($id)
+        return $null
+    }
+    [void]$script:TwDeletedCacheSeenHitIds.Add($id)
     if ($LogHit -and $script:TwDeletedCacheHitIds.Add($id)) {
         Write-TwDeletedCacheLog "Deleted-item cache hit for an exact $MediaType GUID; using stored presentation metadata or artwork."
     }
@@ -441,18 +616,27 @@ function ConvertTo-TwDeletedCacheText {
 
 function Update-TautWeeklyDeletedItemCache {
     param([object]$Item, [string]$PosterPath)
-    if (-not $script:TwDeletedCacheEnabled -or -not $script:TwDeletedCacheAvailable -or
-        $null -eq $Item -or -not (Test-Path -LiteralPath $PosterPath)) { return $false }
+    if (-not $script:TwDeletedCacheEnabled -or -not $script:TwDeletedCacheAvailable) { return $false }
+    if ($null -eq $Item -or -not (Test-Path -LiteralPath $PosterPath)) {
+        $script:TwDeletedCacheCaptureRejectedArtwork++
+        return $false
+    }
 
     $mediaType = if ((Get-OptionalStringProperty $Item "Type") -eq "show") { "show" } else { "movie" }
     $guid = Get-TwDeletedCacheStableGuid (Get-OptionalStringProperty $Item "MetadataGuid")
     $id = Get-TwDeletedCacheId $mediaType $guid
-    if ([string]::IsNullOrWhiteSpace($id)) { return $false }
+    if ([string]::IsNullOrWhiteSpace($id)) {
+        $script:TwDeletedCacheCaptureRejectedGuid++
+        return $false
+    }
 
     $assetTemp = ""
     try {
         $posterInfo = Get-Item -LiteralPath $PosterPath
-        if ($posterInfo.Length -le 512 -or $posterInfo.Length -gt $script:TwDeletedCacheMaxBytes) { return $false }
+        if ($posterInfo.Length -le 512 -or $posterInfo.Length -gt $script:TwDeletedCacheMaxBytes) {
+            $script:TwDeletedCacheCaptureRejectedArtwork++
+            return $false
+        }
         $assetName = $id + ".jpg"
         $assetPath = Join-Path $script:TwDeletedCacheAssetRoot $assetName
         $posterHash = Get-TwDeletedCacheFileSha256 -Path $PosterPath
@@ -501,11 +685,16 @@ function Update-TautWeeklyDeletedItemCache {
             LastSeenUtc = $now
         }
         $index.Entries = @($index.Entries | Where-Object { (Get-OptionalStringProperty $_ "Id") -ne $id }) + @($entry)
-        if (-not (Save-TwDeletedCacheIndex)) { return $false }
+        if (-not (Save-TwDeletedCacheIndex)) {
+            $script:TwDeletedCacheCaptureWriteFailed++
+            return $false
+        }
         Invoke-TwDeletedCacheCleanup
+        $script:TwDeletedCacheCaptureAccepted++
         return $true
     }
     catch {
+        $script:TwDeletedCacheCaptureWriteFailed++
         Write-TwDeletedCacheLog "A live item could not be added to the deleted-item cache; rendering will continue: $($_.Exception.Message)" "WARN"
         return $false
     }

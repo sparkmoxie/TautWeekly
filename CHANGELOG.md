@@ -6,6 +6,36 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-08-27
+
+### Changed
+
+- Added a privacy-safe deleted-item cache row to Manager Config status and an
+  on-demand Verify check for configuration, initialization, manifest/backup
+  health, writability, bounds, aggregate entry/artwork counts, expiry, and
+  artwork hashes without returning media identifiers or private file data.
+- Added `cache-status` launchers across Windows, Docker, native Linux, and
+  FreeBSD with hidden exact-GUID hit/miss checks and a non-sensitive
+  restart-persistence marker.
+
+- Enabled cache-setting saves now start the existing no-email PreviewAll
+  workflow when Manager has an unambiguous owner/administrator, making the
+  required render-triggered warm-up visible while preserving manual fallback.
+- Cache initialization now proves local writability, records bounded recovery
+  state, and emits one aggregate capture/skip/hit/miss summary per render.
+
+### Fixed
+
+- Clarified that enabling the cache is not a whole-library or retroactive
+  snapshot. Only qualifying items selected by a render while still live can be
+  restored after deletion.
+
+### Security
+
+- Cache diagnostic responses and commands expose no paths, titles, GUIDs,
+  rating keys, hashes, artwork, viewing metrics, recipients, credentials, or
+  cache contents.
+
 ## [0.23.0] - 2026-08-26
 
 ### Added

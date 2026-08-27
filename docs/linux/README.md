@@ -152,6 +152,7 @@ sudo tautweekly list-libraries
 sudo tautweekly manage-libraries
 sudo tautweekly preview-all USER_ID
 sudo tautweekly send-test-all USER_ID
+sudo tautweekly cache-status
 sudo tautweekly schedule-status
 ```
 
@@ -245,6 +246,7 @@ sudo tautweekly remote-access-revoke   revoke it after disabling private access
 tautweekly remote-access-status        inspect adapter authorization
 sudo tautweekly setup                 create or replace private configuration
 sudo tautweekly verify                validate files, API, SMTP, and schedule
+sudo tautweekly cache-status          report share-safe deleted-item cache health
 sudo tautweekly list-users            inspect Tautulli recipients
 sudo tautweekly exclude-users         revise stable user exclusions
 sudo tautweekly list-libraries         inspect the global movie/TV scope

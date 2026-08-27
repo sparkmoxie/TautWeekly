@@ -113,6 +113,10 @@ type skipConfigurationPreviewsRequest struct {
 	Reason           string `json:"reason"`
 }
 
+type cacheVerificationRequest struct {
+	ExpectedRevision string `json:"expectedRevision"`
+}
+
 type apiError struct {
 	Error struct {
 		Code    string            `json:"code"`
@@ -259,6 +263,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/checks/integrations", s.protected(s.handleIntegrationCheckState, false))
 	mux.HandleFunc("POST /api/v1/checks/integrations", s.protected(s.handleRunIntegrationCheck, true))
 	mux.HandleFunc("POST /api/v1/checks/smtp-network", s.protected(s.handleRunSMTPNetworkCheck, true))
+	mux.HandleFunc("POST /api/v1/checks/deleted-item-cache", s.protected(s.handleRunDeletedItemCacheCheck, true))
 	mux.HandleFunc("GET /api/v1/discovery/tautulli", s.protected(s.handleTautulliDiscoveryState, false))
 	mux.HandleFunc("POST /api/v1/discovery/tautulli", s.protected(s.handleTautulliDiscovery, true))
 	mux.HandleFunc("POST /api/v1/operations", s.protected(s.handleCreateOperation, true))
@@ -656,7 +661,36 @@ func (s *Server) handleConfigurationStatus(w http.ResponseWriter, _ *http.Reques
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, s.configuration.Load(editor.Revision))
+	writeJSON(w, http.StatusOK, s.configurationStatusWithCache(editor.Revision))
+}
+
+func (s *Server) configurationStatusWithCache(revision string) ConfigurationStatus {
+	status := s.configuration.Load(revision)
+	cache := collectDeletedItemCacheStatus(s.options.RuntimeRoot, false, false, s.options.Now)
+	status.Cache = &cache
+	status.Steps["cache"] = cache.configurationStep()
+	return status
+}
+
+func (s *Server) handleRunDeletedItemCacheCheck(w http.ResponseWriter, r *http.Request) {
+	var request cacheVerificationRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid-request", "Deleted-item cache verification request is invalid.")
+		return
+	}
+	if !s.verificationRunMu.TryLock() {
+		writeAPIError(w, http.StatusConflict, "verification-running", "Another configuration verification is already running.")
+		return
+	}
+	defer s.verificationRunMu.Unlock()
+	editor := ReadConfigEditor(s.options.RuntimeRoot)
+	if editor.State != "ready" || request.ExpectedRevision != editor.Revision {
+		writeAPIError(w, http.StatusConflict, "config-conflict", "Configuration changed before the deleted-item cache check could run.")
+		return
+	}
+	status := collectDeletedItemCacheStatus(s.options.RuntimeRoot, true, true, s.options.Now)
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, status)
 }
 
 func (s *Server) handleSkipConfigurationPreviews(w http.ResponseWriter, r *http.Request) {
@@ -687,7 +721,7 @@ func (s *Server) handleSkipConfigurationPreviews(w http.ResponseWriter, r *http.
 		return
 	}
 	s.updateConfigurationStep(request.ExpectedRevision, "previews", "skipped", summary)
-	writeJSON(w, http.StatusOK, s.configuration.Load(request.ExpectedRevision))
+	writeJSON(w, http.StatusOK, s.configurationStatusWithCache(request.ExpectedRevision))
 }
 
 func (s *Server) updateConfigurationStep(revision, name, state, summary string) {

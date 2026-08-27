@@ -144,6 +144,21 @@ available. Later lookups require the same normalized stable GUID and media
 type. Rating keys and titles are not fallback identities, so already-deleted
 history with a missing or ambiguous identifier fails closed.
 
+Enabling the setting does not take a whole-library snapshot and does not scan
+Plex in the background. Capture happens only when Preview, PreviewAll,
+SendTest, SendTestAll, a scheduled delivery, or a confirmed manual delivery
+selects a current item for rendering while both its live metadata and usable
+poster are still available. Validation alone does not capture anything.
+
+In Manager, changing enabled cache settings and choosing **Validate, save, and
+verify** now schedules the existing no-email PreviewAll workflow when one
+unambiguous owner or administrator is available. That warms only qualifying
+items selected by those six preview states; it is not a library crawl. If
+choice discovery fails, no unambiguous preview user is available, or another
+operation is active, Manager records the skip and the administrator must run
+PreviewAll manually. Direct edits to `config.json` likewise require a later
+render before any entries can exist.
+
 Cleanup runs at initialization and after writes. Expired entries are removed,
 then the newest entries are retained deterministically until the item and total
 byte limits are satisfied. `index.json` is replaced atomically on the same
@@ -151,6 +166,14 @@ volume and `index.backup.json` holds the previous valid generation. A corrupt
 primary recovers from that backup; if neither generation is valid, one corrupt
 copy is retained when practical and the cache starts empty. Poster hash failures
 remove the damaged entry and rendering continues without it.
+
+Manager Dashboard **Config status** includes a privacy-safe **Deleted-item
+cache** row. **Verify → Check deleted-item cache** performs a fixed-content
+local write probe and hashes cached artwork. Both surfaces expose only health
+states, bounds, and aggregate counts. They never expose paths, titles, GUIDs,
+rating keys, hashes, artwork, viewing metrics, recipients, credentials, or
+manifest contents. An `unseeded` result means the cache is enabled but no
+qualifying live render has written an entry; it is not evidence of a cache hit.
 
 Existing configurations migrate safely because missing keys use the defaults
 without rewriting `config.json`; setup preserves explicit values on

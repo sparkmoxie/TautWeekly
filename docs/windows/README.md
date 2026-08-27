@@ -253,7 +253,8 @@ save, and verification. See the
 ### Validate, save, and verify
 
 Select **Validate, save, and verify** after reviewing the form. One safe,
-non-sending operation updates four persistent Config status cards:
+non-sending operation updates four persistent setup results plus a fifth live
+cache-health result:
 
 1. **Libraries and users** loads active movie/TV libraries plus sanitized user
    IDs, display names, and roles from Tautulli. It does not retain email
@@ -265,12 +266,19 @@ non-sending operation updates four persistent Config status cards:
    message.
 4. **Local previews** prepares the six newsletter states when one unambiguous
    owner or administrator ID and the required metadata are available.
+5. **Deleted-item cache** reports disabled, unseeded, healthy, recoverable, or
+   failed local cache state using aggregate counts only. If enabled cache
+   settings changed, the local PreviewAll above is also the bounded warm-up.
 
-The four cards persist across browser refreshes and Manager restarts for the
-current saved configuration. The Dashboard summarizes them in **Config
-status**. A later validation replaces the recorded results. Each check also
-remains available for an explicit manual retest under **Config**, **Verify**, or
-**Previews**.
+The first four results persist across browser refreshes and Manager restarts for
+the current saved configuration. Cache health is recomputed locally whenever
+Config status is loaded. The Dashboard summarizes all five under **Config
+status**. Each check remains available for an explicit manual retest under
+**Config**, **Verify**, or **Previews**.
+
+Use `19-CACHE-DIAGNOSTICS.bat` for the same share-safe aggregate cache summary,
+including optional artwork hashes, hidden exact-GUID hit/miss probing, and a
+restart-persistence marker. See the [cache troubleshooting commands](../TROUBLESHOOTING.md#deleted-item-still-has-no-poster-or-metadata).
 
 After discovery, select the libraries included in newsletter calculations and
 the users excluded from production delivery, then save. These selections remain
