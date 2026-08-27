@@ -44,8 +44,7 @@ function Get-PersistenceProbeState {
     try {
         if ((Get-Item -LiteralPath $Path).Length -gt 4KB) { return "invalid" }
         $probe = (Get-Content -LiteralPath $Path -Raw -Encoding UTF8).Trim()
-        if ($probe -notmatch '^tautweekly-cache-persistence-v1:([0-9]{1,20}):([0-9a-f]{32})$' -or
-            (Safe-Int64 $Matches[1]) -lt 1) {
+        if (-not [string]::Equals($probe, "tautweekly-cache-persistence-v1", [StringComparison]::Ordinal)) {
             return "invalid"
         }
         return "preserved"
@@ -96,8 +95,7 @@ switch ($Action) {
         if ($script:TwDeletedCacheEnabled -and $script:TwDeletedCacheAvailable) {
             $temporaryPath = Join-Path $cacheRoot (".persistence-probe." + [Guid]::NewGuid().ToString("N") + ".tmp")
             try {
-                $probe = "tautweekly-cache-persistence-v1:{0}:{1}" -f [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(), [Guid]::NewGuid().ToString("N")
-                [IO.File]::WriteAllText($temporaryPath, ($probe + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
+                [IO.File]::WriteAllText($temporaryPath, ("tautweekly-cache-persistence-v1" + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
                 Move-Item -LiteralPath $temporaryPath -Destination $probePath -Force
                 $persistenceState = "created"
             }
