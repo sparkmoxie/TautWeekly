@@ -52,12 +52,17 @@ try {
 
     $set = (Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','SetPersistenceProbe')) -join "`n"
     Assert-True $set.Contains('PersistenceProbe: created') 'Persistence probe was not created.'
+    $probePath = Join-Path $testRoot 'cache/deleted-items/.persistence-probe'
+    $probeExists = Test-Path -LiteralPath $probePath -PathType Leaf
+    $probeLengthValid = $probeExists -and (Get-Item -LiteralPath $probePath).Length -le 4KB
+    $probeContentValid = $probeExists -and [string]::Equals((Get-Content -LiteralPath $probePath -Raw -Encoding UTF8).Trim(), 'tautweekly-cache-persistence-v1', [StringComparison]::Ordinal)
+    Assert-True ($probeExists -and $probeLengthValid -and $probeContentValid) "Synthetic persistence marker shape was invalid (exists=$probeExists; lengthValid=$probeLengthValid; contentValid=$probeContentValid)."
     $verify = (Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','VerifyPersistenceProbe','-VerifyArtworkHashes')) -join "`n"
     Assert-True $verify.Contains('PersistenceProbe: preserved') "Persistence verification did not report its safe state. Share-safe output: $verify"
     Assert-True $verify.Contains('Integrity: hash-verified') "Artwork hash verification did not report its safe state. Share-safe output: $verify"
     $clear = (Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','ClearPersistenceProbe')) -join "`n"
     Assert-True $clear.Contains('PersistenceProbe: cleared') 'Persistence probe was not cleared.'
-    Set-Content -LiteralPath (Join-Path $testRoot 'cache/deleted-items/.persistence-probe') -Value 'invalid-synthetic-marker' -Encoding UTF8
+    Set-Content -LiteralPath $probePath -Value 'invalid-synthetic-marker' -Encoding UTF8
     $corruptProbe = (Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','VerifyPersistenceProbe')) -join "`n"
     Assert-True $corruptProbe.Contains('PersistenceProbe: invalid') 'A corrupt persistence probe did not fail closed.'
     Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','ClearPersistenceProbe') | Out-Null
