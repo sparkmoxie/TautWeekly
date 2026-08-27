@@ -53,7 +53,8 @@ try {
     $set = (Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','SetPersistenceProbe')) -join "`n"
     Assert-True $set.Contains('PersistenceProbe: created') 'Persistence probe was not created.'
     $verify = (Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','VerifyPersistenceProbe','-VerifyArtworkHashes')) -join "`n"
-    Assert-True ($verify.Contains('PersistenceProbe: preserved') -and $verify.Contains('Integrity: hash-verified')) 'Persistence or hash verification did not report its safe state.'
+    Assert-True $verify.Contains('PersistenceProbe: preserved') "Persistence verification did not report its safe state. Share-safe output: $verify"
+    Assert-True $verify.Contains('Integrity: hash-verified') "Artwork hash verification did not report its safe state. Share-safe output: $verify"
     $clear = (Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','ClearPersistenceProbe')) -join "`n"
     Assert-True $clear.Contains('PersistenceProbe: cleared') 'Persistence probe was not cleared.'
 
