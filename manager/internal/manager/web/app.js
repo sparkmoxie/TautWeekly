@@ -531,7 +531,9 @@ function setupWorkflowPresentation(workflow = state.setupWorkflow) {
         : "Safe setup checks have not been recorded for this configuration.",
     };
   }
-  const steps = setupWorkflowSteps.map((name) => workflow.steps?.[name]).filter(Boolean);
+  const cacheDisabled = state.cache?.enabled === false && workflow.steps?.cache?.state === "skipped";
+  const applicableStepNames = cacheDisabled ? setupWorkflowSteps.filter((name) => name !== "cache") : setupWorkflowSteps;
+  const steps = applicableStepNames.map((name) => workflow.steps?.[name]).filter(Boolean);
   const states = steps.map((step) => step.state);
   const active = state.setupWorkflowRunning || states.includes("running");
   if (active) return { label: "Running", tone: "pending", summary: "Safe setup checks are running and each result is retained as it completes." };
@@ -539,7 +541,15 @@ function setupWorkflowPresentation(workflow = state.setupWorkflow) {
   if (states.every((stepState) => stepState === "not-run")) return { label: "Not run", tone: "neutral", summary: "Validate and save to run the five safe setup checks." };
   if (states.includes("waiting")) return { label: "Pending", tone: "pending", summary: "One or more setup checks are waiting to run for this configuration." };
   if (states.some((stepState) => ["warning", "skipped"].includes(stepState))) return { label: "Completed with notes", tone: "neutral", summary: "The saved configuration was checked; review the noted result before live delivery." };
-  if (states.length === setupWorkflowSteps.length && states.every((stepState) => stepState === "passed")) return { label: "Passed", tone: "good", summary: "All five safe setup checks passed for the saved configuration." };
+  if (states.length === applicableStepNames.length && states.every((stepState) => stepState === "passed")) {
+    return {
+      label: "Passed",
+      tone: "good",
+      summary: cacheDisabled
+        ? "All four applicable safe setup checks passed; the deleted-item cache is disabled."
+        : "All five safe setup checks passed for the saved configuration.",
+    };
+  }
   return { label: "Incomplete", tone: "neutral", summary: "Some setup checks have not completed for the saved configuration." };
 }
 
@@ -548,7 +558,10 @@ function renderDashboardConfigStatus() {
   setChip("configuration-status-chip", presentation.label, presentation.tone);
   setText("configuration-status-copy", presentation.summary);
   for (const name of setupWorkflowSteps) {
-    setText(`configuration-status-${name}`, titleCase(state.setupWorkflow?.steps?.[name]?.state || "not-run"));
+    const displayState = name === "cache" && state.cache?.enabled === false
+      ? "Disabled"
+      : titleCase(state.setupWorkflow?.steps?.[name]?.state || "not-run");
+    setText(`configuration-status-${name}`, displayState);
   }
 }
 
@@ -1791,7 +1804,8 @@ function renderSetupWorkflow() {
     const step = state.setupWorkflow.steps[name] || { state: "not-run", summary: "This check has not been recorded for the saved configuration." };
     setText(`setup-${name}-summary`, step.summary);
     const tone = step.state === "passed" ? "good" : step.state === "failed" ? "bad" : ["running", "waiting"].includes(step.state) ? "pending" : "neutral";
-    setChip(`setup-${name}-chip`, titleCase(step.state), tone);
+    const label = name === "cache" && state.cache?.enabled === false ? "Disabled" : titleCase(step.state);
+    setChip(`setup-${name}-chip`, label, tone);
     const row = byId(`setup-${name}-step`);
     row.classList.toggle("active", step.state === "running");
   }
@@ -2339,19 +2353,24 @@ function renderVerification() {
   }
 
   if (cache) {
-    const mode = cache.verification === "full" ? "full local verification" : "read-only status";
-    setText("cache-verification-observed", `Checked ${formatDate(cache.checkedAtUtc)} · ${mode}.`);
-    appendVerificationResult(cacheResults, "Deleted-item cache", cache.state, cache.summary);
-    const cleanupPending = cache.expiredEntryCount > 0 || cache.orphanArtworkCount > 0
-      || cache.entryCount > cache.maxItems || cache.artworkBytes > cache.maxBytesMb * 1024 * 1024;
-    const storageState = cache.writability === "failed" ? "failed"
-      : ["passed", "previously-evidenced"].includes(cache.writability) && !cleanupPending ? "passed" : cache.state === "skipped" ? "skipped" : "warning";
-    appendVerificationResult(cacheResults, "Storage and bounds", storageState,
-      `${titleCase(cache.writability)} · ${cache.entryCount} of ${cache.maxItems} entries · ${formatBytes(cache.artworkBytes)} of ${cache.maxBytesMb} MB cache ceiling · ${cache.retentionDays}-day retention.`);
-    const integrityState = cache.integrityState === "failed" ? "failed"
-      : ["verified", "structural"].includes(cache.integrityState) ? "passed" : cache.integrityState === "skipped" ? "skipped" : "warning";
-    appendVerificationResult(cacheResults, "Manifest and artwork", integrityState,
-      `${titleCase(cache.manifestState)} · backup ${titleCase(cache.backupState)} · ${cache.artworkCount} artwork files · ${cache.missingArtworkCount} missing · ${cache.orphanArtworkCount} orphaned · ${cache.hashMismatchCount} hash mismatches · ${cache.expiredEntryCount} expired.`);
+    if (cache.enabled === false) {
+      setText("cache-verification-observed", `Saved setting checked ${formatDate(cache.checkedAtUtc)} · cache storage was not inspected.`);
+      appendVerificationResult(cacheResults, "Deleted-item cache", "disabled", cache.summary);
+    } else {
+      const mode = cache.verification === "full" ? "full local verification" : "read-only status";
+      setText("cache-verification-observed", `Checked ${formatDate(cache.checkedAtUtc)} · ${mode}.`);
+      appendVerificationResult(cacheResults, "Deleted-item cache", cache.state, cache.summary);
+      const cleanupPending = cache.expiredEntryCount > 0 || cache.orphanArtworkCount > 0
+        || cache.entryCount > cache.maxItems || cache.artworkBytes > cache.maxBytesMb * 1024 * 1024;
+      const storageState = cache.writability === "failed" ? "failed"
+        : ["passed", "previously-evidenced"].includes(cache.writability) && !cleanupPending ? "passed" : cache.state === "skipped" ? "skipped" : "warning";
+      appendVerificationResult(cacheResults, "Storage and bounds", storageState,
+        `${titleCase(cache.writability)} · ${cache.entryCount} of ${cache.maxItems} entries · ${formatBytes(cache.artworkBytes)} of ${cache.maxBytesMb} MB cache ceiling · ${cache.retentionDays}-day retention.`);
+      const integrityState = cache.integrityState === "failed" ? "failed"
+        : ["verified", "structural"].includes(cache.integrityState) ? "passed" : cache.integrityState === "skipped" ? "skipped" : "warning";
+      appendVerificationResult(cacheResults, "Manifest and artwork", integrityState,
+        `${titleCase(cache.manifestState)} · backup ${titleCase(cache.backupState)} · ${cache.artworkCount} artwork files · ${cache.missingArtworkCount} missing · ${cache.orphanArtworkCount} orphaned · ${cache.hashMismatchCount} hash mismatches · ${cache.expiredEntryCount} expired.`);
+    }
   } else {
     setText("cache-verification-observed", "No deleted-item cache status is available for this saved configuration.");
     const empty = document.createElement("div");

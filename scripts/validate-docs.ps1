@@ -245,6 +245,36 @@ foreach ($relative in $expandedPlatformPages) {
     Write-Host "[PASS] Quickstart feature/troubleshooting coverage: $relative"
 }
 
+foreach ($relative in $sharedQuickstartPages) {
+    $html = [IO.File]::ReadAllText((Join-Path $docs $relative))
+    foreach ($pattern in @(
+        'Deleted-item cache',
+        'does not crawl the whole library',
+        'Unseeded',
+        'Disabling the cache stops reads and writes but does not erase retained entries'
+    )) {
+        if ($html -notmatch $pattern) {
+            throw "Quickstart cache lifecycle coverage '$pattern' is missing from $relative"
+        }
+    }
+    Write-Host "[PASS] Quickstart cache lifecycle coverage: $relative"
+}
+
+$cacheDiagnosticPatterns = [ordered]@{
+    'windows/index.html'      = '19-CACHE-DIAGNOSTICS\.bat'
+    'nas-docker/manager.html' = '\.\/tautweekly\.sh cache-status'
+    'mac/index.html'          = 'Cache-Diagnostics\.ps1 -DataRoot /data'
+    'linux/index.html'        = 'sudo tautweekly cache-status'
+    'freebsd/index.html'      = 'sudo tautweekly cache-status'
+}
+foreach ($entry in $cacheDiagnosticPatterns.GetEnumerator()) {
+    $html = [IO.File]::ReadAllText((Join-Path $docs $entry.Key))
+    if ($html -notmatch $entry.Value) {
+        throw "Share-safe cache diagnostic command is missing from $($entry.Key)"
+    }
+}
+Write-Host '[PASS] Quickstarts publish platform-specific share-safe cache diagnostics'
+
 & node (Join-Path $Root 'scripts/sync-gui-preview.mjs') --check
 if ($LASTEXITCODE -ne 0) { throw 'GUI preview differs from the current Manager/release. Regenerate it before deployment.' }
 
