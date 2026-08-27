@@ -43,14 +43,9 @@ function Get-PersistenceProbeState {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return "absent" }
     try {
         if ((Get-Item -LiteralPath $Path).Length -gt 4KB) { return "invalid" }
-        $probe = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
-        $createdUnixSeconds = Safe-Int64 (Get-OptionalStringProperty $probe "CreatedUnixSeconds")
-        $nonce = Get-OptionalStringProperty $probe "Nonce"
-        if ($null -eq $probe.PSObject.Properties["SchemaVersion"] -or
-            [int]$probe.SchemaVersion -ne 1 -or
-            $nonce -notmatch '^[0-9a-f]{32}$' -or
-            $createdUnixSeconds -lt 1 -or
-            $createdUnixSeconds -gt [DateTimeOffset]::UtcNow.AddMinutes(5).ToUnixTimeSeconds()) {
+        $probe = (Get-Content -LiteralPath $Path -Raw -Encoding UTF8).Trim()
+        if ($probe -notmatch '^tautweekly-cache-persistence-v1:([0-9]{1,20}):([0-9a-f]{32})$' -or
+            (Safe-Int64 $Matches[1]) -lt 1) {
             return "invalid"
         }
         return "preserved"
@@ -93,7 +88,7 @@ catch {
 . (Join-Path $PSScriptRoot "DeletedItemCache.ps1")
 $cacheRoot = Join-Path $resolvedRoot "cache/deleted-items"
 Initialize-TautWeeklyDeletedItemCache -CacheRoot $cacheRoot -Configuration $configuration
-$probePath = Join-Path $cacheRoot ".persistence-probe.json"
+$probePath = Join-Path $cacheRoot ".persistence-probe"
 $persistenceState = Get-PersistenceProbeState -Path $probePath
 
 switch ($Action) {
@@ -101,8 +96,8 @@ switch ($Action) {
         if ($script:TwDeletedCacheEnabled -and $script:TwDeletedCacheAvailable) {
             $temporaryPath = Join-Path $cacheRoot (".persistence-probe." + [Guid]::NewGuid().ToString("N") + ".tmp")
             try {
-                $probe = [ordered]@{ SchemaVersion = 1; CreatedUnixSeconds = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Nonce = [Guid]::NewGuid().ToString("N") }
-                [IO.File]::WriteAllText($temporaryPath, (($probe | ConvertTo-Json -Compress) + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
+                $probe = "tautweekly-cache-persistence-v1:{0}:{1}" -f [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(), [Guid]::NewGuid().ToString("N")
+                [IO.File]::WriteAllText($temporaryPath, ($probe + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
                 Move-Item -LiteralPath $temporaryPath -Destination $probePath -Force
                 $persistenceState = "created"
             }

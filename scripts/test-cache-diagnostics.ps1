@@ -46,7 +46,7 @@ try {
     foreach ($expected in @('CacheDiagnosticSchema: 1','ShareSafe: true','Configuration: valid','Enabled: true','Available: true','Manifest: unseeded','Backup: missing','Writability: passed','Entries: 0','ExactGuidProbe: not-requested','PersistenceProbe: absent')) {
         Assert-True $joined.Contains($expected) "Cache diagnostic omitted '$expected'. Output: $joined"
     }
-    foreach ($forbidden in @($testRoot, $privateToken, 'config.json', 'index.json', 'deleted-items')) {
+    foreach ($forbidden in @($testRoot, $privateToken, 'config.json', 'index.json', 'deleted-items', 'tautweekly-cache-persistence')) {
         Assert-True (-not $joined.Contains($forbidden)) "Cache diagnostic exposed private value '$forbidden'."
     }
 
@@ -57,6 +57,10 @@ try {
     Assert-True $verify.Contains('Integrity: hash-verified') "Artwork hash verification did not report its safe state. Share-safe output: $verify"
     $clear = (Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','ClearPersistenceProbe')) -join "`n"
     Assert-True $clear.Contains('PersistenceProbe: cleared') 'Persistence probe was not cleared.'
+    Set-Content -LiteralPath (Join-Path $testRoot 'cache/deleted-items/.persistence-probe') -Value 'invalid-synthetic-marker' -Encoding UTF8
+    $corruptProbe = (Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','VerifyPersistenceProbe')) -join "`n"
+    Assert-True $corruptProbe.Contains('PersistenceProbe: invalid') 'A corrupt persistence probe did not fail closed.'
+    Invoke-CacheDiagnostic -Script $scripts[0] -DataRoot $testRoot -Arguments @('-Action','ClearPersistenceProbe') | Out-Null
 
     $invalidRoot = Join-Path $testRoot 'invalid'
     New-Item -ItemType Directory -Path $invalidRoot | Out-Null
