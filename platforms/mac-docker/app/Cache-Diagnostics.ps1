@@ -44,12 +44,13 @@ function Get-PersistenceProbeState {
     try {
         if ((Get-Item -LiteralPath $Path).Length -gt 4KB) { return "invalid" }
         $probe = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
-        $created = [DateTime]::MinValue
+        $createdUnixSeconds = Safe-Int64 (Get-OptionalStringProperty $probe "CreatedUnixSeconds")
         $nonce = Get-OptionalStringProperty $probe "Nonce"
         if ($null -eq $probe.PSObject.Properties["SchemaVersion"] -or
             [int]$probe.SchemaVersion -ne 1 -or
             $nonce -notmatch '^[0-9a-f]{32}$' -or
-            -not [DateTime]::TryParse((Get-OptionalStringProperty $probe "CreatedUtc"), [ref]$created)) {
+            $createdUnixSeconds -lt 1 -or
+            $createdUnixSeconds -gt [DateTimeOffset]::UtcNow.AddMinutes(5).ToUnixTimeSeconds()) {
             return "invalid"
         }
         return "preserved"
@@ -100,7 +101,7 @@ switch ($Action) {
         if ($script:TwDeletedCacheEnabled -and $script:TwDeletedCacheAvailable) {
             $temporaryPath = Join-Path $cacheRoot (".persistence-probe." + [Guid]::NewGuid().ToString("N") + ".tmp")
             try {
-                $probe = [ordered]@{ SchemaVersion = 1; CreatedUtc = [DateTime]::UtcNow.ToString("o"); Nonce = [Guid]::NewGuid().ToString("N") }
+                $probe = [ordered]@{ SchemaVersion = 1; CreatedUnixSeconds = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Nonce = [Guid]::NewGuid().ToString("N") }
                 [IO.File]::WriteAllText($temporaryPath, (($probe | ConvertTo-Json -Compress) + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
                 Move-Item -LiteralPath $temporaryPath -Destination $probePath -Force
                 $persistenceState = "created"
