@@ -161,6 +161,8 @@ def main() -> int:
         failures.append("Manager lock chip or password fields can distort their layout")
     if ".access-status-button:after" not in css or "content:attr(data-tooltip)" not in css:
         failures.append("access lock control has no downward status tooltip")
+    if ".setup-workflow-steps article:last-child:nth-child(odd){grid-column:1/-1}" not in css:
+        failures.append("an odd final setup check leaves an exposed grid cell")
 
     javascript = args.js.read_text(encoding="utf-8")
     required_dynamic_contracts = {
@@ -251,6 +253,15 @@ def main() -> int:
         failures.append("automatic preview generation is still blocked by a separate readiness gate")
     if 'runPostSaveSetup(result.editor.revision, result.postSave);' not in javascript or 'plan.generatePreviews' not in javascript or 'type: "preview-all"' not in javascript:
         failures.append("validated configuration saves do not follow the backend-scoped preview plan")
+    for marker in (
+        'cacheDisabled ? setupWorkflowSteps.filter((name) => name !== "cache")',
+        'All four applicable safe setup checks passed; the deleted-item cache is disabled.',
+        'name === "cache" && state.cache?.enabled === false ? "Disabled"',
+        'cache storage was not inspected.',
+        'appendVerificationResult(cacheResults, "Deleted-item cache", "disabled", cache.summary);',
+    ):
+        if marker not in javascript:
+            failures.append(f"disabled deleted-item cache presentation is missing: {marker}")
     for post_save_flag in ("runDiscovery", "runIntegration", "runSmtp", "generatePreviews"):
         if f"result.postSave.{post_save_flag}" not in javascript:
             failures.append(f"configuration saves do not consume backend impact flag: {post_save_flag}")

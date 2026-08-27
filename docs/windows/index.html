@@ -170,15 +170,17 @@
         <div class="callout green"><div><strong>Safe local save and deliberate recovery.</strong><p>A private timestamped backup is created before <code>config.json</code> is replaced. The newest 10 are retained automatically. Configuration backups can be restored, or one can be permanently deleted only after <strong>Confirm delete</strong>; deletion leaves the live configuration unchanged.</p></div></div>
       </section>
 
-      <section class="section searchable" id="verification" data-search="validate save verify libraries users tautulli plex smtp preflight local previews persistent config status">
+      <section class="section searchable" id="verification" data-search="validate save verify libraries users tautulli plex smtp preflight local previews persistent config status deleted item cache warmup retention diagnostics">
         <div class="section-head"><div><span class="eyebrow">One safe action</span><h2>Validate, save, and verify</h2></div><p>The Manager runs every applicable non-intrusive setup check, records the results, and does not send email.</p></div>
         <div class="grid4">
           <div class="card green"><div class="icon">01</div><h3>Libraries and users</h3><p>Loads active movie/TV libraries plus sanitized user IDs, friendly names, and roles for guided selection.</p></div>
           <div class="card green"><div class="icon">02</div><h3>Tautulli and Plex</h3><p>Verifies the saved Tautulli API and configured direct Plex identity and authenticated library access.</p></div>
           <div class="card green"><div class="icon">03</div><h3>SMTP preflight</h3><p>Checks DNS/TCP, greeting, EHLO, and certificate-validated STARTTLS without authenticating or submitting a message.</p></div>
           <div class="card green"><div class="icon">04</div><h3>Local previews</h3><p>Starts all six local states when one unambiguous owner/admin ID and required metadata are available.</p></div>
+          <div class="card green"><div class="icon">05</div><h3>Deleted-item cache</h3><p>Reports disabled, unseeded, healthy, recoverable, or failed local state with aggregate counts only. Use <code>19-CACHE-DIAGNOSTICS.bat</code> for the same share-safe summary.</p></div>
         </div>
-        <div class="callout blue"><div><strong>The four status cards are persistent.</strong><p>They survive browser refresh and Manager restart for the current saved configuration and appear together in Dashboard Config status. A later validation replaces them.</p></div></div>
+        <div class="callout blue"><div><strong>Cache warm-up is bounded and future-only.</strong><p>Enabling or changing cache settings and selecting <strong>Validate, save, and verify</strong> starts the existing no-email PreviewAll when one unambiguous owner/admin is available. It captures only qualifying live items selected by those previews, using the exact stable GUID and a usable poster; it does not crawl the whole library. <strong>Unseeded</strong> means no qualifying render has written an entry. Disabling the cache stops reads and writes but does not erase retained entries.</p></div></div>
+        <div class="callout blue"><div><strong>The first four results persist; cache health is live.</strong><p>The first four survive browser refresh and Manager restart for the current saved configuration. Cache health is recomputed locally and all five appear together in Dashboard Config status.</p></div></div>
         <div class="callout"><div><strong>Validation remains non-sending.</strong><p>It never authenticates to SMTP, sends email, changes welcome state, or installs a schedule.</p></div></div>
       </section>
 

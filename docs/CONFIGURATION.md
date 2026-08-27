@@ -150,6 +150,10 @@ SendTest, SendTestAll, a scheduled delivery, or a confirmed manual delivery
 selects a current item for rendering while both its live metadata and usable
 poster are still available. Validation alone does not capture anything.
 
+Disabling the setting stops cache reads, writes, verification, and cleanup but
+does not erase retained entries. Re-enabling it initializes the same private
+cache and immediately applies the configured retention, item, and byte limits.
+
 In Manager, changing enabled cache settings and choosing **Validate, save, and
 verify** now schedules the existing no-email PreviewAll workflow when one
 unambiguous owner or administrator is available. That warms only qualifying
