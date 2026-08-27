@@ -446,6 +446,13 @@ foreach ($relativePath in $rendererPaths) {
         param([string]$MediaType, [string]$MetadataGuid, [switch]$LogHit)
         return $null
     }
+    function Register-TautWeeklyDeletedItemCacheCaptureSkip {
+        param([ValidateSet('metadata','poster')][string]$Reason)
+    }
+    function Update-TautWeeklyDeletedItemCache {
+        param([object]$Item, [string]$PosterPath)
+        return $false
+    }
 
     $posterProbeRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-poster-probe-' + [Guid]::NewGuid().ToString('N'))
     try {
