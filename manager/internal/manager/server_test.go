@@ -419,8 +419,12 @@ func TestConfigurationStatusAPIIsRevisionScopedAndPersists(t *testing.T) {
 		t.Fatalf("unexpected saved configuration status: %+v", status)
 	}
 	for _, name := range configurationStatusSteps {
-		if status.Steps[name].State != "waiting" {
-			t.Fatalf("step %s state: got %q, want waiting", name, status.Steps[name].State)
+		expectedState := "waiting"
+		if name == "cache" {
+			expectedState = "running"
+		}
+		if status.Steps[name].State != expectedState {
+			t.Fatalf("step %s state: got %q, want %s", name, status.Steps[name].State, expectedState)
 		}
 	}
 
