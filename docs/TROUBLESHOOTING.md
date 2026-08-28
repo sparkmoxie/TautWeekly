@@ -487,15 +487,23 @@ Enabling the cache and saving configuration does not crawl the library or copy
 all current Plex metadata. A qualifying item must be selected by Preview,
 PreviewAll, SendTest, SendTestAll, a scheduled delivery, or a confirmed manual
 delivery while its live metadata, stable GUID, and non-generic poster are still
-available. Manager now starts its existing no-email PreviewAll after an enabled
-cache setting changes when it has one unambiguous owner/administrator and no
-operation conflict. If that workflow is skipped, run PreviewAll manually.
+available. After an enabled cache setting changes, Manager starts its existing
+no-email PreviewAll when it has one unambiguous owner/administrator and no
+operation conflict. Cache health is **Waiting** during that prerequisite. At
+its terminal state, including failure or cancellation, Manager automatically
+checks configuration, initialization, manifest/backup structure, aggregate
+entry and artwork counts, retention/bounds, write access, and artwork
+integrity. If PreviewAll cannot start, that full check still runs; use
+PreviewAll later only when a warning says the cache remains unseeded.
 
 Start with Manager Dashboard **Config status → Deleted-item cache**, then open
 **Verify → Check deleted-item cache**. The manual check validates configuration,
 initialization, manifest/backup structure, current entry and artwork counts,
 retention/bounds, write access, and artwork hashes without contacting Plex,
 Tautulli, SMTP, or recipients.
+
+The Verify result is retained across refreshes; this manual action is an
+optional recheck for later filesystem or configuration changes.
 
 The same share-safe summary is available from each package:
 

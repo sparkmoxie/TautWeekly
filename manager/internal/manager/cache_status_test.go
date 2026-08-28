@@ -166,6 +166,176 @@ func TestDeletedItemCacheStatusEndpointRequiresSessionCSRFAndRevision(t *testing
 	if err := json.Unmarshal(configuration.Body.Bytes(), &setup); err != nil || setup.Cache == nil || setup.Steps["cache"].State == "" {
 		t.Fatalf("configuration cache status: setup=%+v err=%v", setup, err)
 	}
+	if setup.Cache.Verification != "full" || setup.Cache.Writability != "passed" || setup.Steps["cache"].State != setup.Cache.State {
+		t.Fatalf("full cache verification did not survive a status refresh: cache=%+v step=%+v", setup.Cache, setup.Steps["cache"])
+		rechecked := mutationRequestForTest(server, http.MethodPost, "/api/v1/checks/deleted-item-cache", body, cookie, session.CSRFToken)
+		if rechecked.Code != http.StatusOK {
+			t.Fatalf("repeat cache check: %d %s", rechecked.Code, rechecked.Body.String())
+		}
+		var repeated DeletedItemCacheStatus
+		if err := json.Unmarshal(rechecked.Body.Bytes(), &repeated); err != nil || repeated.Verification != "full" || repeated.Writability != "passed" || repeated.IntegrityState != "verified" {
+			t.Fatalf("repeat cache check response: status=%+v err=%v", repeated, err)
+		}
+
+	}
+}
+
+func TestPreviewWarmupWaitsThenPersistsFullCacheVerification(t *testing.T) {
+	root := normalizedConfigRoot(t)
+	private := seedDeletedItemCache(t, root, cacheStatusNow, true)
+	runner := &fixturePreviewRunner{started: make(chan struct{}), release: make(chan struct{})}
+	server, err := New(Options{
+		DataDir:         t.TempDir(),
+		TautWeeklyRoot:  root,
+		RuntimeRoot:     root,
+		Version:         "test",
+		Now:             func() time.Time { return cacheStatusNow },
+		operationRunner: runner,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := ReadConfigEditor(root).Revision
+	if err := server.configuration.ResetNotRun(revision); err != nil {
+		t.Fatal(err)
+	}
+	session, err := server.auth.newSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{Name: sessionCookieName, Value: session.Token}
+	body, _ := json.Marshal(CreateOperationRequest{
+		Type:             "preview-all",
+		ExpectedRevision: revision,
+		UserID:           "42",
+		ConfirmNoSend:    true,
+	})
+	started := mutationRequestForTest(server, http.MethodPost, "/api/v1/operations", body, cookie, session.CSRFToken)
+	if started.Code != http.StatusAccepted {
+		t.Fatalf("preview start: %d %s", started.Code, started.Body.String())
+	}
+	select {
+	case <-runner.started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("preview fixture did not start")
+	}
+
+	warmup := requestForTest(server, http.MethodGet, "/api/v1/config/status", nil, cookie)
+	var waiting ConfigurationStatus
+	if err := json.Unmarshal(warmup.Body.Bytes(), &waiting); err != nil {
+		t.Fatal(err)
+	}
+	if waiting.Steps["previews"].State != "running" || waiting.Steps["cache"].State != "waiting" {
+		t.Fatalf("cache prerequisite was presented as a completed finding: previews=%+v cache=%+v", waiting.Steps["previews"], waiting.Steps["cache"])
+	}
+
+	close(runner.release)
+	finished := waitForOperationState(t, server.operations, "succeeded")
+	if finished.DeliveryScope != "none" || finished.SMTPAcceptedCount != 0 {
+		t.Fatalf("preview warm-up crossed the delivery boundary: %+v", finished)
+	}
+	refreshed := requestForTest(server, http.MethodGet, "/api/v1/config/status", nil, cookie)
+	var completed ConfigurationStatus
+	if err := json.Unmarshal(refreshed.Body.Bytes(), &completed); err != nil {
+		t.Fatal(err)
+	}
+	if completed.Cache == nil || completed.Cache.Verification != "full" || completed.Cache.Writability != "passed" || completed.Cache.IntegrityState != "verified" {
+		t.Fatalf("preview completion did not run full cache verification: %+v", completed.Cache)
+	}
+	if completed.Cache.State != "warning" || completed.Steps["cache"].State != "warning" || completed.Cache.ExpiredEntryCount != 1 {
+		t.Fatalf("completed cleanup finding was not retained as an actual warning: cache=%+v step=%+v", completed.Cache, completed.Steps["cache"])
+	}
+	encoded, err := json.Marshal(completed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range private {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Fatalf("configuration status exposed private cache value %q", forbidden)
+		}
+	}
+	if matches, _ := filepath.Glob(filepath.Join(root, "cache", "deleted-items", ".manager-cache-write-probe-*.tmp")); len(matches) != 0 {
+		t.Fatalf("automatic write probe was not removed: %v", matches)
+	}
+}
+
+func TestPreviewTerminalFailureAndCancellationStillCompleteCacheVerification(t *testing.T) {
+	tests := []struct {
+		name         string
+		runner       *fixturePreviewRunner
+		terminal     string
+		previewState string
+		cancel       bool
+	}{
+		{
+			name:         "renderer failure",
+			runner:       &fixturePreviewRunner{previewExitCode: 1, previewErrorCategory: "tautulli-unavailable"},
+			terminal:     "failed",
+			previewState: "failed",
+		},
+		{
+			name:         "user cancellation",
+			runner:       &fixturePreviewRunner{started: make(chan struct{}), release: make(chan struct{})},
+			terminal:     "cancelled",
+			previewState: "skipped",
+			cancel:       true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := normalizedConfigRoot(t)
+			private := seedDeletedItemCache(t, root, cacheStatusNow, false)
+			server, err := New(Options{
+				DataDir: t.TempDir(), TautWeeklyRoot: root, RuntimeRoot: root, Version: "test",
+				Now: func() time.Time { return cacheStatusNow }, operationRunner: test.runner,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			revision := ReadConfigEditor(root).Revision
+			if err := server.configuration.ResetNotRun(revision); err != nil {
+				t.Fatal(err)
+			}
+			started, err := server.operations.Start(CreateOperationRequest{
+				Type: "preview-all", ExpectedRevision: revision, UserID: "42", ConfirmNoSend: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if test.cancel {
+				select {
+				case <-test.runner.started:
+				case <-time.After(3 * time.Second):
+					t.Fatal("preview fixture did not start")
+				}
+				if _, err := server.operations.Cancel(started.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			finished := waitForOperationState(t, server.operations, test.terminal)
+			if (finished.DeliveryScope != "" && finished.DeliveryScope != "none") || finished.SMTPAcceptedCount != 0 {
+				t.Fatalf("terminal preview crossed the delivery boundary: %+v", finished)
+			}
+			status := server.configuration.Load(revision)
+			if status.Cache == nil || status.Cache.Verification != "full" || status.Cache.State != "passed" ||
+				status.Cache.Writability != "passed" || status.Cache.IntegrityState != "verified" || status.Steps["cache"].State != "passed" ||
+				status.Steps["previews"].State != test.previewState {
+				t.Fatalf("terminal preview did not retain full cache evidence: operation=%+v status=%+v", finished, status)
+			}
+			encoded, err := json.Marshal(status)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, forbidden := range private {
+				if strings.Contains(string(encoded), forbidden) {
+					t.Fatalf("terminal cache evidence exposed private value %q", forbidden)
+				}
+			}
+			if matches, _ := filepath.Glob(filepath.Join(root, "cache", "deleted-items", ".manager-cache-write-probe-*.tmp")); len(matches) != 0 {
+				t.Fatalf("terminal cache verification left a write probe: %v", matches)
+			}
+		})
+	}
 }
 
 func seedDeletedItemCache(t *testing.T, root string, observed time.Time, expired bool) []string {

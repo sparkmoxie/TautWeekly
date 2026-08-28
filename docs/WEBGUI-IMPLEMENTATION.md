@@ -677,13 +677,15 @@ Group typed controls by Connections, Branding, Sender, Schedule, Newsletter,
 Libraries, Recipients, Cache, and Advanced. Provide search, changed-field
 review, inline validation, backup creation, and rollback.
 
-Keep the four persisted setup results plus the live deleted-item cache result
-permanently visible for every valid configuration. Update each result as
-automatic or manual checks complete, retain only the four revision-scoped
-results in private Manager state, and show all five in the Dashboard Config
-status health card. Cache health is recomputed locally from aggregate state.
-Results from an older configuration revision must never update the current
-summary.
+Keep all five revision-scoped setup results, including the full deleted-item
+cache result, permanently visible for every valid configuration. Update each
+result as automatic or manual checks complete, retain only aggregate evidence
+in private Manager state, and show all five in the Dashboard Config status
+health card. While PreviewAll is a prerequisite, cache health is **Waiting**;
+reserve Warning for a completed, actionable finding. The full local result is
+retained for Verify and refresh, while manual verification remains an optional
+later recheck. Results from an older configuration revision must never update
+the current summary.
 
 ### 12.5 Diagnostics
 

@@ -54,23 +54,24 @@ type Options struct {
 }
 
 type Server struct {
-	options           Options
-	auth              *authStore
-	authLimiter       *attemptLimiter
-	configMu          sync.Mutex
-	actionStartMu     sync.Mutex
-	verificationRunMu sync.Mutex
-	diagnostics       *diagnosticStore
-	discovery         *tautulliDiscoveryStore
-	configuration     *configurationStatusStore
-	operations        *operationCoordinator
-	schedule          *scheduleCoordinator
-	startup           startupSettingsController
-	updates           *updateCoordinator
-	remoteAccess      remoteAccessController
-	capabilities      Capabilities
-	handler           http.Handler
-	bootstrapToken    string
+	options             Options
+	auth                *authStore
+	authLimiter         *attemptLimiter
+	configMu            sync.Mutex
+	actionStartMu       sync.Mutex
+	verificationRunMu   sync.Mutex
+	cacheVerificationMu *sync.Mutex
+	diagnostics         *diagnosticStore
+	discovery           *tautulliDiscoveryStore
+	configuration       *configurationStatusStore
+	operations          *operationCoordinator
+	schedule            *scheduleCoordinator
+	startup             startupSettingsController
+	updates             *updateCoordinator
+	remoteAccess        remoteAccessController
+	capabilities        Capabilities
+	handler             http.Handler
+	bootstrapToken      string
 }
 
 type authRequest struct {
@@ -164,6 +165,7 @@ func New(options Options) (*Server, error) {
 		return nil, err
 	}
 	configuration := newConfigurationStatusStore(options.DataDir, options.Now)
+	cacheVerificationMu := &sync.Mutex{}
 	options.operationCompleted = func(record OperationRecord, revision string) {
 		if record.Type != "preview-all" || !validConfigRevision(revision) {
 			return
@@ -182,6 +184,15 @@ func New(options Options) (*Server, error) {
 			summary = "Local preview generation was cancelled before completion."
 		}
 		_ = configuration.Update(revision, "previews", state, summary)
+		cache := collectDeletedItemCacheStatus(options.RuntimeRoot, false, false, options.Now)
+		if !cache.Enabled {
+			return
+		}
+		_ = configuration.Update(revision, "cache", "running", "Checking cache storage, bounds, manifests, backup, writability, and artwork integrity locally.")
+		cacheVerificationMu.Lock()
+		cache = collectDeletedItemCacheStatus(options.RuntimeRoot, true, true, options.Now)
+		cacheVerificationMu.Unlock()
+		_ = configuration.StoreCache(revision, cache)
 	}
 	operations, err := newOperationCoordinator(options)
 	if err != nil {
@@ -202,19 +213,20 @@ func New(options Options) (*Server, error) {
 		remoteAccess = newPlatformRemoteAccessController(options)
 	}
 	server := &Server{
-		options:        options,
-		auth:           store,
-		authLimiter:    newAttemptLimiter(options.Now),
-		diagnostics:    newDiagnosticStore(options.DataDir, options.Now),
-		discovery:      newTautulliDiscoveryStore(options.DataDir),
-		configuration:  configuration,
-		operations:     operations,
-		schedule:       schedule,
-		startup:        startup,
-		updates:        newUpdateCoordinator(options),
-		remoteAccess:   remoteAccess,
-		capabilities:   capabilitiesFor(options),
-		bootstrapToken: store.bootstrapToken,
+		options:             options,
+		auth:                store,
+		authLimiter:         newAttemptLimiter(options.Now),
+		diagnostics:         newDiagnosticStore(options.DataDir, options.Now),
+		discovery:           newTautulliDiscoveryStore(options.DataDir),
+		cacheVerificationMu: cacheVerificationMu,
+		configuration:       configuration,
+		operations:          operations,
+		schedule:            schedule,
+		startup:             startup,
+		updates:             newUpdateCoordinator(options),
+		remoteAccess:        remoteAccess,
+		capabilities:        capabilitiesFor(options),
+		bootstrapToken:      store.bootstrapToken,
 	}
 	server.handler = server.routes()
 	return server, nil
@@ -666,9 +678,15 @@ func (s *Server) handleConfigurationStatus(w http.ResponseWriter, _ *http.Reques
 
 func (s *Server) configurationStatusWithCache(revision string) ConfigurationStatus {
 	status := s.configuration.Load(revision)
+	if status.Cache != nil {
+		return status
+	}
 	cache := collectDeletedItemCacheStatus(s.options.RuntimeRoot, false, false, s.options.Now)
 	status.Cache = &cache
-	status.Steps["cache"] = cache.configurationStep()
+	step, exists := status.Steps["cache"]
+	if !exists || (step.State != "waiting" && step.State != "running") {
+		status.Steps["cache"] = cache.configurationStep()
+	}
 	return status
 }
 
@@ -678,17 +696,22 @@ func (s *Server) handleRunDeletedItemCacheCheck(w http.ResponseWriter, r *http.R
 		writeAPIError(w, http.StatusBadRequest, "invalid-request", "Deleted-item cache verification request is invalid.")
 		return
 	}
-	if !s.verificationRunMu.TryLock() {
-		writeAPIError(w, http.StatusConflict, "verification-running", "Another configuration verification is already running.")
+	if !s.cacheVerificationMu.TryLock() {
+		writeAPIError(w, http.StatusConflict, "cache-verification-running", "Another deleted-item cache verification is already running.")
 		return
 	}
-	defer s.verificationRunMu.Unlock()
+	defer s.cacheVerificationMu.Unlock()
 	editor := ReadConfigEditor(s.options.RuntimeRoot)
 	if editor.State != "ready" || request.ExpectedRevision != editor.Revision {
 		writeAPIError(w, http.StatusConflict, "config-conflict", "Configuration changed before the deleted-item cache check could run.")
 		return
 	}
+	s.updateConfigurationStep(request.ExpectedRevision, "cache", "running", "Checking cache storage, bounds, manifests, backup, writability, and artwork integrity locally.")
 	status := collectDeletedItemCacheStatus(s.options.RuntimeRoot, true, true, s.options.Now)
+	if err := s.configuration.StoreCache(request.ExpectedRevision, status); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "cache-status-write-failed", "Deleted-item cache verification completed, but its aggregate result could not be retained.")
+		return
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, status)
 }
@@ -1180,6 +1203,10 @@ func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if request.Type == "preview-all" {
+		cache := collectDeletedItemCacheStatus(s.options.RuntimeRoot, false, false, s.options.Now)
+		if cache.Enabled {
+			s.updateConfigurationStep(request.ExpectedRevision, "cache", "waiting", "Waiting for local PreviewAll cache initialization before the full storage and artwork check.")
+		}
 		s.updateConfigurationStep(request.ExpectedRevision, "previews", "running", "Generating six local preview states without sending email.")
 	}
 	writeJSON(w, http.StatusAccepted, record)

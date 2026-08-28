@@ -262,7 +262,7 @@ def main() -> int:
     ):
         if marker not in javascript:
             failures.append(f"disabled deleted-item cache presentation is missing: {marker}")
-    for post_save_flag in ("runDiscovery", "runIntegration", "runSmtp", "generatePreviews"):
+    for post_save_flag in ("runDiscovery", "runIntegration", "runSmtp", "generatePreviews", "verifyCache"):
         if f"result.postSave.{post_save_flag}" not in javascript:
             failures.append(f"configuration saves do not consume backend impact flag: {post_save_flag}")
     if "window.TautWeeklyUpdateUI.routeFromHash(window.location.hash)" not in javascript or "updateHistory: false" not in javascript:
@@ -296,6 +296,18 @@ def main() -> int:
         failures.append("state badges do not inherit the smooth shared text transition")
     if 'chip.replaceChildren(...(iconName ?' in javascript or 'chip.insertBefore(nextIcon, label);' not in javascript:
         failures.append("unchanged state badges are detached and replay their animation during form edits")
+    if 'cacheWorkflowState === "waiting"' not in javascript or 'overallLabel = "Waiting";' not in javascript or 'overallTone = "waiting";' not in javascript:
+        failures.append("cache prerequisite state is not presented as Waiting across setup and Verify")
+    if '"Enable Cache Storage"' not in javascript or 'selectView("configuration", { section: "cache" });' not in javascript:
+        failures.append("disabled cache does not expose a Config-only enable action")
+    if 'cacheToggle.scrollIntoView({ block: "center", behavior: "smooth" });' not in javascript or 'cacheToggle.focus({ preventScroll: true });' not in javascript:
+        failures.append("Enable Cache Storage does not smoothly navigate and focus the cache setting")
+    if '.state-chip.waiting,.state-chip.warning' not in css or 'animation:state-pulse-amber' not in css:
+        failures.append("Waiting and completed Warning do not share the accessible amber treatment")
+    if '.health-card,.setup-workflow-steps article,.verification-result' not in css or 'background-color .22s ease' not in css or 'box-shadow .22s ease' not in css:
+        failures.append("state cards do not transition text, border, background, and glow consistently")
+    if 'Optional local recheck' not in combined or 'Validate, save, and verify already runs this full check' not in combined:
+        failures.append("Verify still presents the manual deleted-item cache action as a required second step")
     if '#startup-settings-chip{animation:none}' not in css:
         failures.append("Manager startup saved-state badge inherits a looping status animation")
     if 'state.startupDraft = requested;' not in javascript or 'body: JSON.stringify(requested)' not in javascript:
