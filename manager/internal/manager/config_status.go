@@ -23,7 +23,7 @@ var (
 		"lan":      "Waiting to verify the saved Tautulli and Plex connections.",
 		"smtp":     "Waiting to run the non-sending SMTP preflight.",
 		"previews": "Waiting to prepare the six local preview states.",
-		"cache":    "Waiting for local PreviewAll cache initialization before the full storage and artwork check.",
+		"cache":    "Refreshing deleted-item cache coverage for the saved user and library scope.",
 	}
 	configurationStatusNotRunCopy = map[string]string{
 		"choices":  "Libraries and users have not been loaded for this configuration.",
@@ -175,7 +175,13 @@ func (s *configurationStatusStore) Rebase(previousRevision, nextRevision string,
 				retainStep("cache", true)
 			}
 		}
-		waitFor("cache", plan.VerifyCache)
+		if plan.WarmCache {
+			next.Steps["cache"] = ConfigurationStatusStep{
+				State: "running", Summary: "Preparing the independent all-included-user cache refresh.", UpdatedAtUTC: now,
+			}
+		} else {
+			waitFor("cache", plan.VerifyCache)
+		}
 	} else {
 		next.Steps["cache"] = ConfigurationStatusStep{
 			State: "skipped", Summary: "Deleted-item cache is disabled in the saved configuration.", UpdatedAtUTC: now,

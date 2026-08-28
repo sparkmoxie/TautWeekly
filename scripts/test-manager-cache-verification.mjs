@@ -13,6 +13,7 @@ const productionCSS = fs.readFileSync(path.join(repositoryRoot, "manager", "inte
 const productionHTML = fs.readFileSync(path.join(repositoryRoot, "manager", "internal", "manager", "web", "index.html"), "utf8");
 const previewJS = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "app.js"), "utf8");
 const previewCSS = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "app.css"), "utf8");
+const previewHTML = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "index.html"), "utf8");
 const previewMock = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "mock-api.js"), "utf8");
 
 function functionSource(name) {
@@ -126,34 +127,44 @@ navigationContext.activateCacheAction();
 assert.equal(manualRuns, 1, "enabled-cache action did not remain an optional manual recheck");
 
 const postSaveSource = functionSource("runPostSaveSetup");
-assert.ok(postSaveSource.indexOf('request("/api/v1/operations"') < postSaveSource.indexOf("if (plan.verifyCache && !previewStarted)"), "cache verification was ordered before PreviewAll initialization");
-assert.match(postSaveSource, /if \(plan\.verifyCache && !previewStarted\)[\s\S]+automatic: true, expectedRevision: revision/, "skipped PreviewAll does not fall back to automatic full verification");
-assert.match(postSaveSource, /cachePending: Boolean\(plan\.verifyCache && previewStarted\)/, "started PreviewAll is not delegated to terminal backend verification");
+assert.match(postSaveSource, /if \(plan\.warmCache\)[\s\S]+startCacheWarmOperation\(revision\)/, "coverage-changing saves do not start the dedicated cache refresh");
+assert.match(postSaveSource, /else if \(plan\.verifyCache\)[\s\S]+runCacheVerification\(\{ automatic: true, expectedRevision: revision \}\)/, "non-coverage saves lost automatic full verification");
+assert.match(postSaveSource, /return \{ cachePending: cacheStarted, previewPending: previewStarted \}/, "cache and preview operations are not tracked independently");
+assert.doesNotMatch(functionSource("startCacheWarmOperation"), /userId|confirmNoSend|preview-all/, "cache refresh still depends on one preview user or PreviewAll confirmation");
+assert.match(functionSource("startCacheWarmOperation"), /updateSetupWorkflowStep\("cache", "running"[\s\S]+type: "cache-warm"/, "cache refresh does not use its dedicated blue Running state");
+assert.match(functionSource("recoverPendingCacheWarm"), /\["waiting", "running"\]\.includes\(cacheState\)/, "a reload cannot recover a pending cache refresh");
 assert.doesNotMatch(functionSource("runCacheVerification"), /operationIsActive|scheduleOperationIsActive/, "an unrelated active operation suppresses the automatic fallback cache check");
 assert.match(functionSource("submitConfig"), /if \(!result\.saved\)[\s\S]+postSave\?\.verifyCache[\s\S]+runCacheVerification\(\{ automatic: true/, "an unchanged enabled configuration does not receive full cache verification");
-assert.match(functionSource("renderVerification"), /cacheWorkflowState === "waiting"[\s\S]+Waiting for the no-email PreviewAll prerequisite/, "Verify does not inherit the Waiting prerequisite");
+assert.doesNotMatch(functionSource("renderVerification"), /PreviewAll prerequisite|PreviewAll warm-up/, "Verify still presents PreviewAll as a cache prerequisite");
 assert.match(functionSource("renderVerification"), /cacheDisabled[\s\S]+"Enable Cache Storage"/, "disabled cache does not expose the Config navigation action");
 assert.match(functionSource("renderVerification"), /prepareVerificationResults[\s\S]+finishVerificationResults/, "verification cards are replaced instead of transitioning in place");
 
+assert.match(productionCSS, /\.state-chip\.bad\{[^}]*animation:state-pulse-bad/, "Failed lost its red glow transition");
+assert.match(productionCSS, /\.state-chip\.pending\{[^}]*animation:state-pulse-pending/, "Running lost its blue glow transition");
 assert.match(productionCSS, /\.state-chip\.waiting,\.state-chip\.warning\{[^}]*animation:state-pulse-amber/, "Waiting and Warning lack the shared amber transition treatment");
 assert.match(productionCSS, /\.health-card,\.setup-workflow-steps article,\.verification-result\{[^}]*color[^}]*border-color[^}]*background-color[^}]*box-shadow/, "state cards do not transition text, border, background, and glow together");
 assert.match(productionCSS, /\.health-card,\.verification-result\{background-image:none;background-color:var\(--surface\)\}/, "opaque card gradients mask the state background transition");
 assert.match(productionCSS, /\.verification-result\.state-card-good[^\n]+\{animation:none\}/, "legacy card pulse animations override the state glow transition");
 assert.match(productionCSS, /prefers-reduced-motion:reduce[^\n]+state-chip\.waiting/, "new state motion lacks a reduced-motion fallback");
-assert.match(productionHTML, /Optional local recheck[\s\S]+Validate, save, and verify already runs this full check/, "Verify copy still presents the manual check as a required second step");
+assert.match(productionHTML, /Optional local recheck[\s\S]+Validate, save, and verify runs the independent cache refresh/, "Verify copy still presents the manual check as a required second step");
 assert.match(productionHTML, /never receives cache paths, titles, GUIDs, rating keys, hashes, artwork, viewing metrics, recipient data, credentials, or manifest contents/, "aggregate cache privacy boundary disappeared from Verify");
 assert.match(productionHTML, /id="icon-home-storage-gear"[^>]+data-symbol="home_storage_gear"[^>]+data-weight="400"[^>]+data-optical-size="24"/, "the requested local cache boundary symbol is missing");
 assert.match(productionHTML, /cache-boundary[^\n]+href="#icon-home-storage-gear"/, "the local cache boundary does not use the home storage settings symbol");
+for (const [name, source] of [["production", productionHTML], ["preview", previewHTML]]) {
+  assert.match(source, /id="icon-mail-shield"[^>]+data-symbol="mail_shield"[^>]+data-fill="0"[^>]+data-weight="400"[^>]+data-grade="0"[^>]+data-optical-size="24"/, `${name} Manager is missing the requested outlined mail_shield symbol contract`);
+  assert.match(source, /smtp-boundary[^\n]+href="#icon-mail-shield"/, `${name} Verify SMTP boundary does not use mail_shield`);
+}
 
 for (const [name, source] of [["production", productionJS], ["preview", previewJS]]) {
-  assert.match(source, /cacheWorkflowState === "waiting"[\s\S]+Waiting for the no-email PreviewAll prerequisite/, `${name} Verify view lost Waiting inheritance`);
+  assert.match(source, /startCacheWarmOperation[\s\S]+type: "cache-warm"/, `${name} UI lost the independent cache refresh operation`);
+  assert.doesNotMatch(source, /PreviewAll prerequisite|PreviewAll warm-up/, `${name} Verify restored the obsolete PreviewAll dependency`);
   assert.match(source, /selectView\("configuration", \{ section: "cache" \}\)/, `${name} disabled-cache action lost Config navigation`);
   assert.match(source, /scrollIntoView\(\{ block: "center", behavior: "smooth" \}\)/, `${name} disabled-cache action lost smooth focus navigation`);
 }
 assert.match(previewCSS, /\.state-chip\.waiting,\.state-chip\.warning\{[^}]*animation:state-pulse-amber/, "GUI preview lost Waiting/Warning transition parity");
 assert.match(previewCSS, /\.health-card,\.setup-workflow-steps article,\.verification-result\{[^}]*background-color[^}]*box-shadow/, "GUI preview lost state-card transition parity");
-assert.match(previewMock, /verifyCache: cacheEnabled, cacheEnabled/);
-assert.match(previewMock, /steps\.cache = \{ state: "waiting"/);
-assert.match(previewMock, /completeCacheVerification\(\);[\s\S]+setupStatus\.running = false/);
+assert.match(previewMock, /warmCache: false,[\s\S]+verifyCache: cacheEnabled, cacheEnabled/);
+assert.match(previewMock, /body\.type === "cache-warm"[\s\S]+steps\.cache = \{ state: "running"/);
+assert.match(previewMock, /operation\.type === "cache-warm"[\s\S]+completeCacheVerification\(\)/);
 
-console.log("[PASS] Manager cache Waiting, automatic full verification, optional recheck, navigation, transition, preview, and privacy contracts.");
+console.log("[PASS] Manager independent cache refresh, automatic full verification, failure/running transitions, preview parity, navigation, and privacy contracts.");

@@ -1,5 +1,5 @@
 ﻿param(
-    [ValidateSet("ListUsers","VerifyPlex","Preview","PreviewAll","SendTest","SendTestAll","SendWelcome","SendAll")]
+    [ValidateSet("ListUsers","VerifyPlex","Preview","PreviewAll","CacheWarm","SendTest","SendTestAll","SendWelcome","SendAll")]
     [string]$Mode = "ListUsers",
 
     [string]$UserId = "",
@@ -5383,7 +5383,13 @@ function Add-DesignRatingMetadata {
             $meta = Invoke-TautulliApi -Command "get_metadata" -Parameters @{
                 rating_key = $ratingKey
             }
-            $liveMetadataAvailable = $true
+            $metadataIdentity = Get-OptionalStringProperty -InputObject $meta -Name "rating_key"
+            $metadataTitle = Get-OptionalStringProperty -InputObject $meta -Name "title"
+            $liveMetadataAvailable = (
+                $null -ne $meta -and
+                -not [string]::IsNullOrWhiteSpace($metadataIdentity) -and
+                -not [string]::IsNullOrWhiteSpace($metadataTitle)
+            )
 
             $ratingImage = Get-OptionalStringProperty -InputObject $meta -Name "rating_image"
             $audienceImage = Get-OptionalStringProperty -InputObject $meta -Name "audience_rating_image"
@@ -9636,7 +9642,7 @@ $tautWeeklyState = Get-TautWeeklyState
 Write-Log ("TautWeekly for Plex age: {0} day(s); warm-up mode: {1}" -f $tautWeeklyState.AgeDays, $tautWeeklyState.IsWarmingUp)
 
 $script:TautWeeklyResultErrorCategory = "configuration-invalid"
-$accessState = if ($Mode -in @("PreviewAll","SendTestAll")) {
+$accessState = if ($Mode -in @("PreviewAll","CacheWarm","SendTestAll")) {
     # The all-variant test harness must not change first-seen/welcome tracking.
     Get-AccessState
 }
@@ -10138,6 +10144,84 @@ function Build-AllEmailVariants {
     }
 }
 
+
+# ---------------------------------------------------------------------------
+# MODE: WARM DELETED-ITEM CACHE FOR EVERY ELIGIBLE RECIPIENT
+# ---------------------------------------------------------------------------
+if ($Mode -eq "CacheWarm") {
+    $cacheStatus = Get-TautWeeklyDeletedItemCacheStatus
+    if (-not $cacheStatus.Enabled) {
+        throw "Deleted-item cache warm-up requires DeletedItemCacheEnabled=true."
+    }
+    if (-not $cacheStatus.Available) {
+        throw "Deleted-item cache storage is unavailable for warm-up."
+    }
+
+    $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
+    $names = @(Get-TautulliUserNames)
+    $eligibleUsers = 0
+    $failedUsers = 0
+    $selectedItems = New-Object System.Collections.Generic.List[object]
+    $seenItems = @{}
+
+    foreach ($name in $names) {
+        try {
+            $user = Get-NewsletterUser -Id ([string]$name.user_id)
+            if (-not [string]::IsNullOrWhiteSpace((Get-UserSkipReason -User $user))) {
+                continue
+            }
+
+            $eligibleUsers++
+            $history = Get-History -AfterDate $afterDate -BeforeDate $beforeDate -ForUserId $user.UserId
+            $stats = Get-UserStats -History $history
+            Add-UserStatsMediaMetadata -Stats $stats
+
+            foreach ($item in @(@($stats.MovieItems) + @($stats.TvShowItems))) {
+                if ($null -eq $item) { continue }
+                $mediaType = if ((Get-OptionalStringProperty -InputObject $item -Name "Type") -eq "show") { "show" } else { "movie" }
+                $metadataGuid = (Get-OptionalStringProperty -InputObject $item -Name "MetadataGuid").Trim().ToLowerInvariant()
+                $ratingKey = (Get-OptionalStringProperty -InputObject $item -Name "PosterRatingKey").Trim()
+                $identity = if (-not [string]::IsNullOrWhiteSpace($metadataGuid)) {
+                    $mediaType + "|guid|" + $metadataGuid
+                }
+                elseif (-not [string]::IsNullOrWhiteSpace($ratingKey)) {
+                    $mediaType + "|rating-key|" + $ratingKey
+                }
+                else { "" }
+                if (-not [string]::IsNullOrWhiteSpace($identity) -and -not $seenItems.ContainsKey($identity)) {
+                    $seenItems[$identity] = $true
+                    $selectedItems.Add($item)
+                }
+            }
+        }
+        catch {
+            $failedUsers++
+            Write-Log "One included recipient could not be inspected during deleted-item cache warm-up." "WARN"
+        }
+    }
+
+    $script:TautWeeklyResultErrorCategory = "asset-unavailable"
+    if ($selectedItems.Count -gt 0) {
+        [void](Prepare-PosterAssets `
+            -ReleaseData ([PSCustomObject]@{ Movies = @(); TV = @() }) `
+            -AdditionalItems $selectedItems.ToArray())
+    }
+
+    $cacheStatus = Get-TautWeeklyDeletedItemCacheStatus
+    Write-Host ""
+    Write-Host "TAUTWEEKLY DELETED-ITEM CACHE WARM-UP"
+    Write-Host "------------------------------------"
+    Write-Host ("Eligible users checked: {0}" -f $eligibleUsers)
+    Write-Host ("Unique personal items:  {0}" -f $selectedItems.Count)
+    Write-Host ("Retained cache entries: {0}" -f $cacheStatus.ItemCount)
+    Write-Host "No email was sent and no recipient state was changed."
+
+    if ($failedUsers -gt 0) {
+        throw "Deleted-item cache warm-up could not inspect every included recipient."
+    }
+    Write-TautWeeklyStructuredResult -Outcome "succeeded"
+    exit 0
+}
 
 # ---------------------------------------------------------------------------
 # MODE: PREVIEW ALL EMAIL TYPES

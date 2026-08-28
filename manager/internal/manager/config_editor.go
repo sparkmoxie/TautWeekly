@@ -108,6 +108,7 @@ type ConfigPostSavePlan struct {
 	RunIntegration      bool     `json:"runIntegration"`
 	RunSMTP             bool     `json:"runSmtp"`
 	GeneratePreviews    bool     `json:"generatePreviews"`
+	WarmCache           bool     `json:"warmCache"`
 	VerifyCache         bool     `json:"verifyCache"`
 	CacheEnabled        bool     `json:"cacheEnabled"`
 	RetainedDiscovery   bool     `json:"retainedDiscovery"`
@@ -381,15 +382,18 @@ func classifyConfigPostSave(current, next map[string]any, existed bool) ConfigPo
 
 	plan := ConfigPostSavePlan{}
 	category := make(map[string]bool)
+	cacheCoverageChanged := false
 	for name := range changed {
 		switch {
 		case name == "TautulliUrl" || name == "ApiKey":
 			category["tautulli"] = true
+			cacheCoverageChanged = true
 			plan.RunDiscovery = true
 			plan.RunIntegration = true
 			plan.GeneratePreviews = true
 		case name == "PlexServerUrl" || name == "PlexToken":
 			category["plex"] = true
+			cacheCoverageChanged = true
 			plan.RunIntegration = true
 			plan.GeneratePreviews = true
 		case strings.HasPrefix(name, "Smtp"):
@@ -404,23 +408,17 @@ func classifyConfigPostSave(current, next map[string]any, existed bool) ConfigPo
 			category["schedule"] = true
 		case strings.HasPrefix(name, "DeletedItemCache"):
 			category["cache"] = true
-			cacheEnabled := true
-			if value, exists := next["DeletedItemCacheEnabled"]; exists {
-				if parsed, ok := value.(bool); ok {
-					cacheEnabled = parsed
-				}
-			}
-			if cacheEnabled {
-				plan.GeneratePreviews = true
-			}
+			cacheCoverageChanged = true
 		case strings.HasPrefix(name, "CustomTextCard"):
 			category["custom-text-card"] = true
 			plan.GeneratePreviews = true
 		case name == "IncludedLibraryIds" || name == "ExcludedUserIds" || name == "ExcludedEmails":
 			category["libraries"] = true
+			cacheCoverageChanged = true
 			plan.GeneratePreviews = true
 		case name == "DaysBack" || name == "RecentAccessDays" || name == "WatchedPercent" || name == "MaxMovies" || name == "MaxTv":
 			category["newsletter"] = true
+			cacheCoverageChanged = true
 			plan.GeneratePreviews = true
 		case name == "SendDelaySeconds" || name == "TestSendDelaySeconds":
 			category["newsletter"] = true
@@ -435,6 +433,7 @@ func classifyConfigPostSave(current, next map[string]any, existed bool) ConfigPo
 		}
 	}
 	plan.CacheEnabled = cacheEnabled
+	plan.WarmCache = cacheEnabled && cacheCoverageChanged
 	plan.VerifyCache = cacheEnabled
 	plan.MaterialChange = len(changed) > 0
 	for _, name := range []string{"tautulli", "plex", "smtp", "identity", "email", "schedule", "newsletter", "cache", "custom-text-card", "libraries", "delivery"} {

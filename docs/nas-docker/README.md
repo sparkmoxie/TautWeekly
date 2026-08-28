@@ -246,6 +246,7 @@ from the extracted project directory on the Docker host, not in the container:
 
 ```bash
 ./tautweekly.sh verify
+./tautweekly.sh cache-refresh
 ./tautweekly.sh cache-status
 ./tautweekly.sh list-libraries
 ./tautweekly.sh manage-libraries
@@ -258,8 +259,10 @@ from the extracted project directory on the Docker host, not in the container:
 
 Replace `USER_ID` with a numeric value printed by `list-users`. The wrapper
 can prompt when run interactively, but `list-users` does not persist a default.
-`cache-status` prints only share-safe aggregate cache health. It does not print
-paths, titles, GUIDs, artwork, credentials, recipients, or manifest contents.
+`cache-refresh` performs the independent non-sending refresh for every
+production-eligible included user's current newsletter window. `cache-status`
+prints only share-safe aggregate cache health. It does not print paths, titles,
+GUIDs, artwork, credentials, recipients, or manifest contents.
 
 During preview review, confirm the supplied animated movie, TV, and Top Genre
 icons; uncapped qualifying personal titles; responsive full-width movie/TV

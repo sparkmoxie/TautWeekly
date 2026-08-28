@@ -25,6 +25,8 @@ type fixturePreviewRunner struct {
 	sendAllNoEligible    bool
 	previewExitCode      int
 	previewErrorCategory string
+	cacheExitCode        int
+	cacheErrorCategory   string
 }
 
 func (r *fixturePreviewRunner) RunPreviewAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error) {
@@ -103,6 +105,66 @@ func (r *fixturePreviewRunner) RunPreviewAll(ctx context.Context, root, configPa
 	}
 	if err := os.WriteFile(resultPath, encoded, 0o600); err != nil {
 		return 15, err
+	}
+	return 0, nil
+}
+
+func (r *fixturePreviewRunner) RunCacheWarm(ctx context.Context, _, configPath, resultPath string) (int, error) {
+	if _, err := os.Stat(configPath); err != nil {
+		return 21, err
+	}
+	r.mu.Lock()
+	r.userID = ""
+	r.runs++
+	r.mu.Unlock()
+	if r.started != nil {
+		r.once.Do(func() { close(r.started) })
+	}
+	if r.release != nil {
+		select {
+		case <-r.release:
+		case <-ctx.Done():
+			return -1, context.Canceled
+		}
+	}
+	started := time.Now().UTC().Add(-time.Second)
+	if r.cacheExitCode != 0 {
+		if r.cacheErrorCategory != "" {
+			result := rendererResult{
+				SchemaVersion: 1,
+				Mode:          "CacheWarm",
+				Outcome:       "failed",
+				ErrorCategory: r.cacheErrorCategory,
+				DeliveryScope: "none",
+				StartedAtUTC:  started.Format(time.RFC3339Nano),
+				FinishedAtUTC: started.Add(time.Second).Format(time.RFC3339Nano),
+				DurationMS:    1000,
+			}
+			encoded, err := json.Marshal(result)
+			if err != nil {
+				return 22, err
+			}
+			if err := os.WriteFile(resultPath, encoded, 0o600); err != nil {
+				return 23, err
+			}
+		}
+		return r.cacheExitCode, errors.New("cache renderer returned a fixed failure status")
+	}
+	result := rendererResult{
+		SchemaVersion: 1,
+		Mode:          "CacheWarm",
+		Outcome:       "succeeded",
+		DeliveryScope: "none",
+		StartedAtUTC:  started.Format(time.RFC3339Nano),
+		FinishedAtUTC: started.Add(time.Second).Format(time.RFC3339Nano),
+		DurationMS:    1000,
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return 22, err
+	}
+	if err := os.WriteFile(resultPath, encoded, 0o600); err != nil {
+		return 23, err
 	}
 	return 0, nil
 }

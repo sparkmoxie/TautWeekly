@@ -483,18 +483,16 @@ before v0.9.0 observed it live, TautWeekly cannot recover it reliably and will
 not guess by title. This is expected for already-deleted items and is not fixed
 by changing the cache settings.
 
-Enabling the cache and saving configuration does not crawl the library or copy
-all current Plex metadata. A qualifying item must be selected by Preview,
-PreviewAll, SendTest, SendTestAll, a scheduled delivery, or a confirmed manual
-delivery while its live metadata, stable GUID, and non-generic poster are still
-available. After an enabled cache setting changes, Manager starts its existing
-no-email PreviewAll when it has one unambiguous owner/administrator and no
-operation conflict. Cache health is **Waiting** during that prerequisite. At
-its terminal state, including failure or cancellation, Manager automatically
-checks configuration, initialization, manifest/backup structure, aggregate
-entry and artwork counts, retention/bounds, write access, and artwork
-integrity. If PreviewAll cannot start, that full check still runs; use
-PreviewAll later only when a warning says the cache remains unseeded.
+Enabling the cache does not crawl the whole Plex library or retroactively
+recover an item that is already gone. On **Validate, save, and verify**, the
+dedicated cache refresh checks every production-eligible included user's
+current `DaysBack` newsletter history in the selected movie/TV libraries. A
+qualifying item still needs live metadata, a stable GUID, and a non-generic
+poster at that moment. The cache step shows blue **Running** and is independent
+of PreviewAll; it sends no email and does not need one owner/administrator
+sample. At its terminal state, Manager automatically checks configuration,
+initialization, manifest/backup structure, aggregate entry and artwork counts,
+retention/bounds, write access, and artwork integrity.
 
 Start with Manager Dashboard **Config status → Deleted-item cache**, then open
 **Verify → Check deleted-item cache**. The manual check validates configuration,
@@ -505,7 +503,24 @@ Tautulli, SMTP, or recipients.
 The Verify result is retained across refreshes; this manual action is an
 optional recheck for later filesystem or configuration changes.
 
-The same share-safe summary is available from each package:
+If configuration was edited outside Manager, or an explicit refresh is useful,
+run the non-sending refresh first:
+
+```text
+Windows:        20-REFRESH-DELETED-ITEM-CACHE.bat
+NAS/Compose:    ./tautweekly.sh cache-refresh
+macOS Docker:   ./tautweekly.sh cache-refresh
+native Linux:   sudo tautweekly cache-refresh
+FreeBSD Podman: sudo tautweekly cache-refresh
+```
+
+For generic Compose without the packaged wrapper:
+
+```bash
+docker compose exec tautweekly /opt/tautweekly/bin/run-mode.sh CacheWarm
+```
+
+The same share-safe health summary is available from each package:
 
 ```text
 Windows:        19-CACHE-DIAGNOSTICS.bat
@@ -533,8 +548,9 @@ Interpret the summary as follows:
 - `Enabled: false` means saved configuration has intentionally stopped cache
   reads and writes.
 - `Manifest: unseeded` with `Available: true` means local storage works but no
-  qualifying live render has captured an entry. Run PreviewAll, then run the
-  status command again and compare only the aggregate counts.
+  qualifying live refresh or render has captured an entry. Run the applicable
+  cache-refresh command, then run the status command again and compare only
+  the aggregate counts.
 - `Writability: failed` means the runtime identity cannot safely initialize or
   update the private cache volume.
 - `backup-recovered` or `reset-after-corruption` records bounded automatic

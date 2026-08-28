@@ -167,25 +167,38 @@ func New(options Options) (*Server, error) {
 	configuration := newConfigurationStatusStore(options.DataDir, options.Now)
 	cacheVerificationMu := &sync.Mutex{}
 	options.operationCompleted = func(record OperationRecord, revision string) {
-		if record.Type != "preview-all" || !validConfigRevision(revision) {
+		if !validConfigRevision(revision) {
 			return
 		}
 		editor := ReadConfigEditor(options.RuntimeRoot)
 		if editor.State != "ready" || editor.Revision != revision {
 			return
 		}
-		state := "failed"
-		summary := "Local preview generation did not complete. Review the Preview operation for its support code."
-		if record.State == "succeeded" {
-			state = "passed"
-			summary = "Six-state local preview generation completed without sending email."
-		} else if record.State == "cancelled" {
-			state = "skipped"
-			summary = "Local preview generation was cancelled before completion."
+		if record.Type == "preview-all" {
+			state := "failed"
+			summary := "Local preview generation did not complete. Review the Preview operation for its support code."
+			if record.State == "succeeded" {
+				state = "passed"
+				summary = "Six-state local preview generation completed without sending email."
+			} else if record.State == "cancelled" {
+				state = "skipped"
+				summary = "Local preview generation was cancelled before completion."
+			}
+			_ = configuration.Update(revision, "previews", state, summary)
+			return
 		}
-		_ = configuration.Update(revision, "previews", state, summary)
+		if record.Type != "cache-warm" {
+			return
+		}
 		cache := collectDeletedItemCacheStatus(options.RuntimeRoot, false, false, options.Now)
 		if !cache.Enabled {
+			return
+		}
+		if record.State != "succeeded" {
+			cache.State = "failed"
+			cache.Verification = "full"
+			cache.Summary = "Deleted-item cache refresh did not inspect every included user and selected-library newsletter item."
+			_ = configuration.StoreCache(revision, cache)
 			return
 		}
 		_ = configuration.Update(revision, "cache", "running", "Checking cache storage, bounds, manifests, backup, writability, and artwork integrity locally.")
@@ -1149,6 +1162,8 @@ func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
 	if current := s.schedule.Current(); current != nil && scheduleOperationActive(current.State) {
 		if request.Type == "preview-all" {
 			s.updateConfigurationStep(request.ExpectedRevision, "previews", "skipped", "A schedule operation was active. Generate previews manually after it finishes.")
+		} else if request.Type == "cache-warm" {
+			s.updateConfigurationStep(request.ExpectedRevision, "cache", "failed", "Deleted-item cache refresh could not start while a schedule operation was active.")
 		}
 		writeAPIError(w, http.StatusConflict, "schedule-busy", "Wait for the active schedule change before starting a Manager operation.")
 		return
@@ -1174,40 +1189,48 @@ func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, ErrOperationInvalid):
 		if request.Type == "preview-all" {
 			s.updateConfigurationStep(request.ExpectedRevision, "previews", "failed", "Preview generation could not start because its user selection was invalid.")
+		} else if request.Type == "cache-warm" {
+			s.updateConfigurationStep(request.ExpectedRevision, "cache", "failed", "Deleted-item cache refresh could not start because its request was invalid.")
 		}
 		writeAPIError(w, http.StatusUnprocessableEntity, "operation-invalid", "Choose a supported operation and provide only the inputs required for that operation.")
 		return
 	case errors.Is(err, ErrOperationNotReady):
 		if request.Type == "preview-all" {
 			s.updateConfigurationStep(request.ExpectedRevision, "previews", "failed", "Configuration is incomplete, so local previews could not be generated.")
+		} else if request.Type == "cache-warm" {
+			s.updateConfigurationStep(request.ExpectedRevision, "cache", "failed", "Configuration is incomplete, so deleted-item cache refresh could not start.")
 		}
 		writeAPIError(w, http.StatusConflict, "operation-not-ready", "Complete and save configuration before starting this operation.")
 		return
 	case errors.Is(err, ErrOperationBusy):
 		if request.Type == "preview-all" {
 			s.updateConfigurationStep(request.ExpectedRevision, "previews", "skipped", "Another Manager operation was active. Generate previews manually after it finishes.")
+		} else if request.Type == "cache-warm" {
+			s.updateConfigurationStep(request.ExpectedRevision, "cache", "failed", "Deleted-item cache refresh could not start while another Manager operation was active.")
 		}
 		writeAPIError(w, http.StatusConflict, "operation-busy", "Another Manager operation is already running.")
 		return
 	case errors.Is(err, ErrConfigConflict):
 		if request.Type == "preview-all" {
 			s.updateConfigurationStep(request.ExpectedRevision, "previews", "failed", "Configuration changed before local preview generation could start.")
+		} else if request.Type == "cache-warm" {
+			s.updateConfigurationStep(request.ExpectedRevision, "cache", "failed", "Configuration changed before deleted-item cache refresh could start.")
 		}
 		writeAPIError(w, http.StatusConflict, "config-conflict", "Configuration changed after this page was loaded. Refresh before generating previews.")
 		return
 	case err != nil:
 		if request.Type == "preview-all" {
 			s.updateConfigurationStep(request.ExpectedRevision, "previews", "failed", "Local preview generation could not be started safely.")
+		} else if request.Type == "cache-warm" {
+			s.updateConfigurationStep(request.ExpectedRevision, "cache", "failed", "Deleted-item cache refresh could not be started safely.")
 		}
 		writeAPIError(w, http.StatusInternalServerError, "operation-start-failed", "The Manager operation could not be started safely.")
 		return
 	}
 	if request.Type == "preview-all" {
-		cache := collectDeletedItemCacheStatus(s.options.RuntimeRoot, false, false, s.options.Now)
-		if cache.Enabled {
-			s.updateConfigurationStep(request.ExpectedRevision, "cache", "waiting", "Waiting for local PreviewAll cache initialization before the full storage and artwork check.")
-		}
 		s.updateConfigurationStep(request.ExpectedRevision, "previews", "running", "Generating six local preview states without sending email.")
+	} else if request.Type == "cache-warm" {
+		s.updateConfigurationStep(request.ExpectedRevision, "cache", "running", "Refreshing cache coverage for every included user's selected-library newsletter items.")
 	}
 	writeJSON(w, http.StatusAccepted, record)
 }

@@ -144,6 +144,10 @@ foreach ($engine in $engines) {
         $plexRejectStderr = Join-Path $tempRoot 'plex-reject.stderr.txt'
         $primeStdout = Join-Path $tempRoot 'prime.stdout.txt'
         $primeStderr = Join-Path $tempRoot 'prime.stderr.txt'
+        $cacheWarmResultPath = Join-Path $tempRoot 'cache-warm-result.json'
+        $secondUserPreviewStdout = Join-Path $tempRoot 'second-user-preview.stdout.txt'
+        $secondUserPreviewStderr = Join-Path $tempRoot 'second-user-preview.stderr.txt'
+        $secondUserPreviewPath = ''
         $serverStdout = Join-Path $tempRoot 'server.stdout.txt'
         $serverStderr = Join-Path $tempRoot 'server.stderr.txt'
         $smtpCallLog = Join-Path $tempRoot 'smtp-calls.jsonl'
@@ -341,18 +345,59 @@ foreach ($engine in $engines) {
                     $primeProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
                         '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
                         '-RendererPath', (Join-Path $appRoot $engine.Renderer), '-ConfigPath', $configPath,
-                        '-UserId', '1', '-Mode', 'PreviewAll'
+                        '-Mode', 'CacheWarm', '-ResultPath', $cacheWarmResultPath
                     ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $primeStdout -RedirectStandardError $primeStderr
                     if ($primeProcess.ExitCode -ne 0) {
                         throw "$($engine.Name)/cache-prime renderer failed ($($primeProcess.ExitCode)).`nSTDOUT:`n$(Get-Content $primeStdout -Raw)`nSTDERR:`n$(Get-Content $primeStderr -Raw)"
                     }
+                    $cacheWarmResultRaw = Get-Content -LiteralPath $cacheWarmResultPath -Raw -Encoding UTF8
+                    $cacheWarmResult = $cacheWarmResultRaw | ConvertFrom-Json
+                    Assert-True ($cacheWarmResult.mode -eq 'CacheWarm' -and $cacheWarmResult.outcome -eq 'succeeded' -and $cacheWarmResult.deliveryScope -eq 'none') "$($engine.Name) cache warm returned the wrong no-delivery result."
+                    Assert-True ($cacheWarmResult.smtpAcceptedCount -eq 0 -and $cacheWarmResult.failedCount -eq 0) "$($engine.Name) cache warm crossed the no-delivery boundary."
                     $cacheRoot = if ($engine.Container) { Join-Path $dataRoot 'cache/deleted-items' } else { Join-Path $appRoot 'cache/deleted-items' }
                     Assert-True (Test-Path -LiteralPath (Join-Path $cacheRoot 'index.json')) "$($engine.Name) did not create the persistent cache manifest while items were live."
-                    Assert-True ((Get-ChildItem -LiteralPath (Join-Path $cacheRoot 'artwork') -File -Filter '*.jpg').Count -ge 2) "$($engine.Name) did not cache live movie and TV artwork."
+                    Assert-True ((Get-ChildItem -LiteralPath (Join-Path $cacheRoot 'artwork') -File -Filter '*.jpg').Count -ge 3) "$($engine.Name) did not cache live owner, second-user, and TV artwork."
+                    $warmManifest = Get-Content -LiteralPath (Join-Path $cacheRoot 'index.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+                    $secondUserCacheEntries = @($warmManifest.Entries | Where-Object { $_.Guid -eq 'plex://movie/second-user-cache-guid' })
+                    Assert-True ($secondUserCacheEntries.Count -eq 1) "$($engine.Name) did not cache the second eligible user's personal movie."
+                    Assert-True ($secondUserCacheEntries[0].Summary -eq 'Second-user metadata captured only by the all-user cache refresh.') "$($engine.Name) did not retain the second user's summary in the cache."
+                    Assert-True (($secondUserCacheEntries[0].Genres -join ', ') -eq 'Adventure, Family') "$($engine.Name) did not retain the second user's genres in the cache."
+                    $warmHistoryUserIds = @(
+                        Get-Content -LiteralPath $callLog |
+                            ForEach-Object { $_ | ConvertFrom-Json } |
+                            Where-Object {
+                                $null -ne $_.PSObject.Properties['query'] -and
+                                $null -ne $_.query.PSObject.Properties['cmd'] -and
+                                [string]$_.query.cmd -eq 'get_history' -and
+                                $null -ne $_.query.PSObject.Properties['user_id'] -and
+                                -not [string]::IsNullOrWhiteSpace([string]$_.query.user_id)
+                            } |
+                            ForEach-Object { [string]$_.query.user_id } |
+                            Select-Object -Unique
+                    )
+                    Assert-True ('1' -in $warmHistoryUserIds -and '2' -in $warmHistoryUserIds) "$($engine.Name) cache warm did not inspect both eligible users independently."
+                    $primeLog = Get-Content -LiteralPath $primeStdout -Raw
+                    foreach ($privateWarmValue in @('Virtual Viewer', 'Simulated Champion', 'viewer@example.com', 'champion@example.com', 'second-user-cache-guid')) {
+                        Assert-True (-not $primeLog.Contains($privateWarmValue)) "$($engine.Name) cache warm console output exposed a recipient or item identifier."
+                    }
                     Set-Content -LiteralPath $scenarioState -Value $cacheScenario -Encoding ASCII
                     Remove-Item -LiteralPath (Join-Path $outputRoot 'posters') -Recurse -Force -ErrorAction SilentlyContinue
                     Get-ChildItem -LiteralPath $outputRoot -File -Filter 'preview-all-*.html' -ErrorAction SilentlyContinue | Remove-Item -Force
                     New-Item -ItemType Directory -Force -Path (Join-Path $outputRoot 'posters') | Out-Null
+                    $secondUserPreview = Start-Process -FilePath $engine.Host -ArgumentList @(
+                        '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
+                        '-RendererPath', (Join-Path $appRoot $engine.Renderer), '-ConfigPath', $configPath,
+                        '-UserId', '2', '-Mode', 'Preview'
+                    ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $secondUserPreviewStdout -RedirectStandardError $secondUserPreviewStderr
+                    if ($secondUserPreview.ExitCode -ne 0) {
+                        throw "$($engine.Name)/cache-deleted second-user preview failed ($($secondUserPreview.ExitCode)).`nSTDOUT:`n$(Get-Content $secondUserPreviewStdout -Raw)`nSTDERR:`n$(Get-Content $secondUserPreviewStderr -Raw)"
+                    }
+                    $secondUserPreviewPath = [string](
+                        Get-ChildItem -LiteralPath $outputRoot -File -Filter 'preview_*.html' |
+                            Sort-Object LastWriteTimeUtc |
+                            Select-Object -Last 1 -ExpandProperty FullName
+                    )
+                    Assert-True (-not [string]::IsNullOrWhiteSpace($secondUserPreviewPath)) "$($engine.Name)/cache-deleted did not write the second-user preview artifact."
                 }
                 $previewArguments = @(
                     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
@@ -387,8 +432,9 @@ foreach ($engine in $engines) {
                     }
             )
             Assert-True ($historicalMovieCalls.Count -ge 1) "$($engine.Name)/$scenario did not request historical movie state."
+            $expectedHistoryUserIds = if ($scenario -eq $cacheScenario) { @('1', '2') } else { @('1') }
             foreach ($historyCall in $historicalMovieCalls) {
-                Assert-True ([string]$historyCall.query.user_id -eq '1') "$($engine.Name)/$scenario did not scope watched state to the recipient."
+                Assert-True ([string]$historyCall.query.user_id -in $expectedHistoryUserIds) "$($engine.Name)/$scenario did not scope watched state to an eligible recipient."
                 Assert-True ([string]$historyCall.query.include_activity -eq '0') "$($engine.Name)/$scenario included active sessions in historical watched state."
                 Assert-True ($null -eq $historyCall.query.PSObject.Properties['after'] -and $null -eq $historyCall.query.PSObject.Properties['before']) "$($engine.Name)/$scenario limited watched state to the newsletter window."
             }
@@ -853,6 +899,12 @@ foreach ($engine in $engines) {
             }
 
             if ($scenario -eq $cacheScenario) {
+                $secondUserPreviewLog = Get-Content -LiteralPath $secondUserPreviewStdout -Raw
+                $secondUserPreviewHtml = Get-Content -LiteralPath $secondUserPreviewPath -Raw -Encoding UTF8
+                Assert-True ($secondUserPreviewLog.Contains('Deleted-item cache hit for an exact movie GUID')) "$($engine.Name)/$scenario did not restore the second user's exact movie cache entry."
+                Assert-True ($secondUserPreviewLog.Contains('Restored deleted movie history artwork from the bounded pre-deletion cache.')) "$($engine.Name)/$scenario did not restore the second user's cached movie artwork."
+                Assert-True ($secondUserPreviewHtml.Contains('Adventure, Family')) "$($engine.Name)/$scenario did not restore the second user's cached genres."
+                Assert-True ($secondUserPreviewHtml.Contains('84%') -and $secondUserPreviewHtml.Contains('90%')) "$($engine.Name)/$scenario did not restore the second user's cached ratings."
                 Assert-True ($previewLog.Contains('Deleted-item cache hit for an exact movie GUID')) "$($engine.Name)/$scenario did not report an exact movie cache hit."
                 Assert-True ($previewLog.Contains('Deleted-item cache hit for an exact show GUID')) "$($engine.Name)/$scenario did not report an exact TV cache hit."
                 Assert-True ($previewLog.Contains('Restored deleted movie history artwork from the bounded pre-deletion cache.')) "$($engine.Name)/$scenario did not restore cached movie artwork."

@@ -614,6 +614,17 @@ function ConvertTo-TwDeletedCacheText {
     return $text
 }
 
+function Get-TwDeletedCachePreferredText {
+    param(
+        [AllowNull()][object]$CurrentValue,
+        [AllowNull()][object]$ExistingValue,
+        [int]$MaximumLength
+    )
+    $current = ConvertTo-TwDeletedCacheText $CurrentValue $MaximumLength
+    if (-not [string]::IsNullOrWhiteSpace($current)) { return $current }
+    return (ConvertTo-TwDeletedCacheText $ExistingValue $MaximumLength)
+}
+
 function Update-TautWeeklyDeletedItemCache {
     param([object]$Item, [string]$PosterPath)
     if (-not $script:TwDeletedCacheEnabled -or -not $script:TwDeletedCacheAvailable) { return $false }
@@ -661,24 +672,32 @@ function Update-TautWeeklyDeletedItemCache {
         $now = [DateTime]::UtcNow.ToString("o")
         $index = Get-TwDeletedCacheIndex
         $existing = @($index.Entries | Where-Object { (Get-OptionalStringProperty $_ "Id") -eq $id } | Select-Object -First 1)
-        $created = if ($existing.Count -gt 0) { Get-OptionalStringProperty $existing[0] "CreatedUtc" } else { $now }
+        $existingEntry = if ($existing.Count -gt 0) { $existing[0] } else { $null }
+        $existingRatings = if ($null -ne $existingEntry -and $null -ne $existingEntry.PSObject.Properties["Ratings"]) { $existingEntry.Ratings } else { $null }
+        if ($genres.Count -eq 0 -and $null -ne $existingEntry -and $null -ne $existingEntry.PSObject.Properties["Genres"]) {
+            foreach ($genre in @($existingEntry.Genres | Select-Object -First 8)) {
+                $text = ConvertTo-TwDeletedCacheText $genre 80
+                if (-not [string]::IsNullOrWhiteSpace($text)) { $genres.Add($text) }
+            }
+        }
+        $created = if ($null -ne $existingEntry) { Get-OptionalStringProperty $existingEntry "CreatedUtc" } else { $now }
         $entry = [PSCustomObject]@{
             Id          = $id
             MediaType   = $mediaType
             Guid        = $guid
-            RatingKey   = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "PosterRatingKey") 128
-            Title       = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "Title") 300
-            Year        = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "Year") 16
-            Summary     = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "Summary") 1600
+            RatingKey   = Get-TwDeletedCachePreferredText (Get-OptionalStringProperty $Item "PosterRatingKey") (Get-OptionalStringProperty $existingEntry "RatingKey") 128
+            Title       = Get-TwDeletedCachePreferredText (Get-OptionalStringProperty $Item "Title") (Get-OptionalStringProperty $existingEntry "Title") 300
+            Year        = Get-TwDeletedCachePreferredText (Get-OptionalStringProperty $Item "Year") (Get-OptionalStringProperty $existingEntry "Year") 16
+            Summary     = Get-TwDeletedCachePreferredText (Get-OptionalStringProperty $Item "Summary") (Get-OptionalStringProperty $existingEntry "Summary") 1600
             Genres      = $genres.ToArray()
             Ratings     = [PSCustomObject]@{
-                RtCritic       = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRtCritic") 8
-                RtAudience     = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRtAudience") 8
-                Imdb           = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignImdbRating") 8
-                Provider       = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRatingProvider") 12
-                ProviderValue  = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRatingValue") 8
-                RtCriticImage  = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRtCriticImage") 100
-                RtAudienceImage = ConvertTo-TwDeletedCacheText (Get-OptionalStringProperty $Item "DesignRtAudienceImage") 100
+                RtCritic       = Get-TwDeletedCachePreferredText (Get-OptionalStringProperty $Item "DesignRtCritic") (Get-OptionalStringProperty $existingRatings "RtCritic") 8
+                RtAudience     = Get-TwDeletedCachePreferredText (Get-OptionalStringProperty $Item "DesignRtAudience") (Get-OptionalStringProperty $existingRatings "RtAudience") 8
+                Imdb           = Get-TwDeletedCachePreferredText (Get-OptionalStringProperty $Item "DesignImdbRating") (Get-OptionalStringProperty $existingRatings "Imdb") 8
+                Provider       = Get-TwDeletedCachePreferredText (Get-OptionalStringProperty $Item "DesignRatingProvider") (Get-OptionalStringProperty $existingRatings "Provider") 12
+                ProviderValue  = Get-TwDeletedCachePreferredText (Get-OptionalStringProperty $Item "DesignRatingValue") (Get-OptionalStringProperty $existingRatings "ProviderValue") 8
+                RtCriticImage  = Get-TwDeletedCachePreferredText (Get-OptionalStringProperty $Item "DesignRtCriticImage") (Get-OptionalStringProperty $existingRatings "RtCriticImage") 100
+                RtAudienceImage = Get-TwDeletedCachePreferredText (Get-OptionalStringProperty $Item "DesignRtAudienceImage") (Get-OptionalStringProperty $existingRatings "RtAudienceImage") 100
             }
             Poster      = [PSCustomObject]@{ FileName = $assetName; Sha256 = $posterHash; Bytes = [int64]$posterInfo.Length }
             CreatedUtc  = $created

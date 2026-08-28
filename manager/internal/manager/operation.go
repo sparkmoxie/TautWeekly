@@ -76,6 +76,7 @@ type OperationHistory struct {
 
 type operationRunner interface {
 	RunPreviewAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error)
+	RunCacheWarm(ctx context.Context, root, configPath, resultPath string) (int, error)
 	RunSendTestAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error)
 	RunSendWelcome(ctx context.Context, root, configPath, resultPath, userID string) (int, error)
 	RunSendAll(ctx context.Context, root, configPath, resultPath string) (int, error)
@@ -144,7 +145,7 @@ func newOperationCoordinator(options Options) (*operationCoordinator, error) {
 }
 
 func (c *operationCoordinator) Start(request CreateOperationRequest) (OperationRecord, error) {
-	if request.Type != "preview-all" && request.Type != "send-test-all" && request.Type != "send-welcome" && request.Type != "send-all" {
+	if request.Type != "preview-all" && request.Type != "cache-warm" && request.Type != "send-test-all" && request.Type != "send-welcome" && request.Type != "send-all" {
 		return OperationRecord{}, ErrOperationInvalid
 	}
 	if request.Type == "preview-all" {
@@ -154,6 +155,9 @@ func (c *operationCoordinator) Start(request CreateOperationRequest) (OperationR
 		if !request.ConfirmNoSend {
 			return OperationRecord{}, ErrOperationConfirmation
 		}
+	}
+	if request.Type == "cache-warm" && (request.ConfirmNoSend || request.ConfirmTestSend || request.ConfirmProductionSend) {
+		return OperationRecord{}, ErrOperationInvalid
 	}
 	if request.Type == "send-test-all" {
 		if request.ConfirmNoSend || request.ConfirmProductionSend {
@@ -172,7 +176,8 @@ func (c *operationCoordinator) Start(request CreateOperationRequest) (OperationR
 		}
 	}
 	userID := strings.TrimSpace(request.UserID)
-	if (request.Type != "send-all" && !validTautulliUserID(userID)) || (request.Type == "send-all" && userID != "") {
+	requiresUser := request.Type == "preview-all" || request.Type == "send-test-all" || request.Type == "send-welcome"
+	if (requiresUser && !validTautulliUserID(userID)) || (!requiresUser && userID != "") {
 		return OperationRecord{}, ErrOperationInvalid
 	}
 	values, raw, exists, state := readConfigDocument(c.runtimeRoot)
@@ -212,7 +217,7 @@ func (c *operationCoordinator) Start(request CreateOperationRequest) (OperationR
 		State:               "queued",
 		StartedAtUTC:        now.Format(time.RFC3339),
 		GeneratedPreviewIDs: []string{},
-		Cancellable:         request.Type == "preview-all",
+		Cancellable:         request.Type == "preview-all" || request.Type == "cache-warm",
 	}
 	if err := c.store.saveCurrent(record); err != nil {
 		_ = os.Remove(snapshotPath)
@@ -241,6 +246,9 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 	} else if record.Type == "send-test-all" {
 		mode = "SendTestAll"
 		exitCode, runErr = c.runner.RunSendTestAll(ctx, c.root, snapshotPath, resultPath, userID)
+	} else if record.Type == "cache-warm" {
+		mode = "CacheWarm"
+		exitCode, runErr = c.runner.RunCacheWarm(ctx, c.root, snapshotPath, resultPath)
 	} else {
 		exitCode, runErr = c.runner.RunPreviewAll(ctx, c.root, snapshotPath, resultPath, userID)
 	}
@@ -615,7 +623,7 @@ func validTautulliUserID(value string) bool {
 }
 
 func validOperationRecord(record OperationRecord) bool {
-	return record.SchemaVersion == operationSchemaVersion && record.ID != "" && (record.Type == "preview-all" || record.Type == "send-test-all" || record.Type == "send-welcome" || record.Type == "send-all") && record.StartedAtUTC != ""
+	return record.SchemaVersion == operationSchemaVersion && record.ID != "" && (record.Type == "preview-all" || record.Type == "cache-warm" || record.Type == "send-test-all" || record.Type == "send-welcome" || record.Type == "send-all") && record.StartedAtUTC != ""
 }
 
 func operationActive(state string) bool {

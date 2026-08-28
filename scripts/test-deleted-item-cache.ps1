@@ -124,6 +124,29 @@ try {
     Assert-Equal $entry.Ratings.ProviderValue '7.4' 'Selected rating value was not retained.'
     Assert-True ($null -eq $entry.PSObject.Properties['PlexToken']) 'Unexpected private field reached cache entry.'
 
+    $sparseMovie = [PSCustomObject]@{
+        Type                  = 'movie'
+        MetadataGuid          = $movieGuid
+        PosterRatingKey       = '42'
+        Title                 = 'Future Deleted Movie'
+        Year                  = ''
+        Summary               = ''
+        DesignGenres          = @()
+        DesignRtCritic        = ''
+        DesignRtAudience      = ''
+        DesignImdbRating      = ''
+        DesignRatingProvider  = ''
+        DesignRatingValue     = ''
+        DesignRtCriticImage   = ''
+        DesignRtAudienceImage = ''
+    }
+    Assert-True (Update-TautWeeklyDeletedItemCache -Item $sparseMovie -PosterPath $poster) 'Sparse live refresh could not update the existing exact-GUID entry.'
+    $entry = Get-TautWeeklyDeletedItemCacheEntry -MediaType movie -MetadataGuid $movieGuid
+    Assert-Equal $entry.Summary 'A short presentation summary.' 'Sparse refresh erased the retained summary.'
+    Assert-Equal ($entry.Genres -join ',') 'Drama,Mystery' 'Sparse refresh erased retained genres.'
+    Assert-Equal $entry.Ratings.RtCritic '91' 'Sparse refresh erased the retained critic rating.'
+    Assert-Equal $entry.Ratings.Provider 'TMDB' 'Sparse refresh erased the retained provider rating.'
+
     $rawIndex = Get-Content -LiteralPath (Join-Path $cacheRoot 'index.json') -Raw
     foreach ($forbidden in @($secret, 'PlexToken', 'TautulliApiKey', 'RecipientEmail', 'ViewCount', 'TotalDuration', 'example.com')) {
         Assert-True (-not $rawIndex.Contains($forbidden)) "Cache serialized forbidden private data: $forbidden"
@@ -138,7 +161,7 @@ try {
     Write-TautWeeklyDeletedItemCacheActivitySummary
     $activity = @($script:TestLogs | Where-Object { $_ -like '*Deleted-item cache activity:*' })
     Assert-Equal $activity.Count 1 'Cache activity summary was not emitted exactly once.'
-    Assert-True ($activity[0] -like '*captures=1*exact-misses=1*invalid-lookups=1*') 'Cache activity summary omitted aggregate capture or lookup evidence.'
+    Assert-True ($activity[0] -like '*captures=2*exact-misses=1*invalid-lookups=1*') 'Cache activity summary omitted aggregate capture or lookup evidence.'
     Write-TautWeeklyDeletedItemCacheActivitySummary
     Assert-Equal @($script:TestLogs | Where-Object { $_ -like '*Deleted-item cache activity:*' }).Count 1 'Cache activity summary repeated within one run.'
 

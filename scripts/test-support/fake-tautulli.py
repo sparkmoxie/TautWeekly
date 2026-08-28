@@ -581,6 +581,43 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                 "started": 100,
             }
         ]
+        if scenario in ("cache-prime", "cache-deleted"):
+            second_user_movie = {
+                "section_id": "10",
+                "media_type": "movie",
+                "rating_key": "second-user-cache-movie",
+                "guid": "plex://movie/second-user-cache-guid",
+                "title": "Second User Cache Movie",
+                "year": "2024",
+                "summary": "Second-user metadata captured only by the all-user cache refresh.",
+                "rating": "8.4",
+                "rating_image": "rottentomatoes://image.rating.ripe",
+                "audience_rating": "9.0",
+                "audience_rating_image": "rottentomatoes://image.rating.upright",
+                "genres": ["Adventure", "Family"],
+                "user_id": "2",
+                "friendly_name": "Simulated Champion",
+                # Keep this cache-coverage probe out of unrelated aggregate
+                # duration expectations while retaining a qualified watch.
+                "play_duration": 0,
+                "watched_status": 1,
+                "percent_complete": 100,
+                "group_count": 1,
+                "platform": "Roku",
+                "started": 180,
+            }
+            if scenario == "cache-deleted":
+                for field in (
+                    "year",
+                    "summary",
+                    "rating",
+                    "rating_image",
+                    "audience_rating",
+                    "audience_rating_image",
+                    "genres",
+                ):
+                    second_user_movie.pop(field, None)
+            rows.append(second_user_movie)
         if scenario == "active":
             rows[0]["group_count"] = 4
             # A real, non-release movie leads the movie-only Trending totals.
@@ -1581,6 +1618,7 @@ class Handler(BaseHTTPRequestHandler):
                 "selected-show",
                 "champion-episode",
                 "viewer-deleted-episode",
+                "second-user-cache-movie",
             ):
                 self.write_json(
                     {
@@ -1592,6 +1630,25 @@ class Handler(BaseHTTPRequestHandler):
                     },
                     # v2.18.0 returns proper HTTP errors for invalid metadata.
                     status=400,
+                )
+                return
+            if scenario == "cache-prime" and key == "second-user-cache-movie":
+                self.api_success(
+                    {
+                        "rating_key": key,
+                        "media_type": "movie",
+                        "title": "Second User Cache Movie",
+                        "year": "2024",
+                        "summary": "Second-user metadata captured only by the all-user cache refresh.",
+                        "rating": "8.4",
+                        "rating_image": "rottentomatoes://image.rating.ripe",
+                        "audience_rating": "9.0",
+                        "audience_rating_image": "rottentomatoes://image.rating.upright",
+                        "genres": ["Adventure", "Family"],
+                        "banner": "",
+                        "art": "",
+                        "thumb": "",
+                    }
                 )
                 return
             is_episode = "episode" in key

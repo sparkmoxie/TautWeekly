@@ -17,6 +17,10 @@ func (platformPreviewOperationRunner) RunPreviewAll(ctx context.Context, root, c
 	return runContainerRendererOperation(ctx, root, configPath, resultPath, userID, "PreviewAll", true, false, false)
 }
 
+func (platformPreviewOperationRunner) RunCacheWarm(ctx context.Context, root, configPath, resultPath string) (int, error) {
+	return runContainerRendererOperation(ctx, root, configPath, resultPath, "", "CacheWarm", false, false, false)
+}
+
 func (platformPreviewOperationRunner) RunSendTestAll(ctx context.Context, root, configPath, resultPath, userID string) (int, error) {
 	return runContainerRendererOperation(ctx, root, configPath, resultPath, userID, "SendTestAll", false, false, false)
 }

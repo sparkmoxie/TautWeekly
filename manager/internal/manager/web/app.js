@@ -321,6 +321,7 @@ async function loadAll() {
     manageSchedulePolling();
     setGlobalStatus("Local status refreshed.", true);
     void loadTailscaleAccess();
+    void recoverPendingCacheWarm();
     return true;
   } catch (error) {
     if (loadAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return false;
@@ -1779,7 +1780,7 @@ function collectConfigSaveRequest() {
 const setupWorkflowSteps = ["choices", "lan", "smtp", "previews", "cache"];
 
 function beginSetupWorkflow(plan) {
-  state.setupWorkflowRunning = Boolean(plan?.runDiscovery || plan?.runIntegration || plan?.runSmtp || plan?.generatePreviews || plan?.verifyCache);
+  state.setupWorkflowRunning = Boolean(plan?.runDiscovery || plan?.runIntegration || plan?.runSmtp || plan?.generatePreviews || plan?.warmCache || plan?.verifyCache);
   renderSetupWorkflow();
 }
 
@@ -1835,8 +1836,42 @@ async function retainSkippedPreviewStatus(revision, reason) {
   renderSetupWorkflow();
 }
 
+async function startCacheWarmOperation(revision) {
+  if (!revision || state.editor?.state !== "ready" || operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation)) return false;
+  state.operationStarting = true;
+  state.operationStartingType = "cache-warm";
+  updateSetupWorkflowStep("cache", "running", "Refreshing cache coverage for every included user's selected-library newsletter items...");
+  renderOperations();
+  renderVerification();
+  try {
+    state.operation = await request("/api/v1/operations", {
+      method: "POST",
+      body: JSON.stringify({ type: "cache-warm", expectedRevision: revision }),
+    });
+    manageOperationPolling();
+    return true;
+  } catch (error) {
+    updateSetupWorkflowStep("cache", "failed", error.message);
+    return false;
+  } finally {
+    state.operationStarting = false;
+    state.operationStartingType = "";
+    renderOperations();
+    renderVerification();
+  }
+}
+
+async function recoverPendingCacheWarm(expectedAuthenticationEpoch = authenticationEpoch) {
+  if (expectedAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
+  const cacheState = state.setupWorkflow?.steps?.cache?.state || "";
+  if (!["waiting", "running"].includes(cacheState) || state.cache?.enabled === false || state.editor?.state !== "ready"
+      || operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation)) return;
+  await startCacheWarmOperation(state.editor.revision);
+}
+
 async function runPostSaveSetup(revision, plan) {
   let previewStarted = false;
+  let cacheStarted = false;
   let discovered = state.discovery?.configRevision === revision ? state.discovery : null;
   let discoveryFailed = false;
   if (plan.runDiscovery) {
@@ -1909,20 +1944,32 @@ async function runPostSaveSetup(revision, plan) {
     }
   }
 
+  if (plan.warmCache) {
+    if (discoveryFailed) {
+      updateSetupWorkflowStep("cache", "failed", "Deleted-item cache refresh could not start because the included user and library choices were unavailable.");
+    } else if (operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation)) {
+      updateSetupWorkflowStep("cache", "failed", "Deleted-item cache refresh could not start while another local operation was active.");
+    } else {
+      cacheStarted = await startCacheWarmOperation(revision);
+    }
+  } else if (plan.verifyCache) {
+    await runCacheVerification({ automatic: true, expectedRevision: revision });
+  }
+
   const suggestedUserID = discovered?.suggestedPreviewUserId || "";
-  if (plan.generatePreviews && discoveryFailed) {
+  if (plan.generatePreviews && !cacheStarted && discoveryFailed) {
     updateSetupWorkflowStep("previews", "skipped", "Preview generation was skipped because Tautulli choices could not be refreshed. Resolve the discovery result, then use Refresh Tautulli choices to continue without another save.");
     await retainSkippedPreviewStatus(revision, "discovery-failed");
-  } else if (plan.generatePreviews && !discovered) {
+  } else if (plan.generatePreviews && !cacheStarted && !discovered) {
     updateSetupWorkflowStep("previews", "skipped", "Preview generation was skipped because no retained Tautulli choices are available. Refresh Tautulli choices to continue without another save.");
     await retainSkippedPreviewStatus(revision, "choices-unavailable");
-  } else if (plan.generatePreviews && !validPreviewUserID(suggestedUserID)) {
+  } else if (plan.generatePreviews && !cacheStarted && !validPreviewUserID(suggestedUserID)) {
     updateSetupWorkflowStep("previews", "skipped", "Tautulli did not expose one unambiguous owner or administrator ID. Choose a user under Previews to generate the six local states manually.");
     await retainSkippedPreviewStatus(revision, "owner-not-found");
-  } else if (plan.generatePreviews && (operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation))) {
+  } else if (plan.generatePreviews && !cacheStarted && (operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation))) {
     updateSetupWorkflowStep("previews", "skipped", "Another Manager or schedule operation is active. Generate previews manually after it finishes.");
     await retainSkippedPreviewStatus(revision, "operation-active");
-  } else if (plan.generatePreviews) {
+  } else if (plan.generatePreviews && !cacheStarted) {
     state.operationStarting = true;
     state.operationStartingType = "preview-all";
     updateSetupWorkflowStep("previews", "running", "Starting six local newsletter previews for the verified owner or administrator...");
@@ -1942,10 +1989,6 @@ async function runPostSaveSetup(revision, plan) {
       state.operationStartingType = "";
       renderOperations();
     }
-  }
-
-  if (plan.verifyCache && !previewStarted) {
-    await runCacheVerification({ automatic: true, expectedRevision: revision });
   }
 
   if (state.setupWorkflow) state.setupWorkflow.running = false;
@@ -1976,7 +2019,7 @@ async function runPostSaveSetup(revision, plan) {
   } catch (_) {
     // Diagnostics are supplementary; the individual setup results remain visible.
   }
-  return { cachePending: Boolean(plan.verifyCache && previewStarted) };
+  return { cachePending: cacheStarted, previewPending: previewStarted };
 }
 
 async function recoverPendingPreviewsFromChoices(expectedAuthenticationEpoch = authenticationEpoch) {
@@ -2099,7 +2142,7 @@ async function submitConfig(event) {
       setGlobalStatus(result.backup ? "Configuration normalized and backed up. No checks or preview work were needed." : "Configuration normalized. No checks or preview work were needed.", true);
       return;
     }
-    const hasPostSaveWork = Boolean(result.postSave.runDiscovery || result.postSave.runIntegration || result.postSave.runSmtp || result.postSave.generatePreviews || result.postSave.verifyCache);
+    const hasPostSaveWork = Boolean(result.postSave.runDiscovery || result.postSave.runIntegration || result.postSave.runSmtp || result.postSave.generatePreviews || result.postSave.warmCache || result.postSave.verifyCache);
     if (!hasPostSaveWork) {
       setGlobalStatus(savedWithoutVerificationMessage(result.postSave), true);
       return;
@@ -2107,8 +2150,10 @@ async function submitConfig(event) {
     setGlobalStatus(result.backup ? "Configuration saved and backed up. Running only affected checks..." : "Configuration saved. Running only affected checks...");
     const setup = await runPostSaveSetup(result.editor.revision, result.postSave);
     setGlobalStatus(setup.cachePending
-      ? "Preview warm-up is running. Full local cache verification will follow automatically."
-      : "Affected save verification finished. Review the results above.", true);
+      ? "Deleted-item cache refresh is running. Full local cache verification will follow automatically."
+      : setup.previewPending
+        ? "Preview generation is running. Review it under Previews when complete."
+        : "Affected save verification finished. Review the results above.", true);
   } catch (error) {
     showConfigErrors(error.message, error.fields);
     setGlobalStatus(error.message, true);
@@ -2387,7 +2432,7 @@ function renderVerification() {
       : state.cacheVerificationRunning
         ? "Checking the bounded manifest, local write access, and cached artwork without contacting any service."
         : operationBusy
-          ? "Wait for the active local operation; its cache verification will finish automatically after PreviewAll."
+          ? "Wait for the active local operation; an active cache refresh will finish its verification automatically."
           : cache?.verification === "full"
             ? "The latest full result is retained. Use this optional recheck after later filesystem or configuration changes."
             : "A successful save runs this full local check automatically; use the button for an optional recheck.";
@@ -2422,9 +2467,9 @@ function renderVerification() {
   if (["waiting", "running"].includes(cacheWorkflowState) && !cacheDisabled) {
     const workflowSummary = state.setupWorkflow?.steps?.cache?.summary
       || (cacheWorkflowState === "waiting"
-        ? "Waiting for the local PreviewAll warm-up before the full cache check."
+        ? "Waiting for the local cache refresh to start."
         : "Checking deleted-item cache storage and artwork locally.");
-    setText("cache-verification-observed", cacheWorkflowState === "waiting" ? "Waiting for the no-email PreviewAll prerequisite." : "Full local verification is running.");
+    setText("cache-verification-observed", cacheWorkflowState === "waiting" ? "Waiting for the local cache refresh to start." : "Cache refresh and verification are running locally.");
     appendVerificationResult(cacheResults, "Deleted-item cache", cacheWorkflowState, workflowSummary);
     appendVerificationResult(cacheResults, "Storage and bounds", cacheWorkflowState,
       cacheWorkflowState === "waiting" ? "Waiting for cache initialization before checking storage and bounds." : "Checking writable storage, retention, and configured bounds.");
@@ -2697,7 +2742,7 @@ function renderOperations() {
 
   let message = "Enter a numeric Tautulli user ID, then confirm this preview-only run.";
   if (!ready) message = "Complete and save configuration before generating previews.";
-  else if (active) message = operation.type === "preview-all" ? (operation.state === "cancelling" ? "Stopping the local preview process safely..." : "Generating previews. You can leave this page while the Manager tracks the operation.") : "An email delivery is active. Wait for its aggregate SMTP result before starting another operation.";
+  else if (active) message = operation.type === "preview-all" ? (operation.state === "cancelling" ? "Stopping the local preview process safely..." : "Generating previews. You can leave this page while the Manager tracks the operation.") : operation.type === "cache-warm" ? "Refreshing deleted-item cache coverage locally. No email is sent." : "An email delivery is active. Wait for its aggregate SMTP result before starting another operation.";
   else if (scheduleActive) message = "Wait for the active schedule change before generating previews.";
   else if (state.operationStarting) message = "Starting a fixed Manager operation...";
   else if (!userIDValid && userID) message = "Enter a numeric Tautulli user ID using no more than 20 digits.";
@@ -2776,7 +2821,7 @@ function renderCurrentOperation(operation) {
   }
   cancel.hidden = !operation?.cancellable || !operationIsActive(operation);
   cancel.disabled = state.operationCancelling;
-  setSwappingButtonText("preview-cancel-button", state.operationCancelling ? "Cancelling..." : "Cancel preview generation");
+  setSwappingButtonText("preview-cancel-button", state.operationCancelling ? "Cancelling..." : operation?.type === "cache-warm" ? "Cancel cache refresh" : "Cancel preview generation");
   if (!operation) {
     setText("current-operation-heading", "No Manager operation recorded");
     setText("current-operation-copy", "The Manager keeps sanitized operation state locally.");
@@ -2853,6 +2898,8 @@ function renderOperationHistory() {
       ? `${operation.smtpAcceptedCount || 0} accepted by SMTP`
       : operation.type === "send-all"
         ? `${operation.smtpAcceptedCount || 0} accepted · ${operation.skippedCount || 0} skipped · ${operation.failedCount || 0} failed`
+        : operation.type === "cache-warm"
+          ? "All included users and selected libraries"
         : `${operation.generatedPreviewIds?.length || 0} preview${operation.generatedPreviewIds?.length === 1 ? "" : "s"}`;
     meta.append(chip, count);
     row.append(copy, meta);
@@ -2862,6 +2909,17 @@ function renderOperationHistory() {
 
 function operationSummary(operation) {
   const count = operation.generatedPreviewIds?.length || 0;
+  if (operation.type === "cache-warm") {
+    switch (operation.state) {
+    case "queued": return { heading: "Deleted-item cache refresh queued", copy: "The local all-included-user cache refresh is waiting to start." };
+    case "running": return { heading: "Refreshing deleted-item cache", copy: "Included users and selected-library newsletter items are being inspected locally; no email is sent." };
+    case "cancelling": return { heading: "Cancelling cache refresh", copy: "The Manager is stopping the local cache refresh and retaining a sanitized result." };
+    case "succeeded": return { heading: "Deleted-item cache refresh completed", copy: "Every eligible included user was checked and the full local cache verification completed." };
+    case "cancelled": return { heading: "Deleted-item cache refresh cancelled", copy: "The local refresh stopped before complete coverage could be verified." };
+    case "failed": return { heading: "Deleted-item cache refresh failed", copy: rendererFailureCopy(operation.errorCategory, operation.supportCode) };
+    default: return { heading: "Deleted-item cache refresh recorded", copy: "Review the sanitized cache result under Verify." };
+    }
+  }
   if (operation.type === "send-welcome") {
     switch (operation.state) {
     case "queued": return { heading: "Manual Welcome queued", copy: "One selected-user welcome newsletter is waiting to start." };
@@ -3129,6 +3187,7 @@ async function pollOperation(expectedOperationID = state.operation?.id || "", ex
       const summary = state.operation ? operationSummary(state.operation) : { heading: "Manager operation ended" };
       setGlobalStatus(summary.heading + ".", true);
     }
+    if (completedOperation.type === "cache-warm") await recoverPendingPreviewsFromChoices();
   } catch (error) {
     if (!operationPollIsCurrent(expectedOperationID, expectedSequence)) return;
     if (error.status === 401) showAuthentication();
