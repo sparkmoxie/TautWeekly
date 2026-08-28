@@ -1399,8 +1399,8 @@ foreach ($relativePath in $rendererPaths) {
         -StartLabel 'August 1' `
         -EndLabel 'August 7'
     Assert-True ($uncappedPlainText.Contains('12 movies watched') -and $uncappedPlainText.Contains('Uncapped Movie 12')) "$relativePath capped the personal movie list in plain text"
-    Assert-True ($uncappedPlainText.Contains('11 TV shows watched') -and $uncappedPlainText.Contains('Uncapped Show 11 — 11 episodes')) "$relativePath capped the personal TV list or lost its episode count in plain text"
-    Assert-True ($uncappedPlainText.Contains('Uncapped Show 01 — 1 episode')) "$relativePath lost singular episode copy in plain text"
+    Assert-True ($uncappedPlainText.Contains('11 TV shows watched') -and $uncappedPlainText.Contains(('Uncapped Show 11 {0} 11 episodes' -f [char]0x2014))) "$relativePath capped the personal TV list or lost its episode count in plain text"
+    Assert-True ($uncappedPlainText.Contains(('Uncapped Show 01 {0} 1 episode' -f [char]0x2014))) "$relativePath lost singular episode copy in plain text"
     Assert-True (-not $uncappedPlainText.Contains('11h 0m')) "$relativePath retained per-show TV duration in plain text"
     Assert-True ($uncappedPlainText.Contains('2h 46m total watch time') -and -not $uncappedPlainText.Contains('total watched')) "$relativePath retained the old personal-time label in plain text"
 
