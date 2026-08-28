@@ -291,7 +291,6 @@ $config = [ordered]@{
     ScheduledTaskName = $taskName
     DaysBack = 7
     WatchedPercent = 85
-    MinimumEpisodeSeconds = 120
     MaxMovies = 8
     MaxTv = 8
     DeletedItemCacheEnabled = $existingDeletedItemCacheEnabled

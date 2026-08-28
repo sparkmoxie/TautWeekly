@@ -261,8 +261,7 @@ authorization.
 | Key | Default | Purpose |
 |---|---:|---|
 | `DaysBack` | 7 | Activity and recently-added window |
-| `WatchedPercent` | 85 | Completion threshold, including the historical recipient movie marker fallback |
-| `MinimumEpisodeSeconds` | 120 | Filters very short playback |
+| `WatchedPercent` | 85 | Movie/episode qualification threshold; definitive `watched_status=1` also qualifies |
 | `MaxMovies`, `MaxTv` | 8 | Content-card limits |
 | `IncludedLibraryIds` | `[]` | Stable Tautulli section IDs defining the global newsletter scope; empty means all active movie/TV libraries for backward compatibility |
 | `ExcludedUserIds` | `[]` | Users omitted by stable Tautulli ID |
@@ -270,6 +269,10 @@ authorization.
 | `RecentAccessDays` | 7 | New/recent access classification |
 | `SendDelaySeconds` | 30 | Pause between real production recipient attempts |
 | `TestSendDelaySeconds` | 10 | Pause between controlled Test All messages |
+
+Legacy configuration files may still contain `MinimumEpisodeSeconds`. Current
+builds ignore that retired key; a fixed 120-second episode rule no longer
+qualifies personal TV or server-wide activity.
 
 Direct configured SMTP remains the standard delivery path. Production messages
 stay personalized with exactly one envelope recipient. The recommended cadence
@@ -303,9 +306,44 @@ Trending, the hero, Binge Champion, and each user's personal totals therefore
 share the selected scope. Per-user Plex sharing rules are not queried or
 intersected; this is a single administrator-controlled scope.
 
-A new movie produces the **HOT NEW RELEASE** hero. Its footer is the existing
-full-width **TRENDING THIS WEEK** movie card, and new movie/TV shelves retain
-their established behavior.
+### Weekly activity qualification
+
+Weekly history requests use `grouping=1` and `include_activity=0`, so active
+sessions are excluded. A movie or episode qualifies when Tautulli reports the
+definitive `watched_status=1` (including its credits-aware decision), or when
+`percent_complete >= WatchedPercent`. Partial grades `0.25`, `0.5`, and `0.75`
+do not qualify by themselves.
+
+Each returned grouped history reference counts as one play. `group_count` is
+not multiplied into newsletter totals, so resumed fragments remain one play;
+separate qualifying history references, including rewatches, count again and
+add their own watch time. Transcode, Direct Stream, and Direct Play use the same
+qualification rule.
+
+Personal total watch time is the deliberate exception: it sums all movie and
+episode playback in the report window, including partial rows. Personal movie
+cards, personal TV cards, Trending, Hot New Release, Top Genre, and Binge
+Champion use qualified rows only. Personal TV groups qualified episodes by
+show, displays the unique episode count with correct singular/plural copy, and
+retains the show-level rating; per-show duration and episode-level rating rows
+are omitted.
+
+Movie **TRENDING THIS WEEK** ranks qualified movies by play count, unique
+viewers, qualified watch time, then most recent activity. Its hero/footer line
+is `Most watched across <server> this week • N play(s)`.
+
+A new movie produces the **HOT NEW RELEASE** hero. New movies with qualified
+activity rank by play count, unique viewers, qualified watch time, then added
+date. The line is
+`Most-watched new release across <server> this week • N play(s)`; when no new
+movie has qualified activity, the newest movie is featured with `Freshly
+added!`. Its footer is the existing full-width **TRENDING THIS WEEK** movie
+card, and new movie/TV shelves retain their established behavior.
+
+**Binge Champion** considers qualified movie and episode rows and ranks users
+by qualified watch time, play count, unique movie/TV-show count, then recency.
+Its supporting line places total plays first, for example
+`7 plays • 3 movies • 2 TV shows`, omitting a zero media category.
 
 A report window with no new movies is a Trending state. When new TV exists, one
 authentic movie-only **TRENDING THIS WEEK** result is used as the hero when
@@ -338,8 +376,8 @@ delivery all use these same computed release and footer values.
 
 Movie and TV personal-stat cards keep their established layout and recipient
 platform icon. When provider metadata exists, movie rows retain poster, genres,
-and Rotten Tomatoes critic/audience ratings; TV rows retain poster, watch
-duration, and IMDb rating.
+and Rotten Tomatoes critic/audience ratings; TV rows retain poster, unique
+episode count, and show-level IMDb rating.
 
 Normally revise this scope in Manager Config. Recovery/expert fallbacks are
 `15-MANAGE-LIBRARIES.bat` on Windows,

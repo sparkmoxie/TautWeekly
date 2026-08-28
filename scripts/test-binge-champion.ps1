@@ -18,9 +18,12 @@ $rendererPaths = @(
 )
 
 $requiredFunctions = @(
+    'Get-OptionalStringProperty',
     'Safe-Int',
     'Format-WatchTime',
     'Get-HistoryRowPlayCount',
+    'Test-HistoryRowQualifiedView',
+    'Get-NewsletterPlatformHistoryTimestamp',
     'Get-BingeChampion',
     'Get-BingeChampionDisplay',
     'Get-BingeChampionTitleBreakdown'
@@ -65,33 +68,30 @@ foreach ($relativePath in $rendererPaths) {
         Invoke-Expression $definition.Extent.Text
     }
 
-    $script:Config = [PSCustomObject]@{
-        WatchedPercent         = 85
-        MinimumEpisodeSeconds = 120
-    }
+    $script:Config = [PSCustomObject]@{ WatchedPercent = 85 }
 
     $history = @(
         [PSCustomObject]@{
             media_type = 'movie'; play_duration = 14400; watched_status = 1
             percent_complete = 100; group_count = 2; rating_key = 'movie-1'
-            title = 'Private Movie'; user_id = '10'; friendly_name = 'Private Winner'
+            title = 'Private Movie'; user_id = '10'; friendly_name = 'Private Winner'; started = 100
         },
         [PSCustomObject]@{
-            media_type = 'episode'; play_duration = 7200; watched_status = 0
-            percent_complete = 50; group_count = 1; grandparent_rating_key = 'show-1'
+            media_type = 'episode'; play_duration = 7200; watched_status = 1
+            percent_complete = 100; group_count = 20; grandparent_rating_key = 'show-1'
             grandparent_title = 'Private Show'; title = 'Episode'
-            user_id = '10'; friendly_name = 'Private Winner'
+            user_id = '10'; friendly_name = 'Private Winner'; started = 200
         },
         [PSCustomObject]@{
             media_type = 'episode'; play_duration = 18000; watched_status = 0
             percent_complete = 50; group_count = 10; grandparent_rating_key = 'show-2'
             grandparent_title = 'Runner Show'; title = 'Episode'
-            user_id = '20'; friendly_name = 'Runner With More Plays'
+            user_id = '20'; friendly_name = 'Partial Runner'; started = 300
         },
         [PSCustomObject]@{
             media_type = 'movie'; play_duration = 21600; watched_status = 1
-            percent_complete = 100; group_count = 2; rating_key = 'movie-3'
-            title = 'Tie Movie'; user_id = '30'; friendly_name = 'Runner With Equal Time'
+            percent_complete = 100; group_count = 50; rating_key = 'movie-3'
+            title = 'Tie Movie'; user_id = '30'; friendly_name = 'Runner With Equal Time'; started = 150
         }
     )
 
@@ -99,7 +99,8 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($null -ne $champion) "$relativePath did not select a Binge Champion"
     Assert-True ($champion.UserId -eq '10') "$relativePath did not rank watch time first and plays second"
     Assert-True ($champion.Seconds -eq 21600) "$relativePath returned the wrong aggregate watch time"
-    Assert-True ($champion.MoviePlays -eq 2) "$relativePath returned the wrong movie-play count"
+    Assert-True ($champion.Plays -eq 2) "$relativePath multiplied grouped fragments into extra plays"
+    Assert-True ($champion.MoviePlays -eq 1) "$relativePath returned the wrong movie-play count"
     Assert-True ($champion.TvPlays -eq 1) "$relativePath returned the wrong TV-play count"
     Assert-True ($champion.QualifyingTitles -eq 2) "$relativePath did not count one movie and one TV show as two qualifying titles"
     Assert-True ($champion.QualifyingMovies -eq 1) "$relativePath returned the wrong unique movie count"
@@ -115,7 +116,8 @@ foreach ($relativePath in $rendererPaths) {
 
     Assert-True $winnerView.IsWinner "$relativePath did not mark the winning recipient"
     Assert-True (-not $otherView.IsWinner) "$relativePath marked a non-winner as the champion"
-    Assert-True ($winnerView.MoviePlays -eq 2 -and $otherView.MoviePlays -eq 2) "$relativePath did not share the movie aggregate"
+    Assert-True ($winnerView.Plays -eq 2 -and $otherView.Plays -eq 2) "$relativePath did not share the total-play aggregate"
+    Assert-True ($winnerView.MoviePlays -eq 1 -and $otherView.MoviePlays -eq 1) "$relativePath did not share the movie aggregate"
     Assert-True ($winnerView.TvPlays -eq 1 -and $otherView.TvPlays -eq 1) "$relativePath did not share the TV aggregate"
     Assert-True ($winnerView.QualifyingTitles -eq 2 -and $otherView.QualifyingTitles -eq 2) "$relativePath did not share the qualifying-title aggregate"
     Assert-True ($winnerView.QualifyingMovies -eq 1 -and $otherView.QualifyingMovies -eq 1) "$relativePath did not share the unique movie aggregate"
@@ -123,12 +125,12 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($winnerView.TotalTimeText -eq '6h 0m' -and $otherView.TotalTimeText -eq '6h 0m') "$relativePath did not share the watch-time aggregate"
 
     $bullet = [char]0x2022
-    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 1; QualifyingTvShows = 0 })) -eq '1 movie') "$relativePath lost singular movie copy"
-    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 2; QualifyingTvShows = 0 })) -eq '2 movies') "$relativePath lost plural movie copy"
-    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 0; QualifyingTvShows = 1 })) -eq '1 TV show') "$relativePath lost singular TV-show copy"
-    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 0; QualifyingTvShows = 3 })) -eq '3 TV shows') "$relativePath lost plural TV-show copy"
-    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 5; QualifyingTvShows = 2 })) -eq "5 movies $bullet 2 TV shows") "$relativePath lost the mixed title breakdown"
-    Assert-True ([string]::IsNullOrWhiteSpace((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ QualifyingMovies = 0; QualifyingTvShows = 0 })))) "$relativePath rendered zero-count categories"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 1; QualifyingMovies = 1; QualifyingTvShows = 0 })) -eq "1 play $bullet 1 movie") "$relativePath lost singular play/movie copy"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 2; QualifyingMovies = 2; QualifyingTvShows = 0 })) -eq "2 plays $bullet 2 movies") "$relativePath lost plural play/movie copy"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 1; QualifyingMovies = 0; QualifyingTvShows = 1 })) -eq "1 play $bullet 1 TV show") "$relativePath lost singular TV-show copy"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 3; QualifyingMovies = 0; QualifyingTvShows = 3 })) -eq "3 plays $bullet 3 TV shows") "$relativePath lost plural TV-show copy"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 7; QualifyingMovies = 5; QualifyingTvShows = 2 })) -eq "7 plays $bullet 5 movies $bullet 2 TV shows") "$relativePath lost the mixed play/title breakdown"
+    Assert-True ([string]::IsNullOrWhiteSpace((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 0; QualifyingMovies = 0; QualifyingTvShows = 0 })))) "$relativePath rendered zero-count categories"
 
     $legacyDisplay = Get-BingeChampionDisplay -BingeChampion ([PSCustomObject]@{
         UserId = '10'; FriendlyName = 'Private Winner'; Seconds = 21600

@@ -6,6 +6,33 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.23.3] - 2026-08-27
+
+### Changed
+
+- Unified completed-view qualification for personal movie/TV cards, Movie
+  Trending, Hot New Release, Top Genre, and Binge Champion: a finished history
+  row now requires definitive `watched_status=1` or
+  `percent_complete >= WatchedPercent` (85 by default). Active sessions are
+  excluded, while partial movie/episode playback remains included only in
+  personal total watch time.
+- Counted each grouped Tautulli history reference as one play instead of
+  multiplying `group_count`. Separate qualifying references, including
+  rewatches, still add another play and their qualified watch time.
+- Ranked Movie Trending by plays, unique viewers, qualified watch time, then
+  recency; ranked Hot New Release by plays, unique viewers, qualified watch
+  time, then added date. Updated Hot New Release activity/fallback copy to name
+  the configured server and use `Freshly added!` when no new movie qualifies.
+- Replaced personal TV per-show duration with a singular/plural unique episode
+  count while preserving the existing layout and show-level rating treatment.
+- Added total plays before the nonzero movie and TV-show counts in the Binge
+  Champion supporting line.
+
+### Removed
+
+- Retired the obsolete `MinimumEpisodeSeconds` setup/Manager control. Existing
+  configuration keys are safely ignored.
+
 ## [0.23.2] - 2026-08-27
 
 ### Changed

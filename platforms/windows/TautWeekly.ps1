@@ -975,11 +975,12 @@ function Get-History {
         $start = 0
         while ($true) {
             $params = @{
-                grouping = 1
-                after    = $AfterDate
-                before   = $BeforeDate
-                start    = $start
-                length   = $pageSize
+                grouping         = 1
+                include_activity = 0
+                after            = $AfterDate
+                before           = $BeforeDate
+                start            = $start
+                length           = $pageSize
             }
             if (-not [string]::IsNullOrWhiteSpace($ForUserId)) {
                 $params.user_id = $ForUserId
@@ -2040,10 +2041,6 @@ function Get-UserStats {
         Safe-Int $Config.WatchedPercent
     } else { 85 }
 
-    $minEpisodeSeconds = if ($null -ne $Config.PSObject.Properties["MinimumEpisodeSeconds"]) {
-        Safe-Int $Config.MinimumEpisodeSeconds
-    } else { 120 }
-
     $moviesWatched = 0
     $episodesStreamed = 0
     $qualifyingPlays = 0
@@ -2064,9 +2061,7 @@ function Get-UserStats {
         }
 
         if ($type -eq "movie") {
-            $watchedStatus = Safe-Int $row.watched_status
-            $percent = Safe-Int $row.percent_complete
-            $qualified = ($watchedStatus -gt 0 -or $percent -ge $watchedThreshold)
+            $qualified = Test-HistoryRowQualifiedView -Row $row -WatchedThreshold $watchedThreshold
 
             if ($qualified) {
                 $moviesWatched++
@@ -2152,7 +2147,7 @@ function Get-UserStats {
             }
 
             $topTitle = [string]$row.title
-            if (-not [string]::IsNullOrWhiteSpace($topTitle) -and $seconds -gt 0) {
+            if ($qualified -and -not [string]::IsNullOrWhiteSpace($topTitle) -and $seconds -gt 0) {
                 $key = "movie:" + $topTitle
                 if (-not $titleTotals.ContainsKey($key)) {
                     $titleTotals[$key] = [PSCustomObject]@{
@@ -2164,7 +2159,7 @@ function Get-UserStats {
             }
         }
         elseif ($type -eq "episode") {
-            $qualified = ($seconds -ge $minEpisodeSeconds)
+            $qualified = Test-HistoryRowQualifiedView -Row $row -WatchedThreshold $watchedThreshold
 
             if ($qualified) {
                 $episodesStreamed++
@@ -2219,6 +2214,7 @@ function Get-UserStats {
                         DesignGenres    = @($rowShowGenres)
                         Plays           = 0
                         Seconds         = [int64]0
+                        EpisodeCount    = 0
                         TotalTimeText   = ""
                     }
                 }
@@ -2268,6 +2264,7 @@ function Get-UserStats {
 
                 if (-not $episodeSeen.ContainsKey($dedupeKey)) {
                     $episodeSeen[$dedupeKey] = $true
+                    $tvShowTotals[$showDedupeKey].EpisodeCount++
 
                     $nativeImdb = ""
                     $ratingImage = Get-OptionalStringProperty -InputObject $row -Name "rating_image"
@@ -2305,7 +2302,7 @@ function Get-UserStats {
                 $showTitleForTop = [string]$row.title
             }
 
-            if (-not [string]::IsNullOrWhiteSpace($showTitleForTop) -and $seconds -gt 0) {
+            if ($qualified -and -not [string]::IsNullOrWhiteSpace($showTitleForTop) -and $seconds -gt 0) {
                 $key = "show:" + $showTitleForTop
                 if (-not $titleTotals.ContainsKey($key)) {
                     $titleTotals[$key] = [PSCustomObject]@{
@@ -2368,40 +2365,50 @@ function Get-HotNewRelease {
         [object[]]$GlobalHistory
     )
 
+    $watchedThreshold = if ($null -ne $Config.PSObject.Properties["WatchedPercent"]) {
+        Safe-Int $Config.WatchedPercent
+    } else { 85 }
+
     $lookup = @{}
 
     foreach ($m in @($ReleaseData.Movies)) {
         $lookup[$m.ReleaseKey] = [PSCustomObject]@{
-            Item    = $m
-            Seconds = [int64]0
-            Plays   = 0
+            Item       = $m
+            Seconds    = [int64]0
+            Plays      = 0
+            ViewerKeys = @{}
         }
     }
 
     foreach ($row in $GlobalHistory) {
         $type = ([string]$row.media_type).ToLowerInvariant()
-        $key = ""
+        if ($type -ne "movie") { continue }
+        if (-not (Test-HistoryRowQualifiedView -Row $row -WatchedThreshold $watchedThreshold)) { continue }
 
-        if ($type -eq "movie") {
-            $key = "movie:" + [string]$row.rating_key
-        }
-        elseif ($type -eq "episode") {
-            $showKey = [string]$row.grandparent_rating_key
-            if (-not [string]::IsNullOrWhiteSpace($showKey)) {
-                $key = "show:" + $showKey
-            }
-        }
+        $ratingKey = ([string]$row.rating_key).Trim()
+        if ([string]::IsNullOrWhiteSpace($ratingKey)) { continue }
+        $key = "movie:" + $ratingKey
+        if (-not $lookup.ContainsKey($key)) { continue }
 
-        if (-not [string]::IsNullOrWhiteSpace($key) -and $lookup.ContainsKey($key)) {
-            $lookup[$key].Seconds += [int64](Safe-Int $row.play_duration)
-            $lookup[$key].Plays += (Get-HistoryRowPlayCount -Row $row)
+        $seconds = [int64](Safe-Int $row.play_duration)
+        if ($seconds -lt 0) { $seconds = 0 }
+        $lookup[$key].Seconds += $seconds
+        $lookup[$key].Plays += (Get-HistoryRowPlayCount -Row $row)
+
+        $viewerKey = Get-HistoryRowViewerKey -Row $row
+        if (-not [string]::IsNullOrWhiteSpace($viewerKey)) {
+            $lookup[$key].ViewerKeys[$viewerKey] = $true
         }
     }
 
     $watched = @(
         $lookup.Values |
-        Where-Object { $_.Seconds -gt 0 -or $_.Plays -gt 0 } |
-        Sort-Object Seconds, Plays -Descending |
+        Where-Object { $_.Plays -gt 0 } |
+        Sort-Object `
+            @{ Expression = { Safe-Int $_.Plays }; Descending = $true }, `
+            @{ Expression = { $_.ViewerKeys.Count }; Descending = $true }, `
+            @{ Expression = { [int64]$_.Seconds }; Descending = $true }, `
+            @{ Expression = { [int64]$_.Item.AddedAt }; Descending = $true } |
         Select-Object -First 1
     )
 
@@ -2435,12 +2442,43 @@ function Get-HotNewRelease {
 function Get-HistoryRowPlayCount {
     param([object]$Row)
 
-    if ($null -ne $Row.PSObject.Properties["group_count"]) {
-        $groupCount = Safe-Int $Row.group_count
-        if ($groupCount -gt 0) { return $groupCount }
+    # With grouping enabled, each returned Tautulli reference represents one
+    # play session. group_count describes grouped fragments and must not turn a
+    # resumed session into multiple newsletter plays.
+    return 1
+}
+
+function Test-HistoryRowQualifiedView {
+    param(
+        [AllowNull()][object]$Row,
+        [int]$WatchedThreshold = 85
+    )
+
+    if ($null -eq $Row) { return $false }
+    return (
+        (Safe-Int $Row.watched_status) -eq 1 -or
+        (Safe-Int $Row.percent_complete) -ge $WatchedThreshold
+    )
+}
+
+function Get-HistoryRowViewerKey {
+    param([AllowNull()][object]$Row)
+
+    if ($null -eq $Row) { return "" }
+    foreach ($propertyName in @("user_id", "userId")) {
+        $value = (Get-OptionalStringProperty -InputObject $Row -Name $propertyName).Trim()
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            return "id:" + $value
+        }
+    }
+    foreach ($propertyName in @("user", "username", "friendly_name")) {
+        $value = (Get-OptionalStringProperty -InputObject $Row -Name $propertyName).Trim()
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            return "name:" + $value.ToLowerInvariant()
+        }
     }
 
-    return 1
+    return ""
 }
 
 function Get-NewsletterPlatformCatalog {
@@ -2658,12 +2696,17 @@ function Get-NewsletterPlatformHeadingHtml {
 function Get-GlobalTitleTotals {
     param([object[]]$GlobalHistory)
 
+    $watchedThreshold = if ($null -ne $Config.PSObject.Properties["WatchedPercent"]) {
+        Safe-Int $Config.WatchedPercent
+    } else { 85 }
+
     $totals = @{}
 
     foreach ($row in $GlobalHistory) {
         $type = ([string]$row.media_type).ToLowerInvariant()
         $seconds = [int64](Safe-Int $row.play_duration)
         if ($seconds -lt 0) { $seconds = 0 }
+        if (-not (Test-HistoryRowQualifiedView -Row $row -WatchedThreshold $watchedThreshold)) { continue }
 
         $title = ""
         $key = ""
@@ -2735,6 +2778,8 @@ function Get-GlobalTitleTotals {
                 Genres    = @($metadataGenres)
                 Seconds   = [int64]0
                 Plays     = 0
+                ViewerKeys = @{}
+                Latest    = [int64]0
             }
         }
 
@@ -2771,6 +2816,12 @@ function Get-GlobalTitleTotals {
 
         $totals[$key].Seconds += $seconds
         $totals[$key].Plays += (Get-HistoryRowPlayCount -Row $row)
+        $viewerKey = Get-HistoryRowViewerKey -Row $row
+        if (-not [string]::IsNullOrWhiteSpace($viewerKey)) {
+            $totals[$key].ViewerKeys[$viewerKey] = $true
+        }
+        $timestamp = Get-NewsletterPlatformHistoryTimestamp -Row $row
+        if ($timestamp -gt $totals[$key].Latest) { $totals[$key].Latest = $timestamp }
     }
 
     return @($totals.Values)
@@ -2785,7 +2836,11 @@ function Get-GlobalTrendingStat {
             [string]$_.Type -eq "movie" -and
             ($_.Seconds -gt 0 -or $_.Plays -gt 0)
         } |
-        Sort-Object Seconds, Plays -Descending |
+        Sort-Object `
+            @{ Expression = { Safe-Int $_.Plays }; Descending = $true }, `
+            @{ Expression = { $_.ViewerKeys.Count }; Descending = $true }, `
+            @{ Expression = { [int64]$_.Seconds }; Descending = $true }, `
+            @{ Expression = { [int64]$_.Latest }; Descending = $true } |
         Select-Object -First 1
     )
 
@@ -2867,10 +2922,8 @@ function Get-GlobalTopMovieGenre {
         if ((Get-OptionalStringProperty -InputObject $row -Name 'media_type').ToLowerInvariant() -ne 'movie') { continue }
 
         $seconds = [int64](Safe-Int $row.play_duration)
-        $qualified = (
-            $seconds -gt 0 -and
-            ((Safe-Int $row.watched_status) -gt 0 -or (Safe-Int $row.percent_complete) -ge $watchedThreshold)
-        )
+        if ($seconds -lt 0) { $seconds = 0 }
+        $qualified = Test-HistoryRowQualifiedView -Row $row -WatchedThreshold $watchedThreshold
         if (-not $qualified) { continue }
 
         $ratingKey = (Get-OptionalStringProperty -InputObject $row -Name 'rating_key').Trim()
@@ -3057,20 +3110,18 @@ function New-HeroItemFromGlobalStat {
 function Get-GlobalTrendingHero {
     param(
         [object[]]$GlobalHistory,
-        [AllowNull()][object]$ReleaseData = $null
+        [AllowNull()][object]$ReleaseData = $null,
+        [AllowNull()][object]$TrendingStat = $null
     )
 
-    $top = @(
-        Get-GlobalTitleTotals -GlobalHistory $GlobalHistory |
-        Where-Object {
-            [string]$_.Type -eq "movie" -and
-            ($_.Seconds -gt 0 -or $_.Plays -gt 0)
-        } |
-        Sort-Object Seconds, Plays -Descending |
-        Select-Object -First 1
-    )
+    $top = @()
+    if ($null -ne $TrendingStat) {
+        $top = @($TrendingStat)
+    } else {
+        $top = @(Get-GlobalTrendingStat -GlobalHistory $GlobalHistory)
+    }
 
-    if ($top.Count -eq 0) { return $null }
+    if ($top.Count -eq 0 -or $null -eq $top[0]) { return $null }
 
     $historyItem = New-HeroItemFromGlobalStat -Stat $top[0]
     $item = $historyItem
@@ -3160,10 +3211,6 @@ function Get-BingeChampion {
         Safe-Int $Config.WatchedPercent
     } else { 85 }
 
-    $minEpisodeSeconds = if ($null -ne $Config.PSObject.Properties["MinimumEpisodeSeconds"]) {
-        Safe-Int $Config.MinimumEpisodeSeconds
-    } else { 120 }
-
     $totals = @{}
 
     foreach ($row in $GlobalHistory) {
@@ -3171,16 +3218,8 @@ function Get-BingeChampion {
         $seconds = [int64](Safe-Int $row.play_duration)
         if ($seconds -lt 0) { $seconds = 0 }
 
-        $qualified = $false
-        if ($type -eq "movie") {
-            $qualified = (
-                (Safe-Int $row.watched_status) -gt 0 -or
-                (Safe-Int $row.percent_complete) -ge $watchedThreshold
-            )
-        }
-        elseif ($type -eq "episode") {
-            $qualified = ($seconds -ge $minEpisodeSeconds)
-        }
+        if ($type -notin @("movie", "episode")) { continue }
+        $qualified = Test-HistoryRowQualifiedView -Row $row -WatchedThreshold $watchedThreshold
 
         if (-not $qualified) { continue }
 
@@ -3225,6 +3264,7 @@ function Get-BingeChampion {
                 Seconds      = [int64]0
                 MoviePlays   = 0
                 TvPlays      = 0
+                Latest       = [int64]0
                 QualifyingTitleKeys = @{}
                 QualifyingMovieKeys = @{}
                 QualifyingTvShowKeys = @{}
@@ -3234,6 +3274,8 @@ function Get-BingeChampion {
         $rowPlays = Get-HistoryRowPlayCount -Row $row
         $totals[$key].Plays += $rowPlays
         $totals[$key].Seconds += $seconds
+        $timestamp = Get-NewsletterPlatformHistoryTimestamp -Row $row
+        if ($timestamp -gt $totals[$key].Latest) { $totals[$key].Latest = $timestamp }
 
         $titleKey = if ($type -eq "movie") {
             $movieRatingKey = [string]$row.rating_key
@@ -3272,8 +3314,12 @@ function Get-BingeChampion {
 
     $top = @(
         $totals.Values |
-        Where-Object { $_.Seconds -gt 0 } |
-        Sort-Object Seconds, Plays -Descending |
+        Where-Object { $_.Plays -gt 0 } |
+        Sort-Object `
+            @{ Expression = { [int64]$_.Seconds }; Descending = $true }, `
+            @{ Expression = { Safe-Int $_.Plays }; Descending = $true }, `
+            @{ Expression = { $_.QualifyingTitleKeys.Count }; Descending = $true }, `
+            @{ Expression = { [int64]$_.Latest }; Descending = $true } |
         Select-Object -First 1
     )
 
@@ -3320,6 +3366,7 @@ function Get-BingeChampionDisplay {
             Available     = $false
             IsWinner      = $false
             TotalTimeText = ""
+            Plays         = 0
             MoviePlays    = 0
             TvPlays       = 0
             QualifyingTitles = 0
@@ -3344,6 +3391,12 @@ function Get-BingeChampionDisplay {
         $totalTimeText = Format-WatchTime ([int64]$BingeChampion.Seconds)
     }
 
+    $plays = if ($null -ne $BingeChampion.PSObject.Properties["Plays"]) {
+        Safe-Int $BingeChampion.Plays
+    } else {
+        0
+    }
+
     $qualifyingTitles = if ($null -ne $BingeChampion.PSObject.Properties["QualifyingTitles"]) {
         Safe-Int $BingeChampion.QualifyingTitles
     } else {
@@ -3364,6 +3417,7 @@ function Get-BingeChampionDisplay {
         Available     = $true
         IsWinner      = $isWinner
         TotalTimeText = $totalTimeText
+        Plays         = $plays
         MoviePlays    = Safe-Int $BingeChampion.MoviePlays
         TvPlays       = Safe-Int $BingeChampion.TvPlays
         QualifyingTitles = $qualifyingTitles
@@ -3376,9 +3430,14 @@ function Get-BingeChampionTitleBreakdown {
     param([object]$BingeDisplay)
 
     $parts = New-Object System.Collections.Generic.List[string]
+    $playCount = Safe-Int $BingeDisplay.Plays
     $movieCount = Safe-Int $BingeDisplay.QualifyingMovies
     $tvShowCount = Safe-Int $BingeDisplay.QualifyingTvShows
 
+    if ($playCount -gt 0) {
+        $playWord = if ($playCount -eq 1) { "play" } else { "plays" }
+        $parts.Add("$playCount $playWord")
+    }
     if ($movieCount -gt 0) {
         $movieWord = if ($movieCount -eq 1) { "movie" } else { "movies" }
         $parts.Add("$movieCount $movieWord")
@@ -7336,11 +7395,9 @@ function Get-StatsTvShowRowsHtml {
             '<img src="' + (HtmlEncode $posterSrc) + '" width="42" height="62" alt="' + $showTitle + ' poster" style="display:block;width:42px;height:62px;object-fit:cover;border:1px solid #363636;border-radius:5px;">'
         }
 
-        $watchTime = if (-not [string]::IsNullOrWhiteSpace([string]$item.TotalTimeText)) {
-            [string]$item.TotalTimeText
-        } else {
-            Format-WatchTime ([int64]$item.Seconds)
-        }
+        $episodeCount = Safe-Int (Get-OptionalStringProperty -InputObject $item -Name "EpisodeCount")
+        $episodeWord = if ($episodeCount -eq 1) { "episode" } else { "episodes" }
+        $episodeSummary = "$episodeCount $episodeWord"
 
         $ratingHtml = Get-StatsTvShowRatingHtml -Item $item -ImageMode $ImageMode
         $ratingLineHtml = if ([string]::IsNullOrWhiteSpace($ratingHtml)) {
@@ -7365,7 +7422,7 @@ function Get-StatsTvShowRowsHtml {
       <td valign="middle" style="padding:0;">
         <div style="font-size:12px;line-height:1.3;color:#ffffff;font-weight:800;">$showTitle</div>
         $ratingLineHtml
-        <div style="padding-top:3px;font-size:12px;line-height:1.35;color:#9b9b9b;font-weight:600;">$(HtmlEncode $watchTime) watched</div>
+        <div style="padding-top:3px;font-size:12px;line-height:1.35;color:#9b9b9b;font-weight:600;">$(HtmlEncode $episodeSummary)</div>
       </td>
     </tr>
   </table>
@@ -8050,10 +8107,10 @@ $tvCards
             "Most watched across $footerServerName this week • $playCount $playWord"
         }
         elseif ($HotRelease.IsPopular) {
-            "Most-watched new movie this week • $playCount $playWord"
+            "Most-watched new release across $footerServerName this week • $playCount $playWord"
         }
         else {
-            "Freshly added — no viewing activity yet"
+            "Freshly added!"
         }
 
         $designBannerHtml = ""
@@ -8765,7 +8822,9 @@ function Build-PlainText {
     if ($plainTvShowItems.Count -gt 0) {
         $showWord = if ($plainTvShowTitleCount -eq 1) { "TV show" } else { "TV shows" }
         $showLines = @($plainTvShowItems | ForEach-Object {
-            "- {0} — {1}" -f ([string]$_.ShowTitle), (Format-WatchTime ([int64]$_.Seconds))
+            $episodeCount = Safe-Int (Get-OptionalStringProperty -InputObject $_ -Name "EpisodeCount")
+            $episodeWord = if ($episodeCount -eq 1) { "episode" } else { "episodes" }
+            "- {0} — {1} {2}" -f ([string]$_.ShowTitle), $episodeCount, $episodeWord
         })
         $tvStatsText = "{0} {1} watched`r`n{2}" -f $plainTvShowTitleCount, $showWord, ($showLines -join "`r`n")
     }
@@ -9412,7 +9471,7 @@ if ($Mode -eq "SendWelcome") {
     $script:GlobalTrendingStat = Get-GlobalTrendingStat -GlobalHistory $globalHistory
     $trendingTitle = if ($null -ne $script:GlobalTrendingStat) { [string]$script:GlobalTrendingStat.Title } else { "" }
     $trendingReleaseData = if ($isQuietReleaseWeek -and @($releaseData.TV).Count -eq 0) { $latestReleaseData } else { $releaseData }
-    $trendingHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory -ReleaseData $trendingReleaseData
+    $trendingHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory -ReleaseData $trendingReleaseData -TrendingStat $script:GlobalTrendingStat
     $hotRelease = if (@($releaseData.Movies).Count -gt 0) { $movieHotRelease } else { $trendingHero }
 
     if (($isQuietReleaseWeek -or @($releaseData.Movies).Count -eq 0) -and $null -ne $trendingHero -and $null -ne $trendingHero.Item) {
@@ -9583,7 +9642,7 @@ $movieHotRelease = Get-HotNewRelease -ReleaseData $releaseData -GlobalHistory $g
 $script:GlobalTrendingStat = Get-GlobalTrendingStat -GlobalHistory $globalHistory
 $trendingTitle = if ($null -ne $script:GlobalTrendingStat) { [string]$script:GlobalTrendingStat.Title } else { "" }
 $trendingReleaseData = if ($isQuietReleaseWeek -and @($releaseData.TV).Count -eq 0) { $latestReleaseData } else { $releaseData }
-$quietHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory -ReleaseData $trendingReleaseData
+$quietHero = Get-GlobalTrendingHero -GlobalHistory $globalHistory -ReleaseData $trendingReleaseData -TrendingStat $script:GlobalTrendingStat
 $hotRelease = if (@($releaseData.Movies).Count -gt 0) { $movieHotRelease } else { $quietHero }
 $bingeChampion = Get-BingeChampion -GlobalHistory $globalHistory
 

@@ -112,7 +112,7 @@
     const title = `<div class="hero-title${item.logo ? " has-logo" : ""}">${watchedTitle(item, state)}</div>`;
     const watched = hasWatchedMovie(item, state);
     const poster = `<div class="hero-poster-wrap${watched ? " is-watched" : ""}"><img class="hero-poster" src="${media(item.art)}" alt="${esc(item.title)} key art">${watched ? `<img class="recipient-watched-desktop-badge" src="${media("watched-desktop.png")}" width="26" height="26" alt="Watched" title="Watched">` : ""}</div>`;
-    return `<section class="panel hero">${poster}<div class="hero-copy"><img class="hero-icon" src="${media(icon)}" alt=""><div class="hero-kicker">${label}</div>${logo}${title}<div class="genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}</div><div class="summary">${esc(item.summary)}</div><div class="plays">${state.latest ? "Most watched across STARLIGHT CINEMA this week" : "Most-watched new movie this week"} &middot; ${state.latest ? 11 : 4} fictional plays</div></div></section>`;
+    return `<section class="panel hero">${poster}<div class="hero-copy"><img class="hero-icon" src="${media(icon)}" alt=""><div class="hero-kicker">${label}</div>${logo}${title}<div class="genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}</div><div class="summary">${esc(item.summary)}</div><div class="plays">${state.latest ? "Most watched across STARLIGHT CINEMA this week" : "Most-watched new release across STARLIGHT CINEMA this week"} &middot; ${state.latest ? 11 : 4} fictional plays</div></div></section>`;
   }
 
   function personalRating(item, kind) {
@@ -127,11 +127,11 @@
 
   function watchedRows(items, kind) {
     return items.map((item, index) => {
-      const watchedMinutes = (index + 2) * 60 + 11 + index * 7;
-      const watchedTime = `${Math.floor(watchedMinutes / 60)}h ${watchedMinutes % 60}m watched`;
+      const episodeCount = index === 0 ? 3 : index + 1;
+      const episodeText = `${episodeCount} ${episodeCount === 1 ? "episode" : "episodes"}`;
       const secondary = kind === "movie"
         ? `<small>${esc(item.genre)}</small>${personalRating(item, kind)}`
-        : `${personalRating(item, kind)}<small>${watchedTime}</small>`;
+        : `${personalRating(item, kind)}<small>${episodeText}</small>`;
       return `<div class="watched-row"><img src="${media(item.art)}" alt="${esc(item.title)} poster"><div><strong>${esc(item.title)}</strong>${secondary}</div></div>`;
     }).join("");
   }
@@ -146,7 +146,7 @@
   }
 
   function awardMetric(winner) {
-    return `<article class="metric compact${winner ? " gold" : ""}"><div class="welcome-kicker">${winner ? "YOU WON" : "THIS WEEK'S"} &middot; BINGE CHAMPION</div><img class="metric-icon" src="${media("trophy.gif")}" alt="" style="margin-top:10px"><div class="metric-value">6h 4m watched</div><div class="metric-label">5 movies &middot; 2 TV shows</div></article>`;
+    return `<article class="metric compact${winner ? " gold" : ""}"><div class="welcome-kicker">${winner ? "YOU WON" : "THIS WEEK'S"} &middot; BINGE CHAMPION</div><img class="metric-icon" src="${media("trophy.gif")}" alt="" style="margin-top:10px"><div class="metric-value">6h 4m watched</div><div class="metric-label">7 plays &middot; 5 movies &middot; 2 TV shows</div></article>`;
   }
 
   function timeMetric(state) {
@@ -156,7 +156,7 @@
   }
 
   function awardCard(winner) {
-    return `<section class="panel status-panel summary-card" style="${winner ? "border-color:#e5a00d;background:#211a0d" : ""}"><img src="${media("trophy.gif")}" alt=""><div><div class="welcome-kicker">${winner ? "YOU WON" : "THIS WEEK'S"} &middot; BINGE CHAMPION</div><h2>6h 4m watched</h2><p>5 movies &middot; 2 TV shows &middot; fictional aggregate</p></div></section>`;
+    return `<section class="panel status-panel summary-card" style="${winner ? "border-color:#e5a00d;background:#211a0d" : ""}"><img src="${media("trophy.gif")}" alt=""><div><div class="welcome-kicker">${winner ? "YOU WON" : "THIS WEEK'S"} &middot; BINGE CHAMPION</div><h2>6h 4m watched</h2><p>7 plays &middot; 5 movies &middot; 2 TV shows &middot; fictional aggregate</p></div></section>`;
   }
 
   function platformIcon(state) {
