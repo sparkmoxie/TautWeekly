@@ -62,6 +62,8 @@ $requiredFunctions = @(
     'New-ReleaseData',
     'Get-LatestReleaseQueryScopes',
     'Get-HistoryRowPlayCount',
+    'Test-HistoryRowQualifiedView',
+    'Get-HistoryRowViewerKey',
     'Get-NewsletterPlatformCatalog',
     'ConvertTo-NewsletterPlatformAlias',
     'Resolve-NewsletterPlatform',
@@ -85,6 +87,7 @@ $requiredFunctions = @(
     'Get-PopulatedPreviewStats',
     'Get-HotNewRelease',
     'Get-GlobalTitleTotals',
+    'Get-GlobalTrendingStat',
     'New-HeroItemFromGlobalStat',
     'Get-GlobalTrendingHero',
     'Get-NewsletterReleaseDisplayData',
@@ -167,14 +170,14 @@ foreach ($relativePath in $rendererPaths) {
         [PSCustomObject]@{ platform = 'Xbox'; group_count = 1000; started = 1000 }
     )
     $selectedPlatform = Get-NewsletterPlatform -History $platformRows -ExpectedUserId '1'
-    Assert-True ($null -ne $selectedPlatform -and $selectedPlatform.Key -eq 'android') "$relativePath did not use recency to break a grouped-play tie"
+    Assert-True ($null -ne $selectedPlatform -and $selectedPlatform.Key -eq 'windows') "$relativePath did not use recency after treating each grouped reference as one play"
     Assert-True ((Resolve-NewsletterPlatform -Row ([PSCustomObject]@{ platform_name = 'windows'; platform = 'Android' })).Key -eq 'windows') "$relativePath did not prefer canonical platform_name"
     Assert-True ((Resolve-NewsletterPlatform -Row ([PSCustomObject]@{ platform_name = 'msedge' })).Key -eq 'microsoft-edge') "$relativePath did not recognize Tautulli's normalized Edge key"
     Assert-True ((Resolve-NewsletterPlatform -Row ([PSCustomObject]@{ platform_name = 'unknown'; platform = 'Google Chrome' })).Key -eq 'chrome') "$relativePath did not safely fall back from an unknown platform_name"
     Assert-True ((Get-NewsletterPlatform -History @(
         [PSCustomObject]@{ user_id = '1'; platform = 'Android'; group_count = 2; started = 500 },
         [PSCustomObject]@{ user_id = '1'; platform = 'Windows'; group_count = 3; started = 1000 }
-    ) -ExpectedUserId '1').Key -eq 'windows') "$relativePath ranked recency ahead of total grouped plays"
+    ) -ExpectedUserId '1').Key -eq 'windows') "$relativePath let group_count override one-reference play semantics"
     Assert-True ((Get-NewsletterPlatform -History @(
         [PSCustomObject]@{ user_id = '1'; platform = 'Chrome'; group_count = 1; date = '2026-08-22T08:00:00Z' },
         [PSCustomObject]@{ user_id = '1'; platform = 'Android'; group_count = 1; date = '2026-08-22T09:00:00Z' }
@@ -221,11 +224,11 @@ foreach ($relativePath in $rendererPaths) {
 
     $previewAssetBase = if ($relativePath -like 'platforms/windows/*') { '../assets' } else { 'assets' }
     $previewPlatformHtml = Get-NewsletterPlatformHeadingHtml -Platform $selectedPlatform -ImageMode Preview -PreviewAssetBase $previewAssetBase
-    Assert-True ($previewPlatformHtml.Contains('YOUR WEEK ON PLEX') -and $previewPlatformHtml.Contains($previewAssetBase + '/platform-android.png')) "$relativePath did not render the selected local preview asset immediately after the heading"
+    Assert-True ($previewPlatformHtml.Contains('YOUR WEEK ON PLEX') -and $previewPlatformHtml.Contains($previewAssetBase + '/platform-windows.png')) "$relativePath did not render the selected local preview asset immediately after the heading"
     Assert-True ($previewPlatformHtml.Contains('width="21" height="21"') -and $previewPlatformHtml.Contains('width:21px;height:21px;max-height:21px')) "$relativePath did not normalize the platform icon to a 21px maximum height"
-    Assert-True ($previewPlatformHtml.Contains('alt="Platform: Android"') -and $previewPlatformHtml.Contains('role="presentation"')) "$relativePath platform heading is not accessible or email-table-safe"
+    Assert-True ($previewPlatformHtml.Contains('alt="Platform: Windows"') -and $previewPlatformHtml.Contains('role="presentation"')) "$relativePath platform heading is not accessible or email-table-safe"
     $emailPlatformHtml = Get-NewsletterPlatformHeadingHtml -Platform $selectedPlatform -ImageMode Email
-    Assert-True ($emailPlatformHtml.Contains('src="cid:platform_android"')) "$relativePath did not render the selected embedded email CID"
+    Assert-True ($emailPlatformHtml.Contains('src="cid:platform_windows"')) "$relativePath did not render the selected embedded email CID"
     $encodedPlatform = [PSCustomObject]@{
         FileName = 'platform-android.png'
         Cid = 'platform_android'
@@ -533,7 +536,6 @@ foreach ($relativePath in $rendererPaths) {
 
     $script:Config = [PSCustomObject]@{
         WatchedPercent       = 85
-        MinimumEpisodeSeconds = 120
         FooterServerName     = 'Test Plex'
         PlexWebUrl           = 'https://app.plex.tv/'
         PlexButtonLabel      = 'View & Request'
@@ -617,8 +619,8 @@ foreach ($relativePath in $rendererPaths) {
     $episode = [PSCustomObject]@{
         media_type             = 'episode'
         play_duration          = 1800
-        watched_status         = 0
-        percent_complete       = 50
+        watched_status         = 1
+        percent_complete       = 100
         rating_key             = 'episode-1'
         guid                   = 'plex://episode/episode-guid-1'
         grandparent_rating_key = 'show-1'
@@ -643,11 +645,20 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($oneEpisode.EpisodeItems.Count -eq 1) "$relativePath lost the one-episode item"
     Assert-True ($oneEpisode.MovieItems.Count -eq 0) "$relativePath created an unexpected movie"
     Assert-True ($oneEpisode.TvShowItems.Count -eq 1) "$relativePath did not group the episode into one TV show"
+    Assert-True ($oneEpisode.TvShowItems[0].EpisodeCount -eq 1) "$relativePath returned the wrong unique episode count"
     Assert-True ($oneEpisode.TvShowItems[0].MetadataGuid -eq 'plex://episode/episode-guid-1') "$relativePath lost the representative episode GUID for TV artwork"
     Assert-True ($oneEpisode.TvShowItems[0].MetadataParentIndex -eq 1 -and $oneEpisode.TvShowItems[0].MetadataIndex -eq 1) "$relativePath detached the representative episode indexes from its GUID"
     Assert-True ($oneEpisode.TvShowItems[0].ShowTitle -eq 'Show One') "$relativePath lost the grouped TV show title"
     Assert-True ($oneEpisode.EpisodeItems[0].ImdbRating -eq '8.5') "$relativePath lost an available episode IMDb rating"
     Assert-True ([string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $oneEpisode.TvShowItems[0] -Name 'Rating')) -and [string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $oneEpisode.TvShowItems[0] -Name 'RatingImage')) -and [string]::IsNullOrWhiteSpace((Get-OptionalStringProperty -InputObject $oneEpisode.TvShowItems[0] -Name 'DesignImdbRating'))) "$relativePath promoted an episode IMDb rating into unverified show-level metadata"
+
+    $partialEpisodeStats = Get-UserStats -History @([PSCustomObject]@{
+        media_type = 'episode'; play_duration = 120; watched_status = 0; percent_complete = 10
+        rating_key = 'partial-episode'; grandparent_rating_key = 'partial-show'
+        grandparent_title = 'Partial Show'; title = 'Barely Started'
+    })
+    Assert-True ($partialEpisodeStats.TotalSeconds -eq 120) "$relativePath removed partial playback from total watch time"
+    Assert-True ($partialEpisodeStats.EpisodeItems.Count -eq 0 -and $partialEpisodeStats.TvShowItems.Count -eq 0) "$relativePath treated a 120-second partial episode as watched"
 
 
     $sparseMovieRows = @(
@@ -680,7 +691,7 @@ foreach ($relativePath in $rendererPaths) {
 
     $sparseTvRows = @(
         [PSCustomObject]@{
-            media_type = 'episode'; play_duration = 1800; watched_status = 0; percent_complete = 50
+            media_type = 'episode'; play_duration = 1800; watched_status = 1; percent_complete = 100
             rating_key = 'sparse-episode-1'; guid = 'plex://episode/sparse-episode-1'
             grandparent_rating_key = 'sparse-show'; grandparent_title = 'Sparse Show'
             parent_title = 'Season 1'; title = 'Sparse Premiere'; parent_media_index = 1; media_index = 1
@@ -690,7 +701,7 @@ foreach ($relativePath in $rendererPaths) {
             grandparent_audience_rating = '7.3'; grandparent_audience_rating_image = ''
         },
         [PSCustomObject]@{
-            media_type = 'episode'; play_duration = 3600; watched_status = 0; percent_complete = 50
+            media_type = 'episode'; play_duration = 3600; watched_status = 1; percent_complete = 100
             rating_key = 'sparse-episode-2'; guid = 'plex://episode/sparse-episode-2'
             grandparent_rating_key = 'sparse-show'; grandparent_title = 'Sparse Show'
             parent_title = 'Season 1'; title = 'Rich Follow-up'; parent_media_index = 1; media_index = 2
@@ -705,6 +716,7 @@ foreach ($relativePath in $rendererPaths) {
     $sparseShowItem = @($sparseTvStats.TvShowItems)[0]
     Assert-True ($sparseTvStats.TvShowItems.Count -eq 1 -and $sparseTvStats.EpisodeItems.Count -eq 2) "$relativePath lost sparse-to-rich TV history rows"
     Assert-True ($sparseShowItem.Summary -eq 'Rich show-level history metadata.' -and $sparseShowItem.Year -eq '2026' -and ($sparseShowItem.DesignGenres -join ',') -eq 'Science Fiction,Drama') "$relativePath did not backfill authentic grandparent show fields"
+    Assert-True ($sparseShowItem.EpisodeCount -eq 2) "$relativePath did not count two distinct qualified episodes"
     Assert-True ($sparseShowItem.Rating -eq '8.4' -and $sparseShowItem.RatingImage -eq 'imdb://image.rating' -and [string]::IsNullOrWhiteSpace([string]$sparseShowItem.AudienceRating)) "$relativePath mixed episode fields or incomplete audience halves into show metadata"
     Assert-True (@($sparseTvStats.EpisodeItems | Where-Object { $_.RatingKey -eq 'sparse-episode-1' })[0].ImdbRating -eq '8.7') "$relativePath lost the exact episode IMDb value"
 
@@ -956,9 +968,9 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($unratedMovieRows.Contains('Unrated Movie') -and -not $unratedMovieRows.Contains('unavailable')) "$relativePath personal movie stats rendered an unavailable-rating placeholder"
 
     $unratedTvRows = Get-StatsTvShowRowsHtml -Items @([PSCustomObject]@{
-        ShowTitle = 'Grouped Show'; PosterRatingKey = ''; TotalTimeText = '1h 2m'; Seconds = 3720; DesignImdbRating = ''
+        ShowTitle = 'Grouped Show'; PosterRatingKey = ''; EpisodeCount = 1; TotalTimeText = '1h 2m'; Seconds = 3720; DesignImdbRating = ''
     }) -PosterAssets @() -ImageMode Preview
-    Assert-True ($unratedTvRows.Contains('Grouped Show') -and $unratedTvRows.Contains('1h 2m watched') -and -not $unratedTvRows.Contains('unavailable')) "$relativePath grouped TV stats did not retain duration while omitting an unavailable rating"
+    Assert-True ($unratedTvRows.Contains('Grouped Show') -and $unratedTvRows.Contains('1 episode') -and -not $unratedTvRows.Contains('1h 2m watched') -and -not $unratedTvRows.Contains('unavailable')) "$relativePath grouped TV stats did not replace duration with a singular episode count"
 
     $manyMovieRowsInput = @(1..12 | ForEach-Object {
         [PSCustomObject]@{
@@ -974,20 +986,20 @@ foreach ($relativePath in $rendererPaths) {
 
     $manyTvRowsInput = @(1..11 | ForEach-Object {
         [PSCustomObject]@{
-            ShowTitle = "Uncapped Show $($_.ToString('00'))"; PosterRatingKey = ''; Seconds = (3600 * $_)
+            ShowTitle = "Uncapped Show $($_.ToString('00'))"; PosterRatingKey = ''; Seconds = (3600 * $_); EpisodeCount = $_
             TotalTimeText = "${_}h 0m"; DesignImdbRating = if ($_ -eq 1) { '8.4' } else { '' }
         }
     })
     $manyTvRows = Get-StatsTvShowRowsHtml -Items $manyTvRowsInput -PosterAssets @() -ImageMode Preview
     Assert-True (([regex]::Matches($manyTvRows, 'Uncapped Show \d{2}')).Count -eq 11) "$relativePath did not render every one of eleven personal TV rows"
-    Assert-True ($manyTvRows.Contains('Uncapped Show 11') -and $manyTvRows.Contains('IMDb') -and $manyTvRows.Contains('8.4')) "$relativePath lost the final TV row or an eligible show rating"
+    Assert-True ($manyTvRows.Contains('Uncapped Show 11') -and $manyTvRows.Contains('11 episodes') -and $manyTvRows.Contains('IMDb') -and $manyTvRows.Contains('8.4')) "$relativePath lost the final TV row, episode count, or eligible show rating"
     Assert-True (([regex]::Matches($manyTvRows, 'class="stats-title-cell stats-tv-title-cell stats-tv-title-(?:left|right)"')).Count -eq 11 -and ([regex]::Matches($manyTvRows, 'class="stats-title-spacer stats-tv-title-spacer"')).Count -eq 1) "$relativePath did not pair an odd TV count into two desktop/mobile columns with one safe spacer"
 
     # Recap text uses the approved 12px sizes without changing each role's weight/leading.
     Assert-True ($manyMovieRows.Contains('font-size:12px;line-height:1.3;color:#9b9b9b;font-weight:500;')) "$relativePath changed movie genre typography"
     Assert-True ($manyMovieRows.Contains('font-size:12px;line-height:1.35;color:#e5a00d;font-weight:700;')) "$relativePath changed movie rating typography"
     Assert-True ($manyTvRows.Contains('font-size:12px;line-height:1.35;color:#e5a00d;font-weight:700;">' + '<span style="display:inline-block;white-space:nowrap;"><img')) "$relativePath did not apply 12px to the TV IMDb number"
-    Assert-True ($manyTvRows.Contains('font-size:12px;line-height:1.35;color:#9b9b9b;font-weight:600;')) "$relativePath changed TV watch-duration typography"
+    Assert-True ($manyTvRows.Contains('font-size:12px;line-height:1.35;color:#9b9b9b;font-weight:600;')) "$relativePath changed TV episode-count typography"
     Assert-True (-not ($manyMovieRows + $manyTvRows).Contains('recipient-watched')) "$relativePath marked a footer recap"
     Assert-True (($preferredMovieStats -split 'width="16" height="16"').Count -eq 3) "$relativePath did not size both footer Rotten Tomatoes icons at 16px"
 
@@ -1297,8 +1309,8 @@ foreach ($relativePath in $rendererPaths) {
     $secondEpisode = [PSCustomObject]@{
         media_type             = 'episode'
         play_duration          = 3600
-        watched_status         = 0
-        percent_complete       = 50
+        watched_status         = 1
+        percent_complete       = 100
         rating_key             = 'episode-2'
         grandparent_rating_key = 'show-1'
         grandparent_title      = 'Show One'
@@ -1315,8 +1327,8 @@ foreach ($relativePath in $rendererPaths) {
     $episodeWithoutRatingMetadata = [PSCustomObject]@{
         media_type             = 'episode'
         play_duration          = 1800
-        watched_status         = 0
-        percent_complete       = 50
+        watched_status         = 1
+        percent_complete       = 100
         rating_key             = 'episode-without-rating'
         grandparent_rating_key = 'show-without-rating'
         grandparent_title      = 'Show Without Rating'
@@ -1387,7 +1399,9 @@ foreach ($relativePath in $rendererPaths) {
         -StartLabel 'August 1' `
         -EndLabel 'August 7'
     Assert-True ($uncappedPlainText.Contains('12 movies watched') -and $uncappedPlainText.Contains('Uncapped Movie 12')) "$relativePath capped the personal movie list in plain text"
-    Assert-True ($uncappedPlainText.Contains('11 TV shows watched') -and $uncappedPlainText.Contains('Uncapped Show 11')) "$relativePath capped the personal TV list in plain text"
+    Assert-True ($uncappedPlainText.Contains('11 TV shows watched') -and $uncappedPlainText.Contains('Uncapped Show 11 — 11 episodes')) "$relativePath capped the personal TV list or lost its episode count in plain text"
+    Assert-True ($uncappedPlainText.Contains('Uncapped Show 01 — 1 episode')) "$relativePath lost singular episode copy in plain text"
+    Assert-True (-not $uncappedPlainText.Contains('11h 0m')) "$relativePath retained per-show TV duration in plain text"
     Assert-True ($uncappedPlainText.Contains('2h 46m total watch time') -and -not $uncappedPlainText.Contains('total watched')) "$relativePath retained the old personal-time label in plain text"
 
     $threeMovies = Get-UserStats -History @(
@@ -1413,12 +1427,27 @@ foreach ($relativePath in $rendererPaths) {
     }
     $releaseFixture = [PSCustomObject]@{ Movies = @($heroMovie); TV = @($tvRelease) }
     $movieOnlyHero = Get-HotNewRelease -ReleaseData $releaseFixture -GlobalHistory @(
-        [PSCustomObject]@{ media_type = 'episode'; grandparent_rating_key = 'tv-release'; play_duration = 7200 },
-        [PSCustomObject]@{ media_type = 'movie'; rating_key = 'hero-movie'; play_duration = 600; group_count = 4 }
+        [PSCustomObject]@{ media_type = 'episode'; grandparent_rating_key = 'tv-release'; play_duration = 7200; watched_status = 1; percent_complete = 100 },
+        [PSCustomObject]@{ media_type = 'movie'; rating_key = 'hero-movie'; play_duration = 600; watched_status = 1; percent_complete = 100; group_count = 4; user_id = '1'; started = 100 }
     )
     Assert-True ($movieOnlyHero.Item.Type -eq 'movie') "$relativePath allowed a TV release to become HOT NEW RELEASE"
     Assert-True (-not $movieOnlyHero.IsTrending) "$relativePath mislabeled a movie release hero as Trending"
-    Assert-True ($movieOnlyHero.Plays -eq 4) "$relativePath did not preserve a grouped HOT movie's authentic play count"
+    Assert-True ($movieOnlyHero.Plays -eq 1) "$relativePath multiplied a grouped HOT movie reference into extra plays"
+
+    $partialHotFallback = Get-HotNewRelease -ReleaseData $releaseFixture -GlobalHistory @(
+        [PSCustomObject]@{ media_type = 'movie'; rating_key = 'hero-movie'; play_duration = 120; watched_status = 0; percent_complete = 10; group_count = 99 }
+    )
+    Assert-True (-not $partialHotFallback.IsPopular -and $partialHotFallback.Plays -eq 0) "$relativePath treated partial new-release playback as qualifying activity"
+
+    $trendingStat = Get-GlobalTrendingStat -GlobalHistory @(
+        [PSCustomObject]@{ media_type = 'movie'; rating_key = 'viewer-winner'; title = 'Viewer Winner'; play_duration = 600; watched_status = 1; percent_complete = 100; group_count = 20; user_id = '1'; started = 100 },
+        [PSCustomObject]@{ media_type = 'movie'; rating_key = 'viewer-winner'; title = 'Viewer Winner'; play_duration = 600; watched_status = 1; percent_complete = 100; group_count = 30; user_id = '2'; started = 200 },
+        [PSCustomObject]@{ media_type = 'movie'; rating_key = 'time-runner'; title = 'Time Runner'; play_duration = 3600; watched_status = 1; percent_complete = 100; group_count = 40; user_id = '1'; started = 300 },
+        [PSCustomObject]@{ media_type = 'movie'; rating_key = 'time-runner'; title = 'Time Runner'; play_duration = 3600; watched_status = 1; percent_complete = 100; group_count = 50; user_id = '1'; started = 400 },
+        [PSCustomObject]@{ media_type = 'movie'; rating_key = 'partial'; title = 'Partial'; play_duration = 9999; watched_status = 0; percent_complete = 10; group_count = 500; user_id = '3'; started = 500 }
+    )
+    Assert-True ($trendingStat.RatingKey -eq 'viewer-winner') "$relativePath did not use unique viewers after the play-count tie"
+    Assert-True ($trendingStat.Plays -eq 2 -and $trendingStat.ViewerKeys.Count -eq 2) "$relativePath returned the wrong Trending play/viewer totals"
 
     $tvOnlyHero = Get-HotNewRelease -ReleaseData ([PSCustomObject]@{
         Movies = @(); TV = @($tvRelease)

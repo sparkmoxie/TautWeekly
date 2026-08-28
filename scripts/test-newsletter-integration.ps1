@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [string]$Root = '',
     [string]$PythonPath = 'python',
@@ -599,7 +599,7 @@ foreach ($engine in $engines) {
                     Assert-True ($heroHtml.Contains('alt="Watched" title="Watched"') -and $heroHtml.Contains('vertical-align:middle;margin-left:8px;')) "$($engine.Name)/$scenario lost accessible, centered, consistently spaced hero markup."
                     Assert-True ($heroHtml.Contains("src=`"$watchedPreviewBase/watched.png`"") -and $heroHtml.Contains("src=`"$watchedPreviewBase/watched-desktop.png`"")) "$($engine.Name)/$scenario used broken watched preview asset paths."
                     Assert-True ($heroHtml.Contains('<v:group') -and $heroHtml.Contains('coordsize="180,275"') -and $heroHtml.Contains('left:147;top:0;width:26;height:26;') -and $heroHtml.Contains('width="7" height="26"') -and $heroHtml.Contains('padding:5px 0 0;')) "$($engine.Name)/$scenario lost Outlook or standard desktop overlay placement."
-                    Assert-True ($heroHtml.Contains('4 plays')) "$($engine.Name)/$scenario collapsed the grouped HOT history row to one play."
+                    Assert-True ($heroHtml.Contains('Most-watched new release across Virtual Plex this week') -and $heroHtml.Contains('1 play')) "$($engine.Name)/$scenario did not use the locked HOT copy or one-reference play count."
                     $activeReleaseHtml = Get-HtmlSection -Html $stateHtml -StartMarker 'NEW RELEASES' -EndMarkers @('YOUR WEEK ON PLEX', 'FRIDAY DROPS')
                     Assert-True (-not [string]::IsNullOrWhiteSpace($activeReleaseHtml)) "$($engine.Name)/$scenario could not bound the active release shelf."
                     Assert-True (-not $activeReleaseHtml.Contains('Selected Movie') -and $activeReleaseHtml.Contains('Selected Show')) "$($engine.Name)/$scenario duplicated the HOT movie in New Releases or lost the TV shelf."
@@ -635,7 +635,7 @@ foreach ($engine in $engines) {
                     Assert-True ($heroHtml.Contains('A complete quiet-week hero with real metadata.') -and $heroHtml.Contains('Adventure, Comedy') -and $heroHtml.Contains('2026')) "$($engine.Name)/$scenario lost quiet hero summary, genres, or year."
                     Assert-True ($heroHtml.Contains('Rotten Tomatoes critic') -and $heroHtml.Contains('Rotten Tomatoes audience')) "$($engine.Name)/$scenario lost quiet hero ratings."
                     Assert-True ($heroHtml.Contains('88%</span>') -and $heroHtml.Contains('94%</span>')) "$($engine.Name)/$scenario swapped or lost exact quiet hero critic/audience values."
-                    Assert-True ($heroHtml.Contains('Most watched across Virtual Plex this week') -and $heroHtml.Contains('4 plays')) "$($engine.Name)/$scenario lost authentic trending watch statistics."
+                    Assert-True ($heroHtml.Contains('Most watched across Virtual Plex this week') -and $heroHtml.Contains('1 play')) "$($engine.Name)/$scenario lost authentic trending watch statistics."
                     $watchedShelfHtml = Get-HtmlSection -Html $stateHtml -StartMarker 'RECENT RELEASES' -EndMarkers @('YOUR WEEK ON PLEX', 'FRIDAY DROPS')
                     Assert-True (([regex]::Matches(($heroHtml + $watchedShelfHtml), 'class="recipient-watched-title-icon"')).Count -eq 2) "$($engine.Name)/$scenario did not render exactly one circular hero marker and one watched movie-card marker."
                     Assert-True (([regex]::Matches($stateHtml, 'class="recipient-watched-desktop-badge"')).Count -eq 1) "$($engine.Name)/$scenario did not render exactly one desktop hero badge."
@@ -671,7 +671,7 @@ foreach ($engine in $engines) {
                     Assert-True ($statsHtml.Contains('84%</span>') -and $statsHtml.Contains('90%</span>')) "$($engine.Name)/$scenario swapped or lost exact quiet watched-movie critic/audience values."
                     Assert-True ($statsHtml.Contains('posters/poster_quiet-recent-movie-01.jpg')) "$($engine.Name)/$scenario lost the watched-movie poster."
                     Assert-True ($statsHtml.Contains('TV SHOWS WATCHED') -and $statsHtml.Contains('Recent Show Two')) "$($engine.Name)/$scenario lost the selected viewer's real TV stat row."
-                    Assert-True ($statsHtml.Contains('alt="IMDb"') -and $statsHtml.Contains('8.5') -and -not $statsHtml.Contains('6.1') -and $statsHtml.Contains('1h 0m watched')) "$($engine.Name)/$scenario lost show-level IMDb/duration or reused the episode rating."
+                    Assert-True ($statsHtml.Contains('alt="IMDb"') -and $statsHtml.Contains('8.5') -and -not $statsHtml.Contains('6.1') -and $statsHtml.Contains('1 episode') -and -not $statsHtml.Contains('1h 0m watched')) "$($engine.Name)/$scenario lost show-level IMDb/episode count or reused the episode rating."
                     Assert-True ($statsHtml.Contains('posters/poster_selected-show-recent-02.jpg')) "$($engine.Name)/$scenario lost the watched-TV poster."
                     Assert-True ($statsHtml.Contains($expectedChromePreviewSource) -and $statsHtml.Contains('alt="Platform: Chrome"')) "$($engine.Name)/$scenario lost the real recipient platform icon from populated stats."
                 }
@@ -747,7 +747,7 @@ foreach ($engine in $engines) {
                 $sparseStatsHtml = $normalHtml.Substring($sparseStatsStart)
                 Assert-True ($sparseStatsHtml.Contains('MOVIES WATCHED') -and $sparseStatsHtml.Contains('Drama, Mystery') -and $sparseStatsHtml.Contains('81%</span>') -and $sparseStatsHtml.Contains('92%</span>')) "$($engine.Name)/$scenario did not backfill exact movie metadata in sparse personal stats."
                 Assert-True (-not $sparseStatsHtml.Contains('76%</span>') -and -not $sparseStatsHtml.Contains('77%</span>')) "$($engine.Name)/$scenario mixed partial movie rating pairs in personal stats."
-                Assert-True ($sparseStatsHtml.Contains('TV SHOWS WATCHED') -and $sparseStatsHtml.Contains('Selected Show') -and $sparseStatsHtml.Contains('alt="IMDb"') -and $sparseStatsHtml.Contains('8.4') -and $sparseStatsHtml.Contains('1h 30m watched')) "$($engine.Name)/$scenario lost show-level IMDb or aggregated TV duration."
+                Assert-True ($sparseStatsHtml.Contains('TV SHOWS WATCHED') -and $sparseStatsHtml.Contains('Selected Show') -and $sparseStatsHtml.Contains('alt="IMDb"') -and $sparseStatsHtml.Contains('8.4') -and $sparseStatsHtml.Contains('2 episodes') -and -not $sparseStatsHtml.Contains('1h 30m watched')) "$($engine.Name)/$scenario lost show-level IMDb or unique episode count."
                 Assert-True (-not $sparseStatsHtml.Contains('7.3') -and -not $sparseStatsHtml.Contains('8.7')) "$($engine.Name)/$scenario promoted an incomplete show pair or ordinary episode IMDb into show stats."
                 Assert-True ($sparseStatsHtml.Contains('posters/poster_selected-movie.jpg') -and $sparseStatsHtml.Contains('posters/poster_selected-show.jpg')) "$($engine.Name)/$scenario lost sparse real-history posters."
                 $expectedChromePreviewSource = if ($engine.Container) { 'assets/platform-chrome.png' } else { '../assets/platform-chrome.png' }
@@ -1123,7 +1123,7 @@ foreach ($engine in $engines) {
                             '88%</span>', '94%</span>', '84%</span>', '90%</span>',
                             'Recent Movie One', 'Selected Movie', 'Recent Movie Three', 'Recent Movie Four',
                             'Selected Show', 'Recent Show Two', 'Recent Show Three', 'Recent Show Four',
-                            'MOVIES WATCHED', 'TV SHOWS WATCHED', 'IMDb', '1h 0m watched', 'Platform: Chrome'
+                            'MOVIES WATCHED', 'TV SHOWS WATCHED', 'IMDb', '1 episode', 'Platform: Chrome'
                         )
                     }
                     else {
@@ -1189,6 +1189,9 @@ foreach ($engine in $engines) {
                 $sendTestTrendingMetadataDelta = if ($scenario -eq 'active') {
                     (Get-TautulliMetadataCallCount -CallLogPath $callLog -RatingKey 'active-trending-movie') - $sendTestTrendingMetadataBefore
                 } else { 0 }
+                if ($scenario -eq 'active') {
+                    Assert-True ($sendTestTrendingMetadataDelta -eq 2) "$($engine.Name)/$scenario SendTest did not make exactly one Top Genre and one Trending hero metadata lookup (actual: $sendTestTrendingMetadataDelta)."
+                }
                 Assert-True ($sendLog.Contains('Test email sent successfully.')) "$($engine.Name)/$scenario SendTest did not complete delivery."
                 if ($scenario -notin $directRatingScenarios -and $scenario -notin @('active', 'quiet', 'tv-only', $platformScenario, $lastPlatformScenario, $quietNoHistoryScenario, $quietNoGlobalHistoryScenario, $sparseEpisodeMetadataScenario)) {
                     Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
@@ -1266,7 +1269,7 @@ foreach ($engine in $engines) {
                         '--require-html', 'Selected Show',
                         '--require-html', 'Active Trending Movie',
                         '--require-html', 'cid:poster_active-trending-movie',
-                        '--require-html-between', 'HOT NEW RELEASE=NEW RELEASES=4 plays',
+                        '--require-html-between', 'HOT NEW RELEASE=NEW RELEASES=1 play',
                         '--require-html-between', 'NEW RELEASES=YOUR WEEK ON PLEX=Selected Show',
                         '--forbid-html-between', 'NEW RELEASES=YOUR WEEK ON PLEX=Selected Movie',
                         '--require-html-after', 'YOUR WEEK ON PLEX=MOVIES WATCHED',
@@ -1302,7 +1305,7 @@ foreach ($engine in $engines) {
                         '--require-html', '88%</span>',
                         '--require-html', '94%</span>',
                         '--require-html', 'Most watched across Virtual Plex this week',
-                        '--require-html', '4 plays',
+                        '--require-html', '1 play',
                         '--require-html', 'cid:hero_logo',
                         '--require-html', 'cid:recipient_watched',
                         '--require-html', 'cid:recipient_watched_desktop',
@@ -1345,7 +1348,7 @@ foreach ($engine in $engines) {
                         '--require-html', 'Recent Movie One poster',
                         '--require-html', 'Recent Show Two poster',
                         '--require-html', 'IMDb',
-                        '--require-html', '1h 0m watched',
+                        '--require-html', '1 episode',
                         '--require-html', 'Platform: Chrome',
                         '--require-html', 'cid:platform_chrome',
                         '--require-cid-sha256', 'platform_chrome=AB21A3ABF3DDEDE0A74C2BD0605AB19E73FE4AB369EFD02FB936CED58565C71E',
@@ -1432,7 +1435,7 @@ foreach ($engine in $engines) {
                         '--require-html-after', 'YOUR WEEK ON PLEX=8.4',
                         '--forbid-html-after', 'YOUR WEEK ON PLEX=8.7',
                         '--forbid-html-after', 'YOUR WEEK ON PLEX=7.3',
-                        '--require-html-after', 'YOUR WEEK ON PLEX=1h 30m watched',
+                        '--require-html-after', 'YOUR WEEK ON PLEX=2 episodes',
                         '--require-html-after', 'YOUR WEEK ON PLEX=Selected Movie poster',
                         '--require-html-after', 'YOUR WEEK ON PLEX=Selected Show poster',
                         '--require-html-after', 'YOUR WEEK ON PLEX=Platform: Chrome',
@@ -1547,7 +1550,7 @@ foreach ($engine in $engines) {
                             '--require-html', 'Rotten Tomatoes audience',
                             '--require-html', '81%</span>',
                             '--require-html', '92%</span>',
-                            '--require-html-between', 'HOT NEW RELEASE=NEW RELEASES=4 plays',
+                            '--require-html-between', 'HOT NEW RELEASE=NEW RELEASES=1 play',
                             '--require-html', 'Active Trending Movie',
                             '--require-html', 'cid:poster_active-trending-movie',
                             '--forbid-html', 'Toy Story 5',
@@ -1574,7 +1577,7 @@ foreach ($engine in $engines) {
                         '--require-html', '88%</span>',
                         '--require-html', '94%</span>',
                         '--require-html', 'Most watched across Virtual Plex this week',
-                        '--require-html', '4 plays',
+                        '--require-html', '1 play',
                         '--require-html', 'cid:hero_logo',
                         '--require-html', 'cid:recipient_watched',
                         '--require-html', 'cid:recipient_watched_desktop',
@@ -1675,7 +1678,7 @@ foreach ($engine in $engines) {
                                     '--require-html-after', 'YOUR WEEK ON PLEX=8.5',
                                     '--require-html-after', 'YOUR WEEK ON PLEX=84%</span>',
                                     '--require-html-after', 'YOUR WEEK ON PLEX=90%</span>',
-                                    '--require-html-after', 'YOUR WEEK ON PLEX=1h 0m watched',
+                                    '--require-html-after', 'YOUR WEEK ON PLEX=1 episode',
                                     '--forbid-html-after', 'YOUR WEEK ON PLEX=6.1'
                                 )
                             }
@@ -1745,7 +1748,7 @@ foreach ($engine in $engines) {
                     $welcomeCapture = $welcomeCapturesAfter[-1]
                     if ($scenario -eq 'active') {
                         $welcomeTrendingMetadataDelta = (Get-TautulliMetadataCallCount -CallLogPath $callLog -RatingKey 'active-trending-movie') - $welcomeTrendingMetadataBefore
-                        Assert-True ($welcomeTrendingMetadataDelta -eq 1 -and $welcomeTrendingMetadataDelta -eq $sendTestTrendingMetadataDelta) "$($engine.Name)/$scenario SendWelcome did not match SendTest's single shared compact-Trending metadata lookup."
+                        Assert-True ($welcomeTrendingMetadataDelta -eq $sendTestTrendingMetadataDelta) "$($engine.Name)/$scenario SendWelcome did not match SendTest's Top Genre and Trending hero metadata lookups (SendTest: $sendTestTrendingMetadataDelta; SendWelcome: $welcomeTrendingMetadataDelta)."
                     }
                     $welcomeArgs = @(
                         $welcomeCapture.FullName,
@@ -1773,7 +1776,7 @@ foreach ($engine in $engines) {
                             '--require-html', 'Rotten Tomatoes audience',
                             '--require-html', '81%</span>',
                             '--require-html', '92%</span>',
-                            '--require-html-between', 'HOT NEW RELEASE=NEW RELEASES=4 plays',
+                            '--require-html-between', 'HOT NEW RELEASE=NEW RELEASES=1 play',
                             '--require-html-between', 'NEW RELEASES=FRIDAY DROPS=Selected Show',
                             '--forbid-html-between', 'NEW RELEASES=FRIDAY DROPS=Selected Movie',
                             '--require-html', 'Active Trending Movie',
@@ -1802,7 +1805,7 @@ foreach ($engine in $engines) {
                             '--require-html', '88%</span>',
                             '--require-html', '94%</span>',
                             '--require-html', 'Most watched across Virtual Plex this week',
-                            '--require-html', '4 plays',
+                            '--require-html', '1 play',
                             '--require-html-between', 'RECENT RELEASES=FRIDAY DROPS=Recent Movie One',
                             '--require-html-between', 'RECENT RELEASES=FRIDAY DROPS=Selected Movie',
                             '--require-html-between', 'RECENT RELEASES=FRIDAY DROPS=Recent Movie Three',

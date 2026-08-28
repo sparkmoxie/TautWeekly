@@ -32,7 +32,7 @@ $rendererPaths = @(
 )
 $requiredFunctions = @(
     'Get-OptionalStringProperty', 'Safe-Int', 'Format-WatchTime',
-    'Get-HistoryRowPlayCount', 'ConvertTo-DesignGenreList', 'Get-NewsletterReleaseDisplayData',
+    'Get-HistoryRowPlayCount', 'Test-HistoryRowQualifiedView', 'ConvertTo-DesignGenreList', 'Get-NewsletterReleaseDisplayData',
     'ConvertTo-TopMovieGenreLabel', 'Get-TopMovieGenreAsset',
     'Get-GlobalTopMovieGenre'
 )
@@ -119,10 +119,11 @@ foreach ($relativePath in $rendererPaths) {
         comedy = [PSCustomObject]@{ genres = @('Comedy') }
     }
     $playTie = Get-GlobalTopMovieGenre -GlobalHistory @(
-        (New-MovieRow -Key action -Seconds 3600 -GroupCount 2),
+        (New-MovieRow -Key action -Seconds 1800 -GroupCount 20),
+        (New-MovieRow -Key action -Seconds 1800 -GroupCount 30),
         (New-MovieRow -Key comedy -Seconds 3600 -GroupCount 1)
     )
-    Assert-True ($playTie.Genre -eq 'Action') "$relativePath did not use grouped plays after the displayed tie metrics"
+    Assert-True ($playTie.Genre -eq 'Action' -and $playTie.Plays -eq 2) "$relativePath did not use distinct qualified plays after the displayed tie metrics"
     $alphaTie = Get-GlobalTopMovieGenre -GlobalHistory @(
         (New-MovieRow -Key action -Seconds 3600),
         (New-MovieRow -Key comedy -Seconds 3600)

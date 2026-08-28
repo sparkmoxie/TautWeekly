@@ -130,7 +130,6 @@ func configDefinitions() []configDefinition {
 	_, daysMax := integerBounds(1, 3650)
 	opacityMin, opacityMax := integerBounds(0, 100)
 	percentMin, percentMax := integerBounds(1, 100)
-	episodeMin, episodeMax := integerBounds(0, 86400)
 	countMin, countMax := integerBounds(0, 100)
 	itemsMin, itemsMax := integerBounds(1, 10000)
 	bytesMin, bytesMax := integerBounds(16, 2048)
@@ -163,7 +162,6 @@ func configDefinitions() []configDefinition {
 		{Name: "DaysBack", Label: "Newsletter history days", Group: "Newsletter", Type: "integer", Required: true, Default: int64(7), Min: portMin, Max: daysMax},
 		{Name: "RecentAccessDays", Label: "Recent-access days", Group: "Newsletter", Type: "integer", Required: true, Default: int64(7), Min: portMin, Max: daysMax},
 		{Name: "WatchedPercent", Label: "Watched threshold (%)", Group: "Newsletter", Type: "integer", Required: true, Default: int64(85), Min: percentMin, Max: percentMax},
-		{Name: "MinimumEpisodeSeconds", Label: "Minimum episode seconds", Group: "Newsletter", Type: "integer", Required: true, Default: int64(120), Min: episodeMin, Max: episodeMax},
 		{Name: "MaxMovies", Label: "Maximum movies", Group: "Newsletter", Type: "integer", Required: true, Default: int64(8), Min: countMin, Max: countMax},
 		{Name: "MaxTv", Label: "Maximum TV entries", Group: "Newsletter", Type: "integer", Required: true, Default: int64(8), Min: countMin, Max: countMax},
 		{Name: "SendDelaySeconds", Label: "Send delay (seconds)", Group: "Newsletter", Type: "integer", Required: true, Default: int64(30), Min: delayMin, Max: delayMax},
@@ -421,7 +419,7 @@ func classifyConfigPostSave(current, next map[string]any, existed bool) ConfigPo
 		case name == "IncludedLibraryIds" || name == "ExcludedUserIds" || name == "ExcludedEmails":
 			category["libraries"] = true
 			plan.GeneratePreviews = true
-		case name == "DaysBack" || name == "RecentAccessDays" || name == "WatchedPercent" || name == "MinimumEpisodeSeconds" || name == "MaxMovies" || name == "MaxTv":
+		case name == "DaysBack" || name == "RecentAccessDays" || name == "WatchedPercent" || name == "MaxMovies" || name == "MaxTv":
 			category["newsletter"] = true
 			plan.GeneratePreviews = true
 		case name == "SendDelaySeconds" || name == "TestSendDelaySeconds":

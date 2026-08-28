@@ -526,7 +526,7 @@
       }
       else if (name.startsWith("CustomTextCard")) { categories.add("custom-text-card"); plan.generatePreviews = true; }
       else if (["IncludedLibraryIds", "ExcludedUserIds", "ExcludedEmails"].includes(name)) { categories.add("libraries"); plan.generatePreviews = true; }
-      else if (["DaysBack", "RecentAccessDays", "WatchedPercent", "MinimumEpisodeSeconds", "MaxMovies", "MaxTv"].includes(name)) { categories.add("newsletter"); plan.generatePreviews = true; }
+      else if (["DaysBack", "RecentAccessDays", "WatchedPercent", "MaxMovies", "MaxTv"].includes(name)) { categories.add("newsletter"); plan.generatePreviews = true; }
       else categories.add("newsletter");
     }
     plan.changedCategories = ["tautulli", "plex", "smtp", "identity", "email", "schedule", "newsletter", "cache", "custom-text-card", "libraries"].filter((name) => categories.has(name));

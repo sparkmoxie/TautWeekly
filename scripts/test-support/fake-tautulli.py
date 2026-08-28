@@ -584,8 +584,8 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
         if scenario == "active":
             rows[0]["group_count"] = 4
             # A real, non-release movie leads the movie-only Trending totals.
-            # It is deliberately not a completed watch so Binge Champion
-            # expectations remain independent from the compact Trending card.
+            # A third viewer keeps Binge Champion expectations independent
+            # while proving Trending uses qualified views only.
             rows.append(
                 {
                     "section_id": "10",
@@ -599,11 +599,11 @@ def history_rows(section_id: str, scenario: str) -> list[dict[str, object]]:
                     "audience_rating": "9.0",
                     "audience_rating_image": "rottentomatoes://image.rating.upright",
                     "genres": ["Adventure", "Science Fiction"],
-                    "user_id": "2",
-                    "friendly_name": "Simulated Champion",
+                    "user_id": "3",
+                    "friendly_name": "Trending Viewer",
                     "play_duration": 9000,
-                    "watched_status": 0,
-                    "percent_complete": 50,
+                    "watched_status": 1,
+                    "percent_complete": 100,
                     "group_count": 4,
                     "platform": "Roku",
                     "started": 190,

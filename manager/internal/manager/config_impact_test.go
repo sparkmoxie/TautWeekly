@@ -46,7 +46,6 @@ func TestEveryConfigFieldHasExplicitSaveImpact(t *testing.T) {
 		"DaysBack":                      {category: "newsletter", preview: true},
 		"RecentAccessDays":              {category: "newsletter", preview: true},
 		"WatchedPercent":                {category: "newsletter", preview: true},
-		"MinimumEpisodeSeconds":         {category: "newsletter", preview: true},
 		"MaxMovies":                     {category: "newsletter", preview: true},
 		"MaxTv":                         {category: "newsletter", preview: true},
 		"SendDelaySeconds":              {category: "newsletter"},
