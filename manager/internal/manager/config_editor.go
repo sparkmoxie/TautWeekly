@@ -108,6 +108,8 @@ type ConfigPostSavePlan struct {
 	RunIntegration      bool     `json:"runIntegration"`
 	RunSMTP             bool     `json:"runSmtp"`
 	GeneratePreviews    bool     `json:"generatePreviews"`
+	VerifyCache         bool     `json:"verifyCache"`
+	CacheEnabled        bool     `json:"cacheEnabled"`
 	RetainedDiscovery   bool     `json:"retainedDiscovery"`
 	RetainedIntegration bool     `json:"retainedIntegration"`
 	RetainedSMTP        bool     `json:"retainedSmtp"`
@@ -318,7 +320,7 @@ func SaveConfig(root string, request ConfigSaveRequest, now func() time.Time) (C
 		return ConfigSaveResult{
 			Saved:            false,
 			Editor:           ReadConfigEditor(root),
-			PostSave:         ConfigPostSavePlan{},
+			PostSave:         postSave,
 			PreviousRevision: previousRevision,
 		}, nil, nil
 	}
@@ -428,6 +430,14 @@ func classifyConfigPostSave(current, next map[string]any, existed bool) ConfigPo
 			category["delivery"] = true
 		}
 	}
+	cacheEnabled := true
+	if value, exists := next["DeletedItemCacheEnabled"]; exists {
+		if parsed, ok := value.(bool); ok {
+			cacheEnabled = parsed
+		}
+	}
+	plan.CacheEnabled = cacheEnabled
+	plan.VerifyCache = cacheEnabled
 	plan.MaterialChange = len(changed) > 0
 	for _, name := range []string{"tautulli", "plex", "smtp", "identity", "email", "schedule", "newsletter", "cache", "custom-text-card", "libraries", "delivery"} {
 		if category[name] {

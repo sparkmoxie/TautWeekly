@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -48,10 +49,20 @@ func TestConfigurationStatusPersistsForCurrentRevision(t *testing.T) {
 	if err := store.StoreSMTPCheck(revision, smtp); err != nil {
 		t.Fatal(err)
 	}
+	cache := DeletedItemCacheStatus{
+		SchemaVersion: deletedItemCacheStatusSchemaVersion, Enabled: true, State: "passed",
+		Summary: "Caller-provided detail must not be persisted.", ManifestState: "primary-valid", BackupState: "valid",
+		Writability: "passed", IntegrityState: "verified", Verification: "full",
+		EntryCount: 2, ArtworkCount: 2, ArtworkBytes: 512, RetentionDays: 365, MaxItems: 1000, MaxBytesMB: 512,
+		CheckedAtUTC: now.Format(time.RFC3339),
+	}
+	if err := store.StoreCache(revision, cache); err != nil {
+		t.Fatal(err)
+	}
 
 	restarted := newConfigurationStatusStore(dataDir, func() time.Time { return now.Add(time.Hour) })
 	loaded := restarted.Load(revision)
-	if !loaded.Available || loaded.Running || loaded.Steps["choices"].State != "passed" || loaded.Steps["previews"].State != "skipped" || loaded.LastVerification == nil || loaded.LastSMTPCheck == nil {
+	if !loaded.Available || loaded.Running || loaded.Steps["choices"].State != "passed" || loaded.Steps["previews"].State != "skipped" || loaded.Steps["cache"].State != "passed" || loaded.LastVerification == nil || loaded.LastSMTPCheck == nil || loaded.Cache == nil {
 		t.Fatalf("unexpected persisted configuration status: %+v", loaded)
 	}
 	if loaded.LastVerification.Steps[0].State != "passed" || loaded.LastVerification.Steps[1].State != "passed" || loaded.LastSMTPCheck.State != "passed" {
@@ -59,12 +70,15 @@ func TestConfigurationStatusPersistsForCurrentRevision(t *testing.T) {
 	}
 	if stale := restarted.Load(strings.Repeat("b", 64)); stale.Steps["choices"].State != "not-run" {
 		t.Fatalf("stale status was reused for a new configuration: %+v", stale)
+		if loaded.Cache.Verification != "full" || loaded.Cache.Writability != "passed" || loaded.Cache.IntegrityState != "verified" || loaded.Cache.Summary != "Full deleted-item cache verification passed." {
+			t.Fatalf("unexpected persisted full cache evidence: %+v", loaded.Cache)
+		}
 	}
 	raw, err := os.ReadFile(filepath.Join(dataDir, "configuration-status.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{"apikey", "password", "token", "email"} {
+	for _, forbidden := range []string{"apikey", "password", "token", "email", "caller-provided"} {
 		if strings.Contains(strings.ToLower(string(raw)), forbidden) {
 			t.Fatalf("configuration status retained forbidden value %q: %s", forbidden, raw)
 		}
@@ -79,10 +93,37 @@ func TestConfigurationStatusPersistsForCurrentRevision(t *testing.T) {
 	}
 }
 
+func TestConfigurationStatusMigratesLegacyEvidenceWithoutCacheResult(t *testing.T) {
+	now := time.Date(2031, 4, 18, 16, 30, 0, 0, time.UTC)
+	dataDir := t.TempDir()
+	revision := strings.Repeat("a", 64)
+	legacy := newConfigurationStatus(revision, "not-run", now)
+	legacy.SchemaVersion = 1
+	delete(legacy.Steps, "cache")
+	legacy.Cache = nil
+	encoded, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "configuration-status.json"), encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded := newConfigurationStatusStore(dataDir, func() time.Time { return now }).Load(revision)
+	if loaded.SchemaVersion != configurationStatusSchemaVersion || loaded.Cache != nil {
+		t.Fatalf("legacy evidence migration: %+v", loaded)
+	}
+	cacheStep, exists := loaded.Steps["cache"]
+	if !exists || cacheStep.State != "not-run" {
+		t.Fatalf("legacy evidence did not gain a cache step: %+v", loaded.Steps)
+	}
+}
+
 func TestConfigurationStatusRejectsInvalidFile(t *testing.T) {
 	dataDir := t.TempDir()
 	store := newConfigurationStatusStore(dataDir, time.Now)
 	revision := strings.Repeat("a", 64)
+
 	if err := os.WriteFile(filepath.Join(dataDir, "configuration-status.json"), []byte(`{"schemaVersion":1,"available":true,"configRevision":"private"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}

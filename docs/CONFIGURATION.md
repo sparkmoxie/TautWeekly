@@ -155,13 +155,15 @@ does not erase retained entries. Re-enabling it initializes the same private
 cache and immediately applies the configured retention, item, and byte limits.
 
 In Manager, changing enabled cache settings and choosing **Validate, save, and
-verify** now schedules the existing no-email PreviewAll workflow when one
-unambiguous owner or administrator is available. That warms only qualifying
-items selected by those six preview states; it is not a library crawl. If
-choice discovery fails, no unambiguous preview user is available, or another
-operation is active, Manager records the skip and the administrator must run
-PreviewAll manually. Direct edits to `config.json` likewise require a later
-render before any entries can exist.
+verify** schedules the existing no-email PreviewAll workflow when one
+unambiguous owner or administrator is available. Cache health shows **Waiting**
+while that prerequisite runs. PreviewAll warms only qualifying items selected
+by those six preview states; it is not a library crawl. When PreviewAll ends,
+including failure or cancellation, Manager automatically runs and retains the
+full local cache verification. If discovery or an operation conflict prevents
+preview start, the full check still runs and reports the current actionable
+state; run PreviewAll later if the cache needs seeding. Direct edits to
+`config.json` likewise require a later render before entries can exist.
 
 Cleanup runs at initialization and after writes. Expired entries are removed,
 then the newest entries are retained deterministically until the item and total
@@ -178,6 +180,11 @@ states, bounds, and aggregate counts. They never expose paths, titles, GUIDs,
 rating keys, hashes, artwork, viewing metrics, recipients, credentials, or
 manifest contents. An `unseeded` result means the cache is enabled but no
 qualifying live render has written an entry; it is not evidence of a cache hit.
+
+The full result from **Validate, save, and verify** is retained for Verify,
+including after refresh; the manual check is an optional later recheck. When
+disabled, **Enable Cache Storage** only navigates to and focuses the Config
+setting; it does not toggle or save it.
 
 Existing configurations migrate safely because missing keys use the defaults
 without rewriting `config.json`; setup preserves explicit values on

@@ -2,8 +2,8 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.23.1";
-  const PREVIOUS_VERSION = "0.23.0";
+  const DEMO_VERSION = "0.23.2";
+  const PREVIOUS_VERSION = "0.23.1";
   const PROFILES = {
     windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows" },
     nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker" },
@@ -136,8 +136,8 @@
     manifestState: "primary-valid",
     backupState: "valid",
     writability: "passed",
-    integrityState: "structural",
-    verification: "read-only",
+    integrityState: "verified",
+    verification: "full",
     entryCount: 12,
     artworkCount: 12,
     artworkBytes: 1866240,
@@ -152,7 +152,7 @@
     checkedAtUtc: now(),
   };
   const setupStatus = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     available: true,
     configRevision: revision,
     running: false,
@@ -385,6 +385,33 @@
     return event;
   }
 
+  function setCacheEnabled(enabled) {
+    Object.assign(cacheStatus, enabled ? {
+      enabled: true, state: "passed", summary: "Synthetic full deleted-item cache verification passed.",
+      manifestState: "primary-valid", backupState: "valid", writability: "passed", integrityState: "verified",
+      verification: "full", checkedAtUtc: now(),
+    } : {
+      enabled: false, state: "skipped", summary: "Deleted-item cache is disabled in the fictional saved configuration.",
+      manifestState: "disabled", backupState: "not-applicable", writability: "not-applicable", integrityState: "skipped",
+      verification: "full", entryCount: 0, artworkCount: 0, artworkBytes: 0, checkedAtUtc: now(),
+    });
+    setupStatus.cache = cacheStatus;
+    setupStatus.steps.cache = { state: cacheStatus.state, summary: cacheStatus.summary, updatedAtUtc: cacheStatus.checkedAtUtc };
+    setupStatus.updatedAtUtc = now();
+  }
+
+  function completeCacheVerification() {
+    if (!cacheStatus.enabled) return;
+    Object.assign(cacheStatus, {
+      state: "passed", summary: "Synthetic full deleted-item cache verification passed.",
+      manifestState: "primary-valid", backupState: "valid", writability: "passed", integrityState: "verified",
+      verification: "full", checkedAtUtc: now(),
+    });
+    setupStatus.cache = cacheStatus;
+    setupStatus.steps.cache = { state: "passed", summary: cacheStatus.summary, updatedAtUtc: cacheStatus.checkedAtUtc };
+    setupStatus.updatedAtUtc = now();
+  }
+
   function finishOperationIfReady() {
     if (!model.operation || !["queued", "running", "cancelling"].includes(model.operation.state)) return;
     if (Date.now() - model.operationStartedMS < 900) return;
@@ -394,7 +421,15 @@
     operation.finishedAtUtc = now();
     operation.durationMs = Date.now() - model.operationStartedMS;
     operation.cancellable = false;
-    if (operation.type === "preview-all") operation.generatedPreviewIds = previews.map((item) => item.id);
+    if (operation.type === "preview-all") {
+      operation.generatedPreviewIds = operation.state === "succeeded" ? previews.map((item) => item.id) : [];
+      setupStatus.steps.previews = operation.state === "succeeded"
+        ? { state: "passed", summary: "Six production-faithful newsletter states are available for review.", updatedAtUtc: now() }
+        : { state: "skipped", summary: "The fictional local preview operation was cancelled.", updatedAtUtc: now() };
+      completeCacheVerification();
+      setupStatus.running = false;
+      setupStatus.updatedAtUtc = now();
+    }
     if (operation.type === "send-test-all") operation.smtpAcceptedCount = 6;
     if (operation.type === "send-welcome") operation.smtpAcceptedCount = 1;
     if (operation.type === "send-all") operation.smtpAcceptedCount = 14;
@@ -417,6 +452,12 @@
       generatedPreviewIds: [],
       cancellable: body.type === "preview-all",
     };
+    if (body.type === "preview-all") {
+      setupStatus.running = true;
+      setupStatus.steps.previews = { state: "running", summary: "Generating six fictional local preview states without sending.", updatedAtUtc: now() };
+      if (cacheStatus.enabled) setupStatus.steps.cache = { state: "waiting", summary: "Waiting for fictional local PreviewAll cache initialization before the full check.", updatedAtUtc: now() };
+      setupStatus.updatedAtUtc = now();
+    }
     return model.operation;
   }
 
@@ -466,7 +507,11 @@
   }
 
   function postSavePlan(changed, values) {
-    const plan = { materialChange: changed.length > 0, changedCategories: [], runDiscovery: false, runIntegration: false, runSmtp: false, generatePreviews: false, retainedDiscovery: true, retainedIntegration: true, retainedSmtp: true, retainedPreviews: true };
+    const cacheEnabled = "DeletedItemCacheEnabled" in values
+      ? Boolean(values.DeletedItemCacheEnabled)
+      : Boolean(editorFields.find((item) => item.name === "DeletedItemCacheEnabled")?.value);
+    const plan = { materialChange: changed.length > 0, changedCategories: [], runDiscovery: false, runIntegration: false, runSmtp: false, generatePreviews: false,
+      verifyCache: cacheEnabled, cacheEnabled, retainedDiscovery: true, retainedIntegration: true, retainedSmtp: true, retainedPreviews: true };
     const categories = new Set();
     for (const name of changed) {
       if (["TautulliUrl", "ApiKey"].includes(name)) { categories.add("tautulli"); plan.runDiscovery = true; plan.runIntegration = true; plan.generatePreviews = true; }
@@ -477,10 +522,7 @@
       else if (name.startsWith("Schedule") || name === "ScheduledTaskName") categories.add("schedule");
       else if (name.startsWith("DeletedItemCache")) {
         categories.add("cache");
-        const enabled = "DeletedItemCacheEnabled" in values
-          ? Boolean(values.DeletedItemCacheEnabled)
-          : Boolean(editorFields.find((item) => item.name === "DeletedItemCacheEnabled")?.value);
-        if (enabled) plan.generatePreviews = true;
+        if (plan.cacheEnabled) plan.generatePreviews = true;
       }
       else if (name.startsWith("CustomTextCard")) { categories.add("custom-text-card"); plan.generatePreviews = true; }
       else if (["IncludedLibraryIds", "ExcludedUserIds", "ExcludedEmails"].includes(name)) { categories.add("libraries"); plan.generatePreviews = true; }
@@ -574,6 +616,7 @@
           const target = editorFields.find((item) => item.name === name);
           if (target) target.value = value;
         }
+        setCacheEnabled(Boolean(editorFields.find((item) => item.name === "DeletedItemCacheEnabled")?.value));
         return json({ saved: plan.materialChange, backup: plan.materialChange ? "synthetic-demo-backup" : "", editor: editor(), postSave: plan });
       }
       return json(configView());
@@ -595,7 +638,11 @@
     if (/^\/api\/v1\/config\/secrets\/[^/]+\/reveal$/.test(path)) return json({ name: decodeURIComponent(path.split("/").at(-2)), value: "FICTIONAL-DEMO-VALUE" });
     if (path === "/api/v1/checks/integrations") return json(integration);
     if (path === "/api/v1/checks/smtp-network") return json(smtp);
-    if (path === "/api/v1/checks/deleted-item-cache") return json({ ...cacheStatus, verification: "full", integrityState: "verified", checkedAtUtc: now() });
+    if (path === "/api/v1/checks/deleted-item-cache") {
+      completeCacheVerification();
+      setupStatus.running = false;
+      return json(cacheStatus);
+    }
     if (path === "/api/v1/discovery/tautulli") return json(method === "POST" ? discovery : { last: discovery });
     if (path === "/api/v1/previews") return json({ previews });
     if (path === "/api/v1/operations" && method === "POST") return json(startOperation(body), 202);

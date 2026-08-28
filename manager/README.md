@@ -121,12 +121,16 @@ discovery when configuration is ready; it never contacts Plex or SMTP and never
 starts newsletter preview work. The dedicated Config discovery control
 continues to require its own confirmation and retains setup-preview recovery.
 A successful **Validate, save, and verify** action uses a typed backend impact
-plan and runs only affected work: Tautulli changes rerun discovery and
-integration checks, Plex changes rerun integration checks, SMTP-card changes
-rerun SMTP preflight, and presentation/content/library changes regenerate six
-local previews when retained or refreshed discovery reports one unambiguous
-owner or administrator ID. Cache, email, schedule, and delivery-delay-only
-saves retain applicable results and run no checks or preview work. The SMTP preflight permits a
+plan and runs affected work: Tautulli changes rerun discovery and integration
+checks, Plex changes rerun integration checks, SMTP-card changes rerun SMTP
+preflight, and presentation/content/library changes regenerate six local
+previews when retained or refreshed discovery reports one unambiguous owner or
+administrator ID. When cache storage is enabled, every successful action also
+runs the complete local cache verification. If cache settings changed and
+PreviewAll can start, cache health remains **Waiting** until that prerequisite
+finishes; Manager then retains the actual result for Dashboard and Verify.
+Email, schedule, and delivery-delay-only saves otherwise retain applicable
+results. The SMTP preflight permits a
 configured private or public unicast provider but stops before authentication
 and sending; SMTP credentials, From-address permission, and real MIME delivery
 are validated only by the separately confirmed `TestEmail` operation. Every

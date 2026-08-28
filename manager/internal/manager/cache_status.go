@@ -252,6 +252,69 @@ func (status DeletedItemCacheStatus) configurationStep() ConfigurationStatusStep
 	return ConfigurationStatusStep{State: status.State, Summary: status.Summary, UpdatedAtUTC: status.CheckedAtUTC}
 }
 
+func cleanStoredDeletedItemCacheStatus(status DeletedItemCacheStatus) (DeletedItemCacheStatus, bool) {
+	if status.SchemaVersion != deletedItemCacheStatusSchemaVersion || status.Verification != "full" {
+		return DeletedItemCacheStatus{}, false
+	}
+	if !cacheStatusValueAllowed(status.State, "passed", "warning", "failed", "skipped") ||
+		!cacheStatusValueAllowed(status.ManifestState, "unavailable", "disabled", "unseeded", "primary-valid", "backup-recoverable", "corrupt") ||
+		!cacheStatusValueAllowed(status.BackupState, "unavailable", "not-applicable", "missing", "valid", "invalid", "stale-ignored") ||
+		!cacheStatusValueAllowed(status.Writability, "not-checked", "not-applicable", "passed", "failed", "previously-evidenced") ||
+		!cacheStatusValueAllowed(status.IntegrityState, "not-checked", "skipped", "verified", "structural", "warning", "failed") {
+		return DeletedItemCacheStatus{}, false
+	}
+	if _, err := time.Parse(time.RFC3339, status.CheckedAtUTC); err != nil {
+		return DeletedItemCacheStatus{}, false
+	}
+	switch status.State {
+	case "passed":
+		status.Summary = "Full deleted-item cache verification passed."
+	case "warning":
+		status.Summary = "Full deleted-item cache verification completed with an actionable health finding."
+	case "failed":
+		status.Summary = "Full deleted-item cache verification failed."
+	default:
+		status.Summary = "Deleted-item cache is disabled in the saved configuration."
+	}
+	if status.RetentionDays < 1 || status.RetentionDays > 3650 ||
+		status.MaxItems < 1 || status.MaxItems > maximumDeletedItemManifestEntries ||
+		status.MaxBytesMB < 16 || status.MaxBytesMB > 2048 {
+		return DeletedItemCacheStatus{}, false
+	}
+	counts := []int{
+		status.EntryCount, status.ArtworkCount, status.MissingArtworkCount, status.OrphanArtworkCount,
+		status.ArtworkSizeMismatchCount, status.HashMismatchCount, status.ExpiredEntryCount,
+	}
+	for _, count := range counts {
+		if count < 0 || count > 1_000_000 {
+			return DeletedItemCacheStatus{}, false
+		}
+	}
+	if status.ArtworkBytes < 0 || status.ArtworkBytes > 1<<50 ||
+		status.MissingArtworkCount > status.EntryCount || status.ArtworkSizeMismatchCount > status.EntryCount ||
+		status.HashMismatchCount > status.EntryCount || status.ExpiredEntryCount > status.EntryCount ||
+		status.OrphanArtworkCount > status.ArtworkCount {
+		return DeletedItemCacheStatus{}, false
+	}
+	if !status.Enabled && (status.State != "skipped" || status.ManifestState != "disabled" ||
+		status.Writability != "not-applicable" || status.IntegrityState != "skipped") {
+		return DeletedItemCacheStatus{}, false
+	}
+	if status.Enabled && status.State == "skipped" {
+		return DeletedItemCacheStatus{}, false
+	}
+	return status, true
+}
+
+func cacheStatusValueAllowed(value string, allowed ...string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func readDeletedItemCacheManifest(path string) (deletedItemCacheManifest, string) {
 	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {

@@ -57,6 +57,7 @@ jobs:
           node --check scripts/test-recipient-watched-visuals.mjs
           node scripts/test-manager-header-refresh.mjs
           node scripts/test-manager-preview-refresh.mjs
+          node scripts/test-manager-cache-verification.mjs
       - name: Validate Manager accessibility structure
         run: python scripts/test-manager-accessibility.py
       - name: Test synthetic GUI preview personal statistics

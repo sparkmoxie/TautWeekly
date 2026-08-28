@@ -6,6 +6,35 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.23.2] - 2026-08-27
+
+### Changed
+
+- **Validate, save, and verify** now treats no-email PreviewAll as a cache
+  prerequisite: cache health is **Waiting** while warm-up runs, then the full
+  local storage, bounds, manifest, backup, writability, and artwork-integrity
+  check runs automatically and remains available on Verify.
+- Disabled cache verification now offers **Enable Cache Storage**, which opens
+  and focuses the Config cache setting without changing or saving it. The
+  manual cache check remains available as an optional later recheck.
+- Cache verification cards, badges, text, borders, backgrounds, and glows now
+  transition consistently, and the local cache boundary uses the outlined
+  home-storage settings symbol.
+
+### Fixed
+
+- Healthy cache and storage cards no longer remain at Warning after a
+  successful configuration workflow, and Warning is reserved for completed,
+  actionable health findings.
+- Full local verification still completes after a PreviewAll failure or
+  cancellation and when preview start is skipped.
+
+### Security
+
+- Automatic and manual cache checks remain local: they send no email, perform
+  no SMTP authentication, change no schedules, expose no private cache data,
+  and remove their fixed-content writability probe.
+
 ## [0.23.1] - 2026-08-27
 
 ### Changed

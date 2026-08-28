@@ -79,7 +79,7 @@ func TestEveryConfigFieldHasExplicitSaveImpact(t *testing.T) {
 		plan := classifyConfigPostSave(map[string]any{definition.Name: "before"}, map[string]any{definition.Name: "after"}, true)
 		if !plan.MaterialChange || len(plan.ChangedCategories) != 1 || plan.ChangedCategories[0] != want.category ||
 			plan.RunDiscovery != want.discovery || plan.RunIntegration != want.integration ||
-			plan.RunSMTP != want.smtp || plan.GeneratePreviews != want.preview {
+			plan.RunSMTP != want.smtp || plan.GeneratePreviews != want.preview || !plan.CacheEnabled || !plan.VerifyCache {
 			t.Fatalf("config field %q: got %+v, want %+v", definition.Name, plan, want)
 		}
 	}
@@ -87,9 +87,10 @@ func TestEveryConfigFieldHasExplicitSaveImpact(t *testing.T) {
 
 func TestConfigPostSavePlanInvalidatesOnlyAffectedCategories(t *testing.T) {
 	tests := []struct {
-		name   string
-		mutate func(*ConfigSaveRequest)
-		want   ConfigPostSavePlan
+		name          string
+		mutate        func(*ConfigSaveRequest)
+		want          ConfigPostSavePlan
+		cacheDisabled bool
 	}{
 		{
 			name: "custom card presentation",
@@ -161,7 +162,8 @@ func TestConfigPostSavePlanInvalidatesOnlyAffectedCategories(t *testing.T) {
 			mutate: func(request *ConfigSaveRequest) {
 				request.Values["DeletedItemCacheEnabled"] = json.RawMessage(`false`)
 			},
-			want: ConfigPostSavePlan{MaterialChange: true, ConfirmationCode: "cache-disabled"},
+			cacheDisabled: true,
+			want:          ConfigPostSavePlan{MaterialChange: true, ConfirmationCode: "cache-disabled"},
 		},
 		{
 			name: "enabled cache bounds warm local previews",
@@ -189,9 +191,11 @@ func TestConfigPostSavePlanInvalidatesOnlyAffectedCategories(t *testing.T) {
 				t.Fatalf("save: result=%+v fields=%v err=%v", result, fields, err)
 			}
 			got := result.PostSave
+			expectedCacheEnabled := !test.cacheDisabled
 			if got.MaterialChange != test.want.MaterialChange || got.RunDiscovery != test.want.RunDiscovery ||
 				got.RunIntegration != test.want.RunIntegration || got.RunSMTP != test.want.RunSMTP ||
-				got.GeneratePreviews != test.want.GeneratePreviews || got.ConfirmationCode != test.want.ConfirmationCode {
+				got.GeneratePreviews != test.want.GeneratePreviews || got.ConfirmationCode != test.want.ConfirmationCode ||
+				got.CacheEnabled != expectedCacheEnabled || got.VerifyCache != expectedCacheEnabled {
 				t.Fatalf("post-save plan: got %+v, want effects %+v", got, test.want)
 			}
 			encoded, _ := json.Marshal(result)
@@ -213,6 +217,9 @@ func TestNoMaterialChangeSaveDoesNoWork(t *testing.T) {
 		t.Fatalf("no-op save: fields=%v err=%v", fields, err)
 	}
 	if result.Saved || result.PostSave.MaterialChange || result.PostSave.RunDiscovery || result.PostSave.RunIntegration || result.PostSave.RunSMTP || result.PostSave.GeneratePreviews {
+		if !result.PostSave.CacheEnabled || !result.PostSave.VerifyCache {
+			t.Fatalf("no-op save did not schedule the enabled-cache verification: %+v", result.PostSave)
+		}
 		t.Fatalf("no-op save scheduled work: %+v", result)
 	}
 	if result.Editor.Revision != before.Revision {
@@ -265,7 +272,7 @@ func TestPresentationSaveRebasesEvidenceAcrossEveryManagerPackage(t *testing.T) 
 				t.Fatalf("sanitized discovery was not rebased: %+v", discovery)
 			}
 			status := server.configuration.Load(result.Editor.Revision)
-			if status.Steps["choices"].State != "passed" || status.Steps["lan"].State != "passed" || status.Steps["smtp"].State != "passed" || status.Steps["previews"].State != "waiting" {
+			if status.Steps["choices"].State != "passed" || status.Steps["lan"].State != "passed" || status.Steps["smtp"].State != "passed" || status.Steps["previews"].State != "waiting" || status.Steps["cache"].State != "waiting" {
 				t.Fatalf("scoped setup state: %+v", status.Steps)
 			}
 			if status.LastVerification == nil || status.LastVerification.ConfigRevision != result.Editor.Revision || status.LastSMTPCheck == nil || status.LastSMTPCheck.ConfigRevision != result.Editor.Revision {
@@ -337,7 +344,7 @@ func TestSavedConnectionCategoriesInvalidateOnlyRelevantEvidence(t *testing.T) {
 			if gotDiscovery != test.wantDiscovery || (status.LastVerification != nil) != test.wantIntegration || (status.LastSMTPCheck != nil) != test.wantSMTP {
 				t.Fatalf("retained evidence: discovery=%t integration=%t smtp=%t status=%+v plan=%+v", gotDiscovery, status.LastVerification != nil, status.LastSMTPCheck != nil, status, result.PostSave)
 			}
-			if status.Steps["choices"].State != test.wantChoicesState || status.Steps["lan"].State != test.wantLANState || status.Steps["smtp"].State != test.wantSMTPState || status.Steps["previews"].State != test.wantPreviewState {
+			if status.Steps["choices"].State != test.wantChoicesState || status.Steps["lan"].State != test.wantLANState || status.Steps["smtp"].State != test.wantSMTPState || status.Steps["previews"].State != test.wantPreviewState || status.Steps["cache"].State != "waiting" {
 				t.Fatalf("scoped steps: got=%+v", status.Steps)
 			}
 		})

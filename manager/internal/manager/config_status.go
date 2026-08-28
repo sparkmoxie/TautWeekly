@@ -10,24 +10,27 @@ import (
 )
 
 const (
-	configurationStatusSchemaVersion = 1
+	configurationStatusSchemaVersion = 2
+	legacyConfigurationStatusVersion = 1
 	maximumConfigurationStatusBytes  = 16 << 10
 )
 
 var (
 	errConfigurationStatusRevision = errors.New("configuration status revision does not match")
-	configurationStatusSteps       = []string{"choices", "lan", "smtp", "previews"}
+	configurationStatusSteps       = []string{"choices", "lan", "smtp", "previews", "cache"}
 	configurationStatusWaitingCopy = map[string]string{
 		"choices":  "Waiting to load saved Tautulli libraries and users.",
 		"lan":      "Waiting to verify the saved Tautulli and Plex connections.",
 		"smtp":     "Waiting to run the non-sending SMTP preflight.",
 		"previews": "Waiting to prepare the six local preview states.",
+		"cache":    "Waiting for local PreviewAll cache initialization before the full storage and artwork check.",
 	}
 	configurationStatusNotRunCopy = map[string]string{
 		"choices":  "Libraries and users have not been loaded for this configuration.",
 		"lan":      "Tautulli and Plex have not been verified for this configuration.",
 		"smtp":     "SMTP preflight has not been run for this configuration.",
 		"previews": "Local previews have not been prepared for this configuration.",
+		"cache":    "Full deleted-item cache verification has not been run for this configuration.",
 	}
 )
 
@@ -164,6 +167,21 @@ func (s *configurationStatusStore) Rebase(previousRevision, nextRevision string,
 	}
 	waitFor("previews", plan.GeneratePreviews)
 
+	if plan.CacheEnabled {
+		if !plan.VerifyCache && hasPrevious && previous.Cache != nil {
+			retained := *previous.Cache
+			if clean, ok := cleanStoredDeletedItemCacheStatus(retained); ok {
+				next.Cache = &clean
+				retainStep("cache", true)
+			}
+		}
+		waitFor("cache", plan.VerifyCache)
+	} else {
+		next.Steps["cache"] = ConfigurationStatusStep{
+			State: "skipped", Summary: "Deleted-item cache is disabled in the saved configuration.", UpdatedAtUTC: now,
+		}
+	}
+
 	next.Running = false
 	for _, step := range next.Steps {
 		if step.State == "waiting" || step.State == "running" {
@@ -264,6 +282,34 @@ func (s *configurationStatusStore) StoreSMTPCheck(revision string, result SMTPNe
 	return writePrivateJSON(s.path, status)
 }
 
+func (s *configurationStatusStore) StoreCache(revision string, result DeletedItemCacheStatus) error {
+	clean, ok := cleanStoredDeletedItemCacheStatus(result)
+	if !validConfigRevision(revision) || !ok {
+		return errConfigurationStatusRevision
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if storedRevision, exists := s.storedRevisionLocked(); exists && storedRevision != revision {
+		return errConfigurationStatusRevision
+	}
+	status, exists := s.readLocked(revision)
+	if !exists {
+		status = newConfigurationStatus(revision, "not-run", s.now())
+	}
+	status.SchemaVersion = configurationStatusSchemaVersion
+	status.Cache = &clean
+	status.Steps["cache"] = clean.configurationStep()
+	status.UpdatedAtUTC = s.now().UTC().Format(time.RFC3339)
+	status.Running = false
+	for _, step := range status.Steps {
+		if step.State == "waiting" || step.State == "running" {
+			status.Running = true
+			break
+		}
+	}
+	return writePrivateJSON(s.path, status)
+}
+
 func (s *configurationStatusStore) storedRevisionLocked() (string, bool) {
 	info, err := os.Stat(s.path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() > maximumConfigurationStatusBytes {
@@ -277,7 +323,8 @@ func (s *configurationStatusStore) storedRevisionLocked() (string, bool) {
 		SchemaVersion  int    `json:"schemaVersion"`
 		ConfigRevision string `json:"configRevision"`
 	}
-	if json.Unmarshal(raw, &stored) != nil || stored.SchemaVersion != configurationStatusSchemaVersion || !validConfigRevision(stored.ConfigRevision) {
+	if json.Unmarshal(raw, &stored) != nil ||
+		(stored.SchemaVersion != configurationStatusSchemaVersion && stored.SchemaVersion != legacyConfigurationStatusVersion) || !validConfigRevision(stored.ConfigRevision) {
 		return "", false
 	}
 	return stored.ConfigRevision, true
@@ -293,7 +340,9 @@ func (s *configurationStatusStore) readLocked(revision string) (ConfigurationSta
 		return ConfigurationStatus{}, false
 	}
 	var stored ConfigurationStatus
-	if json.Unmarshal(raw, &stored) != nil || stored.SchemaVersion != configurationStatusSchemaVersion || !stored.Available || stored.ConfigRevision != revision {
+	if json.Unmarshal(raw, &stored) != nil ||
+		(stored.SchemaVersion != configurationStatusSchemaVersion && stored.SchemaVersion != legacyConfigurationStatusVersion) ||
+		!stored.Available || stored.ConfigRevision != revision {
 		return ConfigurationStatus{}, false
 	}
 	if _, err := time.Parse(time.RFC3339, stored.UpdatedAtUTC); err != nil {
@@ -309,6 +358,12 @@ func (s *configurationStatusStore) readLocked(revision string) (ConfigurationSta
 	}
 	for _, name := range configurationStatusSteps {
 		step, exists := stored.Steps[name]
+		if name == "cache" && stored.SchemaVersion == legacyConfigurationStatusVersion && !exists {
+			clean.Steps[name] = ConfigurationStatusStep{
+				State: "not-run", Summary: configurationStatusNotRunCopy[name], UpdatedAtUTC: stored.UpdatedAtUTC,
+			}
+			continue
+		}
 		if !exists || !validConfigurationStatusState(step.State) {
 			return ConfigurationStatus{}, false
 		}
@@ -336,6 +391,13 @@ func (s *configurationStatusStore) readLocked(revision string) (ConfigurationSta
 			return ConfigurationStatus{}, false
 		}
 		clean.LastSMTPCheck = &result
+	}
+	if stored.Cache != nil {
+		cache, valid := cleanStoredDeletedItemCacheStatus(*stored.Cache)
+		if !valid {
+			return ConfigurationStatus{}, false
+		}
+		clean.Cache = &cache
 	}
 	return clean, true
 }

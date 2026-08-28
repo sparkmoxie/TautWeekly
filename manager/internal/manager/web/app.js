@@ -539,8 +539,8 @@ function setupWorkflowPresentation(workflow = state.setupWorkflow) {
   if (active) return { label: "Running", tone: "pending", summary: "Safe setup checks are running and each result is retained as it completes." };
   if (states.includes("failed")) return { label: "Needs review", tone: "bad", summary: "One or more saved setup checks need review before live delivery." };
   if (states.every((stepState) => stepState === "not-run")) return { label: "Not run", tone: "neutral", summary: "Validate and save to run the five safe setup checks." };
-  if (states.includes("waiting")) return { label: "Pending", tone: "pending", summary: "One or more setup checks are waiting to run for this configuration." };
-  if (states.some((stepState) => ["warning", "skipped"].includes(stepState))) return { label: "Completed with notes", tone: "neutral", summary: "The saved configuration was checked; review the noted result before live delivery." };
+  if (states.includes("waiting")) return { label: "Waiting", tone: "waiting", summary: "One or more setup checks are waiting for a prerequisite." };
+  if (states.some((stepState) => ["warning", "skipped"].includes(stepState))) return { label: "Completed with notes", tone: states.includes("warning") ? "warning" : "neutral", summary: "The saved configuration was checked; review the noted result before live delivery." };
   if (states.length === applicableStepNames.length && states.every((stepState) => stepState === "passed")) {
     return {
       label: "Passed",
@@ -561,7 +561,7 @@ function renderDashboardConfigStatus() {
     const displayState = name === "cache" && state.cache?.enabled === false
       ? "Disabled"
       : titleCase(state.setupWorkflow?.steps?.[name]?.state || "not-run");
-    setText(`configuration-status-${name}`, displayState);
+    setSwappingText(`configuration-status-${name}`, displayState);
   }
 }
 
@@ -1779,7 +1779,7 @@ function collectConfigSaveRequest() {
 const setupWorkflowSteps = ["choices", "lan", "smtp", "previews", "cache"];
 
 function beginSetupWorkflow(plan) {
-  state.setupWorkflowRunning = Boolean(plan?.runDiscovery || plan?.runIntegration || plan?.runSmtp || plan?.generatePreviews);
+  state.setupWorkflowRunning = Boolean(plan?.runDiscovery || plan?.runIntegration || plan?.runSmtp || plan?.generatePreviews || plan?.verifyCache);
   renderSetupWorkflow();
 }
 
@@ -1802,8 +1802,10 @@ function renderSetupWorkflow() {
   setText("setup-workflow-summary", presentation.summary);
   for (const name of setupWorkflowSteps) {
     const step = state.setupWorkflow.steps[name] || { state: "not-run", summary: "This check has not been recorded for the saved configuration." };
-    setText(`setup-${name}-summary`, step.summary);
-    const tone = step.state === "passed" ? "good" : step.state === "failed" ? "bad" : ["running", "waiting"].includes(step.state) ? "pending" : "neutral";
+    setSwappingText(`setup-${name}-summary`, step.summary);
+    const tone = step.state === "passed" ? "good" : step.state === "failed" ? "bad"
+      : step.state === "waiting" ? "waiting" : step.state === "running" ? "pending"
+        : step.state === "warning" ? "warning" : "neutral";
     const label = name === "cache" && state.cache?.enabled === false ? "Disabled" : titleCase(step.state);
     setChip(`setup-${name}-chip`, label, tone);
     const row = byId(`setup-${name}-step`);
@@ -1834,6 +1836,7 @@ async function retainSkippedPreviewStatus(revision, reason) {
 }
 
 async function runPostSaveSetup(revision, plan) {
+  let previewStarted = false;
   let discovered = state.discovery?.configRevision === revision ? state.discovery : null;
   let discoveryFailed = false;
   if (plan.runDiscovery) {
@@ -1929,6 +1932,7 @@ async function runPostSaveSetup(revision, plan) {
         method: "POST",
         body: JSON.stringify({ type: "preview-all", expectedRevision: revision, userId: suggestedUserID, confirmNoSend: true }),
       });
+      previewStarted = true;
       updateSetupWorkflowStep("previews", "running", "Six-state local preview generation started. No email will be sent; progress is available under Previews.");
       manageOperationPolling();
     } catch (error) {
@@ -1938,6 +1942,10 @@ async function runPostSaveSetup(revision, plan) {
       state.operationStartingType = "";
       renderOperations();
     }
+  }
+
+  if (plan.verifyCache && !previewStarted) {
+    await runCacheVerification({ automatic: true, expectedRevision: revision });
   }
 
   if (state.setupWorkflow) state.setupWorkflow.running = false;
@@ -1968,6 +1976,7 @@ async function runPostSaveSetup(revision, plan) {
   } catch (_) {
     // Diagnostics are supplementary; the individual setup results remain visible.
   }
+  return { cachePending: Boolean(plan.verifyCache && previewStarted) };
 }
 
 async function recoverPendingPreviewsFromChoices(expectedAuthenticationEpoch = authenticationEpoch) {
@@ -2072,7 +2081,15 @@ async function submitConfig(event) {
     const result = await request("/api/v1/config", { method: "PUT", body: JSON.stringify(collectConfigSaveRequest()) });
     state.editor = result.editor;
     if (!result.saved) {
-      setGlobalStatus("No material configuration changes were found. No checks or preview work ran.", true);
+      if (!result.postSave?.verifyCache) {
+        setGlobalStatus("No material configuration changes were found. No checks or preview work ran.", true);
+        return;
+      }
+      beginSetupWorkflow(result.postSave);
+      setGlobalStatus("Configuration is unchanged. Running the full local cache verification...");
+      await runCacheVerification({ automatic: true, expectedRevision: result.editor.revision });
+      state.setupWorkflowRunning = false;
+      setGlobalStatus("Configuration is unchanged and the full local cache verification finished.", true);
       return;
     }
     await loadAll();
@@ -2082,14 +2099,16 @@ async function submitConfig(event) {
       setGlobalStatus(result.backup ? "Configuration normalized and backed up. No checks or preview work were needed." : "Configuration normalized. No checks or preview work were needed.", true);
       return;
     }
-    const hasPostSaveWork = Boolean(result.postSave.runDiscovery || result.postSave.runIntegration || result.postSave.runSmtp || result.postSave.generatePreviews);
+    const hasPostSaveWork = Boolean(result.postSave.runDiscovery || result.postSave.runIntegration || result.postSave.runSmtp || result.postSave.generatePreviews || result.postSave.verifyCache);
     if (!hasPostSaveWork) {
       setGlobalStatus(savedWithoutVerificationMessage(result.postSave), true);
       return;
     }
     setGlobalStatus(result.backup ? "Configuration saved and backed up. Running only affected checks..." : "Configuration saved. Running only affected checks...");
-    await runPostSaveSetup(result.editor.revision, result.postSave);
-    setGlobalStatus("Affected save verification finished. Review the results above.", true);
+    const setup = await runPostSaveSetup(result.editor.revision, result.postSave);
+    setGlobalStatus(setup.cachePending
+      ? "Preview warm-up is running. Full local cache verification will follow automatically."
+      : "Affected save verification finished. Review the results above.", true);
   } catch (error) {
     showConfigErrors(error.message, error.fields);
     setGlobalStatus(error.message, true);
@@ -2260,22 +2279,67 @@ async function restoreBackup(backup, button, cancel) {
   }
 }
 
+function verificationResultTone(checkState) {
+  if (checkState === "passed") return "good";
+  if (checkState === "failed") return "bad";
+  if (checkState === "waiting") return "waiting";
+  if (checkState === "running") return "pending";
+  if (checkState === "warning") return "warning";
+  return "neutral";
+}
+
+function prepareVerificationResults(container) {
+  Array.from(container.children).forEach((child) => { child.dataset.verificationCurrent = "false"; });
+}
+
+function finishVerificationResults(container) {
+  Array.from(container.children).forEach((child) => {
+    if (child.dataset.verificationCurrent !== "true") child.remove();
+  });
+}
+
 function appendVerificationResult(container, heading, checkState, summaryText) {
-  const card = document.createElement("article");
-  const tone = checkState === "passed" ? "good" : checkState === "failed" ? "bad" : "neutral";
+  const key = `result:${heading}`;
+  let card = Array.from(container.children).find((child) => child.dataset.verificationKey === key);
+  if (!card) {
+    card = document.createElement("article");
+    card.dataset.verificationKey = key;
+    const top = document.createElement("div");
+    top.className = "card-topline";
+    const title = document.createElement("h2");
+    const chip = document.createElement("span");
+    const label = document.createElement("span");
+    label.className = "state-chip-label";
+    chip.append(label);
+    top.append(title, chip);
+    const summary = document.createElement("p");
+    card.append(top, summary);
+    container.append(card);
+  }
+  card.dataset.verificationCurrent = "true";
+  const tone = verificationResultTone(checkState);
   card.className = `verification-result ${checkState} state-card-${tone}`;
-  const top = document.createElement("div");
-  top.className = "card-topline";
-  const title = document.createElement("h2");
-  title.textContent = heading;
-  const chip = document.createElement("span");
+  const title = card.querySelector("h2");
+  const chip = card.querySelector("span");
+  const label = chip.querySelector(".state-chip-label");
+  const summary = card.querySelector("p");
+  setSwappingElementText(title, heading);
+  setSwappingElementText(label, titleCase(checkState));
   chip.className = `state-chip ${tone}`;
-  chip.textContent = titleCase(checkState);
-  top.append(title, chip);
-  const summary = document.createElement("p");
-  summary.textContent = summaryText;
-  card.append(top, summary);
-  container.append(card);
+  setSwappingElementText(summary, summaryText);
+}
+
+function appendVerificationEmpty(container, text) {
+  const key = "empty";
+  let empty = Array.from(container.children).find((child) => child.dataset.verificationKey === key);
+  if (!empty) {
+    empty = document.createElement("div");
+    empty.className = "config-empty";
+    empty.dataset.verificationKey = key;
+    container.append(empty);
+  }
+  empty.dataset.verificationCurrent = "true";
+  setSwappingElementText(empty, text);
 }
 
 function renderVerification() {
@@ -2284,6 +2348,9 @@ function renderVerification() {
   const cache = state.cache;
   const ready = state.editor?.state === "ready";
   const networkBusy = state.verificationRunning || state.smtpVerificationRunning || state.discoveryRunning || state.cacheVerificationRunning;
+  const operationBusy = operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation);
+  const cacheDisabled = cache?.enabled === false;
+  const cacheWorkflowState = state.setupWorkflow?.steps?.cache?.state || "";
   const results = byId("verification-results");
   const smtpResults = byId("smtp-verification-results");
   const cacheResults = byId("cache-verification-results");
@@ -2292,15 +2359,17 @@ function renderVerification() {
   const runButton = byId("verification-run-button");
   const smtpRunButton = byId("smtp-verification-run-button");
   const cacheRunButton = byId("cache-verification-run-button");
-  results.replaceChildren();
-  smtpResults.replaceChildren();
-  cacheResults.replaceChildren();
+  prepareVerificationResults(results);
+  prepareVerificationResults(smtpResults);
+  prepareVerificationResults(cacheResults);
   runButton.disabled = networkBusy || !confirm.checked || !ready;
   smtpRunButton.disabled = networkBusy || !smtpConfirm.checked || !ready;
-  cacheRunButton.disabled = networkBusy || !ready || cache?.enabled === false;
+  cacheRunButton.disabled = cacheDisabled ? !ready : networkBusy || operationBusy || !ready;
   setSwappingButtonText("verification-run-button", state.verificationRunning ? "Testing saved services..." : "Run connection test");
   setSwappingButtonText("smtp-verification-run-button", state.smtpVerificationRunning ? "Testing SMTP..." : "Run SMTP preflight");
-  setSwappingButtonText("cache-verification-run-button", state.cacheVerificationRunning ? "Checking cache..." : "Check deleted-item cache");
+  setSwappingButtonText("cache-verification-run-button", cacheDisabled
+    ? "Enable Cache Storage"
+    : state.cacheVerificationRunning ? "Checking cache..." : "Check deleted-item cache");
 
   if (!ready) {
     byId("verification-message").textContent = "Complete and save configuration before running a connection test.";
@@ -2313,11 +2382,15 @@ function renderVerification() {
     byId("smtp-verification-message").textContent = state.smtpVerificationRunning
       ? "Contacting the saved SMTP endpoint without authenticating or sending. This may take up to 45 seconds."
       : "No SMTP request occurs until the confirmation is checked and the button is pressed.";
-    byId("cache-verification-message").textContent = cache?.enabled === false
-      ? "Enable the deleted-item cache and validate and save before running this local check."
+    byId("cache-verification-message").textContent = cacheDisabled
+      ? "Open Config to review the deleted-item cache settings. This action does not toggle or save anything."
       : state.cacheVerificationRunning
         ? "Checking the bounded manifest, local write access, and cached artwork without contacting any service."
-        : "The current summary is read-only. Press the button to test writability and hash every cached artwork file.";
+        : operationBusy
+          ? "Wait for the active local operation; its cache verification will finish automatically after PreviewAll."
+          : cache?.verification === "full"
+            ? "The latest full result is retained. Use this optional recheck after later filesystem or configuration changes."
+            : "A successful save runs this full local check automatically; use the button for an optional recheck.";
   }
 
   const retainedLANState = retainedSetupCheckState("lan");
@@ -2332,10 +2405,7 @@ function renderVerification() {
     appendVerificationResult(results, "Tautulli and direct Plex", retainedLANState, state.setupWorkflow.steps.lan.summary);
   } else {
     setText("verification-observed", "No integration result is retained for this saved configuration.");
-    const empty = document.createElement("div");
-    empty.className = "config-empty";
-    empty.textContent = "Validate and save to run every safe setup check, or repeat this targeted connection test.";
-    results.append(empty);
+    appendVerificationEmpty(results, "Validate and save to run every safe setup check, or repeat this targeted connection test.");
   }
 
   if (smtp) {
@@ -2346,13 +2416,21 @@ function renderVerification() {
     appendVerificationResult(smtpResults, "SMTP preflight", retainedSMTPState, state.setupWorkflow.steps.smtp.summary);
   } else {
     setText("smtp-verification-observed", "No SMTP preflight is retained for this saved configuration.");
-    const empty = document.createElement("div");
-    empty.className = "config-empty";
-    empty.textContent = "Validate and save to run every safe setup check, or repeat this targeted SMTP preflight.";
-    smtpResults.append(empty);
+    appendVerificationEmpty(smtpResults, "Validate and save to run every safe setup check, or repeat this targeted SMTP preflight.");
   }
 
-  if (cache) {
+  if (["waiting", "running"].includes(cacheWorkflowState) && !cacheDisabled) {
+    const workflowSummary = state.setupWorkflow?.steps?.cache?.summary
+      || (cacheWorkflowState === "waiting"
+        ? "Waiting for the local PreviewAll warm-up before the full cache check."
+        : "Checking deleted-item cache storage and artwork locally.");
+    setText("cache-verification-observed", cacheWorkflowState === "waiting" ? "Waiting for the no-email PreviewAll prerequisite." : "Full local verification is running.");
+    appendVerificationResult(cacheResults, "Deleted-item cache", cacheWorkflowState, workflowSummary);
+    appendVerificationResult(cacheResults, "Storage and bounds", cacheWorkflowState,
+      cacheWorkflowState === "waiting" ? "Waiting for cache initialization before checking storage and bounds." : "Checking writable storage, retention, and configured bounds.");
+    appendVerificationResult(cacheResults, "Manifest and artwork", cacheWorkflowState,
+      cacheWorkflowState === "waiting" ? "Waiting for cache initialization before checking the manifest and artwork." : "Checking the manifest, backup, and cached artwork integrity.");
+  } else if (cache) {
     if (cache.enabled === false) {
       setText("cache-verification-observed", `Saved setting checked ${formatDate(cache.checkedAtUtc)} · cache storage was not inspected.`);
       appendVerificationResult(cacheResults, "Deleted-item cache", "disabled", cache.summary);
@@ -2373,16 +2451,19 @@ function renderVerification() {
     }
   } else {
     setText("cache-verification-observed", "No deleted-item cache status is available for this saved configuration.");
-    const empty = document.createElement("div");
-    empty.className = "config-empty";
-    empty.textContent = "Validate and save, then use this local check to verify cache initialization and artwork integrity.";
-    cacheResults.append(empty);
+    appendVerificationEmpty(cacheResults, "Validate and save to run the full local cache verification automatically.");
   }
+  finishVerificationResults(results);
+  finishVerificationResults(smtpResults);
+  finishVerificationResults(cacheResults);
 
   const integration = renderIntegrationStatus();
   let overallLabel = integration.overallLabel;
   let overallTone = integration.overallTone;
-  if (state.cacheVerificationRunning) {
+  if (cacheWorkflowState === "waiting") {
+    overallLabel = "Waiting";
+    overallTone = "waiting";
+  } else if (state.cacheVerificationRunning || cacheWorkflowState === "running") {
     overallLabel = "Running";
     overallTone = "pending";
   } else if (cache?.state === "failed") {
@@ -2390,7 +2471,7 @@ function renderVerification() {
     overallTone = "bad";
   } else if (cache?.state === "warning" && overallTone !== "bad") {
     overallLabel = "Completed with notes";
-    overallTone = "neutral";
+    overallTone = "warning";
   } else if (["passed", "skipped"].includes(cache?.state) && integration.overallLabel === "Passed") {
     overallLabel = "Passed";
     overallTone = "good";
@@ -2398,32 +2479,48 @@ function renderVerification() {
   setChip("verification-chip", overallLabel, overallTone);
 }
 
-async function runCacheVerification() {
-  if (state.verificationRunning || state.smtpVerificationRunning || state.discoveryRunning || state.cacheVerificationRunning || state.editor?.state !== "ready" || state.cache?.enabled === false) return;
+async function runCacheVerification(options = {}) {
+  if (state.verificationRunning || state.smtpVerificationRunning || state.discoveryRunning || state.cacheVerificationRunning || state.editor?.state !== "ready" || state.cache?.enabled === false) return null;
+  const automatic = Boolean(options.automatic);
+  const expectedRevision = options.expectedRevision || state.editor.revision;
   state.cacheVerificationRunning = true;
+  updateSetupWorkflowStep("cache", "running", "Checking deleted-item cache storage, bounds, manifest, backup, writability, and artwork integrity...");
   renderVerification();
-  setGlobalStatus("Checking deleted-item cache storage and artwork locally...");
+  setGlobalStatus(automatic ? "Running the automatic full local cache verification..." : "Rechecking deleted-item cache storage and artwork locally...");
   try {
     const result = await request("/api/v1/checks/deleted-item-cache", {
       method: "POST",
-      body: JSON.stringify({ expectedRevision: state.editor.revision }),
+      body: JSON.stringify({ expectedRevision }),
     });
     state.cache = result;
     if (state.setupWorkflow?.steps) {
       state.setupWorkflow.steps.cache = { state: result.state, summary: result.summary, updatedAtUtc: result.checkedAtUtc };
     }
     renderSetupWorkflow();
-    setGlobalStatus(result.state === "failed" ? "Deleted-item cache check found a problem." : "Deleted-item cache check completed.", true);
+    const completedMessage = automatic ? "Automatic deleted-item cache verification completed" : "Deleted-item cache recheck completed";
+    setGlobalStatus(result.state === "failed" ? `${completedMessage} with a problem.` : `${completedMessage}.`, true);
+    return result;
   } catch (error) {
+    updateSetupWorkflowStep("cache", "failed", "Full deleted-item cache verification could not complete. Review the local Manager diagnostics and retry.");
     setGlobalStatus(error.message, true);
+    return null;
   } finally {
     state.cacheVerificationRunning = false;
     renderVerification();
   }
 }
 
+function handleCacheVerificationAction() {
+  if (state.cache?.enabled === false) {
+    selectView("configuration", { section: "cache" });
+    return;
+  }
+  void runCacheVerification();
+}
+
 async function runVerification() {
   if (state.verificationRunning || state.smtpVerificationRunning || state.discoveryRunning || !byId("verification-confirm").checked || state.editor?.state !== "ready") return;
+
   let completed = false;
   state.verificationRunning = true;
   const button = byId("verification-run-button");
@@ -3886,6 +3983,12 @@ function selectView(name, options = {}) {
       byId("update-settings-panel").scrollIntoView({ block: "start", behavior: "smooth" });
       byId("update-settings-heading").focus({ preventScroll: true });
     });
+  } else if (section === "cache" && name === "configuration") {
+    requestAnimationFrame(() => {
+      const cacheToggle = byId("config-DeletedItemCacheEnabled");
+      cacheToggle.scrollIntoView({ block: "center", behavior: "smooth" });
+      cacheToggle.focus({ preventScroll: true });
+    });
   } else {
     byId("main-content").focus({ preventScroll: true });
   }
@@ -4003,7 +4106,7 @@ function setChip(id, text, tone, iconName = "") {
   chip.className = `state-chip ${resolvedTone}`;
   const card = chip.closest(".health-card,.operation-strip,.current-operation,.setup-workflow-steps article,.setup-workflow");
   if (card) {
-    card.classList.remove("state-card-good", "state-card-bad", "state-card-pending", "state-card-neutral");
+    card.classList.remove("state-card-good", "state-card-bad", "state-card-pending", "state-card-neutral", "state-card-waiting", "state-card-warning");
     card.classList.add(`state-card-${resolvedTone}`);
   }
 }
@@ -4132,7 +4235,7 @@ byId("verification-confirm").addEventListener("change", renderVerification);
 byId("verification-run-button").addEventListener("click", runVerification);
 byId("smtp-verification-confirm").addEventListener("change", renderVerification);
 byId("smtp-verification-run-button").addEventListener("click", runSMTPVerification);
-byId("cache-verification-run-button").addEventListener("click", runCacheVerification);
+byId("cache-verification-run-button").addEventListener("click", handleCacheVerificationAction);
 byId("preview-user-id").addEventListener("input", renderOperations);
 byId("preview-confirm").addEventListener("change", renderOperations);
 byId("preview-run-button").addEventListener("click", startPreviewOperation);
