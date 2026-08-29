@@ -82,6 +82,13 @@ The Manager is published only at `http://localhost:8787/` by default.
    the explicit controlled TestEmail check. Enable **Schedule** only after the
    configured timezone, next run, previews, and SMTP result are correct.
 
+When deleted-item cache storage is enabled or its coverage changes,
+**Validate, save, and verify** starts a separate no-email refresh for every
+production-eligible included user's current newsletter window in the selected
+movie/TV libraries. It does not depend on PreviewAll or one selected preview
+user. Run `./tautweekly.sh cache-refresh` for an explicit refresh. Disabling
+the cache stops reads and writes without deleting retained entries.
+
 Pairing, login, CSRF protection, session expiry, throttling, credential reveal,
 and diagnostics use the shared Manager security contracts. Browser reads never
 return stored secrets. A service restart invalidates active browser sessions

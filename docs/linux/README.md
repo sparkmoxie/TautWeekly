@@ -81,6 +81,13 @@ GUI, open **Config**, complete guided setup, and choose **Validate, save, and
 verify**. Automatic sending remains disabled until it is explicitly enabled on
 the GUI **Schedule** page.
 
+When deleted-item cache storage is enabled or its coverage changes,
+**Validate, save, and verify** starts a separate no-email refresh for every
+production-eligible included user's current newsletter window in the selected
+movie/TV libraries. It does not depend on PreviewAll or one selected preview
+user. Run `sudo tautweekly cache-refresh` for an explicit refresh. Disabling
+the cache stops reads and writes without deleting retained entries.
+
 ### Optional custom newsletter text card
 
 The optional Config card immediately after **Cache** places administrator text

@@ -96,6 +96,14 @@ the FreeBSD host or a separate Plex service. **Validate, save, and verify**
 checks Plex `/identity` plus authenticated `/library/sections` without printing
 the token. A resolved but unusable connection fails verification; an unresolved
 pair emits a Tautulli-only fallback warning.
+
+When deleted-item cache storage is enabled or its coverage changes,
+**Validate, save, and verify** starts a separate no-email refresh for every
+production-eligible included user's current newsletter window in the selected
+movie/TV libraries. It does not depend on PreviewAll or one selected preview
+user. Run `sudo tautweekly cache-refresh` for an explicit refresh. Disabling
+the cache stops reads and writes without deleting retained entries.
+
 Verification proves reachability and authentication, not that every item has
 every provider score. The renderer explicitly requests Plex's optional
 `Rating` element so available movie RT pairs and exact-episode IMDb/RT values are not
