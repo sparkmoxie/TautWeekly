@@ -375,6 +375,13 @@ def main() -> int:
         failures.append("Tailscale card does not distinguish integrated and host-managed package adapters")
     if 'panel.classList.toggle("enabled-glow", Boolean(remote.enabled && remote.active));' not in javascript:
         failures.append("Active Tailscale state does not drive the full-card glow")
+    tailscale_renderer_start = javascript.find("function renderTailscaleSettings()")
+    tailscale_renderer_end = javascript.find("\n}\n\nasync function updateTailscaleAccess", tailscale_renderer_start)
+    tailscale_renderer = javascript[tailscale_renderer_start:tailscale_renderer_end]
+    funnel_declaration = tailscale_renderer.find('const publicFunnel = windows && remote.networkKind === "public-funnel";')
+    funnel_first_use = tailscale_renderer.find("const displayRemote = publicFunnel")
+    if tailscale_renderer_start < 0 or tailscale_renderer_end < 0 or funnel_declaration < 0 or funnel_first_use < 0 or funnel_declaration > funnel_first_use:
+        failures.append("Windows Funnel renderer uses publicFunnel before its declaration")
     if ".tailscale-settings-panel.enabled-glow" not in css or "prefers-reduced-motion:reduce" not in css:
         failures.append("Active Tailscale card glow lacks its motion-safe styling contract")
     if '.tailscale-settings-panel' not in css or '.tailscale-status-grid' not in css or '.tailscale-security-boundary' not in css:
