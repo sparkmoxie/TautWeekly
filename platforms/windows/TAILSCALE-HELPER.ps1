@@ -167,6 +167,61 @@ function Test-OwnedFunnelStatus {
     return $null -eq $caps -or @($caps.Value).Count -eq 0
 }
 
+function Test-PublicIPv4Address {
+    param([string]$Value)
+    try { $bytes = ([Net.IPAddress]::Parse($Value)).GetAddressBytes() }
+    catch { return $false }
+    if ($bytes.Count -ne 4) { return $false }
+    if ($bytes[0] -in @(0, 10, 127) -or $bytes[0] -ge 224) { return $false }
+    if ($bytes[0] -eq 100 -and $bytes[1] -ge 64 -and $bytes[1] -le 127) { return $false }
+    if ($bytes[0] -eq 169 -and $bytes[1] -eq 254) { return $false }
+    if ($bytes[0] -eq 172 -and $bytes[1] -ge 16 -and $bytes[1] -le 31) { return $false }
+    if ($bytes[0] -eq 192 -and ($bytes[1] -eq 0 -or $bytes[1] -eq 168)) { return $false }
+    if ($bytes[0] -eq 198 -and $bytes[1] -in @(18, 19, 51)) { return $false }
+    if ($bytes[0] -eq 203 -and $bytes[1] -eq 0 -and $bytes[2] -eq 113) { return $false }
+    return $true
+}
+
+function Test-PublicFunnelPublished {
+    param([object]$Status, [string]$ExpectedTarget)
+    if (-not (Test-OwnedFunnelStatus $Status $ExpectedTarget)) { return $false }
+    $webEntry = @($Status.PSObject.Properties['Web'].Value.PSObject.Properties)[0]
+    $hostname = ([string]$webEntry.Name).Substring(0, ([string]$webEntry.Name).Length - 4)
+    if ($hostname -notmatch '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.ts\.net$') { return $false }
+    try {
+        # Query a fixed public recursive resolver explicitly so MagicDNS cannot
+        # turn a private tailnet result into a false public-success signal.
+        $records = @(Resolve-DnsName -Name $hostname -Type A -Server '1.1.1.1' -DnsOnly -NoHostsFile -QuickTimeout -ErrorAction Stop)
+    }
+    catch { return $false }
+    $addresses = @($records | ForEach-Object { [string](Get-PropertyValue $_ 'IPAddress' '') } | Where-Object { Test-PublicIPv4Address $_ } | Select-Object -Unique | Select-Object -First 4)
+    foreach ($address in $addresses) {
+        $client = New-Object Net.Sockets.TcpClient
+        try {
+            $connect = $client.BeginConnect($address, 443, $null, $null)
+            if (-not $connect.AsyncWaitHandle.WaitOne(4000)) { continue }
+            $client.EndConnect($connect)
+            $stream = $client.GetStream()
+            try {
+                $stream.ReadTimeout = 5000
+                $stream.WriteTimeout = 5000
+                $tls = New-Object Net.Security.SslStream($stream, $false)
+                try {
+                    $authentication = $tls.BeginAuthenticateAsClient($hostname, $null, $null)
+                    if (-not $authentication.AsyncWaitHandle.WaitOne(5000)) { continue }
+                    $tls.EndAuthenticateAsClient($authentication)
+                    if ($tls.IsAuthenticated -and $tls.IsEncrypted) { return $true }
+                }
+                finally { $tls.Dispose() }
+            }
+            finally { $stream.Dispose() }
+        }
+        catch { }
+        finally { $client.Dispose() }
+    }
+    return $false
+}
+
 function Test-OwnedLegacyServeStatus {
     param([object]$Status, [string]$ExpectedTarget)
     if (-not (Test-OwnedFunnelStatusShape $Status $ExpectedTarget)) { return $false }
@@ -207,7 +262,7 @@ function Test-OwnedFunnelStatusShape {
 }
 
 function Send-Result {
-    param([string]$Code, [object]$ServeStatus, [string]$SetupUrl = "")
+    param([string]$Code, [object]$ServeStatus, [string]$SetupUrl = "", [bool]$PubliclyPublished = $false)
     if (-not [string]::IsNullOrWhiteSpace($SetupUrl) -and
         $SetupUrl -notmatch "^https://login\.tailscale\.com/[^\s]+$") {
         throw "invalid-provider-url"
@@ -217,6 +272,7 @@ function Send-Result {
         nonce = $Nonce
         code = $Code
         serveStatus = if ($null -eq $ServeStatus) { [PSCustomObject]@{} } else { $ServeStatus }
+        publiclyPublished = $PubliclyPublished
     }
     if (-not [string]::IsNullOrWhiteSpace($SetupUrl)) { $result.setupUrl = $SetupUrl }
     $json = $result | ConvertTo-Json -Compress -Depth 32
@@ -270,7 +326,8 @@ try {
     }
     $before = Get-FunnelStatus $tailscalePath
     if ($Action -eq "Inspect") {
-        Send-Result "inspected" $before
+        $published = Test-PublicFunnelPublished $before $Target
+        Send-Result "inspected" $before "" $published
         exit 0
     }
     $ownedFunnel = Test-OwnedFunnelStatus $before $Target
@@ -303,7 +360,8 @@ try {
                 if ($command.TimedOut) {
                     $afterTimeout = Get-FunnelStatus $tailscalePath
                     if (Test-OwnedFunnelStatus $afterTimeout $Target) {
-                        Send-Result "enabled" $afterTimeout
+                        $published = Test-PublicFunnelPublished $afterTimeout $Target
+                        Send-Result "enabled" $afterTimeout "" $published
                         exit 0
                     }
                 }
@@ -316,7 +374,8 @@ try {
             Send-Result "verification-failed" $after
             exit 23
         }
-        Send-Result "enabled" $after
+        $published = Test-PublicFunnelPublished $after $Target
+        Send-Result "enabled" $after "" $published
         exit 0
     }
     if ($ownedFunnel) {

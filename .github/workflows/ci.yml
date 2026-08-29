@@ -181,6 +181,7 @@ jobs:
         run: |
           ./scripts/validate-shell.sh
           pwsh ./scripts/validate-powershell.ps1
+          pwsh ./scripts/test-tailscale-helper.ps1
           ruby -e "require 'yaml'; Dir['.github/workflows/*.{yml,yaml}'].each { |file| YAML.parse_file(file) }"
       - name: Test fast runtime contracts and CI classifier fixtures
         run: |
@@ -201,7 +202,9 @@ jobs:
       - uses: actions/checkout@v6
       - name: Parse all PowerShell source with Windows PowerShell
         shell: powershell
-        run: .\scripts\validate-powershell.ps1
+        run: |
+          .\scripts\validate-powershell.ps1
+          .\scripts\test-tailscale-helper.ps1
 
   powershell-runtime-unix:
     name: PowerShell runtime (PowerShell 7)

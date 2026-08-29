@@ -135,7 +135,12 @@ for (const name of ["windows", "nas", "mac", "linux", "freebsd"]) {
   const remote = await api("/api/v1/remote-access/tailscale", "PUT", name === "windows"
     ? { operation: "enable" }
     : { enabled: true, confirmedPrivate: true });
-  assert.equal(remote.data.active, true);
+  assert.equal(remote.data.active, name !== "windows");
+  if (name === "windows") {
+    assert.equal(remote.data.state, "starting", "Windows preview skipped the public-publication pending state");
+    const verified = await api("/api/v1/remote-access/tailscale/verify", "POST");
+    assert.equal(verified.data.active, true, "Windows preview Verify did not promote a published Funnel to active");
+  }
   assert.equal(remote.data.url, "https://manager.demo.invalid");
 }
 assert.equal((await api("/api/v1/updates/install", "POST")).status, 409, "service profile offered browser-owned installation");

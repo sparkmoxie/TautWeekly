@@ -30,6 +30,11 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Stopped Windows Funnel from reporting **Active** when Tailscale had only saved
+  the local route. Enable and Verify now require public DNS through a fixed
+  public resolver plus a certificate-validated TLS handshake before the green
+  active state appears. Missing public publication remains safely configured as
+  a gold **Publication pending** state with the generated address available.
 - Fixed the Windows Funnel card renderer so its public/private presentation is
   selected before transition state is evaluated. This prevents the upgraded
   dashboard from retaining the retired private Serve labels.
@@ -47,6 +52,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- Public verification sends only the intended-public `.ts.net` hostname to the
+  fixed `1.1.1.1` resolver and then connects only to a returned globally
+  routable IPv4 address on TLS port 443. It rejects private, carrier-grade NAT,
+  loopback, documentation, multicast, and other non-public answers; it never
+  returns or stores DNS answers, certificate details, raw CLI output, or Manager
+  data. It does not restart Tailscale or change DNS, firewall, or router state.
 - Public Funnel enablement requires the Windows Manager password lock. Disabling
   that lock first disables and verifies the owned Funnel or refuses safely;
   changing the password preserves the route while revoking other sessions.

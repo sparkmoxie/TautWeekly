@@ -3382,7 +3382,7 @@ function tailscaleStatePresentation(remote) {
     switch (remote.state) {
     case "active": return { label: "Active", tone: "good", status: "Public HTTPS Funnel is active and points only to the loopback Manager." };
     case "inactive": return { label: "Inactive", tone: "neutral", status: "Public Funnel is off." };
-    case "starting": return { label: "Starting", tone: "pending", status: "Windows is starting and verifying the exact TautWeekly Funnel." };
+    case "starting": return { label: "Publication pending", tone: "publication-pending", status: "The exact loopback Funnel is configured, but public DNS and certificate-validated TLS are not available yet. Wait up to 10 minutes, then Verify; if it remains pending, restart the Tailscale Windows service once and verify again." };
     case "stopping": return { label: "Stopping", tone: "pending", status: "Windows is stopping and verifying the exact TautWeekly Funnel." };
     case "manager-password-required": return { label: "Password required", tone: "pending", status: "Create and enable a unique Manager password before Funnel can be turned on." };
     case "approval-required": return remote.enabled
@@ -3441,10 +3441,10 @@ function renderTailscaleSettings() {
   const remote = state.tailscale || {};
   panel.hidden = !remote.supported;
   if (!remote.supported) return;
-  panel.classList.toggle("enabled-glow", Boolean(remote.enabled && remote.active));
-
   const windows = state.runtimeMode === "windows";
   const publicFunnel = windows && remote.networkKind === "public-funnel";
+  panel.classList.toggle("enabled-glow", Boolean(remote.enabled && remote.active));
+  panel.classList.toggle("publication-pending-glow", Boolean(publicFunnel && remote.enabled && remote.state === "starting"));
   const displayRemote = publicFunnel && state.tailscaleSaving
     ? { ...remote, state: state.tailscaleRequestedOperation === "enable" ? "starting" : "stopping" }
     : remote;
@@ -3496,7 +3496,7 @@ function renderTailscaleSettings() {
       : "nas-docker/#security";
   guide.href = `https://sparkmoxie.github.io/TautWeekly/${guidePath}`;
 
-  const hasURL = validTailscaleURL(remote.url || "") && (!publicFunnel || Boolean(remote.active));
+  const hasURL = validTailscaleURL(remote.url || "") && (!publicFunnel || Boolean(remote.enabled));
   const link = byId("tailscale-url");
   link.hidden = !hasURL;
   byId("tailscale-url-empty").hidden = hasURL;
@@ -3572,7 +3572,7 @@ async function updateTailscaleAccess() {
     });
     if (external && !requested) byId("tailscale-private-confirm").checked = false;
     setGlobalStatus(publicFunnel
-      ? requested ? "Public Tailscale Funnel enabled." : "Public Tailscale Funnel disabled."
+      ? requested ? (state.tailscale.active ? "Public Tailscale Funnel verified active." : "Funnel configured locally; public publication is pending.") : "Public Tailscale Funnel disabled."
       : requested ? "Private Tailscale access enabled." : "Private Tailscale access disabled.", true);
   } catch (error) {
     state.tailscaleError = error.message;
@@ -3608,7 +3608,9 @@ async function refreshTailscaleAccess() {
   renderTailscaleSettings();
   try {
     state.tailscale = await request("/api/v1/remote-access/tailscale/verify", { method: "POST" });
-    setGlobalStatus(state.tailscale?.networkKind === "public-funnel" ? "Tailscale Funnel status verified." : "Tailscale Serve status verified.", true);
+    setGlobalStatus(state.tailscale?.networkKind === "public-funnel"
+      ? (state.tailscale.active ? "Public Tailscale Funnel verified active." : "Funnel remains configured locally; public publication is pending.")
+      : "Tailscale Serve status verified.", true);
   } catch (error) {
     state.tailscaleError = error.message;
     if (error.code === "tailscale-provider-approval-required" && validTailscaleSetupURL(error.fields?.setupUrl || "")) state.tailscaleSetupURL = error.fields.setupUrl;

@@ -375,6 +375,8 @@ def main() -> int:
         failures.append("Tailscale card does not distinguish integrated and host-managed package adapters")
     if 'panel.classList.toggle("enabled-glow", Boolean(remote.enabled && remote.active));' not in javascript:
         failures.append("Active Tailscale state does not drive the full-card glow")
+    if 'panel.classList.toggle("publication-pending-glow", Boolean(publicFunnel && remote.enabled && remote.state === "starting"));' not in javascript:
+        failures.append("Publication-pending Funnel state does not drive the requested gold full-card glow")
     tailscale_renderer_start = javascript.find("function renderTailscaleSettings()")
     tailscale_renderer_end = javascript.find("\n}\n\nasync function updateTailscaleAccess", tailscale_renderer_start)
     tailscale_renderer = javascript[tailscale_renderer_start:tailscale_renderer_end]
@@ -384,6 +386,8 @@ def main() -> int:
         failures.append("Windows Funnel renderer uses publicFunnel before its declaration")
     if ".tailscale-settings-panel.enabled-glow" not in css or "prefers-reduced-motion:reduce" not in css:
         failures.append("Active Tailscale card glow lacks its motion-safe styling contract")
+    if ".state-chip.publication-pending" not in css or ".tailscale-settings-panel.publication-pending-glow" not in css or "tailscale-publication-pending-glow" not in css:
+        failures.append("Publication-pending Funnel state lacks synchronized gold badge/card styling")
     if '.tailscale-settings-panel' not in css or '.tailscale-status-grid' not in css or '.tailscale-security-boundary' not in css:
         failures.append("Tailscale remote access card lacks its responsive security treatment")
     if "function materializeMaterialIcons(" not in javascript or "materializeMaterialIcons();" not in javascript:

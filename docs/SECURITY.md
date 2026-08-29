@@ -65,7 +65,14 @@ Disabling the feature stops access but does not erase the existing cache.
   review as any other network-reachable Manager.
 - Windows optional remote access uses public HTTPS Tailscale Funnel while the
   Manager remains bound to loopback. The fixed UAC helper accepts only the
-  exact TautWeekly operation and target, and verifies the observed route. The
+  exact TautWeekly operation and target, and verifies the observed route. A
+  green active state additionally requires the exact public hostname to resolve
+  through the fixed `1.1.1.1` resolver to a globally routable IPv4 address and
+  complete a certificate-validated TLS handshake. Only that intended-public
+  hostname is disclosed for the verification; answers, certificates, raw
+  output, Manager data, and private network details are not returned or stored.
+  Failure remains a gold publication-pending state and never triggers an
+  automatic service restart, DNS change, firewall rule, or router change. The
   password lock is mandatory before Funnel enablement. A remote viewer needs no
   Tailscale client or VPN because the login page is public; use a unique
   password and retain local recovery because Internet brute-force risk remains.

@@ -319,6 +319,14 @@ CSRF, and HSTS. Disabling the password lock, local access reset, and uninstall
 first disable and verify the owned Funnel or fail closed. Password changes keep
 the route and current session while revoking other sessions.
 
+Local Funnel JSON is not sufficient for an active result. The elevated helper
+queries only the exact intended-public hostname through the fixed `1.1.1.1`
+resolver, rejects non-public IPv4 answers, and completes a certificate-validated
+TLS handshake. Failure returns only a boolean postcondition and renders the
+configured route as gold **Publication pending**; DNS answers, certificate
+details, raw command output, and Manager data never enter Manager state or its
+diagnostics.
+
 Native Linux uses the same route-ownership contract through a root-owned
 systemd accepted socket. Its one-shot helper verifies the Unix peer is exactly
 the packaged `tautweekly` service UID and maps only the fixed protocol actions
