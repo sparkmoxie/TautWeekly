@@ -1,13 +1,13 @@
 name: Pages
 
 on:
-  push:
-    branches:
-      - main
-      - public-launch
-    paths:
-      - 'docs/**'
-      - '.github/workflows/pages.yml'
+  workflow_call:
+    inputs:
+      validate:
+        description: Re-run documentation validation before deployment.
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
 
 permissions:
@@ -21,14 +21,14 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || github.ref_name == github.event.repository.default_branch
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Validate documentation links
+      - name: Validate documentation links for a manual deployment
+        if: github.event_name == 'workflow_dispatch' || inputs.validate
         shell: pwsh
         run: |
           ./scripts/validate-branding.ps1
