@@ -4,11 +4,14 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 const (
@@ -17,21 +20,39 @@ const (
 )
 
 var (
-	activateDashboardWindow = activateExistingDashboardWindow
-	navigateDashboardWindow = startLocalBrowserNavigation
+	activateDashboardWindow  = activateExistingDashboardWindow
+	navigateDashboardWindow  = startLocalBrowserNavigation
+	dashboardNavigationNonce = func() string { return strconv.FormatInt(time.Now().UnixNano(), 10) }
 )
 
 func openLocalBrowser(target string) error {
 	if err := validateLocalBrowserURL(target); err != nil {
 		return err
 	}
+	navigationTarget, err := freshDashboardNavigationURL(target)
+	if err != nil {
+		return err
+	}
 	// Focusing a matching browser window is only a best-effort accessibility
 	// aid. The document in that window may predate an application upgrade, so
-	// always send the validated URL to the browser afterward. Returning after
-	// AppActivate leaves the old JavaScript running and makes a successful
-	// Manager update appear to have done nothing.
+	// always send an internally versioned, one-use URL to the browser afterward.
+	// Returning after AppActivate or reusing the exact same URL leaves the old
+	// JavaScript running and makes a successful Manager update appear to have
+	// done nothing.
 	_ = activateDashboardWindow()
-	return navigateDashboardWindow(target)
+	return navigateDashboardWindow(navigationTarget)
+}
+
+func freshDashboardNavigationURL(target string) (string, error) {
+	parsed, err := url.Parse(target)
+	if err != nil {
+		return "", fmt.Errorf("parse validated Dashboard URL: %w", err)
+	}
+	query := parsed.Query()
+	query.Set("manager-build", strings.TrimSpace(version))
+	query.Set("manager-open", dashboardNavigationNonce())
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
 }
 
 func startLocalBrowserNavigation(target string) error {

@@ -96,9 +96,11 @@ func TestDashboardActivationUsesHiddenWindowsAccessibilityCommand(t *testing.T) 
 func TestOpenLocalBrowserNavigatesAfterActivatingExistingDashboard(t *testing.T) {
 	originalActivate := activateDashboardWindow
 	originalNavigate := navigateDashboardWindow
+	originalNonce := dashboardNavigationNonce
 	t.Cleanup(func() {
 		activateDashboardWindow = originalActivate
 		navigateDashboardWindow = originalNavigate
+		dashboardNavigationNonce = originalNonce
 	})
 
 	activated := false
@@ -111,6 +113,7 @@ func TestOpenLocalBrowserNavigatesAfterActivatingExistingDashboard(t *testing.T)
 		navigated = target
 		return nil
 	}
+	dashboardNavigationNonce = func() string { return "fixture-open" }
 
 	const target = "http://127.0.0.1:8788/"
 	if err := openLocalBrowser(target); err != nil {
@@ -119,7 +122,25 @@ func TestOpenLocalBrowserNavigatesAfterActivatingExistingDashboard(t *testing.T)
 	if !activated {
 		t.Fatal("existing Dashboard window was not activated")
 	}
-	if navigated != target {
-		t.Fatalf("browser navigation target = %q, want %q", navigated, target)
+	if navigated != "http://127.0.0.1:8788/?manager-build=local&manager-open=fixture-open" {
+		t.Fatalf("browser navigation target = %q, want a build- and open-specific loopback URL", navigated)
+	}
+}
+
+func TestFreshDashboardNavigationPreservesPairingFragment(t *testing.T) {
+	originalNonce := dashboardNavigationNonce
+	t.Cleanup(func() { dashboardNavigationNonce = originalNonce })
+	dashboardNavigationNonce = func() string { return "fixture-pair" }
+
+	target := "http://127.0.0.1:8788/#pair=fictional-token"
+	if err := validateLocalBrowserURL(target); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := freshDashboardNavigationURL(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh != "http://127.0.0.1:8788/?manager-build=local&manager-open=fixture-pair#pair=fictional-token" {
+		t.Fatalf("fresh Dashboard URL = %q", fresh)
 	}
 }

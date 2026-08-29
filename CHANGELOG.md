@@ -24,8 +24,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   material, history, previews, schedule, and the selected Funnel state. Removal
   stops safely if the owned public route cannot be verified off.
 - Windows dashboard launches now navigate the validated loopback URL even when
-  an existing browser window is found, so an installer upgrade cannot leave a
-  focused pre-upgrade document displaying obsolete Manager controls.
+  an existing browser window is found, and add only internal build and one-use
+  navigation tokens. This forces a new document request after an upgrade
+  without accepting browser-supplied hosts, ports, commands, or arguments.
 
 ### Fixed
 
@@ -35,6 +36,10 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fixed Windows Setup updates of a running Manager so the elevated updater
   waits for its finite helper process without remaining attached to the
   successfully restarted Manager and blocking Setup completion.
+- Windows updates now verify the candidate executable's exact version and that
+  the restarted process itself owns the healthy loopback listener. If an older
+  Manager from another installation still owns port 8788, Setup refuses with a
+  clear recovery action instead of mistaking that process for update success.
 
 ### Security
 
