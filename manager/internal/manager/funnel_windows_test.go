@@ -119,7 +119,7 @@ func TestWindowsFunnelMigratesLegacyPrivateServeOnlyAfterExplicitEnable(t *testi
 	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: ownedTailscaleServeJSON(hostname, target), errors: map[string]error{}}
 	controller := newWindowsFunnelController(dataDir, "127.0.0.1:8788", true, runner)
 	status := controller.Status(context.Background())
-	if status.State != "migration-required" || !status.CleanupRequired || controller.AllowsHost(hostname) {
+	if status.State != "migration-required" || !status.Installed || !status.CleanupRequired || controller.AllowsHost(hostname) {
 		t.Fatalf("legacy private Serve was not blocked pending explicit migration: %+v", status)
 	}
 	enabled, err := controller.Update(context.Background(), true, "", false)
