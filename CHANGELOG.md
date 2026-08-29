@@ -6,18 +6,15 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.24.0] - 2026-08-28
+## [0.23.4] - 2026-08-28
 
-### Added
+### Changed
 
-- Added a dedicated, non-sending deleted-item cache refresh that inspects the
+- A dedicated, non-sending deleted-item cache refresh now inspects the
   current newsletter window for every production-eligible included user and
   selected movie/TV library. Manager starts it automatically after applicable
   configuration saves, and every maintained package exposes a `cache-refresh`
   recovery command.
-
-### Changed
-
 - Cache refresh is independent of PreviewAll and does not require an
   owner/administrator preview user. Manager shows the cache step as blue
   **Running** immediately, then retains the automatic full local storage,
