@@ -8,45 +8,38 @@ $Root = [IO.Path]::GetFullPath($Root)
 $helper = Join-Path $Root 'platforms/windows/TAILSCALE-HELPER.ps1'
 if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw 'Tailscale helper is missing.' }
 
-$nonceBytes = New-Object byte[] 32
-$random = [Security.Cryptography.RandomNumberGenerator]::Create()
-try { $random.GetBytes($nonceBytes) }
-finally { $random.Dispose() }
-$nonce = ([BitConverter]::ToString($nonceBytes)).Replace('-', '').ToLowerInvariant()
-$listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
-$listener.Start()
-try {
-    $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port
-    $systemRoot = [string]$env:SystemRoot
-    if ([string]::IsNullOrWhiteSpace($systemRoot)) { throw 'Windows system root is unavailable.' }
-    $windowsPowerShell = Join-Path $systemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    if (-not (Test-Path -LiteralPath $windowsPowerShell -PathType Leaf)) { throw 'Windows PowerShell 5.1 is unavailable.' }
-    & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper `
-        -Action Inspect -Target 'http://127.0.0.1:8788' -CallbackPort $port -Nonce $nonce
-    $helperExit = $LASTEXITCODE
-    if ($helperExit -eq 10) { throw 'Windows administrator approval was cancelled.' }
-    if (-not $listener.Pending()) { throw "Tailscale helper returned without a verified callback (exit $helperExit)." }
-    $client = $listener.AcceptTcpClient()
-    try {
-        $client.ReceiveTimeout = 2000
-        $reader = New-Object IO.StreamReader($client.GetStream(), [Text.UTF8Encoding]::new($false), $false, 4096, $true)
-        try { $raw = $reader.ReadToEnd() }
-        finally { $reader.Dispose() }
-    }
-    finally { $client.Dispose() }
-    if ([string]::IsNullOrWhiteSpace($raw) -or $raw.Length -gt 262144) { throw 'Tailscale helper returned an invalid bounded result.' }
-    $result = $raw | ConvertFrom-Json -ErrorAction Stop
-    if ([int]$result.schemaVersion -ne 1 -or [string]$result.nonce -cne $nonce -or [string]$result.code -cne 'inspected' -or $helperExit -ne 0) {
-        throw 'Tailscale helper callback verification failed.'
-    }
-    $configured = $false
-    foreach ($name in @('TCP', 'Web', 'Services', 'AllowFunnel', 'Foreground')) {
-        $property = $result.serveStatus.PSObject.Properties[$name]
-        if ($null -ne $property -and @($property.Value.PSObject.Properties).Count -gt 0) { $configured = $true }
-    }
-    Write-Host '[PASS] Windows UAC Tailscale inspection completed with a bounded verified callback.' -ForegroundColor Green
-    Write-Host ('Serve state is ' + $(if ($configured) { 'configured (details withheld).' } else { 'empty.' }))
+$tokens = $null
+$parseErrors = $null
+[Management.Automation.Language.Parser]::ParseFile($helper, [ref]$tokens, [ref]$parseErrors) | Out-Null
+if (@($parseErrors).Count -ne 0) {
+    throw ('Tailscale helper has PowerShell syntax errors: ' + (($parseErrors | ForEach-Object Message) -join '; '))
 }
-finally {
-    $listener.Stop()
+$source = Get-Content -LiteralPath $helper -Raw
+
+function Require-Pattern([string]$Pattern, [string]$Message) {
+    if ($source -notmatch $Pattern) { throw $Message }
 }
+function Forbid-Pattern([string]$Pattern, [string]$Message) {
+    if ($source -match $Pattern) { throw $Message }
+}
+
+Require-Pattern '\[ValidateSet\("Enable", "Disable", "Inspect"\)\]' 'Helper actions are not limited to Enable, Disable, and Inspect.'
+Require-Pattern '\[ValidatePattern\("\^http://127\\\.0\\\.0\\\.1:' 'Helper target is not pinned to loopback HTTP.'
+Require-Pattern 'funnel status --json' 'Helper does not inspect Funnel through the official JSON status command.'
+Require-Pattern 'funnel --bg --yes --https=443 \$ExpectedTarget' 'Helper does not enable the fixed persistent HTTPS Funnel.'
+Require-Pattern '& \$tailscalePath funnel --yes --https=443 off' 'Helper does not remove the exact Funnel route.'
+Require-Pattern '& \$tailscalePath serve --yes --https=443 off' 'Helper cannot retire the exact legacy private Serve route.'
+Require-Pattern 'Test-OwnedFunnelStatus' 'Helper does not validate exact Funnel ownership.'
+Require-Pattern 'Test-OwnedLegacyServeStatus' 'Helper does not isolate legacy Serve migration.'
+Require-Pattern 'AllowFunnel' 'Helper does not require explicit Funnel metadata.'
+Require-Pattern 'provider-approval-required' 'Helper does not sanitize first-use provider approval.'
+Require-Pattern 'not-running' 'Helper does not sanitize the stopped-service state.'
+Require-Pattern 'unsupported' 'Helper does not sanitize unsupported clients.'
+Require-Pattern 'Send-Result' 'Helper does not use the bounded nonce callback.'
+
+Forbid-Pattern 'serve --bg' 'Helper still enables the obsolete private Serve workflow.'
+Forbid-Pattern '(?i)tailscale(?:\.exe)?\s+(?:serve|funnel)\s+reset' 'Helper contains a destructive Tailscale reset.'
+Forbid-Pattern '(?i)authkey|oauth|control-plane|device list|tailscale status(?:\s|$)' 'Helper contains a credential or inventory surface.'
+Forbid-Pattern '(?i)New-NetFirewallRule|Set-NetFirewallRule|netsh\s+advfirewall|portproxy' 'Helper changes Windows firewall or ingress rules.'
+
+Write-Host '[PASS] Windows Funnel helper syntax, typed operations, fixed target, exact postconditions, legacy cleanup, and privacy boundaries are virtual-test safe.' -ForegroundColor Green

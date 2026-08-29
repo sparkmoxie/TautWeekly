@@ -130,7 +130,26 @@ Docker/NAS normally opens from another trusted-LAN device at
 keeps Manager on loopback and requires the documented SSH tunnel or private
 Tailscale access.
 
-### Private Tailscale address does not open
+### Windows public Funnel address does not open
+
+- Remote viewers need only an ordinary HTTPS browser; they do not install or
+  connect Tailscale. Confirm the Windows host has the official Tailscale client
+  installed, running, and signed in, then use **Settings > Tailscale Funnel >
+  Verify with Windows**. Do not share the real `.ts.net` address in support
+  material.
+- **Manager password required** means create and enable a unique password first.
+  **Approval required** means approve the Windows UAC prompt and any official
+  one-time Funnel page, then verify again. **Needs attention** means the
+  observed route did not exactly match TautWeekly's fixed loopback target.
+- A successful CLI configuration check does not replace public edge acceptance.
+  From a separate network, open the generated HTTPS address, sign in, verify a
+  read and a CSRF-protected change, sign out, and confirm the local Dashboard
+  still works. Do not expose port 8788 or add a firewall/router rule.
+- If password-lock disable, access reset, or uninstall refuses, restore the
+  Tailscale Windows service and approve the fixed shutdown so TautWeekly can
+  verify its owned Funnel is off. Do not remove the password boundary first.
+
+### Private Tailscale address does not open on other packages
 
 - Confirm the remote computer or mobile device is connected to the same
   tailnet and permitted by its current grants. Disconnecting the remote client
@@ -141,15 +160,13 @@ Tailscale access.
 - On native Linux, run `tautweekly remote-access-status`. If authorization is
   absent, run `sudo tautweekly remote-access-authorize`, then retry Settings.
   Disable in Manager before using `sudo tautweekly remote-access-revoke`.
-- On Windows, choose **Verify with Windows** and approve the UAC prompt. A
-  conflicting existing Serve configuration is intentionally left unchanged.
 - For a first-use provider link, enable HTTPS certificates only and turn
   Funnel off even if the provider page preselects it.
 - For macOS, FreeBSD, QNAP, Unraid, or another host-managed package, inspect the
   host/client Serve state separately and confirm it still proxies the mapped
   loopback Manager port. Disable the Manager setting before removing the route.
-- The Manager password remains required outside Windows; Windows keeps its
-  existing optional lock behavior. There is no read-only remote role.
+- The Manager password remains required on these packages. There is no
+  read-only remote role.
 
 Windows, NAS/Docker, macOS Docker Desktop, native Linux, and FreeBSD serve previews through the
 authenticated Manager. NAS/Docker normally maps host port 8787 to container

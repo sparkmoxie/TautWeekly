@@ -1,6 +1,14 @@
 TAUTWEEKLY FOR PLEX PORTABLE CHANGELOG
 ===============================
 
+v1.11.0 Windows
+---------------
+- replaces private Tailscale Serve/VPN access with password-gated public HTTPS Funnel access for ordinary remote browsers
+- keeps Manager bound to loopback and lets only fixed typed helper operations manage the exact TautWeekly route
+- requires verified Funnel shutdown before password-lock disable, local access reset, or uninstall can proceed
+- preserves configuration, password verification material, schedule, history, previews, and Funnel preference across installer updates
+- leaves non-Windows packages unchanged and adds no new Internet login-attempt limiter; use a unique Manager password
+
 v1.10.4 Windows
 ---------------
 - optimizes all 32 email GIFs at twice their email display size while preserving frames, timing, loops, and transparency

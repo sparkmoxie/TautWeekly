@@ -63,26 +63,36 @@ Disabling the feature stops access but does not erase the existing cache.
   LAN bind restricted by the host firewall. macOS binds to Mac loopback by
   default; changing that bind requires the same explicit allowed-host and TLS
   review as any other network-reachable Manager.
-- Optional Tailscale support uses private HTTPS Serve, never public Funnel.
-  Windows verifies a fixed route through an explicit UAC helper; native Linux
-  uses a root-owned, socket-activated helper that verifies the fixed service UID
-  and exposes only Inspect/Enable/Disable for the fixed loopback target. All
-  container/host-managed packages accept only one exact HTTPS `.ts.net`
-  hostname after an authenticated administrator confirms the external route is
-  private and Funnel is off. They never accept a Tailscale credential or gain a
-  Docker/Podman/host control plane.
-- Treat tailnet membership as an additional network boundary, not Manager
-  authentication. Non-Windows packages keep their independent Manager password
-  required; the Windows password lock remains optional. Every remote session
-  has full Manager administration because no read-only role exists. Restrict
-  tailnet grants, use MFA at the identity provider, protect and promptly revoke
-  lost devices, keep clients updated, and retain local/host recovery access.
+- Windows optional remote access uses public HTTPS Tailscale Funnel while the
+  Manager remains bound to loopback. The fixed UAC helper accepts only the
+  exact TautWeekly operation and target, and verifies the observed route. The
+  password lock is mandatory before Funnel enablement. A remote viewer needs no
+  Tailscale client or VPN because the login page is public; use a unique
+  password and retain local recovery because Internet brute-force risk remains.
+  This delivery adds no new Internet login-attempt limiter.
+- Native Linux retains its root-owned, socket-activated private Serve helper.
+  Container/host-managed packages retain one exact private HTTPS `.ts.net`
+  hostname after an authenticated administrator confirms Funnel is off. Those
+  packages never accept a Tailscale credential or gain a Docker/Podman/host
+  control plane. Their independent Manager password remains required.
+- Every remote session has full Manager administration because no read-only
+  role exists. Keep the host client updated and signed in. For private Serve
+  packages, also restrict tailnet grants, use MFA at the identity provider, and
+  promptly revoke lost devices.
 - A saved external Tailscale address means Manager will accept that exact Host;
   it does not prove the host-owned route is still present or private. Recheck
   Serve and Funnel state after host/client updates. Disable in Manager first so
   the hostname is blocked immediately, then remove the external route. Never
   expose or retain auth keys in Manager, Compose YAML, `.env`, Community Apps
   templates, screenshots, logs, or support bundles.
+- Windows Funnel state contains only a schema version, selected state, and the
+  exact verified public hostname. It never stores raw CLI output, auth keys,
+  control-plane tokens, tailnet identity, device lists, private IPs, or
+  sensitive paths. Password-lock disable, local access reset, and uninstall
+  first disable and verify the owned Funnel or fail closed. Password changes
+  keep Funnel and the current session but revoke other sessions. Installer
+  updates preserve the private state; ordinary Manager exit preserves the
+  persistent route for restart.
 - For a trusted TLS reverse proxy, allow only its exact DNS host, preserve the
   original Host header, and enable secure Manager cookies. Do not trust broad
   wildcards or publish the plain HTTP backend. Remove proxy Host rewrites,

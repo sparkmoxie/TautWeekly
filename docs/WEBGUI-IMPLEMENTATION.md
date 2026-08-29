@@ -745,7 +745,7 @@ change their password there but cannot disable the mandatory boundary.
   - Canonical authority comparison lower-cases DNS, removes one trailing dot,
     and treats omitted `:80`/`:443` like the explicit default while still
     requiring the exact request scheme and host. Malformed origins, different
-    hosts, and HTTP mutations through a private Tailscale hostname use
+    hosts, and HTTP mutations through an admitted Tailscale hostname use
     sanitized support codes and are rejected. Forwarded headers are ignored.
 - CSRF protection on mutations
 - Content Security Policy
@@ -1016,18 +1016,23 @@ acceptance, and the absence of a multi-run production delivery journal. Static
 accessibility structure, keyboard focus, reduced-motion CSS, and desktop/mobile
 browser checks are automated or completed with fictional fixtures.
 
-The shared Settings surface now adds optional private Tailscale access below
-the existing browser/access card. Windows uses a fixed UAC helper and native
-Linux uses a root-owned socket-activated one-shot helper; both inspect exact
-Serve ownership and refuse unrelated configuration. Container, macOS,
-FreeBSD, QNAP, Unraid, and compatible Docker modes use a host-managed contract:
-the browser submits only an exact HTTPS `.ts.net` URL plus an explicit
-private-Serve/Funnel-off confirmation. The backend persists only the hostname,
-accepts it as an exact Host value, and applies HTTPS origin semantics, Secure
-cookies, and HSTS. It never trusts forwarded identity/TLS headers or accepts a
-provider credential. The complete card pulses only while an owned integrated
-route is verified or an external hostname is enabled; reduced-motion users get
-a static glow.
+The shared Settings surface adds package-aware Tailscale access below the
+existing browser/access card. Windows alone uses public Funnel: enablement
+requires the active local password lock, and the browser submits only the typed
+`enable` or `disable` operation. A fixed UAC helper owns the Manager loopback
+target and CLI arguments, verifies exact TCP/Web/AllowFunnel postconditions,
+and refuses unrelated configuration. Password-lock disable, access reset, and
+uninstall first verify the owned route off. Only the exact public hostname is
+persisted and admitted; Secure/HttpOnly/SameSite cookies, HTTPS origin, CSRF,
+HSTS, authenticated endpoints, and secret boundaries apply through the proxy.
+
+Native Linux keeps its root-owned private Serve socket helper. Container,
+macOS, FreeBSD, QNAP, Unraid, and compatible Docker modes keep the host-managed
+private contract: the browser submits one exact HTTPS `.ts.net` URL plus an
+explicit private-Serve/Funnel-off confirmation. They do not accept provider
+credentials or gain a host control plane. This Windows boundary is isolated so
+a later discrete delivery can reuse the proven state machine without silently
+changing those packages.
 
 ## 20. Decision gates
 

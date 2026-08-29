@@ -20,6 +20,25 @@ Manager operation history and configuration diagnostics each use count-only
 FIFO retention of the newest 20 completed records. Each new overflow record
 removes the oldest; record age does not otherwise expire an entry.
 
+## Windows Manager public access
+
+Windows Funnel state is Manager-owned private state, not a `config.json`
+setting. The Manager remains bound to `127.0.0.1:8788`; the backend owns that
+fixed target, Funnel HTTPS port 443, and every CLI argument. Browser requests
+can submit only the allowlisted `enable` or `disable` operation. They cannot
+supply a command, executable, port, hostname, target, or Tailscale argument.
+
+Install, start, and sign in to the official Tailscale Windows client yourself.
+TautWeekly never stores auth keys, control-plane tokens, raw CLI output,
+tailnet identities, device lists, private IPs, or sensitive paths. A verified
+public `.ts.net` hostname is retained only to enforce exact Host/origin
+admission. Funnel enablement requires an active Manager password lock. Access
+reset, password-lock disable, and uninstall first verify the owned Funnel off;
+installer updates preserve the password verifier and Funnel state.
+
+Other packages retain their existing private Serve configuration and are not
+changed by this Windows-only boundary.
+
 ## Bundled artwork and updates
 
 Bundled email assets are release-owned. An asset-bundle transition (including

@@ -55,9 +55,10 @@ Manager release updates:
 - An optional custom text card before the newsletter release-count/date block,
   with configurable border color/opacity, optional title and subheading, and a
   required plain-text body when enabled.
-- Optional private HTTPS administration through **Settings > Tailscale**, with
-  package-aware setup and no Funnel requirement. Windows keeps its password lock
-  optional; other remote-capable Managers require authentication.
+- Optional public HTTPS administration on Windows through password-gated
+  **Tailscale Funnel**, so an ordinary remote browser needs no VPN client.
+  Other packages keep their existing private Serve workflow and required
+  Manager authentication.
 - Capability-aware **Settings > Updates** status for application, package, image,
   and host-adapter layers. A header SVG appears only for a validated newer
   release; Windows can launch its verified updater, while other packages keep
@@ -128,8 +129,8 @@ The responsive Manager is the primary workflow on every maintained package:
   newsletter states, and controlled TestEmail delivery stays separate from
   production recipients.
 - **Operate deliberately:** Schedule reports and controls only the package's
-  supported delivery lifecycle; Settings covers access, optional private
-  Tailscale HTTPS, capability-aware update status, release notes, diagnostics,
+  supported delivery lifecycle; Settings covers access, Windows public Funnel
+  or package-private Tailscale HTTPS, capability-aware update status, release notes, diagnostics,
   and recovery. Manual and scheduled production delivery share one guarded
   live-roster refresh and eligibility path, 30-second default attempt spacing,
   and fail-fast handling for batch-wide SMTP failures. Host-owned packages keep

@@ -87,6 +87,14 @@ var remoteAccessDiagnosticSummaries = map[string]string{
 	"tailscale-disabled":                    "Private Tailscale access was disabled.",
 	"tailscale-enabled":                     "Private Tailscale access was enabled and verified.",
 	"tailscale-verified":                    "Tailscale Serve status was explicitly inspected without changing it.",
+	"tailscale-funnel-verified":             "Tailscale Funnel status was explicitly inspected without changing it.",
+	"manager-password-required":             "Public Funnel enablement was blocked because the Manager password lock was not active.",
+	"tailscale-not-running":                 "The official Tailscale Windows service was not running.",
+	"tailscale-funnel-unsupported":          "The installed Tailscale Windows client did not support Funnel.",
+	"tailscale-password-disable-blocked":    "The Manager password lock stayed enabled because public Funnel shutdown could not be verified.",
+	"tailscale-funnel-needs-attention":      "The saved public Funnel did not match the exact TautWeekly loopback route.",
+	"tailscale-funnel-disabled":             "The TautWeekly-owned public Funnel was disabled and verified.",
+	"tailscale-funnel-enabled":              "The TautWeekly-owned public Funnel was enabled and verified.",
 }
 
 func diagnosticSummary(code string) (string, bool) {

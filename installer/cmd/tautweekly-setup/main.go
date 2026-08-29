@@ -451,14 +451,25 @@ func uninstall(opts options, logger *log.Logger) error {
 	if err != nil {
 		return err
 	}
-	if err := removeInstalledSchedule(opts.installDir, opts.testMode); err != nil {
-		return err
-	}
 	managerWasRunning, err := stopInstalledManager(opts.installDir, opts.testMode)
 	if err != nil {
 		return err
 	}
+	restoreRunningManager := func() {
+		if managerWasRunning {
+			_ = startDetached(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir)
+		}
+	}
+	if err := disableInstalledRemoteAccess(opts.installDir, opts.dataDir); err != nil {
+		restoreRunningManager()
+		return err
+	}
+	if err := removeInstalledSchedule(opts.installDir, opts.testMode); err != nil {
+		restoreRunningManager()
+		return err
+	}
 	if err := removeManagerStartup(opts.installDir, opts.testMode); err != nil {
+		restoreRunningManager()
 		return err
 	}
 	if !opts.testMode {
@@ -470,12 +481,48 @@ func uninstall(opts options, logger *log.Logger) error {
 			_ = reconcileManagerStartup(startupPreference, opts, opts.testMode)
 		}
 		if managerWasRunning {
-			_ = startDetached(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir)
+			restoreRunningManager()
 		}
 		return err
 	}
 	logger.Printf("uninstall complete private-data-preserved=%s", opts.dataDir)
 	return nil
+}
+
+func disableInstalledRemoteAccess(installDir, dataDir string) error {
+	managerPath := filepath.Join(installDir, "tautweekly-manager.exe")
+	info, err := os.Lstat(managerPath)
+	if errors.Is(err, os.ErrNotExist) {
+		for _, stateName := range []string{"windows-funnel.json", "remote-access.json"} {
+			if _, stateErr := os.Lstat(filepath.Join(dataDir, stateName)); stateErr == nil || !errors.Is(stateErr, os.ErrNotExist) {
+				return errors.New("installed Manager is missing, so saved remote-access state cannot be cleaned up safely; reinstall before removal")
+			}
+		}
+		return nil
+	}
+	if err != nil || !info.Mode().IsRegular() {
+		return errors.New("installed Manager is unavailable for public Funnel cleanup")
+	}
+	if err := runInstalledRemoteCleanup(managerPath, installDir, dataDir); err != nil {
+		return errors.New("removal stopped because the TautWeekly-owned public Funnel could not be disabled and verified")
+	}
+	return nil
+}
+
+var runInstalledRemoteCleanup = func(managerPath, installDir, dataDir string) error {
+	command := exec.Command(
+		managerPath,
+		"remote-access-cleanup",
+		"--confirm",
+		"--listen=127.0.0.1:8788",
+		"--tautweekly-root="+installDir,
+		"--data-dir="+dataDir,
+	)
+	command.Dir = installDir
+	command.Stdout = io.Discard
+	command.Stderr = io.Discard
+	hideProcessWindow(command)
+	return command.Run()
 }
 
 func verifyPayload() error {

@@ -16,9 +16,40 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
+
+const (
+	windowsFunnelSchemaVersion = 1
+	windowsFunnelStateFile     = "windows-funnel.json"
+)
+
+type windowsFunnelFile struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	Enabled       bool   `json:"enabled"`
+	Hostname      string `json:"hostname,omitempty"`
+}
+
+type windowsFunnelRunner interface {
+	tailscaleCommandRunner
+	privilegedTailscaleCommandRunner
+}
+
+type windowsFunnelController struct {
+	opMu            sync.Mutex
+	stateMu         sync.RWMutex
+	runner          windowsFunnelRunner
+	statePath       string
+	legacyStatePath string
+	target          string
+	supported       bool
+	state           windowsFunnelFile
+	stateError      error
+	legacyEnabled   bool
+	legacyError     error
+}
 
 type windowsTailscaleRunner struct {
 	path       string
@@ -38,7 +69,336 @@ func newPlatformRemoteAccessController(options Options) remoteAccessController {
 		powershell: powershell,
 		helper:     filepath.Join(options.TautWeeklyRoot, "TAILSCALE-HELPER.ps1"),
 	}
-	return newTailscaleRemoteAccessController(options.DataDir, options.ListenAddress, options.RuntimeMode == runtimeModeWindows, runner)
+	return newWindowsFunnelController(options.DataDir, options.ListenAddress, options.RuntimeMode == runtimeModeWindows, runner)
+}
+
+func newWindowsFunnelController(dataDir, listenAddress string, supported bool, runner windowsFunnelRunner) *windowsFunnelController {
+	controller := &windowsFunnelController{
+		runner:          runner,
+		statePath:       filepath.Join(dataDir, windowsFunnelStateFile),
+		legacyStatePath: filepath.Join(dataDir, remoteAccessStateFile),
+		target:          tailscaleLoopbackTarget(listenAddress),
+		supported:       supported,
+		state:           windowsFunnelFile{SchemaVersion: windowsFunnelSchemaVersion},
+	}
+	controller.loadState()
+	controller.loadLegacyState()
+	return controller
+}
+
+func (c *windowsFunnelController) loadState() {
+	raw, err := os.ReadFile(c.statePath)
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err != nil || len(raw) > 64<<10 {
+		c.stateError = errors.New("Windows Funnel state is unavailable")
+		return
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var saved windowsFunnelFile
+	if err := decoder.Decode(&saved); err != nil || decoder.Decode(&struct{}{}) != io.EOF ||
+		saved.SchemaVersion != windowsFunnelSchemaVersion ||
+		(saved.Enabled && !validTailscaleHostname(saved.Hostname)) || (!saved.Enabled && saved.Hostname != "") {
+		c.stateError = errors.New("Windows Funnel state is invalid")
+		return
+	}
+	c.state = saved
+}
+
+func (c *windowsFunnelController) loadLegacyState() {
+	raw, err := os.ReadFile(c.legacyStatePath)
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err != nil || len(raw) > 64<<10 {
+		c.legacyError = errors.New("legacy Windows remote-access state is unavailable")
+		return
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var saved remoteAccessFile
+	if err := decoder.Decode(&saved); err != nil || decoder.Decode(&struct{}{}) != io.EOF ||
+		saved.SchemaVersion != remoteAccessSchemaVersion ||
+		(saved.Enabled && !validTailscaleHostname(saved.Hostname)) || (!saved.Enabled && saved.Hostname != "") {
+		c.legacyError = errors.New("legacy Windows remote-access state is invalid")
+		return
+	}
+	c.legacyEnabled = saved.Enabled
+}
+
+func (c *windowsFunnelController) savedState() (windowsFunnelFile, error) {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	if c.stateError != nil {
+		return c.state, c.stateError
+	}
+	return c.state, c.legacyError
+}
+
+func (c *windowsFunnelController) saveState(next windowsFunnelFile) error {
+	if err := writePrivateJSON(c.statePath, next); err != nil {
+		return err
+	}
+	c.stateMu.Lock()
+	c.state = next
+	c.stateError = nil
+	c.stateMu.Unlock()
+	return nil
+}
+
+func (c *windowsFunnelController) clearLegacyState() error {
+	info, err := os.Lstat(c.legacyStatePath)
+	if errors.Is(err, os.ErrNotExist) {
+		c.legacyEnabled = false
+		c.legacyError = nil
+		return nil
+	}
+	if err != nil || !info.Mode().IsRegular() {
+		return errors.New("legacy Windows remote-access state could not be removed safely")
+	}
+	if err := os.Remove(c.legacyStatePath); err != nil {
+		return err
+	}
+	c.legacyEnabled = false
+	c.legacyError = nil
+	return nil
+}
+
+func (c *windowsFunnelController) PublicExposureConfigured() bool {
+	state, err := c.savedState()
+	return err != nil || state.Enabled || c.legacyEnabled
+}
+
+func (c *windowsFunnelController) AllowsHost(value string) bool {
+	state, err := c.savedState()
+	return err == nil && state.Enabled && validTailscaleHostname(state.Hostname) && strings.EqualFold(state.Hostname, hostnameOnly(value))
+}
+
+func (c *windowsFunnelController) Status(context.Context) TailscaleRemoteAccessStatus {
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+	return c.status()
+}
+
+func (c *windowsFunnelController) status() TailscaleRemoteAccessStatus {
+	state, stateErr := c.savedState()
+	result := TailscaleRemoteAccessStatus{
+		Supported: c.supported, State: "unavailable", Provider: "tailscale",
+		NetworkKind: "public-funnel", Management: "integrated",
+	}
+	if state.Enabled && validTailscaleHostname(state.Hostname) {
+		result.Enabled = true
+		result.URL = "https://" + state.Hostname
+		result.CleanupRequired = true
+	}
+	if !c.supported {
+		result.State = "unsupported"
+		result.ErrorCode = "platform-unsupported"
+		return result
+	}
+	if stateErr != nil {
+		result.State = "needs-attention"
+		result.ErrorCode = "remote-state-invalid"
+		result.CleanupRequired = true
+		return result
+	}
+	if c.legacyEnabled {
+		result.State = "migration-required"
+		result.ErrorCode = "tailscale-serve-migration-required"
+		result.CleanupRequired = true
+		return result
+	}
+	if c.runner == nil || !c.runner.Available() {
+		result.Installed = false
+		if result.Enabled {
+			result.State = "needs-attention"
+			result.ErrorCode = "tailscale-required"
+		} else {
+			result.State = "tailscale-required"
+			result.ErrorCode = "tailscale-required"
+		}
+		return result
+	}
+	result.Installed = true
+	result.State = "approval-required"
+	result.ErrorCode = "tailscale-approval-required"
+	return result
+}
+
+func (c *windowsFunnelController) Verify(ctx context.Context) (TailscaleRemoteAccessStatus, error) {
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+	if !c.supported {
+		return c.status(), ErrRemoteAccessUnsupported
+	}
+	if c.runner == nil || !c.runner.Available() {
+		return c.status(), ErrTailscaleUnavailable
+	}
+	raw, err := c.runner.RunPrivileged(ctx, "inspect", c.target)
+	if err != nil {
+		return c.status(), err
+	}
+	observed, err := decodeTailscaleServeStatus(raw)
+	if err != nil {
+		return c.status(), ErrTailscaleConfigurationInvalid
+	}
+	return c.observedStatus(observed), nil
+}
+
+func (c *windowsFunnelController) observedStatus(observed tailscaleServeStatus) TailscaleRemoteAccessStatus {
+	state, stateErr := c.savedState()
+	result := TailscaleRemoteAccessStatus{
+		Supported: true, Installed: true, Provider: "tailscale", NetworkKind: "public-funnel", Management: "integrated",
+	}
+	if stateErr != nil {
+		result.State = "needs-attention"
+		result.ErrorCode = "remote-state-invalid"
+		result.CleanupRequired = true
+		return result
+	}
+	if state.Enabled {
+		result.Enabled = true
+		result.URL = "https://" + state.Hostname
+		result.CleanupRequired = true
+	}
+	if serveStatusEmpty(observed) {
+		if state.Enabled || c.legacyEnabled {
+			result.State = "needs-attention"
+			result.ErrorCode = "tailscale-funnel-missing"
+			return result
+		}
+		result.State = "inactive"
+		return result
+	}
+	if hostname, owned := ownedTailscaleFunnel(observed, c.target); owned {
+		if state.Enabled && strings.EqualFold(state.Hostname, hostname) {
+			result.Active = true
+			result.State = "active"
+			return result
+		}
+		result.Enabled = false
+		result.Active = false
+		result.URL = ""
+		result.State = "needs-attention"
+		result.ErrorCode = "tailscale-funnel-untracked"
+		result.CleanupRequired = true
+		return result
+	}
+	if _, owned := ownedTailscaleServe(observed, c.target); owned {
+		result.Enabled = false
+		result.Active = false
+		result.URL = ""
+		result.State = "migration-required"
+		result.ErrorCode = "tailscale-serve-migration-required"
+		result.CleanupRequired = true
+		return result
+	}
+	result.State = "needs-attention"
+	result.ErrorCode = "tailscale-funnel-conflict"
+	result.CleanupRequired = state.Enabled || c.legacyEnabled
+	return result
+}
+
+func (c *windowsFunnelController) Update(ctx context.Context, enabled bool, _ string, _ bool) (TailscaleRemoteAccessStatus, error) {
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+	if !c.supported {
+		return c.status(), ErrRemoteAccessUnsupported
+	}
+	if enabled {
+		return c.enable(ctx)
+	}
+	return c.ensureInactive(ctx)
+}
+
+func (c *windowsFunnelController) enable(ctx context.Context) (TailscaleRemoteAccessStatus, error) {
+	if c.runner == nil || !c.runner.Available() {
+		return c.status(), ErrTailscaleUnavailable
+	}
+	raw, err := c.runner.RunPrivileged(ctx, "enable", c.target)
+	if err != nil {
+		return c.status(), err
+	}
+	observed, err := decodeTailscaleServeStatus(raw)
+	if err != nil {
+		return c.status(), ErrTailscaleConfigurationInvalid
+	}
+	hostname, owned := ownedTailscaleFunnel(observed, c.target)
+	if !owned {
+		return c.status(), ErrTailscaleConfigurationInvalid
+	}
+	if err := c.saveState(windowsFunnelFile{SchemaVersion: windowsFunnelSchemaVersion, Enabled: true, Hostname: hostname}); err != nil {
+		if _, rollbackErr := c.runner.RunPrivileged(ctx, "disable", c.target); rollbackErr != nil {
+			return c.status(), ErrTailscaleDisableIncomplete
+		}
+		return c.status(), err
+	}
+	if err := c.clearLegacyState(); err != nil {
+		if _, rollbackErr := c.runner.RunPrivileged(ctx, "disable", c.target); rollbackErr != nil {
+			return c.status(), ErrTailscaleDisableIncomplete
+		}
+		if resetErr := c.saveState(windowsFunnelFile{SchemaVersion: windowsFunnelSchemaVersion}); resetErr != nil {
+			return c.status(), resetErr
+		}
+		return c.status(), err
+	}
+	return c.observedStatus(observed), nil
+}
+
+func (c *windowsFunnelController) EnsureInactive(ctx context.Context) (TailscaleRemoteAccessStatus, error) {
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+	return c.ensureInactive(ctx)
+}
+
+func (c *windowsFunnelController) ensureInactive(ctx context.Context) (TailscaleRemoteAccessStatus, error) {
+	if !c.PublicExposureConfigured() {
+		return c.status(), nil
+	}
+	if c.runner == nil || !c.runner.Available() {
+		return c.status(), ErrTailscaleDisableIncomplete
+	}
+	raw, err := c.runner.RunPrivileged(ctx, "disable", c.target)
+	if err != nil {
+		return c.status(), ErrTailscaleDisableIncomplete
+	}
+	observed, err := decodeTailscaleServeStatus(raw)
+	if err != nil || !serveStatusEmpty(observed) {
+		return c.status(), ErrTailscaleDisableIncomplete
+	}
+	if err := c.saveState(windowsFunnelFile{SchemaVersion: windowsFunnelSchemaVersion}); err != nil {
+		return c.status(), err
+	}
+	if err := c.clearLegacyState(); err != nil {
+		return c.status(), err
+	}
+	return TailscaleRemoteAccessStatus{
+		Supported: true, Installed: true, State: "inactive", Provider: "tailscale", NetworkKind: "public-funnel", Management: "integrated",
+	}, nil
+}
+
+func ownedTailscaleFunnel(status tailscaleServeStatus, target string) (string, bool) {
+	if len(status.TCP) != 1 || len(status.Web) != 1 || len(status.Services) != 0 || len(status.Foreground) != 0 || len(status.AllowFunnel) != 1 {
+		return "", false
+	}
+	tcp, ok := status.TCP["443"]
+	if !ok || !tcp.HTTPS || tcp.HTTP || tcp.TCPForward != "" || tcp.TerminateTLS != "" || tcp.ProxyProtocol != 0 {
+		return "", false
+	}
+	for hostPort, web := range status.Web {
+		hostname, port, err := net.SplitHostPort(hostPort)
+		if err != nil || port != "443" || !validTailscaleHostname(hostname) || len(web.Handlers) != 1 || !status.AllowFunnel[hostPort] {
+			return "", false
+		}
+		handler, ok := web.Handlers["/"]
+		if !ok || handler.Proxy != target || handler.Path != "" || handler.Text != "" || handler.Redirect != "" || len(handler.AcceptAppCaps) != 0 {
+			return "", false
+		}
+		return strings.ToLower(hostname), true
+	}
+	return "", false
 }
 
 func installedWindowsTailscalePath() string {
@@ -90,6 +450,10 @@ func (r *windowsTailscaleRunner) Run(ctx context.Context, arguments ...string) (
 			return nil, ErrTailscaleApprovalRequired
 		case strings.Contains(message, "not logged"), strings.Contains(message, "logged out"), strings.Contains(message, "needs login"), strings.Contains(message, "no current profile"):
 			return nil, ErrTailscaleSignInRequired
+		case strings.Contains(message, "service is not running"), strings.Contains(message, "failed to connect to local tailscaled"), strings.Contains(message, "no backend"):
+			return nil, ErrTailscaleNotRunning
+		case strings.Contains(message, "unknown command"), strings.Contains(message, "does not support funnel"):
+			return nil, ErrTailscaleFunnelUnsupported
 		case errors.Is(ctx.Err(), context.DeadlineExceeded), errors.Is(ctx.Err(), context.Canceled):
 			return nil, ctx.Err()
 		}
@@ -175,6 +539,10 @@ func (r *windowsTailscaleRunner) RunPrivileged(ctx context.Context, action, targ
 		return nil, ErrTailscaleServeConflict
 	case "not-installed":
 		return nil, ErrTailscaleUnavailable
+	case "not-running":
+		return nil, ErrTailscaleNotRunning
+	case "unsupported":
+		return nil, ErrTailscaleFunnelUnsupported
 	case "sign-in-required":
 		return nil, ErrTailscaleSignInRequired
 	case "provider-approval-required":

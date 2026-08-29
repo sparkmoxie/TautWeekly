@@ -54,12 +54,18 @@ function Get-PropertyValue {
     return $property.Value
 }
 
-function Get-ServeStatus {
+function Get-FunnelStatus {
     param([string]$TailscalePath)
-    $raw = (& $TailscalePath serve status --json 2>&1 | Out-String)
+    $raw = (& $TailscalePath funnel status --json 2>&1 | Out-String)
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($raw) -or $raw.Length -gt 262144) {
         if ($raw -match "(?i)not logged|logged out|needs login|no current profile|sign in") {
             throw "tailscale-sign-in-required"
+        }
+        if ($raw -match "(?i)service is not running|failed to connect to local tailscaled|no backend|connection refused") {
+            throw "tailscale-not-running"
+        }
+        if ($raw -match "(?i)unknown command|unknown subcommand|does not support funnel") {
+            throw "tailscale-funnel-unsupported"
         }
         throw "tailscale-status-unavailable"
     }
@@ -86,11 +92,11 @@ function Get-TailscaleApprovalUrl {
     catch { return "" }
 }
 
-function Invoke-TailscaleServeEnable {
+function Invoke-TailscaleFunnelEnable {
     param([string]$TailscalePath, [string]$ExpectedTarget)
     $startInfo = New-Object Diagnostics.ProcessStartInfo
     $startInfo.FileName = $TailscalePath
-    $startInfo.Arguments = "serve --bg --yes --https=443 $ExpectedTarget"
+    $startInfo.Arguments = "funnel --bg --yes --https=443 $ExpectedTarget"
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardOutput = $true
@@ -126,7 +132,7 @@ function Test-ServeStatusEmpty {
     return $true
 }
 
-function Test-OwnedServeStatus {
+function Test-OwnedFunnelStatus {
     param([object]$Status, [string]$ExpectedTarget)
     $tcpProperty = $Status.PSObject.Properties["TCP"]
     $webProperty = $Status.PSObject.Properties["Web"]
@@ -144,12 +150,11 @@ function Test-OwnedServeStatus {
         [int](Get-PropertyValue $tcp443.Value "ProxyProtocol" 0) -ne 0) { return $false }
     $webEntry = @($webProperty.Value.PSObject.Properties)[0]
     if ([string]$webEntry.Name -notmatch "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.ts\.net:443$") { return $false }
-    if ($null -ne $funnelProperty) {
-        $funnelEntries = @($funnelProperty.Value.PSObject.Properties)
-        if ($funnelEntries.Count -gt 1) { return $false }
-        foreach ($entry in $funnelEntries) {
-            if ([bool]$entry.Value -or [string]$entry.Name -ine [string]$webEntry.Name) { return $false }
-        }
+    if ($null -eq $funnelProperty) { return $false }
+    $funnelEntries = @($funnelProperty.Value.PSObject.Properties)
+    if ($funnelEntries.Count -ne 1) { return $false }
+    foreach ($entry in $funnelEntries) {
+        if (-not [bool]$entry.Value -or [string]$entry.Name -ine [string]$webEntry.Name) { return $false }
     }
     $handlers = $webEntry.Value.PSObject.Properties["Handlers"]
     if ($null -eq $handlers -or (Get-PropertyCount $handlers.Value) -ne 1) { return $false }
@@ -159,6 +164,45 @@ function Test-OwnedServeStatus {
         -not [string]::IsNullOrWhiteSpace([string](Get-PropertyValue $rootHandler.Value "Text" "")) -or
         -not [string]::IsNullOrWhiteSpace([string](Get-PropertyValue $rootHandler.Value "Redirect" ""))) { return $false }
     $caps = $rootHandler.Value.PSObject.Properties["AcceptAppCaps"]
+    return $null -eq $caps -or @($caps.Value).Count -eq 0
+}
+
+function Test-OwnedLegacyServeStatus {
+    param([object]$Status, [string]$ExpectedTarget)
+    if (-not (Test-OwnedFunnelStatusShape $Status $ExpectedTarget)) { return $false }
+    $webEntry = @($Status.PSObject.Properties['Web'].Value.PSObject.Properties)[0]
+    $funnelProperty = $Status.PSObject.Properties['AllowFunnel']
+    if ($null -eq $funnelProperty) { return $true }
+    $entries = @($funnelProperty.Value.PSObject.Properties)
+    if ($entries.Count -eq 0) { return $true }
+    return $entries.Count -eq 1 -and [string]$entries[0].Name -ieq [string]$webEntry.Name -and -not [bool]$entries[0].Value
+}
+
+function Test-OwnedFunnelStatusShape {
+    param([object]$Status, [string]$ExpectedTarget)
+    $tcpProperty = $Status.PSObject.Properties['TCP']
+    $webProperty = $Status.PSObject.Properties['Web']
+    if ($null -eq $tcpProperty -or $null -eq $webProperty) { return $false }
+    if ((Get-PropertyCount $tcpProperty.Value) -ne 1 -or (Get-PropertyCount $webProperty.Value) -ne 1) { return $false }
+    foreach ($name in @('Services', 'Foreground')) {
+        $property = $Status.PSObject.Properties[$name]
+        if ($null -ne $property -and (Get-PropertyCount $property.Value) -ne 0) { return $false }
+    }
+    $tcp443 = $tcpProperty.Value.PSObject.Properties['443']
+    if ($null -eq $tcp443 -or -not [bool](Get-PropertyValue $tcp443.Value 'HTTPS' $false) -or [bool](Get-PropertyValue $tcp443.Value 'HTTP' $false)) { return $false }
+    if (-not [string]::IsNullOrWhiteSpace([string](Get-PropertyValue $tcp443.Value 'TCPForward' '')) -or
+        -not [string]::IsNullOrWhiteSpace([string](Get-PropertyValue $tcp443.Value 'TerminateTLS' '')) -or
+        [int](Get-PropertyValue $tcp443.Value 'ProxyProtocol' 0) -ne 0) { return $false }
+    $webEntry = @($webProperty.Value.PSObject.Properties)[0]
+    if ([string]$webEntry.Name -notmatch '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.ts\.net:443$') { return $false }
+    $handlers = $webEntry.Value.PSObject.Properties['Handlers']
+    if ($null -eq $handlers -or (Get-PropertyCount $handlers.Value) -ne 1) { return $false }
+    $rootHandler = $handlers.Value.PSObject.Properties['/']
+    if ($null -eq $rootHandler -or [string](Get-PropertyValue $rootHandler.Value 'Proxy' '') -cne $ExpectedTarget) { return $false }
+    if (-not [string]::IsNullOrWhiteSpace([string](Get-PropertyValue $rootHandler.Value 'Path' '')) -or
+        -not [string]::IsNullOrWhiteSpace([string](Get-PropertyValue $rootHandler.Value 'Text' '')) -or
+        -not [string]::IsNullOrWhiteSpace([string](Get-PropertyValue $rootHandler.Value 'Redirect' ''))) { return $false }
+    $caps = $rootHandler.Value.PSObject.Properties['AcceptAppCaps']
     return $null -eq $caps -or @($caps.Value).Count -eq 0
 }
 
@@ -224,22 +268,20 @@ try {
         Send-Result "not-installed" $null
         exit 20
     }
-    $before = Get-ServeStatus $tailscalePath
+    $before = Get-FunnelStatus $tailscalePath
     if ($Action -eq "Inspect") {
         Send-Result "inspected" $before
         exit 0
     }
-    if (-not (Test-ServeStatusEmpty $before) -and -not (Test-OwnedServeStatus $before $Target)) {
-        if ($Action -eq "Disable") {
-            Send-Result "disabled" $before
-            exit 0
-        }
+    $ownedFunnel = Test-OwnedFunnelStatus $before $Target
+    $ownedLegacyServe = Test-OwnedLegacyServeStatus $before $Target
+    if (-not (Test-ServeStatusEmpty $before) -and -not $ownedFunnel -and -not $ownedLegacyServe) {
         Send-Result "conflict" $before
         exit 21
     }
     if ($Action -eq "Enable") {
-        if (Test-ServeStatusEmpty $before) {
-            $command = Invoke-TailscaleServeEnable $tailscalePath $Target
+        if (-not $ownedFunnel) {
+            $command = Invoke-TailscaleFunnelEnable $tailscalePath $Target
             $approvalUrl = Get-TailscaleApprovalUrl $command.Output
             if (-not [string]::IsNullOrWhiteSpace($approvalUrl)) {
                 Send-Result "provider-approval-required" $null $approvalUrl
@@ -250,9 +292,17 @@ try {
                     Send-Result "sign-in-required" $null
                     exit 25
                 }
+                if ($command.Output -match "(?i)service is not running|failed to connect to local tailscaled|no backend|connection refused") {
+                    Send-Result "not-running" $null
+                    exit 27
+                }
+                if ($command.Output -match "(?i)unknown command|unknown subcommand|does not support funnel") {
+                    Send-Result "unsupported" $null
+                    exit 28
+                }
                 if ($command.TimedOut) {
-                    $afterTimeout = Get-ServeStatus $tailscalePath
-                    if (Test-OwnedServeStatus $afterTimeout $Target) {
+                    $afterTimeout = Get-FunnelStatus $tailscalePath
+                    if (Test-OwnedFunnelStatus $afterTimeout $Target) {
                         Send-Result "enabled" $afterTimeout
                         exit 0
                     }
@@ -261,22 +311,29 @@ try {
                 exit 22
             }
         }
-        $after = Get-ServeStatus $tailscalePath
-        if (-not (Test-OwnedServeStatus $after $Target)) {
+        $after = Get-FunnelStatus $tailscalePath
+        if (-not (Test-OwnedFunnelStatus $after $Target)) {
             Send-Result "verification-failed" $after
             exit 23
         }
         Send-Result "enabled" $after
         exit 0
     }
-    if (-not (Test-ServeStatusEmpty $before)) {
+    if ($ownedFunnel) {
+        & $tailscalePath funnel --yes --https=443 off 1>$null 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Send-Result "unavailable" $before
+            exit 22
+        }
+    }
+    elseif ($ownedLegacyServe) {
         & $tailscalePath serve --yes --https=443 off 1>$null 2>$null
         if ($LASTEXITCODE -ne 0) {
             Send-Result "unavailable" $before
             exit 22
         }
     }
-    $after = Get-ServeStatus $tailscalePath
+    $after = Get-FunnelStatus $tailscalePath
     if (-not (Test-ServeStatusEmpty $after)) {
         Send-Result "verification-failed" $after
         exit 23
@@ -288,6 +345,14 @@ catch {
     if ($_.Exception.Message -eq "tailscale-sign-in-required") {
         Send-Result "sign-in-required" $null
         exit 25
+    }
+    if ($_.Exception.Message -eq "tailscale-not-running") {
+        Send-Result "not-running" $null
+        exit 27
+    }
+    if ($_.Exception.Message -eq "tailscale-funnel-unsupported") {
+        Send-Result "unsupported" $null
+        exit 28
     }
     Send-Result "unavailable" $null
     exit 22

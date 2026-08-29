@@ -80,7 +80,7 @@
           <a href="#previews">Previews and TestEmail</a>
           <a href="#schedule">Schedule</a>
           <a href="#updates">Update or migrate</a>
-          <a href="#tailscale">Private remote access</a>
+          <a href="#tailscale">Public remote access</a>
           <a href="#password">Password protection</a>
           <a href="#data">Private data</a>
           <a href="#metadata-readiness">Metadata readiness</a>
@@ -219,13 +219,13 @@
         </div>
       </section>
 
-      <section class="section searchable" id="tailscale" data-search="tailscale remote mobile private serve https funnel vpn tailnet">
-        <div class="section-head"><div><span class="eyebrow">Optional private remote access</span><h2>Private HTTPS through your tailnet</h2></div><p>Settings can create and verify one exact Tailscale Serve route without making the Manager public.</p></div>
+      <section class="section searchable" id="tailscale" data-search="tailscale remote mobile public https funnel ordinary browser password loopback">
+        <div class="section-head"><div><span class="eyebrow">Optional public remote access</span><h2>Public HTTPS through Tailscale Funnel</h2></div><p>Open the password-protected Manager from an ordinary remote browser while the backend remains bound to loopback.</p></div>
         <div class="grid2">
-          <div class="card blue"><div class="icon">TS</div><h3>Install, sign in, enable</h3><p>Install Tailscale on this Windows host and every remote computer or mobile device. In <strong>Settings &gt; Tailscale</strong>, enable private access and approve the fixed Windows helper.</p></div>
-          <div class="card"><div class="icon">HTTPS</div><h3>HTTPS only; Funnel off</h3><p>If Tailscale opens its consent page, enable HTTPS certificates only and turn Funnel off. TautWeekly never needs a router port or public URL.</p></div>
+          <div class="card blue"><div class="icon">TS</div><h3>Host prerequisite</h3><p>Install the official Tailscale Windows client, start it, and sign in on this host. TautWeekly does not install or authenticate Tailscale. Remote viewers need no Tailscale client or VPN.</p></div>
+          <div class="card"><div class="icon">HTTPS</div><h3>Enable and verify</h3><p>Create a unique Manager password, enable Funnel, approve the fixed Windows helper and any one-time Tailscale page, then verify the exact generated <code>https://…ts.net</code> address.</p></div>
         </div>
-        <div class="callout"><div><strong>The Windows password lock stays optional.</strong><p>Tailnet policy decides who can reach the host. With the Manager lock off, every permitted tailnet user or device receives full Manager administration; there is no read-only role. Local loopback access remains the recovery path.</p></div></div>
+        <div class="callout"><div><strong>Funnel makes the login page public, so the password lock is mandatory while it is active.</strong><p>Manager remains on <code>127.0.0.1</code>; no router or firewall ingress port is opened. Remote sessions have full administration. Use a unique password because Internet brute-force risk remains. Password-lock disable, access reset, and uninstall first turn off and verify only the TautWeekly Funnel or refuse safely.</p></div></div>
       </section>
 
       <section class="section searchable" id="password" data-search="password protection lock settings trusted local pairing token recovery reset eight characters">
@@ -234,7 +234,7 @@
           <div class="card"><div class="icon">U</div><h3>Unlocked by default</h3><p>No first-run pairing token is required. A gold unlocked icon reports <strong>Browser access unlocked</strong> and links to Settings.</p></div>
           <div class="card green"><div class="icon">L</div><h3>Optional password lock</h3><p>Use at least 8 characters. Enable or change the lock under Settings. A green icon reports <strong>Browser access locked</strong>. Passwords are stored only as a salted local verifier.</p></div>
         </div>
-        <div class="callout"><div><strong>Recovery does not erase TautWeekly.</strong><p>Use the Start Menu <strong>Reset TautWeekly Manager Access</strong> shortcut or <code>Reset-TautWeekly-Access.cmd</code>. Only the Manager lock is disabled; configuration, credentials, schedules, history, and previews remain.</p></div></div>
+        <div class="callout"><div><strong>Recovery does not erase TautWeekly.</strong><p>Use the Start Menu <strong>Reset TautWeekly Manager Access</strong> shortcut or <code>Reset-TautWeekly-Access.cmd</code>. It first disables and verifies the exact owned Funnel, then disables only the Manager lock. If Funnel shutdown cannot be verified, recovery stops safely. Configuration, credentials, schedules, history, and previews remain.</p></div></div>
       </section>
 
       <section class="section searchable" id="data" data-search="private data config state output previews logs installer diagnostics settings backup privacy">

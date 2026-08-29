@@ -37,6 +37,7 @@ const state = {
   tailscale: { supported: false, installed: false, enabled: false, active: false, state: "unsupported" },
   tailscaleSaving: false,
   tailscaleVerifying: false,
+  tailscaleRequestedOperation: "",
   tailscaleError: "",
   tailscaleSetupURL: "",
   about: null,
@@ -520,7 +521,12 @@ function renderFirstTimeSetup() {
   const prompt = byId("first-time-setup");
   const firstRun = state.editor?.state === "unconfigured";
   prompt.hidden = !firstRun;
-  if (firstRun) setChip("first-time-setup-chip", "Not run", "pending");
+  if (firstRun) {
+    setChip("first-time-setup-chip", "Not run", "pending");
+    setText("first-time-setup-copy", state.runtimeMode === "windows"
+      ? "Add Tautulli, Plex, and email settings first. Optional public Funnel access stays off until you create a unique Manager password in Settings."
+      : "Add Tautulli, Plex, and email settings, then let the Manager validate the non-sending setup checks.");
+  }
 }
 
 function setupWorkflowPresentation(workflow = state.setupWorkflow) {
@@ -3372,6 +3378,26 @@ function renderAccessSettings() {
 }
 
 function tailscaleStatePresentation(remote) {
+  if (remote.networkKind === "public-funnel") {
+    switch (remote.state) {
+    case "active": return { label: "Active", tone: "good", status: "Public HTTPS Funnel is active and points only to the loopback Manager." };
+    case "inactive": return { label: "Inactive", tone: "neutral", status: "Public Funnel is off." };
+    case "starting": return { label: "Starting", tone: "pending", status: "Windows is starting and verifying the exact TautWeekly Funnel." };
+    case "stopping": return { label: "Stopping", tone: "pending", status: "Windows is stopping and verifying the exact TautWeekly Funnel." };
+    case "manager-password-required": return { label: "Password required", tone: "pending", status: "Create and enable a unique Manager password before Funnel can be turned on." };
+    case "approval-required": return remote.enabled
+      ? { label: "Approval required", tone: "pending", status: "Funnel is saved. Approve Verify with Windows to confirm the current public route." }
+      : { label: "Approval required", tone: "pending", status: "Windows approval is required only for an explicit Enable, Disable, or Verify action." };
+    case "tailscale-required": return { label: "Tailscale required", tone: "neutral", status: "Install the official Tailscale Windows client, start it, and sign in before enabling Funnel." };
+    case "sign-in-required": return { label: "Sign in required", tone: "pending", status: "Sign in through the official Tailscale Windows app, then verify again." };
+    case "not-running": return { label: "Tailscale stopped", tone: "bad", status: "Start the official Tailscale Windows service, then verify again." };
+    case "funnel-unsupported": return { label: "Update required", tone: "bad", status: "Update the official Tailscale Windows client to a Funnel-capable release." };
+    case "migration-required": return { label: "Migration required", tone: "pending", status: "The older private Serve route is blocked. With the password lock active, Enable converts only that exact route to Funnel; Disable removes it." };
+    case "needs-attention": return { label: "Needs attention", tone: "bad", status: "The saved Funnel could not be matched to the exact TautWeekly route. The password boundary remains active." };
+    case "unavailable": return { label: "Unavailable", tone: "bad", status: "Funnel state could not be verified safely." };
+    default: return { label: "Unavailable", tone: "neutral", status: "Public Funnel is unavailable in this package." };
+    }
+  }
   switch (remote.state) {
   case "enabled": return { label: "Connected", tone: "good", status: "Private HTTPS Serve route is active." };
   case "external-enabled": return { label: "Enabled", tone: "good", status: "Manager accepts only the saved private Tailscale HTTPS hostname." };
@@ -3393,7 +3419,8 @@ function tailscaleStatePresentation(remote) {
 function validTailscaleURL(value) {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === "https:" && parsed.port === "" && parsed.pathname === "/" && parsed.hostname.endsWith(".ts.net");
+    return parsed.protocol === "https:" && parsed.username === "" && parsed.password === "" && parsed.port === "" &&
+      parsed.pathname === "/" && parsed.search === "" && parsed.hash === "" && parsed.hostname.endsWith(".ts.net");
   } catch (_) {
     return false;
   }
@@ -3416,22 +3443,37 @@ function renderTailscaleSettings() {
   if (!remote.supported) return;
   panel.classList.toggle("enabled-glow", Boolean(remote.enabled && remote.active));
 
-  const presentation = tailscaleStatePresentation(remote);
+  const displayRemote = publicFunnel && state.tailscaleSaving
+    ? { ...remote, state: state.tailscaleRequestedOperation === "enable" ? "starting" : "stopping" }
+    : remote;
+  const presentation = tailscaleStatePresentation(displayRemote);
   const external = remote.management === "external";
   const windows = state.runtimeMode === "windows";
+  const publicFunnel = windows && remote.networkKind === "public-funnel";
+  const passwordLocked = Boolean(state.authAccess?.passwordLockEnabled);
+  setText("tailscale-settings-eyebrow", publicFunnel ? "Optional public remote access" : "Optional private remote access");
+  setText("tailscale-settings-heading", publicFunnel ? "Tailscale Funnel" : "Tailscale");
+  setText("tailscale-settings-copy", publicFunnel
+    ? "Open the Manager from an ordinary remote browser through a stable public HTTPS address. The Manager remains bound to loopback; Funnel proxies only the fixed local target."
+    : "Use Tailscale Serve for private HTTPS access from devices authorized by your tailnet. This never opens a router port or makes the Manager public.");
+  setText("tailscale-toggle-label", publicFunnel ? "Make the Manager remotely available" : "Allow private tailnet access");
+  setText("tailscale-status-label", publicFunnel ? "Funnel status" : "Serve status");
+  setText("tailscale-address-label", publicFunnel ? "Public HTTPS address" : "Private address");
   panel.setAttribute("aria-busy", String(state.tailscaleSaving));
-  setChip("tailscale-settings-chip", state.tailscaleSaving ? "Saving" : presentation.label, state.tailscaleSaving ? "pending" : presentation.tone);
+  const transitionLabel = state.tailscaleVerifying ? "Checking" : state.tailscaleRequestedOperation === "enable" ? "Starting" : "Stopping";
+  setChip("tailscale-settings-chip", state.tailscaleSaving ? transitionLabel : presentation.label, state.tailscaleSaving ? "pending" : presentation.tone);
   setText("tailscale-serve-status", presentation.status);
 
   const toggle = byId("tailscale-enabled");
   toggle.checked = Boolean(remote.enabled);
-  toggle.disabled = state.tailscaleSaving || (!remote.enabled && (!remote.installed || ["conflict", "unavailable", "sign-in-required", "authorization-required"].includes(remote.state)));
+  const blockedState = ["conflict", "unavailable", "sign-in-required", "authorization-required", "tailscale-required", "not-running", "funnel-unsupported", "needs-attention"].includes(remote.state);
+  toggle.disabled = state.tailscaleSaving || (!remote.enabled && (!remote.installed || blockedState || (publicFunnel && !passwordLocked)));
   toggle.closest(".tailscale-setting").classList.toggle("disabled", toggle.disabled);
   toggle.closest(".config-toggle").querySelector("em").textContent = remote.enabled ? "On" : "Off";
   setText("tailscale-toggle-help", external
     ? "The package host or optional sidecar owns Tailscale. Manager saves only one exact private HTTPS hostname and never handles a Tailscale credential."
-    : windows
-      ? "Tailscale must already be installed and signed in. Windows asks for administrator approval only when you Enable, Disable, or Verify."
+    : publicFunnel
+      ? "Tailscale must already be installed, running, and signed in. Windows asks for administrator approval only for an explicit Enable, Disable, or Verify operation."
       : "Tailscale must already be installed and signed in. The Linux host administrator authorizes the fixed adapter once; Manager remains unprivileged.");
 
   const authorizationCommand = remote.hostAuthorizationCommand === "sudo tautweekly remote-access-authorize"
@@ -3454,7 +3496,7 @@ function renderTailscaleSettings() {
       : "nas-docker/#security";
   guide.href = `https://sparkmoxie.github.io/TautWeekly/${guidePath}`;
 
-  const hasURL = validTailscaleURL(remote.url || "");
+  const hasURL = validTailscaleURL(remote.url || "") && (!publicFunnel || Boolean(remote.active));
   const link = byId("tailscale-url");
   link.hidden = !hasURL;
   byId("tailscale-url-empty").hidden = hasURL;
@@ -3467,10 +3509,16 @@ function renderTailscaleSettings() {
     link.textContent = "";
   }
 
-  const passwordLocked = Boolean(state.authAccess?.authenticationRequired);
-  setText("tailscale-password-status", windows ? (passwordLocked ? "Optional lock enabled" : "Optional lock off") : "Required login enabled");
+  setText("tailscale-password-status", publicFunnel
+    ? (passwordLocked ? "Required lock enabled" : "Required before enable")
+    : windows ? (passwordLocked ? "Optional lock enabled" : "Optional lock off") : "Required login enabled");
+  const passwordSetup = byId("tailscale-password-setup-button");
+  passwordSetup.hidden = !publicFunnel || passwordLocked;
+  passwordSetup.disabled = state.tailscaleSaving;
   const boundary = byId("tailscale-security-boundary");
-  boundary.innerHTML = !windows
+  boundary.innerHTML = publicFunnel
+    ? "<strong>Funnel makes the Manager login page publicly reachable over HTTPS.</strong> Remote viewers do not need Tailscale or a VPN, so the Manager password lock is mandatory. Use a unique password; Internet login attempts remain a brute-force risk."
+    : !windows
     ? "<strong>The Manager login remains required.</strong> Tailnet access is an additional network boundary, not a replacement for authentication. Every signed-in remote session still has full Manager administration; there is no read-only role."
     : passwordLocked
     ? "<strong>Two access checks are active.</strong> A permitted tailnet device must also enter the independent Manager password. Existing Windows password-lock behavior is unchanged."
@@ -3483,18 +3531,23 @@ function renderTailscaleSettings() {
   const setupLink = byId("tailscale-setup-link");
   const hasSetupURL = validTailscaleSetupURL(state.tailscaleSetupURL);
   setupLink.hidden = !hasSetupURL;
+  setupLink.textContent = publicFunnel ? "Approve Funnel in Tailscale" : "Approve HTTPS in Tailscale";
   byId("tailscale-provider-warning").hidden = !hasSetupURL;
   if (hasSetupURL) setupLink.href = state.tailscaleSetupURL;
   else setupLink.removeAttribute("href");
   const message = byId("tailscale-settings-message");
   if (state.tailscaleError) message.textContent = state.tailscaleError;
   else if (state.tailscaleSaving) message.textContent = state.tailscaleVerifying
-    ? "Waiting for Windows approval, then verifying the exact Tailscale Serve route..."
-    : remote.enabled ? "Disabling private access and verifying Tailscale Serve ownership..." : "Enabling a private HTTPS Serve route and verifying its exact target...";
+    ? `Waiting for Windows approval, then verifying the exact Tailscale ${publicFunnel ? "Funnel" : "Serve"} route...`
+    : state.tailscaleRequestedOperation === "disable"
+      ? `Stopping and verifying the exact TautWeekly ${publicFunnel ? "Funnel" : "Serve route"}...`
+      : `Starting and verifying the exact TautWeekly ${publicFunnel ? "Funnel" : "Serve route"}...`;
   else message.textContent = remote.enabled && remote.active
-    ? "Open the private address only from a device signed in to an authorized tailnet."
+    ? (publicFunnel ? "The public address opens the password-protected Manager; remote viewers do not need Tailscale." : "Open the private address only from a device signed in to an authorized tailnet.")
     : presentation.status;
-  byId("tailscale-recovery-copy").innerHTML = external
+  byId("tailscale-recovery-copy").innerHTML = publicFunnel
+    ? "<strong>Local access remains the recovery path.</strong> Password-lock disable, local access reset, and uninstall first turn off and verify only the exact TautWeekly Funnel. If verification fails, the password and application stay in place. Ordinary Manager exit preserves the selected Funnel for the next start."
+    : external
     ? "<strong>Local or host access remains the recovery path.</strong> Disabling blocks the saved private hostname immediately. Remove the external Serve route separately with the package host or sidecar instructions."
     : "<strong>Local access remains the recovery path.</strong> Disabling blocks the saved private hostname first, then removes only the owned HTTPS Serve route. If another Serve configuration is present, TautWeekly leaves it unchanged.";
 }
@@ -3502,21 +3555,25 @@ function renderTailscaleSettings() {
 async function updateTailscaleAccess() {
   const requested = byId("tailscale-enabled").checked;
   const external = state.tailscale?.management === "external";
+  const publicFunnel = state.runtimeMode === "windows" && state.tailscale?.networkKind === "public-funnel";
   state.tailscaleSaving = true;
+  state.tailscaleRequestedOperation = requested ? "enable" : "disable";
   state.tailscaleError = "";
   state.tailscaleSetupURL = "";
   renderTailscaleSettings();
   try {
     state.tailscale = await request("/api/v1/remote-access/tailscale", {
       method: "PUT",
-      body: JSON.stringify({
+      body: JSON.stringify(publicFunnel ? { operation: state.tailscaleRequestedOperation } : {
         enabled: requested,
         url: external ? byId("tailscale-external-url").value.trim() : "",
         confirmedPrivate: external ? byId("tailscale-private-confirm").checked : false,
       }),
     });
     if (external && !requested) byId("tailscale-private-confirm").checked = false;
-    setGlobalStatus(requested ? "Private Tailscale access enabled." : "Private Tailscale access disabled.", true);
+    setGlobalStatus(publicFunnel
+      ? requested ? "Public Tailscale Funnel enabled." : "Public Tailscale Funnel disabled."
+      : requested ? "Private Tailscale access enabled." : "Private Tailscale access disabled.", true);
   } catch (error) {
     state.tailscaleError = error.message;
     if (error.code === "tailscale-provider-approval-required" && validTailscaleSetupURL(error.fields?.setupUrl || "")) state.tailscaleSetupURL = error.fields.setupUrl;
@@ -3525,6 +3582,7 @@ async function updateTailscaleAccess() {
     catch (_) { /* Preserve the actionable update error. */ }
   } finally {
     state.tailscaleSaving = false;
+    state.tailscaleRequestedOperation = "";
     renderTailscaleSettings();
   }
 }
@@ -3544,12 +3602,13 @@ async function copyTailscaleAuthorizationCommand() {
 async function refreshTailscaleAccess() {
   state.tailscaleSaving = true;
   state.tailscaleVerifying = true;
+  state.tailscaleRequestedOperation = "verify";
   state.tailscaleError = "";
   state.tailscaleSetupURL = "";
   renderTailscaleSettings();
   try {
     state.tailscale = await request("/api/v1/remote-access/tailscale/verify", { method: "POST" });
-    setGlobalStatus("Tailscale Serve status verified.", true);
+    setGlobalStatus(state.tailscale?.networkKind === "public-funnel" ? "Tailscale Funnel status verified." : "Tailscale Serve status verified.", true);
   } catch (error) {
     state.tailscaleError = error.message;
     if (error.code === "tailscale-provider-approval-required" && validTailscaleSetupURL(error.fields?.setupUrl || "")) state.tailscaleSetupURL = error.fields.setupUrl;
@@ -3557,6 +3616,7 @@ async function refreshTailscaleAccess() {
   } finally {
     state.tailscaleSaving = false;
     state.tailscaleVerifying = false;
+    state.tailscaleRequestedOperation = "";
     renderTailscaleSettings();
   }
 }
@@ -3574,9 +3634,9 @@ async function copyTailscaleURL() {
   if (!validTailscaleURL(state.tailscale?.url || "")) return;
   try {
     await navigator.clipboard.writeText(state.tailscale.url);
-    setGlobalStatus("Private Tailscale address copied.", true);
+    setGlobalStatus(state.tailscale?.networkKind === "public-funnel" ? "Public Funnel address copied." : "Private Tailscale address copied.", true);
   } catch (_) {
-    state.tailscaleError = "The browser could not copy the private address. Select it manually instead.";
+    state.tailscaleError = `The browser could not copy the ${state.tailscale?.networkKind === "public-funnel" ? "public" : "private"} address. Select it manually instead.`;
     renderTailscaleSettings();
   }
 }
@@ -3620,6 +3680,7 @@ async function submitAccessPassword(event) {
     renderAccessSettings();
     message.textContent = "Manager access settings saved. This browser remains signed in.";
     setGlobalStatus("Manager password lock updated.", true);
+    await loadTailscaleAccess();
   } catch (error) {
     message.textContent = error.message;
   } finally {
@@ -3633,12 +3694,16 @@ async function disableAccessPassword() {
   const message = byId("access-settings-message");
   button.disabled = true;
   setSwappingButtonText("access-disable-button", "Disabling lock...");
-  message.textContent = "Disabling the optional Manager password lock...";
+  const publicFunnelConfigured = state.tailscale?.networkKind === "public-funnel" && Boolean(state.tailscale?.cleanupRequired || state.tailscale?.enabled);
+  message.textContent = publicFunnelConfigured
+    ? "Turning off and verifying the public Funnel before disabling the password lock. Windows approval may be required..."
+    : "Disabling the optional Manager password lock...";
   try {
     state.authAccess = await request("/api/v1/auth/access/disable", { method: "POST", body: "{}" });
     renderAccessSettings();
     message.textContent = "Password lock disabled. The Manager remains limited to this computer.";
     setGlobalStatus("Manager returned to trusted-local access.", true);
+    await loadTailscaleAccess();
   } catch (error) {
     message.textContent = error.message;
   } finally {
@@ -4317,6 +4382,7 @@ document.querySelectorAll("[data-schedule-action]").forEach((button) => button.a
 byId("startup-manager").addEventListener("change", startupSettingsChanged);
 byId("startup-dashboard").addEventListener("change", startupSettingsChanged);
 byId("tailscale-enabled").addEventListener("change", updateTailscaleAccess);
+byId("tailscale-password-setup-button").addEventListener("click", openAccessSettings);
 byId("tailscale-refresh-button").addEventListener("click", refreshTailscaleAccess);
 byId("tailscale-copy-button").addEventListener("click", copyTailscaleURL);
 byId("tailscale-copy-authorization").addEventListener("click", copyTailscaleAuthorizationCommand);
