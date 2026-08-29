@@ -205,6 +205,11 @@ func (c *windowsFunnelController) status() TailscaleRemoteAccessStatus {
 		return result
 	}
 	if c.legacyEnabled {
+		// Migration is an explicit privileged enable operation, but the browser
+		// still needs the passive executable-availability signal so it can offer
+		// that operation. Leaving Installed at its zero value disables both
+		// Enable and Verify and strands upgraded private-Serve installations.
+		result.Installed = c.runner != nil && c.runner.Available()
 		result.State = "migration-required"
 		result.ErrorCode = "tailscale-serve-migration-required"
 		result.CleanupRequired = true

@@ -40,6 +40,10 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the restarted process itself owns the healthy loopback listener. If an older
   Manager from another installation still owns port 8788, Setup refuses with a
   clear recovery action instead of mistaking that process for update success.
+- Fixed upgraded Windows installations with an owned legacy private Serve route
+  incorrectly disabling both Funnel Enable and Verify. The migration state now
+  preserves the passive installed-client signal so explicit conversion remains
+  available after the Manager password lock is enabled.
 
 ### Security
 
