@@ -42,25 +42,35 @@ These instructions apply to the entire repository.
 
 ## Optimized CI trigger matrix
 
-This section is the target policy for a future workflow change, not a description of the workflows currently implemented in .github/workflows. Reinspect the current workflows, required checks or rulesets, and recent Actions history before implementing it. Preserve the intent of the matrix if job names or scripts have since changed.
+This section describes the implemented risk-based policy in `.github/workflows`.
+Reinspect the current workflows, required checks or rulesets, and recent Actions
+history before changing it. Keep `scripts/ci_classifier.py` and its positive and
+negative fixtures synchronized with workflow, build, packaging, and test inputs.
 
 ### Evidence and current behavior
 
 - The baseline audit was performed against v0.23.1 / 06fba2372e45ab88fe63a58736b98b82a42f1b55 on 2026-08-27. At that point ci.yml used unfiltered push and pull_request triggers, so the same feature-branch commit ran the complete CI workflow twice once a pull request existed. The workflow also ran the complete matrix again on main and on release tags.
 - PRs #161 and #162 each produced both a six-job branch-push CI run and a six-job pull-request CI run for the identical head SHA. Their full active-week and quiet-week rendering steps took 12.4 and 13.4 minutes in the PR runs; the complete duplicate runs took 16-24 minutes. Each merge then produced another approximately 20-minute full main CI run.
 - The v0.23.1 tag produced an 18.2-minute generic CI run in parallel with the 18.3-minute Release workflow. The tag CI repeated PowerShell, rendering, archive, and installer checks even though Release built and validated the artifacts, tested the installer, built and boot-tested both container architectures, and published only after those jobs passed.
+- The final v0.24.0 maintenance PR repeated its exact head SHA in a 19.2-minute
+  branch-push CI run and a 21.4-minute pull-request CI run. The latter spent
+  14 minutes 27 seconds in the full active-week and quiet-week render step.
+  Merging then launched another 20.7-minute generic main CI run, and tagging the
+  same merge commit launched a 21-minute generic CI run beside the 19.3-minute
+  Release workflow. The optimized triggers eliminate the feature-branch and tag
+  copies and make a verified merge run provenance-only.
 - At the audit point GitHub reported no classic branch protection on main and no repository rulesets. Do not infer that this remains true. Before changing check names or triggers, query both protection mechanisms and inventory any required status contexts.
 - test-newsletter-integration.ps1 copies and exercises the Windows, NAS/Linux/FreeBSD, and Mac renderer payloads across active, quiet, and additional edge scenarios. build-releases.ps1 packages the complete platform trees and platform guides, builds Manager and installer binaries, normalizes archives, and emits checksums. These direct dependencies are the basis for the path classes below; keep the classifier synchronized when either script changes.
 
-### Target event policy
+### Implemented event policy
 
 | Event | Always present | Conditional work | Work intentionally omitted |
 | --- | --- | --- | --- |
-| Feature-branch push | No automatic full validation. Developers may use a manual diagnostic dispatch before opening a PR. | None by default. Once a PR exists, pull_request is the authoritative validation event. | Do not run a second full branch-push matrix for the same SHA. |
+| Feature-branch push | No automatic CI workflow. Developers may use a manual `auto`, `fast`, or `full` diagnostic dispatch before opening a PR. | None by default. Once a PR exists, `pull_request` is the authoritative validation event. | Do not run a second full branch-push matrix for the same SHA. |
 | Pull request | Run an unfiltered change-classifier job, the fast PR layer, and one stable aggregate check named CI / required. | Run the path-classified PowerShell/runtime, render, Manager, package, installer, Compose, and container-image gates below. | Do not publish Pages, containers, archives, or releases. |
-| Push to main after a green PR | Run a short merge-integrity/provenance check and the stable aggregate. Require PRs to be current with main so the tested PR merge tree is the tree that lands. | Deploy Pages for documentation inputs and publish the edge container for container-image inputs. Perform only deployment-specific verification not already proven by the PR SHA/tree. | Do not blindly replay the full PR matrix, full render matrix, release archives, or installer lifecycle. |
+| Push to main after a green PR | Verify the exact merge commit, PR head, tested first parent, short-lived exact base/head provenance artifact, and successful `CI / required` run, then run the stable aggregate. Require PRs to be current with main so the tested PR merge tree is the tree that lands. | Deploy Pages for documentation inputs and publish the edge container for container-image inputs, after the aggregate. Perform only deployment-specific work not already proven by the PR tree. | Do not blindly replay the full PR matrix, full render matrix, release archives, or installer lifecycle. |
 | Direct or otherwise unverified push to main | Detect the lack of a green associated PR and fail closed. | Run the same path-classified gates that a PR would have required before any deployment or publication. | Do not treat an unprotected direct push as if it inherited PR evidence. |
-| Release tag v*.*.* | Run a release preflight that proves the tag is on the intended main history, version/release notes agree, and the underlying tree has green CI provenance. | Build the final archives once; validate checksums, payload contracts, launcher modes, native Linux package, and reproducibility; test the generated Windows installer; build and boot-test the release container architectures; publish attestations, containers, artifacts, and the GitHub Release only after all gates pass. | Do not trigger generic CI or the source-render matrix merely because a tag was pushed. Do not build the same release candidates in both CI and Release. |
+| Release tag `v*.*.*` | Run a release preflight that proves the tag is on main history, every platform version and the release notes agree, and the exact tagged commit has green `CI / required` provenance. | Build the final archives once; validate checksums, payload contracts, launcher modes, native Linux startup, and reproducibility; test the generated Windows installer; build and boot-test both release container architectures; publish attestations, containers, artifacts, and the GitHub Release only after all gates pass. | Generic CI does not trigger for tags, and Release does not repeat the source-render or generic repository matrix. |
 | Manual dispatch | Always identify the selected commit and report which classifier outputs and gates were requested. | Permit focused diagnostics or an explicit full audit. | A manual run does not replace a required PR result unless it tests the exact required commit/tree and repository policy explicitly accepts its stable aggregate context. |
 
 Keep the required PR workflow itself free of workflow-level paths filters. The classifier, fast layer, and aggregate must start for every PR; apply path conditions to jobs or reusable calls. Otherwise an intentionally unmatched workflow may never create its required check and can leave branch protection pending.
@@ -73,7 +83,7 @@ The path notation below is descriptive shorthand; expand it explicitly in the cl
 | --- | --- | --- |
 | Fast PR layer | Every PR, including Markdown- and AGENTS.md-only changes. | Repository privacy/hygiene and JSON checks; branding, platform-copy, Unraid, and GUI synchronization contracts; docs validation and relative links; shell, JavaScript, Python, JSON/YAML, and PowerShell syntax; Manager accessibility; plus cheap unit checks applicable to the changed files. This layer must remain fast and must not build release archives, installers, or container images. |
 | PowerShell/runtime | Maintained platforms/**/*.ps1 runtime or setup code; PowerShell validators/tests and their fixtures; templates or configuration contracts consumed by that code. | Parse under the maintained Windows PowerShell and PowerShell 7 engines and run the relevant cross-platform runtime/unit suites. Exclude the full newsletter render gate unless the render class also matches. |
-| Full renderer | Any maintained TautWeekly.ps1; renderer-loaded SMTP, operation-lock, deleted-item-cache, or cache-diagnostic runtime; newsletter templates or local email assets; renderer fixture/assertion helpers; render, recipient-isolation, library/user-selection, cache, MIME/SMTP, or presentation tests; or packaging logic that can change which renderer/runtime/template/asset bytes enter an artifact. | Run the complete active-week and quiet-week render matrix on the maintained Windows and container engines, together with the privacy/isolation assertions. A guide, license, or other package-only text input does not select this gate merely because it is included in an archive. |
+| Full renderer | Any maintained `TautWeekly.ps1`; renderer-loaded SMTP, operation-lock, deleted-item-cache, or cache-diagnostic runtime; newsletter templates or local email assets; renderer fixture/assertion helpers; render, recipient-isolation, library/user-selection, cache, MIME/SMTP, or presentation tests; or packaging logic that can change which renderer/runtime/template/asset bytes enter an artifact. | Run the complete active-week and quiet-week matrix once under Windows PowerShell across the maintained Windows and container payloads, plus the PowerShell 7 portability, cache, SMTP, and recipient-isolation assertions. A guide, license, or other package-only text input does not select this gate merely because it is included in an archive. |
 | Manager | manager/**, mirrored Manager or GUI-preview web assets, Manager Go tests, GUI synchronization, accessibility, update-indicator/header/preview tests, or Manager cross-build logic. | Run Go test/vet, embedded JavaScript checks, GUI parity/accessibility tests, and maintained-target cross-builds. Avoid repeating the same cross-build on both runner operating systems unless the OS itself is under test. |
 | Release package | platforms/** files copied into a release; manager/**; installer/**; the five packaged platform README files; LICENSE; THIRD_PARTY_NOTICES.md; release builder, artifact-contract, reproducibility, native-Linux-package, archive-mode, or checksum logic. | Build candidates once, then test exact manifests/payload contracts, archive integrity and executable modes, checksums, native Linux startup, and reproducibility. Upload a short-lived candidate only when a downstream selected gate needs it. |
 | Windows installer | installer/**; any Windows release-payload input; Manager Windows binary/resource inputs; installer build/test logic. | Consume the selected package candidate and test isolated install, upgrade, icon/identity, rollback where applicable, and uninstall. Do not run for packages that cannot change the Windows payload or installer. |
@@ -89,6 +99,18 @@ Keep path classification conservative around shared inputs. In particular, the c
 - Run the aggregate with if: always() and make it depend on the classifier, fast layer, and every conditional gate. It must succeed only when the classifier and fast layer succeeded and every selected gate succeeded. A conditional gate may be skipped only when the classifier explicitly marked it unnecessary; cancellation, failure, or a missing selected result fails the aggregate.
 - Keep job/check names stable or migrate repository protection atomically with a workflow rename. Validate the skipped-job cases on a docs-only PR and the selected-job cases on representative PowerShell, renderer, package, installer, and container changes before making the aggregate required.
 - Use concurrency cancellation keyed to the PR number for superseded PR runs, but never let a cancelled latest run satisfy the aggregate. Reuse successful outputs and artifacts within the same SHA/tree instead of rebuilding them in downstream jobs.
+
+### Workflow implementation map
+
+| Responsibility | Implementation |
+| --- | --- |
+| Event authority and merge provenance | `.github/workflows/ci.yml` jobs `provenance` and `classify` |
+| Conservative path classification | `scripts/ci_classifier.py`; unknown executable, build, workflow, or test inputs fail closed |
+| Classifier regression coverage | `scripts/test_ci_classifier.py` positive and negative fixtures |
+| Stable protection context | `CI / required`, produced by the `required` job with `if: always()` |
+| PR container validation and main edge publication | Reusable `.github/workflows/container.yml`, called in validation-only or publication-only mode |
+| Pages publication | Reusable `.github/workflows/pages.yml`, called only after `CI / required` succeeds on main |
+| Tagged publication | `.github/workflows/release.yml` preflight, single candidate build, installer lifecycle, multiarch container publication, and final release job |
 
 ## Local asset optimization before deployment
 

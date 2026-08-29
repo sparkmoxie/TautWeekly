@@ -1,144 +1,281 @@
 name: CI
 
 on:
-  push:
   pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: Validation scope for this diagnostic run.
+        required: true
+        default: auto
+        type: choice
+        options: [auto, fast, full]
 
 permissions:
+  actions: read
+  checks: read
   contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  repository-validation:
-    name: Repository, shell, JSON, and Compose
+  provenance:
+    name: Event and merge provenance
     runs-on: ubuntu-latest
+    outputs:
+      full_validation: ${{ steps.provenance.outputs.full_validation }}
+      trusted_merge: ${{ steps.provenance.outputs.trusted_merge }}
+    steps:
+      - name: Identify validation authority
+        id: provenance
+        uses: actions/github-script@v8
+        with:
+          script: |
+            if (context.eventName !== 'push' || context.ref !== 'refs/heads/main') {
+              core.setOutput('trusted_merge', 'false');
+              core.setOutput('full_validation', 'true');
+              await core.summary.addHeading('CI event provenance')
+                .addRaw(`${context.eventName} runs validate their selected change classes directly.`).write();
+              return;
+            }
+            const { owner, repo } = context.repo;
+            const sha = context.sha;
+            const associated = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner, repo, commit_sha: sha,
+            });
+            const pull = associated.data.find(candidate =>
+              candidate.merged_at &&
+              candidate.base.ref === context.payload.repository.default_branch &&
+              candidate.merge_commit_sha === sha
+            );
+            let trusted = false;
+            let reason = 'no merged pull request owns this exact main commit';
+            if (pull) {
+              const commit = await github.rest.repos.getCommit({ owner, repo, ref: sha });
+              const firstParent = commit.data.parents[0]?.sha;
+              const runs = await github.rest.actions.listWorkflowRunsForRepo({
+                owner, repo, event: 'pull_request', head_sha: pull.head.sha,
+                status: 'completed', per_page: 50,
+              });
+              const artifactName =
+                `ci-provenance-pr-${pull.number}-base-${firstParent}-head-${pull.head.sha}`;
+              let matchingRun;
+              if (pull.base.sha === firstParent) {
+                const candidates = runs.data.workflow_runs.filter(run =>
+                  run.name === 'CI' &&
+                  run.conclusion === 'success' &&
+                  run.head_branch === pull.head.ref &&
+                  run.head_sha === pull.head.sha &&
+                  run.head_repository?.full_name === pull.head.repo.full_name
+                );
+                for (const run of candidates) {
+                  const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                    owner, repo, run_id: run.id, per_page: 100,
+                  });
+                  if (artifacts.data.artifacts.some(artifact =>
+                    artifact.name === artifactName && !artifact.expired
+                  )) {
+                    matchingRun = run;
+                    break;
+                  }
+                }
+              }
+              if (!matchingRun) {
+                reason = pull.base.sha === firstParent
+                  ? 'no successful PR run has exact base/head provenance for this merge'
+                  : 'the merged pull-request base does not match the merge first parent';
+              } else {
+                const checks = await github.rest.checks.listForRef({
+                  owner, repo, ref: pull.head.sha, check_name: 'required',
+                  filter: 'latest', per_page: 100,
+                });
+                trusted = checks.data.check_runs.some(check =>
+                  check.conclusion === 'success' &&
+                  check.details_url?.includes(`/actions/runs/${matchingRun.id}/`)
+                );
+                reason = trusted
+                  ? `PR #${pull.number} has a successful CI / required check for the tested merge tree`
+                  : `PR #${pull.number} lacks a successful CI / required check on the matching run`;
+              }
+            }
+            core.setOutput('trusted_merge', trusted ? 'true' : 'false');
+            core.setOutput('full_validation', trusted ? 'false' : 'true');
+            await core.summary.addHeading('CI event provenance')
+              .addRaw(`${trusted ? 'Trusted merge' : 'Fail-closed main validation'}: ${reason}.`).write();
+
+  classify:
+    name: Change classifier
+    runs-on: ubuntu-latest
+    needs: provenance
+    outputs:
+      powershell: ${{ steps.changes.outputs.powershell }}
+      renderer: ${{ steps.changes.outputs.renderer }}
+      manager: ${{ steps.changes.outputs.manager }}
+      package: ${{ steps.changes.outputs.package }}
+      installer: ${{ steps.changes.outputs.installer }}
+      compose: ${{ steps.changes.outputs.compose }}
+      container: ${{ steps.changes.outputs.container }}
+      container_arm64: ${{ steps.changes.outputs.container_arm64 }}
+      pages: ${{ steps.changes.outputs.pages }}
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
         with:
-          go-version-file: manager/go.mod
-          cache-dependency-path: manager/go.mod
-      - name: Validate repository hygiene and JSON
+          fetch-depth: 0
+      - name: Classify changed paths
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+          HEAD_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_SCOPE: ${{ inputs.scope || 'auto' }}
+        run: |
+          base_sha="$BASE_SHA"
+          if test "$EVENT_NAME" = workflow_dispatch && test "$REQUESTED_SCOPE" = auto; then
+            base_sha="$(git rev-parse "${HEAD_SHA}^")"
+          fi
+          python3 scripts/ci_classifier.py \
+            --base "$base_sha" --head "$HEAD_SHA" --scope "$REQUESTED_SCOPE"
+
+  fast:
+    name: Fast repository contracts
+    runs-on: ubuntu-latest
+    needs: [provenance, classify]
+    if: needs.provenance.outputs.full_validation == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate repository hygiene, synchronization, and JSON
         shell: pwsh
         run: |
           ./scripts/validate-repository.ps1
           ./scripts/validate-branding.ps1
           ./scripts/validate-unraid-template.ps1
           ./scripts/validate-platforms.ps1
-      - name: Validate relative links
+      - name: Validate documentation and relative links
         shell: pwsh
-        run: ./scripts/check-links.ps1
-      - name: Validate documentation features and JavaScript
         run: |
-          pwsh ./scripts/validate-docs.ps1
+          ./scripts/check-links.ps1
+          ./scripts/validate-docs.ps1
+      - name: Validate JavaScript and Manager accessibility
+        run: |
           node --check docs/assets/site.js
           node --check docs/gui-preview/mock-api.js
           node --check docs/gui-preview/rich-preview.js
           node --check docs/gui-preview/update-ui.js
           node --check docs/gui-preview/app.js
+          node --check manager/internal/manager/web/update-ui.js
+          node --check manager/internal/manager/web/app.js
           node --check scripts/test-recipient-watched-visuals.mjs
           node scripts/test-gui-preview-personal-stats.mjs
           node scripts/test-manager-update-indicator.mjs
           node scripts/test-manager-header-refresh.mjs
           node scripts/test-manager-preview-refresh.mjs
           node scripts/test-manager-cache-verification.mjs
-      - name: Validate shell scripts
-        run: ./scripts/validate-shell.sh
-      - name: Test container health behavior
-        run: ./scripts/test-container-health.sh
-      - name: Test unified container profile selection
-        run: ./scripts/test-container-profiles.sh
-      - name: Test cross-platform command routing
-        run: ./scripts/test-platform-command-routing.sh
-      - name: Test bundled email assets and persistent refresh
+          python3 scripts/test-manager-accessibility.py
+      - name: Validate shell, PowerShell 7, and workflow syntax
         run: |
+          ./scripts/validate-shell.sh
+          pwsh ./scripts/validate-powershell.ps1
+          ruby -e "require 'yaml'; Dir['.github/workflows/*.{yml,yaml}'].each { |file| YAML.parse_file(file) }"
+      - name: Test fast runtime contracts and CI classifier fixtures
+        run: |
+          ./scripts/test-container-health.sh
+          ./scripts/test-container-profiles.sh
+          ./scripts/test-platform-command-routing.sh
+          ./scripts/test-update-management.sh
           python3 -B scripts/optimize-email-gifs.py --check
           python3 -B scripts/test-asset-refresh.py
-      - name: Test update detection and application guards
-        run: |
-          ./scripts/test-update-management.sh
-          pwsh ./scripts/test-update-checks.ps1
-      - name: Test scheduler timezone behavior
-        shell: pwsh
-        run: ./scripts/test-scheduler-timezone.ps1
-      - name: Test renderer collection and poster-probe behavior on Unix
-        shell: pwsh
-        run: ./scripts/test-renderer-collections.ps1
-      - name: Test recipient-specific movie watched markers on PowerShell 7
-        shell: pwsh
-        run: ./scripts/test-recipient-watched-movies.ps1
-      - name: Test bounded deleted-item cache on PowerShell 7
-        shell: pwsh
-        run: |
-          ./scripts/test-deleted-item-cache.ps1
-          ./scripts/test-cache-diagnostics.ps1
-      - name: Test rolling configuration-backup retention on PowerShell 7
-        shell: pwsh
-        run: ./scripts/test-config-backup-retention.ps1
-      - name: Test production recipient policy on PowerShell 7
-        shell: pwsh
-        run: ./scripts/test-sendall-recipient-policy.ps1 -PythonPath python3
-      - name: Test SMTP authentication protocol on PowerShell 7
-        run: python3 scripts/test-smtp-transport.py --helper platforms/nas-docker/app/Smtp-Transport.ps1
-      - name: Validate NAS Compose configuration
-        run: |
-          docker compose -f platforms/nas-docker/compose.yaml config --quiet
-          docker compose -f platforms/nas-docker/compose.qnap.yaml config --quiet
-      - name: Validate macOS Compose configuration
-        run: |
-          docker compose -f platforms/mac-docker/compose.yaml config --quiet
-          docker compose -f platforms/mac-docker/compose.registry.yaml config --quiet
-      - name: Build and boot-test the macOS Docker image
-        run: ./scripts/test-container-image.sh tautweekly-mac-ci platforms/mac-docker mac
+          python3 -B scripts/test_ci_classifier.py
 
-  powershell-syntax:
-    name: PowerShell syntax
+  fast-windows-powershell:
+    name: Fast Windows PowerShell syntax
     runs-on: windows-latest
+    needs: [provenance, classify]
+    if: needs.provenance.outputs.full_validation == 'true'
     steps:
       - uses: actions/checkout@v6
-      - name: Parse all PowerShell source
+      - name: Parse all PowerShell source with Windows PowerShell
         shell: powershell
         run: .\scripts\validate-powershell.ps1
-      - name: Test adaptive renderer collection edges
-        shell: powershell
-        run: .\scripts\test-renderer-collections.ps1
-      - name: Test recipient-specific movie watched markers on Windows PowerShell
-        shell: powershell
-        run: .\scripts\test-recipient-watched-movies.ps1
-      - name: Test bounded deleted-item cache on Windows PowerShell
+
+  powershell-runtime-unix:
+    name: PowerShell runtime (PowerShell 7)
+    runs-on: ubuntu-latest
+    needs: [provenance, classify]
+    if: needs.provenance.outputs.full_validation == 'true' && needs.classify.outputs.powershell == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test configuration, scheduling, and update runtime behavior
+        shell: pwsh
+        run: |
+          ./scripts/test-config-backup-retention.ps1
+          ./scripts/test-scheduler-timezone.ps1
+          ./scripts/test-update-checks.ps1
+
+  powershell-runtime-windows:
+    name: PowerShell runtime (Windows PowerShell)
+    runs-on: windows-latest
+    needs: [provenance, classify]
+    if: needs.provenance.outputs.full_validation == 'true' && needs.classify.outputs.powershell == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test configuration, scheduling, and update runtime behavior
         shell: powershell
         run: |
+          .\scripts\test-config-backup-retention.ps1
+          .\scripts\test-scheduler-timezone.ps1
+          .\scripts\test-update-checks.ps1
+
+  renderer-unix:
+    name: Renderer privacy and portability (PowerShell 7)
+    runs-on: ubuntu-latest
+    needs: [provenance, classify]
+    if: needs.provenance.outputs.full_validation == 'true' && needs.classify.outputs.renderer == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test cross-platform renderer, cache, recipient, and SMTP contracts
+        shell: pwsh
+        run: |
+          ./scripts/test-renderer-collections.ps1
+          ./scripts/test-recipient-watched-movies.ps1
+          ./scripts/test-deleted-item-cache.ps1
+          ./scripts/test-cache-diagnostics.ps1
+          ./scripts/test-sendall-recipient-policy.ps1 -PythonPath python3
+      - name: Test SMTP authentication protocol on PowerShell 7
+        run: python3 scripts/test-smtp-transport.py --helper platforms/nas-docker/app/Smtp-Transport.ps1
+
+  renderer-windows:
+    name: Full active/quiet renderer and privacy matrix
+    runs-on: windows-latest
+    needs: [provenance, classify]
+    if: needs.provenance.outputs.full_validation == 'true' && needs.classify.outputs.renderer == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test renderer behavior and recipient isolation
+        shell: powershell
+        run: |
+          .\scripts\test-renderer-collections.ps1
+          .\scripts\test-recipient-watched-movies.ps1
           .\scripts\test-deleted-item-cache.ps1
           .\scripts\test-cache-diagnostics.ps1
-      - name: Test rolling configuration-backup retention on Windows PowerShell
-        shell: powershell
-        run: .\scripts\test-config-backup-retention.ps1
-      - name: Test user-exclusion selection
-        shell: powershell
-        run: .\scripts\test-user-exclusions.ps1
-      - name: Test Binge Champion privacy and ranking
-        shell: powershell
-        run: .\scripts\test-binge-champion.ps1
-      - name: Test Top Movie Genre aggregation, assets, and footer matrix
-        shell: powershell
-        run: .\scripts\test-top-movie-genre.ps1
-      - name: Test global library selection and renderer scope
-        shell: powershell
-        run: .\scripts\test-library-selection.ps1
-      - name: Test Windows stable update process and rollback behavior
-        shell: powershell
-        run: .\scripts\test-update-checks.ps1
-      - name: Test full active-week and quiet-week rendering
-        shell: powershell
-        run: .\scripts\test-newsletter-integration.ps1
-      - name: Test production recipient policy and zero-delivery evidence
-        shell: powershell
-        run: .\scripts\test-sendall-recipient-policy.ps1
+          .\scripts\test-user-exclusions.ps1
+          .\scripts\test-binge-champion.ps1
+          .\scripts\test-top-movie-genre.ps1
+          .\scripts\test-library-selection.ps1
+          .\scripts\test-newsletter-integration.ps1
+          .\scripts\test-sendall-recipient-policy.ps1
       - name: Test SMTP authentication protocol on Windows PowerShell
         run: python scripts/test-smtp-transport.py --helper platforms/windows/Smtp-Transport.ps1
 
-  manager-tests:
-    name: Local Manager (${{ matrix.os }})
+  manager:
+    name: Manager (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    needs: [provenance, classify]
+    if: needs.provenance.outputs.full_validation == 'true' && needs.classify.outputs.manager == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -148,35 +285,22 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: manager/go.mod
-          cache-dependency-path: |
-            manager/go.mod
-            installer/go.mod
+          cache-dependency-path: manager/go.mod
       - name: Test and vet the Manager
         working-directory: manager
         run: |
           go test ./...
           go vet ./...
-      - name: Test and vet the Windows installer
-        working-directory: installer
-        run: |
-          go test ./...
-          go test -tags uninstaller ./...
-          go vet ./...
-          go vet -tags uninstaller ./...
-      - name: Cross-build the Manager for maintained targets
+      - name: Cross-build maintained Manager targets once
+        if: matrix.os == 'ubuntu-latest'
         shell: pwsh
         run: ./scripts/test-manager-cross-builds.ps1
-      - name: Validate embedded Manager JavaScript
-        run: |
-          node --check manager/internal/manager/web/update-ui.js
-          node --check manager/internal/manager/web/app.js
-      - name: Validate Manager accessibility structure
-        run: python scripts/test-manager-accessibility.py
 
-  release-archives:
-    name: Reproducible release archives
+  package:
+    name: Release package, checksums, and reproducibility
     runs-on: ubuntu-latest
-    needs: [repository-validation, powershell-syntax, manager-tests]
+    needs: [provenance, classify]
+    if: needs.provenance.outputs.full_validation == 'true' && needs.classify.outputs.package == 'true'
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -188,7 +312,7 @@ jobs:
       - name: Build archives and SHA-256 checksums
         shell: pwsh
         run: ./scripts/build-releases.ps1 -Version ci
-      - name: Test packaged runtime contracts and checksums
+      - name: Test package contracts and checksums
         shell: pwsh
         run: ./scripts/test-release-artifacts.ps1
       - name: Boot-test the packaged native Linux Manager
@@ -196,12 +320,10 @@ jobs:
       - name: Verify release archive reproducibility
         shell: pwsh
         run: ./scripts/test-release-reproducibility.ps1 -Version ci
-      - name: Test ZIP archives
-        run: for file in dist/*.zip; do unzip -t "$file"; done
-      - name: Test TAR.GZ archives
-        run: for file in dist/*.tar.gz; do tar -tzf "$file" >/dev/null; done
-      - name: Test launcher permissions
+      - name: Test archive integrity and launcher modes
         run: |
+          for file in dist/*.zip; do unzip -t "$file"; done
+          for file in dist/*.tar.gz; do tar -tzf "$file" >/dev/null; done
           test -x platforms/nas-docker/tautweekly.sh
           test -x platforms/nas-docker/app/bin/run-as-user.sh
           test -x platforms/nas-docker/app/bin/runtime-profile.sh
@@ -242,7 +364,7 @@ jobs:
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/app/bin/run-as-user.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/app/bin/runtime-profile.sh | grep -q '^-rwx'
           tar -tvzf dist/TautWeekly-freebsd-podman.tar.gz TautWeekly-freebsd-podman/app/bin/run-script.sh | grep -q '^-rwx'
-      - name: Upload release candidates
+      - name: Upload release candidates for the installer gate
         uses: actions/upload-artifact@v4
         with:
           name: tautweekly-release-candidates
@@ -250,16 +372,166 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  windows-installer:
-    name: Windows one-click installer lifecycle
+  installer:
+    name: Windows installer lifecycle
     runs-on: windows-latest
-    needs: release-archives
+    needs: [provenance, classify, package]
+    if: needs.provenance.outputs.full_validation == 'true' && needs.classify.outputs.installer == 'true'
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: installer/go.mod
+          cache-dependency-path: installer/go.mod
+      - name: Test and vet installer sources
+        working-directory: installer
+        run: |
+          go test ./...
+          go test -tags uninstaller ./...
+          go vet ./...
+          go vet -tags uninstaller ./...
       - uses: actions/download-artifact@v4
         with:
           name: tautweekly-release-candidates
           path: dist
-      - name: Test isolated install, upgrade, icon, and uninstall lifecycle
+      - name: Test isolated install, upgrade, icon, rollback, and uninstall
         shell: powershell
         run: .\scripts\test-windows-installer.ps1
+
+  compose:
+    name: Compose and runtime-profile configuration
+    runs-on: ubuntu-latest
+    needs: [provenance, classify]
+    if: needs.provenance.outputs.full_validation == 'true' && needs.classify.outputs.compose == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate Compose variants and profile refusal behavior
+        run: |
+          docker compose -f platforms/nas-docker/compose.yaml config --quiet
+          docker compose -f platforms/nas-docker/compose.qnap.yaml config --quiet
+          docker compose -f platforms/mac-docker/compose.yaml config --quiet
+          docker compose -f platforms/mac-docker/compose.registry.yaml config --quiet
+          ./scripts/test-container-profiles.sh
+
+  container-validation:
+    name: Container image validation
+    needs: [provenance, classify]
+    if: needs.provenance.outputs.full_validation == 'true' && needs.classify.outputs.container == 'true'
+    uses: ./.github/workflows/container.yml
+    with:
+      publish_mode: none
+      smoke_test: true
+      test_arm64: ${{ needs.classify.outputs.container_arm64 == 'true' }}
+    permissions:
+      contents: read
+
+  required:
+    name: required
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - provenance
+      - classify
+      - fast
+      - fast-windows-powershell
+      - powershell-runtime-unix
+      - powershell-runtime-windows
+      - renderer-unix
+      - renderer-windows
+      - manager
+      - package
+      - installer
+      - compose
+      - container-validation
+    steps:
+      - name: Require every selected gate
+        env:
+          FULL_VALIDATION: ${{ needs.provenance.outputs.full_validation }}
+          PROVENANCE_RESULT: ${{ needs.provenance.result }}
+          CLASSIFY_RESULT: ${{ needs.classify.result }}
+          FAST_RESULT: ${{ needs.fast.result }}
+          FAST_WINDOWS_RESULT: ${{ needs.fast-windows-powershell.result }}
+          POWERSHELL_SELECTED: ${{ needs.classify.outputs.powershell }}
+          POWERSHELL_UNIX_RESULT: ${{ needs.powershell-runtime-unix.result }}
+          POWERSHELL_WINDOWS_RESULT: ${{ needs.powershell-runtime-windows.result }}
+          RENDERER_SELECTED: ${{ needs.classify.outputs.renderer }}
+          RENDERER_UNIX_RESULT: ${{ needs.renderer-unix.result }}
+          RENDERER_WINDOWS_RESULT: ${{ needs.renderer-windows.result }}
+          MANAGER_SELECTED: ${{ needs.classify.outputs.manager }}
+          MANAGER_RESULT: ${{ needs.manager.result }}
+          PACKAGE_SELECTED: ${{ needs.classify.outputs.package }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+          INSTALLER_SELECTED: ${{ needs.classify.outputs.installer }}
+          INSTALLER_RESULT: ${{ needs.installer.result }}
+          COMPOSE_SELECTED: ${{ needs.classify.outputs.compose }}
+          COMPOSE_RESULT: ${{ needs.compose.result }}
+          CONTAINER_SELECTED: ${{ needs.classify.outputs.container }}
+          CONTAINER_RESULT: ${{ needs.container-validation.result }}
+        run: |
+          test "$PROVENANCE_RESULT" = success
+          test "$CLASSIFY_RESULT" = success
+          if test "$FULL_VALIDATION" = true; then
+            test "$FAST_RESULT" = success
+            test "$FAST_WINDOWS_RESULT" = success
+          fi
+          require_selected() {
+            selected="$1"; result="$2"; gate="$3"
+            if test "$FULL_VALIDATION" = true && test "$selected" = true && test "$result" != success; then
+              echo "Selected gate failed or did not run: $gate ($result)" >&2
+              exit 1
+            fi
+          }
+          require_selected "$POWERSHELL_SELECTED" "$POWERSHELL_UNIX_RESULT" powershell-unix
+          require_selected "$POWERSHELL_SELECTED" "$POWERSHELL_WINDOWS_RESULT" powershell-windows
+          require_selected "$RENDERER_SELECTED" "$RENDERER_UNIX_RESULT" renderer-unix
+          require_selected "$RENDERER_SELECTED" "$RENDERER_WINDOWS_RESULT" renderer-windows
+          require_selected "$MANAGER_SELECTED" "$MANAGER_RESULT" manager
+          require_selected "$PACKAGE_SELECTED" "$PACKAGE_RESULT" package
+          require_selected "$INSTALLER_SELECTED" "$INSTALLER_RESULT" installer
+          require_selected "$COMPOSE_SELECTED" "$COMPOSE_RESULT" compose
+          require_selected "$CONTAINER_SELECTED" "$CONTAINER_RESULT" container
+      - name: Materialize exact PR base/head provenance
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          printf 'pull_request=%s\nbase_sha=%s\nhead_sha=%s\n' \
+            "$PR_NUMBER" "$BASE_SHA" "$HEAD_SHA" > ci-provenance.txt
+      - name: Record exact PR base/head provenance
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-provenance-pr-${{ github.event.pull_request.number }}-base-${{ github.event.pull_request.base.sha }}-head-${{ github.event.pull_request.head.sha }}
+          path: ci-provenance.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-edge-container:
+    name: Publish verified edge container
+    needs: [provenance, classify, required]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.classify.outputs.container == 'true'
+    uses: ./.github/workflows/container.yml
+    with:
+      publish_mode: edge
+      smoke_test: false
+      test_arm64: false
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+  deploy-pages:
+    name: Deploy verified Pages
+    needs: [provenance, classify, required]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.classify.outputs.pages == 'true'
+    uses: ./.github/workflows/pages.yml
+    with:
+      validate: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
