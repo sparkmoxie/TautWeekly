@@ -146,6 +146,19 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertRegex(on_block, r"(?m)^  workflow_call:")
         self.assertNotIn("\n    permissions:", self.container)
 
+    def test_main_publications_run_after_successful_aggregate_with_skipped_gates(self):
+        publish = self.ci.split("\n  publish-edge-container:", 1)[1].split(
+            "\n  deploy-pages:", 1
+        )[0]
+        pages = self.ci.split("\n  deploy-pages:", 1)[1]
+        for block, selected in ((publish, "container"), (pages, "pages")):
+            self.assertIn("if: always() &&", block)
+            self.assertIn("needs.required.result == 'success'", block)
+            self.assertIn(
+                f"needs.classify.outputs.{selected} == 'true'",
+                block,
+            )
+
     def test_release_is_tag_only_and_requires_green_exact_commit(self):
         on_block = self.release.split("\npermissions:", 1)[0]
         self.assertIn("      - 'v*.*.*'", on_block)
