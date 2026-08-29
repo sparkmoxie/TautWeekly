@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -61,6 +62,8 @@ func run(args []string) error {
 			return errors.New("the internal remote-access helper does not accept arguments")
 		}
 		return manager.RunLinuxRemoteAccessHelper(os.Stdin, os.Stdout)
+	case "remote-access-cleanup":
+		return cleanupRemoteAccess(args)
 	case "status":
 		return printStatus(args)
 	case "shutdown":
@@ -69,7 +72,7 @@ func run(args []string) error {
 		fmt.Printf("TautWeekly Manager %s\n", version)
 		return nil
 	default:
-		return fmt.Errorf("unknown command %q; use serve, open, access-reset, access-bootstrap, access-recover, status, shutdown, or version", command)
+		return fmt.Errorf("unknown command %q; use serve, open, access-reset, access-bootstrap, access-recover, remote-access-cleanup, status, shutdown, or version", command)
 	}
 }
 
@@ -220,6 +223,24 @@ func serve(args []string) error {
 				})
 				return trayHealthFromOverall(snapshot.Overall)
 			},
+			RemoteStatus: func(ctx context.Context) string {
+				status := server.RemoteAccessStatus(ctx)
+				if status.NetworkKind != "public-funnel" {
+					return ""
+				}
+				switch status.State {
+				case "active":
+					return "Funnel active"
+				case "starting":
+					return "Funnel starting"
+				case "stopping":
+					return "Funnel stopping"
+				case "inactive", "manager-password-required":
+					return "Funnel inactive"
+				default:
+					return "Funnel needs attention"
+				}
+			},
 			Open: func() {
 				if err := openLocalBrowser(startURL); err != nil {
 					log.Printf("WARNING: the local browser could not be opened from the notification area: %v", err)
@@ -320,13 +341,54 @@ func resetAccess(args []string) error {
 	}
 	flags := flag.NewFlagSet("access-reset", flag.ContinueOnError)
 	dataDir := flags.String("data-dir", filepath.Join(root, ".manager-data"), "private manager state directory")
+	rootDir := flags.String("tautweekly-root", root, "TautWeekly package directory")
+	listen := flags.String("listen", "127.0.0.1:8788", "loopback address for the local manager")
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if err := requireLoopback(*listen); err != nil {
+		return err
+	}
+	if err := manager.CleanupPublicRemoteAccess(context.Background(), manager.Options{
+		DataDir: *dataDir, TautWeeklyRoot: *rootDir, ListenAddress: *listen, RuntimeMode: runtimeModeWindows,
+	}); err != nil {
+		return errors.New("the Manager password lock stayed enabled because public Funnel shutdown could not be verified")
 	}
 	if err := manager.ResetLocalAccess(*dataDir); err != nil {
 		return err
 	}
 	fmt.Println("The optional local Manager password lock is disabled. TautWeekly configuration and runtime data were not changed.")
+	return nil
+}
+
+func cleanupRemoteAccess(args []string) error {
+	if runtime.GOOS != "windows" {
+		return errors.New("public Funnel cleanup is available only in the Windows Manager")
+	}
+	root, err := defaultTautWeeklyRoot()
+	if err != nil {
+		return err
+	}
+	flags := flag.NewFlagSet("remote-access-cleanup", flag.ContinueOnError)
+	dataDir := flags.String("data-dir", filepath.Join(root, ".manager-data"), "private manager state directory")
+	rootDir := flags.String("tautweekly-root", root, "TautWeekly package directory")
+	listen := flags.String("listen", "127.0.0.1:8788", "loopback address for the local manager")
+	confirm := flags.Bool("confirm", false, "confirm disabling only the TautWeekly-owned Funnel")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if !*confirm {
+		return errors.New("public Funnel cleanup requires --confirm")
+	}
+	if err := requireLoopback(*listen); err != nil {
+		return err
+	}
+	if err := manager.CleanupPublicRemoteAccess(context.Background(), manager.Options{
+		DataDir: *dataDir, TautWeeklyRoot: *rootDir, ListenAddress: *listen, RuntimeMode: runtimeModeWindows,
+	}); err != nil {
+		return errors.New("the TautWeekly-owned Funnel could not be disabled and verified")
+	}
+	fmt.Println("The TautWeekly-owned public Funnel is inactive. No Tailscale account, device, or unrelated route was changed.")
 	return nil
 }
 

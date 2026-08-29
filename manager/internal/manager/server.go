@@ -74,6 +74,13 @@ type Server struct {
 	bootstrapToken      string
 }
 
+// RemoteAccessStatus returns the same sanitized state exposed to the dashboard.
+// The Windows notification-area integration uses it without invoking Tailscale
+// or exposing a hostname, route, or control-plane detail.
+func (s *Server) RemoteAccessStatus(ctx context.Context) TailscaleRemoteAccessStatus {
+	return s.remoteAccessStatus(ctx)
+}
+
 type authRequest struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`
@@ -359,7 +366,7 @@ func (s *Server) allowedHost(value string) bool {
 	if ip != nil {
 		return ip.IsLoopback() || isContainerRuntimeMode(s.capabilities.RuntimeMode)
 	}
-	if s.remoteAccess.AllowsHost(host) {
+	if s.remoteHostAllowed(host) {
 		return true
 	}
 	if !isManagedServiceRuntimeMode(s.capabilities.RuntimeMode) {
@@ -419,7 +426,7 @@ func (s *Server) originRejectionCode(r *http.Request) string {
 	if !ok {
 		return "invalid-origin"
 	}
-	remoteHost := s.remoteAccess.AllowsHost(hostProbe.host)
+	remoteHost := s.remoteHostAllowed(hostProbe.host)
 	remoteHTTPS := remoteHost && hostProbe.port == "443"
 	if remoteHost && !remoteHTTPS {
 		return "remote-http"
@@ -578,7 +585,8 @@ func (s *Server) handleAccessPassword(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "invalid-request", "Manager access request is invalid.")
 		return
 	}
-	if err := s.auth.setPasswordLock(request.Password); err != nil {
+	current, _ := r.Context().Value(sessionContextKey).(session)
+	if err := s.auth.setPasswordLockForSession(request.Password, current.Token); err != nil {
 		writeAPIError(w, http.StatusUnprocessableEntity, "password-invalid", err.Error())
 		return
 	}
@@ -586,7 +594,15 @@ func (s *Server) handleAccessPassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.accessResponse())
 }
 
-func (s *Server) handleAccessDisable(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleAccessDisable(w http.ResponseWriter, r *http.Request) {
+	// Password disable may first require the same explicit Windows approval and
+	// exact Funnel verification as the remote-access controls.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(tailscaleResponseTimeout))
+	if err := cleanupPublicRemoteAccess(r.Context(), s.remoteAccess); err != nil {
+		s.recordDiagnostic("remote-access", "warning", "tailscale-password-disable-blocked")
+		writeAPIError(w, http.StatusConflict, "funnel-shutdown-required", "The password lock stayed enabled because TautWeekly could not verify that its public Funnel was off. Restore Tailscale, approve the shutdown, and try again.")
+		return
+	}
 	if err := s.auth.disablePasswordLock(); err != nil {
 		writeAPIError(w, http.StatusConflict, "password-required", err.Error())
 		return

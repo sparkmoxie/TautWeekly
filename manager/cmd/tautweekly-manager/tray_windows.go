@@ -180,6 +180,7 @@ type windowsManagerTray struct {
 	className      *uint16
 	taskbarMessage uint32
 	health         atomic.Uint32
+	remoteStatus   atomic.Value
 	lastOpen       atomic.Int64
 	stop           chan struct{}
 	done           chan struct{}
@@ -190,6 +191,7 @@ type windowsManagerTray struct {
 func startManagerTray(options trayOptions) (managerTray, error) {
 	tray := &windowsManagerTray{options: options, stop: make(chan struct{}), done: make(chan struct{})}
 	tray.health.Store(uint32(trayNeedsAttentionIndex))
+	tray.remoteStatus.Store("")
 	ready := make(chan error, 1)
 	go tray.run(ready)
 	if err := <-ready; err != nil {
@@ -300,7 +302,11 @@ func (t *windowsManagerTray) notificationData(flags uint32) trayNotifyIconData {
 		// unless NIF_SHOWTIP is explicitly retained on the icon.
 		data.Flags |= trayNIFShowTip
 	}
-	tip, _ := syscall.UTF16FromString(trayTooltip)
+	tipText := trayTooltip
+	if remote := t.currentRemoteStatus(); remote != "" {
+		tipText += " · " + remote
+	}
+	tip, _ := syscall.UTF16FromString(tipText)
 	copy(data.Tip[:], tip)
 	return data
 }
@@ -324,11 +330,21 @@ func (t *windowsManagerTray) updateStatus() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	health := t.options.Status(ctx)
+	remote := ""
+	if t.options.RemoteStatus != nil {
+		remote = t.options.RemoteStatus(ctx)
+	}
 	cancel()
 	t.setHealth(health)
+	t.remoteStatus.Store(remote)
 	if window := t.window.Load(); window != 0 {
 		trayPostMessage.Call(window, trayUpdateMessage, 0, 0)
 	}
+}
+
+func (t *windowsManagerTray) currentRemoteStatus() string {
+	value, _ := t.remoteStatus.Load().(string)
+	return value
 }
 
 func (t *windowsManagerTray) setHealth(health trayHealth) {
@@ -369,7 +385,11 @@ func (t *windowsManagerTray) showMenu() {
 		return
 	}
 	defer trayDestroyMenu.Call(menu)
-	statusLabel, _ := syscall.UTF16PtrFromString("Status: " + t.currentHealth().label() + " — Open Dashboard")
+	statusText := "Status: " + t.currentHealth().label()
+	if remote := t.currentRemoteStatus(); remote != "" {
+		statusText += " · " + remote
+	}
+	statusLabel, _ := syscall.UTF16PtrFromString(statusText + " — Open Dashboard")
 	exitLabel, _ := syscall.UTF16PtrFromString("Exit TautWeekly for Plex")
 	// Windows desaturates an hbmpItem on disabled menu rows. Keep the status row
 	// enabled so its health color remains truthful and make the whole native row

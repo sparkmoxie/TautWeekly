@@ -229,13 +229,13 @@
             reveal recipients and server activity. Weekly Binge Champion cards
             share only anonymous watch time plus nonzero unique movie/TV-show counts; the
             champion's identity and titles remain private.</p>
-          <p>Optional private Tailscale Serve is available on every package.
-            Windows and native Linux use narrow fixed helpers; host-managed
-            packages save only an exact private <code>.ts.net</code> address.
-            For optional mobile access, sign the phone or tablet into the same
-            tailnet with the Tailscale app before opening that address. Funnel
-            stays off, Manager authentication remains independent, and every
-            remote session has full administration.</p>
+          <p>Windows can optionally publish its password-protected, loopback
+            Manager through Tailscale Funnel. The login page becomes publicly
+            reachable over HTTPS, and remote viewers need no Tailscale or VPN
+            client. Other packages keep private Tailscale Serve: sign the
+            viewer into the authorized tailnet and keep Funnel off. Every
+            remote session has full administration, so Manager authentication
+            and local recovery remain independent boundaries.</p>
           <a class="button primary" href="SECURITY.md">Read the hardening guide</a>
         </div>
         <ul><li>Never commit live config or `.env`</li><li>Keep port 8787 private</li><li>Binge Champion identity stays private</li><li>Use application passwords</li><li>Rotate exposed credentials</li></ul>

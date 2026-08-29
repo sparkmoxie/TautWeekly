@@ -139,11 +139,15 @@ try {
         Assert-True (-not [bool]$setupState.pairingRequired) 'Fresh Windows Manager unexpectedly requires a pairing token.'
         Assert-True (-not (Test-Path -LiteralPath (Join-Path $dataRoot 'bootstrap-token.txt'))) 'Fresh Windows Manager wrote an obsolete pairing token.'
         $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-        Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/api/v1/auth/session" -WebSession $session -TimeoutSec 2 | Out-Null
+        $authSession = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/api/v1/auth/session" -WebSession $session -TimeoutSec 2
         $startupState = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/api/v1/startup" -WebSession $session -TimeoutSec 2
         Assert-True ([bool]$startupState.supported) 'Installed Windows Manager did not report sign-in startup capability.'
         $startupJson = $startupState | ConvertTo-Json -Compress
         Assert-True (-not $startupJson.Contains($installRoot) -and -not $startupJson.Contains($dataRoot)) 'Startup status leaked an application or private-data path.'
+        $authHeaders = @{ 'X-CSRF-Token' = [string]$authSession.csrfToken; Origin = "http://127.0.0.1:$port" }
+        Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/api/v1/auth/access/password" -Method Post -ContentType 'application/json' -Headers $authHeaders -WebSession $session -Body '{"password":"synthetic installer preservation password"}' -TimeoutSec 3 | Out-Null
+        Assert-True (Test-Path -LiteralPath (Join-Path $dataRoot 'auth.json') -PathType Leaf) 'Manager password setup did not create its private verifier.'
+        Assert-True ((Get-Content -LiteralPath (Join-Path $dataRoot 'auth-settings.json') -Raw).Contains('"passwordLockEnabled": true')) 'Manager password setup did not activate the Windows lock.'
         $shutdown = Start-Process `
             -FilePath $managerExecutable `
             -ArgumentList @('shutdown', "--listen=127.0.0.1:$port", "--tautweekly-root=$installRoot") `
@@ -165,6 +169,19 @@ try {
 
     [IO.File]::WriteAllText((Join-Path $installRoot 'config.json'), '{"private":"preserve"}', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $dataRoot 'access-state.json'), '{"session":"preserve"}', [Text.UTF8Encoding]::new($false))
+    $authHashBefore = (Get-FileHash -LiteralPath (Join-Path $dataRoot 'auth.json') -Algorithm SHA256).Hash
+    $authSettingsBefore = Get-Content -LiteralPath (Join-Path $dataRoot 'auth-settings.json') -Raw
+    $privateManagerFixtures = [ordered]@{
+        'operation-history.jsonl' = '{"schemaVersion":1,"id":"synthetic-history-preserve"}'
+        'schedule-operation.json' = '{"schemaVersion":1,"state":"synthetic-schedule-preserve"}'
+        'windows-funnel.json' = '{"schemaVersion":1,"enabled":true,"hostname":"manager.synthetic-fixture.ts.net"}'
+    }
+    foreach ($fixture in $privateManagerFixtures.GetEnumerator()) {
+        [IO.File]::WriteAllText((Join-Path $dataRoot $fixture.Key), $fixture.Value, [Text.UTF8Encoding]::new($false))
+    }
+    $previewRoot = Join-Path $installRoot 'output\previews'
+    New-Item -ItemType Directory -Path $previewRoot -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $previewRoot 'synthetic-preview.html'), '<!doctype html><title>Synthetic preserved preview</title>', [Text.UTF8Encoding]::new($false))
     $legacyData = Join-Path $installRoot '.manager-data'
     New-Item -ItemType Directory -Path $legacyData | Out-Null
     [IO.File]::WriteAllText((Join-Path $legacyData 'legacy-state.json'), '{"legacy":"migrate"}', [Text.UTF8Encoding]::new($false))
@@ -174,6 +191,12 @@ try {
     Invoke-TestInstaller -UseRecordedData
     Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'config.json') -Raw) -eq '{"private":"preserve"}') 'Upgrade replaced private config.json.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $dataRoot 'access-state.json') -Raw) -eq '{"session":"preserve"}') 'Upgrade replaced external Manager data.'
+    Assert-True ((Get-FileHash -LiteralPath (Join-Path $dataRoot 'auth.json') -Algorithm SHA256).Hash -eq $authHashBefore) 'Upgrade replaced the Manager password verifier.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $dataRoot 'auth-settings.json') -Raw) -eq $authSettingsBefore) 'Upgrade replaced the Manager password-lock setting.'
+    foreach ($fixture in $privateManagerFixtures.GetEnumerator()) {
+        Assert-True ((Get-Content -LiteralPath (Join-Path $dataRoot $fixture.Key) -Raw) -eq $fixture.Value) "Upgrade replaced private Manager fixture $($fixture.Key)."
+    }
+    Assert-True ((Get-Content -LiteralPath (Join-Path $previewRoot 'synthetic-preview.html') -Raw) -eq '<!doctype html><title>Synthetic preserved preview</title>') 'Upgrade replaced a private generated preview.'
     Assert-True (Test-Path -LiteralPath (Join-Path $dataRoot 'legacy-state.json') -PathType Leaf) 'Upgrade did not migrate legacy .manager-data state.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $installRoot '.manager-data'))) 'Upgrade retained a duplicate legacy .manager-data directory.'
     $updatedMetadata = Get-Content -LiteralPath (Join-Path $installRoot 'INSTALL-METADATA.txt') -Raw
@@ -184,6 +207,35 @@ try {
     Assert-True ($rollbackBackups.Count -eq 1) "Upgrade created $($rollbackBackups.Count) rollback backups instead of exactly one."
     Assert-True ((Get-Content -LiteralPath (Join-Path $rollbackBackups[0].FullName 'config.json') -Raw) -eq '{"private":"preserve"}') 'Upgrade rollback backup did not preserve private config.json.'
     Assert-True (Test-Path -LiteralPath (Join-Path $rollbackBackups[0].FullName 'INSTALL-METADATA.txt') -PathType Leaf) 'Upgrade rollback backup did not capture the installed application state.'
+
+    $restartListener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    $restartListener.Start()
+    $restartPort = ([Net.IPEndPoint]$restartListener.LocalEndpoint).Port
+    $restartListener.Stop()
+    $restartedManager = Start-Process -FilePath $managerExecutable -ArgumentList @('serve', "--listen=127.0.0.1:$restartPort", "--tautweekly-root=$installRoot", "--data-dir=$dataRoot") -WorkingDirectory $installRoot -WindowStyle Hidden -PassThru
+    try {
+        $restartDeadline = (Get-Date).AddSeconds(10)
+        $restartHealthy = $false
+        do {
+            Start-Sleep -Milliseconds 200
+            if ($restartedManager.HasExited) { throw "Upgraded Manager stopped during restart recovery with exit code $($restartedManager.ExitCode)." }
+            try { $restartHealthy = [string](Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$restartPort/health/live" -TimeoutSec 2).status -eq 'alive' } catch { }
+        } while (-not $restartHealthy -and (Get-Date) -lt $restartDeadline)
+        Assert-True $restartHealthy 'Upgraded Manager did not restart with preserved password and Funnel state.'
+        $restartSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+        Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$restartPort/api/v1/auth/login" -Method Post -ContentType 'application/json' -WebSession $restartSession -Body '{"password":"synthetic installer preservation password"}' -TimeoutSec 3 | Out-Null
+        $recoveredFunnel = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$restartPort/api/v1/remote-access/tailscale" -WebSession $restartSession -TimeoutSec 3
+        Assert-True ([bool]$recoveredFunnel.enabled -and -not [bool]$recoveredFunnel.active -and [bool]$recoveredFunnel.cleanupRequired) 'Upgraded Manager did not recover the saved passive Funnel preference safely.'
+        Assert-True ([string]$recoveredFunnel.networkKind -eq 'public-funnel') 'Upgraded Manager reverted to the obsolete private remote-access controller.'
+        $restartShutdown = Start-Process -FilePath $managerExecutable -ArgumentList @('shutdown', "--listen=127.0.0.1:$restartPort", "--tautweekly-root=$installRoot") -WorkingDirectory $installRoot -Wait -PassThru -WindowStyle Hidden
+        Assert-True ($restartShutdown.ExitCode -eq 0) 'Upgraded Manager rejected graceful shutdown after restart recovery.'
+        $restartShutdown.Dispose()
+        Assert-True ($restartedManager.WaitForExit(10000)) 'Upgraded Manager did not exit cleanly after restart recovery.'
+    }
+    finally {
+        if (-not $restartedManager.HasExited) { Stop-Process -Id $restartedManager.Id -Force -ErrorAction SilentlyContinue; [void]$restartedManager.WaitForExit(10000) }
+        $restartedManager.Dispose()
+    }
 
     $portableExtractRoot = Join-Path $testRoot 'portable-extract'
     Expand-Archive -LiteralPath (Join-Path $DistPath 'TautWeekly-windows.zip') -DestinationPath $portableExtractRoot
@@ -202,6 +254,10 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $portableRoot 'INSTALL-METADATA.txt') -PathType Leaf) 'Portable migration did not convert the folder to an installer-owned application.'
     Assert-True (@(Get-ChildItem -LiteralPath $portableExtractRoot -Directory -Filter 'TautWeekly-windows.backup-v*').Count -eq 1) 'Portable migration did not create exactly one rollback backup.'
 
+    # The upgrade assertion above proves the selected enabled preference was
+    # retained. Make the synthetic route inactive before testing removal so
+    # this virtual lifecycle never invokes the real Tailscale client.
+    [IO.File]::WriteAllText((Join-Path $dataRoot 'windows-funnel.json'), '{"schemaVersion":1,"enabled":false}', [Text.UTF8Encoding]::new($false))
     $uninstaller = Join-Path $installRoot 'TautWeekly-Uninstall.exe'
     # The installed uninstaller must recover both the custom application root
     # and external data root without caller-supplied path arguments.
@@ -217,6 +273,9 @@ try {
     Assert-True (-not (Test-Path -LiteralPath $uninstaller)) 'Installed uninstaller did not remove its exact executable after exit.'
     Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'config.json') -PathType Leaf) 'Uninstall removed private configuration.'
     Assert-True (Test-Path -LiteralPath (Join-Path $dataRoot 'access-state.json') -PathType Leaf) 'Uninstall removed external Manager data.'
+    foreach ($name in @('auth.json', 'auth-settings.json', 'operation-history.jsonl', 'schedule-operation.json', 'windows-funnel.json')) {
+        Assert-True (Test-Path -LiteralPath (Join-Path $dataRoot $name) -PathType Leaf) "Uninstall removed private Manager fixture $name."
+    }
     Assert-True (Test-Path -LiteralPath $logPath -PathType Leaf) 'Installer did not retain its diagnostic log.'
 
     $embeddedIcon = [Drawing.Icon]::ExtractAssociatedIcon($setup)

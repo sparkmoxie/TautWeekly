@@ -6,6 +6,36 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Replaced the Windows Manager's private Tailscale Serve workflow with an
+  explicit, password-gated Tailscale Funnel that keeps Manager on loopback and
+  provides a stable public HTTPS `.ts.net` address to ordinary remote browsers.
+- Added Windows Funnel states, setup guidance, sanitized diagnostics,
+  notification-area status, and deterministic recovery, access-reset, and
+  uninstall cleanup for the exact TautWeekly-owned route.
+
+### Changed
+
+- Windows Funnel changes now use only fixed typed enable/disable operations,
+  the official installed Tailscale CLI, and exact postcondition verification.
+  Existing non-Windows private Serve behavior is unchanged.
+- Installer updates preserve Manager configuration, password verification
+  material, history, previews, schedule, and the selected Funnel state. Removal
+  stops safely if the owned public route cannot be verified off.
+
+### Security
+
+- Public Funnel enablement requires the Windows Manager password lock. Disabling
+  that lock first disables and verifies the owned Funnel or refuses safely;
+  changing the password preserves the route while revoking other sessions.
+- Manager remains loopback-bound. Public-host admission, secure/HttpOnly/
+  SameSite cookies, same-origin and CSRF checks, authenticated sensitive
+  endpoints, and secret-reveal boundaries remain enforced through Funnel.
+- No new Internet login-attempt limiter was added in this delivery. A unique
+  Manager password is strongly recommended because a public login page retains
+  brute-force risk.
+
 ## [0.24.0] - 2026-08-28
 
 ### Changed

@@ -11,10 +11,11 @@ const (
 )
 
 type trayOptions struct {
-	IconPath string
-	Status   func(context.Context) trayHealth
-	Open     func()
-	Exit     func()
+	IconPath     string
+	Status       func(context.Context) trayHealth
+	RemoteStatus func(context.Context) string
+	Open         func()
+	Exit         func()
 }
 
 type managerTray interface {

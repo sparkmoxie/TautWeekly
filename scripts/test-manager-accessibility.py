@@ -335,6 +335,7 @@ def main() -> int:
         "tailscale-serve-status",
         "tailscale-url",
         "tailscale-password-status",
+        "tailscale-password-setup-button",
         "tailscale-refresh-button",
         "tailscale-setup-link",
         "tailscale-provider-warning",
@@ -347,13 +348,27 @@ def main() -> int:
         'request("/api/v1/remote-access/tailscale")',
         'method: "PUT"',
         'confirmedPrivate: external ? byId("tailscale-private-confirm").checked : false',
+        'JSON.stringify(publicFunnel ? { operation: state.tailscaleRequestedOperation }',
         'navigator.clipboard.writeText(state.tailscale.url)',
+        'parsed.search === "" && parsed.hash === "" && parsed.hostname.endsWith(".ts.net")',
         'panel.setAttribute("aria-busy", String(state.tailscaleSaving));',
     ):
         if marker not in javascript:
             failures.append(f"Tailscale remote access interaction contract is missing: {marker}")
-    if "Enable HTTPS certificates only." not in combined or "Turn Funnel off before continuing" not in combined:
-        failures.append("Tailscale provider approval does not explicitly require HTTPS-only consent with Funnel off")
+    if "Private HTTPS only; Funnel is off" not in combined:
+        failures.append("non-Windows adapters no longer disclose the private Serve/Funnel-off boundary")
+    for marker in (
+        "Funnel makes the Manager login page publicly reachable over HTTPS",
+        "Remote viewers do not need Tailscale or a VPN",
+        "Internet login attempts remain a brute-force risk",
+        'case "manager-password-required"',
+        'case "approval-required"',
+        'case "starting"',
+        'case "stopping"',
+        'byId("access-password").focus({ preventScroll: true })',
+    ):
+        if marker not in combined:
+            failures.append(f"Windows Funnel disclosure or accessible state is missing: {marker}")
     if "No credentials belong here." not in combined or "remote.hostAuthorizationCommand === \"sudo tautweekly remote-access-authorize\"" not in javascript:
         failures.append("Tailscale adapters do not keep credentials out of Manager or pin Linux host authorization to the packaged command")
     if 'remote.management === "external"' not in javascript or 'remote.management' not in javascript:
