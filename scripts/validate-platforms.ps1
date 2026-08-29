@@ -756,6 +756,11 @@ Require-Text 'platforms/windows/Windows-Update.ps1' @(
     'Assert-PowerShellSyntax',
     'Get-InstalledManagerProcesses',
     'Start-InstalledManager',
+    'Get-HealthyManagerListenerProcessIds',
+    'Get-NetTCPConnection.*LocalPort 8788',
+    'OwningProcess',
+    'different TautWeekly Manager installation',
+    'TautWeekly Manager \$TargetVersion',
     '\.manager-data'
 )
 Require-Text 'platforms/windows/START-MANAGER.ps1' @(
