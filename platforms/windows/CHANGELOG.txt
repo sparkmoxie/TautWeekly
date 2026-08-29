@@ -7,6 +7,7 @@ v1.11.0 Windows
 - keeps Manager bound to loopback and lets only fixed typed helper operations manage the exact TautWeekly route
 - requires verified Funnel shutdown before password-lock disable, local access reset, or uninstall can proceed
 - preserves configuration, password verification material, schedule, history, previews, and Funnel preference across installer updates
+- navigates the fresh loopback Dashboard after an update instead of only focusing a browser window that may still contain the old Manager page
 - leaves non-Windows packages unchanged and adds no new Internet login-attempt limiter; use a unique Manager password
 
 v1.10.4 Windows

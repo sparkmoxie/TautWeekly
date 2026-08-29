@@ -23,6 +23,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Installer updates preserve Manager configuration, password verification
   material, history, previews, schedule, and the selected Funnel state. Removal
   stops safely if the owned public route cannot be verified off.
+- Windows dashboard launches now navigate the validated loopback URL even when
+  an existing browser window is found, so an installer upgrade cannot leave a
+  focused pre-upgrade document displaying obsolete Manager controls.
 
 ### Security
 

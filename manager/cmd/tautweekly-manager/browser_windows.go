@@ -16,13 +16,25 @@ const (
 	windowsCreateNoWindow = 0x08000000
 )
 
+var (
+	activateDashboardWindow = activateExistingDashboardWindow
+	navigateDashboardWindow = startLocalBrowserNavigation
+)
+
 func openLocalBrowser(target string) error {
 	if err := validateLocalBrowserURL(target); err != nil {
 		return err
 	}
-	if activateExistingDashboardWindow() {
-		return nil
-	}
+	// Focusing a matching browser window is only a best-effort accessibility
+	// aid. The document in that window may predate an application upgrade, so
+	// always send the validated URL to the browser afterward. Returning after
+	// AppActivate leaves the old JavaScript running and makes a successful
+	// Manager update appear to have done nothing.
+	_ = activateDashboardWindow()
+	return navigateDashboardWindow(target)
+}
+
+func startLocalBrowserNavigation(target string) error {
 	systemRoot := strings.TrimSpace(os.Getenv("SystemRoot"))
 	if systemRoot == "" {
 		return fmt.Errorf("SystemRoot is unavailable")
