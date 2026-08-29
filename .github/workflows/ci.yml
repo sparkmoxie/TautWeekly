@@ -511,7 +511,7 @@ jobs:
   publish-edge-container:
     name: Publish verified edge container
     needs: [provenance, classify, required]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.classify.outputs.container == 'true'
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.required.result == 'success' && needs.classify.outputs.container == 'true'
     uses: ./.github/workflows/container.yml
     with:
       publish_mode: edge
@@ -527,7 +527,7 @@ jobs:
   deploy-pages:
     name: Deploy verified Pages
     needs: [provenance, classify, required]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.classify.outputs.pages == 'true'
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.required.result == 'success' && needs.classify.outputs.pages == 'true'
     uses: ./.github/workflows/pages.yml
     with:
       validate: false
