@@ -127,7 +127,14 @@ for (const name of ["windows", "nas", "mac", "linux", "freebsd"]) {
   assert.equal((await api("/api/v1/auth/access")).data.runtimeRequired, name !== "windows");
   controls.offerUpdate();
   assert.equal((await api("/api/v1/updates")).data.installSupported, name === "windows", "demo grants a host-owned updater to the browser");
-  const remote = await api("/api/v1/remote-access/tailscale", "PUT", { enabled: true, confirmedPrivate: true });
+  if (name === "windows") {
+    assert.equal((await api("/api/v1/remote-access/tailscale", "PUT", { enabled: true })).status, 400,
+      "Windows preview accepted the obsolete boolean/private-Serve operation");
+    await api("/api/v1/auth/access/password", "POST", { password: "synthetic preview password" });
+  }
+  const remote = await api("/api/v1/remote-access/tailscale", "PUT", name === "windows"
+    ? { operation: "enable" }
+    : { enabled: true, confirmedPrivate: true });
   assert.equal(remote.data.active, true);
   assert.equal(remote.data.url, "https://manager.demo.invalid");
 }
