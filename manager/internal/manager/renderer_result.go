@@ -143,6 +143,10 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 		seen[key] = struct{}{}
 	}
 	switch result.Mode {
+	case "CacheWarm":
+		if len(seen) != 0 || result.SMTPAcceptedCount != 0 || result.SkippedCount != 0 || result.FailedCount != 0 || result.Outcome == "partial" {
+			return false
+		}
 	case "PreviewAll":
 		if result.SMTPAcceptedCount != 0 || result.SkippedCount != 0 || result.FailedCount != 0 {
 			return false
@@ -278,7 +282,7 @@ func expectedDeliveryScope(mode string) string {
 		return "welcome"
 	case "SendAll":
 		return "production"
-	case "Preview", "PreviewAll", "ListUsers", "VerifyPlex":
+	case "Preview", "PreviewAll", "CacheWarm", "ListUsers", "VerifyPlex":
 		return "none"
 	default:
 		return ""

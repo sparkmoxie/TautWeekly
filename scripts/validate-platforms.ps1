@@ -353,6 +353,8 @@ Require-Text 'platforms/nas-docker/app/TautWeekly.ps1' @(
     'ListUsers only displays the roster',
     'ResultPath',
     'Write-TautWeeklyStructuredResult',
+    'Mode -eq "CacheWarm"',
+    'Eligible users checked:',
     'Get-TautWeeklyScheduleNow -TimeZone \$deliveryTimeZone',
     'ConvertTo-TautWeeklyScheduleUtc -TimeZone \$deliveryTimeZone'
 )
@@ -361,7 +363,9 @@ Require-Text 'platforms/windows/TautWeekly.ps1' @(
     'Operation-Lock\.ps1',
     'Enter-TautWeeklyOperationLock',
     'Send-TautWeeklySmtpMessage',
-    'ListUsers only displays the roster'
+    'ListUsers only displays the roster',
+    'Mode -eq "CacheWarm"',
+    'Eligible users checked:'
 )
 foreach ($relative in @(
     'platforms/windows/DeletedItemCache.ps1',
@@ -486,6 +490,8 @@ Require-Text 'platforms/nas-docker/tautweekly.sh' @(
     'access-recover',
     'run-script\.sh Verify-Setup\.ps1',
     'cache-status',
+    'cache-refresh',
+    'run-mode.sh CacheWarm',
     'Cache-Diagnostics\.ps1',
     'run-as-user\.sh bash'
 )
@@ -686,6 +692,8 @@ Require-Text 'platforms/mac-docker/tautweekly.sh' @(
     'access-recover',
     'open-manager',
     'cache-status',
+    'cache-refresh',
+    'run-mode.sh CacheWarm',
     'Cache-Diagnostics\.ps1',
     'package-update\.sh'
 )
@@ -761,6 +769,7 @@ Require-Text 'platforms/windows/00-OPEN-MANAGER.bat' @('START-MANAGER\.ps1', 'No
 Require-Text 'platforms/windows/RESET-MANAGER-ACCESS.ps1' @('access-reset', 'Manager access', 'START-MANAGER\.ps1')
 Require-Text 'platforms/windows/18-RESET-MANAGER-ACCESS.bat' @('RESET-MANAGER-ACCESS\.ps1', 'NoProfile')
 Require-Text 'platforms/windows/19-CACHE-DIAGNOSTICS.bat' @('Cache-Diagnostics\.ps1', 'NoProfile')
+Require-Text 'platforms/windows/20-REFRESH-DELETED-ITEM-CACHE.bat' @('TautWeekly\.ps1', 'CacheWarm', 'NoProfile')
 Require-Text 'platforms/windows/Operation-Lock.ps1' @(
     '\.tautweekly-operation\.lock',
     'FileShare\]::None',
@@ -778,8 +787,8 @@ foreach ($relative in @(
     Require-Text $relative @('check', 'stable', 'rollback|restore')
 }
 
-Require-Text 'platforms/linux/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1', 'cache-status', 'Cache-Diagnostics\.ps1')
-Require-Text 'platforms/freebsd-podman/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1', 'cache-status', 'Cache-Diagnostics\.ps1')
+Require-Text 'platforms/linux/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1', 'cache-status', 'cache-refresh', 'run_mode CacheWarm', 'Cache-Diagnostics\.ps1')
+Require-Text 'platforms/freebsd-podman/tautweekly' @('list-libraries', 'manage-libraries', 'Manage-Library-Selection\.ps1', 'cache-status', 'cache-refresh', 'run_mode CacheWarm', 'Cache-Diagnostics\.ps1')
 
 foreach ($relative in @(
     'platforms/windows/Library-Selection.ps1',

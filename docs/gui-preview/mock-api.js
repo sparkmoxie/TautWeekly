@@ -2,8 +2,8 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.23.3";
-  const PREVIOUS_VERSION = "0.23.2";
+  const DEMO_VERSION = "0.24.0";
+  const PREVIOUS_VERSION = "0.23.3";
   const PROFILES = {
     windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows" },
     nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker" },
@@ -426,7 +426,15 @@
       setupStatus.steps.previews = operation.state === "succeeded"
         ? { state: "passed", summary: "Six production-faithful newsletter states are available for review.", updatedAtUtc: now() }
         : { state: "skipped", summary: "The fictional local preview operation was cancelled.", updatedAtUtc: now() };
-      completeCacheVerification();
+      setupStatus.running = false;
+      setupStatus.updatedAtUtc = now();
+    }
+    if (operation.type === "cache-warm") {
+      if (operation.state === "succeeded") completeCacheVerification();
+      else {
+        Object.assign(cacheStatus, { state: "failed", verification: "full", summary: "Synthetic cache refresh stopped before complete coverage was verified.", checkedAtUtc: now() });
+        setupStatus.steps.cache = { state: "failed", summary: cacheStatus.summary, updatedAtUtc: cacheStatus.checkedAtUtc };
+      }
       setupStatus.running = false;
       setupStatus.updatedAtUtc = now();
     }
@@ -448,14 +456,18 @@
       packageVersion: "GUI Preview",
       state: "running",
       startedAtUtc: now(),
-      deliveryScope: body.type === "send-test-all" ? "test-email" : body.type === "send-all" ? "all-eligible" : body.type === "send-welcome" ? "selected-user" : "local-preview",
+      deliveryScope: body.type === "send-test-all" ? "test-email" : body.type === "send-all" ? "all-eligible" : body.type === "send-welcome" ? "selected-user" : "none",
       generatedPreviewIds: [],
-      cancellable: body.type === "preview-all",
+      cancellable: ["preview-all", "cache-warm"].includes(body.type),
     };
     if (body.type === "preview-all") {
       setupStatus.running = true;
       setupStatus.steps.previews = { state: "running", summary: "Generating six fictional local preview states without sending.", updatedAtUtc: now() };
-      if (cacheStatus.enabled) setupStatus.steps.cache = { state: "waiting", summary: "Waiting for fictional local PreviewAll cache initialization before the full check.", updatedAtUtc: now() };
+      setupStatus.updatedAtUtc = now();
+    }
+    if (body.type === "cache-warm") {
+      setupStatus.running = true;
+      setupStatus.steps.cache = { state: "running", summary: "Refreshing fictional all-included-user cache coverage locally.", updatedAtUtc: now() };
       setupStatus.updatedAtUtc = now();
     }
     return model.operation;
@@ -510,23 +522,23 @@
     const cacheEnabled = "DeletedItemCacheEnabled" in values
       ? Boolean(values.DeletedItemCacheEnabled)
       : Boolean(editorFields.find((item) => item.name === "DeletedItemCacheEnabled")?.value);
-    const plan = { materialChange: changed.length > 0, changedCategories: [], runDiscovery: false, runIntegration: false, runSmtp: false, generatePreviews: false,
+    const plan = { materialChange: changed.length > 0, changedCategories: [], runDiscovery: false, runIntegration: false, runSmtp: false, generatePreviews: false, warmCache: false,
       verifyCache: cacheEnabled, cacheEnabled, retainedDiscovery: true, retainedIntegration: true, retainedSmtp: true, retainedPreviews: true };
     const categories = new Set();
     for (const name of changed) {
-      if (["TautulliUrl", "ApiKey"].includes(name)) { categories.add("tautulli"); plan.runDiscovery = true; plan.runIntegration = true; plan.generatePreviews = true; }
-      else if (["PlexServerUrl", "PlexToken"].includes(name)) { categories.add("plex"); plan.runIntegration = true; plan.generatePreviews = true; }
+      if (["TautulliUrl", "ApiKey"].includes(name)) { categories.add("tautulli"); plan.runDiscovery = true; plan.runIntegration = true; plan.generatePreviews = true; plan.warmCache = plan.cacheEnabled; }
+      else if (["PlexServerUrl", "PlexToken"].includes(name)) { categories.add("plex"); plan.runIntegration = true; plan.generatePreviews = true; plan.warmCache = plan.cacheEnabled; }
       else if (name.startsWith("Smtp")) { categories.add("smtp"); plan.runSmtp = true; }
       else if (["PlexWebUrl", "PlexButtonLabel", "ServerLabel", "FooterServerName"].includes(name)) { categories.add("identity"); plan.generatePreviews = true; }
       else if (["FromName", "FromEmail", "ReplyToEmail", "TestEmail"].includes(name)) categories.add("email");
       else if (name.startsWith("Schedule") || name === "ScheduledTaskName") categories.add("schedule");
       else if (name.startsWith("DeletedItemCache")) {
         categories.add("cache");
-        if (plan.cacheEnabled) plan.generatePreviews = true;
+        plan.warmCache = plan.cacheEnabled;
       }
       else if (name.startsWith("CustomTextCard")) { categories.add("custom-text-card"); plan.generatePreviews = true; }
-      else if (["IncludedLibraryIds", "ExcludedUserIds", "ExcludedEmails"].includes(name)) { categories.add("libraries"); plan.generatePreviews = true; }
-      else if (["DaysBack", "RecentAccessDays", "WatchedPercent", "MaxMovies", "MaxTv"].includes(name)) { categories.add("newsletter"); plan.generatePreviews = true; }
+      else if (["IncludedLibraryIds", "ExcludedUserIds", "ExcludedEmails"].includes(name)) { categories.add("libraries"); plan.generatePreviews = true; plan.warmCache = plan.cacheEnabled; }
+      else if (["DaysBack", "RecentAccessDays", "WatchedPercent", "MaxMovies", "MaxTv"].includes(name)) { categories.add("newsletter"); plan.generatePreviews = true; plan.warmCache = plan.cacheEnabled; }
       else categories.add("newsletter");
     }
     plan.changedCategories = ["tautulli", "plex", "smtp", "identity", "email", "schedule", "newsletter", "cache", "custom-text-card", "libraries"].filter((name) => categories.has(name));
@@ -617,6 +629,7 @@
           if (target) target.value = value;
         }
         setCacheEnabled(Boolean(editorFields.find((item) => item.name === "DeletedItemCacheEnabled")?.value));
+        if (plan.warmCache) setupStatus.steps.cache = { state: "running", summary: "Preparing the independent fictional cache refresh.", updatedAtUtc: now() };
         return json({ saved: plan.materialChange, backup: plan.materialChange ? "synthetic-demo-backup" : "", editor: editor(), postSave: plan });
       }
       return json(configView());

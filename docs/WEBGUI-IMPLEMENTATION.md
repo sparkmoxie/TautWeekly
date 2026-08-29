@@ -173,6 +173,7 @@ known modes using argument arrays rather than a shell command string:
 - ListUsers
 - Preview
 - PreviewAll
+- CacheWarm
 - SendTest
 - SendTestAll
 - SendWelcome
@@ -181,15 +182,17 @@ known modes using argument arrays rather than a shell command string:
 Production send and welcome modes retain explicit confirmation gates. The
 existing operation lock remains authoritative during the transition.
 
-The implemented renderer operations are `PreviewAll`, `SendTestAll`,
-`SendWelcome`, and `SendAll` on Windows. Preview, TestEmail, and Manual Welcome
-operations pass only a validated numeric user ID; all-recipient production
-delivery does not accept one. Every mode receives a
+The implemented renderer operations are `PreviewAll`, `CacheWarm`,
+`SendTestAll`, `SendWelcome`, and `SendAll` on Windows. Preview, TestEmail, and
+Manual Welcome operations pass only a validated numeric user ID; the cache
+refresh and all-recipient production delivery do not accept one. Every mode receives a
 private per-run configuration snapshot through the fixed packaged PowerShell
 script, discards raw process output, and records only a sanitized operation
 result.
-`PreviewAll` adds `-NoOpen`, does not contact SMTP, and does not update the
-access roster or welcome state. `SendTestAll` requires a separate confirmation,
+`PreviewAll` adds `-NoOpen`. `CacheWarm` enumerates every currently eligible
+included user's selected-library newsletter window without rendering previews.
+Neither mode contacts SMTP or updates the access roster or welcome state.
+`SendTestAll` requires a separate confirmation,
 delivers six variants only to the configured `TestEmail`, and cannot be
 cancelled after starting because a partial set may already have been accepted
 by SMTP. `SendWelcome` requires a selected user plus production confirmation,
@@ -681,11 +684,12 @@ Keep all five revision-scoped setup results, including the full deleted-item
 cache result, permanently visible for every valid configuration. Update each
 result as automatic or manual checks complete, retain only aggregate evidence
 in private Manager state, and show all five in the Dashboard Config status
-health card. While PreviewAll is a prerequisite, cache health is **Waiting**;
-reserve Warning for a completed, actionable finding. The full local result is
-retained for Verify and refresh, while manual verification remains an optional
-later recheck. Results from an older configuration revision must never update
-the current summary.
+health card. A dedicated cache refresh changes the cache step directly to blue
+**Running** and remains independent of PreviewAll; reserve Warning for a
+completed, actionable finding and Failed for a failed or cancelled refresh.
+The full local result is retained for Verify and refresh, while manual
+verification remains an optional later recheck. Results from an older
+configuration revision must never update the current summary.
 
 ### 12.5 Diagnostics
 
@@ -940,9 +944,10 @@ pre-restore safety backup. A successful save now consumes a typed backend
 impact plan: Tautulli changes rerun discovery and integration checks, Plex
 changes rerun integration checks, SMTP-card changes rerun only SMTP preflight,
 and identity/newsletter-content/custom-card/library changes regenerate local
-previews. Enabled cache-setting changes also regenerate local previews; cache
-disable, email, schedule, and delivery-delay-only saves retain all applicable
-results and run no setup check or preview work. Each check remains
+  previews. Enabled cache and coverage changes start the dedicated all-included-
+  user cache refresh independently; cache disable, email, schedule, and
+  delivery-delay-only saves retain all applicable results and run no setup
+  check or preview work. Each check remains
 manually repeatable under Verify; page load and status refresh never contact
 external services. Local loopback fixtures cover the adapters in automated
 tests and explicit live-LAN acceptance has passed.
@@ -960,8 +965,11 @@ service URLs, email addresses, credentials, and raw responses are excluded. A
 separate SMTP preflight validates reachability and
 STARTTLS without sending credentials or message data, with deterministic plain,
 missing-STARTTLS, certificate-validated STARTTLS, CSRF, and redaction tests.
-The typed Windows renderer operations now run `PreviewAll`, guarded
-`SendTestAll`, and explicitly confirmed `SendAll`. Preview generation adds
+The typed Windows renderer operations now run `PreviewAll`, userless
+`CacheWarm`, guarded `SendTestAll`, and explicitly confirmed `SendAll`.
+`CacheWarm` applies the production eligibility and selected-library scope to
+every included user's current newsletter window, reports aggregate counts only,
+and automatically hands off to full local cache verification. Preview generation adds
 headless `-NoOpen` behavior, supports
 safe cancellation and restart recovery, and attributes only files changed by
 that run. Test delivery is limited by the renderer to the saved `TestEmail`,

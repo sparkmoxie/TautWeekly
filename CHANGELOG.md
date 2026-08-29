@@ -6,6 +6,43 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-08-28
+
+### Added
+
+- Added a dedicated, non-sending deleted-item cache refresh that inspects the
+  current newsletter window for every production-eligible included user and
+  selected movie/TV library. Manager starts it automatically after applicable
+  configuration saves, and every maintained package exposes a `cache-refresh`
+  recovery command.
+
+### Changed
+
+- Cache refresh is independent of PreviewAll and does not require an
+  owner/administrator preview user. Manager shows the cache step as blue
+  **Running** immediately, then retains the automatic full local storage,
+  bounds, manifest, backup, writability, and artwork-integrity result.
+- Preview, TestEmail, and delivery paths can still refresh qualifying live
+  entries opportunistically, but cache coverage no longer depends on which
+  single user was selected for preview.
+- Updated the Verify SMTP boundary to the outlined `mail_shield` symbol while
+  preserving its existing local styling and interaction behavior.
+
+### Fixed
+
+- Fixed a multi-user coverage gap that could leave another included user's
+  upcoming personal-history items uncached before deletion.
+- Preserved existing nonblank titles, years, summaries, genres, ratings, and
+  rating keys when a later live metadata response is sparse, while still
+  allowing valid poster and hash refreshes.
+
+### Security
+
+- The independent refresh sends no email, changes no recipient or welcome
+  state, and reports aggregate counts only. Manager and package diagnostics
+  continue to exclude titles, GUIDs, rating keys, hashes, viewing metrics,
+  recipient data, credentials, cache contents, and private paths.
+
 ## [0.23.3] - 2026-08-27
 
 ### Changed

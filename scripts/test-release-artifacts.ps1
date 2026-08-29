@@ -222,6 +222,7 @@ $expected = [ordered]@{
         'TautWeekly-windows/START-MANAGER.ps1',
         'TautWeekly-windows/18-RESET-MANAGER-ACCESS.bat',
         'TautWeekly-windows/19-CACHE-DIAGNOSTICS.bat',
+        'TautWeekly-windows/20-REFRESH-DELETED-ITEM-CACHE.bat',
         'TautWeekly-windows/RESET-MANAGER-ACCESS.ps1',
         'TautWeekly-windows/SCHEDULE-HELPER.ps1',
         'TautWeekly-windows/TAILSCALE-HELPER.ps1',

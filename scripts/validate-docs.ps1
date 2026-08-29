@@ -275,6 +275,21 @@ foreach ($entry in $cacheDiagnosticPatterns.GetEnumerator()) {
 }
 Write-Host '[PASS] Quickstarts publish platform-specific share-safe cache diagnostics'
 
+$cacheRefreshPatterns = [ordered]@{
+    'windows/index.html'      = '20-REFRESH-DELETED-ITEM-CACHE\.bat'
+    'nas-docker/manager.html' = '\.\/tautweekly\.sh cache-refresh'
+    'mac/index.html'          = '\.\/tautweekly\.sh cache-refresh'
+    'linux/index.html'        = 'sudo tautweekly cache-refresh'
+    'freebsd/index.html'      = 'sudo tautweekly cache-refresh'
+}
+foreach ($entry in $cacheRefreshPatterns.GetEnumerator()) {
+    $html = [IO.File]::ReadAllText((Join-Path $docs $entry.Key))
+    if ($html -notmatch $entry.Value) {
+        throw "Independent cache refresh command is missing from $($entry.Key)"
+    }
+}
+Write-Host '[PASS] Quickstarts publish platform-specific independent cache refresh commands'
+
 & node (Join-Path $Root 'scripts/sync-gui-preview.mjs') --check
 if ($LASTEXITCODE -ne 0) { throw 'GUI preview differs from the current Manager/release. Regenerate it before deployment.' }
 

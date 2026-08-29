@@ -144,26 +144,29 @@ available. Later lookups require the same normalized stable GUID and media
 type. Rating keys and titles are not fallback identities, so already-deleted
 history with a missing or ambiguous identifier fails closed.
 
-Enabling the setting does not take a whole-library snapshot and does not scan
-Plex in the background. Capture happens only when Preview, PreviewAll,
-SendTest, SendTestAll, a scheduled delivery, or a confirmed manual delivery
-selects a current item for rendering while both its live metadata and usable
-poster are still available. Validation alone does not capture anything.
+Enabling the setting does not take a whole-library snapshot. The dedicated
+cache refresh enumerates every currently production-eligible included user,
+loads that user's current `DaysBack` newsletter history from the selected
+movie/TV libraries, and captures each unique qualifying live item. It also
+uses the common current shared-item preparation performed by the renderer. It
+does not crawl unrelated Plex library contents or retain recipient identity or
+viewing metrics. Preview, PreviewAll, SendTest, SendTestAll, scheduled delivery,
+and confirmed manual delivery can still refresh qualifying entries they select
+while the live metadata and usable poster remain available.
 
 Disabling the setting stops cache reads, writes, verification, and cleanup but
 does not erase retained entries. Re-enabling it initializes the same private
 cache and immediately applies the configured retention, item, and byte limits.
 
-In Manager, changing enabled cache settings and choosing **Validate, save, and
-verify** schedules the existing no-email PreviewAll workflow when one
-unambiguous owner or administrator is available. Cache health shows **Waiting**
-while that prerequisite runs. PreviewAll warms only qualifying items selected
-by those six preview states; it is not a library crawl. When PreviewAll ends,
-including failure or cancellation, Manager automatically runs and retains the
-full local cache verification. If discovery or an operation conflict prevents
-preview start, the full check still runs and reports the current actionable
-state; run PreviewAll later if the cache needs seeding. Direct edits to
-`config.json` likewise require a later render before entries can exist.
+In Manager, enabling the cache or changing cache coverage and choosing
+**Validate, save, and verify** starts the dedicated no-email cache refresh.
+Cache health shows blue **Running** immediately; this independent operation
+does not rerun unrelated discovery, Plex/Tautulli, SMTP, or preview checks.
+When it ends, Manager automatically runs and retains the full local cache
+verification. A failure or cancellation is shown as **Failed** and does not get
+replaced by a stale healthy summary. The manual cache check remains an optional
+later storage recheck and never substitutes for coverage. After direct edits to
+`config.json`, run the package's `cache-refresh` command to establish coverage.
 
 Cleanup runs at initialization and after writes. Expired entries are removed,
 then the newest entries are retained deterministically until the item and total
@@ -179,7 +182,8 @@ local write probe and hashes cached artwork. Both surfaces expose only health
 states, bounds, and aggregate counts. They never expose paths, titles, GUIDs,
 rating keys, hashes, artwork, viewing metrics, recipients, credentials, or
 manifest contents. An `unseeded` result means the cache is enabled but no
-qualifying live render has written an entry; it is not evidence of a cache hit.
+qualifying live refresh or render has written an entry; it is not evidence of
+a cache hit.
 
 The full result from **Validate, save, and verify** is retained for Verify,
 including after refresh; the manual check is an optional later recheck. When

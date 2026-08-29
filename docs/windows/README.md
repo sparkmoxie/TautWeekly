@@ -267,8 +267,9 @@ cache-health result:
 4. **Local previews** prepares the six newsletter states when one unambiguous
    owner or administrator ID and the required metadata are available.
 5. **Deleted-item cache** reports disabled, unseeded, healthy, recoverable, or
-   failed local cache state using aggregate counts only. If enabled cache
-   settings changed, the local PreviewAll above is also the bounded warm-up.
+   failed local cache state using aggregate counts only. Applicable cache and
+   coverage changes start a separate non-sending refresh for every currently
+   production-eligible included user and selected movie/TV library.
 
 The first four results persist across browser refreshes and Manager restarts for
 the current saved configuration. Cache health is recomputed locally whenever
@@ -276,7 +277,8 @@ Config status is loaded. The Dashboard summarizes all five under **Config
 status**. Each check remains available for an explicit manual retest under
 **Config**, **Verify**, or **Previews**.
 
-Use `19-CACHE-DIAGNOSTICS.bat` for the same share-safe aggregate cache summary,
+Use `20-REFRESH-DELETED-ITEM-CACHE.bat` for an explicit independent refresh and
+`19-CACHE-DIAGNOSTICS.bat` for the same share-safe aggregate cache summary,
 including optional artwork hashes, hidden exact-GUID hit/miss probing, and a
 restart-persistence marker. See the [cache troubleshooting commands](../TROUBLESHOOTING.md#deleted-item-still-has-no-poster-or-metadata).
 

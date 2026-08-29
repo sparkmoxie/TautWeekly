@@ -17,12 +17,13 @@ func TestEveryConfigFieldHasExplicitSaveImpact(t *testing.T) {
 		integration bool
 		smtp        bool
 		preview     bool
+		warmCache   bool
 	}
 	expected := map[string]impact{
-		"TautulliUrl":                   {category: "tautulli", discovery: true, integration: true, preview: true},
-		"ApiKey":                        {category: "tautulli", discovery: true, integration: true, preview: true},
-		"PlexServerUrl":                 {category: "plex", integration: true, preview: true},
-		"PlexToken":                     {category: "plex", integration: true, preview: true},
+		"TautulliUrl":                   {category: "tautulli", discovery: true, integration: true, preview: true, warmCache: true},
+		"ApiKey":                        {category: "tautulli", discovery: true, integration: true, preview: true, warmCache: true},
+		"PlexServerUrl":                 {category: "plex", integration: true, preview: true, warmCache: true},
+		"PlexToken":                     {category: "plex", integration: true, preview: true, warmCache: true},
 		"PlexWebUrl":                    {category: "identity", preview: true},
 		"PlexButtonLabel":               {category: "identity", preview: true},
 		"ServerLabel":                   {category: "identity", preview: true},
@@ -43,17 +44,17 @@ func TestEveryConfigFieldHasExplicitSaveImpact(t *testing.T) {
 		"ScheduleDay":                   {category: "schedule"},
 		"ScheduleTime":                  {category: "schedule"},
 		"ScheduledTaskName":             {category: "schedule"},
-		"DaysBack":                      {category: "newsletter", preview: true},
-		"RecentAccessDays":              {category: "newsletter", preview: true},
-		"WatchedPercent":                {category: "newsletter", preview: true},
-		"MaxMovies":                     {category: "newsletter", preview: true},
-		"MaxTv":                         {category: "newsletter", preview: true},
+		"DaysBack":                      {category: "newsletter", preview: true, warmCache: true},
+		"RecentAccessDays":              {category: "newsletter", preview: true, warmCache: true},
+		"WatchedPercent":                {category: "newsletter", preview: true, warmCache: true},
+		"MaxMovies":                     {category: "newsletter", preview: true, warmCache: true},
+		"MaxTv":                         {category: "newsletter", preview: true, warmCache: true},
 		"SendDelaySeconds":              {category: "newsletter"},
 		"TestSendDelaySeconds":          {category: "newsletter"},
-		"DeletedItemCacheEnabled":       {category: "cache", preview: true},
-		"DeletedItemCacheRetentionDays": {category: "cache", preview: true},
-		"DeletedItemCacheMaxItems":      {category: "cache", preview: true},
-		"DeletedItemCacheMaxBytesMB":    {category: "cache", preview: true},
+		"DeletedItemCacheEnabled":       {category: "cache", warmCache: true},
+		"DeletedItemCacheRetentionDays": {category: "cache", warmCache: true},
+		"DeletedItemCacheMaxItems":      {category: "cache", warmCache: true},
+		"DeletedItemCacheMaxBytesMB":    {category: "cache", warmCache: true},
 		"CustomTextCardEnabled":         {category: "custom-text-card", preview: true},
 		"CustomTextCardBorderColor":     {category: "custom-text-card", preview: true},
 		"CustomTextCardBorderOpacity":   {category: "custom-text-card", preview: true},
@@ -61,9 +62,9 @@ func TestEveryConfigFieldHasExplicitSaveImpact(t *testing.T) {
 		"CustomTextCardTitleGif":        {category: "custom-text-card", preview: true},
 		"CustomTextCardSubheading":      {category: "custom-text-card", preview: true},
 		"CustomTextCardBody":            {category: "custom-text-card", preview: true},
-		"IncludedLibraryIds":            {category: "libraries", preview: true},
-		"ExcludedUserIds":               {category: "libraries", preview: true},
-		"ExcludedEmails":                {category: "libraries", preview: true},
+		"IncludedLibraryIds":            {category: "libraries", preview: true, warmCache: true},
+		"ExcludedUserIds":               {category: "libraries", preview: true, warmCache: true},
+		"ExcludedEmails":                {category: "libraries", preview: true, warmCache: true},
 	}
 
 	definitions := configDefinitions()
@@ -78,7 +79,7 @@ func TestEveryConfigFieldHasExplicitSaveImpact(t *testing.T) {
 		plan := classifyConfigPostSave(map[string]any{definition.Name: "before"}, map[string]any{definition.Name: "after"}, true)
 		if !plan.MaterialChange || len(plan.ChangedCategories) != 1 || plan.ChangedCategories[0] != want.category ||
 			plan.RunDiscovery != want.discovery || plan.RunIntegration != want.integration ||
-			plan.RunSMTP != want.smtp || plan.GeneratePreviews != want.preview || !plan.CacheEnabled || !plan.VerifyCache {
+			plan.RunSMTP != want.smtp || plan.GeneratePreviews != want.preview || plan.WarmCache != want.warmCache || !plan.CacheEnabled || !plan.VerifyCache {
 			t.Fatalf("config field %q: got %+v, want %+v", definition.Name, plan, want)
 		}
 	}
@@ -104,7 +105,7 @@ func TestConfigPostSavePlanInvalidatesOnlyAffectedCategories(t *testing.T) {
 			mutate: func(request *ConfigSaveRequest) {
 				request.Values["TautulliUrl"] = json.RawMessage(`"http://127.0.0.1:8282"`)
 			},
-			want: ConfigPostSavePlan{MaterialChange: true, RunDiscovery: true, RunIntegration: true, GeneratePreviews: true},
+			want: ConfigPostSavePlan{MaterialChange: true, RunDiscovery: true, RunIntegration: true, GeneratePreviews: true, WarmCache: true},
 		},
 		{
 			name: "Plex connection",
@@ -112,7 +113,7 @@ func TestConfigPostSavePlanInvalidatesOnlyAffectedCategories(t *testing.T) {
 				request.Values["PlexServerUrl"] = json.RawMessage(`"http://127.0.0.1:32401"`)
 				request.Secrets["PlexToken"] = SecretChange{Action: "replace", Value: "synthetic-new-plex-token"}
 			},
-			want: ConfigPostSavePlan{MaterialChange: true, RunIntegration: true, GeneratePreviews: true},
+			want: ConfigPostSavePlan{MaterialChange: true, RunIntegration: true, GeneratePreviews: true, WarmCache: true},
 		},
 		{
 			name: "SMTP connection",
@@ -126,7 +127,7 @@ func TestConfigPostSavePlanInvalidatesOnlyAffectedCategories(t *testing.T) {
 			mutate: func(request *ConfigSaveRequest) {
 				request.Values["IncludedLibraryIds"] = json.RawMessage(`["7"]`)
 			},
-			want: ConfigPostSavePlan{MaterialChange: true, GeneratePreviews: true},
+			want: ConfigPostSavePlan{MaterialChange: true, GeneratePreviews: true, WarmCache: true},
 		},
 		{
 			name: "identity presentation",
@@ -140,7 +141,7 @@ func TestConfigPostSavePlanInvalidatesOnlyAffectedCategories(t *testing.T) {
 			mutate: func(request *ConfigSaveRequest) {
 				request.Values["DaysBack"] = json.RawMessage(`14`)
 			},
-			want: ConfigPostSavePlan{MaterialChange: true, GeneratePreviews: true},
+			want: ConfigPostSavePlan{MaterialChange: true, GeneratePreviews: true, WarmCache: true},
 		},
 		{
 			name: "newsletter delivery delay",
@@ -165,11 +166,11 @@ func TestConfigPostSavePlanInvalidatesOnlyAffectedCategories(t *testing.T) {
 			want:          ConfigPostSavePlan{MaterialChange: true, ConfirmationCode: "cache-disabled"},
 		},
 		{
-			name: "enabled cache bounds warm local previews",
+			name: "enabled cache bounds refresh cache independently",
 			mutate: func(request *ConfigSaveRequest) {
 				request.Values["DeletedItemCacheMaxItems"] = json.RawMessage(`1200`)
 			},
-			want: ConfigPostSavePlan{MaterialChange: true, GeneratePreviews: true, ConfirmationCode: "cache-updated"},
+			want: ConfigPostSavePlan{MaterialChange: true, WarmCache: true, ConfirmationCode: "cache-updated"},
 		},
 		{
 			name: "schedule only",
@@ -193,7 +194,7 @@ func TestConfigPostSavePlanInvalidatesOnlyAffectedCategories(t *testing.T) {
 			expectedCacheEnabled := !test.cacheDisabled
 			if got.MaterialChange != test.want.MaterialChange || got.RunDiscovery != test.want.RunDiscovery ||
 				got.RunIntegration != test.want.RunIntegration || got.RunSMTP != test.want.RunSMTP ||
-				got.GeneratePreviews != test.want.GeneratePreviews || got.ConfirmationCode != test.want.ConfirmationCode ||
+				got.GeneratePreviews != test.want.GeneratePreviews || got.WarmCache != test.want.WarmCache || got.ConfirmationCode != test.want.ConfirmationCode ||
 				got.CacheEnabled != expectedCacheEnabled || got.VerifyCache != expectedCacheEnabled {
 				t.Fatalf("post-save plan: got %+v, want effects %+v", got, test.want)
 			}
@@ -215,7 +216,7 @@ func TestNoMaterialChangeSaveDoesNoWork(t *testing.T) {
 	if err != nil || len(fields) != 0 {
 		t.Fatalf("no-op save: fields=%v err=%v", fields, err)
 	}
-	if result.Saved || result.PostSave.MaterialChange || result.PostSave.RunDiscovery || result.PostSave.RunIntegration || result.PostSave.RunSMTP || result.PostSave.GeneratePreviews {
+	if result.Saved || result.PostSave.MaterialChange || result.PostSave.RunDiscovery || result.PostSave.RunIntegration || result.PostSave.RunSMTP || result.PostSave.GeneratePreviews || result.PostSave.WarmCache {
 		if !result.PostSave.CacheEnabled || !result.PostSave.VerifyCache {
 			t.Fatalf("no-op save did not schedule the enabled-cache verification: %+v", result.PostSave)
 		}
@@ -296,34 +297,35 @@ func TestSavedConnectionCategoriesInvalidateOnlyRelevantEvidence(t *testing.T) {
 		wantChoicesState string
 		wantLANState     string
 		wantSMTPState    string
+		wantCacheState   string
 	}{
 		{
 			name: "Tautulli invalidates discovery and integration",
 			mutate: func(request *ConfigSaveRequest) {
 				request.Values["TautulliUrl"] = json.RawMessage(`"http://127.0.0.1:8282"`)
 			},
-			wantSMTP: true, wantPreviewState: "waiting", wantChoicesState: "waiting", wantLANState: "waiting", wantSMTPState: "passed",
+			wantSMTP: true, wantPreviewState: "waiting", wantChoicesState: "waiting", wantLANState: "waiting", wantSMTPState: "passed", wantCacheState: "running",
 		},
 		{
 			name: "Plex invalidates integration only",
 			mutate: func(request *ConfigSaveRequest) {
 				request.Values["PlexServerUrl"] = json.RawMessage(`"http://127.0.0.1:32401"`)
 			},
-			wantDiscovery: true, wantSMTP: true, wantPreviewState: "waiting", wantChoicesState: "passed", wantLANState: "waiting", wantSMTPState: "passed",
+			wantDiscovery: true, wantSMTP: true, wantPreviewState: "waiting", wantChoicesState: "passed", wantLANState: "waiting", wantSMTPState: "passed", wantCacheState: "running",
 		},
 		{
 			name: "SMTP invalidates SMTP only",
 			mutate: func(request *ConfigSaveRequest) {
 				request.Values["SmtpTimeoutSeconds"] = json.RawMessage(`45`)
 			},
-			wantDiscovery: true, wantIntegration: true, wantPreviewState: "passed", wantChoicesState: "passed", wantLANState: "passed", wantSMTPState: "waiting",
+			wantDiscovery: true, wantIntegration: true, wantPreviewState: "passed", wantChoicesState: "passed", wantLANState: "passed", wantSMTPState: "waiting", wantCacheState: "waiting",
 		},
 		{
 			name: "library selection invalidates previews only",
 			mutate: func(request *ConfigSaveRequest) {
 				request.Values["IncludedLibraryIds"] = json.RawMessage(`["7"]`)
 			},
-			wantDiscovery: true, wantIntegration: true, wantSMTP: true, wantPreviewState: "waiting", wantChoicesState: "passed", wantLANState: "passed", wantSMTPState: "passed",
+			wantDiscovery: true, wantIntegration: true, wantSMTP: true, wantPreviewState: "waiting", wantChoicesState: "passed", wantLANState: "passed", wantSMTPState: "passed", wantCacheState: "running",
 		},
 	}
 
@@ -343,7 +345,7 @@ func TestSavedConnectionCategoriesInvalidateOnlyRelevantEvidence(t *testing.T) {
 			if gotDiscovery != test.wantDiscovery || (status.LastVerification != nil) != test.wantIntegration || (status.LastSMTPCheck != nil) != test.wantSMTP {
 				t.Fatalf("retained evidence: discovery=%t integration=%t smtp=%t status=%+v plan=%+v", gotDiscovery, status.LastVerification != nil, status.LastSMTPCheck != nil, status, result.PostSave)
 			}
-			if status.Steps["choices"].State != test.wantChoicesState || status.Steps["lan"].State != test.wantLANState || status.Steps["smtp"].State != test.wantSMTPState || status.Steps["previews"].State != test.wantPreviewState || status.Steps["cache"].State != "waiting" {
+			if status.Steps["choices"].State != test.wantChoicesState || status.Steps["lan"].State != test.wantLANState || status.Steps["smtp"].State != test.wantSMTPState || status.Steps["previews"].State != test.wantPreviewState || status.Steps["cache"].State != test.wantCacheState {
 				t.Fatalf("scoped steps: got=%+v", status.Steps)
 			}
 		})

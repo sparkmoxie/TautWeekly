@@ -155,6 +155,7 @@ case "$cmd" in
   setup) run_script Setup-First.ps1 ;;
   verify) run_script Verify-Setup.ps1 ;;
   cache-status) run_script Cache-Diagnostics.ps1 -DataRoot /data "$@" ;;
+  cache-refresh) run_mode CacheWarm ;;
   list-users) run_mode ListUsers ;;
   exclude-users|manage-exclusions) run_script Manage-User-Exclusions.ps1 ;;
   list-libraries) run_script Manage-Library-Selection.ps1 -ListOnly ;;
@@ -312,6 +313,7 @@ TautWeekly for Plex FreeBSD Podman commands
   sudo tautweekly setup
   sudo tautweekly verify
   sudo tautweekly cache-status
+  sudo tautweekly cache-refresh
   sudo tautweekly list-users
   sudo tautweekly exclude-users
   sudo tautweekly list-libraries

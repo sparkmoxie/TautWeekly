@@ -126,9 +126,11 @@ checks, Plex changes rerun integration checks, SMTP-card changes rerun SMTP
 preflight, and presentation/content/library changes regenerate six local
 previews when retained or refreshed discovery reports one unambiguous owner or
 administrator ID. When cache storage is enabled, every successful action also
-runs the complete local cache verification. If cache settings changed and
-PreviewAll can start, cache health remains **Waiting** until that prerequisite
-finishes; Manager then retains the actual result for Dashboard and Verify.
+runs the complete local cache verification. Applicable cache and coverage
+changes start a dedicated, userless `CacheWarm` operation for every currently
+production-eligible included user's selected-library newsletter window. Cache
+health changes directly to blue **Running**; PreviewAll remains independent,
+and Manager retains the final local result for Dashboard and Verify.
 Email, schedule, and delivery-delay-only saves otherwise retain applicable
 results. The SMTP preflight permits a
 configured private or public unicast provider but stops before authentication

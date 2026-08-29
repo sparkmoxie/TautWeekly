@@ -40,6 +40,7 @@ $required = @(
     'platforms/windows/RESET-MANAGER-ACCESS.ps1',
     'platforms/windows/18-RESET-MANAGER-ACCESS.bat',
     'platforms/windows/19-CACHE-DIAGNOSTICS.bat',
+    'platforms/windows/20-REFRESH-DELETED-ITEM-CACHE.bat',
     'platforms/windows/17-CHECK-FOR-UPDATE.bat',
     'platforms/nas-docker/compose.yaml',
     'platforms/nas-docker/compose.qnap.yaml',

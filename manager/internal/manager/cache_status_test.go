@@ -180,7 +180,7 @@ func TestDeletedItemCacheStatusEndpointRequiresSessionCSRFAndRevision(t *testing
 	}
 }
 
-func TestPreviewWarmupWaitsThenPersistsFullCacheVerification(t *testing.T) {
+func TestCacheWarmRunsIndependentlyThenPersistsFullCacheVerification(t *testing.T) {
 	root := normalizedConfigRoot(t)
 	private := seedDeletedItemCache(t, root, cacheStatusNow, true)
 	runner := &fixturePreviewRunner{started: make(chan struct{}), release: make(chan struct{})}
@@ -205,34 +205,32 @@ func TestPreviewWarmupWaitsThenPersistsFullCacheVerification(t *testing.T) {
 	}
 	cookie := &http.Cookie{Name: sessionCookieName, Value: session.Token}
 	body, _ := json.Marshal(CreateOperationRequest{
-		Type:             "preview-all",
+		Type:             "cache-warm",
 		ExpectedRevision: revision,
-		UserID:           "42",
-		ConfirmNoSend:    true,
 	})
 	started := mutationRequestForTest(server, http.MethodPost, "/api/v1/operations", body, cookie, session.CSRFToken)
 	if started.Code != http.StatusAccepted {
-		t.Fatalf("preview start: %d %s", started.Code, started.Body.String())
+		t.Fatalf("cache warm start: %d %s", started.Code, started.Body.String())
 	}
 	select {
 	case <-runner.started:
 	case <-time.After(3 * time.Second):
-		t.Fatal("preview fixture did not start")
+		t.Fatal("cache warm fixture did not start")
 	}
 
 	warmup := requestForTest(server, http.MethodGet, "/api/v1/config/status", nil, cookie)
-	var waiting ConfigurationStatus
-	if err := json.Unmarshal(warmup.Body.Bytes(), &waiting); err != nil {
+	var running ConfigurationStatus
+	if err := json.Unmarshal(warmup.Body.Bytes(), &running); err != nil {
 		t.Fatal(err)
 	}
-	if waiting.Steps["previews"].State != "running" || waiting.Steps["cache"].State != "waiting" {
-		t.Fatalf("cache prerequisite was presented as a completed finding: previews=%+v cache=%+v", waiting.Steps["previews"], waiting.Steps["cache"])
+	if running.Steps["cache"].State != "running" || running.Steps["previews"].State == "running" {
+		t.Fatalf("cache refresh was not independent and running: previews=%+v cache=%+v", running.Steps["previews"], running.Steps["cache"])
 	}
 
 	close(runner.release)
 	finished := waitForOperationState(t, server.operations, "succeeded")
 	if finished.DeliveryScope != "none" || finished.SMTPAcceptedCount != 0 {
-		t.Fatalf("preview warm-up crossed the delivery boundary: %+v", finished)
+		t.Fatalf("cache warm crossed the delivery boundary: %+v", finished)
 	}
 	refreshed := requestForTest(server, http.MethodGet, "/api/v1/config/status", nil, cookie)
 	var completed ConfigurationStatus
@@ -240,7 +238,7 @@ func TestPreviewWarmupWaitsThenPersistsFullCacheVerification(t *testing.T) {
 		t.Fatal(err)
 	}
 	if completed.Cache == nil || completed.Cache.Verification != "full" || completed.Cache.Writability != "passed" || completed.Cache.IntegrityState != "verified" {
-		t.Fatalf("preview completion did not run full cache verification: %+v", completed.Cache)
+		t.Fatalf("cache warm completion did not run full cache verification: %+v", completed.Cache)
 	}
 	if completed.Cache.State != "warning" || completed.Steps["cache"].State != "warning" || completed.Cache.ExpiredEntryCount != 1 {
 		t.Fatalf("completed cleanup finding was not retained as an actual warning: cache=%+v step=%+v", completed.Cache, completed.Steps["cache"])
@@ -259,26 +257,23 @@ func TestPreviewWarmupWaitsThenPersistsFullCacheVerification(t *testing.T) {
 	}
 }
 
-func TestPreviewTerminalFailureAndCancellationStillCompleteCacheVerification(t *testing.T) {
+func TestCacheWarmFailureAndCancellationRemainFailed(t *testing.T) {
 	tests := []struct {
-		name         string
-		runner       *fixturePreviewRunner
-		terminal     string
-		previewState string
-		cancel       bool
+		name     string
+		runner   *fixturePreviewRunner
+		terminal string
+		cancel   bool
 	}{
 		{
-			name:         "renderer failure",
-			runner:       &fixturePreviewRunner{previewExitCode: 1, previewErrorCategory: "tautulli-unavailable"},
-			terminal:     "failed",
-			previewState: "failed",
+			name:     "renderer failure",
+			runner:   &fixturePreviewRunner{cacheExitCode: 1, cacheErrorCategory: "tautulli-unavailable"},
+			terminal: "failed",
 		},
 		{
-			name:         "user cancellation",
-			runner:       &fixturePreviewRunner{started: make(chan struct{}), release: make(chan struct{})},
-			terminal:     "cancelled",
-			previewState: "skipped",
-			cancel:       true,
+			name:     "user cancellation",
+			runner:   &fixturePreviewRunner{started: make(chan struct{}), release: make(chan struct{})},
+			terminal: "cancelled",
+			cancel:   true,
 		},
 	}
 	for _, test := range tests {
@@ -297,7 +292,7 @@ func TestPreviewTerminalFailureAndCancellationStillCompleteCacheVerification(t *
 				t.Fatal(err)
 			}
 			started, err := server.operations.Start(CreateOperationRequest{
-				Type: "preview-all", ExpectedRevision: revision, UserID: "42", ConfirmNoSend: true,
+				Type: "cache-warm", ExpectedRevision: revision,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -306,7 +301,7 @@ func TestPreviewTerminalFailureAndCancellationStillCompleteCacheVerification(t *
 				select {
 				case <-test.runner.started:
 				case <-time.After(3 * time.Second):
-					t.Fatal("preview fixture did not start")
+					t.Fatal("cache warm fixture did not start")
 				}
 				if _, err := server.operations.Cancel(started.ID); err != nil {
 					t.Fatal(err)
@@ -314,13 +309,12 @@ func TestPreviewTerminalFailureAndCancellationStillCompleteCacheVerification(t *
 			}
 			finished := waitForOperationState(t, server.operations, test.terminal)
 			if (finished.DeliveryScope != "" && finished.DeliveryScope != "none") || finished.SMTPAcceptedCount != 0 {
-				t.Fatalf("terminal preview crossed the delivery boundary: %+v", finished)
+					t.Fatalf("terminal cache warm crossed the delivery boundary: %+v", finished)
 			}
 			status := server.configuration.Load(revision)
-			if status.Cache == nil || status.Cache.Verification != "full" || status.Cache.State != "passed" ||
-				status.Cache.Writability != "passed" || status.Cache.IntegrityState != "verified" || status.Steps["cache"].State != "passed" ||
-				status.Steps["previews"].State != test.previewState {
-				t.Fatalf("terminal preview did not retain full cache evidence: operation=%+v status=%+v", finished, status)
+			if status.Cache == nil || status.Cache.Verification != "full" || status.Cache.State != "failed" || status.Steps["cache"].State != "failed" ||
+				status.Steps["previews"].State == "running" {
+				t.Fatalf("terminal cache warm did not retain its failure independently: operation=%+v status=%+v", finished, status)
 			}
 			encoded, err := json.Marshal(status)
 			if err != nil {
@@ -332,7 +326,7 @@ func TestPreviewTerminalFailureAndCancellationStillCompleteCacheVerification(t *
 				}
 			}
 			if matches, _ := filepath.Glob(filepath.Join(root, "cache", "deleted-items", ".manager-cache-write-probe-*.tmp")); len(matches) != 0 {
-				t.Fatalf("terminal cache verification left a write probe: %v", matches)
+				t.Fatalf("terminal cache warm left a write probe: %v", matches)
 			}
 		})
 	}
