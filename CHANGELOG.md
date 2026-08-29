@@ -27,6 +27,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   an existing browser window is found, so an installer upgrade cannot leave a
   focused pre-upgrade document displaying obsolete Manager controls.
 
+### Fixed
+
+- Fixed the Windows Funnel card renderer so its public/private presentation is
+  selected before transition state is evaluated. This prevents the upgraded
+  dashboard from retaining the retired private Serve labels.
+
 ### Security
 
 - Public Funnel enablement requires the Windows Manager password lock. Disabling

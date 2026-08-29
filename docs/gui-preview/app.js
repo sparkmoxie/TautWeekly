@@ -3443,13 +3443,13 @@ function renderTailscaleSettings() {
   if (!remote.supported) return;
   panel.classList.toggle("enabled-glow", Boolean(remote.enabled && remote.active));
 
+  const windows = state.runtimeMode === "windows";
+  const publicFunnel = windows && remote.networkKind === "public-funnel";
   const displayRemote = publicFunnel && state.tailscaleSaving
     ? { ...remote, state: state.tailscaleRequestedOperation === "enable" ? "starting" : "stopping" }
     : remote;
   const presentation = tailscaleStatePresentation(displayRemote);
   const external = remote.management === "external";
-  const windows = state.runtimeMode === "windows";
-  const publicFunnel = windows && remote.networkKind === "public-funnel";
   const passwordLocked = Boolean(state.authAccess?.passwordLockEnabled);
   setText("tailscale-settings-eyebrow", publicFunnel ? "Optional public remote access" : "Optional private remote access");
   setText("tailscale-settings-heading", publicFunnel ? "Tailscale Funnel" : "Tailscale");
