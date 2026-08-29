@@ -60,6 +60,36 @@ function Assert-WatchedPngBytes([string]$PackageName, [string]$AssetName, [byte[
     Assert-True ($Bytes[24] -eq 8 -and $Bytes[25] -eq 6) "$PackageName $AssetName is not 8-bit RGBA with transparency."
 }
 
+function Assert-WindowsManagerSocialJpeg([string]$PackageName, [byte[]]$Bytes) {
+    Assert-True ($Bytes.Length -gt 4 -and $Bytes[0] -eq 0xff -and $Bytes[1] -eq 0xd8 -and
+        $Bytes[$Bytes.Length - 2] -eq 0xff -and $Bytes[$Bytes.Length - 1] -eq 0xd9) "$PackageName Manager social preview is not a complete JPEG."
+    $width = 0
+    $height = 0
+    $offset = 2
+    $frameMarkers = @(0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf)
+    while ($offset -lt $Bytes.Length) {
+        Assert-True ($Bytes[$offset] -eq 0xff) "$PackageName Manager social preview has an invalid JPEG marker."
+        while ($offset -lt $Bytes.Length -and $Bytes[$offset] -eq 0xff) { $offset++ }
+        Assert-True ($offset -lt $Bytes.Length) "$PackageName Manager social preview has a truncated JPEG marker."
+        $marker = [int]$Bytes[$offset]
+        $offset++
+        if ($marker -eq 0xd9 -or $marker -eq 0xda) { break }
+        if ($marker -eq 0x01 -or ($marker -ge 0xd0 -and $marker -le 0xd7)) { continue }
+        Assert-True ($offset + 1 -lt $Bytes.Length) "$PackageName Manager social preview has a truncated JPEG segment."
+        $length = ([int]$Bytes[$offset] * 256) + [int]$Bytes[$offset + 1]
+        Assert-True ($length -ge 2 -and $offset + $length -le $Bytes.Length) "$PackageName Manager social preview has an invalid JPEG segment length."
+        if ($frameMarkers -contains $marker) {
+            Assert-True ($length -ge 7) "$PackageName Manager social preview has a truncated frame header."
+            $height = ([int]$Bytes[$offset + 3] * 256) + [int]$Bytes[$offset + 4]
+            $width = ([int]$Bytes[$offset + 5] * 256) + [int]$Bytes[$offset + 6]
+        }
+        $offset += $length
+    }
+    Assert-True ($width -eq 1280 -and $height -eq 640) "$PackageName Manager social preview has wrong dimensions: ${width}x${height}."
+    $ascii = [Text.Encoding]::ASCII.GetString($Bytes)
+    Assert-True ($ascii -notmatch 'Exif|Photoshop 3[.]0|ns[.]adobe[.]com/xap') "$PackageName Manager social preview retains editor or EXIF/XMP metadata."
+}
+
 
 function Assert-RendererContract([string]$PackageName, [string]$Renderer) {
     Assert-True ($Renderer.Contains('[string]$ResultPath = ""')) "$PackageName lacks the Manager structured-result path."
@@ -226,6 +256,7 @@ $expected = [ordered]@{
         'TautWeekly-windows/RESET-MANAGER-ACCESS.ps1',
         'TautWeekly-windows/SCHEDULE-HELPER.ps1',
         'TautWeekly-windows/TAILSCALE-HELPER.ps1',
+        'TautWeekly-windows/manager-assets/tautweekly-social-preview.jpg',
         'TautWeekly-windows/tautweekly-manager.exe',
         'TautWeekly-windows/TautWeekly-Uninstall.exe',
         'TautWeekly-windows/THIRD_PARTY_NOTICES.md',
@@ -366,6 +397,13 @@ $expectedWatchedPngs = [ordered]@{
     'watched.png' = @{ Hash='26744BE4A08445006673CEE9757E88937FF6A98406ECA4ACF6C4DA4FC2B20498'; Width=20; Height=20 }
     'watched-desktop.png' = @{ Hash='714BBB0D84C41A22AD38717A52BF177029F8854EC3ACE48E753C162D7E97A52E'; Width=26; Height=26 }
 }
+$expectedWindowsManagerSocialHash = '1AB6B9CE65FD8E6A9587453484E1969348C952057F8087A734B602856DAC761D'
+$windowsManagerSocialPath = Join-Path $Root 'platforms/windows/manager-assets/tautweekly-social-preview.jpg'
+Assert-True (Test-Path -LiteralPath $windowsManagerSocialPath -PathType Leaf) 'Windows Manager social preview is missing.'
+$windowsManagerSocialBytes = [IO.File]::ReadAllBytes($windowsManagerSocialPath)
+Assert-True ($windowsManagerSocialBytes.Length -eq 581202) 'Windows Manager social preview byte size changed unexpectedly.'
+Assert-True ((Get-FileHash -LiteralPath $windowsManagerSocialPath -Algorithm SHA256).Hash -ceq $expectedWindowsManagerSocialHash) 'Windows Manager social preview hash changed unexpectedly.'
+Assert-WindowsManagerSocialJpeg 'Windows source' $windowsManagerSocialBytes
 
 $expectedBrandFiles = [ordered]@{
     'TautWeekly-windows.zip' = [ordered]@{
@@ -429,6 +467,9 @@ foreach ($archiveName in $expected.Keys) {
         foreach ($requiredEntry in $expected[$archiveName]) {
             Assert-True ($entryNames -ccontains $requiredEntry) "$archiveName is missing $requiredEntry"
         }
+        if ($archiveName -ne 'TautWeekly-windows.zip') {
+            Assert-True (@($entryNames | Where-Object { $_ -match '/manager-assets/tautweekly-social-preview[.]jpg$' }).Count -eq 0) "$archiveName contains the Windows-only Manager social preview."
+        }
         $thirdPartyNoticeEntry = @($archive.Entries | Where-Object { $_.FullName.Replace('\', '/') -match '/THIRD_PARTY_NOTICES[.]md$' })
         Assert-True ($thirdPartyNoticeEntry.Count -eq 1) "$archiveName has no unique third-party notices file."
         $thirdPartyNoticeReader = New-Object IO.StreamReader($thirdPartyNoticeEntry[0].Open())
@@ -451,6 +492,11 @@ foreach ($archiveName in $expected.Keys) {
         }
 
         if ($archiveName -eq 'TautWeekly-windows.zip') {
+            $socialEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-windows/manager-assets/tautweekly-social-preview.jpg' })
+            Assert-True ($socialEntry.Count -eq 1) 'Windows archive has no unique Manager social preview.'
+            Assert-True ((Get-ZipEntrySha256 $socialEntry[0]) -ceq $expectedWindowsManagerSocialHash) 'Windows archive Manager social preview hash changed.'
+            Assert-WindowsManagerSocialJpeg 'Windows archive' (Get-ZipEntryBytes $socialEntry[0])
+
             $managerEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-windows/tautweekly-manager.exe' })
             Assert-True ($managerEntry.Count -eq 1) 'Windows archive has no unique Manager executable.'
             $managerStream = $managerEntry[0].Open()

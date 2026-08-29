@@ -122,6 +122,27 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 	if !strings.Contains(response.Body.String(), "TautWeekly Manager") {
 		t.Fatal("static root did not serve the embedded application shell")
 	}
+	document := response.Body.String()
+	for _, expected := range []string{
+		"<title>" + windowsManagerBrowserTitle + "</title>",
+		`<meta name="description" content="` + windowsManagerSocialDescription + `">`,
+		`<meta property="og:title" content="` + windowsManagerSocialTitle + `">`,
+		`<meta property="og:type" content="website">`,
+		`<meta property="og:image" content="http://127.0.0.1:8788/manager-social-preview.jpg">`,
+		`<meta property="og:url" content="http://127.0.0.1:8788/">`,
+		`<meta property="og:image:width" content="1280">`,
+		`<meta property="og:image:height" content="640">`,
+		`<meta name="twitter:card" content="summary_large_image">`,
+		`<link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="16x16 24x24 32x32">`,
+		`<link rel="icon" href="/tautweekly-icon-192.png" type="image/png" sizes="192x192">`,
+	} {
+		if !strings.Contains(document, expected) {
+			t.Fatalf("Windows Manager document omitted sharing or favicon metadata: %s", expected)
+		}
+	}
+	if strings.Contains(document, "og:image:secure_url") {
+		t.Fatal("loopback HTTP document advertised a secure image URL")
+	}
 	if cache := response.Header().Get("Cache-Control"); cache != "no-store" {
 		t.Fatalf("static application cache policy: got %q, want no-store", cache)
 	}
@@ -131,6 +152,35 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 	app := requestForTest(server, http.MethodGet, "/app.js", nil, nil)
 	if app.Code != http.StatusOK || !strings.Contains(app.Body.String(), "no-eligible-recipients") || !strings.Contains(app.Body.String(), "origin-host-mismatch") || !strings.Contains(app.Body.String(), "httpHostHeader") || !strings.Contains(app.Body.String(), "No configuration was saved") || !strings.Contains(app.Body.String(), "(unsaved)") {
 		t.Fatalf("production JavaScript omitted recipient/origin guidance: status=%d", app.Code)
+	}
+	favicon := requestForTest(server, http.MethodGet, "/favicon.ico", nil, nil)
+	if favicon.Code != http.StatusOK || favicon.Header().Get("Content-Type") != "image/x-icon" || len(favicon.Body.Bytes()) < 4 || !bytes.Equal(favicon.Body.Bytes()[:4], []byte{0, 0, 1, 0}) {
+		t.Fatalf("Windows Manager favicon contract failed: status=%d type=%q bytes=%d", favicon.Code, favicon.Header().Get("Content-Type"), favicon.Body.Len())
+	}
+}
+
+func TestNonWindowsManagerDoesNotExposeWindowsSocialMetadataOrAsset(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	assetPath := filepath.Join(root, filepath.FromSlash(windowsManagerSocialImageRelativePath))
+	if err := os.MkdirAll(filepath.Dir(assetPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(assetPath, []byte{0xff, 0xd8, 0xff, 0xd9}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server, err := New(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Version: "test", RuntimeMode: runtimeModeLinux})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rootResponse := requestForTest(server, http.MethodGet, "/", nil, nil)
+	if rootResponse.Code != http.StatusOK || strings.Contains(rootResponse.Body.String(), "og:image") || !strings.Contains(rootResponse.Body.String(), "<title>TautWeekly Manager</title>") {
+		t.Fatalf("non-Windows Manager sharing boundary changed: code=%d", rootResponse.Code)
+	}
+	assetResponse := requestForTest(server, http.MethodGet, windowsManagerSocialImagePath, nil, nil)
+	if assetResponse.Code != http.StatusNotFound {
+		t.Fatalf("non-Windows Manager served the Windows social image: code=%d", assetResponse.Code)
 	}
 }
 

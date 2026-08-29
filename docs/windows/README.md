@@ -170,6 +170,12 @@ Windows** again. If it remains pending, restart the official Tailscale Windows
 service once and verify again. Do not create an A record, share the machine,
 open a firewall/router port, or install Tailscale on the viewing device.
 
+Once the public address resolves, links to the Manager render a TautWeekly
+large-card preview with a concise title and description. The preview image and
+favicon are served by the Windows Manager itself; canonical preview URLs use
+only its validated Funnel Host, never browser-forwarded host or scheme headers.
+The login shell remains marked no-index.
+
 Local `http://127.0.0.1:8788` remains the recovery path. Disabling the password
 lock, using the access-reset shortcut, or uninstalling first disables and
 verifies the exact TautWeekly Funnel. If that cannot be verified, the password
