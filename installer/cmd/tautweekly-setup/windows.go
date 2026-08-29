@@ -57,6 +57,8 @@ var (
 	resultYes         = uintptr(6)
 )
 
+const elevatedUpdateLauncherScript = `$ErrorActionPreference='Stop';$q=[char]34;$arguments=@('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',($q+$env:TAUTWEEKLY_UPDATE_SCRIPT+$q),'-InstallRoot',($q+$env:TAUTWEEKLY_UPDATE_ROOT+$q),'-CandidateRoot',($q+$env:TAUTWEEKLY_UPDATE_CANDIDATE+$q),'-TargetVersion',$env:TAUTWEEKLY_UPDATE_VERSION,'-ResultPath',($q+$env:TAUTWEEKLY_UPDATE_RESULT+$q),'-ManagerDataRoot',($q+$env:TAUTWEEKLY_UPDATE_DATA+$q));$process=Start-Process -FilePath $env:TAUTWEEKLY_UPDATE_POWERSHELL -ArgumentList $arguments -WorkingDirectory $env:TAUTWEEKLY_UPDATE_CANDIDATE -Verb RunAs -WindowStyle Hidden -PassThru;$process.WaitForExit();exit [int]$process.ExitCode`
+
 type browseInfo struct {
 	owner       uintptr
 	root        uintptr
@@ -235,8 +237,7 @@ func applyVerifiedUpdate(opts options, candidateRoot, targetVersion string) erro
 		arguments = append(arguments, "-InstallerTestMode")
 		command = hiddenCommand(powerShellPath, arguments...)
 	} else {
-		const elevateScript = `$ErrorActionPreference='Stop';$q=[char]34;$arguments=@('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',($q+$env:TAUTWEEKLY_UPDATE_SCRIPT+$q),'-InstallRoot',($q+$env:TAUTWEEKLY_UPDATE_ROOT+$q),'-CandidateRoot',($q+$env:TAUTWEEKLY_UPDATE_CANDIDATE+$q),'-TargetVersion',$env:TAUTWEEKLY_UPDATE_VERSION,'-ResultPath',($q+$env:TAUTWEEKLY_UPDATE_RESULT+$q),'-ManagerDataRoot',($q+$env:TAUTWEEKLY_UPDATE_DATA+$q));$process=Start-Process -FilePath $env:TAUTWEEKLY_UPDATE_POWERSHELL -ArgumentList $arguments -WorkingDirectory $env:TAUTWEEKLY_UPDATE_CANDIDATE -Verb RunAs -WindowStyle Hidden -PassThru -Wait;exit [int]$process.ExitCode`
-		command = hiddenCommand(powerShellPath, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", elevateScript)
+		command = hiddenCommand(powerShellPath, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", elevatedUpdateLauncherScript)
 		command.Env = append(os.Environ(),
 			"TAUTWEEKLY_UPDATE_POWERSHELL="+powerShellPath,
 			"TAUTWEEKLY_UPDATE_SCRIPT="+updateScript,

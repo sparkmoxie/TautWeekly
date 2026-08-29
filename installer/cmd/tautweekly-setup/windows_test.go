@@ -24,6 +24,15 @@ func TestHiddenChildProcessesDoNotInheritSetupHandles(t *testing.T) {
 	}
 }
 
+func TestElevatedUpdateLauncherWaitsForHelperProcessOnly(t *testing.T) {
+	if strings.Contains(elevatedUpdateLauncherScript, "-PassThru -Wait") {
+		t.Fatal("elevated update launcher waits for the helper process tree, which includes the restarted Manager")
+	}
+	if !strings.Contains(elevatedUpdateLauncherScript, "-PassThru;$process.WaitForExit()") {
+		t.Fatal("elevated update launcher does not wait explicitly for the finite update helper process")
+	}
+}
+
 func TestCreateShortcutAcceptsPathsWithSpaces(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "folder with spaces")
 	if err := os.MkdirAll(root, 0o755); err != nil {
