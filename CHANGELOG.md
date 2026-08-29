@@ -32,6 +32,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fixed the Windows Funnel card renderer so its public/private presentation is
   selected before transition state is evaluated. This prevents the upgraded
   dashboard from retaining the retired private Serve labels.
+- Fixed Windows Setup updates of a running Manager so the elevated updater
+  waits for its finite helper process without remaining attached to the
+  successfully restarted Manager and blocking Setup completion.
 
 ### Security
 
