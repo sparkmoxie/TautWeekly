@@ -2,7 +2,7 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.23.4";
+  const DEMO_VERSION = "0.24.0";
   const PREVIOUS_VERSION = "0.23.3";
   const PROFILES = {
     windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows" },

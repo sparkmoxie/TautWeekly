@@ -6,7 +6,7 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.23.4] - 2026-08-28
+## [0.24.0] - 2026-08-28
 
 ### Changed
 
