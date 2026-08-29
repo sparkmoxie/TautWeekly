@@ -92,3 +92,34 @@ func TestDashboardActivationUsesHiddenWindowsAccessibilityCommand(t *testing.T) 
 		t.Fatal("Dashboard activation command is not configured to stay hidden")
 	}
 }
+
+func TestOpenLocalBrowserNavigatesAfterActivatingExistingDashboard(t *testing.T) {
+	originalActivate := activateDashboardWindow
+	originalNavigate := navigateDashboardWindow
+	t.Cleanup(func() {
+		activateDashboardWindow = originalActivate
+		navigateDashboardWindow = originalNavigate
+	})
+
+	activated := false
+	navigated := ""
+	activateDashboardWindow = func() bool {
+		activated = true
+		return true
+	}
+	navigateDashboardWindow = func(target string) error {
+		navigated = target
+		return nil
+	}
+
+	const target = "http://127.0.0.1:8788/"
+	if err := openLocalBrowser(target); err != nil {
+		t.Fatal(err)
+	}
+	if !activated {
+		t.Fatal("existing Dashboard window was not activated")
+	}
+	if navigated != target {
+		t.Fatalf("browser navigation target = %q, want %q", navigated, target)
+	}
+}
