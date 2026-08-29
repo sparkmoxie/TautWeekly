@@ -137,9 +137,23 @@ steps.
   material.
 - **Manager password required** means create and enable a unique password first.
   **Approval required** means approve the Windows UAC prompt and any official
-  one-time Funnel page, then verify again. **Needs attention** means the
-  observed route did not exactly match TautWeekly's fixed loopback target.
+  one-time Funnel page, then verify again. **Publication pending** means the
+  exact loopback route exists but the fixed public DNS and certificate-validated
+  TLS checks have not passed. The URL remains available and the card glows gold;
+  it is not an active public Funnel. **Needs attention** means the observed route
+  did not exactly match TautWeekly's fixed loopback target.
+- Tailscale documents that public DNS can take up to 10 minutes. After that,
+  choose **Verify with Windows**. If publication remains pending, restart the
+  official Tailscale Windows service once and verify again. A known upstream
+  Windows failure can retain a valid local Funnel while omitting public
+  control-plane publication: <https://github.com/tailscale/tailscale/issues/19508>.
+  Do not create an A record, share the machine, reinstall Tailscale, or add a
+  firewall/router rule; those actions do not publish Funnel.
 - A successful CLI configuration check does not replace public edge acceptance.
+  TautWeekly queries the exact intended-public hostname through `1.1.1.1`,
+  rejects non-public answers, and requires a trusted TLS certificate before
+  showing **Active**. No DNS answer, certificate, raw CLI output, or private
+  network detail is returned to Manager or written to diagnostics.
   From a separate network, open the generated HTTPS address, sign in, verify a
   read and a CSRF-protected change, sign out, and confirm the local Dashboard
   still works. Do not expose port 8788 or add a firewall/router rule.

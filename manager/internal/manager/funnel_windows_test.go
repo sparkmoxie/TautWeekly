@@ -14,13 +14,14 @@ import (
 )
 
 type fixtureWindowsFunnelRunner struct {
-	available bool
-	hostname  string
-	target    string
-	observed  []byte
-	commands  []string
-	errors    map[string]error
-	responses map[string][]byte
+	available         bool
+	hostname          string
+	target            string
+	observed          []byte
+	commands          []string
+	errors            map[string]error
+	responses         map[string][]byte
+	publiclyPublished bool
 }
 
 func (f *fixtureWindowsFunnelRunner) Available() bool        { return f.available }
@@ -28,29 +29,33 @@ func (f *fixtureWindowsFunnelRunner) RequiresApproval() bool { return true }
 func (f *fixtureWindowsFunnelRunner) Run(context.Context, ...string) ([]byte, error) {
 	return nil, errors.New("an unelevated Tailscale command was not expected")
 }
-func (f *fixtureWindowsFunnelRunner) RunPrivileged(_ context.Context, action, target string) ([]byte, error) {
+func (f *fixtureWindowsFunnelRunner) RunFunnelPrivileged(_ context.Context, action, target string) (windowsFunnelObservation, error) {
 	f.commands = append(f.commands, action+" "+target)
 	if err := f.errors[action]; err != nil {
-		return nil, err
+		return windowsFunnelObservation{}, err
 	}
 	if response, ok := f.responses[action]; ok {
-		return slices.Clone(response), nil
+		status, err := decodeTailscaleServeStatus(slices.Clone(response))
+		return windowsFunnelObservation{ServeStatus: status, PubliclyPublished: f.publiclyPublished}, err
 	}
 	if target != f.target {
-		return nil, errors.New("unexpected fixed target")
+		return windowsFunnelObservation{}, errors.New("unexpected fixed target")
 	}
+	var raw []byte
 	switch action {
 	case "inspect":
-		return slices.Clone(f.observed), nil
+		raw = slices.Clone(f.observed)
 	case "enable":
 		f.observed = ownedTailscaleFunnelJSON(f.hostname, f.target)
-		return slices.Clone(f.observed), nil
+		raw = slices.Clone(f.observed)
 	case "disable":
 		f.observed = []byte(`{}`)
-		return slices.Clone(f.observed), nil
+		raw = slices.Clone(f.observed)
 	default:
-		return nil, errors.New("unexpected allowlisted action")
+		return windowsFunnelObservation{}, errors.New("unexpected allowlisted action")
 	}
+	status, err := decodeTailscaleServeStatus(raw)
+	return windowsFunnelObservation{ServeStatus: status, PubliclyPublished: f.publiclyPublished}, err
 }
 
 func ownedTailscaleFunnelJSON(hostname, target string) []byte {
@@ -70,7 +75,7 @@ func TestWindowsFunnelLifecycleUsesOnlyFixedPrivilegedOperations(t *testing.T) {
 		hostname = "tautweekly.example-tailnet.ts.net"
 		target   = "http://127.0.0.1:18788"
 	)
-	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: []byte(`{}`), errors: map[string]error{}}
+	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: []byte(`{}`), errors: map[string]error{}, publiclyPublished: true}
 	dataDir := t.TempDir()
 	controller := newWindowsFunnelController(dataDir, "127.0.0.1:18788", true, runner)
 
@@ -116,7 +121,7 @@ func TestWindowsFunnelMigratesLegacyPrivateServeOnlyAfterExplicitEnable(t *testi
 	if err := writePrivateJSON(filepath.Join(dataDir, remoteAccessStateFile), remoteAccessFile{SchemaVersion: remoteAccessSchemaVersion, Enabled: true, Hostname: hostname}); err != nil {
 		t.Fatal(err)
 	}
-	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: ownedTailscaleServeJSON(hostname, target), errors: map[string]error{}}
+	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: ownedTailscaleServeJSON(hostname, target), errors: map[string]error{}, publiclyPublished: true}
 	controller := newWindowsFunnelController(dataDir, "127.0.0.1:8788", true, runner)
 	status := controller.Status(context.Background())
 	if status.State != "migration-required" || !status.Installed || !status.CleanupRequired || controller.AllowsHost(hostname) {
@@ -136,7 +141,7 @@ func TestWindowsFunnelShutdownFailurePreservesPasswordSafetyState(t *testing.T) 
 		hostname = "shutdown.example-tailnet.ts.net"
 		target   = "http://127.0.0.1:8788"
 	)
-	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: ownedTailscaleFunnelJSON(hostname, target), errors: map[string]error{}}
+	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: ownedTailscaleFunnelJSON(hostname, target), errors: map[string]error{}, publiclyPublished: true}
 	controller := newWindowsFunnelController(t.TempDir(), "127.0.0.1:8788", true, runner)
 	if _, err := controller.Update(context.Background(), true, "", false); err != nil {
 		t.Fatal(err)
@@ -189,7 +194,7 @@ func TestWindowsFunnelStateNeverStoresCommandOrTailnetInventory(t *testing.T) {
 		target   = "http://127.0.0.1:8788"
 	)
 	dataDir := t.TempDir()
-	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: []byte(`{}`), errors: map[string]error{}}
+	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: []byte(`{}`), errors: map[string]error{}, publiclyPublished: true}
 	controller := newWindowsFunnelController(dataDir, "127.0.0.1:8788", true, runner)
 	if _, err := controller.Update(context.Background(), true, "", false); err != nil {
 		t.Fatal(err)
@@ -240,7 +245,7 @@ func TestWindowsFunnelRejectsStaleAndMalformedCLIResponses(t *testing.T) {
 		target   = "http://127.0.0.1:8788"
 	)
 	runner := &fixtureWindowsFunnelRunner{
-		available: true, hostname: hostname, target: target, observed: []byte(`{}`),
+		available: true, hostname: hostname, target: target, observed: []byte(`{}`), publiclyPublished: true,
 		errors: map[string]error{}, responses: map[string][]byte{"enable": []byte(`{"AllowFunnel":`)},
 	}
 	controller := newWindowsFunnelController(t.TempDir(), "127.0.0.1:8788", true, runner)
@@ -287,7 +292,7 @@ func TestWindowsFunnelEnableRollsBackIfLegacyStateCannotBeRetired(t *testing.T) 
 	if err := os.Mkdir(filepath.Join(dataDir, remoteAccessStateFile), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: []byte(`{}`), errors: map[string]error{}, responses: map[string][]byte{}}
+	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: []byte(`{}`), errors: map[string]error{}, responses: map[string][]byte{}, publiclyPublished: true}
 	controller := newWindowsFunnelController(dataDir, "127.0.0.1:8788", true, runner)
 	status, err := controller.Update(context.Background(), true, "", false)
 	if err == nil || controller.AllowsHost(hostname) || status.Enabled || status.Active {
@@ -295,5 +300,43 @@ func TestWindowsFunnelEnableRollsBackIfLegacyStateCannotBeRetired(t *testing.T) 
 	}
 	if !slices.Equal(runner.commands, []string{"enable " + target, "disable " + target}) {
 		t.Fatalf("enable rollback did not use the fixed shutdown operation: %v", runner.commands)
+	}
+}
+
+func TestWindowsFunnelDoesNotReportActiveBeforePublicPublication(t *testing.T) {
+	const (
+		hostname = "pending.example-tailnet.ts.net"
+		target   = "http://127.0.0.1:8788"
+	)
+	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: []byte(`{}`), errors: map[string]error{}}
+	controller := newWindowsFunnelController(t.TempDir(), "127.0.0.1:8788", true, runner)
+
+	pending, err := controller.Update(context.Background(), true, "", false)
+	if err != nil || !pending.Enabled || pending.Active || pending.State != "starting" || pending.ErrorCode != "tailscale-funnel-publication-pending" || pending.URL != "https://"+hostname {
+		t.Fatalf("local Funnel was falsely reported public: status=%+v err=%v", pending, err)
+	}
+	restarted := newWindowsFunnelController(filepath.Dir(controller.statePath), "127.0.0.1:8788", true, runner)
+	stillPending := restarted.Status(context.Background())
+	if !stillPending.Enabled || stillPending.Active || stillPending.State != "starting" || stillPending.URL != "https://"+hostname {
+		t.Fatalf("publication-pending state did not survive restart: %+v", stillPending)
+	}
+	runner.publiclyPublished = true
+	active, err := restarted.Verify(context.Background())
+	if err != nil || !active.Active || active.State != "active" || active.ErrorCode != "" {
+		t.Fatalf("published Funnel was not promoted to active: status=%+v err=%v", active, err)
+	}
+}
+
+func TestWindowsFunnelSchemaOneUpgradeRequiresFreshPublicVerification(t *testing.T) {
+	const hostname = "upgrade.example-tailnet.ts.net"
+	dataDir := t.TempDir()
+	legacy := []byte(`{"schemaVersion":1,"enabled":true,"hostname":"` + hostname + `"}`)
+	if err := os.WriteFile(filepath.Join(dataDir, windowsFunnelStateFile), legacy, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := &fixtureWindowsFunnelRunner{available: true, errors: map[string]error{}}
+	status := newWindowsFunnelController(dataDir, "127.0.0.1:8788", true, runner).Status(context.Background())
+	if !status.Enabled || status.Active || status.State != "starting" || status.ErrorCode != "tailscale-funnel-publication-pending" {
+		t.Fatalf("schema-one local route bypassed fresh public verification: %+v", status)
 	}
 }

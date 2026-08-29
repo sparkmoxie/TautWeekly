@@ -36,6 +36,13 @@ admission. Funnel enablement requires an active Manager password lock. Access
 reset, password-lock disable, and uninstall first verify the owned Funnel off;
 installer updates preserve the password verifier and Funnel state.
 
+An exact local Funnel is reported as **Publication pending** until its hostname
+resolves through the fixed `1.1.1.1` public resolver to a globally routable IPv4
+address and a certificate-validated TLS handshake succeeds. The check discloses
+only the intended-public hostname and stores neither the answer nor certificate.
+The URL remains copyable while pending; no DNS, Tailscale service, firewall, or
+router setting is changed automatically.
+
 Other packages retain their existing private Serve configuration and are not
 changed by this Windows-only boundary.
 

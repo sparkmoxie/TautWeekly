@@ -22,19 +22,25 @@ import (
 )
 
 const (
-	windowsFunnelSchemaVersion = 1
+	windowsFunnelSchemaVersion = 2
 	windowsFunnelStateFile     = "windows-funnel.json"
 )
 
 type windowsFunnelFile struct {
-	SchemaVersion int    `json:"schemaVersion"`
-	Enabled       bool   `json:"enabled"`
-	Hostname      string `json:"hostname,omitempty"`
+	SchemaVersion     int    `json:"schemaVersion"`
+	Enabled           bool   `json:"enabled"`
+	Hostname          string `json:"hostname,omitempty"`
+	PubliclyPublished bool   `json:"publiclyPublished,omitempty"`
 }
 
 type windowsFunnelRunner interface {
-	tailscaleCommandRunner
-	privilegedTailscaleCommandRunner
+	Available() bool
+	RunFunnelPrivileged(context.Context, string, string) (windowsFunnelObservation, error)
+}
+
+type windowsFunnelObservation struct {
+	ServeStatus       tailscaleServeStatus
+	PubliclyPublished bool
 }
 
 type windowsFunnelController struct {
@@ -99,11 +105,15 @@ func (c *windowsFunnelController) loadState() {
 	decoder.DisallowUnknownFields()
 	var saved windowsFunnelFile
 	if err := decoder.Decode(&saved); err != nil || decoder.Decode(&struct{}{}) != io.EOF ||
-		saved.SchemaVersion != windowsFunnelSchemaVersion ||
-		(saved.Enabled && !validTailscaleHostname(saved.Hostname)) || (!saved.Enabled && saved.Hostname != "") {
+		(saved.SchemaVersion != 1 && saved.SchemaVersion != windowsFunnelSchemaVersion) ||
+		(saved.Enabled && !validTailscaleHostname(saved.Hostname)) ||
+		(!saved.Enabled && (saved.Hostname != "" || saved.PubliclyPublished)) {
 		c.stateError = errors.New("Windows Funnel state is invalid")
 		return
 	}
+	// Schema 1 recorded only the local route. Treat it as publication pending
+	// until an explicit Verify proves public DNS and trusted TLS.
+	saved.SchemaVersion = windowsFunnelSchemaVersion
 	c.state = saved
 }
 
@@ -227,6 +237,11 @@ func (c *windowsFunnelController) status() TailscaleRemoteAccessStatus {
 		return result
 	}
 	result.Installed = true
+	if result.Enabled && !state.PubliclyPublished {
+		result.State = "starting"
+		result.ErrorCode = "tailscale-funnel-publication-pending"
+		return result
+	}
 	result.State = "approval-required"
 	result.ErrorCode = "tailscale-approval-required"
 	return result
@@ -241,18 +256,26 @@ func (c *windowsFunnelController) Verify(ctx context.Context) (TailscaleRemoteAc
 	if c.runner == nil || !c.runner.Available() {
 		return c.status(), ErrTailscaleUnavailable
 	}
-	raw, err := c.runner.RunPrivileged(ctx, "inspect", c.target)
+	observation, err := c.runner.RunFunnelPrivileged(ctx, "inspect", c.target)
 	if err != nil {
 		return c.status(), err
 	}
-	observed, err := decodeTailscaleServeStatus(raw)
-	if err != nil {
-		return c.status(), ErrTailscaleConfigurationInvalid
+	status := c.observedStatus(observation)
+	if status.Enabled && (status.State == "active" || status.State == "starting") {
+		state, stateErr := c.savedState()
+		if stateErr != nil {
+			return c.status(), ErrTailscaleConfigurationInvalid
+		}
+		state.PubliclyPublished = observation.PubliclyPublished
+		if err := c.saveState(state); err != nil {
+			return c.status(), err
+		}
 	}
-	return c.observedStatus(observed), nil
+	return status, nil
 }
 
-func (c *windowsFunnelController) observedStatus(observed tailscaleServeStatus) TailscaleRemoteAccessStatus {
+func (c *windowsFunnelController) observedStatus(observation windowsFunnelObservation) TailscaleRemoteAccessStatus {
+	observed := observation.ServeStatus
 	state, stateErr := c.savedState()
 	result := TailscaleRemoteAccessStatus{
 		Supported: true, Installed: true, Provider: "tailscale", NetworkKind: "public-funnel", Management: "integrated",
@@ -279,8 +302,13 @@ func (c *windowsFunnelController) observedStatus(observed tailscaleServeStatus) 
 	}
 	if hostname, owned := ownedTailscaleFunnel(observed, c.target); owned {
 		if state.Enabled && strings.EqualFold(state.Hostname, hostname) {
-			result.Active = true
-			result.State = "active"
+			if observation.PubliclyPublished {
+				result.Active = true
+				result.State = "active"
+			} else {
+				result.State = "starting"
+				result.ErrorCode = "tailscale-funnel-publication-pending"
+			}
 			return result
 		}
 		result.Enabled = false
@@ -322,26 +350,26 @@ func (c *windowsFunnelController) enable(ctx context.Context) (TailscaleRemoteAc
 	if c.runner == nil || !c.runner.Available() {
 		return c.status(), ErrTailscaleUnavailable
 	}
-	raw, err := c.runner.RunPrivileged(ctx, "enable", c.target)
+	observation, err := c.runner.RunFunnelPrivileged(ctx, "enable", c.target)
 	if err != nil {
 		return c.status(), err
 	}
-	observed, err := decodeTailscaleServeStatus(raw)
-	if err != nil {
-		return c.status(), ErrTailscaleConfigurationInvalid
-	}
+	observed := observation.ServeStatus
 	hostname, owned := ownedTailscaleFunnel(observed, c.target)
 	if !owned {
 		return c.status(), ErrTailscaleConfigurationInvalid
 	}
-	if err := c.saveState(windowsFunnelFile{SchemaVersion: windowsFunnelSchemaVersion, Enabled: true, Hostname: hostname}); err != nil {
-		if _, rollbackErr := c.runner.RunPrivileged(ctx, "disable", c.target); rollbackErr != nil {
+	if err := c.saveState(windowsFunnelFile{
+		SchemaVersion: windowsFunnelSchemaVersion, Enabled: true, Hostname: hostname,
+		PubliclyPublished: observation.PubliclyPublished,
+	}); err != nil {
+		if _, rollbackErr := c.runner.RunFunnelPrivileged(ctx, "disable", c.target); rollbackErr != nil {
 			return c.status(), ErrTailscaleDisableIncomplete
 		}
 		return c.status(), err
 	}
 	if err := c.clearLegacyState(); err != nil {
-		if _, rollbackErr := c.runner.RunPrivileged(ctx, "disable", c.target); rollbackErr != nil {
+		if _, rollbackErr := c.runner.RunFunnelPrivileged(ctx, "disable", c.target); rollbackErr != nil {
 			return c.status(), ErrTailscaleDisableIncomplete
 		}
 		if resetErr := c.saveState(windowsFunnelFile{SchemaVersion: windowsFunnelSchemaVersion}); resetErr != nil {
@@ -349,7 +377,7 @@ func (c *windowsFunnelController) enable(ctx context.Context) (TailscaleRemoteAc
 		}
 		return c.status(), err
 	}
-	return c.observedStatus(observed), nil
+	return c.observedStatus(observation), nil
 }
 
 func (c *windowsFunnelController) EnsureInactive(ctx context.Context) (TailscaleRemoteAccessStatus, error) {
@@ -365,12 +393,11 @@ func (c *windowsFunnelController) ensureInactive(ctx context.Context) (Tailscale
 	if c.runner == nil || !c.runner.Available() {
 		return c.status(), ErrTailscaleDisableIncomplete
 	}
-	raw, err := c.runner.RunPrivileged(ctx, "disable", c.target)
+	observation, err := c.runner.RunFunnelPrivileged(ctx, "disable", c.target)
 	if err != nil {
 		return c.status(), ErrTailscaleDisableIncomplete
 	}
-	observed, err := decodeTailscaleServeStatus(raw)
-	if err != nil || !serveStatusEmpty(observed) {
+	if !serveStatusEmpty(observation.ServeStatus) {
 		return c.status(), ErrTailscaleDisableIncomplete
 	}
 	if err := c.saveState(windowsFunnelFile{SchemaVersion: windowsFunnelSchemaVersion}); err != nil {
@@ -470,23 +497,23 @@ func (r *windowsTailscaleRunner) Run(ctx context.Context, arguments ...string) (
 	return output.buffer.Bytes(), nil
 }
 
-func (r *windowsTailscaleRunner) RunPrivileged(ctx context.Context, action, target string) ([]byte, error) {
+func (r *windowsTailscaleRunner) RunFunnelPrivileged(ctx context.Context, action, target string) (windowsFunnelObservation, error) {
 	if !r.Available() || (action != "enable" && action != "disable" && action != "inspect") {
-		return nil, ErrTailscaleUnavailable
+		return windowsFunnelObservation{}, ErrTailscaleUnavailable
 	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
-		return nil, ErrTailscaleUnavailable
+		return windowsFunnelObservation{}, ErrTailscaleUnavailable
 	}
 	defer listener.Close()
 	tcpListener, ok := listener.(*net.TCPListener)
 	if !ok {
-		return nil, ErrTailscaleUnavailable
+		return windowsFunnelObservation{}, ErrTailscaleUnavailable
 	}
 	port := tcpListener.Addr().(*net.TCPAddr).Port
 	nonceBytes := make([]byte, 32)
 	if _, err := rand.Read(nonceBytes); err != nil {
-		return nil, ErrTailscaleUnavailable
+		return windowsFunnelObservation{}, ErrTailscaleUnavailable
 	}
 	nonce := hex.EncodeToString(nonceBytes)
 	commandCtx, cancel := context.WithTimeout(ctx, tailscaleResponseTimeout-15*time.Second)
@@ -509,55 +536,59 @@ func (r *windowsTailscaleRunner) RunPrivileged(ctx context.Context, action, targ
 	command.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 	runErr := command.Run()
 	if errors.Is(commandCtx.Err(), context.DeadlineExceeded) || errors.Is(commandCtx.Err(), context.Canceled) {
-		return nil, commandCtx.Err()
+		return windowsFunnelObservation{}, commandCtx.Err()
 	}
 	if err := tcpListener.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
-		return nil, ErrTailscaleUnavailable
+		return windowsFunnelObservation{}, ErrTailscaleUnavailable
 	}
 	connection, acceptErr := tcpListener.AcceptTCP()
 	if acceptErr != nil {
 		var exitError *exec.ExitError
 		if errors.As(runErr, &exitError) && exitError.ExitCode() == 10 {
-			return nil, ErrTailscaleApprovalDeclined
+			return windowsFunnelObservation{}, ErrTailscaleApprovalDeclined
 		}
-		return nil, ErrTailscaleUnavailable
+		return windowsFunnelObservation{}, ErrTailscaleUnavailable
 	}
 	defer connection.Close()
 	_ = connection.SetReadDeadline(time.Now().Add(2 * time.Second))
 	raw, readErr := io.ReadAll(io.LimitReader(connection, maximumTailscaleOutput+1))
 	if readErr != nil || len(raw) == 0 || len(raw) > maximumTailscaleOutput {
-		return nil, ErrTailscaleConfigurationInvalid
+		return windowsFunnelObservation{}, ErrTailscaleConfigurationInvalid
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	var result tailscaleHelperResult
 	if err := decoder.Decode(&result); err != nil || decoder.Decode(&struct{}{}) != io.EOF || result.SchemaVersion != 1 || result.Nonce != nonce {
-		return nil, ErrTailscaleConfigurationInvalid
+		return windowsFunnelObservation{}, ErrTailscaleConfigurationInvalid
 	}
 	switch result.Code {
 	case "enabled", "disabled", "inspected":
 		if runErr != nil || len(result.ServeStatus) == 0 {
-			return nil, ErrTailscaleConfigurationInvalid
+			return windowsFunnelObservation{}, ErrTailscaleConfigurationInvalid
 		}
-		return result.ServeStatus, nil
+		serveStatus, err := decodeTailscaleServeStatus(result.ServeStatus)
+		if err != nil {
+			return windowsFunnelObservation{}, ErrTailscaleConfigurationInvalid
+		}
+		return windowsFunnelObservation{ServeStatus: serveStatus, PubliclyPublished: result.PubliclyPublished}, nil
 	case "conflict":
-		return nil, ErrTailscaleServeConflict
+		return windowsFunnelObservation{}, ErrTailscaleServeConflict
 	case "not-installed":
-		return nil, ErrTailscaleUnavailable
+		return windowsFunnelObservation{}, ErrTailscaleUnavailable
 	case "not-running":
-		return nil, ErrTailscaleNotRunning
+		return windowsFunnelObservation{}, ErrTailscaleNotRunning
 	case "unsupported":
-		return nil, ErrTailscaleFunnelUnsupported
+		return windowsFunnelObservation{}, ErrTailscaleFunnelUnsupported
 	case "sign-in-required":
-		return nil, ErrTailscaleSignInRequired
+		return windowsFunnelObservation{}, ErrTailscaleSignInRequired
 	case "provider-approval-required":
 		if !validTailscaleProviderURL(result.SetupURL) {
-			return nil, ErrTailscaleConfigurationInvalid
+			return windowsFunnelObservation{}, ErrTailscaleConfigurationInvalid
 		}
-		return nil, tailscaleProviderApprovalError{url: result.SetupURL}
+		return windowsFunnelObservation{}, tailscaleProviderApprovalError{url: result.SetupURL}
 	case "verification-failed":
-		return nil, ErrTailscaleConfigurationInvalid
+		return windowsFunnelObservation{}, ErrTailscaleConfigurationInvalid
 	default:
-		return nil, ErrTailscaleUnavailable
+		return windowsFunnelObservation{}, ErrTailscaleUnavailable
 	}
 }

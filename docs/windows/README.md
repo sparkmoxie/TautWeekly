@@ -152,8 +152,23 @@ risk even though the existing Manager authentication protections stay active.
 Turning Funnel on or off, or choosing **Verify with Windows**, requests a normal
 Windows administrator confirmation. Manager itself stays unelevated. The fixed
 helper accepts only exact typed operations for the fixed loopback target,
-refuses unrelated Tailscale routes, and verifies the postcondition. Opening or
-refreshing Dashboard and the notification-area status never invokes Tailscale.
+refuses unrelated Tailscale routes, and verifies the postcondition. For Enable
+and Verify, it also queries the exact intended-public hostname through the fixed
+`1.1.1.1` public resolver and performs a certificate-validated TLS handshake to
+a returned globally routable address. The only application-level value the
+check discloses is that public hostname, sent to the fixed resolver and as the
+TLS server name. DNS answers,
+certificates, CLI output, credentials, Manager data, and private network details
+are neither returned nor stored. Opening or refreshing
+Dashboard and the notification-area status never invokes Tailscale.
+
+The green **Active** badge and card glow appear only when the exact local route,
+public DNS, and public TLS checks all pass. If Tailscale saves the route but has
+not published it, the URL remains available while the badge and full card glow
+gold as **Publication pending**. Wait up to 10 minutes and choose **Verify with
+Windows** again. If it remains pending, restart the official Tailscale Windows
+service once and verify again. Do not create an A record, share the machine,
+open a firewall/router port, or install Tailscale on the viewing device.
 
 Local `http://127.0.0.1:8788` remains the recovery path. Disabling the password
 lock, using the access-reset shortcut, or uninstalling first disables and

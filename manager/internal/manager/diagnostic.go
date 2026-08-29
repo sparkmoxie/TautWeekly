@@ -88,6 +88,7 @@ var remoteAccessDiagnosticSummaries = map[string]string{
 	"tailscale-enabled":                     "Private Tailscale access was enabled and verified.",
 	"tailscale-verified":                    "Tailscale Serve status was explicitly inspected without changing it.",
 	"tailscale-funnel-verified":             "Tailscale Funnel status was explicitly inspected without changing it.",
+	"tailscale-funnel-publication-pending":  "The exact Funnel route is configured locally, but Tailscale has not confirmed public control-plane publication.",
 	"manager-password-required":             "Public Funnel enablement was blocked because the Manager password lock was not active.",
 	"tailscale-not-running":                 "The official Tailscale Windows service was not running.",
 	"tailscale-funnel-unsupported":          "The installed Tailscale Windows client did not support Funnel.",

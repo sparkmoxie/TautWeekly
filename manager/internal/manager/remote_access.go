@@ -140,11 +140,12 @@ type tailscaleHelperRequest struct {
 }
 
 type tailscaleHelperResult struct {
-	SchemaVersion int             `json:"schemaVersion"`
-	Nonce         string          `json:"nonce"`
-	Code          string          `json:"code"`
-	ServeStatus   json.RawMessage `json:"serveStatus,omitempty"`
-	SetupURL      string          `json:"setupUrl,omitempty"`
+	SchemaVersion     int             `json:"schemaVersion"`
+	Nonce             string          `json:"nonce"`
+	Code              string          `json:"code"`
+	ServeStatus       json.RawMessage `json:"serveStatus,omitempty"`
+	SetupURL          string          `json:"setupUrl,omitempty"`
+	PubliclyPublished bool            `json:"publiclyPublished,omitempty"`
 }
 
 type remoteAccessFile struct {
@@ -768,7 +769,10 @@ func (s *Server) handleVerifyTailscaleRemoteAccess(w http.ResponseWriter, r *htt
 	code := "tailscale-verified"
 	if isPublicRemoteAccess(s.remoteAccess) {
 		code = "tailscale-funnel-verified"
-		if status.State == "needs-attention" || status.State == "migration-required" {
+		if status.State == "starting" {
+			outcome = "warning"
+			code = "tailscale-funnel-publication-pending"
+		} else if status.State == "needs-attention" || status.State == "migration-required" {
 			outcome = "warning"
 			code = "tailscale-funnel-needs-attention"
 		}
@@ -900,9 +904,15 @@ func (s *Server) handleUpdateTailscaleRemoteAccess(w http.ResponseWriter, r *htt
 		code = "tailscale-funnel-disabled"
 		if status.Enabled && status.Active {
 			code = "tailscale-funnel-enabled"
+		} else if status.Enabled && status.State == "starting" {
+			code = "tailscale-funnel-publication-pending"
 		}
 	}
-	s.recordDiagnostic("remote-access", "passed", code)
+	outcome := "passed"
+	if code == "tailscale-funnel-publication-pending" {
+		outcome = "warning"
+	}
+	s.recordDiagnostic("remote-access", outcome, code)
 	writeJSON(w, http.StatusOK, status)
 }
 

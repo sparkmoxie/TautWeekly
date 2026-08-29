@@ -603,8 +603,8 @@
           if (body.operation === "enable" && !model.lockEnabled)
             return json({ error: { code: "manager-password-required", message: "Set the synthetic Manager password first." } }, 409);
           const enabled = body.operation === "enable";
-          Object.assign(model.tailscale, { enabled, active: enabled, cleanupRequired: enabled,
-            passwordRequired: !model.lockEnabled, state: enabled ? "active" : "inactive",
+          Object.assign(model.tailscale, { enabled, active: false, cleanupRequired: enabled,
+            passwordRequired: !model.lockEnabled, state: enabled ? "starting" : "inactive",
             url: enabled ? "https://manager.demo.invalid" : "" });
         } else {
           if (body.enabled && model.tailscale.management === "external" && !body.confirmedPrivate)
@@ -612,6 +612,8 @@
           Object.assign(model.tailscale, { enabled: Boolean(body.enabled), active: Boolean(body.enabled),
             state: body.enabled ? "enabled" : "disabled", url: body.enabled ? "https://manager.demo.invalid" : "" });
         }
+      } else if (profileName === "windows" && model.tailscale.enabled) {
+        Object.assign(model.tailscale, { active: true, state: "active" });
       }
       return json(model.tailscale);
     }
