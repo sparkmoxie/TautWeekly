@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -20,7 +22,16 @@ import (
 	"time"
 )
 
-const sessionCookieName = "tautweekly_manager_session"
+const (
+	sessionCookieName                     = "tautweekly_manager_session"
+	windowsManagerSocialImagePath         = "/manager-social-preview.jpg"
+	windowsManagerSocialImageRelativePath = "manager-assets/tautweekly-social-preview.jpg"
+	windowsManagerBrowserTitle            = "TautWeekly Manager — Your Plex week, delivered."
+	windowsManagerSocialTitle             = "TautWeekly — Your Plex week, delivered."
+	windowsManagerSocialDescription       = "Create, preview, schedule, and manage personalized weekly Plex recap emails from the password-protected TautWeekly Manager."
+	windowsManagerSocialImageAlt          = "TautWeekly product artwork with a weekly Plex recap dashboard."
+	windowsManagerDefaultDocumentHead     = "  <title>TautWeekly Manager</title>\n  <link rel=\"icon\" href=\"/favicon.ico\" sizes=\"any\">\n  <link rel=\"apple-touch-icon\" href=\"/tautweekly-icon-180.png\">\n  <link rel=\"manifest\" href=\"/manifest.webmanifest\">"
+)
 
 //go:embed web/*
 var embeddedWeb embed.FS
@@ -317,6 +328,10 @@ func (s *Server) staticHandler() http.Handler {
 	if err != nil {
 		panic(err)
 	}
+	indexDocument, err := fs.ReadFile(webRoot, "index.html")
+	if err != nil {
+		panic(err)
+	}
 	files := http.FileServer(http.FS(webRoot))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -329,8 +344,131 @@ func (s *Server) staticHandler() http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
+		if s.capabilities.RuntimeMode == runtimeModeWindows {
+			if cleaned == "/" || cleaned == "/index.html" {
+				document, ok := s.windowsManagerIndexDocument(r, indexDocument)
+				if !ok {
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.Header().Set("Content-Length", strconv.Itoa(len(document)))
+				w.WriteHeader(http.StatusOK)
+				if r.Method == http.MethodGet {
+					_, _ = w.Write(document)
+				}
+				return
+			}
+			if cleaned == windowsManagerSocialImagePath {
+				s.serveWindowsManagerSocialImage(w, r)
+				return
+			}
+			if cleaned == "/favicon.ico" {
+				w.Header().Set("Content-Type", "image/x-icon")
+			}
+		}
 		files.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) windowsManagerIndexDocument(r *http.Request, source []byte) ([]byte, bool) {
+	pageURL, ok := s.requestAbsoluteURL(r, "/")
+	if !ok {
+		return nil, false
+	}
+	imageURL, ok := s.requestAbsoluteURL(r, windowsManagerSocialImagePath)
+	if !ok {
+		return nil, false
+	}
+	pageURL = html.EscapeString(pageURL)
+	imageURL = html.EscapeString(imageURL)
+	secureImage := ""
+	if s.remoteRequestIsSecure(r) {
+		secureImage = fmt.Sprintf("\n  <meta property=\"og:image:secure_url\" content=\"%s\">", imageURL)
+	}
+	replacement := fmt.Sprintf(`  <title>%s</title>
+  <meta name="application-name" content="TautWeekly Manager">
+  <meta name="description" content="%s">
+  <meta name="theme-color" content="#080909">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <link rel="canonical" href="%s">
+  <meta property="og:title" content="%s">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="%s">
+  <meta property="og:url" content="%s">%s
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="%s">
+  <meta property="og:description" content="%s">
+  <meta property="og:site_name" content="TautWeekly">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="%s">
+  <meta name="twitter:description" content="%s">
+  <meta name="twitter:image" content="%s">
+  <meta name="twitter:image:alt" content="%s">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="16x16 24x24 32x32">
+  <link rel="icon" href="/tautweekly-icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/tautweekly-icon-180.png" sizes="180x180">
+  <link rel="manifest" href="/manifest.webmanifest">`,
+		windowsManagerBrowserTitle,
+		windowsManagerSocialDescription,
+		pageURL,
+		windowsManagerSocialTitle,
+		imageURL,
+		pageURL,
+		secureImage,
+		windowsManagerSocialImageAlt,
+		windowsManagerSocialDescription,
+		windowsManagerSocialTitle,
+		windowsManagerSocialDescription,
+		imageURL,
+		windowsManagerSocialImageAlt,
+	)
+	document := strings.Replace(string(source), windowsManagerDefaultDocumentHead, replacement, 1)
+	if document == string(source) {
+		return nil, false
+	}
+	return []byte(document), true
+}
+
+func (s *Server) requestAbsoluteURL(r *http.Request, requestPath string) (string, bool) {
+	scheme := "http"
+	if s.remoteRequestIsSecure(r) {
+		scheme = "https"
+	}
+	authority, ok := canonicalAuthority(r.Host, scheme)
+	if !ok {
+		return "", false
+	}
+	host := authority.host
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	defaultPort := "80"
+	if scheme == "https" {
+		defaultPort = "443"
+	}
+	if authority.port != defaultPort {
+		host = net.JoinHostPort(authority.host, authority.port)
+	}
+	return (&url.URL{Scheme: scheme, Host: host, Path: requestPath}).String(), true
+}
+
+func (s *Server) serveWindowsManagerSocialImage(w http.ResponseWriter, r *http.Request) {
+	assetPath := filepath.Join(s.options.TautWeeklyRoot, filepath.FromSlash(windowsManagerSocialImageRelativePath))
+	payload, err := os.ReadFile(assetPath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodGet {
+		_, _ = w.Write(payload)
+	}
 }
 
 func (s *Server) securityHeaders(next http.Handler) http.Handler {

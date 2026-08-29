@@ -327,6 +327,13 @@ configured route as gold **Publication pending**; DNS answers, certificate
 details, raw command output, and Manager data never enter Manager state or its
 diagnostics.
 
+On Windows only, the public login shell includes concise Open Graph and
+large-card metadata plus explicit favicon declarations. Canonical and image
+URLs derive from the same exact admitted Funnel Host and ignore forwarded host
+or protocol headers. The optimized social image is packaged outside newsletter
+assets, contains no EXIF/XMP/editor metadata, and is not exposed by other
+runtime modes.
+
 Native Linux uses the same route-ownership contract through a root-owned
 systemd accepted socket. Its one-shot helper verifies the Unix peer is exactly
 the packaged `tautweekly` service UID and maps only the fixed protocol actions

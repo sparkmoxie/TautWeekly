@@ -1,10 +1,12 @@
 package manager
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -137,6 +139,75 @@ func TestPublicFunnelHostAdmissionRequiresActivePasswordLock(t *testing.T) {
 	server.Handler().ServeHTTP(missingCredentialResponse, missingCredential)
 	if missingCredentialResponse.Code != http.StatusBadRequest || !strings.Contains(missingCredentialResponse.Body.String(), `"code":"invalid-host"`) {
 		t.Fatalf("public Host remained admitted after credential loss: code=%d body=%s", missingCredentialResponse.Code, missingCredentialResponse.Body.String())
+	}
+}
+
+func TestPublicFunnelPublishesHardenedSharingMetadataAndWindowsAssets(t *testing.T) {
+	const hostname = "public.example-tailnet.ts.net"
+	root := t.TempDir()
+	assetPath := filepath.Join(root, filepath.FromSlash(windowsManagerSocialImageRelativePath))
+	if err := os.MkdirAll(filepath.Dir(assetPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	assetBytes := []byte{0xff, 0xd8, 0xff, 0xdb, 0, 2, 0xff, 0xd9}
+	if err := os.WriteFile(assetPath, assetBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	remote := newFixturePublicController()
+	remote.allowed = hostname
+	remote.configured = true
+	remote.status.Enabled = true
+	remote.status.Active = true
+	remote.status.URL = "https://" + hostname
+	server, err := New(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Version: "test", RuntimeMode: runtimeModeWindows, remoteAccessController: remote})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.auth.setPasswordLock("unique metadata boundary password"); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Host = hostname
+	request.Header.Set("X-Forwarded-Host", "attacker.invalid")
+	request.Header.Set("X-Forwarded-Proto", "http")
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Header().Get("Strict-Transport-Security") == "" {
+		t.Fatalf("public metadata response: code=%d hsts=%q", response.Code, response.Header().Get("Strict-Transport-Security"))
+	}
+	document := response.Body.String()
+	for _, expected := range []string{
+		"<title>" + windowsManagerBrowserTitle + "</title>",
+		`<link rel="canonical" href="https://` + hostname + `/">`,
+		`<meta property="og:url" content="https://` + hostname + `/">`,
+		`<meta property="og:image" content="https://` + hostname + windowsManagerSocialImagePath + `">`,
+		`<meta property="og:image:secure_url" content="https://` + hostname + windowsManagerSocialImagePath + `">`,
+		`<meta name="twitter:image" content="https://` + hostname + windowsManagerSocialImagePath + `">`,
+		`<meta name="robots" content="noindex, nofollow, noarchive">`,
+	} {
+		if !strings.Contains(document, expected) {
+			t.Fatalf("public Manager document omitted hardened sharing metadata: %s", expected)
+		}
+	}
+	if strings.Contains(document, "attacker.invalid") || strings.Contains(document, "http://"+hostname) {
+		t.Fatal("public sharing metadata trusted a forwarded header or emitted remote HTTP")
+	}
+
+	assetRequest := httptest.NewRequest(http.MethodGet, windowsManagerSocialImagePath, nil)
+	assetRequest.Host = hostname
+	assetResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(assetResponse, assetRequest)
+	if assetResponse.Code != http.StatusOK || assetResponse.Header().Get("Content-Type") != "image/jpeg" || !bytes.Equal(assetResponse.Body.Bytes(), assetBytes) {
+		t.Fatalf("public social image contract failed: status=%d type=%q bytes=%d", assetResponse.Code, assetResponse.Header().Get("Content-Type"), assetResponse.Body.Len())
+	}
+
+	faviconRequest := httptest.NewRequest(http.MethodGet, "/favicon.ico", nil)
+	faviconRequest.Host = hostname
+	faviconResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(faviconResponse, faviconRequest)
+	if faviconResponse.Code != http.StatusOK || faviconResponse.Header().Get("Content-Type") != "image/x-icon" || faviconResponse.Body.Len() == 0 {
+		t.Fatalf("public favicon contract failed: status=%d type=%q bytes=%d", faviconResponse.Code, faviconResponse.Header().Get("Content-Type"), faviconResponse.Body.Len())
 	}
 }
 

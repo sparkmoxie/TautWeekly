@@ -14,6 +14,9 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added Windows Funnel states, setup guidance, sanitized diagnostics,
   notification-area status, and deterministic recovery, access-reset, and
   uninstall cleanup for the exact TautWeekly-owned route.
+- Added Windows Manager link previews with an optimized 1280×640 product card,
+  concise Open Graph and large-card metadata, canonical Funnel HTTPS URLs, and
+  explicit ICO, PNG, touch-icon, and manifest declarations.
 
 ### Changed
 
@@ -64,6 +67,10 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Manager remains loopback-bound. Public-host admission, secure/HttpOnly/
   SameSite cookies, same-origin and CSRF checks, authenticated sensitive
   endpoints, and secret-reveal boundaries remain enforced through Funnel.
+- Funnel preview URLs are derived only from the already validated request Host;
+  forwarded host/protocol headers cannot rewrite them. The public login shell
+  remains marked no-index, and the social image contains no EXIF, XMP, or editor
+  metadata.
 - No new Internet login-attempt limiter was added in this delivery. A unique
   Manager password is strongly recommended because a public login page retains
   brute-force risk.
