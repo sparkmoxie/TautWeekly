@@ -84,6 +84,27 @@ func TestParseOptionsExplicitPrivateDataDirectoryOverridesInstalledMetadata(t *t
 	}
 }
 
+func TestInstallDirectorySelectionBypassesValidatedExistingInstall(t *testing.T) {
+	installed := t.TempDir()
+	if err := os.WriteFile(filepath.Join(installed, "INSTALL-METADATA.txt"), []byte("Version=test\r\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if requiresInstallDirectorySelection(options{installDir: installed}) {
+		t.Fatal("validated existing installation still required the legacy folder picker")
+	}
+
+	newInstall := filepath.Join(t.TempDir(), "TautWeekly")
+	if !requiresInstallDirectorySelection(options{installDir: newInstall}) {
+		t.Fatal("new installation did not require application-folder selection")
+	}
+	if requiresInstallDirectorySelection(options{installDir: newInstall, installDirExplicit: true}) {
+		t.Fatal("explicit installation directory still required interactive selection")
+	}
+	if requiresInstallDirectorySelection(options{installDir: newInstall, testMode: true}) {
+		t.Fatal("installer test mode unexpectedly required interactive selection")
+	}
+}
+
 func TestExtractPayloadRejectsTraversal(t *testing.T) {
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
