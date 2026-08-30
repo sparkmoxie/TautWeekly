@@ -49,9 +49,10 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Windows Setup now uses a validated registered application folder directly
-  for Update or Migrate instead of reopening the legacy folder picker, whose
-  initial selection can be ignored on some Windows hosts. New and unresolved
+- Windows Setup now reads the validated current-user application registration
+  through the native Windows Registry API and uses that folder directly for
+  Update or Migrate instead of reopening the legacy folder picker, whose initial
+  selection can be ignored on some Windows hosts. New and unresolved
   installations still require an explicit folder selection.
 - Fixed the Windows public-publication probe so a fixed-resolver lookup cannot
   be intercepted by Tailscale's Windows NRPT/MagicDNS policy. The elevated

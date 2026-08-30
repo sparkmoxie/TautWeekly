@@ -112,6 +112,30 @@ func TestPreferredInstallDirectoryUsesValidatedInstallLocation(t *testing.T) {
 	}
 }
 
+func TestCustomRegisteredInstallSkipsFolderSelection(t *testing.T) {
+	installed := filepath.Join(t.TempDir(), "Legacy Custom TautWeekly")
+	writeInstallerMarker(t, installed)
+	stubWindowsUninstallValues(t, map[string]string{"InstallLocation": installed})
+
+	opts := options{installDir: preferredInstallDirectory(filepath.Join(t.TempDir(), "fallback"))}
+	if !samePath(opts.installDir, installed) {
+		t.Fatalf("registered install directory = %s, want %s", opts.installDir, installed)
+	}
+	if requiresInstallDirectorySelection(opts) {
+		t.Fatal("validated custom registered install still opens the folder selector")
+	}
+}
+
+func TestWindowsUninstallRegistryPathUsesNativeSubkey(t *testing.T) {
+	const want = `Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`
+	if windowsUninstallRegistrySubkey != want {
+		t.Fatalf("Windows uninstall registry subkey = %q, want %q", windowsUninstallRegistrySubkey, want)
+	}
+	if windowsUninstallRegistryKey != `HKCU\`+want {
+		t.Fatalf("Windows uninstall registry key = %q", windowsUninstallRegistryKey)
+	}
+}
+
 func TestPreferredInstallDirectoryRecoversFromRegisteredUninstaller(t *testing.T) {
 	installed := filepath.Join(t.TempDir(), "Custom TautWeekly With Spaces")
 	writeInstallerMarker(t, installed)
