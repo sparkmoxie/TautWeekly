@@ -55,10 +55,11 @@ Manager release updates:
 - An optional custom text card before the newsletter release-count/date block,
   with configurable border color/opacity, optional title and subheading, and a
   required plain-text body when enabled.
-- Optional public HTTPS administration on Windows through password-gated
-  **Tailscale Funnel**, so an ordinary remote browser needs no VPN client.
-  Other packages keep their existing private Serve workflow and required
-  Manager authentication.
+- Optional public HTTPS administration on native Windows and native Linux
+  through password-gated **Tailscale Funnel**, so an ordinary remote browser
+  needs no VPN client. Container/NAS, macOS Docker, and FreeBSD Podman packages
+  deliberately retain externally managed private Serve because Manager cannot
+  own and clean up a host public route safely.
 - Capability-aware **Settings > Updates** status for application, package, image,
   and host-adapter layers. A header SVG appears only for a validated newer
   release; Windows can launch its verified updater, while other packages keep
@@ -99,11 +100,12 @@ break-fix fallback.
 ### Native Linux Manager
 
 Install the matching amd64 or arm64 archive and access the authenticated,
-loopback-only GUI through the documented SSH tunnel or optional private
-Tailscale flow. This service is also headless and needs no local desktop, but it
-does not publish its Manager directly to the LAN. systemd owns the service and
-schedule while `tautweekly update` retains verified host update and recovery
-authority.
+loopback-only GUI through the documented SSH tunnel/bootstrap flow. This
+service is also headless and needs no local desktop, and it does not publish its
+Manager directly to the LAN. systemd owns the service and schedule while
+`tautweekly update` retains verified host update and recovery authority. A
+root-owned fixed adapter can optionally publish that loopback Manager through
+password-gated Tailscale Funnel.
 
 ### FreeBSD Podman Manager
 
@@ -129,7 +131,7 @@ The responsive Manager is the primary workflow on every maintained package:
   newsletter states, and controlled TestEmail delivery stays separate from
   production recipients.
 - **Operate deliberately:** Schedule reports and controls only the package's
-  supported delivery lifecycle; Settings covers access, Windows public Funnel
+  supported delivery lifecycle; Settings covers access, native public Funnel
   or package-private Tailscale HTTPS, capability-aware update status, release notes, diagnostics,
   and recovery. Manual and scheduled production delivery share one guarded
   live-roster refresh and eligibility path, 30-second default attempt spacing,

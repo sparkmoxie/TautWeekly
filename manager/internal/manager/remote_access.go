@@ -29,14 +29,14 @@ var (
 	ErrTailscaleUnavailable          = errors.New("Tailscale is unavailable")
 	ErrTailscaleApprovalRequired     = errors.New("Windows administrator approval is required for Tailscale Serve")
 	ErrTailscaleApprovalDeclined     = errors.New("Windows administrator approval was declined")
-	ErrTailscaleHostAuthorization    = errors.New("host administrator authorization is required for Tailscale Serve")
+	ErrTailscaleHostAuthorization    = errors.New("host administrator authorization is required for Tailscale remote access")
 	ErrTailscaleProviderApproval     = errors.New("Tailscale provider approval is required")
 	ErrTailscaleSignInRequired       = errors.New("Tailscale sign-in is required")
 	ErrTailscaleServeConflict        = errors.New("Tailscale Serve is already configured for another service")
 	ErrTailscaleConfigurationInvalid = errors.New("Tailscale Serve returned an unexpected configuration")
 	ErrTailscaleDisableIncomplete    = errors.New("local remote access was blocked, but Tailscale Serve cleanup is incomplete")
 	ErrManagerPasswordRequired       = errors.New("the Manager password lock is required for public remote access")
-	ErrTailscaleNotRunning           = errors.New("the Tailscale Windows service is not running")
+	ErrTailscaleNotRunning           = errors.New("the Tailscale service is not running")
 	ErrTailscaleFunnelUnsupported    = errors.New("this Tailscale installation does not support Funnel")
 )
 
@@ -83,17 +83,18 @@ type remoteAccessController interface {
 
 // publicRemoteAccessSafety is implemented only by a controller that can make
 // the Manager reachable from the public Internet. Shared private-Serve
-// controllers intentionally do not implement it, keeping the Windows Funnel
-// lifecycle separate from the other maintained packages.
+// controllers intentionally do not implement it, keeping public Funnel
+// lifecycle ownership separate from externally managed private routes.
 type publicRemoteAccessSafety interface {
 	remoteAccessController
+	PublicExposureSupported() bool
 	PublicExposureConfigured() bool
 	EnsureInactive(context.Context) (TailscaleRemoteAccessStatus, error)
 }
 
 func isPublicRemoteAccess(controller remoteAccessController) bool {
-	_, ok := controller.(publicRemoteAccessSafety)
-	return ok
+	public, ok := controller.(publicRemoteAccessSafety)
+	return ok && public.PublicExposureSupported()
 }
 
 func cleanupPublicRemoteAccess(ctx context.Context, controller remoteAccessController) error {
@@ -111,9 +112,9 @@ func cleanupPublicRemoteAccess(ctx context.Context, controller remoteAccessContr
 	return nil
 }
 
-// CleanupPublicRemoteAccess is used by local recovery and the Windows
-// uninstaller before either can remove the password boundary or application
-// files. It is a no-op for every private-Serve controller.
+// CleanupPublicRemoteAccess is used by local recovery, updates, shutdown, and
+// uninstall before any can remove the password boundary or application files.
+// It is a no-op for every private-Serve controller.
 func CleanupPublicRemoteAccess(ctx context.Context, options Options) error {
 	return cleanupPublicRemoteAccess(ctx, newPlatformRemoteAccessController(options))
 }
@@ -130,6 +131,10 @@ type privilegedTailscaleCommandRunner interface {
 
 type tailscaleRunnerAvailability interface {
 	Availability() string
+}
+
+type tailscaleApprovalRequirement interface {
+	RequiresApproval() bool
 }
 
 type tailscaleHelperRequest struct {
@@ -718,11 +723,11 @@ func (s *Server) remoteAccessStatus(ctx context.Context) TailscaleRemoteAccessSt
 }
 
 func (s *Server) publicPasswordBoundaryActive() bool {
-	return s.auth.localPasswordLockEnabled() && s.auth.passwordConfigured()
+	return s.auth.authenticationRequired() && s.auth.passwordConfigured()
 }
 
 func (s *Server) handleVerifyTailscaleRemoteAccess(w http.ResponseWriter, r *http.Request) {
-	// Windows UAC and first-time HTTPS certificate provisioning can take longer
+	// Platform approval and first-time HTTPS certificate provisioning can take longer
 	// than the Manager's normal response deadline. Keep the stricter global
 	// timeout and extend only this explicit, authenticated interaction.
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(tailscaleResponseTimeout))
@@ -749,10 +754,10 @@ func (s *Server) handleVerifyTailscaleRemoteAccess(w http.ResponseWriter, r *htt
 			writeAPIError(w, http.StatusConflict, "tailscale-route-conflict", "Tailscale already has a different configuration. TautWeekly left it unchanged.")
 		case errors.Is(err, ErrTailscaleNotRunning):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-not-running")
-			writeAPIError(w, http.StatusConflict, "tailscale-not-running", "Start the official Tailscale Windows service, then verify again.")
+			writeAPIError(w, http.StatusConflict, "tailscale-not-running", "Start the official Tailscale service on this host, then verify again.")
 		case errors.Is(err, ErrTailscaleFunnelUnsupported):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-funnel-unsupported")
-			writeAPIError(w, http.StatusConflict, "tailscale-funnel-unsupported", "Update the official Tailscale Windows client to a version that supports Funnel, then verify again.")
+			writeAPIError(w, http.StatusConflict, "tailscale-funnel-unsupported", "Update the official Tailscale client on this host to a version that supports Funnel, then verify again.")
 		case errors.Is(err, ErrTailscaleConfigurationInvalid):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-verification-failed")
 			writeAPIError(w, http.StatusBadGateway, "tailscale-verification-failed", "Tailscale returned an unexpected route configuration. Nothing was changed.")
@@ -788,7 +793,7 @@ func (s *Server) handleVerifyTailscaleRemoteAccess(w http.ResponseWriter, r *htt
 
 func (s *Server) handleUpdateTailscaleRemoteAccess(w http.ResponseWriter, r *http.Request) {
 	// See handleVerifyTailscaleRemoteAccess. This deadline covers the response;
-	// the elevated helper still owns and verifies the complete Serve operation.
+	// the platform adapter still owns and verifies the complete remote-access operation.
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(tailscaleResponseTimeout))
 	var request tailscaleRemoteAccessRequest
 	if err := decodeJSON(r, &request); err != nil {
@@ -853,10 +858,10 @@ func (s *Server) handleUpdateTailscaleRemoteAccess(w http.ResponseWriter, r *htt
 			writeAPIError(w, http.StatusBadGateway, "tailscale-unavailable", "Tailscale is not installed, connected, or available to this package host.")
 		case errors.Is(err, ErrTailscaleNotRunning):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-not-running")
-			writeAPIError(w, http.StatusConflict, "tailscale-not-running", "Start the official Tailscale Windows service, then verify again.")
+			writeAPIError(w, http.StatusConflict, "tailscale-not-running", "Start the official Tailscale service on this host, then verify again.")
 		case errors.Is(err, ErrTailscaleFunnelUnsupported):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-funnel-unsupported")
-			writeAPIError(w, http.StatusConflict, "tailscale-funnel-unsupported", "Update the official Tailscale Windows client to a version that supports Funnel, then verify again.")
+			writeAPIError(w, http.StatusConflict, "tailscale-funnel-unsupported", "Update the official Tailscale client on this host to a version that supports Funnel, then verify again.")
 		case errors.Is(err, ErrManagerPasswordRequired):
 			s.recordDiagnostic("remote-access", "failed", "manager-password-required")
 			writeAPIError(w, http.StatusConflict, "manager-password-required", "Set and enable the Manager password lock before making its login page publicly reachable.")
@@ -869,7 +874,7 @@ func (s *Server) handleUpdateTailscaleRemoteAccess(w http.ResponseWriter, r *htt
 			writeAPIError(w, http.StatusConflict, "tailscale-approval-required", message)
 		case errors.Is(err, ErrTailscaleSignInRequired):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-sign-in-required")
-			writeAPIError(w, http.StatusConflict, "tailscale-sign-in-required", "Sign in to Tailscale on this Windows computer, then refresh this status.")
+			writeAPIError(w, http.StatusConflict, "tailscale-sign-in-required", "Sign in to Tailscale on this host outside Manager, then refresh this status.")
 		case errors.Is(err, ErrTailscaleConfigurationInvalid):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-verification-failed")
 			message := "Tailscale did not retain the expected private HTTPS route. TautWeekly did not allow the remote hostname."

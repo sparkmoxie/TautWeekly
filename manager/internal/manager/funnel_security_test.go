@@ -29,6 +29,7 @@ func (f *fixturePublicRemoteAccessController) AllowsHost(value string) bool {
 	return strings.EqualFold(hostnameOnly(value), f.allowed)
 }
 func (f *fixturePublicRemoteAccessController) PublicExposureConfigured() bool { return f.configured }
+func (f *fixturePublicRemoteAccessController) PublicExposureSupported() bool  { return true }
 func (f *fixturePublicRemoteAccessController) EnsureInactive(context.Context) (TailscaleRemoteAccessStatus, error) {
 	if f.ensureInactive != nil {
 		return f.status, f.ensureInactive

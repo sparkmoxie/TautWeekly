@@ -5,9 +5,11 @@ package manager
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"os/user"
@@ -21,7 +23,7 @@ const linuxRemoteAccessServiceUser = "tautweekly"
 
 // RunLinuxRemoteAccessHelper serves one socket-activated request. It must run
 // as root, accepts only the dedicated tautweekly service account as its Unix
-// peer, and exposes only the fixed Manager Serve actions and target.
+// peer, and exposes only the fixed Manager Funnel actions and target.
 func RunLinuxRemoteAccessHelper(input, output *os.File) error {
 	if os.Geteuid() != 0 {
 		return errors.New("the Linux remote-access helper must run as root")
@@ -93,12 +95,20 @@ func runLinuxTailscaleAction(parent context.Context, action, target string) tail
 		result.Code = "not-installed"
 		return result
 	}
-	if !linuxTailscaleRunning(parent, path) {
-		result.Code = "sign-in-required"
+	if backendCode := linuxTailscaleBackendCode(parent, path); backendCode != "" {
+		result.Code = backendCode
 		return result
 	}
-	serve, raw, err := readLinuxTailscaleServe(parent, path)
+	serve, raw, err := readLinuxTailscaleFunnel(parent, path)
 	if err != nil {
+		switch {
+		case errors.Is(err, ErrTailscaleFunnelUnsupported):
+			result.Code = "unsupported"
+		case errors.Is(err, ErrTailscaleSignInRequired):
+			result.Code = "sign-in-required"
+		case errors.Is(err, ErrTailscaleNotRunning):
+			result.Code = "not-running"
+		}
 		return result
 	}
 
@@ -106,6 +116,7 @@ func runLinuxTailscaleAction(parent context.Context, action, target string) tail
 	case "inspect":
 		result.Code = "inspected"
 		result.ServeStatus = raw
+		result.PubliclyPublished = verifyLinuxPublicFunnel(parent, serve, target)
 		return result
 	case "disable":
 		if serveStatusEmpty(serve) {
@@ -113,14 +124,20 @@ func runLinuxTailscaleAction(parent context.Context, action, target string) tail
 			result.ServeStatus = raw
 			return result
 		}
-		if _, owned := ownedTailscaleServe(serve, target); !owned {
+		_, ownedFunnel := ownedTailscaleFunnel(serve, target)
+		_, ownedLegacy := ownedTailscaleServe(serve, target)
+		if !ownedFunnel && !ownedLegacy {
 			result.Code = "conflict"
 			return result
 		}
-		if _, _, err := runBoundedLinuxTailscale(parent, path, tailscaleCommandTimeout, "serve", "--yes", "--https=443", "off"); err != nil {
+		command := "funnel"
+		if ownedLegacy {
+			command = "serve"
+		}
+		if _, _, err := runBoundedLinuxTailscale(parent, path, tailscaleCommandTimeout, command, "--yes", "--https=443", "off"); err != nil {
 			return result
 		}
-		serve, raw, err = readLinuxTailscaleServe(parent, path)
+		serve, raw, err = readLinuxTailscaleFunnel(parent, path)
 		if err != nil || !serveStatusEmpty(serve) {
 			return result
 		}
@@ -129,32 +146,56 @@ func runLinuxTailscaleAction(parent context.Context, action, target string) tail
 		return result
 	case "enable":
 		if !serveStatusEmpty(serve) {
-			if _, owned := ownedTailscaleServe(serve, target); !owned {
+			_, ownedFunnel := ownedTailscaleFunnel(serve, target)
+			_, ownedLegacy := ownedTailscaleServe(serve, target)
+			if !ownedFunnel && !ownedLegacy {
 				result.Code = "conflict"
 				return result
 			}
-			result.Code = "enabled"
-			result.ServeStatus = raw
-			return result
+			if ownedFunnel {
+				result.Code = "enabled"
+				result.ServeStatus = raw
+				result.PubliclyPublished = verifyLinuxPublicFunnel(parent, serve, target)
+				return result
+			}
 		}
-		stdout, stderr, commandErr := runBoundedLinuxTailscale(parent, path, 15*time.Second, "serve", "--bg", "--yes", "--https=443", target)
+		stdout, stderr, commandErr := runBoundedLinuxTailscale(parent, path, 15*time.Second, "funnel", "--bg", "--yes", "--https=443", target)
 		if setupURL := tailscaleApprovalURL(string(stdout) + "\n" + string(stderr)); setupURL != "" {
 			result.Code = "provider-approval-required"
 			result.SetupURL = setupURL
 			return result
 		}
 		if commandErr != nil {
+			message := strings.ToLower(string(stdout) + "\n" + string(stderr))
+			switch {
+			case strings.Contains(message, "not logged"), strings.Contains(message, "logged out"), strings.Contains(message, "needs login"), strings.Contains(message, "no current profile"), strings.Contains(message, "sign in"):
+				result.Code = "sign-in-required"
+			case strings.Contains(message, "service is not running"), strings.Contains(message, "failed to connect to local tailscaled"), strings.Contains(message, "no backend"), strings.Contains(message, "connection refused"):
+				result.Code = "not-running"
+			case strings.Contains(message, "unknown command"), strings.Contains(message, "unknown subcommand"), strings.Contains(message, "does not support funnel"):
+				result.Code = "unsupported"
+			case errors.Is(commandErr, context.DeadlineExceeded):
+				after, afterRaw, afterErr := readLinuxTailscaleFunnel(parent, path)
+				if afterErr == nil {
+					if _, owned := ownedTailscaleFunnel(after, target); owned {
+						result.Code = "enabled"
+						result.ServeStatus = afterRaw
+						result.PubliclyPublished = verifyLinuxPublicFunnel(parent, after, target)
+					}
+				}
+			}
 			return result
 		}
-		serve, raw, err = readLinuxTailscaleServe(parent, path)
+		serve, raw, err = readLinuxTailscaleFunnel(parent, path)
 		if err != nil {
 			return result
 		}
-		if _, owned := ownedTailscaleServe(serve, target); !owned {
+		if _, owned := ownedTailscaleFunnel(serve, target); !owned {
 			return result
 		}
 		result.Code = "enabled"
 		result.ServeStatus = raw
+		result.PubliclyPublished = verifyLinuxPublicFunnel(parent, serve, target)
 		return result
 	}
 	return result
@@ -169,21 +210,56 @@ func trustedRootExecutable(path string) bool {
 	return ok && stat.Uid == 0
 }
 
-func linuxTailscaleRunning(parent context.Context, path string) bool {
-	stdout, _, err := runBoundedLinuxTailscale(parent, path, tailscaleCommandTimeout, "status", "--json")
+func linuxTailscaleBackendCode(parent context.Context, path string) string {
+	stdout, stderr, err := runBoundedLinuxTailscale(parent, path, tailscaleCommandTimeout, "status", "--json")
 	if err != nil {
-		return false
+		return classifyLinuxTailscaleBackend(stdout, stderr, err)
+	}
+	return classifyLinuxTailscaleBackend(stdout, nil, nil)
+}
+
+func classifyLinuxTailscaleBackend(stdout, stderr []byte, commandErr error) string {
+	message := strings.ToLower(string(stdout) + "\n" + string(stderr))
+	if commandErr != nil {
+		switch {
+		case strings.Contains(message, "service is not running"), strings.Contains(message, "failed to connect to local tailscaled"), strings.Contains(message, "no backend"), strings.Contains(message, "connection refused"):
+			return "not-running"
+		case strings.Contains(message, "not logged"), strings.Contains(message, "logged out"), strings.Contains(message, "needs login"), strings.Contains(message, "no current profile"), strings.Contains(message, "sign in"):
+			return "sign-in-required"
+		default:
+			return "verification-failed"
+		}
 	}
 	var status struct {
 		BackendState string `json:"BackendState"`
 	}
-	return json.Unmarshal(stdout, &status) == nil && status.BackendState == "Running"
+	if json.Unmarshal(stdout, &status) != nil {
+		return "verification-failed"
+	}
+	switch status.BackendState {
+	case "Running":
+		return ""
+	case "NeedsLogin", "NoState", "Stopped":
+		return "sign-in-required"
+	default:
+		return "verification-failed"
+	}
 }
 
-func readLinuxTailscaleServe(parent context.Context, path string) (tailscaleServeStatus, json.RawMessage, error) {
-	stdout, _, err := runBoundedLinuxTailscale(parent, path, tailscaleCommandTimeout, "serve", "status", "--json")
+func readLinuxTailscaleFunnel(parent context.Context, path string) (tailscaleServeStatus, json.RawMessage, error) {
+	stdout, stderr, err := runBoundedLinuxTailscale(parent, path, tailscaleCommandTimeout, "funnel", "status", "--json")
 	if err != nil {
-		return tailscaleServeStatus{}, nil, err
+		message := strings.ToLower(string(stdout) + "\n" + string(stderr))
+		switch {
+		case strings.Contains(message, "unknown command"), strings.Contains(message, "unknown subcommand"), strings.Contains(message, "does not support funnel"):
+			return tailscaleServeStatus{}, nil, ErrTailscaleFunnelUnsupported
+		case strings.Contains(message, "not logged"), strings.Contains(message, "logged out"), strings.Contains(message, "needs login"), strings.Contains(message, "no current profile"), strings.Contains(message, "sign in"):
+			return tailscaleServeStatus{}, nil, ErrTailscaleSignInRequired
+		case strings.Contains(message, "service is not running"), strings.Contains(message, "failed to connect to local tailscaled"), strings.Contains(message, "no backend"), strings.Contains(message, "connection refused"):
+			return tailscaleServeStatus{}, nil, ErrTailscaleNotRunning
+		default:
+			return tailscaleServeStatus{}, nil, err
+		}
 	}
 	serve, err := decodeTailscaleServeStatus(stdout)
 	if err != nil {
@@ -194,6 +270,82 @@ func readLinuxTailscaleServe(parent context.Context, path string) (tailscaleServ
 		return tailscaleServeStatus{}, nil, ErrTailscaleConfigurationInvalid
 	}
 	return serve, normalized, nil
+}
+
+var lookupLinuxPublicIPv4 = resolveLinuxPublicIPv4
+var probeLinuxTrustedTLS = dialLinuxTrustedTLS
+
+func verifyLinuxPublicFunnel(parent context.Context, status tailscaleServeStatus, target string) bool {
+	hostname, owned := ownedTailscaleFunnel(status, target)
+	if !owned {
+		return false
+	}
+	addresses, err := lookupLinuxPublicIPv4(parent, hostname)
+	if err != nil {
+		return false
+	}
+	for index, address := range addresses {
+		if index >= 4 {
+			break
+		}
+		if publicIPv4Address(address) && probeLinuxTrustedTLS(parent, hostname, address) {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveLinuxPublicIPv4(parent context.Context, hostname string) ([]net.IP, error) {
+	resolver := &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			var dialer net.Dialer
+			return dialer.DialContext(ctx, network, "1.1.1.1:53")
+		},
+	}
+	ctx, cancel := context.WithTimeout(parent, 4*time.Second)
+	defer cancel()
+	return resolver.LookupIP(ctx, "ip4", hostname)
+}
+
+func publicIPv4Address(value net.IP) bool {
+	address := value.To4()
+	if address == nil || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() {
+		return false
+	}
+	if address[0] == 100 && address[1] >= 64 && address[1] <= 127 {
+		return false
+	}
+	if address[0] == 192 && address[1] == 0 {
+		return false
+	}
+	if address[0] == 198 && (address[1] == 18 || address[1] == 19 || address[1] == 51) {
+		return false
+	}
+	return !(address[0] == 203 && address[1] == 0 && address[2] == 113)
+}
+
+func dialLinuxTrustedTLS(parent context.Context, hostname string, address net.IP) bool {
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+	dialer := &tls.Dialer{
+		NetDialer: &net.Dialer{},
+		Config: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			ServerName: hostname,
+		},
+	}
+	connection, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(address.String(), "443"))
+	if err != nil {
+		return false
+	}
+	defer connection.Close()
+	tlsConnection, ok := connection.(*tls.Conn)
+	if !ok {
+		return false
+	}
+	state := tlsConnection.ConnectionState()
+	return state.HandshakeComplete && len(state.VerifiedChains) > 0
 }
 
 func runBoundedLinuxTailscale(parent context.Context, path string, timeout time.Duration, arguments ...string) ([]byte, []byte, error) {

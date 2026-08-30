@@ -5,10 +5,10 @@ v1.11.0 Windows
 ---------------
 - replaces private Tailscale Serve/VPN access with password-gated public HTTPS Funnel access for ordinary remote browsers
 - keeps Manager bound to loopback and lets only fixed typed helper operations manage the exact TautWeekly route
-- requires verified Funnel shutdown before password-lock disable, local access reset, or uninstall can proceed
-- preserves configuration, password verification material, schedule, history, previews, and Funnel preference across installer updates
+- requires verified Funnel shutdown before password-lock disable, local access reset, explicit Exit, update, or uninstall can proceed
+- preserves configuration, password verification material, schedule, history, and previews across installer updates while leaving Funnel off for explicit re-enable
 - navigates the fresh loopback Dashboard after an update instead of only focusing a browser window that may still contain the old Manager page
-- leaves non-Windows packages unchanged and adds no new Internet login-attempt limiter; use a unique Manager password
+- shares the provider-neutral controller with native Linux while keeping the fixed Windows UAC adapter and adding no new Internet login-attempt limiter
 
 v1.10.4 Windows
 ---------------

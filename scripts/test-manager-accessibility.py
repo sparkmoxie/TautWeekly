@@ -356,7 +356,7 @@ def main() -> int:
         if marker not in javascript:
             failures.append(f"Tailscale remote access interaction contract is missing: {marker}")
     if "Private HTTPS only; Funnel is off" not in combined:
-        failures.append("non-Windows adapters no longer disclose the private Serve/Funnel-off boundary")
+        failures.append("external package adapters no longer disclose the private Serve/Funnel-off boundary")
     for marker in (
         "Funnel makes the Manager login page publicly reachable over HTTPS",
         "Remote viewers do not need Tailscale or a VPN",
@@ -368,7 +368,7 @@ def main() -> int:
         'byId("access-password").focus({ preventScroll: true })',
     ):
         if marker not in combined:
-            failures.append(f"Windows Funnel disclosure or accessible state is missing: {marker}")
+            failures.append(f"Integrated Funnel disclosure or accessible state is missing: {marker}")
     if "No credentials belong here." not in combined or "remote.hostAuthorizationCommand === \"sudo tautweekly remote-access-authorize\"" not in javascript:
         failures.append("Tailscale adapters do not keep credentials out of Manager or pin Linux host authorization to the packaged command")
     if 'remote.management === "external"' not in javascript or 'remote.management' not in javascript:
@@ -380,10 +380,10 @@ def main() -> int:
     tailscale_renderer_start = javascript.find("function renderTailscaleSettings()")
     tailscale_renderer_end = javascript.find("\n}\n\nasync function updateTailscaleAccess", tailscale_renderer_start)
     tailscale_renderer = javascript[tailscale_renderer_start:tailscale_renderer_end]
-    funnel_declaration = tailscale_renderer.find('const publicFunnel = windows && remote.networkKind === "public-funnel";')
+    funnel_declaration = tailscale_renderer.find('const publicFunnel = remote.networkKind === "public-funnel";')
     funnel_first_use = tailscale_renderer.find("const displayRemote = publicFunnel")
     if tailscale_renderer_start < 0 or tailscale_renderer_end < 0 or funnel_declaration < 0 or funnel_first_use < 0 or funnel_declaration > funnel_first_use:
-        failures.append("Windows Funnel renderer uses publicFunnel before its declaration")
+        failures.append("Integrated Funnel renderer uses publicFunnel before its declaration")
     if ".tailscale-settings-panel.enabled-glow" not in css or "prefers-reduced-motion:reduce" not in css:
         failures.append("Active Tailscale card glow lacks its motion-safe styling contract")
     if ".state-chip.publication-pending" not in css or ".tailscale-settings-panel.publication-pending-glow" not in css or "tailscale-publication-pending-glow" not in css:

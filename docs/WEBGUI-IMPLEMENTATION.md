@@ -1017,22 +1017,25 @@ accessibility structure, keyboard focus, reduced-motion CSS, and desktop/mobile
 browser checks are automated or completed with fictional fixtures.
 
 The shared Settings surface adds package-aware Tailscale access below the
-existing browser/access card. Windows alone uses public Funnel: enablement
-requires the active local password lock, and the browser submits only the typed
-`enable` or `disable` operation. A fixed UAC helper owns the Manager loopback
-target and CLI arguments, verifies exact TCP/Web/AllowFunnel postconditions,
-and refuses unrelated configuration. Password-lock disable, access reset, and
-uninstall first verify the owned route off. Only the exact public hostname is
+existing browser/access card. Native Windows and native Linux use the shared
+provider-neutral public controller: enablement requires the active password
+lock, and the browser submits only typed `enable`, `disable`, or `verify`.
+The platform adapter owns the fixed Manager loopback target and CLI arguments,
+verifies exact TCP/Web/AllowFunnel plus public DNS/trusted-TLS postconditions,
+and refuses unrelated configuration. Windows uses the fixed UAC helper; Linux
+uses the root-owned socket-activated one-shot helper. Password-lock disable,
+access reset, explicit stop, adapter revocation, update, and uninstall first
+verify the owned route off. Only an exact publicly verified hostname is
 persisted and admitted; Secure/HttpOnly/SameSite cookies, HTTPS origin, CSRF,
 HSTS, authenticated endpoints, and secret boundaries apply through the proxy.
 
-Native Linux keeps its root-owned private Serve socket helper. Container,
-macOS, FreeBSD, QNAP, Unraid, and compatible Docker modes keep the host-managed
-private contract: the browser submits one exact HTTPS `.ts.net` URL plus an
-explicit private-Serve/Funnel-off confirmation. They do not accept provider
-credentials or gain a host control plane. This Windows boundary is isolated so
-a later discrete delivery can reuse the proven state machine without silently
-changing those packages.
+Container, macOS, FreeBSD, QNAP, Synology, Unraid, and compatible Docker modes
+keep the host-managed private contract: the browser submits one exact HTTPS
+`.ts.net` URL plus explicit private-Serve/Funnel-off confirmation. They do not
+accept provider credentials or gain a host control plane. Public Funnel is
+refused because lifecycle ownership cannot be proven without forbidden
+container privilege. The detailed state model, inventory, and adapter boundary
+are in [REMOTE-ACCESS.md](REMOTE-ACCESS.md).
 
 ## 20. Decision gates
 

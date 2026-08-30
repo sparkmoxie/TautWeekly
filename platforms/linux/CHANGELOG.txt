@@ -1,5 +1,12 @@
 TautWeekly for Plex native Linux platform changelog
 
+v1.4.0
+- replaces native private Serve with password-gated public HTTPS Funnel while Manager remains on loopback
+- uses the root-owned socket service only for fixed inspect, enable, disable, public DNS, and trusted-TLS verification operations
+- requires exact Funnel cleanup before explicit stop, update, access reset, adapter revocation, or uninstall can proceed
+- preserves configuration, password verification material, history, previews, schedule, and selected access state across upgrade
+- packages the verified Manager social preview and keeps malformed, conflicting, unpublished, or untrusted routes out of Active state
+
 v1.3.4
 - optimizes all 32 email GIFs at twice their email display size while preserving frames, timing, loops, and transparency
 - refreshes every shipped persistent asset and the preview mirror on bundle change or legacy migration; preserves custom-only files and same-bundle restart edits

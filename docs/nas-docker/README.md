@@ -433,6 +433,14 @@ it as an exact Host value, uses Secure cookies/HSTS and HTTPS same-origin rules
 for that host, and keeps its independent password required. It does not accept
 an auth key, tunnel token, provider credential, wildcard, port, or URL path.
 
+Public Funnel is intentionally unsupported through Docker/NAS Manager,
+including QNAP, Synology, Unraid, and the bundled sidecar. The container has no
+Docker socket, host executable, privileged network mode, root identity, or NAS
+control plane, so it cannot prove route ownership or disable and verify a
+public route before access reset, shutdown, update, rollback, or removal. Do
+not work around that refusal by mounting host control into Manager. Use the
+documented separately administered private Serve topology only.
+
 - **Unraid 7:** use the recommended Tailscale Plugin, sign the server into the
   tailnet, and create a private Serve route to the mapped TautWeekly port. Do
   not put a Tailscale key in the Community Apps template.
@@ -460,6 +468,15 @@ config that proxies only to `http://tautweekly:8080`. It has no host network,
 Docker socket, `/dev/net/tun`, added Linux capability, Manager credential, or
 Funnel entry.
 
+Public declarative sidecars have a different provider contract: the exact
+`${TS_CERT_DOMAIN}:443` route must set `AllowFunnel` to true and the tailnet
+policy must grant `funnel` to the sidecar's actual tag, for example
+`tag:containers`. The shipped config deliberately supplies neither public
+capability. Do not add one or both to this package: Manager cannot verify and
+remove the independently owned public route during password reset, shutdown,
+update, rollback, or uninstall, so TautWeekly continues to refuse public Funnel
+on Docker/NAS. This container-only requirement does not apply to native Windows.
+
 1. In the Tailscale console, create a **one-off** auth key for this node. If the
    tailnet uses device approval or restrictive grants, approve only the intended
    node and users.
@@ -473,7 +490,8 @@ Funnel entry.
 
 4. Confirm the node is connected and enable **HTTPS certificates only** in the
    provider console. The bundled `${TS_CERT_DOMAIN}` Serve config then creates
-   the private address. Never enable Funnel.
+   the private address. Never enable Funnel or add `AllowFunnel`; the packaged
+   capability/refusal tests require this sidecar to remain private.
 5. Empty `tailscale/authkey.local` after the persistent node state is written;
    the one-off key is no longer needed. Keep `tailscale/state/` private and back
    it up or deliberately re-enroll the node after loss.

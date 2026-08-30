@@ -91,6 +91,17 @@ if [[ "$mode" == "--upgrade" ]]; then
     exit 75
   fi
 fi
+if [[ "$mode" == "--upgrade" ]] && { [[ -f /var/lib/tautweekly/manager/linux-funnel.json ]] || [[ -f /var/lib/tautweekly/manager/remote-access.json ]]; }; then
+  if ! runuser -u tautweekly -- "$manager_source" remote-access-cleanup \
+    --data-dir /var/lib/tautweekly/manager \
+    --tautweekly-root /opt/tautweekly \
+    --listen 127.0.0.1:8788 \
+    --runtime-mode linux \
+    --confirm; then
+    echo "Upgrade stopped because the exact TautWeekly Funnel or legacy Serve route could not be disabled and verified." >&2
+    exit 75
+  fi
+fi
 if [[ "$mode" == "--upgrade" ]] && systemctl is-active --quiet tautweekly.service; then
   systemctl stop tautweekly.service
   was_active=true
@@ -190,11 +201,14 @@ The authenticated Manager service is enabled. Automatic sending remains disabled
 until you explicitly enable it in the Manager. CLI commands remain available as
 documented recovery and expert fallbacks.
 
-Optional private Tailscale access remains disabled. After Tailscale is installed
-and signed in on this host, authorize only TautWeekly's fixed one-shot adapter:
+Optional public Tailscale Funnel remains disabled. After the official Tailscale
+Linux package is installed, running, and signed in by the host administrator,
+authorize only TautWeekly's fixed one-shot adapter:
   sudo tautweekly remote-access-authorize
-Then use Settings > Tailscale in the authenticated Manager. This does not make
-the Manager public and never enables Tailscale Funnel.
+Create and enable a unique Manager password, then use Settings > Tailscale
+Funnel. Manager stays on loopback; the adapter accepts only the exact package
+target and typed operations. A remote viewer needs no Tailscale client, so
+retain local recovery and treat Internet login attempts as a remaining risk.
 EOF
 
 if [[ -n "${TAUTWEEKLY_PACKAGE_UPDATE_WORK_ROOT:-}" ]]; then

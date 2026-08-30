@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 ================================
 
+v1.6.1 Portable
+---------------
+- retains exact private Tailscale Serve for the maintained Docker Desktop package
+- explicitly refuses public Funnel because container Manager cannot own and verify a macOS host-client route
+- preserves the no-Docker-socket, non-root, host-owned update and rollback boundaries
+
 v1.6.0 Portable
 ---------------
 - migrates the preferred Docker Desktop route to ghcr.io/sparkmoxie/tautweekly with the desktop profile

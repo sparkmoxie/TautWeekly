@@ -29,14 +29,14 @@ func (f *fixtureWindowsFunnelRunner) RequiresApproval() bool { return true }
 func (f *fixtureWindowsFunnelRunner) Run(context.Context, ...string) ([]byte, error) {
 	return nil, errors.New("an unelevated Tailscale command was not expected")
 }
-func (f *fixtureWindowsFunnelRunner) RunFunnelPrivileged(_ context.Context, action, target string) (windowsFunnelObservation, error) {
+func (f *fixtureWindowsFunnelRunner) RunPublicRoute(_ context.Context, action, target string) (windowsFunnelObservation, error) {
 	f.commands = append(f.commands, action+" "+target)
 	if err := f.errors[action]; err != nil {
 		return windowsFunnelObservation{}, err
 	}
 	if response, ok := f.responses[action]; ok {
 		status, err := decodeTailscaleServeStatus(slices.Clone(response))
-		return windowsFunnelObservation{ServeStatus: status, PubliclyPublished: f.publiclyPublished}, err
+		return normalizeTailscalePublicObservation(status, target, f.publiclyPublished), err
 	}
 	if target != f.target {
 		return windowsFunnelObservation{}, errors.New("unexpected fixed target")
@@ -55,7 +55,7 @@ func (f *fixtureWindowsFunnelRunner) RunFunnelPrivileged(_ context.Context, acti
 		return windowsFunnelObservation{}, errors.New("unexpected allowlisted action")
 	}
 	status, err := decodeTailscaleServeStatus(raw)
-	return windowsFunnelObservation{ServeStatus: status, PubliclyPublished: f.publiclyPublished}, err
+	return normalizeTailscalePublicObservation(status, target, f.publiclyPublished), err
 }
 
 func ownedTailscaleFunnelJSON(hostname, target string) []byte {
@@ -96,7 +96,7 @@ func TestWindowsFunnelLifecycleUsesOnlyFixedPrivilegedOperations(t *testing.T) {
 
 	restarted := newWindowsFunnelController(dataDir, "127.0.0.1:18788", true, runner)
 	passive := restarted.Status(context.Background())
-	if !passive.Enabled || passive.Active || passive.State != "approval-required" || passive.URL != "https://"+hostname {
+	if !passive.Enabled || !passive.Active || passive.State != "active" || passive.URL != "https://"+hostname {
 		t.Fatalf("persistent Funnel preference did not survive restart: %+v", passive)
 	}
 	verified, err := restarted.Verify(context.Background())
@@ -324,6 +324,10 @@ func TestWindowsFunnelDoesNotReportActiveBeforePublicPublication(t *testing.T) {
 	active, err := restarted.Verify(context.Background())
 	if err != nil || !active.Active || active.State != "active" || active.ErrorCode != "" {
 		t.Fatalf("published Funnel was not promoted to active: status=%+v err=%v", active, err)
+	}
+	persistedActive := restarted.Status(context.Background())
+	if !persistedActive.Enabled || !persistedActive.Active || persistedActive.State != "active" || persistedActive.ErrorCode != "" {
+		t.Fatalf("verified public state was not retained by passive status: %+v", persistedActive)
 	}
 }
 

@@ -127,16 +127,18 @@ The Docker/NAS and Native Linux services are both headless and use the same
 Manager and newsletter behavior, but do not assume they share an access path.
 Docker/NAS normally opens from another trusted-LAN device at
 `http://SERVER_LAN_IP:8787/`, without SSH or a server desktop. Native Linux
-keeps Manager on loopback and requires the documented SSH tunnel or private
-Tailscale access.
+keeps Manager on loopback and requires the documented SSH tunnel or optional
+password-gated public Funnel.
 
-### Windows public Funnel address does not open
+### Native public Funnel address does not open
 
 - Remote viewers need only an ordinary HTTPS browser; they do not install or
-  connect Tailscale. Confirm the Windows host has the official Tailscale client
-  installed, running, and signed in, then use **Settings > Tailscale Funnel >
-  Verify with Windows**. Do not share the real `.ts.net` address in support
-  material.
+  connect Tailscale. Confirm the native Windows or Linux host has the official
+  Tailscale client installed, running, and signed in, then use **Settings >
+  Tailscale Funnel > Verify**. On Linux, `tautweekly
+  remote-access-status` must report authorized; otherwise run `sudo
+  tautweekly remote-access-authorize`. Do not share the real `.ts.net`
+  address in support material.
 - **Manager password required** means create and enable a unique password first.
   **Approval required** means approve the Windows UAC prompt and any official
   one-time Funnel page, then verify again. **Publication pending** means the
@@ -144,13 +146,33 @@ Tailscale access.
   TLS checks have not passed. The URL remains available and the card glows gold;
   it is not an active public Funnel. **Needs attention** means the observed route
   did not exactly match TautWeekly's fixed loopback target.
+- Confirm the tailnet has MagicDNS, HTTPS certificates, and a `funnel`
+  `nodeAttrs` policy target that includes this node. The default
+  `autogroup:member` target does not include a tagged service node; a separately
+  managed tagged container or Kubernetes node needs an explicit tag target.
+  TautWeekly never reads or changes policy, tags, devices, or authentication.
+- A separately managed declarative tagged sidecar also requires
+  `AllowFunnel=true` for the exact `${TS_CERT_DOMAIN}:443` entry. TautWeekly's
+  shipped NAS/macOS sidecar intentionally has neither that public entry nor a
+  policy file, and the container Manager refuses public lifecycle operations.
+  This is a container-only capability boundary from
+  [tailscale/tailscale#11849](https://github.com/tailscale/tailscale/issues/11849#issuecomment-2211623437),
+  not a Windows workaround. Do not modify Windows Tailscale state files or tag
+  an untagged member-owned Windows device to try it.
 - Tailscale documents that public DNS can take up to 10 minutes. After that,
-  choose **Verify with Windows**. If publication remains pending, restart the
-  official Tailscale Windows service once and verify again. A known upstream
-  Windows failure can retain a valid local Funnel while omitting public
-  control-plane publication: <https://github.com/tailscale/tailscale/issues/19508>.
-  Do not create an A record, share the machine, reinstall Tailscale, or add a
-  firewall/router rule; those actions do not publish Funnel.
+  choose **Verify**. On Windows only, restarting the official Tailscale service
+  once is a bounded diagnostic; it is not proof of publication. Open upstream
+  reports cover Windows missing DNS
+  ([#19508](https://github.com/tailscale/tailscale/issues/19508)), Linux/iOS and
+  Docker off-tailnet resolution failures
+  ([#11849](https://github.com/tailscale/tailscale/issues/11849)), Docker
+  userspace DNS failure ([#8680](https://github.com/tailscale/tailscale/issues/8680)),
+  and Linux public-DNS success followed by CDN-edge TLS stalls
+  ([#19290](https://github.com/tailscale/tailscale/issues/19290)). Local
+  `Funnel on` remains **Publication pending** until independent public DNS and
+  trusted TLS both pass. Do not create an A record, share the machine,
+  repeatedly reset certificates, add firewall/router rules, or replace the
+  transport; those actions do not satisfy TautWeekly's publication proof.
 - A successful CLI configuration check does not replace public edge acceptance.
   TautWeekly queries the exact intended-public hostname through `1.1.1.1`,
   rejects non-public answers, and requires a trusted TLS certificate before
@@ -159,26 +181,28 @@ Tailscale access.
   From a separate network, open the generated HTTPS address, sign in, verify a
   read and a CSRF-protected change, sign out, and confirm the local Dashboard
   still works. Do not expose port 8788 or add a firewall/router rule.
-- If password-lock disable, access reset, or uninstall refuses, restore the
-  Tailscale Windows service and approve the fixed shutdown so TautWeekly can
-  verify its owned Funnel is off. Do not remove the password boundary first.
+- If password-lock disable, access reset, explicit stop, update, adapter
+  revocation, or uninstall refuses, restore the official Tailscale service and
+  the fixed platform adapter, then retry so TautWeekly can verify its owned
+  Funnel is off. On Windows approve the fixed UAC shutdown; on Linux restore
+  the authorized socket. Do not remove the password boundary first.
 
 ### Private Tailscale address does not open on other packages
 
 - Confirm the remote computer or mobile device is connected to the same
   tailnet and permitted by its current grants. Disconnecting the remote client
   is expected to make the private address unreachable.
-- In Manager **Settings > Tailscale**, distinguish **Connected** (integrated
-  route verified) from **Enabled** (an external exact hostname is allowlisted;
-  the host-owned route cannot be inspected by Manager).
-- On native Linux, run `tautweekly remote-access-status`. If authorization is
-  absent, run `sudo tautweekly remote-access-authorize`, then retry Settings.
-  Disable in Manager before using `sudo tautweekly remote-access-revoke`.
+- In Manager **Settings > Tailscale**, **Enabled** means an external exact
+  hostname is allowlisted; the host-owned route cannot be inspected by Manager.
 - For a first-use provider link, enable HTTPS certificates only and turn
   Funnel off even if the provider page preselects it.
 - For macOS, FreeBSD, QNAP, Unraid, or another host-managed package, inspect the
   host/client Serve state separately and confirm it still proxies the mapped
   loopback Manager port. Disable the Manager setting before removing the route.
+- Public Funnel is intentionally unavailable on these packages because the
+  container Manager cannot own and verify host-route cleanup. Do not mount a
+  Docker/Podman socket, host CLI, or privileged network access to bypass that
+  refusal.
 - The Manager password remains required on these packages. There is no
   read-only remote role.
 

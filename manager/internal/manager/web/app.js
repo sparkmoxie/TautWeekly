@@ -3378,19 +3378,22 @@ function renderAccessSettings() {
 
 function tailscaleStatePresentation(remote) {
   if (remote.networkKind === "public-funnel") {
+    const windows = state.runtimeMode === "windows";
     switch (remote.state) {
     case "active": return { label: "Active", tone: "good", status: "Public HTTPS Funnel is active and points only to the loopback Manager." };
     case "inactive": return { label: "Inactive", tone: "neutral", status: "Public Funnel is off." };
-    case "starting": return { label: "Publication pending", tone: "publication-pending", status: "The exact loopback Funnel is configured, but public DNS and certificate-validated TLS are not available yet. Wait up to 10 minutes, then Verify; if it remains pending, restart the Tailscale Windows service once and verify again." };
-    case "stopping": return { label: "Stopping", tone: "pending", status: "Windows is stopping and verifying the exact TautWeekly Funnel." };
+    case "starting": return { label: "Publication pending", tone: "publication-pending", status: "The exact loopback Funnel is configured, but independent public DNS and certificate-validated TLS have not both passed. Local Funnel on is not proof of publication. Wait up to 10 minutes, confirm MagicDNS, HTTPS certificates, and the matching Funnel policy target, then Verify." };
+    case "stopping": return { label: "Stopping", tone: "pending", status: "The host adapter is stopping and verifying the exact TautWeekly Funnel." };
     case "manager-password-required": return { label: "Password required", tone: "pending", status: "Create and enable a unique Manager password before Funnel can be turned on." };
     case "approval-required": return remote.enabled
       ? { label: "Approval required", tone: "pending", status: "Funnel is saved. Approve Verify with Windows to confirm the current public route." }
       : { label: "Approval required", tone: "pending", status: "Windows approval is required only for an explicit Enable, Disable, or Verify action." };
-    case "tailscale-required": return { label: "Tailscale required", tone: "neutral", status: "Install the official Tailscale Windows client, start it, and sign in before enabling Funnel." };
-    case "sign-in-required": return { label: "Sign in required", tone: "pending", status: "Sign in through the official Tailscale Windows app, then verify again." };
-    case "not-running": return { label: "Tailscale stopped", tone: "bad", status: "Start the official Tailscale Windows service, then verify again." };
-    case "funnel-unsupported": return { label: "Update required", tone: "bad", status: "Update the official Tailscale Windows client to a Funnel-capable release." };
+    case "ready": return { label: "Ready", tone: "neutral", status: "The fixed host adapter is ready. Enable creates only the loopback Funnel after the Manager password lock is active." };
+    case "authorization-required": return { label: "Host approval required", tone: "pending", status: "Run the one-time Linux host authorization command, then retry. Manager remains unprivileged." };
+    case "tailscale-required": return { label: "Tailscale required", tone: "neutral", status: `Install the official Tailscale ${windows ? "Windows client" : "Linux package"}, start it, and sign in before enabling Funnel.` };
+    case "sign-in-required": return { label: "Sign in required", tone: "pending", status: `Sign in through the official Tailscale ${windows ? "Windows app" : "Linux CLI outside Manager"}, then verify again.` };
+    case "not-running": return { label: "Tailscale stopped", tone: "bad", status: `Start the official Tailscale ${windows ? "Windows" : "Linux"} service, then verify again.` };
+    case "funnel-unsupported": return { label: "Update required", tone: "bad", status: `Update the official Tailscale ${windows ? "Windows client" : "Linux package"} to a Funnel-capable release.` };
     case "migration-required": return { label: "Migration required", tone: "pending", status: "The older private Serve route is blocked. With the password lock active, Enable converts only that exact route to Funnel; Disable removes it." };
     case "needs-attention": return { label: "Needs attention", tone: "bad", status: "The saved Funnel could not be matched to the exact TautWeekly route. The password boundary remains active." };
     case "unavailable": return { label: "Unavailable", tone: "bad", status: "Funnel state could not be verified safely." };
@@ -3441,7 +3444,7 @@ function renderTailscaleSettings() {
   panel.hidden = !remote.supported;
   if (!remote.supported) return;
   const windows = state.runtimeMode === "windows";
-  const publicFunnel = windows && remote.networkKind === "public-funnel";
+  const publicFunnel = remote.networkKind === "public-funnel";
   panel.classList.toggle("enabled-glow", Boolean(remote.enabled && remote.active));
   panel.classList.toggle("publication-pending-glow", Boolean(publicFunnel && remote.enabled && remote.state === "starting"));
   const displayRemote = publicFunnel && state.tailscaleSaving
@@ -3472,7 +3475,9 @@ function renderTailscaleSettings() {
   setText("tailscale-toggle-help", external
     ? "The package host or optional sidecar owns Tailscale. Manager saves only one exact private HTTPS hostname and never handles a Tailscale credential."
     : publicFunnel
-      ? "Tailscale must already be installed, running, and signed in. Windows asks for administrator approval only for an explicit Enable, Disable, or Verify operation."
+      ? windows
+        ? "Tailscale must already be installed, running, and signed in. Windows asks for administrator approval only for an explicit Enable, Disable, or Verify operation."
+        : "Tailscale must already be installed, running, and signed in. A Linux host administrator authorizes the fixed Inspect/Enable/Disable adapter once; Manager remains unprivileged."
       : "Tailscale must already be installed and signed in. The Linux host administrator authorizes the fixed adapter once; Manager remains unprivileged.");
 
   const authorizationCommand = remote.hostAuthorizationCommand === "sudo tautweekly remote-access-authorize"
@@ -3524,7 +3529,7 @@ function renderTailscaleSettings() {
     : "<strong>The password lock remains optional on Windows.</strong> Any user or device permitted to reach this computer through the tailnet receives full Manager administration. Review tailnet grants and protect every enrolled device.";
 
   byId("tailscale-refresh-button").hidden = external;
-  byId("tailscale-refresh-button").textContent = windows ? "Verify with Windows" : "Verify private access";
+  byId("tailscale-refresh-button").textContent = publicFunnel ? (windows ? "Verify with Windows" : "Verify publication") : "Verify private access";
   byId("tailscale-refresh-button").disabled = state.tailscaleSaving || !remote.installed || remote.hostAuthorizationRequired;
   byId("tailscale-copy-button").disabled = state.tailscaleSaving;
   const setupLink = byId("tailscale-setup-link");
@@ -3537,7 +3542,7 @@ function renderTailscaleSettings() {
   const message = byId("tailscale-settings-message");
   if (state.tailscaleError) message.textContent = state.tailscaleError;
   else if (state.tailscaleSaving) message.textContent = state.tailscaleVerifying
-    ? `Waiting for Windows approval, then verifying the exact Tailscale ${publicFunnel ? "Funnel" : "Serve"} route...`
+    ? `${windows ? "Waiting for Windows approval, then v" : "V"}erifying the exact Tailscale ${publicFunnel ? "Funnel" : "Serve"} route...`
     : state.tailscaleRequestedOperation === "disable"
       ? `Stopping and verifying the exact TautWeekly ${publicFunnel ? "Funnel" : "Serve route"}...`
       : `Starting and verifying the exact TautWeekly ${publicFunnel ? "Funnel" : "Serve route"}...`;
@@ -3545,7 +3550,7 @@ function renderTailscaleSettings() {
     ? (publicFunnel ? "The public address opens the password-protected Manager; remote viewers do not need Tailscale." : "Open the private address only from a device signed in to an authorized tailnet.")
     : presentation.status;
   byId("tailscale-recovery-copy").innerHTML = publicFunnel
-    ? "<strong>Local access remains the recovery path.</strong> Password-lock disable, local access reset, and uninstall first turn off and verify only the exact TautWeekly Funnel. If verification fails, the password and application stay in place. Ordinary Manager exit preserves the selected Funnel for the next start."
+    ? "<strong>Local access remains the recovery path.</strong> Password-lock disable, local access reset, and uninstall first turn off and verify only the exact TautWeekly Funnel. If verification fails, the password and application stay in place. A normal restart preserves Funnel; explicit stop or Exit and update leave it off for explicit re-enable."
     : external
     ? "<strong>Local or host access remains the recovery path.</strong> Disabling blocks the saved private hostname immediately. Remove the external Serve route separately with the package host or sidecar instructions."
     : "<strong>Local access remains the recovery path.</strong> Disabling blocks the saved private hostname first, then removes only the owned HTTPS Serve route. If another Serve configuration is present, TautWeekly leaves it unchanged.";
@@ -3554,7 +3559,7 @@ function renderTailscaleSettings() {
 async function updateTailscaleAccess() {
   const requested = byId("tailscale-enabled").checked;
   const external = state.tailscale?.management === "external";
-  const publicFunnel = state.runtimeMode === "windows" && state.tailscale?.networkKind === "public-funnel";
+  const publicFunnel = state.tailscale?.networkKind === "public-funnel";
   state.tailscaleSaving = true;
   state.tailscaleRequestedOperation = requested ? "enable" : "disable";
   state.tailscaleError = "";
@@ -3697,7 +3702,7 @@ async function disableAccessPassword() {
   setSwappingButtonText("access-disable-button", "Disabling lock...");
   const publicFunnelConfigured = state.tailscale?.networkKind === "public-funnel" && Boolean(state.tailscale?.cleanupRequired || state.tailscale?.enabled);
   message.textContent = publicFunnelConfigured
-    ? "Turning off and verifying the public Funnel before disabling the password lock. Windows approval may be required..."
+    ? "Turning off and verifying the public Funnel before disabling the password lock. Host approval may be required..."
     : "Disabling the optional Manager password lock...";
   try {
     state.authAccess = await request("/api/v1/auth/access/disable", { method: "POST", body: "{}" });

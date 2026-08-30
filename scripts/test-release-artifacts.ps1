@@ -323,6 +323,7 @@ $expected = [ordered]@{
         'TautWeekly-linux/app/bin/run-as-user.sh',
         'TautWeekly-linux/app/bin/run-mode.sh',
         'TautWeekly-linux/app/bin/run-script.sh',
+        'TautWeekly-linux/app/manager-assets/tautweekly-social-preview.jpg',
         'TautWeekly-linux/app/product-branding/favicon.ico',
         'TautWeekly-linux/app/product-branding/tautweekly-app-icon-128.png',
         'TautWeekly-linux/install-linux.sh',
@@ -464,10 +465,17 @@ foreach ($archiveName in $expected.Keys) {
             Assert-True ($identityText -match 'TAUTWEEKLY_PACKAGE_KIND' -and $identityText -match 'TAUTWEEKLY_PACKAGE_VERSION') "$archiveName omits package identity from $($composeEntry.FullName)."
             Assert-True ($identityText -match 'TAUTWEEKLY_HOST_ADAPTER_API:\s*"3"') "$archiveName has a stale host-adapter API in $($composeEntry.FullName)."
         }
+        $sidecarServeEntries = @($archive.Entries | Where-Object { $_.FullName -match '/tailscale/config/serve[.]json$' })
+        foreach ($sidecarServeEntry in $sidecarServeEntries) {
+            $sidecarReader = New-Object IO.StreamReader($sidecarServeEntry.Open())
+            try { $sidecarServe = $sidecarReader.ReadToEnd() | ConvertFrom-Json } finally { $sidecarReader.Dispose() }
+            Assert-True ($null -eq $sidecarServe.PSObject.Properties['AllowFunnel']) "$archiveName packages public AllowFunnel in its private sidecar config."
+            Assert-True ($null -ne $sidecarServe.PSObject.Properties['Web'].Value.PSObject.Properties['${TS_CERT_DOMAIN}:443']) "$archiveName changed the fixed private sidecar certificate-domain route."
+        }
         foreach ($requiredEntry in $expected[$archiveName]) {
             Assert-True ($entryNames -ccontains $requiredEntry) "$archiveName is missing $requiredEntry"
         }
-        if ($archiveName -ne 'TautWeekly-windows.zip') {
+        if ($archiveName -notin @('TautWeekly-windows.zip', 'TautWeekly-linux.zip')) {
             Assert-True (@($entryNames | Where-Object { $_ -match '/manager-assets/tautweekly-social-preview[.]jpg$' }).Count -eq 0) "$archiveName contains the Windows-only Manager social preview."
         }
         $thirdPartyNoticeEntry = @($archive.Entries | Where-Object { $_.FullName.Replace('\', '/') -match '/THIRD_PARTY_NOTICES[.]md$' })
@@ -526,6 +534,11 @@ foreach ($archiveName in $expected.Keys) {
         }
 
         if ($archiveName -eq 'TautWeekly-linux.zip') {
+            $socialEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-linux/app/manager-assets/tautweekly-social-preview.jpg' })
+            Assert-True ($socialEntry.Count -eq 1) 'Linux archive has no unique Manager social preview.'
+            Assert-True ((Get-ZipEntrySha256 $socialEntry[0]) -ceq $expectedWindowsManagerSocialHash) 'Linux archive Manager social preview differs from the verified shared asset.'
+            Assert-WindowsManagerSocialJpeg 'Linux archive' (Get-ZipEntryBytes $socialEntry[0])
+
             $previewEntry = @($archive.Entries | Where-Object { $_.FullName -ceq 'TautWeekly-linux/app/preview-home.html' })
             Assert-True ($previewEntry.Count -eq 1) 'Linux archive has no unique preview landing page.'
             $previewReader = New-Object IO.StreamReader($previewEntry[0].Open())

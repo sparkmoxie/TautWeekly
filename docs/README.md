@@ -68,14 +68,16 @@ Only Windows can start its existing verified updater from the GUI; every other
 guide names the exact host-owned command or platform-native flow and its
 limitations.
 
-Every maintained package also exposes an optional **Settings > Tailscale**
-private-access card. Windows and native Linux have narrow, package-owned
-adapters; macOS, FreeBSD, QNAP, Unraid, and other Docker/NAS packages accept
-only a separately created exact private Serve hostname. TautWeekly never
-enables Funnel or treats tailnet membership as a replacement for the Manager
-login. Optional mobile access requires the Tailscale app signed in on the phone
-or tablet before opening the private address. An active card uses a motion-safe
-full-card glow so the additional remote administration boundary remains visible.
+Every maintained package exposes a package-aware **Settings > Tailscale**
+card. Native Windows and native Linux have narrow, package-owned public Funnel
+adapters with a mandatory password lock, fixed loopback target, and verified
+public DNS/TLS state. macOS, FreeBSD, QNAP, Synology, Unraid, and other
+Docker/NAS packages accept only a separately created exact private Serve
+hostname because their container Manager cannot own and clean up a host public
+route safely. The complete inventory and refusal boundary are in the
+[remote-access architecture](REMOTE-ACCESS.md). An active card uses a
+motion-safe full-card glow so the additional administration boundary remains
+visible.
 
 ## Documentation
 
@@ -87,6 +89,7 @@ full-card glow so the additional remote administration boundary remains visible.
 - [FreeBSD Podman installation](freebsd/README.md)
 - [Configuration reference](CONFIGURATION.md)
 - [Security and hardening](SECURITY.md)
+- [Remote-access architecture and platform matrix](REMOTE-ACCESS.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
 - [Release process](RELEASING.md)
 

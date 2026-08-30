@@ -1,5 +1,10 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
+v1.2.5
+- retains exact private Tailscale Serve through the community-maintained FreeBSD host client
+- explicitly refuses public Funnel because Podman Manager cannot own and verify host-route cleanup
+- preserves the no-Podman-socket, non-root, rc.d-owned lifecycle and rollback boundaries
+
 v1.2.4
 - optimizes all 32 email GIFs at twice their email display size while preserving frames, timing, loops, and transparency
 - refreshes every shipped persistent asset and the preview mirror on bundle change or legacy migration; preserves custom-only files and same-bundle restart edits

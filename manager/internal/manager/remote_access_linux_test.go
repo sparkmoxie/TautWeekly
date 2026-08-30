@@ -6,11 +6,36 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestLinuxTailscaleBackendClassificationIsSanitized(t *testing.T) {
+	tests := []struct {
+		name       string
+		stdout     string
+		stderr     string
+		commandErr error
+		want       string
+	}{
+		{name: "running", stdout: `{"BackendState":"Running"}`},
+		{name: "needs login", stdout: `{"BackendState":"NeedsLogin"}`, want: "sign-in-required"},
+		{name: "stopped profile", stdout: `{"BackendState":"Stopped"}`, want: "sign-in-required"},
+		{name: "daemon offline", stderr: "failed to connect to local tailscaled", commandErr: errors.New("exit"), want: "not-running"},
+		{name: "malformed", stdout: `{"BackendState":`, want: "verification-failed"},
+		{name: "unexpected failure", stderr: "private fixture detail", commandErr: errors.New("exit"), want: "verification-failed"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := classifyLinuxTailscaleBackend([]byte(test.stdout), []byte(test.stderr), test.commandErr); got != test.want {
+				t.Fatalf("backend code: got %q, want %q", got, test.want)
+			}
+		})
+	}
+}
 
 func TestLinuxTailscaleRunnerUsesOnlyAuthorizedSocketProtocol(t *testing.T) {
 	root := t.TempDir()
@@ -38,10 +63,11 @@ func TestLinuxTailscaleRunnerUsesOnlyAuthorizedSocketProtocol(t *testing.T) {
 		}
 		requests <- request
 		_ = json.NewEncoder(connection).Encode(tailscaleHelperResult{
-			SchemaVersion: 1,
-			Nonce:         request.Nonce,
-			Code:          "inspected",
-			ServeStatus:   json.RawMessage(`{}`),
+			SchemaVersion:     1,
+			Nonce:             request.Nonce,
+			Code:              "inspected",
+			ServeStatus:       json.RawMessage(`{}`),
+			PubliclyPublished: true,
 		})
 	}()
 
@@ -49,16 +75,19 @@ func TestLinuxTailscaleRunnerUsesOnlyAuthorizedSocketProtocol(t *testing.T) {
 	if runner.Availability() != "available" || !runner.Available() {
 		t.Fatalf("authorized fixture runner was unavailable: %s", runner.Availability())
 	}
-	raw, err := runner.Run(context.Background(), "serve", "status", "--json")
-	if err != nil || string(raw) != `{}` {
-		t.Fatalf("authorized inspect failed: raw=%q err=%v", raw, err)
+	observation, err := runner.RunPublicRoute(context.Background(), "inspect", linuxRemoteAccessTarget)
+	if err != nil || observation.PubliclyPublished || observation.RouteState != publicRemoteAccessRouteEmpty {
+		t.Fatalf("authorized inspect failed: observation=%+v err=%v", observation, err)
 	}
 	request := <-requests
 	if request.Action != "inspect" || request.Target != linuxRemoteAccessTarget || !validHelperNonce(request.Nonce) {
 		t.Fatalf("unexpected helper request: %+v", request)
 	}
-	if _, err := runner.Run(context.Background(), "serve", "reset"); err == nil {
+	if _, err := runner.RunPublicRoute(context.Background(), "reset", linuxRemoteAccessTarget); err == nil {
 		t.Fatal("Linux runner accepted a destructive or arbitrary Tailscale command")
+	}
+	if _, err := runner.RunPublicRoute(context.Background(), "enable", "http://127.0.0.1:9999"); err == nil {
+		t.Fatal("Linux runner accepted a browser-selected target")
 	}
 }
 
@@ -81,8 +110,12 @@ func TestLinuxRuntimeSelectsIntegratedAdapterOnlyForFixedNativeService(t *testin
 	integrated := newPlatformRemoteAccessController(Options{
 		RuntimeMode: runtimeModeLinux, ListenAddress: "127.0.0.1:8788", DataDir: t.TempDir(),
 	})
-	if _, ok := integrated.(*tailscaleRemoteAccessController); !ok {
+	if _, ok := integrated.(*publicFunnelController); !ok {
 		t.Fatalf("fixed native Linux service did not receive the integrated adapter: %T", integrated)
+	}
+	status := integrated.Status(context.Background())
+	if status.NetworkKind != "public-funnel" || status.Management != "integrated" || !status.HostAuthorizationRequired {
+		t.Fatalf("native Linux Funnel capability was not fail-closed before host authorization: %+v", status)
 	}
 
 	for _, options := range []Options{
@@ -97,5 +130,44 @@ func TestLinuxRuntimeSelectsIntegratedAdapterOnlyForFixedNativeService(t *testin
 		if _, ok := controller.(*externalTailscaleRemoteAccessController); !ok {
 			t.Errorf("host-managed package %s/%s did not receive the external adapter: %T", options.RuntimeMode, options.PackageKind, controller)
 		}
+	}
+}
+
+func TestLinuxPublicPublicationRequiresPublicDNSAndTrustedTLS(t *testing.T) {
+	const (
+		hostname = "tautweekly.example-tailnet.ts.net"
+		target   = linuxRemoteAccessTarget
+	)
+	status := tailscaleServeStatus{
+		TCP: map[string]tailscaleTCPHandler{"443": {HTTPS: true}},
+		Web: map[string]tailscaleWebServer{hostname + ":443": {
+			Handlers: map[string]tailscaleHTTPHandler{"/": {Proxy: target}},
+		}},
+		AllowFunnel: map[string]bool{hostname + ":443": true},
+	}
+	originalLookup := lookupLinuxPublicIPv4
+	originalProbe := probeLinuxTrustedTLS
+	t.Cleanup(func() {
+		lookupLinuxPublicIPv4 = originalLookup
+		probeLinuxTrustedTLS = originalProbe
+	})
+	lookupLinuxPublicIPv4 = func(context.Context, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("100.100.100.100"), net.ParseIP("203.0.113.10"), net.ParseIP("1.1.1.1")}, nil
+	}
+	probes := 0
+	probeLinuxTrustedTLS = func(_ context.Context, gotHostname string, address net.IP) bool {
+		probes++
+		return gotHostname == hostname && address.Equal(net.ParseIP("1.1.1.1"))
+	}
+	if !verifyLinuxPublicFunnel(context.Background(), status, target) || probes != 1 {
+		t.Fatalf("exact public DNS/TLS fixture did not publish: probes=%d", probes)
+	}
+	probeLinuxTrustedTLS = func(context.Context, string, net.IP) bool { return false }
+	if verifyLinuxPublicFunnel(context.Background(), status, target) {
+		t.Fatal("public DNS followed by stalled or untrusted TLS was reported as published")
+	}
+	probes = 0
+	if verifyLinuxPublicFunnel(context.Background(), status, "http://127.0.0.1:9999") || probes != 0 {
+		t.Fatal("a non-owned target reached public publication probing")
 	}
 }

@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX NAS PORTABLE CHANGELOG
 =================================
 
+v1.6.1 Portable
+---------------
+- retains exact private Tailscale Serve for Docker, QNAP, Synology, Unraid, and other NAS surfaces
+- explicitly refuses public Funnel because container Manager cannot prove host-route cleanup without forbidden host control
+- preserves the no-Docker-socket, non-root, non-privileged sidecar and Manager boundaries
+
 v1.6.0 Portable
 ---------------
 - publishes one shared amd64/arm64 OCI image for desktop, server, and Unraid profiles

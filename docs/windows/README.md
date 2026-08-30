@@ -169,6 +169,18 @@ gold as **Publication pending**. Wait up to 10 minutes and choose **Verify with
 Windows** again. If it remains pending, restart the official Tailscale Windows
 service once and verify again. Do not create an A record, share the machine,
 open a firewall/router port, or install Tailscale on the viewing device.
+The tailnet must have MagicDNS, HTTPS certificates, and a `funnel` node
+attribute that includes this device. The official CLI approval may configure
+those prerequisites, but local `Funnel on` is still not publication proof.
+Open upstream reports show the same DNS-or-TLS failure distinction on Windows,
+Linux, and container hosts; TautWeekly therefore applies the public checks
+without a platform exception.
+
+The Docker-only `AllowFunnel` plus tag-targeted `nodeAttrs` requirement is not
+a Windows recovery step. An untagged member-owned Windows device is already in
+the default member target. Do not edit Tailscale Windows state files or tag the
+device merely to try a container workaround; continue to require independent
+public DNS and trusted TLS.
 
 Once the public address resolves, links to the Manager render a TautWeekly
 large-card preview with a concise title and description. The preview image and
@@ -180,9 +192,11 @@ Local `http://127.0.0.1:8788` remains the recovery path. Disabling the password
 lock, using the access-reset shortcut, or uninstalling first disables and
 verifies the exact TautWeekly Funnel. If that cannot be verified, the password
 or application remains in place. Changing the password keeps Funnel available
-and keeps the current session while revoking other sessions. Ordinary Manager
-exit and installer updates preserve the selected persistent Funnel for the
-next start; removal preserves the private data directory after safe cleanup.
+and keeps the current session while revoking other sessions. An ordinary
+restart preserves the selected persistent Funnel for the next process.
+Explicit notification-area Exit and installer update first disable and verify
+the exact route; Funnel remains off for explicit re-enable after update.
+Removal preserves the private data directory after safe cleanup.
 
 ## Notification area and sign-in startup
 

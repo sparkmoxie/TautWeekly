@@ -8,24 +8,40 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Replaced the Windows Manager's private Tailscale Serve workflow with an
+- Replaced the native Windows and native Linux Managers' private Tailscale
+  Serve workflows with an
   explicit, password-gated Tailscale Funnel that keeps Manager on loopback and
   provides a stable public HTTPS `.ts.net` address to ordinary remote browsers.
 - Added Windows Funnel states, setup guidance, sanitized diagnostics,
   notification-area status, and deterministic recovery, access-reset, and
   uninstall cleanup for the exact TautWeekly-owned route.
-- Added Windows Manager link previews with an optimized 1280×640 product card,
+- Added a shared provider-neutral public-access controller with fixed typed
+  operations, exact route ownership, legacy-state migration, public DNS and
+  trusted-TLS verification, and fail-closed lifecycle cleanup.
+- Added native Linux Funnel states and a root-owned, socket-activated fixed
+  adapter while keeping Manager unprivileged.
+- Added native Manager link previews with an optimized 1280×640 product card,
   concise Open Graph and large-card metadata, canonical Funnel HTTPS URLs, and
   explicit ICO, PNG, touch-icon, and manifest declarations.
 
 ### Changed
 
-- Windows Funnel changes now use only fixed typed enable/disable operations,
+- Native Funnel changes use only fixed typed enable/disable/verify operations,
   the official installed Tailscale CLI, and exact postcondition verification.
-  Existing non-Windows private Serve behavior is unchanged.
+  Docker/NAS, macOS Docker, QNAP, Synology, Unraid, and FreeBSD Podman retain
+  private Serve and explicitly refuse public Funnel because safe host-route
+  lifecycle ownership cannot be proven.
+- Documented the provider prerequisites and cross-platform publication failure
+  classes: MagicDNS, HTTPS certificates, and a matching Funnel `nodeAttrs`
+  target are host-admin responsibilities, tagged nodes require an explicit
+  tag-targeted attribute, a declarative container route also requires exact
+  `AllowFunnel`, and local `Funnel on` never substitutes for public DNS plus
+  trusted-TLS verification. Shipped sidecars remain private and refuse both
+  public-capability inputs.
 - Installer updates preserve Manager configuration, password verification
-  material, history, previews, schedule, and the selected Funnel state. Removal
-  stops safely if the owned public route cannot be verified off.
+  material, history, previews, and schedule, but first disable and verify the
+  exact public route. Funnel stays off for explicit re-enable after update.
+  Removal stops safely if the owned public route cannot be verified off.
 - Windows dashboard launches now navigate the validated loopback URL even when
   an existing browser window is found, and add only internal build and one-use
   navigation tokens. This forces a new document request after an upgrade
@@ -33,7 +49,7 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Stopped Windows Funnel from reporting **Active** when Tailscale had only saved
+- Stopped native Funnel from reporting **Active** when Tailscale had only saved
   the local route. Enable and Verify now require public DNS through a fixed
   public resolver plus a certificate-validated TLS handshake before the green
   active state appears. Missing public publication remains safely configured as

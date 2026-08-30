@@ -92,6 +92,13 @@ func (s *Server) RemoteAccessStatus(ctx context.Context) TailscaleRemoteAccessSt
 	return s.remoteAccessStatus(ctx)
 }
 
+// EnsurePublicRemoteAccessInactive is used only by trusted local lifecycle
+// controls before an explicit application exit. A failed cleanup leaves the
+// running Manager and its password boundary in place.
+func (s *Server) EnsurePublicRemoteAccessInactive(ctx context.Context) error {
+	return cleanupPublicRemoteAccess(ctx, s.remoteAccess)
+}
+
 type authRequest struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`
@@ -344,7 +351,7 @@ func (s *Server) staticHandler() http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		if s.capabilities.RuntimeMode == runtimeModeWindows {
+		if s.capabilities.RuntimeMode == runtimeModeWindows || isPublicRemoteAccess(s.remoteAccess) {
 			if cleaned == "/" || cleaned == "/index.html" {
 				document, ok := s.windowsManagerIndexDocument(r, indexDocument)
 				if !ok {

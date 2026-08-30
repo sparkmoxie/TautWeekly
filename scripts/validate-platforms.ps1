@@ -56,7 +56,7 @@ Require-Text 'platforms/linux/systemd/tautweekly-remote-access@.service' @(
     'CapabilityBoundingSet=',
     'NoNewPrivileges=true',
     'ProtectSystem=strict',
-    'RestrictAddressFamilies=AF_UNIX'
+    'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6'
 )
 Require-Text 'platforms/linux/tautweekly.env.example' @(
     'TAUTWEEKLY_PREVIEW_BIND=127\.0\.0\.1',
@@ -565,7 +565,36 @@ foreach ($relative in @('platforms/nas-docker/tailscale/config/serve.json', 'pla
         '"Proxy": "http://tautweekly:8080"'
     )
     Forbid-Text $relative @('(?i)funnel')
+    $privateServe = Read-RepoFile $relative | ConvertFrom-Json
+    if ($null -ne $privateServe.PSObject.Properties['AllowFunnel']) {
+        throw "Shipped private sidecar config unexpectedly enables public Funnel: $relative"
+    }
 }
+
+function Test-TaggedPublicSidecarContract([object]$ServeConfig, [object[]]$NodeAttrs, [string]$TagTarget) {
+    $allowFunnel = $ServeConfig.PSObject.Properties['AllowFunnel']
+    if ($null -eq $allowFunnel) { return $false }
+    $route = $allowFunnel.Value.PSObject.Properties['${TS_CERT_DOMAIN}:443']
+    if ($null -eq $route -or -not [bool]$route.Value) { return $false }
+    foreach ($nodeAttr in @($NodeAttrs)) {
+        if (@($nodeAttr.target) -contains $TagTarget -and @($nodeAttr.attr) -contains 'funnel') { return $true }
+    }
+    return $false
+}
+
+$syntheticPublicServe = '{"AllowFunnel":{"${TS_CERT_DOMAIN}:443":true}}' | ConvertFrom-Json
+$syntheticTaggedPolicy = '{"nodeAttrs":[{"target":["tag:containers"],"attr":["funnel"]}]}' | ConvertFrom-Json
+$syntheticMemberPolicy = '{"nodeAttrs":[{"target":["autogroup:member"],"attr":["funnel"]}]}' | ConvertFrom-Json
+if (-not (Test-TaggedPublicSidecarContract $syntheticPublicServe $syntheticTaggedPolicy.nodeAttrs 'tag:containers')) {
+    throw 'Tagged public-sidecar capability fixture did not require exact AllowFunnel and tag-targeted nodeAttrs.'
+}
+if (Test-TaggedPublicSidecarContract ([PSCustomObject]@{}) $syntheticTaggedPolicy.nodeAttrs 'tag:containers') {
+    throw 'A tagged sidecar without AllowFunnel was treated as public-capable.'
+}
+if (Test-TaggedPublicSidecarContract $syntheticPublicServe $syntheticMemberPolicy.nodeAttrs 'tag:containers') {
+    throw 'The default member nodeAttr was treated as permission for a tagged sidecar.'
+}
+Write-Host '[PASS] Container-only public Funnel requires exact AllowFunnel plus a matching tag-targeted nodeAttr; shipped sidecars remain private.'
 Require-Text 'platforms/nas-docker/Dockerfile' @(
     'FROM golang:1\.26\.6-bookworm AS manager-build',
     'GOOS=linux GOARCH="\$\{TARGETARCH:-amd64\}"',
@@ -755,6 +784,10 @@ Require-Text 'platforms/windows/Windows-Update.ps1' @(
     'Assert-ManifestFiles',
     'Assert-PowerShellSyntax',
     'Get-InstalledManagerProcesses',
+    'Resolve-ManagerDataRoot',
+    'Disable-InstalledPublicRoute',
+    'remote-access-cleanup',
+    'exact TautWeekly Funnel could not be disabled and verified',
     'Start-InstalledManager',
     'Get-HealthyManagerListenerProcessIds',
     'Get-NetTCPConnection.*LocalPort 8788',

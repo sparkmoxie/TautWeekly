@@ -127,19 +127,22 @@ for (const name of ["windows", "nas", "mac", "linux", "freebsd"]) {
   assert.equal((await api("/api/v1/auth/access")).data.runtimeRequired, name !== "windows");
   controls.offerUpdate();
   assert.equal((await api("/api/v1/updates")).data.installSupported, name === "windows", "demo grants a host-owned updater to the browser");
-  if (name === "windows") {
+  const integratedFunnel = name === "windows" || name === "linux";
+  if (integratedFunnel) {
     assert.equal((await api("/api/v1/remote-access/tailscale", "PUT", { enabled: true })).status, 400,
-      "Windows preview accepted the obsolete boolean/private-Serve operation");
+      "integrated Funnel preview accepted the obsolete boolean/private-Serve operation");
+  }
+  if (name === "windows") {
     await api("/api/v1/auth/access/password", "POST", { password: "synthetic preview password" });
   }
-  const remote = await api("/api/v1/remote-access/tailscale", "PUT", name === "windows"
+  const remote = await api("/api/v1/remote-access/tailscale", "PUT", integratedFunnel
     ? { operation: "enable" }
     : { enabled: true, confirmedPrivate: true });
-  assert.equal(remote.data.active, name !== "windows");
-  if (name === "windows") {
-    assert.equal(remote.data.state, "starting", "Windows preview skipped the public-publication pending state");
+  assert.equal(remote.data.active, !integratedFunnel);
+  if (integratedFunnel) {
+    assert.equal(remote.data.state, "starting", `${name} preview skipped the public-publication pending state`);
     const verified = await api("/api/v1/remote-access/tailscale/verify", "POST");
-    assert.equal(verified.data.active, true, "Windows preview Verify did not promote a published Funnel to active");
+    assert.equal(verified.data.active, true, `${name} preview Verify did not promote a published Funnel to active`);
   }
   assert.equal(remote.data.url, "https://manager.demo.invalid");
 }

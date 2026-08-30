@@ -235,11 +235,12 @@
             reveal recipients and server activity. Weekly Binge Champion cards
             share only anonymous watch time plus nonzero unique movie/TV-show counts; the
             champion's identity and titles remain private.</p>
-          <p>Windows can optionally publish its password-protected, loopback
-            Manager through Tailscale Funnel. The login page becomes publicly
-            reachable over HTTPS, and remote viewers need no Tailscale or VPN
-            client. Other packages keep private Tailscale Serve: sign the
-            viewer into the authorized tailnet and keep Funnel off. Every
+          <p>Native Windows and Linux can optionally publish their
+            password-protected, loopback Manager through Tailscale Funnel. The
+            login page becomes publicly reachable over HTTPS, and remote
+            viewers need no Tailscale or VPN client. Container/NAS, macOS
+            Docker, and FreeBSD packages keep private Tailscale Serve because
+            Manager cannot own public-route cleanup safely. Every
             remote session has full administration, so Manager authentication
             and local recovery remain independent boundaries.</p>
           <a class="button primary" href="SECURITY.md">Read the hardening guide</a>

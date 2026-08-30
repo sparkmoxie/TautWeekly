@@ -287,11 +287,13 @@
       profileName = name;
       model.lockEnabled = serviceProfile();
       model.startup.supported = !serviceProfile();
+      const integratedFunnel = name === "windows" || name === "linux";
       Object.assign(model.tailscale, { enabled: false, active: false,
-        state: name === "windows" ? "manager-password-required" : "disabled", url: "",
-        provider: "tailscale", networkKind: name === "windows" ? "public-funnel" : "private-serve",
+        state: name === "windows" ? "manager-password-required" : name === "linux" ? "ready" : "external-ready", url: "",
+        provider: "tailscale", networkKind: integratedFunnel ? "public-funnel" : "private-tailnet",
         passwordRequired: name === "windows", cleanupRequired: false,
-        management: ["nas", "mac", "freebsd"].includes(name) ? "external" : "managed" });
+        management: integratedFunnel ? "integrated" : "external",
+        hostAuthorizationRequired: false, hostAuthorizationCommand: "" });
       Object.assign(model.update, { managerVersion: DEMO_VERSION, applicationVersion: DEMO_VERSION,
         packageVersion: DEMO_VERSION, runtimeProfile: profile().runtimeProfile, packageKind: profile().packageKind, packageLabel: profile().label + " (fictional)",
         imageVersion: ["nas", "mac", "freebsd"].includes(name) ? DEMO_VERSION : "",
@@ -597,7 +599,7 @@
     }
     if (path === "/api/v1/remote-access/tailscale" || path === "/api/v1/remote-access/tailscale/verify") {
       if (method === "PUT") {
-        if (profileName === "windows") {
+        if (["windows", "linux"].includes(profileName)) {
           if (!['enable', 'disable'].includes(body.operation) || Object.hasOwn(body, 'enabled') || Object.hasOwn(body, 'url'))
             return json({ error: { code: "invalid-operation", message: "Only the synthetic typed Funnel operation is accepted." } }, 400);
           if (body.operation === "enable" && !model.lockEnabled)
@@ -612,7 +614,7 @@
           Object.assign(model.tailscale, { enabled: Boolean(body.enabled), active: Boolean(body.enabled),
             state: body.enabled ? "enabled" : "disabled", url: body.enabled ? "https://manager.demo.invalid" : "" });
         }
-      } else if (profileName === "windows" && model.tailscale.enabled) {
+      } else if (["windows", "linux"].includes(profileName) && model.tailscale.enabled) {
         Object.assign(model.tailscale, { active: true, state: "active" });
       }
       return json(model.tailscale);

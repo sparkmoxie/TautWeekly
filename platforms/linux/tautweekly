@@ -126,7 +126,12 @@ case "$cmd" in
       systemctl stop tautweekly.service
       was_active=true
     fi
-    if ! run_as_service_user "$app_root/bin/tautweekly-manager" access-recover --data-dir "$data_root/manager" --confirm; then
+    if ! run_as_service_user "$app_root/bin/tautweekly-manager" access-recover \
+      --data-dir "$data_root/manager" \
+      --tautweekly-root "$app_root" \
+      --listen 127.0.0.1:8788 \
+      --runtime-mode linux \
+      --confirm; then
       $was_active && systemctl start tautweekly.service
       exit 1
     fi
@@ -157,18 +162,19 @@ case "$cmd" in
       echo "The fixed TautWeekly remote-access adapter socket did not start." >&2
       exit 70
     }
-    echo "Authorized TautWeekly's fixed Inspect/Enable/Disable Tailscale adapter."
-    echo "The Manager remains the unprivileged tautweekly service user; Funnel remains unsupported."
+    echo "Authorized TautWeekly's fixed Inspect/Enable/Disable Tailscale Funnel adapter."
+    echo "The Manager remains the unprivileged tautweekly service user. Tailscale sign-in and policy stay host-owned."
     ;;
   remote-access-revoke)
     require_root
-    remote_state="$data_root/manager/remote-access.json"
-    if [[ -f "$remote_state" ]]; then
-      remote_enabled="$(python3 -c 'import json,sys; print("true" if json.load(open(sys.argv[1], encoding="utf-8")).get("enabled") is True else "false")' "$remote_state" 2>/dev/null || echo invalid)"
-      if [[ "$remote_enabled" != "false" ]]; then
-        echo "Disable private access in Manager before revoking the host adapter so the owned Serve route is removed safely." >&2
-        exit 75
-      fi
+    if ! run_as_service_user "$app_root/bin/tautweekly-manager" remote-access-cleanup \
+      --data-dir "$data_root/manager" \
+      --tautweekly-root "$app_root" \
+      --listen 127.0.0.1:8788 \
+      --runtime-mode linux \
+      --confirm; then
+      echo "Adapter revocation stopped because the exact TautWeekly Funnel could not be disabled and verified." >&2
+      exit 75
     fi
     systemctl disable --now tautweekly-remote-access.socket >/dev/null 2>&1 || true
     rm -f /etc/tautweekly/remote-access.enabled
@@ -181,7 +187,20 @@ case "$cmd" in
       echo "TautWeekly Tailscale adapter: not authorized"
     fi
     ;;
-  start|stop|restart|status)
+  stop)
+    require_root
+    if ! run_as_service_user "$app_root/bin/tautweekly-manager" remote-access-cleanup \
+      --data-dir "$data_root/manager" \
+      --tautweekly-root "$app_root" \
+      --listen 127.0.0.1:8788 \
+      --runtime-mode linux \
+      --confirm; then
+      echo "Shutdown stopped because the exact TautWeekly Funnel could not be disabled and verified." >&2
+      exit 75
+    fi
+    systemctl stop tautweekly.service
+    ;;
+  start|restart|status)
     require_root
     systemctl "$cmd" tautweekly.service
     ;;
@@ -212,6 +231,15 @@ case "$cmd" in
     ;;
   update)
     require_root
+    if ! run_as_service_user "$app_root/bin/tautweekly-manager" remote-access-cleanup \
+      --data-dir "$data_root/manager" \
+      --tautweekly-root "$app_root" \
+      --listen 127.0.0.1:8788 \
+      --runtime-mode linux \
+      --confirm; then
+      echo "Update stopped because the exact TautWeekly Funnel could not be disabled and verified." >&2
+      exit 75
+    fi
     TAUTWEEKLY_PACKAGE_KIND=linux TAUTWEEKLY_PACKAGE_ROOT="$app_root" \
       exec /usr/local/libexec/tautweekly-package-update apply
     ;;

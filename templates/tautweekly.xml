@@ -21,7 +21,7 @@
   <Date>2026-08-26</Date>
   <MinVer>6.12.0</MinVer>
   <License>MIT</License>
-  <Config Name="Manager Web UI" Target="8080" Default="8787" Mode="tcp" Description="Authenticated Manager for a trusted LAN. Do not expose plain HTTP publicly; use an explicitly configured TLS reverse proxy when remote access is required." Type="Port" Display="always" Required="true" Mask="false"/>
+  <Config Name="Manager Web UI" Target="8080" Default="8787" Mode="tcp" Description="Authenticated Manager for a trusted LAN. Do not expose plain HTTP or enable public Funnel; use the documented separately managed private Tailscale Serve route or an explicitly configured TLS reverse proxy." Type="Port" Display="always" Required="true" Mask="false"/>
   <Config Name="Appdata" Target="/data" Default="/mnt/user/appdata/tautweekly" Mode="rw" Description="Private configuration, Manager credentials, state, backups, logs, assets, and generated previews. Preserve this path across updates and reinstalls." Type="Path" Display="always" Required="true" Mask="false"/>
   <Config Name="Timezone" Target="TZ" Default="Etc/UTC" Description="IANA timezone used by the weekly scheduler, for example America/Phoenix." Type="Variable" Display="always" Required="true" Mask="false"/>
   <Config Name="PUID" Target="PUID" Default="99" Description="Non-root Unraid user ID used for appdata ownership." Type="Variable" Display="advanced" Required="true" Mask="false"/>

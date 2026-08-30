@@ -13,13 +13,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"slices"
 	"time"
 )
 
 const (
 	linuxRemoteAccessSocket = "/run/tautweekly/remote-access.sock"
 	linuxRemoteAccessTarget = "http://127.0.0.1:8788"
+	linuxFunnelStateFile    = "linux-funnel.json"
 )
 
 type linuxTailscaleRunner struct {
@@ -33,7 +33,7 @@ func newPlatformRemoteAccessController(options Options) remoteAccessController {
 		target := tailscaleLoopbackTarget(options.ListenAddress)
 		if target == linuxRemoteAccessTarget {
 			runner := &linuxTailscaleRunner{socket: linuxRemoteAccessSocket, target: target}
-			return newTailscaleRemoteAccessController(options.DataDir, options.ListenAddress, true, runner)
+			return newPublicFunnelController(options.DataDir, options.ListenAddress, linuxFunnelStateFile, true, runner)
 		}
 		return newExternalTailscaleRemoteAccessController(options.DataDir, options.ListenAddress)
 	}
@@ -76,83 +76,85 @@ func (r *linuxTailscaleRunner) Available() bool {
 	return r != nil && r.target == linuxRemoteAccessTarget && r.Availability() == "available"
 }
 
-func (r *linuxTailscaleRunner) Run(ctx context.Context, arguments ...string) ([]byte, error) {
+func (*linuxTailscaleRunner) RequiresApproval() bool { return false }
+
+func (r *linuxTailscaleRunner) RunPublicRoute(ctx context.Context, action, target string) (publicRemoteAccessObservation, error) {
 	if !r.Available() {
 		if r != nil && r.Availability() == "authorization-required" {
-			return nil, ErrTailscaleHostAuthorization
+			return publicRemoteAccessObservation{}, ErrTailscaleHostAuthorization
 		}
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
-	action := ""
-	switch {
-	case slices.Equal(arguments, []string{"serve", "status", "--json"}):
-		action = "inspect"
-	case len(arguments) == 5 && slices.Equal(arguments[:4], []string{"serve", "--bg", "--yes", "--https=443"}) && arguments[4] == r.target:
-		action = "enable"
-	case slices.Equal(arguments, []string{"serve", "--yes", "--https=443", "off"}):
-		action = "disable"
-	default:
-		return nil, ErrTailscaleConfigurationInvalid
+	if target != r.target || (action != "inspect" && action != "enable" && action != "disable") {
+		return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 	}
 
 	nonceBytes := make([]byte, 32)
 	if _, err := rand.Read(nonceBytes); err != nil {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	nonce := hex.EncodeToString(nonceBytes)
 	request := tailscaleHelperRequest{SchemaVersion: 1, Nonce: nonce, Action: action, Target: r.target}
 	rawRequest, err := json.Marshal(request)
 	if err != nil {
-		return nil, ErrTailscaleConfigurationInvalid
+		return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 	}
 
 	var dialer net.Dialer
 	connection, err := dialer.DialContext(ctx, "unix", r.socket)
 	if err != nil {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	defer connection.Close()
-	deadline := time.Now().Add(tailscaleCommandTimeout)
+	deadline := time.Now().Add(tailscaleResponseTimeout)
 	if value, ok := ctx.Deadline(); ok && value.Before(deadline) {
 		deadline = value
 	}
 	_ = connection.SetDeadline(deadline)
 	if _, err := connection.Write(rawRequest); err != nil {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	if unix, ok := connection.(*net.UnixConn); ok {
 		_ = unix.CloseWrite()
 	}
 	raw, err := io.ReadAll(io.LimitReader(connection, maximumTailscaleOutput+1))
 	if err != nil || len(raw) == 0 || len(raw) > maximumTailscaleOutput {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	var result tailscaleHelperResult
 	if err := decoder.Decode(&result); err != nil || decoder.Decode(&struct{}{}) != io.EOF || result.SchemaVersion != 1 || result.Nonce != nonce {
-		return nil, ErrTailscaleConfigurationInvalid
+		return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 	}
 	switch result.Code {
 	case "enabled", "disabled", "inspected":
 		if len(result.ServeStatus) == 0 || len(result.ServeStatus) > maximumTailscaleOutput {
-			return nil, ErrTailscaleConfigurationInvalid
+			return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 		}
-		return slices.Clone(result.ServeStatus), nil
+		serveStatus, err := decodeTailscaleServeStatus(result.ServeStatus)
+		if err != nil {
+			return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
+		}
+		return normalizeTailscalePublicObservation(serveStatus, target, result.PubliclyPublished), nil
 	case "conflict":
-		return nil, ErrTailscaleServeConflict
+		return publicRemoteAccessObservation{}, ErrTailscaleServeConflict
 	case "not-installed":
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
+	case "not-running":
+		return publicRemoteAccessObservation{}, ErrTailscaleNotRunning
+	case "unsupported":
+		return publicRemoteAccessObservation{}, ErrTailscaleFunnelUnsupported
 	case "sign-in-required":
-		return nil, ErrTailscaleSignInRequired
+		return publicRemoteAccessObservation{}, ErrTailscaleSignInRequired
 	case "provider-approval-required":
 		if !validTailscaleProviderURL(result.SetupURL) {
-			return nil, ErrTailscaleConfigurationInvalid
+			return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 		}
-		return nil, tailscaleProviderApprovalError{url: result.SetupURL}
+		return publicRemoteAccessObservation{}, tailscaleProviderApprovalError{url: result.SetupURL}
 	case "verification-failed":
-		return nil, ErrTailscaleConfigurationInvalid
+		return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 	default:
-		return nil, errors.New("the authorized Linux Tailscale helper returned an unsupported result")
+		return publicRemoteAccessObservation{}, errors.New("the authorized Linux Tailscale helper returned an unsupported result")
 	}
 }

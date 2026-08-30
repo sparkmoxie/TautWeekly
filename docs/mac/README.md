@@ -227,11 +227,21 @@ and remote sessions have full administration. For optional mobile access,
 install and sign in to Tailscale on the phone or tablet, then open the private
 address shown by Manager.
 
+The maintained macOS package is the Docker Desktop package, not a native Mac
+Manager. Public Funnel is therefore intentionally unsupported through Manager:
+the container cannot prove ownership of a host-client route or disable and
+verify it during password reset, shutdown, update, rollback, or removal.
+Manager will not receive a Docker socket, host executable, privileged network
+mode, or macOS control plane to bypass that boundary.
+
 For Docker-only hosts that cannot install the native client, the fallback archive also
 includes an optional `compose.tailscale.yaml` userspace sidecar. Follow the
 [NAS/Docker sidecar procedure](../nas-docker/README.md#optional-userspace-compose-sidecar).
 It has no Docker socket, `/dev/net/tun`, added capability, host-network access,
-or public Funnel configuration. The native Mac client is the simpler default.
+or public Funnel configuration. Its declarative Serve config intentionally
+omits `AllowFunnel`; adding that field and a tag-targeted provider policy would
+create an independently owned public route that TautWeekly refuses to manage.
+The native Mac client is the simpler default.
 
 ## Newsletter behavior
 

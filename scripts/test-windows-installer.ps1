@@ -174,7 +174,10 @@ try {
     $privateManagerFixtures = [ordered]@{
         'operation-history.jsonl' = '{"schemaVersion":1,"id":"synthetic-history-preserve"}'
         'schedule-operation.json' = '{"schemaVersion":1,"state":"synthetic-schedule-preserve"}'
-        'windows-funnel.json' = '{"schemaVersion":1,"enabled":true,"hostname":"manager.synthetic-fixture.ts.net"}'
+        # Keep the virtual lifecycle inactive so it cannot invoke the host's
+        # real Tailscale client. Enabled-route cleanup is covered with fake
+        # runners in the Manager controller tests.
+        'windows-funnel.json' = '{"schemaVersion":2,"enabled":false}'
     }
     foreach ($fixture in $privateManagerFixtures.GetEnumerator()) {
         [IO.File]::WriteAllText((Join-Path $dataRoot $fixture.Key), $fixture.Value, [Text.UTF8Encoding]::new($false))
@@ -221,11 +224,12 @@ try {
             if ($restartedManager.HasExited) { throw "Upgraded Manager stopped during restart recovery with exit code $($restartedManager.ExitCode)." }
             try { $restartHealthy = [string](Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$restartPort/health/live" -TimeoutSec 2).status -eq 'alive' } catch { }
         } while (-not $restartHealthy -and (Get-Date) -lt $restartDeadline)
-        Assert-True $restartHealthy 'Upgraded Manager did not restart with preserved password and Funnel state.'
+        Assert-True $restartHealthy 'Upgraded Manager did not restart with preserved password and remote-access state.'
         $restartSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
         Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$restartPort/api/v1/auth/login" -Method Post -ContentType 'application/json' -WebSession $restartSession -Body '{"password":"synthetic installer preservation password"}' -TimeoutSec 3 | Out-Null
         $recoveredFunnel = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$restartPort/api/v1/remote-access/tailscale" -WebSession $restartSession -TimeoutSec 3
-        Assert-True ([bool]$recoveredFunnel.enabled -and -not [bool]$recoveredFunnel.active -and [bool]$recoveredFunnel.cleanupRequired) 'Upgraded Manager did not recover the saved passive Funnel preference safely.'
+        $cleanupRequired = if ($null -eq $recoveredFunnel.PSObject.Properties['cleanupRequired']) { $false } else { [bool]$recoveredFunnel.cleanupRequired }
+        Assert-True (-not [bool]$recoveredFunnel.enabled -and -not [bool]$recoveredFunnel.active -and -not $cleanupRequired) 'Upgraded Manager did not preserve the inactive Funnel state safely.'
         Assert-True ([string]$recoveredFunnel.networkKind -eq 'public-funnel') 'Upgraded Manager reverted to the obsolete private remote-access controller.'
         $restartShutdown = Start-Process -FilePath $managerExecutable -ArgumentList @('shutdown', "--listen=127.0.0.1:$restartPort", "--tautweekly-root=$installRoot") -WorkingDirectory $installRoot -Wait -PassThru -WindowStyle Hidden
         Assert-True ($restartShutdown.ExitCode -eq 0) 'Upgraded Manager rejected graceful shutdown after restart recovery.'
@@ -254,10 +258,8 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $portableRoot 'INSTALL-METADATA.txt') -PathType Leaf) 'Portable migration did not convert the folder to an installer-owned application.'
     Assert-True (@(Get-ChildItem -LiteralPath $portableExtractRoot -Directory -Filter 'TautWeekly-windows.backup-v*').Count -eq 1) 'Portable migration did not create exactly one rollback backup.'
 
-    # The upgrade assertion above proves the selected enabled preference was
-    # retained. Make the synthetic route inactive before testing removal so
-    # this virtual lifecycle never invokes the real Tailscale client.
-    [IO.File]::WriteAllText((Join-Path $dataRoot 'windows-funnel.json'), '{"schemaVersion":1,"enabled":false}', [Text.UTF8Encoding]::new($false))
+    # The virtual lifecycle remains inactive before removal so it never
+    # invokes the real Tailscale client.
     $uninstaller = Join-Path $installRoot 'TautWeekly-Uninstall.exe'
     # The installed uninstaller must recover both the custom application root
     # and external data root without caller-supplied path arguments.

@@ -125,6 +125,46 @@ if run_privileged \
   assert_call "runuser -u tautweekly -- env TZ=Etc/UTC TAUTWEEKLY_APP_DIR=/virtual/app TAUTWEEKLY_DATA_DIR=$test_root/data TAUTWEEKLY_CONFIG=$test_root/data/config.json TAUTWEEKLY_PREVIEW_BASE_URL= /virtual/app/bin/tautweekly-manager access-bootstrap --data-dir $test_root/data/manager"
 fi
 
+reset_calls
+if run_privileged \
+    "PATH=$PATH" \
+    "TAUTWEEKLY_TEST_CALL_LOG=$call_log" \
+    "TAUTWEEKLY_APP_DIR=/virtual/app" \
+    "TAUTWEEKLY_DATA_DIR=$test_root/data" \
+    "TAUTWEEKLY_CONFIG=$test_root/data/config.json" \
+    bash "$repo_root/platforms/linux/tautweekly" stop; then
+  assert_call "runuser -u tautweekly -- env TZ=Etc/UTC TAUTWEEKLY_APP_DIR=/virtual/app TAUTWEEKLY_DATA_DIR=$test_root/data TAUTWEEKLY_CONFIG=$test_root/data/config.json TAUTWEEKLY_PREVIEW_BASE_URL= /virtual/app/bin/tautweekly-manager remote-access-cleanup --data-dir $test_root/data/manager --tautweekly-root /virtual/app --listen 127.0.0.1:8788 --runtime-mode linux --confirm"
+  assert_call 'systemctl stop tautweekly.service'
+fi
+
+reset_calls
+if run_privileged \
+    "PATH=$PATH" \
+    "TAUTWEEKLY_TEST_CALL_LOG=$call_log" \
+    "TAUTWEEKLY_APP_DIR=/virtual/app" \
+    "TAUTWEEKLY_DATA_DIR=$test_root/data" \
+    "TAUTWEEKLY_CONFIG=$test_root/data/config.json" \
+    bash "$repo_root/platforms/linux/tautweekly" restart; then
+  assert_call 'systemctl restart tautweekly.service'
+  if grep -Fq 'remote-access-cleanup' "$call_log"; then
+    fail 'native Linux restart unexpectedly removed the selected persistent route'
+  fi
+fi
+
+reset_calls
+if run_privileged \
+    "PATH=$PATH" \
+    "TAUTWEEKLY_TEST_CALL_LOG=$call_log" \
+    "TAUTWEEKLY_APP_DIR=/virtual/app" \
+    "TAUTWEEKLY_DATA_DIR=$test_root/data" \
+    "TAUTWEEKLY_CONFIG=$test_root/data/config.json" \
+    bash "$repo_root/platforms/linux/tautweekly" manager-reset-access; then
+  assert_call 'systemctl is-active --quiet tautweekly.service'
+  assert_call 'systemctl stop tautweekly.service'
+  assert_call "runuser -u tautweekly -- env TZ=Etc/UTC TAUTWEEKLY_APP_DIR=/virtual/app TAUTWEEKLY_DATA_DIR=$test_root/data TAUTWEEKLY_CONFIG=$test_root/data/config.json TAUTWEEKLY_PREVIEW_BASE_URL= /virtual/app/bin/tautweekly-manager access-recover --data-dir $test_root/data/manager --tautweekly-root /virtual/app --listen 127.0.0.1:8788 --runtime-mode linux --confirm"
+  assert_call 'systemctl start tautweekly.service'
+fi
+
 freebsd_env="$test_root/freebsd.env"
 cat >"$freebsd_env" <<EOF
 TAUTWEEKLY_CONTAINER=virtual-tautweekly

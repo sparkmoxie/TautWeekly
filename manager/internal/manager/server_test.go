@@ -159,7 +159,7 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 	}
 }
 
-func TestNonWindowsManagerDoesNotExposeWindowsSocialMetadataOrAsset(t *testing.T) {
+func TestExternalPrivateManagerDoesNotExposePublicSocialMetadataOrAsset(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	assetPath := filepath.Join(root, filepath.FromSlash(windowsManagerSocialImageRelativePath))
@@ -169,18 +169,58 @@ func TestNonWindowsManagerDoesNotExposeWindowsSocialMetadataOrAsset(t *testing.T
 	if err := os.WriteFile(assetPath, []byte{0xff, 0xd8, 0xff, 0xd9}, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	server, err := New(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Version: "test", RuntimeMode: runtimeModeLinux})
+	server, err := New(Options{
+		DataDir:                t.TempDir(),
+		TautWeeklyRoot:         root,
+		Version:                "test",
+		RuntimeMode:            runtimeModeMac,
+		remoteAccessController: newExternalTailscaleRemoteAccessController(t.TempDir(), "0.0.0.0:8788"),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	rootResponse := requestForTest(server, http.MethodGet, "/", nil, nil)
 	if rootResponse.Code != http.StatusOK || strings.Contains(rootResponse.Body.String(), "og:image") || !strings.Contains(rootResponse.Body.String(), "<title>TautWeekly Manager</title>") {
-		t.Fatalf("non-Windows Manager sharing boundary changed: code=%d", rootResponse.Code)
+		t.Fatalf("external-only Manager sharing boundary changed: code=%d", rootResponse.Code)
 	}
 	assetResponse := requestForTest(server, http.MethodGet, windowsManagerSocialImagePath, nil, nil)
 	if assetResponse.Code != http.StatusNotFound {
-		t.Fatalf("non-Windows Manager served the Windows social image: code=%d", assetResponse.Code)
+		t.Fatalf("external-only Manager served the public social image: code=%d", assetResponse.Code)
+	}
+}
+
+func TestIntegratedLinuxManagerExposesPublicSocialMetadataAndAsset(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	assetPath := filepath.Join(root, filepath.FromSlash(windowsManagerSocialImageRelativePath))
+	if err := os.MkdirAll(filepath.Dir(assetPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	image := []byte{0xff, 0xd8, 0xff, 0xd9}
+	if err := os.WriteFile(assetPath, image, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server, err := New(Options{
+		DataDir:                t.TempDir(),
+		TautWeeklyRoot:         root,
+		Version:                "test",
+		RuntimeMode:            runtimeModeLinux,
+		remoteAccessController: newPublicFunnelController(t.TempDir(), "127.0.0.1:8788", "test-funnel.json", true, nil),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rootResponse := requestForTest(server, http.MethodGet, "/", nil, nil)
+	if rootResponse.Code != http.StatusOK ||
+		!strings.Contains(rootResponse.Body.String(), "property=\"og:image\"") ||
+		!strings.Contains(rootResponse.Body.String(), "content=\"http://127.0.0.1:8788/manager-social-preview.jpg\"") {
+		t.Fatalf("integrated Linux Manager omitted public sharing metadata: code=%d", rootResponse.Code)
+	}
+	assetResponse := requestForTest(server, http.MethodGet, windowsManagerSocialImagePath, nil, nil)
+	if assetResponse.Code != http.StatusOK || !bytes.Equal(assetResponse.Body.Bytes(), image) {
+		t.Fatalf("integrated Linux Manager social image contract failed: code=%d bytes=%d", assetResponse.Code, assetResponse.Body.Len())
 	}
 }
 

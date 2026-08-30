@@ -205,6 +205,13 @@ first, then remove the host Serve route if private access is no longer wanted.
 For optional mobile use, install and sign in to Tailscale on the phone or
 tablet, then open the private address shown by Manager.
 
+Public Funnel is intentionally unsupported through the maintained FreeBSD
+Podman package. Tailscale support on FreeBSD is community-maintained, and the
+container cannot own or verify host-client cleanup across rc.d stop, rollback,
+or uninstall. Manager receives no root, Podman socket, host executable, or
+Tailscale control plane. Keep Funnel off and use only the separately
+administered private Serve route described above.
+
 ## Operations
 
 Use the Manager GUI for normal configuration, verification, library/user

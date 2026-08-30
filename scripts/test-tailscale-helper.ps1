@@ -39,6 +39,7 @@ Require-Pattern 'Send-Result' 'Helper does not use the bounded nonce callback.'
 Require-Pattern 'Resolve-DnsName -Name \$hostname -Type A -Server ''1\.1\.1\.1''' 'Helper does not bypass private MagicDNS with the fixed public resolver.'
 Require-Pattern 'Test-PublicIPv4Address' 'Helper does not reject private and non-routable DNS answers.'
 Require-Pattern 'BeginAuthenticateAsClient\(\$hostname' 'Helper does not perform a certificate-validated public TLS handshake.'
+Require-Pattern 'if \(-not \$authentication\.AsyncWaitHandle\.WaitOne\(5000\)\) \{ continue \}' 'Helper could treat a public-edge TLS stall as published.'
 Require-Pattern 'publiclyPublished = \$PubliclyPublished' 'Helper does not return the sanitized public-publication postcondition.'
 
 Forbid-Pattern 'serve --bg' 'Helper still enables the obsolete private Serve workflow.'

@@ -58,14 +58,17 @@ Disabling the feature stops access but does not erase the existing cache.
   same-origin mutation checks, bounded sessions, and login throttling. A
   service restart invalidates sessions without changing newsletter delivery
   state. Access recovery resets only Manager authentication material.
-- Keep NAS/FreeBSD/macOS Manager port 8787 and native Linux Manager port 8788
-  off the public internet. Prefer the documented localhost bind or a trusted
-  LAN bind restricted by the host firewall. macOS binds to Mac loopback by
-  default; changing that bind requires the same explicit allowed-host and TLS
-  review as any other network-reachable Manager.
-- Windows optional remote access uses public HTTPS Tailscale Funnel while the
-  Manager remains bound to loopback. The fixed UAC helper accepts only the
-  exact TautWeekly operation and target, and verifies the observed route. A
+- Keep every Manager listener off the public internet. NAS/FreeBSD/macOS use
+  port 8787 and native Windows/Linux use port 8788; public native access still
+  reaches only the loopback listener through the verified proxy. Prefer the
+  documented localhost bind or a trusted LAN bind restricted by the host
+  firewall. macOS binds to Mac loopback by default; changing that bind requires
+  the same explicit allowed-host and TLS review as any other network-reachable
+  Manager.
+- Native Windows and native Linux optional remote access use public HTTPS
+  Tailscale Funnel while Manager remains bound to loopback. The Windows fixed
+  UAC helper or Linux root-owned one-shot socket adapter accepts only the exact
+  TautWeekly operation and target, and verifies the observed route. A
   green active state additionally requires the exact public hostname to resolve
   through the fixed `1.1.1.1` resolver to a globally routable IPv4 address and
   complete a certificate-validated TLS handshake. Only that intended-public
@@ -77,11 +80,12 @@ Disabling the feature stops access but does not erase the existing cache.
   Tailscale client or VPN because the login page is public; use a unique
   password and retain local recovery because Internet brute-force risk remains.
   This delivery adds no new Internet login-attempt limiter.
-- Native Linux retains its root-owned, socket-activated private Serve helper.
-  Container/host-managed packages retain one exact private HTTPS `.ts.net`
+- Container/host-managed packages retain one exact private HTTPS `.ts.net`
   hostname after an authenticated administrator confirms Funnel is off. Those
   packages never accept a Tailscale credential or gain a Docker/Podman/host
-  control plane. Their independent Manager password remains required.
+  control plane. Their independent Manager password remains required, and
+  integrated public Funnel is deliberately refused because cleanup ownership
+  cannot be proven across reset, shutdown, update, rollback, and removal.
 - Every remote session has full Manager administration because no read-only
   role exists. Keep the host client updated and signed in. For private Serve
   packages, also restrict tailnet grants, use MFA at the identity provider, and
@@ -92,14 +96,17 @@ Disabling the feature stops access but does not erase the existing cache.
   the hostname is blocked immediately, then remove the external route. Never
   expose or retain auth keys in Manager, Compose YAML, `.env`, Community Apps
   templates, screenshots, logs, or support bundles.
-- Windows Funnel state contains only a schema version, selected state, and the
+- Native Funnel state contains only a schema version, selected state, and the
   exact verified public hostname. It never stores raw CLI output, auth keys,
   control-plane tokens, tailnet identity, device lists, private IPs, or
   sensitive paths. Password-lock disable, local access reset, and uninstall
   first disable and verify the owned Funnel or fail closed. Password changes
   keep Funnel and the current session but revoke other sessions. Installer
-  updates preserve the private state; ordinary Manager exit preserves the
-  persistent route for restart.
+  Windows and native Linux updates preserve private Manager data, but first
+  disable and verify the route and leave Funnel off for explicit re-enable.
+  Ordinary Manager restart preserves the persistent route.
+  See the [remote-access architecture](REMOTE-ACCESS.md) for the complete
+  platform and lifecycle matrix.
 - For a trusted TLS reverse proxy, allow only its exact DNS host, preserve the
   original Host header, and enable secure Manager cookies. Do not trust broad
   wildcards or publish the plain HTTP backend. Remove proxy Host rewrites,

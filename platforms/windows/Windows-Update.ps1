@@ -323,6 +323,46 @@ function Stop-InstalledManager {
     return $true
 }
 
+function Resolve-ManagerDataRoot {
+    $dataRoot = if ([string]::IsNullOrWhiteSpace($ManagerDataRoot)) { Join-Path $InstallRoot '.manager-data' } else { [IO.Path]::GetFullPath($ManagerDataRoot) }
+    if ([string]::IsNullOrWhiteSpace($ManagerDataRoot)) {
+        $installMetadata = Join-Path $InstallRoot 'INSTALL-METADATA.txt'
+        if (Test-Path -LiteralPath $installMetadata -PathType Leaf) {
+            $dataLine = Get-Content -LiteralPath $installMetadata | Where-Object { $_ -match '^DataDirectory=(?<path>.+)$' } | Select-Object -First 1
+            if ($null -ne $dataLine -and $dataLine -match '^DataDirectory=(?<path>.+)$') {
+                $candidateDataRoot = [IO.Path]::GetFullPath([string]$Matches['path'])
+                if ($candidateDataRoot -eq [IO.Path]::GetFullPath($InstallRoot)) {
+                    throw 'Installer metadata contains an unsafe Manager data directory.'
+                }
+                $dataRoot = $candidateDataRoot
+            }
+        }
+    }
+    return [IO.Path]::GetFullPath($dataRoot)
+}
+
+function Disable-InstalledPublicRoute {
+    $dataRoot = Resolve-ManagerDataRoot
+    $funnelState = Join-Path $dataRoot 'windows-funnel.json'
+    $legacyState = Join-Path $dataRoot 'remote-access.json'
+    if (-not (Test-Path -LiteralPath $funnelState -PathType Leaf) -and
+        -not (Test-Path -LiteralPath $legacyState -PathType Leaf)) {
+        return
+    }
+    $managerPath = Join-Path $InstallRoot 'tautweekly-manager.exe'
+    if (-not (Test-Path -LiteralPath $managerPath -PathType Leaf)) {
+        throw 'Update stopped because the existing Manager cannot verify public Funnel shutdown.'
+    }
+    & $managerPath remote-access-cleanup `
+        "--data-dir=$dataRoot" `
+        "--tautweekly-root=$InstallRoot" `
+        --listen=127.0.0.1:8788 `
+        --confirm
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Update stopped because the exact TautWeekly Funnel could not be disabled and verified.'
+    }
+}
+
 function Get-HealthyManagerListenerProcessIds {
     try {
         $health = Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/health/live' -TimeoutSec 2
@@ -344,20 +384,7 @@ function Start-InstalledManager {
     if ($LASTEXITCODE -ne 0 -or $reportedVersion.Count -ne 1 -or [string]$reportedVersion[0] -ne "TautWeekly Manager $TargetVersion") {
         throw 'The packaged Manager executable does not report the requested update version.'
     }
-    $dataRoot = if ([string]::IsNullOrWhiteSpace($ManagerDataRoot)) { Join-Path $InstallRoot '.manager-data' } else { [IO.Path]::GetFullPath($ManagerDataRoot) }
-    if ([string]::IsNullOrWhiteSpace($ManagerDataRoot)) {
-        $installMetadata = Join-Path $InstallRoot 'INSTALL-METADATA.txt'
-        if (Test-Path -LiteralPath $installMetadata -PathType Leaf) {
-            $dataLine = Get-Content -LiteralPath $installMetadata | Where-Object { $_ -match '^DataDirectory=(?<path>.+)$' } | Select-Object -First 1
-            if ($null -ne $dataLine -and $dataLine -match '^DataDirectory=(?<path>.+)$') {
-                $candidateDataRoot = [IO.Path]::GetFullPath([string]$Matches['path'])
-                if ($candidateDataRoot -eq [IO.Path]::GetFullPath($InstallRoot)) {
-                    throw 'Installer metadata contains an unsafe Manager data directory.'
-                }
-                $dataRoot = $candidateDataRoot
-            }
-        }
-    }
+    $dataRoot = Resolve-ManagerDataRoot
     if (-not (Test-Path -LiteralPath $dataRoot -PathType Container)) {
         New-Item -ItemType Directory -Path $dataRoot | Out-Null
     }
@@ -465,6 +492,7 @@ $managerRestarted = $false
 try {
     $operationLock = Enter-TautWeeklyOperationLock -Root $InstallRoot -Purpose "update to $TargetVersion"
 
+    Disable-InstalledPublicRoute
     $managerWasRunning = Stop-InstalledManager
 
     $task = if ($InstallerTestMode) { $null } else { Get-ScheduledNewsletterTask }
