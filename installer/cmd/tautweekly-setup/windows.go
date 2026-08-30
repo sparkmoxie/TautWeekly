@@ -139,23 +139,67 @@ func preferredInstallDirectory(fallback string) string {
 	return fallback
 }
 
-const windowsUninstallRegistryKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`
+const (
+	windowsUninstallRegistrySubkey = `Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`
+	windowsUninstallRegistryKey    = `HKCU\` + windowsUninstallRegistrySubkey
+)
 
 var readWindowsUninstallValue = windowsUninstallValue
 
 func windowsUninstallValue(name string) (string, error) {
-	output, err := hiddenCommand("reg.exe", "query", windowsUninstallRegistryKey, "/v", name).CombinedOutput()
+	path, err := syscall.UTF16PtrFromString(windowsUninstallRegistrySubkey)
 	if err != nil {
 		return "", err
 	}
-	for _, line := range strings.Split(string(output), "\n") {
-		if index := strings.Index(line, "REG_SZ"); index >= 0 {
-			if value := strings.TrimSpace(line[index+len("REG_SZ"):]); value != "" {
-				return value, nil
-			}
-		}
+	var key uintptr
+	result, _, _ := managerRegOpenKey.Call(
+		uintptr(syscall.HKEY_CURRENT_USER),
+		uintptr(unsafe.Pointer(path)),
+		0,
+		uintptr(managerKeyQuery),
+		uintptr(unsafe.Pointer(&key)),
+	)
+	if result != 0 {
+		return "", syscall.Errno(result)
 	}
-	return "", fmt.Errorf("Windows uninstall value %s is unavailable", name)
+	defer managerRegCloseKey.Call(key)
+
+	valueName, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return "", err
+	}
+	var valueType uint32
+	var size uint32
+	result, _, _ = managerRegQueryValue.Call(
+		key,
+		uintptr(unsafe.Pointer(valueName)),
+		0,
+		uintptr(unsafe.Pointer(&valueType)),
+		0,
+		uintptr(unsafe.Pointer(&size)),
+	)
+	if result != 0 {
+		return "", syscall.Errno(result)
+	}
+	if valueType != managerRegistrySZ || size < 2 || size > 64<<10 {
+		return "", fmt.Errorf("Windows uninstall value %s is not a bounded string", name)
+	}
+	buffer := make([]uint16, (size+1)/2)
+	result, _, _ = managerRegQueryValue.Call(
+		key,
+		uintptr(unsafe.Pointer(valueName)),
+		0,
+		uintptr(unsafe.Pointer(&valueType)),
+		uintptr(unsafe.Pointer(&buffer[0])),
+		uintptr(unsafe.Pointer(&size)),
+	)
+	if result != 0 {
+		return "", syscall.Errno(result)
+	}
+	if value := strings.TrimSpace(syscall.UTF16ToString(buffer)); value != "" {
+		return value, nil
+	}
+	return "", fmt.Errorf("Windows uninstall value %s is empty", name)
 }
 
 func registeredInstallLocation(value string) string {
