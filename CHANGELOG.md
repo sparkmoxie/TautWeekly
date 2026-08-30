@@ -33,6 +33,10 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Windows Setup now uses a validated registered application folder directly
+  for Update or Migrate instead of reopening the legacy folder picker, whose
+  initial selection can be ignored on some Windows hosts. New and unresolved
+  installations still require an explicit folder selection.
 - Stopped Windows Funnel from reporting **Active** when Tailscale had only saved
   the local route. Enable and Verify now require public DNS through a fixed
   public resolver plus a certificate-validated TLS handshake before the green
