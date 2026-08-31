@@ -280,7 +280,7 @@ func TestSaveConfigValidationAndRevisionConflict(t *testing.T) {
 
 func TestSaveConfigRejectsSMTPURLInsteadOfReportingUnsafeDNS(t *testing.T) {
 	definition := configDefinition{Name: "SmtpHost", Type: "text", Required: true}
-	_, message := parseAndValidateConfigValue(json.RawMessage(`"smtp://smtp.gmail.com:587"`), definition)
+	_, message := parseAndValidateConfigValue(json.RawMessage(`"smtp://smtp.example.com:587"`), definition)
 	if !strings.Contains(message, "hostname only") {
 		t.Fatalf("SMTP URL validation message: %q", message)
 	}

@@ -35,33 +35,19 @@ and it does not display or copy private configuration, logs, or output.
 
 ## SMTP authentication or TLS fails
 
-- Use the provider's STARTTLS hostname and port, normally 587.
+- Use the exact SMTP submission hostname from the provider's account settings.
+- Use a supported STARTTLS submission port, normally 587. TautWeekly does not
+  support implicit-TLS port 465.
 - Confirm whether authentication is required and whether the username is a full
   email address.
+- Keep `FromEmail` equal to the authenticated account or a sender identity or
+  alias that the account is permitted to use.
 - Use an application password when the provider requires one.
 - Preserve password whitespace unless the provider displays grouped characters
   and `SmtpStripPasswordSpaces` is intentionally enabled.
 - `verify` proves that the SMTP host is reachable; it does not authenticate or
   submit mail. Use a numeric ID from `list-users` with `send-test` for the
   authoritative delivery check. Listing users does not save a default.
-
-For Zoho Mail, use the exact outgoing server shown for the account and data
-center. TautWeekly requires its TLS/STARTTLS port 587 rather than implicit-SSL
-port 465. Enable authentication, use the full Zoho email address as the
-username, and keep `FromEmail` equal to that account or one of its permitted
-aliases. When Zoho MFA requires an application-specific password, enter it
-without spaces or deliberately enable `SmtpStripPasswordSpaces`. See
-[Zoho's SMTP configuration](https://www.zoho.com/mail/help/zoho-smtp.html) and
-[application-password guidance](https://help.zoho.com/portal/en/kb/accounts/manage-your-zoho-account/articles/mfa-application-specific-passwords).
-
-For Proton SMTP submission, use `smtp.protonmail.ch`, port 587, STARTTLS,
-authentication enabled, and `SmtpAuthenticationMethod` set to `Auto` or
-`Login`. The username and `FromEmail` must be the exact address paired with the
-generated SMTP token; the password must be that token, not a Proton account,
-mailbox, or Bridge password. See [Proton's SMTP submission instructions](https://proton.me/support/smtp-submission).
-If Proton reports `Sender address rejected: not logged in`, update to a build
-containing the explicit SMTP authentication transport, then regenerate or
-re-enter the token if the error remains.
 
 ## SMTP provider temporarily locks or limits the account
 

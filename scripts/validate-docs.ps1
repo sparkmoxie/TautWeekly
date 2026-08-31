@@ -818,8 +818,26 @@ $troubleshooting = [IO.File]::ReadAllText((Join-Path $docs 'TROUBLESHOOTING.md')
 if ($configuration -notmatch 'SmtpAuthenticationMethod' -or $configuration -notmatch 'successful `235` response') {
     throw 'SMTP authentication transport is not documented in CONFIGURATION.md.'
 }
-if ($troubleshooting -notmatch 'smtp\.protonmail\.ch' -or $troubleshooting -notmatch 'Sender address rejected: not logged in') {
-    throw 'Proton SMTP troubleshooting guidance is missing.'
+$smtpTroubleshooting = [regex]::Match($troubleshooting, '(?ms)^## SMTP authentication or TLS fails\s*(?<content>.*?)(?=^##\s)')
+if (-not $smtpTroubleshooting.Success) {
+    throw 'Provider-neutral SMTP authentication troubleshooting guidance is missing.'
+}
+$smtpTroubleshootingContent = $smtpTroubleshooting.Groups['content'].Value
+foreach ($pattern in @(
+    'exact SMTP submission hostname',
+    'STARTTLS submission port',
+    'does not\s+support implicit-TLS port 465',
+    'FromEmail',
+    'application password',
+    'SmtpStripPasswordSpaces',
+    'does not authenticate or\s+submit mail'
+)) {
+    if ($smtpTroubleshootingContent -notmatch $pattern) {
+        throw "Provider-neutral SMTP troubleshooting guidance is missing: $pattern"
+    }
+}
+if ($smtpTroubleshootingContent -match '(?i)\b(Proton|Zoho|Gmail|Outlook|Office 365|Microsoft 365|Yahoo|iCloud|Fastmail|Mailgun|SendGrid|SMTP2GO|Amazon SES|Postmark)\b') {
+    throw 'SMTP troubleshooting guidance must remain provider-neutral.'
 }
 foreach ($pattern in @(
     'Manager \*\*Config\*\* is the setup source on Windows, NAS/Docker, macOS Docker\s+Desktop, native Linux, and FreeBSD Podman',

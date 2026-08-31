@@ -154,7 +154,7 @@ func configDefinitions() []configDefinition {
 		{Name: "SmtpUseAuthentication", Label: "Use SMTP authentication", Group: "SMTP", Type: "boolean", Default: true},
 		{Name: "SmtpUsername", Label: "SMTP username", Group: "SMTP", Type: "text", Default: ""},
 		{Name: "SmtpPassword", Label: "SMTP password", Group: "SMTP", Type: "secret", Help: "Leave blank to preserve the stored password. Revealing it requires your Manager password and clears automatically."},
-		{Name: "SmtpStripPasswordSpaces", Label: "Strip password spaces", Group: "SMTP", Type: "boolean", Default: false, Help: "Enable only when the provider displays a grouped app password; all whitespace is removed before authentication."},
+		{Name: "SmtpStripPasswordSpaces", Label: "Strip password spaces", Group: "SMTP", Type: "boolean", Default: false},
 		{Name: "SmtpAuthenticationMethod", Label: "Authentication method", Group: "SMTP", Type: "select", Required: true, Default: "Auto", Options: []string{"Auto"}},
 		{Name: "SmtpTimeoutSeconds", Label: "SMTP timeout (seconds)", Group: "SMTP", Type: "integer", Required: true, Default: int64(30), Min: portMin, Max: shortMax},
 		{Name: "ScheduleDay", Label: "Weekly send day", Group: "Schedule", Type: "select", Required: true, Default: "Friday", Options: []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}},
@@ -669,7 +669,7 @@ func parseAndValidateConfigValue(raw json.RawMessage, definition configDefinitio
 			}
 		}
 		if definition.Name == "SmtpHost" && text != "" && !validSMTPHost(text) {
-			return nil, "Enter a hostname only, such as smtp.gmail.com; do not include smtp:// or a port."
+			return nil, "Enter a hostname only, such as smtp.example.com; do not include smtp:// or a port."
 		}
 		if definition.Type == "time" && text != "" {
 			if _, err := time.Parse("15:04", text); err != nil || len(text) != 5 {
