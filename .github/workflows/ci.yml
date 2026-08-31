@@ -160,6 +160,7 @@ jobs:
         run: |
           ./scripts/check-links.ps1
           ./scripts/validate-docs.ps1
+          ./scripts/validate-release-history.ps1
       - name: Validate JavaScript and Manager accessibility
         run: |
           node --check docs/assets/site.js

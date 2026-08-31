@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-08-31
+
 ### Fixed
 
 - Preserved privacy-safe SMTP category, protocol stage, numeric response code,
