@@ -2925,7 +2925,7 @@ function operationSummary(operation) {
     case "queued": return { heading: "Manual Welcome queued", copy: "One selected-user welcome newsletter is waiting to start." };
     case "running": return { heading: "Sending one Manual Welcome", copy: "One selected Plex user is being processed. Cancellation is disabled once delivery begins." };
     case "succeeded": return { heading: "Manual Welcome accepted by SMTP", copy: "One welcome message was accepted by SMTP. The selected user's welcome state was updated; inbox delivery is not asserted." };
-    case "failed": return { heading: "Manual Welcome delivery failed", copy: rendererFailureCopy(operation.errorCategory, operation.supportCode) };
+    case "failed": return { heading: "Manual Welcome delivery failed", copy: `${rendererFailureCopy(operation.errorCategory, operation.supportCode)}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
     default: return { heading: "Manual Welcome delivery recorded", copy: "Review aggregate SMTP acceptance without exposing the selected recipient." };
     }
   }
@@ -2950,7 +2950,7 @@ function operationSummary(operation) {
     case "queued": return { heading: "Test delivery queued", copy: "The fixed six-message TestEmail operation is waiting to start." };
     case "running": return { heading: "Sending six test messages", copy: "Messages go only to the configured TestEmail; cancellation is disabled once sending begins." };
     case "succeeded": return { heading: "Test delivery accepted by SMTP", copy: `${operation.smtpAcceptedCount || 0} test messages were accepted by SMTP. Inbox delivery is not asserted.` };
-    case "failed": return { heading: "Test delivery failed", copy: `${operation.smtpAcceptedCount || 0} test message${operation.smtpAcceptedCount === 1 ? " was" : "s were"} accepted before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}` };
+    case "failed": return { heading: "Test delivery failed", copy: `${operation.smtpAcceptedCount || 0} test message${operation.smtpAcceptedCount === 1 ? " was" : "s were"} accepted before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
     default: return { heading: "Test delivery recorded", copy: "Review aggregate SMTP acceptance and failure counts." };
     }
   }

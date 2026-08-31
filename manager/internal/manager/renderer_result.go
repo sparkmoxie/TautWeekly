@@ -84,7 +84,7 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 		if (result.ErrorCategory == "no-eligible-recipients" || result.ErrorCategory == "user-roster-refresh-failed") && result.Mode != "SendAll" {
 			return false
 		}
-		if structuredSMTPFailureCategory(result.ErrorCategory) && result.Mode != "SendAll" {
+		if structuredSMTPFailureCategory(result.ErrorCategory) && !smtpDeliveryMode(result.Mode) {
 			return false
 		}
 	}
@@ -93,7 +93,7 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 			return false
 		}
 	} else if result.SMTPFailure != nil {
-		if result.Mode != "SendAll" || (result.Outcome != "failed" && result.Outcome != "partial") || result.ErrorCategory != result.SMTPFailure.Category || !validSMTPFailureEvidence(*result.SMTPFailure) {
+		if !smtpDeliveryMode(result.Mode) || (result.Outcome != "failed" && !(result.Mode == "SendAll" && result.Outcome == "partial")) || result.ErrorCategory != result.SMTPFailure.Category || !validSMTPFailureEvidence(*result.SMTPFailure) {
 			return false
 		}
 	} else if structuredSMTPFailureCategory(result.ErrorCategory) {
@@ -159,15 +159,15 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 			return false
 		}
 	case "SendTest":
-		if len(seen) != 0 || result.SkippedCount != 0 || (result.Outcome == "succeeded" && (result.SMTPAcceptedCount != 1 || result.FailedCount != 0)) {
+		if len(seen) != 0 || result.SkippedCount != 0 || (result.Outcome == "succeeded" && (result.SMTPAcceptedCount != 1 || result.FailedCount != 0)) || (result.SMTPFailure != nil && (result.SMTPAcceptedCount != 0 || result.FailedCount != 1)) {
 			return false
 		}
 	case "SendTestAll":
-		if len(seen) != 0 || result.SkippedCount != 0 || (result.Outcome == "succeeded" && (result.SMTPAcceptedCount != 6 || result.FailedCount != 0)) {
+		if len(seen) != 0 || result.SkippedCount != 0 || (result.Outcome == "succeeded" && (result.SMTPAcceptedCount != 6 || result.FailedCount != 0)) || (result.SMTPFailure != nil && (result.SMTPAcceptedCount >= 6 || result.FailedCount != 1)) {
 			return false
 		}
 	case "SendWelcome":
-		if len(seen) != 0 || result.SkippedCount != 0 || (result.Outcome == "succeeded" && (result.SMTPAcceptedCount != 1 || result.FailedCount != 0)) {
+		if len(seen) != 0 || result.SkippedCount != 0 || (result.Outcome == "succeeded" && (result.SMTPAcceptedCount != 1 || result.FailedCount != 0)) || (result.SMTPFailure != nil && (result.SMTPAcceptedCount != 0 || result.FailedCount != 1)) {
 			return false
 		}
 	case "SendAll":
@@ -216,6 +216,15 @@ func validRendererErrorCategory(category string) bool {
 func structuredSMTPFailureCategory(category string) bool {
 	switch category {
 	case "smtp-auth-failed", "smtp-rate-limited", "smtp-recipient-rejected", "smtp-provider-rejected", "smtp-transport-failed", "smtp-acceptance-unknown":
+		return true
+	default:
+		return false
+	}
+}
+
+func smtpDeliveryMode(mode string) bool {
+	switch mode {
+	case "SendTest", "SendTestAll", "SendWelcome", "SendAll":
 		return true
 	default:
 		return false

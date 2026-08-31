@@ -533,6 +533,51 @@ foreach ($engine in $engines) {
                         Assert-True (-not $resultRaw.Contains($privateValue)) "$($engine.Name)/$($scenario.Name) exposed a recipient identity in its structured result."
                     }
                 }
+                if ($scenario.Name -eq 'auth-failure-stops-batch') {
+                    $testAllResultPath = Join-Path $tempRoot ("result-test-all-auth-failure-$($engine.Name).json")
+                    $testAllStdout = Join-Path $tempRoot ("renderer-test-all-auth-failure-$($engine.Name).stdout.txt")
+                    $testAllStderr = Join-Path $tempRoot ("renderer-test-all-auth-failure-$($engine.Name).stderr.txt")
+                    $oldTestAllDataRoot = $env:TAUTWEEKLY_DATA_DIR
+                    $oldTestAllConfig = $env:TAUTWEEKLY_CONFIG
+                    try {
+                        if ($engine.Container) {
+                            $env:TAUTWEEKLY_DATA_DIR = $dataRoot
+                            $env:TAUTWEEKLY_CONFIG = $configPath
+                        }
+                        $testAllProcess = Start-Process -FilePath $engine.Host -ArgumentList @(
+                            '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $headlessRunner,
+                            '-RendererPath', (Join-Path $appRoot 'TautWeekly.ps1'), '-ConfigPath', $configPath,
+                            '-UserId', '1', '-Mode', 'SendTestAll', '-ResultPath', $testAllResultPath
+                        ) -Wait -PassThru @processWindowArgs -RedirectStandardOutput $testAllStdout -RedirectStandardError $testAllStderr
+                    }
+                    finally {
+                        $env:TAUTWEEKLY_DATA_DIR = $oldTestAllDataRoot
+                        $env:TAUTWEEKLY_CONFIG = $oldTestAllConfig
+                    }
+
+                    Assert-True ($testAllProcess.ExitCode -eq 1) "$($engine.Name) TestEmail authentication failure exited $($testAllProcess.ExitCode), expected 1."
+                    Assert-True (Test-Path -LiteralPath $testAllResultPath) "$($engine.Name) TestEmail authentication failure omitted its structured result."
+                    $testAllResultRaw = Get-Content -LiteralPath $testAllResultPath -Raw -Encoding UTF8
+                    $testAllResult = $testAllResultRaw | ConvertFrom-Json
+                    Assert-True ($testAllResult.schemaVersion -eq 3 -and $testAllResult.mode -eq 'SendTestAll' -and $testAllResult.outcome -eq 'failed') "$($engine.Name) TestEmail authentication failure reported an invalid result envelope."
+                    Assert-True ([string]$testAllResult.errorCategory -eq 'smtp-auth-failed') "$($engine.Name) TestEmail authentication failure omitted its fixed error category."
+                    Assert-True ($testAllResult.smtpAcceptedCount -eq 0 -and $testAllResult.skippedCount -eq 0 -and $testAllResult.failedCount -eq 1) "$($engine.Name) TestEmail authentication failure reported inconsistent aggregates."
+                    Assert-True ($null -ne $testAllResult.smtpFailure) "$($engine.Name) TestEmail authentication failure omitted typed SMTP evidence."
+                    Assert-True ([string]$testAllResult.smtpFailure.category -eq 'smtp-auth-failed' -and [string]$testAllResult.smtpFailure.stage -eq 'auth') "$($engine.Name) TestEmail authentication failure reported the wrong sanitized category or stage."
+                    Assert-True ([int]$testAllResult.smtpFailure.responseCode -eq 535 -and [int]$testAllResult.smtpFailure.responseClass -eq 5) "$($engine.Name) TestEmail authentication failure reported the wrong sanitized response classification."
+                    Assert-True ([bool]$testAllResult.smtpFailure.batchFatal -and [string]$testAllResult.smtpFailure.acceptance -eq 'not-attempted') "$($engine.Name) TestEmail authentication failure reported the wrong batch or acceptance classification."
+                    foreach ($privateValue in @('virtual-sender@example.com', 'virtual-app-password', 'Authentication rejected')) {
+                        Assert-True (-not $testAllResultRaw.Contains($privateValue)) "$($engine.Name) TestEmail authentication failure exposed credentials or provider response text."
+                    }
+                    $testAllSmtpCalls = @(
+                        Get-Content -LiteralPath $smtpLog -ErrorAction SilentlyContinue |
+                            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                            ForEach-Object { $_ | ConvertFrom-Json }
+                    )
+                    Assert-True (@($testAllSmtpCalls | Where-Object { [string]$_.command -eq '<connection>' }).Count -eq ($connections.Count + 1)) "$($engine.Name) TestEmail authentication failure did not stop after one additional SMTP connection."
+                    Assert-True (@($testAllSmtpCalls | Where-Object { ([string]$_.command).StartsWith('MAIL FROM:', [StringComparison]::OrdinalIgnoreCase) }).Count -eq 0) "$($engine.Name) TestEmail authentication failure attempted an SMTP envelope after rejected authentication."
+                    Write-Host "[PASS] TestEmail sanitized SMTP failure evidence: $($engine.Name)"
+                }
                 $executed++
                 Write-Host "[PASS] SendAll recipient policy: $($engine.Name) / $($scenario.Name)"
             }

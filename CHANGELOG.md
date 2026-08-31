@@ -6,6 +6,20 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Added Zoho-specific SMTP setup guidance for the account/data-center server,
+  STARTTLS port 587, full-address authentication, allowed sender identity, and
+  whitespace-free application passwords.
+
+### Fixed
+
+- Preserved privacy-safe SMTP category, protocol stage, numeric response code,
+  batch-fatal status, acceptance state, and failed-attempt count when TestEmail,
+  single-test, or Manual Welcome delivery fails. Manager now validates and
+  displays that evidence instead of collapsing every such failure to the
+  generic SMTP handoff message.
+
 ## [0.24.0] - 2026-08-28
 
 ### Changed

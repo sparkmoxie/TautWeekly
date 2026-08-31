@@ -244,8 +244,11 @@ and a support code when needed. Categories distinguish package-lock,
 configuration, Tautulli, Direct Plex, asset, HTML-render, preview-output, SMTP,
 and generic renderer stages; they never contain an exception message, path,
 address, media title, or identity. The
-local history uses count-only FIFO retention of the newest 20 completed
-operations, all available to the authenticated UI.
+test, Manual Welcome, and production delivery modes also retain only fixed SMTP
+protocol stage, numeric response code, batch-fatal status, and acceptance state
+when the shared transport supplies that evidence. Provider response text is
+never retained. The local history uses count-only FIFO retention of the newest
+20 completed operations, all available to the authenticated UI.
 
 Service-package Manager operations make one non-blocking attempt at the shared
 newsletter lock and report `operation-busy` immediately when a scheduled,

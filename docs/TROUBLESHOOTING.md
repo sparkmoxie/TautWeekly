@@ -45,6 +45,15 @@ and it does not display or copy private configuration, logs, or output.
   submit mail. Use a numeric ID from `list-users` with `send-test` for the
   authoritative delivery check. Listing users does not save a default.
 
+For Zoho Mail, use the exact outgoing server shown for the account and data
+center. TautWeekly requires its TLS/STARTTLS port 587 rather than implicit-SSL
+port 465. Enable authentication, use the full Zoho email address as the
+username, and keep `FromEmail` equal to that account or one of its permitted
+aliases. When Zoho MFA requires an application-specific password, enter it
+without spaces or deliberately enable `SmtpStripPasswordSpaces`. See
+[Zoho's SMTP configuration](https://www.zoho.com/mail/help/zoho-smtp.html) and
+[application-password guidance](https://help.zoho.com/portal/en/kb/accounts/manage-your-zoho-account/articles/mfa-application-specific-passwords).
+
 For Proton SMTP submission, use `smtp.protonmail.ch`, port 587, STARTTLS,
 authentication enabled, and `SmtpAuthenticationMethod` set to `Auto` or
 `Login`. The username and `FromEmail` must be the exact address paired with the
