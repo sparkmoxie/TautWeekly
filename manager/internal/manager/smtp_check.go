@@ -288,7 +288,7 @@ func smtpAdvertisesSTARTTLS(lines []string) bool {
 func smtpFailureSummary(err error) string {
 	switch {
 	case errors.Is(err, errSMTPHost):
-		return "The saved SMTP host or port is invalid. Enter a hostname only, such as smtp.gmail.com, and a STARTTLS port such as 587. No credentials were sent."
+		return "The saved SMTP host or port is invalid. Enter a hostname only, such as smtp.example.com, and a STARTTLS port such as 587. No credentials were sent."
 	case errors.Is(err, errSMTPUnsafeAddress):
 		return "The saved SMTP hostname resolved to an unsafe or non-unicast address. Review local DNS or filtering before retrying. No credentials were sent."
 	case errors.Is(err, errSMTPTLS):

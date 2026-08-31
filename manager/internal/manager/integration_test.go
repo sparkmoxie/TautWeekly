@@ -107,16 +107,16 @@ func TestSMTPDestinationFailuresDistinguishSyntaxFromUnsafeResolution(t *testing
 		},
 		tlsConfig: func(string) *tls.Config { return &tls.Config{} },
 	}
-	invalid := smtpProbeConfig{Host: "smtp://smtp.gmail.com", Port: 587, Timeout: time.Second}
+	invalid := smtpProbeConfig{Host: "smtp://smtp.example.com", Port: 587, Timeout: time.Second}
 	if err := probeSMTPNetwork(context.Background(), invalid, dependencies); !errors.Is(err, errSMTPHost) {
 		t.Fatalf("invalid SMTP syntax classification: got %v", err)
 	}
-	unsafe := smtpProbeConfig{Host: "smtp.gmail.com", Port: 587, Timeout: time.Second}
+	unsafe := smtpProbeConfig{Host: "smtp.example.com", Port: 587, Timeout: time.Second}
 	if err := probeSMTPNetwork(context.Background(), unsafe, dependencies); !errors.Is(err, errSMTPUnsafeAddress) {
 		t.Fatalf("unsafe SMTP resolution classification: got %v", err)
 	}
-	if !validSMTPHost("smtp.gmail.com") || !allowedSMTPIP(net.ParseIP("192.178.231.109")) || !allowedSMTPIP(net.ParseIP("2607:f8b0:4023:200d::6d")) {
-		t.Fatal("valid Gmail host or public unicast address was rejected")
+	if !validSMTPHost("smtp.example.com") || !allowedSMTPIP(net.ParseIP("192.0.2.10")) || !allowedSMTPIP(net.ParseIP("2001:db8::10")) {
+		t.Fatal("valid SMTP host or public unicast address was rejected")
 	}
 }
 
