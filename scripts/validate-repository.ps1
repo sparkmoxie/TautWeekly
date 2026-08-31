@@ -108,6 +108,7 @@ $required = @(
     'scripts/test-recipient-watched-movies.ps1',
     'scripts/test-recipient-watched-visuals.mjs',
     'scripts/test-release-reproducibility.ps1',
+    'scripts/validate-release-history.ps1',
     'scripts/test-windows-installer.ps1',
     'scripts/test-scheduler-timezone.ps1',
     'scripts/test-manager-accessibility.py',

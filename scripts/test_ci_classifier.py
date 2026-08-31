@@ -72,6 +72,9 @@ class ClassifierTests(unittest.TestCase):
     def test_ci_workflow_change_fails_closed_to_every_gate(self):
         self.assert_gates([".github/workflows/ci.yml"], set(GATES))
 
+    def test_release_history_validator_stays_in_the_fast_layer(self):
+        self.assert_gates(["scripts/validate-release-history.ps1"], set())
+
     def test_unknown_executable_input_fails_closed(self):
         self.assert_gates(["tools/new-build-helper.py"], set(GATES) - {"pages"})
 
@@ -164,6 +167,14 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("      - 'v*.*.*'", on_block)
         self.assertIn("Release history, version, and CI provenance", self.release)
         self.assertIn("check_name: 'required'", self.release)
+        self.assertIn(
+            "./scripts/validate-release-history.ps1 -Version $version", self.release
+        )
+        self.assertNotIn(
+            "(Get-Content -LiteralPath $file.FullName -Raw).Trim() -ne $version",
+            self.release,
+        )
+        self.assertIn("./scripts/validate-release-history.ps1", self.ci)
         self.assertEqual(self.release.count("./scripts/build-releases.ps1"), 1)
         self.assertNotIn("./scripts/validate-repository.ps1", self.release)
 

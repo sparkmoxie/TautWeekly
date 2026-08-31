@@ -37,6 +37,7 @@ FAST_ONLY_SCRIPTS = {
     "scripts/test-manager-update-indicator.mjs",
     "scripts/validate-branding.ps1",
     "scripts/validate-docs.ps1",
+    "scripts/validate-release-history.ps1",
     "scripts/validate-repository.ps1",
     "scripts/validate-shell.sh",
     "scripts/validate-unraid-template.ps1",

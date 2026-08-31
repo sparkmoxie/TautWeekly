@@ -32,22 +32,7 @@ jobs:
           if ($env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+$') {
               throw "Release tags must use vMAJOR.MINOR.PATCH."
           }
-          $versionFiles = @(Get-ChildItem -LiteralPath platforms -Filter VERSION.txt -Recurse)
-          if ($versionFiles.Count -eq 0) {
-              throw 'No platform VERSION.txt files were found.'
-          }
-          foreach ($file in $versionFiles) {
-              if ((Get-Content -LiteralPath $file.FullName -Raw).Trim() -ne $version) {
-                  throw "$($file.FullName) does not match $version."
-              }
-          }
-          if (-not (Test-Path -LiteralPath "docs/releases/$($env:GITHUB_REF_NAME).md" -PathType Leaf)) {
-              throw "Release notes are missing for $($env:GITHUB_REF_NAME)."
-          }
-          $changelog = Get-Content -LiteralPath CHANGELOG.md -Raw
-          if ($changelog -notmatch "(?m)^## \[$([regex]::Escape($version))\]") {
-              throw "CHANGELOG.md has no $version section."
-          }
+          ./scripts/validate-release-history.ps1 -Version $version
       - name: Require the exact tagged commit to have green CI provenance
         uses: actions/github-script@v8
         with:
