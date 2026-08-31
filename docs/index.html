@@ -54,14 +54,14 @@
         </div>
       </div>
       <div class="terminal" aria-label="Example authenticated Manager setup workflow">
-        <div class="terminal-head"><span></span><span></span><span></span><b>nas manager - safe launch</b></div>
+        <div class="terminal-head"><span></span><span></span><span></span><b>docker manager - headless LAN launch</b></div>
         <pre><span class="muted">$</span> docker compose up -d
 <span class="ok">✓</span> Replaceable service; persistent /data
 
 <span class="muted">$</span> ./tautweekly.sh manager-bootstrap
-<span class="ok">✓</span> One-time token returned only here
+<span class="ok">✓</span> Host-side release-archive wrapper; one-time token
 
-<span class="muted">$</span> Open http://NAS_IP:8787/
+<span class="muted">$</span> Open http://SERVER_LAN_IP:8787/ from another trusted device
 <span class="gold">→</span> Config · Verify · PreviewAll · TestEmail
 
 <span class="muted">$</span> Enable Schedule only after review
@@ -125,9 +125,12 @@
       <div class="section-heading">
         <div><div class="eyebrow">Installation tracks</div><h2>One renderer, five operating models</h2></div>
         <p>Each Quickstart is standalone and keeps its platform's setup, scheduling,
-          preview, and recovery workflow intact. Manager <strong>Settings &gt; Updates</strong>
-          is the shared status source, while installation remains owned by the
-          verified Windows updater or the documented host-native tool.</p>
+          preview, and recovery workflow intact. Linux Docker servers use the
+          NAS/Docker track—dedicated NAS hardware is not required—while the native
+          Linux track is Docker-free. Both are headless and use the same Manager
+          and newsletter behavior. Manager <strong>Settings &gt; Updates</strong> is the
+          shared status source, while installation remains owned by the verified
+          Windows updater or the documented host-native tool.</p>
       </div>
       <div class="cards platform-cards">
         <article class="card">
@@ -143,8 +146,10 @@
           <div class="platform-logo-card"><img class="docker-logo" src="assets/platforms/docker.svg" alt="" width="340" height="268"></div>
           <span class="tag">One NAS / Docker package</span>
           <h3>NAS / Docker</h3>
-          <p>A dedicated service with persistent data and an internal scheduler
-            for QNAP, Unraid, and general Linux hosts.</p>
+          <p>A fully headless Docker service with persistent data and an internal
+            scheduler for Debian, Ubuntu, other Linux servers, QNAP, and Unraid.
+            Open its authenticated Manager from another trusted-LAN device; no
+            server desktop or everyday SSH session is required.</p>
           <ul><li>Source baseline 1.5.0</li><li>Authenticated Manager + Unraid Apps + GHCR</li><li>x86-64 and ARM64</li></ul>
           <div class="card-actions"><a href="nas-docker/">NAS/Docker/QNAP/Unraid Quickstart</a><a href="nas-docker/README.md">Documentation</a></div>
         </article>
@@ -161,8 +166,9 @@
           <div class="platform-logo-card"><img class="linux-logo" src="assets/platforms/linux-tux.png" alt="" width="104" height="120"></div>
           <span class="tag">Native PowerShell</span>
           <h3>Linux</h3>
-          <p>A Docker-free systemd service with protected private storage and a
-            localhost-only authenticated Manager.</p>
+          <p>A headless, Docker-free systemd service with protected private storage.
+            Its localhost-only authenticated Manager is reached through an SSH
+            tunnel or optional private Tailscale access.</p>
           <ul><li>Source baseline 1.3.0</li><li>Authenticated Manager + PowerShell 7.2+</li><li>Ubuntu, Debian, and RHEL</li></ul>
           <div class="card-actions"><a href="linux/">Native Linux Quickstart</a><a href="linux/README.md">Documentation</a></div>
         </article>
