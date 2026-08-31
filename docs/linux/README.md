@@ -1,11 +1,19 @@
 # Native Linux installation
 
 The native Linux distribution runs TautWeekly for Plex directly with
-PowerShell 7. It does not require Docker. A hardened systemd service keeps the
-authenticated Manager and guarded scheduler alive. The shared
-Manager GUI is the primary setup, verification, preview, TestEmail, scheduling,
-and administration surface; `tautweekly` remains the host recovery and expert
-command wrapper.
+PowerShell 7 and no Docker. It is fully headless: no desktop is required on the
+server. A hardened systemd service keeps the authenticated Manager and guarded
+scheduler alive. The shared Manager GUI is the primary setup, verification,
+preview, TestEmail, scheduling, and administration surface; `tautweekly`
+remains the host recovery and expert command wrapper.
+
+If a Debian, Ubuntu, or other Linux server uses Docker or Compose, use the
+[NAS/Docker distribution](../nas-docker/README.md) instead. “NAS” is only the
+container distribution name; dedicated NAS hardware is not required. Both
+distributions use the same Manager and newsletter behavior. Their access model
+differs: Native Linux keeps Manager on loopback and uses an SSH tunnel or
+private Tailscale, while NAS/Docker normally serves an authenticated trusted-LAN
+URL.
 
 [Open the Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/)
 
@@ -27,8 +35,8 @@ Install PowerShell from Microsoft's supported repository for your distribution
 before running this package. The TautWeekly installer deliberately does not add
 third-party package repositories or download a runtime as root.
 
-Linux systems without systemd should use the maintained
-[NAS/Docker distribution](../nas-docker/README.md).
+Linux systems without systemd, or servers where Docker is the chosen operating
+model, should use the maintained [NAS/Docker distribution](../nas-docker/README.md).
 
 ## Download and verify
 
@@ -59,10 +67,11 @@ The installer validates dependencies, creates the locked `tautweekly` service
 account, selects the packaged amd64 or arm64 Manager for the host, installs
 application files, starts the loopback-only service, and preserves any existing
 environment and private data. The GUI writes live configuration only under
-`/var/lib/tautweekly`.
+`/var/lib/tautweekly`. The server does not need a desktop and the Manager is not
+published directly to the LAN.
 
-From an administrator workstation, keep the Manager on host loopback and open
-an SSH tunnel:
+From a separate administrator workstation, keep the Manager on host loopback
+and open an SSH tunnel:
 
 ```bash
 ssh -L 8788:127.0.0.1:8788 YOUR_LINUX_ADMIN@YOUR_LINUX_HOST
@@ -201,8 +210,10 @@ data root until configuration, state, output, cache entries, and backups are no
 longer required.
 
 The authenticated Manager defaults to `127.0.0.1:8788` and serves protected
-preview content inside the same session. For remote administration, keep it on
-loopback and tunnel the Manager port:
+preview content inside the same session. This is a headless service; open it
+from an administrator workstation rather than installing a desktop on the
+server. For remote administration, keep it on loopback and tunnel the Manager
+port:
 
 ```bash
 ssh -L 8788:127.0.0.1:8788 admin@example.com
@@ -402,7 +413,8 @@ sudo systemctl daemon-reload
   rerun the installer.
 - `systemd is required`: use the NAS/Docker edition on that host.
 - Manager works locally but not remotely: keep the localhost bind and use the
-  SSH tunnel above.
+  SSH tunnel above, or verify the optional private Tailscale route and tailnet
+  device access.
 - Forgotten Manager password: run `sudo tautweekly manager-reset-access`, then
   `sudo tautweekly manager-bootstrap`; this preserves configuration, schedules,
   output, delivery history, and newsletter state.

@@ -45,14 +45,16 @@
       <div class="hero-copy">
         <div class="eyebrow">Shared NAS / container Manager</div>
         <h1>One secure core.<br><span>Host-owned lifecycle.</span></h1>
-        <p>Run the authenticated TautWeekly Manager beside Tautulli on Unraid, QNAP Container Station, a Linux NAS, or another compatible amd64/arm64 Docker host. The image stays replaceable; configuration, credentials, schedules, output, and recovery data live in the persistent volume.</p>
-        <div class="pills"><span>password required</span><span>amd64 + arm64</span><span>embedded scheduler</span><span>persistent /data</span></div>
+        <p>Run the authenticated TautWeekly Manager beside Tautulli on Debian, Ubuntu, another Linux Docker server, Unraid, QNAP Container Station, or a Linux NAS. Dedicated NAS hardware is not required. The fully headless service normally opens from another trusted-LAN device at <code>http://SERVER_LAN_IP:8787/</code>, without SSH or a server desktop. The image stays replaceable; configuration, credentials, schedules, output, and recovery data live in the persistent volume.</p>
+        <div class="pills"><span>fully headless</span><span>password required</span><span>amd64 + arm64</span><span>persistent /data</span></div>
         <div class="actions"><a class="button primary" href="#install">Choose an install path</a><a class="button" href="README.md">Open detailed reference</a></div>
       </div>
-      <div class="terminal" aria-label="First access sequence"><div class="terminal-head"><span></span><span></span><span></span><b>trusted NAS host</b></div><pre>docker compose up -d
+      <div class="terminal" aria-label="First access sequence"><div class="terminal-head"><span></span><span></span><span></span><b>release-archive Docker host</b></div><pre>docker compose up -d
+docker compose ps
+docker compose port tautweekly 8080
 ./tautweekly.sh manager-bootstrap
 
-Open http://NAS_IP:8787/
+Open http://SERVER_LAN_IP:8787/ from another trusted device
 Pair once, then create the admin password.
 
 <span class="ok">No default password</span>
@@ -63,7 +65,7 @@ Pair once, then create the admin password.
     <section class="metrics searchable" data-search="facts authentication session csrf health volume"><div><strong>required</strong><span>Manager authentication</span></div><div><strong>8 hours</strong><span>in-memory session lifetime</span></div><div><strong>/health/live</strong><span>minimal public liveness</span></div><div><strong>30 min</strong><span>Compose shutdown grace</span></div></section>
 
     <section id="install" class="section searchable" data-search="install unraid apps community applications qnap container station compose linux docker desktop">
-      <div class="section-heading"><div><div class="eyebrow">Installation</div><h2>Use the adapter your host owns.</h2></div><p>Every path runs the same image and Manager core from <code>ghcr.io/sparkmoxie/tautweekly</code>. New definitions explicitly select <code>server</code>, <code>unraid</code>, or <code>desktop</code>; the host remains responsible for semver/digest pins, pulls, ports, TLS, volumes, UID/GID/UMASK, and container start/stop behavior.</p></div>
+      <div class="section-heading"><div><div class="eyebrow">Installation</div><h2>Use the adapter your host owns.</h2></div><p>Every path runs the same image and Manager core from <code>ghcr.io/sparkmoxie/tautweekly</code>. Debian, Ubuntu, and other Linux Docker servers use this distribution just like NAS hosts. New definitions explicitly select <code>server</code>, <code>unraid</code>, or <code>desktop</code>; the host remains responsible for semver/digest pins, pulls, ports, TLS, volumes, UID/GID/UMASK, and container start/stop behavior.</p></div>
       <div class="guide-grid">
         <article class="guide-card"><h3>Unraid Apps</h3><p>Install the maintained Community Applications template, review the appdata path, host port, timezone, PUID, and PGID, then start the container.</p><div class="command"># Docker &gt; TautWeekly for Plex &gt; Console
 /opt/tautweekly/bin/run-as-user.sh \
@@ -72,12 +74,16 @@ Pair once, then create the admin password.
         <article class="guide-card"><h3>QNAP Container Station</h3><p>In <strong>Create Application</strong>, paste <code>compose.qnap.yaml</code>, set the timezone and non-root identity, and replace the example host data path before validation and creation. Or extract the release over SSH and run:</p><div class="command">chmod +x qnap-install.sh tautweekly.sh container-update.sh package-update.sh
 ./qnap-install.sh
 ./tautweekly.sh manager-bootstrap</div><p>Open <code>http://QNAP_IP:8787/</code>. A native QPKG is not part of this delivery; signing, App Center submission, and hardware-specific lifecycle would require a separately tested package.</p></article>
-        <article class="guide-card"><h3>Generic Compose / Linux NAS</h3><div class="command"># Verify TautWeekly-compose.yaml and SHA256SUMS.txt from the same release.
+        <article class="guide-card"><h3>Generic Compose / Linux server</h3><p>No NAS appliance is required. Use this path on a headless Debian, Ubuntu, or other Linux Docker server.</p><div class="command"># Verify TautWeekly-compose.yaml and SHA256SUMS.txt from the same release.
 mv TautWeekly-compose.yaml compose.yaml
 mkdir -p data
 # Set private .env values for TZ, PUID, PGID, UMASK, bind/port, and host policy.
 docker compose pull tautweekly
-docker compose up -d tautweekly</div><p>The no-clone asset pins full semver and selects <code>server</code>. Append the release manifest digest for immutable automation; never promote mutable minor, <code>latest</code>, or <code>edge</code> tags unattended. The verified archive wrapper remains a recovery/local-build fallback. For an audited break-fix source build only, use <code>docker build -f platforms/nas-docker/Dockerfile .</code>; the published semver/digest image remains preferred.</p></article>
+docker compose up -d tautweekly
+docker compose ps
+docker compose port tautweekly 8080
+docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
+  /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager</div><p>The no-clone asset pins full semver and selects <code>server</code>. It does not install the host-side <code>./tautweekly.sh</code> wrapper, so use the direct Compose command above. Append the release manifest digest for immutable automation; never promote mutable minor, <code>latest</code>, or <code>edge</code> tags unattended. The verified archive wrapper remains a recovery/local-build fallback. For an audited break-fix source build only, use <code>docker build -f platforms/nas-docker/Dockerfile .</code>; the published semver/digest image remains preferred.</p></article>
         <article class="guide-card"><h3>Other Docker hosts</h3><p>Compatible hosts need Linux containers, Compose-compatible service settings, amd64 or arm64, a writable persistent mount at <code>/data</code>, and a non-root UID/GID. Docker Desktop can use the PowerShell wrapper:</p><div class="command">docker compose pull
 docker compose up -d
 .\tautweekly-docker.ps1 manager-bootstrap</div><p>For host-published Tautulli on Docker Desktop, use the platform's host gateway name or a shared private Docker network—not container-local <code>localhost</code>.</p></article>
@@ -85,9 +91,9 @@ docker compose up -d
     </section>
 
     <section id="first-access" class="section searchable" data-search="first run bootstrap password pair login schedule setup recovery token custom text card body">
-      <div class="section-heading"><div><div class="eyebrow">First run</div><h2>Pair locally; configure in the Manager.</h2></div><p>The container creates a random one-time token in private persistent storage. Startup logs say pairing is required but never print the token or a credentialed URL.</p></div>
-      <div class="timeline"><div><b>01</b><h3>Retrieve</h3><p>Run <code>manager-bootstrap</code> explicitly from the trusted host or container Console.</p></div><div><b>02</b><h3>Pair</h3><p>Open the NAS IP URL, enter the token, and create an administrator password of 8–256 UTF-8 bytes.</p></div><div><b>03</b><h3>Configure</h3><p>Save Tautulli, recommended direct Plex, SMTP, branding, library scope, exclusions, the weekly window, and the optional custom text card. Its body is required when enabled.</p></div><div><b>04</b><h3>Accept</h3><p>Run safe checks, generate six preview states, and send only to TestEmail.</p></div><div><b>05</b><h3>Enable</h3><p>Explicitly enable future starts only after the recipient roster and test messages pass review.</p></div></div>
-      <div class="callout"><div class="shield">!</div><div><h3>Recovery is narrow by design.</h3><p><code>./tautweekly.sh manager-reset-access</code> removes only Manager credentials, pairing material, and active browser sessions, then restarts the container. It preserves newsletter configuration, secrets, schedules, state, output, history, and backups. Retrieve the new one-time token with <code>manager-bootstrap</code>.</p></div><ul><li>No default password</li><li>No secret in normal diagnostics</li><li>Five failed attempts in five minutes are rate-limited</li></ul></div>
+      <div class="section-heading"><div><div class="eyebrow">First run</div><h2>Pair from the trusted LAN; configure in the Manager.</h2></div><p>The container creates a random one-time token in private persistent storage. Startup logs say pairing is required but never print the token or a credentialed URL. After bootstrap, the browser can stay on another trusted-LAN device; no SSH session or Docker-host desktop is needed for normal administration.</p></div>
+      <div class="timeline"><div><b>01</b><h3>Retrieve</h3><p>For a release archive, run the host-side <code>./tautweekly.sh manager-bootstrap</code>. For no-clone Compose or a vendor Console, use the documented direct <code>access-bootstrap</code> container command.</p></div><div><b>02</b><h3>Pair</h3><p>Open <code>http://SERVER_LAN_IP:8787/</code> from another trusted device, enter the token, and create an administrator password of 8–256 UTF-8 bytes.</p></div><div><b>03</b><h3>Configure</h3><p>Save Tautulli, recommended direct Plex, SMTP, branding, library scope, exclusions, the weekly window, and the optional custom text card. Its body is required when enabled.</p></div><div><b>04</b><h3>Accept</h3><p>Run safe checks, generate six preview states, and send only to TestEmail.</p></div><div><b>05</b><h3>Enable</h3><p>Explicitly enable future starts only after the recipient roster and test messages pass review.</p></div></div>
+      <div class="callout"><div class="shield">!</div><div><h3>Recovery is narrow by design.</h3><p>On a release-archive install, <code>./tautweekly.sh manager-reset-access</code> removes only Manager credentials, pairing material, and active browser sessions, then restarts the container. Vendor and no-wrapper deployments use the documented direct <code>access-recover</code> Console command and their host restart control. Both preserve newsletter configuration, secrets, schedules, state, output, history, and backups; retrieve the new token through the same bootstrap interface used during installation.</p></div><ul><li>No default password</li><li>No secret in normal diagnostics</li><li>Five failed attempts in five minutes are rate-limited</li></ul></div>
     </section>
 
     <section id="features" class="section searchable" data-search="main features config connections branding library selection content scope user exclusion custom text newsletter preview testemail schedule deleted item cache warmup retention diagnostics">
@@ -112,7 +118,7 @@ docker compose up -d
     <section id="security" class="section searchable" data-search="network binding lan reverse proxy tls hosts csrf cookie hsts health security permissions uid gid">
       <div class="section-heading"><div><div class="eyebrow">Network and storage</div><h2>Secure defaults that remain reachable.</h2></div><p>IP-literal Host headers are accepted for NAS LAN access. DNS names are rejected unless listed exactly; proxy forwarding headers are intentionally not trusted.</p></div>
       <table class="paths"><thead><tr><th>Setting or path</th><th>Purpose</th><th>Boundary</th></tr></thead><tbody>
-        <tr><td><code>PREVIEW_BIND / PREVIEW_PORT</code></td><td>Host mapping to the Manager's internal port 8080</td><td>Default <code>0.0.0.0:8787</code>; restrict with firewall/VLAN policy and never public-port-forward plain HTTP</td></tr>
+        <tr><td><code>PREVIEW_BIND / PREVIEW_PORT</code></td><td>Compatibility variable names retained for the Manager's host mapping to internal port 8080</td><td>Default <code>0.0.0.0:8787</code>; restrict with firewall/VLAN policy and never public-port-forward plain HTTP</td></tr>
         <tr><td><code>MANAGER_ALLOWED_HOSTS</code></td><td>Comma-separated exact DNS names</td><td>No schemes, ports, paths, wildcards, or IP entries; the reverse proxy must preserve the allowed Host</td></tr>
         <tr><td><code>MANAGER_SECURE_COOKIES=true</code></td><td>TLS reverse-proxy mode</td><td>Marks sessions Secure and emits HSTS; enable only when browsers use HTTPS</td></tr>
         <tr><td><code>/data/manager</code></td><td>Password hash, pairing state, sanitized Manager operations</td><td>Persistent, private, writable by configured PUID/PGID</td></tr>
@@ -146,7 +152,7 @@ docker compose up -d
     <section id="troubleshooting" class="section searchable" data-search="basic troubleshooting manager unavailable container health logs connection verify preview skipped testemail schedule timezone permissions">
       <div class="section-heading"><div><div class="eyebrow">Basic troubleshooting</div><h2>Check the boundary that failed.</h2></div><p>Start with the Manager status and the host-owned container controls; keep credentials and private logs out of public support reports.</p></div>
       <div class="guide-grid">
-        <article class="guide-card"><h3>Manager does not open</h3><p>Confirm the container is healthy, port 8787 is mapped as intended, and the persistent <code>/data</code> path is writable by the configured PUID/PGID. Then review only the recent container logs.</p></article>
+        <article class="guide-card"><h3>Manager does not open</h3><p>Run <code>docker compose ps</code> and <code>docker compose port tautweekly 8080</code>. Confirm the container is healthy, the browser on the other trusted-LAN device uses the reported server port, the firewall permits it, and <code>/data</code> is writable by the configured PUID/PGID. Then review only recent container logs.</p></article>
         <article class="guide-card"><h3>Verify cannot reach a service</h3><p>Test the saved Tautulli or Plex URL from the container network. Container <code>localhost</code> means TautWeekly itself; use a shared network, NAS address, or supported host gateway.</p></article>
         <article class="guide-card"><h3>Preview is skipped or incomplete</h3><p>Confirm one unambiguous owner/admin sample, selected libraries, and the metadata readiness sequence. Save and verify again before regenerating previews.</p></article>
         <article class="guide-card"><h3>TestEmail or schedule fails</h3><p>Keep production disabled. Recheck SMTP, sender permission, <code>TestEmail</code>, timezone, recipient exclusions, and the saved configuration revision; then inspect the sanitized operation result.</p></article>

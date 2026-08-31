@@ -128,6 +128,13 @@ steps.
 
 ## Manager or preview does not open
 
+The Docker/NAS and Native Linux services are both headless and use the same
+Manager and newsletter behavior, but do not assume they share an access path.
+Docker/NAS normally opens from another trusted-LAN device at
+`http://SERVER_LAN_IP:8787/`, without SSH or a server desktop. Native Linux
+keeps Manager on loopback and requires the documented SSH tunnel or private
+Tailscale access.
+
 ### Private Tailscale address does not open
 
 - Confirm the remote computer or mobile device is connected to the same
@@ -157,12 +164,16 @@ Use the platform `status` and `logs` commands, then confirm the mapped, local,
 or tunneled URL is the one the browser opens.
 
 The Manager requires pairing on service/container packages and never has a
-default password. On macOS run `./tautweekly.sh manager-bootstrap`; on other
-service packages run the platform's explicit `manager-bootstrap` command. The token is never in
-installer, container, systemd, or rc.d logs. Complete Config to create the
-persistent `config.json`, then use **Validate, save, and verify**, PreviewAll,
-and TestEmail in the GUI. Terminal setup and preview commands are recovery or
-expert fallbacks on Manager-capable packages.
+default password. On macOS and release-archive NAS/Compose installs,
+`./tautweekly.sh manager-bootstrap` is a host-side wrapper command. It does not
+exist inside an Unraid or other vendor container Console, and a no-clone
+Compose install does not download it. Those deployments use the documented
+direct `access-bootstrap` container command instead; Native Linux uses
+`sudo tautweekly manager-bootstrap`. The token is never in installer,
+container, systemd, or rc.d logs. Complete Config to create the
+persistent `config.json`, then use **Validate, save, and verify**, PreviewAll, and TestEmail
+in the GUI. Terminal setup and preview commands are recovery or expert
+fallbacks on Manager-capable packages.
 
 ### Preview generation fails or reports Operation busy
 
@@ -238,11 +249,19 @@ were already package-based: verify the current Linux archive and run
 If the browser reports **connection refused**, run:
 
 ```bash
+# Release-archive host wrapper:
 ./tautweekly.sh status
 ./tautweekly.sh logs
+# Any Compose project:
+docker compose ps
 docker compose port tautweekly 8080
 docker compose exec tautweekly tail -n 40 /data/logs/manager.log
 ```
+
+`docker compose port tautweekly 8080` reports the host mapping; open that port
+through the Docker server's real trusted-LAN name or address, not Docker's
+`*:PORT` display notation. A vendor UI or differently named service should use
+its equivalent status and port-mapping view.
 
 The container scheduler reads only `/data/config.json`, mapped from the
 distribution's `./data/config.json`, configured Unraid appdata directory, or

@@ -39,10 +39,16 @@ and milestone emails. Preview locally, send controlled tests, then schedule deli
 | Platform | Best fit | Start here |
 |---|---|---|
 | Windows Manager | Always-on Windows 10/11 host | [Windows Quickstart](https://sparkmoxie.github.io/TautWeekly/windows/) · [Documentation](docs/windows/README.md) · [Download Setup](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-Setup.exe) |
-| NAS / Docker | QNAP, Unraid, Linux NAS, or another Docker host | [NAS/Docker/QNAP/Unraid Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Standalone Compose](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-compose.yaml) · [Archive fallback](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.tar.gz) |
+| NAS / Docker | Debian, Ubuntu, or another Linux Docker server; QNAP and Unraid too—dedicated NAS hardware is not required | [NAS/Docker/QNAP/Unraid Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/) · [Unraid Apps](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb) · [Documentation](docs/nas-docker/README.md) · [Standalone Compose](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-compose.yaml) · [Archive fallback](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.tar.gz) |
 | macOS | Docker Desktop on Intel or Apple silicon | [macOS Quickstart](https://sparkmoxie.github.io/TautWeekly/mac/) · [Documentation](docs/mac/README.md) · [Standalone Compose](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-compose.yaml) · [Archive fallback](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-mac-docker.tar.gz) |
-| Native Linux | Current Ubuntu, Debian, or RHEL host with systemd | [Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-linux.tar.gz) |
+| Native Linux | Docker-free Ubuntu, Debian, or RHEL host with systemd | [Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/) · [Documentation](docs/linux/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-linux.tar.gz) |
 | FreeBSD / Podman **beta** | FreeBSD 15.1+ amd64 host | [FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/) · [Documentation](docs/freebsd/README.md) · [Download](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-freebsd-podman.tar.gz) |
+
+For a Linux server that already uses Docker or Compose, choose **NAS / Docker**;
+“NAS” names the container distribution and does not require a NAS appliance.
+Choose **Native Linux** for a Docker-free systemd installation. Both are
+headless and provide the same Manager workflow and newsletter behavior, but
+their normal Manager access paths differ as described below.
 
 Manager release updates:
 
@@ -75,7 +81,10 @@ can start the existing verified elevated updater.
 Use the unified `ghcr.io/sparkmoxie/tautweekly` image with the explicit
 `server` or `unraid` profile, bootstrap the authenticated Manager, and keep
 private state under `/data`. QNAP/Compose wrappers and Unraid Apps retain
-their host-owned verified update and recovery paths.
+their host-owned verified update and recovery paths. The service is fully
+headless: normally open `http://SERVER_LAN_IP:8787/` from a browser on another
+trusted-LAN device. The Docker server needs neither a desktop nor an SSH
+session for everyday Manager use.
 
 ### macOS Manager
 
@@ -89,9 +98,11 @@ break-fix fallback.
 ### Native Linux Manager
 
 Install the matching amd64 or arm64 archive and access the authenticated,
-loopback-only GUI through the documented tunnel/bootstrap flow. systemd owns the
-service and schedule while `tautweekly update` retains verified host update and
-recovery authority.
+loopback-only GUI through the documented SSH tunnel or optional private
+Tailscale flow. This service is also headless and needs no local desktop, but it
+does not publish its Manager directly to the LAN. systemd owns the service and
+schedule while `tautweekly update` retains verified host update and recovery
+authority.
 
 ### FreeBSD Podman Manager
 

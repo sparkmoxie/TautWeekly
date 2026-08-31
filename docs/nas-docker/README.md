@@ -10,6 +10,15 @@ FreeBSD/Podman, and compatible x86-64 or ARM64 container systems. The explicit
 network, persistence, permission, health, scheduling, and lifecycle contract
 without duplicating the application payload.
 
+Despite the distribution name, dedicated NAS hardware is not required. A
+Debian, Ubuntu, or other Linux server that runs Docker or Compose should use
+this NAS/Docker distribution. It is fully headless: normally open the
+authenticated Manager from a browser on another trusted-LAN device at
+`http://SERVER_LAN_IP:8787/`; everyday Manager use needs neither SSH nor a
+desktop on the server. The Docker and Native Linux distributions use the same
+Manager and newsletter behavior, but Native Linux keeps Manager on loopback and
+uses an SSH tunnel or optional private Tailscale access.
+
 Current source baseline: **1.6.0**.
 
 > [!IMPORTANT]
@@ -29,21 +38,37 @@ Current source baseline: **1.6.0**.
   backgrounds, and selected logos.
 - A Tautulli API key.
 - A trusted-LAN host port for the authenticated Manager; default 8787.
-- A browser that can reach the NAS by IP address, or an explicit
+- A browser on another trusted-LAN device that can reach the Docker server by IP
+  address, or an explicit
   `MANAGER_ALLOWED_HOSTS` entry when a DNS name or reverse proxy is used.
 
 ## Required Manager authentication
 
-The NAS Manager never has a default password. On first start it creates a
+The Docker/NAS Manager never has a default password. On first start it creates a
 random, one-time pairing token in private `/data/manager` storage. The token is
-not printed to container logs. Retrieve it only through an explicit local
-administrator command:
+not printed to container logs. Retrieve it only through the explicit interface
+provided by the installation method.
+
+For a release-archive install, run the host-side wrapper from the extracted
+package directory:
 
 ```bash
 ./tautweekly.sh manager-bootstrap
 ```
 
-Open `http://NAS_IP:8787/`, enter that token, and create an administrator
+That `./tautweekly.sh` file lives on the Docker host and does not exist inside
+the container. A no-clone Compose install has no wrapper; from its Compose
+project directory, use the container launcher through Compose:
+
+```bash
+docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
+  /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager
+```
+
+In a vendor container Console such as Unraid, run only the command beginning
+with `/opt/tautweekly/bin/run-as-user.sh`; do not prefix it with
+`docker compose exec`. Open `http://SERVER_LAN_IP:8787/` from another trusted
+device, enter the token, and create an administrator
 password of at least eight characters. The Manager stores only a salted,
 iterated password hash; sessions are in memory, expire after eight hours, use
 HttpOnly SameSite=Strict cookies, and require a per-session CSRF token for
@@ -129,6 +154,9 @@ mkdir -p data
 docker compose pull tautweekly
 docker compose up -d tautweekly
 docker compose ps
+docker compose port tautweekly 8080
+docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
+  /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager
 ```
 
 For reviewed deployments use
@@ -157,11 +185,15 @@ cp .env.example .env
 # Edit .env: timezone, UID/GID, Manager bind, URL, and optional allowed hosts.
 docker compose pull
 docker compose up -d
+docker compose ps
+docker compose port tautweekly 8080
 ./tautweekly.sh manager-bootstrap
 ```
 
-Open `http://NAS_IP:8787/`, pair the browser, and complete guided setup. A DNS
-name such as `tautweekly.example.test` must be listed exactly in
+Here `./tautweekly.sh manager-bootstrap` is the host-side release-archive
+wrapper. Open `http://SERVER_LAN_IP:8787/` from another trusted-LAN device, pair
+the browser, and complete guided setup. A DNS name such as
+`tautweekly.example.test` must be listed exactly in
 `MANAGER_ALLOWED_HOSTS`; IP-literal access needs no entry. Do not add schemes,
 paths, ports, or wildcards.
 
@@ -364,7 +396,9 @@ or schedule settings.
 
 ## Networking
 
-The default Compose file publishes container port 8080 as host port 8787. Set
+The default Compose file publishes container port 8080 as host port 8787. The
+compatibility variable names `PREVIEW_BIND` and `PREVIEW_PORT` are retained, but
+they control the authenticated Manager's host mapping. Set
 `PREVIEW_BIND=127.0.0.1` for host-only access or bind to a trusted LAN interface
 when LAN Manager access is required. IP-literal Host headers are accepted in
 NAS mode. DNS names are rejected unless listed exactly, comma-separated, in
@@ -482,21 +516,29 @@ configure the scheduler and that container-layer file would be lost on update.
 If the browser reports **connection refused**:
 
 ```bash
+# Release-archive host wrapper:
 ./tautweekly.sh status
 ./tautweekly.sh logs
+# Any Compose project:
+docker compose ps
 docker compose port tautweekly 8080
 docker compose exec tautweekly tail -n 40 /data/logs/manager.log
 ```
 
 Confirm the container is running and healthy, the published host port is the
-one used in the browser, and a firewall is not blocking that host port. Use a
-real host name or address in the browser—not Docker's `*:8787` port-listing
-notation. The container exits with a clear error if its Manager
+one used in the browser, and a firewall is not blocking that host port. From a
+separate trusted-LAN device, open the real server name or address reported by
+the mapping—not Docker's `*:8787` port-listing notation. No SSH session or
+server desktop is required once Manager is reachable. The container exits with
+a clear error if its Manager
 cannot bind, allowing the restart policy and health status to expose the
 failure.
 
-If the Manager requests a pairing token, run `manager-bootstrap`; do not search
-logs because the token is intentionally absent. Running the container alone
+If the Manager requests a pairing token, use the host-side
+`./tautweekly.sh manager-bootstrap` only for a release-archive install; use the
+direct Compose or vendor-console `access-bootstrap` command documented above
+when no wrapper was installed. Do not search logs because the token is
+intentionally absent. Running the container alone
 does not authorize delivery: guided setup creates `/data/config.json`, preview
 and email operations remain explicit, and scheduling stays disabled until the
 administrator enables it.

@@ -38,6 +38,15 @@ formatting. No Plex token or private server data is embedded.
 - [Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/)
 - [FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/)
 
+A Debian, Ubuntu, or other Linux server that runs Docker uses the **NAS/Docker**
+distribution; “NAS” is a deployment label and does not require dedicated NAS
+hardware. That distribution is fully headless and normally exposes its
+authenticated Manager at `http://SERVER_LAN_IP:8787/` to another trusted-LAN
+device, without SSH or a server desktop. **Native Linux** is also headless, but
+its loopback-only Manager is reached through the documented SSH tunnel or
+optional private Tailscale access. Both paths use the same Manager workflow and
+produce the same newsletter behavior.
+
 Every Quickstart follows the same GUI-first path: install the package, open and
 pair the Manager where required, complete **Config**, run the non-sending
 verification, review all six **Previews**, send only to **TestEmail**, and then
