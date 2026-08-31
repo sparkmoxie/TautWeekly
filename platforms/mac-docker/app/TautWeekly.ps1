@@ -136,6 +136,12 @@ function Get-TautWeeklySmtpFailureEvidence {
 }
 
 trap {
+    $smtpFailure = Get-TautWeeklySmtpFailureEvidence -Exception $_.Exception
+    if ($null -ne $smtpFailure) {
+        $script:TautWeeklyResultSmtpFailure = $smtpFailure
+        $script:TautWeeklyResultErrorCategory = [string]$smtpFailure.category
+        $script:TautWeeklyResultFailedCount = [Math]::Max(1, [int]$script:TautWeeklyResultFailedCount)
+    }
     Write-TautWeeklyStructuredResult -Outcome "failed"
     exit 1
 }

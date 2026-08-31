@@ -539,6 +539,8 @@ def main() -> int:
         failures.append("manual production delivery does not expose both all-recipient and Manual Welcome scopes")
     if 'type === "send-welcome"' not in javascript or "confirmProductionSend: true" not in javascript:
         failures.append("manual production delivery does not use the fixed confirmed operation contracts")
+    if javascript.count("smtpFailureEvidenceCopy(operation.smtpFailure)") < 4:
+        failures.append("test, welcome, partial, and failed delivery summaries do not all expose sanitized SMTP evidence")
     if 'id="manual-send-user-id"' not in combined or 'state.history.find((candidate) => manualTypes.has(candidate.type))' not in javascript:
         failures.append("Manual Welcome lacks selected-user input or shared sanitized status")
     if 'id="direct-plex-notice"' not in combined or "legacyFieldsMissing" not in javascript:

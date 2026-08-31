@@ -23,6 +23,7 @@ type fixturePreviewRunner struct {
 	runs                 int
 	sendAllPartial       bool
 	sendAllNoEligible    bool
+	sendTestAllFailure   bool
 	previewExitCode      int
 	previewErrorCategory string
 	cacheExitCode        int
@@ -188,15 +189,39 @@ func (r *fixturePreviewRunner) RunSendTestAll(ctx context.Context, _, configPath
 		}
 	}
 	started := time.Now().UTC().Add(-time.Second)
+	schemaVersion := 1
+	outcome := "succeeded"
+	accepted := 6
+	failed := 0
+	exitCode := 0
+	var runErr error
+	var smtpFailure *SMTPFailureEvidence
+	var skipReasons *DeliverySkipReasonCounts
+	errorCategory := ""
+	if r.sendTestAllFailure {
+		schemaVersion = 3
+		outcome = "failed"
+		accepted = 0
+		failed = 1
+		exitCode = 1
+		runErr = errors.New("renderer returned exit status 1")
+		smtpFailure = &SMTPFailureEvidence{Category: "smtp-auth-failed", Stage: "auth", ResponseCode: 535, ResponseClass: 5, BatchFatal: true, Acceptance: "not-attempted"}
+		skipReasons = &DeliverySkipReasonCounts{}
+		errorCategory = smtpFailure.Category
+	}
 	result := rendererResult{
-		SchemaVersion:         1,
+		SchemaVersion:         schemaVersion,
 		Mode:                  "SendTestAll",
-		Outcome:               "succeeded",
+		Outcome:               outcome,
+		ErrorCategory:         errorCategory,
 		DeliveryScope:         "test",
 		StartedAtUTC:          started.Format(time.RFC3339Nano),
 		FinishedAtUTC:         started.Add(time.Second).Format(time.RFC3339Nano),
 		DurationMS:            1000,
-		SMTPAcceptedCount:     6,
+		SMTPAcceptedCount:     accepted,
+		FailedCount:           failed,
+		SMTPFailure:           smtpFailure,
+		SkipReasonCounts:      skipReasons,
 		GeneratedPreviewFiles: []string{},
 	}
 	encoded, err := json.Marshal(result)
@@ -206,7 +231,7 @@ func (r *fixturePreviewRunner) RunSendTestAll(ctx context.Context, _, configPath
 	if err := os.WriteFile(resultPath, encoded, 0o600); err != nil {
 		return 33, err
 	}
-	return 0, nil
+	return exitCode, runErr
 }
 
 func (r *fixturePreviewRunner) RunSendWelcome(ctx context.Context, _, configPath, resultPath, userID string) (int, error) {
@@ -503,6 +528,23 @@ func TestSendTestAllOperationRecordsAggregateSMTPAcceptanceAndCannotCancel(t *te
 		if _, err := coordinator.Start(request); err == nil {
 			t.Fatalf("unsafe test-send request was accepted: %+v", request)
 		}
+	}
+}
+
+func TestSendTestAllOperationRetainsSanitizedSMTPFailureEvidence(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
+	runner := &fixturePreviewRunner{sendTestAllFailure: true}
+	coordinator, err := newOperationCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Now: time.Now, operationRunner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	if _, err := coordinator.Start(CreateOperationRequest{Type: "send-test-all", ExpectedRevision: view.Revision, UserID: "42", ConfirmTestSend: true}); err != nil {
+		t.Fatal(err)
+	}
+	finished := waitForOperationState(t, coordinator, "failed")
+	if finished.DeliveryScope != "test" || finished.SMTPAcceptedCount != 0 || finished.FailedCount != 1 || finished.ErrorCategory != "smtp-auth-failed" || finished.SMTPFailure == nil || finished.SMTPFailure.Stage != "auth" || finished.SMTPFailure.ResponseCode != 535 || finished.SupportCode == "" {
+		t.Fatalf("unexpected sanitized test-send failure: %+v", finished)
 	}
 }
 

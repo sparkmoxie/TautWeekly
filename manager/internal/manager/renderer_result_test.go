@@ -216,6 +216,36 @@ func TestRendererResultV3ValidatesSanitizedSMTPFailureEvidence(t *testing.T) {
 		t.Fatalf("valid ambiguous-acceptance evidence was rejected: %+v", ambiguous)
 	}
 
+	for _, delivery := range []struct {
+		mode          string
+		deliveryScope string
+		accepted      int
+	}{
+		{mode: "SendTest", deliveryScope: "test", accepted: 0},
+		{mode: "SendTestAll", deliveryScope: "test", accepted: 2},
+		{mode: "SendWelcome", deliveryScope: "welcome", accepted: 0},
+	} {
+		result := valid
+		result.Mode = delivery.mode
+		result.DeliveryScope = delivery.deliveryScope
+		result.SMTPAcceptedCount = delivery.accepted
+		result.SkippedCount = 0
+		result.SkipReasonCounts = &DeliverySkipReasonCounts{}
+		if !validRendererResult(result, delivery.mode) {
+			t.Fatalf("valid %s SMTP failure evidence was rejected: %+v", delivery.mode, result)
+		}
+	}
+
+	invalidTestAll := valid
+	invalidTestAll.Mode = "SendTestAll"
+	invalidTestAll.DeliveryScope = "test"
+	invalidTestAll.SMTPAcceptedCount = 6
+	invalidTestAll.SkippedCount = 0
+	invalidTestAll.SkipReasonCounts = &DeliverySkipReasonCounts{}
+	if validRendererResult(invalidTestAll, "SendTestAll") {
+		t.Fatalf("SendTestAll accepted SMTP failure evidence after all six messages: %+v", invalidTestAll)
+	}
+
 	cases := []struct {
 		name   string
 		mutate func(*rendererResult)
