@@ -71,6 +71,14 @@ var diagnosticSummaries = map[string]string{
 	"startup-enabled-dashboard":        "Manager sign-in startup and one-time Dashboard opening were enabled for the current Windows user.",
 }
 
+var discoveryDiagnosticSummaries = map[string]string{
+	"discovery-failed-retained":           "Fresh Tautulli choices could not be loaded; the previous sanitized cache remains available.",
+	"discovery-libraries-failed":          "Fresh Tautulli choices failed at the library-list stage and no retained choices were available.",
+	"discovery-libraries-failed-retained": "Fresh Tautulli choices failed at the library-list stage; the previous sanitized cache remains available.",
+	"discovery-users-failed":              "Fresh Tautulli choices failed at the user-roster stage and no retained choices were available.",
+	"discovery-users-failed-retained":     "Fresh Tautulli choices failed at the user-roster stage; the previous sanitized cache remains available.",
+}
+
 var remoteAccessDiagnosticSummaries = map[string]string{
 	"remote-access-request-invalid":         "The Manager rejected an invalid public remote access request.",
 	"remote-access-unsupported":             "Public Funnel access is unavailable for this package.",
@@ -100,6 +108,9 @@ var remoteAccessDiagnosticSummaries = map[string]string{
 
 func diagnosticSummary(code string) (string, bool) {
 	if summary, ok := diagnosticSummaries[code]; ok {
+		return summary, true
+	}
+	if summary, ok := discoveryDiagnosticSummaries[code]; ok {
 		return summary, true
 	}
 	summary, ok := remoteAccessDiagnosticSummaries[code]

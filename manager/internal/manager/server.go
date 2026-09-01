@@ -1286,9 +1286,10 @@ func (s *Server) handleTautulliDiscovery(w http.ResponseWriter, r *http.Request)
 		writeAPIError(w, http.StatusUnprocessableEntity, "discovery-boundary", "The configured Tautulli destination is outside the private or loopback network boundary.")
 		return
 	case err != nil:
-		s.updateConfigurationStep(request.ExpectedRevision, "choices", "failed", "Tautulli libraries and users could not be loaded from the saved connection.")
-		s.recordDiagnostic("tautulli-discovery", "failed", "discovery-failed")
-		writeAPIError(w, http.StatusBadGateway, "discovery-failed", "Tautulli choices could not be loaded. Confirm the saved address, API key, and service availability.")
+		failure := presentTautulliDiscoveryFailure(err, s.discovery.Load(request.ExpectedRevision))
+		s.updateConfigurationStep(request.ExpectedRevision, "choices", failure.State, failure.Message)
+		s.recordDiagnostic("tautulli-discovery", failure.Outcome, failure.Code)
+		writeAPIError(w, http.StatusBadGateway, failure.Code, failure.Message)
 		return
 	}
 	s.configMu.Lock()
@@ -1310,6 +1311,60 @@ func (s *Server) handleTautulliDiscovery(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, result)
+}
+
+type tautulliDiscoveryFailurePresentation struct {
+	State   string
+	Outcome string
+	Code    string
+	Message string
+}
+
+func presentTautulliDiscoveryFailure(err error, retained *TautulliDiscoveryResult) tautulliDiscoveryFailurePresentation {
+	stage := tautulliDiscoveryFailureStage(err)
+	stageLabel := "choices"
+	code := "discovery-failed"
+	switch stage {
+	case "libraries":
+		stageLabel = "library-list"
+		code = "discovery-libraries-failed"
+	case "users":
+		stageLabel = "user-roster"
+		code = "discovery-users-failed"
+	}
+	reason := "the saved service was unavailable or returned an unsupported response"
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, errIntegrationConnection):
+		reason = "the saved service could not be reached before the bounded timeout"
+	case errors.Is(err, errIntegrationAuth):
+		reason = "the saved credential was rejected"
+	case errors.Is(err, errNoActiveLibraries):
+		reason = "the saved service reported no active movie or TV libraries"
+	case errors.Is(err, errIntegrationResponse):
+		reason = "the saved service returned an unsupported API response"
+	}
+	message := fmt.Sprintf("Fresh Tautulli choices refresh failed at the %s stage because %s.", stageLabel, reason)
+	presentation := tautulliDiscoveryFailurePresentation{
+		State:   "failed",
+		Outcome: "failed",
+		Code:    code,
+		Message: message + " No retained choices are available for this configuration.",
+	}
+	if retained != nil {
+		libraryLabel := "libraries"
+		if len(retained.Libraries) == 1 {
+			libraryLabel = "library"
+		}
+		userLabel := "users"
+		if len(retained.Users) == 1 {
+			userLabel = "user"
+		}
+		presentation.State = "warning"
+		presentation.Outcome = "warning"
+		presentation.Code += "-retained"
+		presentation.Message = fmt.Sprintf("%s The previous sanitized cache remains available with %d active %s and %d %s.", message, len(retained.Libraries), libraryLabel, len(retained.Users), userLabel)
+	}
+	return presentation
 }
 
 func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {

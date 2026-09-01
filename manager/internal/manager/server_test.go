@@ -578,6 +578,101 @@ func TestDiscoveryCacheAPIRequiresAuthenticationAndSurvivesManagerRestart(t *tes
 	}
 }
 
+func TestFailedFreshDiscoveryRetainsSanitizedChoicesAndMarksTheirEvidence(t *testing.T) {
+	const secret = "fictional-retained-discovery-secret"
+	tautulli := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var data any
+		switch r.URL.Query().Get("cmd") {
+		case "get_libraries":
+			data = []any{map[string]any{"section_id": "10", "section_name": "Fictional Movies", "section_type": "movie", "is_active": 1}}
+		case "get_user_names", "get_users":
+			data = map[string]any{"private": "raw-private-roster-fixture"}
+		default:
+			http.Error(w, "unsupported", http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"response": map[string]any{"result": "success", "data": data}})
+	}))
+	defer tautulli.Close()
+
+	root := integrationConfigRoot(t, tautulli.URL, secret, "", "")
+	data := t.TempDir()
+	server, err := New(Options{DataDir: data, TautWeeklyRoot: root, Version: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := ReadConfigEditor(root).Revision
+	retained := TautulliDiscoveryResult{
+		Mode:            "real-lan-discovery",
+		NetworkBoundary: "private-and-loopback-only",
+		CompletedAtUTC:  "2031-04-18T16:30:00Z",
+		ConfigRevision:  revision,
+		Libraries:       []DiscoveredLibrary{{ID: "10", Name: "Fictional Movies", MediaType: "movie"}},
+		Users: []DiscoveredUser{
+			{ID: "1", Name: "Fictional Owner", Eligibility: "eligible", Role: "owner"},
+			{ID: "2", Name: "Fictional Viewer", Eligibility: "eligible"},
+		},
+	}
+	if err := server.discovery.Save(retained); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.configuration.ResetNotRun(revision); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.configuration.Update(revision, "choices", "passed", "Synthetic fresh choices passed."); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.configuration.Update(revision, "lan", "passed", "Synthetic retained Tautulli and Plex evidence passed."); err != nil {
+		t.Fatal(err)
+	}
+	current, err := server.auth.newSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{Name: sessionCookieName, Value: current.Token}
+	body, err := json.Marshal(TautulliDiscoveryRequest{ExpectedRevision: revision, ConfirmRealNetwork: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed := mutationRequestForTest(server, http.MethodPost, "/api/v1/discovery/tautulli", body, cookie, current.CSRFToken)
+	if failed.Code != http.StatusBadGateway || !strings.Contains(failed.Body.String(), `"code":"discovery-users-failed-retained"`) ||
+		!strings.Contains(failed.Body.String(), "previous sanitized cache remains available with 1 active library and 2 users") {
+		t.Fatalf("fresh discovery failure did not identify retained user-roster evidence: got %d, body %s", failed.Code, failed.Body.String())
+	}
+	for _, private := range []string{secret, tautulli.URL, "raw-private-roster-fixture"} {
+		if strings.Contains(failed.Body.String(), private) {
+			t.Fatalf("fresh discovery failure exposed private evidence %q: %s", private, failed.Body.String())
+		}
+	}
+
+	statusResponse := requestForTest(server, http.MethodGet, "/api/v1/config/status", nil, cookie)
+	var status ConfigurationStatus
+	if statusResponse.Code != http.StatusOK || json.Unmarshal(statusResponse.Body.Bytes(), &status) != nil {
+		t.Fatalf("configuration status unavailable after discovery failure: got %d, body %s", statusResponse.Code, statusResponse.Body.String())
+	}
+	if status.Steps["choices"].State != "warning" || status.Steps["lan"].State != "passed" ||
+		!strings.Contains(status.Steps["choices"].Summary, "previous sanitized cache remains available") {
+		t.Fatalf("retained and fresh evidence were not distinguished: %+v", status.Steps)
+	}
+	cache := requestForTest(server, http.MethodGet, "/api/v1/discovery/tautulli", nil, cookie)
+	if cache.Code != http.StatusOK || !strings.Contains(cache.Body.String(), "Fictional Movies") || !strings.Contains(cache.Body.String(), "Fictional Owner") {
+		t.Fatalf("sanitized choices were not retained after fresh failure: got %d, body %s", cache.Code, cache.Body.String())
+	}
+	diagnostics := requestForTest(server, http.MethodGet, "/api/v1/diagnostics", nil, cookie)
+	if diagnostics.Code != http.StatusOK || !strings.Contains(diagnostics.Body.String(), `"code":"discovery-users-failed-retained"`) ||
+		strings.Contains(diagnostics.Body.String(), secret) || strings.Contains(diagnostics.Body.String(), tautulli.URL) {
+		t.Fatalf("sanitized staged diagnostic was not retained: got %d, body %s", diagnostics.Code, diagnostics.Body.String())
+	}
+}
+
+func TestFreshDiscoveryFailureWithoutCacheRemainsFailed(t *testing.T) {
+	failure := presentTautulliDiscoveryFailure(wrapTautulliDiscoveryStage("libraries", errIntegrationResponse), nil)
+	if failure.State != "failed" || failure.Outcome != "failed" || failure.Code != "discovery-libraries-failed" ||
+		!strings.Contains(failure.Message, "No retained choices are available") {
+		t.Fatalf("no-cache discovery failure was softened: %+v", failure)
+	}
+}
+
 func TestConfigurationMutationRequiresCSRFAndNeverReturnsSecrets(t *testing.T) {
 	root := t.TempDir()
 	server, err := New(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Version: "test"})

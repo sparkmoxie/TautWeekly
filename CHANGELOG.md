@@ -6,6 +6,17 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserved valid current-configuration Tautulli library and user choices when
+  a later live Manager refresh fails. Config now distinguishes a fresh failure
+  from retained sanitized evidence, reports the fixed library-list or
+  user-roster stage through allowlisted diagnostics, and remains failed when no
+  safe cache exists.
+- Accepted legacy Tautulli `Checked` table flags and added focused coverage
+  that either supported user roster endpoint can safely supply discovery when
+  the other is unavailable or returns an unsupported response.
+
 ## [0.25.1] - 2026-09-01
 
 ### Changed

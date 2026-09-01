@@ -141,7 +141,12 @@ successful preview selection persist on disk, while cached Tautulli choices are
 accepted only for the current configuration revision. The four setup outcomes
 (choices, Tautulli/Plex, SMTP preflight, and local previews) are retained for
 that revision; a save safely rebases only unaffected sanitized evidence to the
-new full revision, while restore resets every outcome to not-run. Guarded test delivery is
+new full revision, while restore resets every outcome to not-run. A failed
+fresh Tautulli lookup never replaces a valid current-revision sanitized cache:
+Config reports a warning with the fixed library-list or user-roster stage,
+labels the visible choices as retained evidence, and keeps a true failure when
+no safe cache exists. URLs, API keys, credentials, raw responses, and private
+roster data are omitted from the status and diagnostic record. Guarded test delivery is
 always manual, sends six messages only to the saved `TestEmail`, and cannot be
 cancelled after it starts because some messages may already have been accepted
 by SMTP. A separate manual production-send card invokes either the fixed

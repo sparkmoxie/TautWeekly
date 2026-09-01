@@ -126,6 +126,7 @@ function createHarness({
     editor: { state: editorState, revision: configuredRevision },
     status: { observedAtUtc: "2031-04-18T16:31:00Z" },
     discovery: initialDiscovery,
+    discoveryEvidence: initialDiscovery ? "retained" : "",
     discoveryError: "",
     discoveryRunning: false,
     verificationRunning: false,
@@ -263,6 +264,8 @@ async function flushAsyncWork() {
   assert.equal(harness.state.updateChecking, false);
   assert.equal(harness.state.discoveryRunning, false);
   assert.equal(harness.state.discovery, discoveredChoices);
+  assert.equal(harness.state.discoveryEvidence, "fresh", "successful header discovery was not marked as fresh evidence");
+  assert.match(harness.discoveryMessage.textContent, /^Fresh choices loaded /, "fresh discovery rendered as retained evidence");
   assert.equal(harness.globalStatuses.at(-1).message, "Stable update check completed.");
   assert.equal(harness.events.includes("previews:recover"), false, "header Refresh inherited setup-preview recovery");
 }
@@ -301,6 +304,8 @@ async function flushAsyncWork() {
   assert.deepEqual(harness.requests.map((request) => request.type), ["discovery"], "dedicated discovery inherited update checking");
   assert.deepEqual(harness.requests[0].payload, { expectedRevision: configuredRevision, confirmRealNetwork: true });
   assert.equal(harness.discoveryConfirm.checked, false, "successful dedicated discovery retained stale confirmation");
+  assert.equal(harness.state.discoveryEvidence, "fresh", "dedicated discovery was not marked as fresh evidence");
+  assert.match(harness.discoveryMessage.textContent, /^Fresh choices loaded /, "dedicated discovery rendered as retained evidence");
   assert.equal(harness.globalStatuses.at(-1).message, "Tautulli choices loaded and retained locally.");
   assert.equal(harness.events.includes("previews:recover"), true, "dedicated discovery lost setup-preview recovery");
 }
@@ -387,6 +392,7 @@ async function flushAsyncWork() {
   assert.equal(harness.state.updates, checked, "Tautulli failure suppressed the update result");
   assert.equal(harness.discoveryMessage.textContent, failure.message, "Tautulli failure was not retained on its scoped surface");
   assert.equal(harness.state.discovery, discoveredChoices, "Tautulli failure discarded the retained choices");
+  assert.equal(harness.state.discoveryEvidence, "retained", "failed fresh discovery mislabeled retained choices");
   assert.equal(harness.globalStatuses.at(-1).message, "Stable update found.", "suppressed Tautulli failure replaced the update result");
 }
 

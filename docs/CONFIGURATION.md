@@ -345,6 +345,14 @@ fallback accepts rows or ranges such as `1,3-4`, `all`, or Enter to keep the
 displayed scope. At least one active movie or TV library is required for a
 newly saved selection.
 
+Manager retains only sanitized discovery choices for the exact current
+configuration revision. If a later live refresh fails, those choices remain
+visible and usable while Config reports **Completed with notes**, identifies
+the fixed library-list or user-roster stage, and labels the choices as retained
+rather than fresh. If no valid cache exists, discovery remains **Failed**.
+Status and diagnostics never include the Tautulli URL, API key, credentials,
+raw response, email addresses, or other private roster fields.
+
 `IncludedLibraryIds` is applied to raw Tautulli history and recently-added
 rows before any newsletter calculations. New/recent releases, Trending detection,
 Trending, the hero, Binge Champion, and each user's personal totals therefore

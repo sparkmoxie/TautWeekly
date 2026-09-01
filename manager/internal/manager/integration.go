@@ -25,8 +25,38 @@ var (
 	ErrRealCheckNotReady     = errors.New("configuration is not ready for verification")
 	errLANOnlyDestination    = errors.New("destination is outside the private LAN boundary")
 	errIntegrationConnection = errors.New("connection failed or timed out")
+	errIntegrationAuth       = errors.New("service rejected the configured credential")
 	errIntegrationResponse   = errors.New("service returned an invalid response")
+	errNoActiveLibraries     = errors.New("service reported no active movie or TV libraries")
 )
+
+type tautulliDiscoveryStageError struct {
+	stage string
+	cause error
+}
+
+func (e *tautulliDiscoveryStageError) Error() string {
+	return "tautulli discovery failed at the " + e.stage + " stage"
+}
+
+func (e *tautulliDiscoveryStageError) Unwrap() error {
+	return e.cause
+}
+
+func wrapTautulliDiscoveryStage(stage string, cause error) error {
+	if cause == nil {
+		return nil
+	}
+	return &tautulliDiscoveryStageError{stage: stage, cause: cause}
+}
+
+func tautulliDiscoveryFailureStage(err error) string {
+	var stageError *tautulliDiscoveryStageError
+	if errors.As(err, &stageError) {
+		return stageError.stage
+	}
+	return ""
+}
 
 type RealIntegrationCheckRequest struct {
 	ExpectedRevision   string `json:"expectedRevision"`
@@ -176,14 +206,14 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 
 	var rawLibraries []map[string]any
 	if err := tautulliCommand(checkContext, client, base, apiKey, "get_libraries", &rawLibraries); err != nil {
-		return TautulliDiscoveryResult{}, err
+		return TautulliDiscoveryResult{}, wrapTautulliDiscoveryStage("libraries", err)
 	}
 	var rawNames []map[string]any
 	nameErr := tautulliCommand(checkContext, client, base, apiKey, "get_user_names", &rawNames)
 	var rawUsers []map[string]any
 	detailErr := tautulliCommand(checkContext, client, base, apiKey, "get_users", &rawUsers)
 	if nameErr != nil && detailErr != nil {
-		return TautulliDiscoveryResult{}, errIntegrationResponse
+		return TautulliDiscoveryResult{}, wrapTautulliDiscoveryStage("users", representativeDiscoveryFailure(nameErr, detailErr))
 	}
 
 	legacyRules := normalizedLegacyExclusionRules(values["ExcludedEmails"])
@@ -201,7 +231,7 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 	}
 	libraries := normalizeDiscoveredLibraries(rawLibraries)
 	if len(libraries) == 0 {
-		return TautulliDiscoveryResult{}, fmt.Errorf("%w: no active movie or TV libraries", errIntegrationResponse)
+		return TautulliDiscoveryResult{}, wrapTautulliDiscoveryStage("libraries", fmt.Errorf("%w: %w", errIntegrationResponse, errNoActiveLibraries))
 	}
 	return TautulliDiscoveryResult{
 		Mode:                   "real-lan-discovery",
@@ -214,6 +244,30 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 		LegacyRuleCount:        len(legacyRules),
 		MatchedLegacyRuleCount: matchedLegacyRules,
 	}, nil
+}
+
+func representativeDiscoveryFailure(failures ...error) error {
+	for _, failure := range failures {
+		if errors.Is(failure, errLANOnlyDestination) {
+			return errLANOnlyDestination
+		}
+	}
+	for _, failure := range failures {
+		if errors.Is(failure, errIntegrationAuth) {
+			return errIntegrationAuth
+		}
+	}
+	for _, failure := range failures {
+		if errors.Is(failure, context.DeadlineExceeded) {
+			return context.DeadlineExceeded
+		}
+	}
+	for _, failure := range failures {
+		if errors.Is(failure, errIntegrationConnection) {
+			return errIntegrationConnection
+		}
+	}
+	return errIntegrationResponse
 }
 
 func normalizeDiscoveredLibraries(values []map[string]any) []DiscoveredLibrary {
@@ -561,7 +615,7 @@ func tautulliCommandWithParams(ctx context.Context, client *http.Client, base *u
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-			return fmt.Errorf("authentication rejected: HTTP %d", response.StatusCode)
+			return fmt.Errorf("%w: HTTP %d", errIntegrationAuth, response.StatusCode)
 		}
 		return fmt.Errorf("unexpected HTTP status: %d", response.StatusCode)
 	}
@@ -735,7 +789,7 @@ func failedIntegrationStep(service string, err error) IntegrationCheckStep {
 		summary = "The configured destination was blocked because it did not resolve exclusively to private or loopback addresses."
 	case errors.Is(err, errIntegrationConnection), errors.Is(err, context.DeadlineExceeded):
 		summary = "The configured service could not be reached before the verification timeout."
-	case strings.Contains(err.Error(), "authentication rejected"):
+	case errors.Is(err, errIntegrationAuth):
 		summary = "The service rejected the configured credential. The credential value was not returned or logged."
 	case strings.Contains(err.Error(), "unexpected HTTP status"):
 		summary = "The service answered, but its HTTP status did not match the expected API contract."
@@ -769,7 +823,7 @@ func integrationTruthy(value any) bool {
 	case json.Number:
 		return typed.String() != "0"
 	case string:
-		return typed == "1" || strings.EqualFold(typed, "true")
+		return typed == "1" || strings.EqualFold(typed, "true") || strings.EqualFold(typed, "checked")
 	default:
 		return false
 	}

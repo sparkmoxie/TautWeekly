@@ -13,6 +13,7 @@ const state = {
   cacheVerificationRunning: false,
   cache: null,
   discovery: null,
+  discoveryEvidence: "",
   discoveryError: "",
   discoveryRunning: false,
   setupWorkflow: null,
@@ -288,6 +289,7 @@ async function loadAll() {
     state.backups = (backups.backups || []).slice(0, state.backupMaximum);
     state.verification = verification || { last: null, smtp: null };
     state.discovery = discovery.last || null;
+    state.discoveryEvidence = state.discovery ? "retained" : "";
     state.previews = previews.previews || [];
     state.operation = operation.current || null;
     state.historyMaximum = Number(history.maximumEntries) || 20;
@@ -670,7 +672,7 @@ function renderIntegrationStatus() {
   const overallLabel = verificationActive ? "Running" : overall === "not-run" ? "Not run" : overall === "warning" ? "Attention" : titleCase(overall);
   setChip("integration-chip", overallLabel, overallTone);
   setText("integration-copy", outcomes.length
-    ? "Latest checks from validation or a targeted retest are retained for this saved configuration."
+    ? "Retained results from the latest completed connection checks. A separate Tautulli choices refresh does not rerun or replace this evidence."
     : "Safe real checks run after a successful save or when you start a manual retest.");
   return { overallLabel, overallTone, funnel };
 }
@@ -1106,7 +1108,10 @@ function reviewDirectPlexFields() {
 }
 
 function renderDiscovery() {
-  if (state.discovery && state.discovery.configRevision !== state.editor?.revision) state.discovery = null;
+  if (state.discovery && state.discovery.configRevision !== state.editor?.revision) {
+    state.discovery = null;
+    state.discoveryEvidence = "";
+  }
   const confirm = byId("discovery-confirm");
   const button = byId("discovery-run-button");
   const ready = state.editor?.state === "ready";
@@ -1122,7 +1127,10 @@ function renderDiscovery() {
     return;
   }
   byId("discovery-results").hidden = false;
-  byId("discovery-message").textContent = state.discoveryError || `Choices loaded ${formatDate(state.discovery.completedAtUtc)} and retained locally for this saved configuration.`;
+  const evidenceLabel = state.discoveryEvidence === "fresh"
+    ? `Fresh choices loaded ${formatDate(state.discovery.completedAtUtc)} and stored as the sanitized cache for this saved configuration.`
+    : `Retained sanitized choices from the successful live refresh completed ${formatDate(state.discovery.completedAtUtc)}.`;
+  byId("discovery-message").textContent = state.discoveryError || evidenceLabel;
   renderDiscoveredLibraries();
   renderDiscoveredUsers();
   renderUserComboboxes();
@@ -1364,6 +1372,7 @@ async function runTautulliDiscovery(options = {}) {
     });
     if (discoveryAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return false;
     state.discovery = discovery;
+    state.discoveryEvidence = "fresh";
     refreshed = true;
     state.discoveryError = "";
     if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
@@ -1966,13 +1975,15 @@ async function runPostSaveSetup(revision, plan) {
         body: JSON.stringify({ expectedRevision: revision, confirmRealNetwork: true }),
       });
       state.discovery = discovered;
+      state.discoveryEvidence = "fresh";
       state.discoveryError = "";
       if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
       updateSetupWorkflowStep("choices", "passed", `${discovered.libraries?.length || 0} active libraries and ${discovered.users?.length || 0} users loaded and retained locally.`);
     } catch (error) {
       discoveryFailed = true;
       state.discoveryError = error.message;
-      updateSetupWorkflowStep("choices", "failed", error.message);
+      const retainedFailure = typeof error.code === "string" && error.code.endsWith("-retained");
+      updateSetupWorkflowStep("choices", retainedFailure ? "warning" : "failed", error.message);
     } finally {
       state.discoveryRunning = false;
       renderDiscovery();
@@ -4222,6 +4233,7 @@ function showAuthentication() {
   closeSecretRevealDialog();
   concealMaskedInputs(byId("auth-shell"));
   state.discovery = null;
+  state.discoveryEvidence = "";
   state.discoveryError = "";
   state.discoveryRunning = false;
   state.updateChecking = false;

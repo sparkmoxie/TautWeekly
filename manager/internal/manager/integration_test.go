@@ -467,7 +467,7 @@ func TestTautulliDiscoveryReturnsSanitizedChoicesWithoutEmailOrSecrets(t *testin
 			}
 		case "get_users":
 			data = []any{
-				map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "is_active": 1, "do_notify": 0, "is_admin": 1},
+				map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "do_notify": 0},
 				map[string]any{"user_id": "2", "username": "viewer", "email": "private-viewer@example.org", "is_active": 0, "do_notify": 1},
 			}
 		case "get_users_table":
@@ -476,7 +476,7 @@ func TestTautulliDiscoveryReturnsSanitizedChoicesWithoutEmailOrSecrets(t *testin
 				return
 			}
 			data = map[string]any{"data": []any{
-				map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "email": "private-admin@example.org", "is_active": 1, "do_notify": 0},
+				map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "email": "private-admin@example.org", "is_active": "Checked", "is_admin": "Checked", "do_notify": 0},
 			}}
 		default:
 			http.Error(w, "unsupported", http.StatusBadRequest)
@@ -518,6 +518,111 @@ func TestTautulliDiscoveryReturnsSanitizedChoicesWithoutEmailOrSecrets(t *testin
 		if strings.Contains(string(encoded), private) {
 			t.Fatalf("discovery response returned private value %q", private)
 		}
+	}
+}
+
+func TestTautulliDiscoveryAcceptsEitherSupportedUserRosterResponse(t *testing.T) {
+	tests := []struct {
+		name            string
+		failedCommand   string
+		wantEligibility string
+		wantRole        string
+	}{
+		{name: "names endpoint remains usable when details fail", failedCommand: "get_users", wantEligibility: "unknown"},
+		{name: "details endpoint remains usable when names fail", failedCommand: "get_user_names", wantEligibility: "eligible", wantRole: "administrator"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			const secret = "fictional-roster-variation-secret"
+			tautulli := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				command := r.URL.Query().Get("cmd")
+				if r.URL.Path != "/api/v2" || r.URL.Query().Get("apikey") != secret {
+					http.Error(w, "unauthorized", http.StatusUnauthorized)
+					return
+				}
+				if command == test.failedCommand {
+					_ = json.NewEncoder(w).Encode(map[string]any{"response": map[string]any{"result": "error", "message": "fixture-only failure", "data": map[string]any{}}})
+					return
+				}
+				var data any
+				switch command {
+				case "get_libraries":
+					data = []any{map[string]any{"section_id": 10, "section_name": "Fictional Movies", "section_type": "movie", "is_active": "1"}}
+				case "get_user_names":
+					data = []any{map[string]any{"user_id": 1, "friendly_name": "Fictional Admin"}}
+				case "get_users":
+					data = []any{map[string]any{"user_id": "1", "friendly_name": "Fictional Admin", "email": "private-admin@example.org", "is_active": true, "is_admin": "Checked"}}
+				default:
+					http.Error(w, "unsupported", http.StatusBadRequest)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"response": map[string]any{"result": "success", "data": data}})
+			}))
+			defer tautulli.Close()
+
+			root := integrationConfigRoot(t, tautulli.URL, secret, "", "")
+			view := ReadConfigEditor(root)
+			result, err := DiscoverTautulliChoices(context.Background(), root, TautulliDiscoveryRequest{
+				ExpectedRevision:   view.Revision,
+				ConfirmRealNetwork: true,
+			}, time.Now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Libraries) != 1 || len(result.Users) != 1 || result.Users[0].Eligibility != test.wantEligibility || result.Users[0].Role != test.wantRole {
+				t.Fatalf("unexpected compatible discovery result: %+v", result)
+			}
+		})
+	}
+}
+
+func TestTautulliDiscoveryClassifiesTheFailingResponseStageWithoutPrivateEvidence(t *testing.T) {
+	tests := []struct {
+		name          string
+		failedCommand string
+		wantStage     string
+	}{
+		{name: "library list", failedCommand: "get_libraries", wantStage: "libraries"},
+		{name: "both user rosters", failedCommand: "users", wantStage: "users"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			const secret = "fictional-stage-secret"
+			tautulli := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				command := r.URL.Query().Get("cmd")
+				var data any
+				if test.failedCommand == "get_libraries" && command == "get_libraries" || test.failedCommand == "users" && (command == "get_user_names" || command == "get_users") {
+					data = map[string]any{"private": "raw-private-fixture"}
+				} else {
+					switch command {
+					case "get_libraries":
+						data = []any{map[string]any{"section_id": "10", "section_name": "Fictional Movies", "section_type": "movie", "is_active": 1}}
+					case "get_user_names", "get_users":
+						data = []any{map[string]any{"user_id": "1", "friendly_name": "Fictional Admin"}}
+					default:
+						http.Error(w, "unsupported", http.StatusBadRequest)
+						return
+					}
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"response": map[string]any{"result": "success", "data": data}})
+			}))
+			defer tautulli.Close()
+
+			root := integrationConfigRoot(t, tautulli.URL, secret, "", "")
+			view := ReadConfigEditor(root)
+			_, err := DiscoverTautulliChoices(context.Background(), root, TautulliDiscoveryRequest{
+				ExpectedRevision:   view.Revision,
+				ConfirmRealNetwork: true,
+			}, time.Now)
+			if !errors.Is(err, errIntegrationResponse) || tautulliDiscoveryFailureStage(err) != test.wantStage {
+				t.Fatalf("unexpected staged discovery error: %v", err)
+			}
+			for _, private := range []string{secret, tautulli.URL, "raw-private-fixture"} {
+				if strings.Contains(err.Error(), private) {
+					t.Fatalf("staged discovery error exposed private evidence %q: %v", private, err)
+				}
+			}
+		})
 	}
 }
 
