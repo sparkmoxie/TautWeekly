@@ -124,12 +124,46 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ($winnerView.QualifyingTvShows -eq 1 -and $otherView.QualifyingTvShows -eq 1) "$relativePath did not share the unique TV-show aggregate"
     Assert-True ($winnerView.TotalTimeText -eq '6h 0m' -and $otherView.TotalTimeText -eq '6h 0m') "$relativePath did not share the watch-time aggregate"
 
+    $cumulativeEpisodeHistory = @(
+        [PSCustomObject]@{
+            media_type = 'movie'; play_duration = 5400; watched_status = 1
+            percent_complete = 100; group_count = 1; rating_key = 'movie-cumulative'
+            title = 'Private Movie'; user_id = '40'; friendly_name = 'Episode Winner'; started = 400
+        },
+        [PSCustomObject]@{
+            media_type = 'episode'; play_duration = 1800; watched_status = 1
+            percent_complete = 100; group_count = 1; rating_key = 'episode-a1'
+            grandparent_rating_key = 'show-a'; grandparent_title = 'Private Show A'
+            title = 'Episode A1'; user_id = '40'; friendly_name = 'Episode Winner'; started = 401
+        },
+        [PSCustomObject]@{
+            media_type = 'episode'; play_duration = 1800; watched_status = 1
+            percent_complete = 100; group_count = 1; rating_key = 'episode-a2'
+            grandparent_rating_key = 'show-a'; grandparent_title = 'Private Show A'
+            title = 'Episode A2'; user_id = '40'; friendly_name = 'Episode Winner'; started = 402
+        },
+        [PSCustomObject]@{
+            media_type = 'episode'; play_duration = 1800; watched_status = 1
+            percent_complete = 100; group_count = 1; rating_key = 'episode-b1'
+            grandparent_rating_key = 'show-b'; grandparent_title = 'Private Show B'
+            title = 'Episode B1'; user_id = '40'; friendly_name = 'Episode Winner'; started = 403
+        }
+    )
+    $cumulativeChampion = Get-BingeChampion -GlobalHistory $cumulativeEpisodeHistory
+    Assert-True ($cumulativeChampion.Plays -eq 4) "$relativePath lost the cumulative total-play count"
+    Assert-True ($cumulativeChampion.QualifyingMovies -eq 1) "$relativePath lost the cumulative unique-movie count"
+    Assert-True ($cumulativeChampion.QualifyingTvShows -eq 2) "$relativePath repeated an episode count as the TV-show count"
+    Assert-True ($cumulativeChampion.TvPlays -eq 3) "$relativePath did not total qualifying episodes across TV shows"
+
     $bullet = [char]0x2022
     Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 1; QualifyingMovies = 1; QualifyingTvShows = 0 })) -eq "1 play $bullet 1 movie") "$relativePath lost singular play/movie copy"
     Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 2; QualifyingMovies = 2; QualifyingTvShows = 0 })) -eq "2 plays $bullet 2 movies") "$relativePath lost plural play/movie copy"
     Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 1; QualifyingMovies = 0; QualifyingTvShows = 1 })) -eq "1 play $bullet 1 TV show") "$relativePath lost singular TV-show copy"
     Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 3; QualifyingMovies = 0; QualifyingTvShows = 3 })) -eq "3 plays $bullet 3 TV shows") "$relativePath lost plural TV-show copy"
     Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 7; QualifyingMovies = 5; QualifyingTvShows = 2 })) -eq "7 plays $bullet 5 movies $bullet 2 TV shows") "$relativePath lost the mixed play/title breakdown"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 2; QualifyingMovies = 0; QualifyingTvShows = 1; TvPlays = 1 })) -eq "2 plays $bullet 1 TV show") "$relativePath did not suppress a single-episode suffix"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 7; QualifyingMovies = 1; QualifyingTvShows = 2; TvPlays = 7 })) -eq "7 plays $bullet 1 movie $bullet 2 TV shows: 7 episodes") "$relativePath lost cumulative episode summary or singular/plural copy"
+    Assert-True ((Get-BingeChampionTitleBreakdown -BingeDisplay (Get-BingeChampionDisplay -BingeChampion $cumulativeChampion -User ([PSCustomObject]@{ UserId = '50'; FriendlyName = 'Observer' }))) -eq "4 plays $bullet 1 movie $bullet 2 TV shows: 3 episodes") "$relativePath repeated the TV-show count instead of summing episodes"
     Assert-True ([string]::IsNullOrWhiteSpace((Get-BingeChampionTitleBreakdown -BingeDisplay ([PSCustomObject]@{ Plays = 0; QualifyingMovies = 0; QualifyingTvShows = 0 })))) "$relativePath rendered zero-count categories"
 
     $legacyDisplay = Get-BingeChampionDisplay -BingeChampion ([PSCustomObject]@{

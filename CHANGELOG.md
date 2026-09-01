@@ -10,6 +10,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Binge Champion winner and non-winner summaries retain total plays plus unique
+  movie and TV-show counts, and now append the cumulative qualifying episode
+  count when it is greater than one, with correct singular/plural labels.
+- Central Markdown documentation now provides a more detailed, provider-neutral
+  SMTP setup, verification, security, and stage-by-stage troubleshooting path;
+  platform Quickstarts remain focused on package operation.
 - The Manager header now places a locally bundled Tailscale-light badge after
   the access lock. Verified Active and Publication pending use the source SVG's
   default bright/faded-dot appearance; Off, unsupported, unconfigured,

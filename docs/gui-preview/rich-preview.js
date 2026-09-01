@@ -146,7 +146,7 @@
   }
 
   function awardMetric(winner) {
-    return `<article class="metric compact${winner ? " gold" : ""}"><div class="welcome-kicker">${winner ? "YOU WON" : "THIS WEEK'S"} &middot; BINGE CHAMPION</div><img class="metric-icon" src="${media("trophy.gif")}" alt="" style="margin-top:10px"><div class="metric-value">6h 4m watched</div><div class="metric-label">7 plays &middot; 5 movies &middot; 2 TV shows</div></article>`;
+    return `<article class="metric compact${winner ? " gold" : ""}"><div class="welcome-kicker">${winner ? "YOU WON" : "THIS WEEK'S"} &middot; BINGE CHAMPION</div><img class="metric-icon" src="${media("trophy.gif")}" alt="" style="margin-top:10px"><div class="metric-value">6h 4m watched</div><div class="metric-label">7 plays &middot; 5 movies &middot; 2 TV shows: 7 episodes</div></article>`;
   }
 
   function timeMetric(state) {
@@ -156,7 +156,7 @@
   }
 
   function awardCard(winner) {
-    return `<section class="panel status-panel summary-card" style="${winner ? "border-color:#e5a00d;background:#211a0d" : ""}"><img src="${media("trophy.gif")}" alt=""><div><div class="welcome-kicker">${winner ? "YOU WON" : "THIS WEEK'S"} &middot; BINGE CHAMPION</div><h2>6h 4m watched</h2><p>7 plays &middot; 5 movies &middot; 2 TV shows &middot; fictional aggregate</p></div></section>`;
+    return `<section class="panel status-panel summary-card" style="${winner ? "border-color:#e5a00d;background:#211a0d" : ""}"><img src="${media("trophy.gif")}" alt=""><div><div class="welcome-kicker">${winner ? "YOU WON" : "THIS WEEK'S"} &middot; BINGE CHAMPION</div><h2>6h 4m watched</h2><p>7 plays &middot; 5 movies &middot; 2 TV shows: 7 episodes &middot; fictional aggregate</p></div></section>`;
   }
 
   function platformIcon(state) {

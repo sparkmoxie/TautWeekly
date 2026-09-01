@@ -3460,6 +3460,11 @@ function Get-BingeChampionTitleBreakdown {
     $playCount = Safe-Int $BingeDisplay.Plays
     $movieCount = Safe-Int $BingeDisplay.QualifyingMovies
     $tvShowCount = Safe-Int $BingeDisplay.QualifyingTvShows
+    $episodeCount = if ($null -ne $BingeDisplay.PSObject.Properties["TvPlays"]) {
+        Safe-Int $BingeDisplay.TvPlays
+    } else {
+        0
+    }
 
     if ($playCount -gt 0) {
         $playWord = if ($playCount -eq 1) { "play" } else { "plays" }
@@ -3471,7 +3476,11 @@ function Get-BingeChampionTitleBreakdown {
     }
     if ($tvShowCount -gt 0) {
         $tvShowWord = if ($tvShowCount -eq 1) { "TV show" } else { "TV shows" }
-        $parts.Add("$tvShowCount $tvShowWord")
+        $tvSummary = "$tvShowCount $tvShowWord"
+        if ($episodeCount -gt 1) {
+            $tvSummary += ": $episodeCount episodes"
+        }
+        $parts.Add($tvSummary)
     }
 
     return ($parts -join " • ")
@@ -8391,8 +8400,8 @@ $tvCards
     }
     $footerFeatureBlock = if ($trendingHeroMode) { $topGenreBlock } else { $trendingBlock }
     # Binge Champion ranks users by qualifying watch time. Every recipient sees
-    # the same anonymous watch time and unique movie/TV-show breakdown. Only
-    # the winner receives the gold YOU WON treatment.
+    # the same anonymous watch time, play/title counts, and cumulative episode
+    # count. Only the winner receives the gold YOU WON treatment.
     $bingeDisplay = Get-BingeChampionDisplay -BingeChampion $BingeChampion -User $User
     $bingeTimeLine = "Awaiting the first qualifying stream"
     $bingeTitleBreakdown = ""
@@ -8646,7 +8655,7 @@ $mediaStatsRows
           <img src="$lockInfoIconSrc" width="18" height="18" alt="Just Your Stats" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
           <span style="display:inline-block;vertical-align:middle;">JUST YOUR STATS</span>
         </div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion watch duration and nonzero unique movie/TV-show counts are shared server-wide; the champion’s identity stays private.</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion watch duration, total plays, and nonzero unique movie/TV-show counts are shared server-wide; when more than one episode qualifies, their cumulative count is included. The champion’s identity stays private.</div>
       </td>
     </tr>
   </table>
@@ -8667,7 +8676,7 @@ $mediaStatsRows
 <td class="pad" align="center" style="padding:12px 20px 26px;color:#5f5f5f;font-size:11px;line-height:1.5;">
   Your watch recap is generated privately from $(HtmlEncode $footerServerName) server’s history.<br>
   Other users do not receive your detailed individual viewing stats.<br>
-  The Binge Champion watch duration and nonzero unique movie/TV-show counts are shared server-wide; the champion's identity stays private.
+  The Binge Champion watch duration, total plays, and nonzero unique movie/TV-show counts are shared server-wide. A cumulative qualifying episode count is included when greater than one; the champion's identity stays private.
 </td>
 </tr>
 "@
@@ -9040,7 +9049,7 @@ function Build-WelcomeHtml {
         <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">As you stream, your weekly email builds a private recap with watch time, movies, TV shows, posters, and ratings.</div>
 
         <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">🔒 JUST YOUR STATS</div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion watch duration and nonzero unique movie/TV-show counts are shared server-wide; the champion’s identity stays private.</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion watch duration, total plays, and nonzero unique movie/TV-show counts are shared server-wide; when more than one episode qualifies, their cumulative count is included. The champion’s identity stays private.</div>
       </td>
     </tr>
   </table>

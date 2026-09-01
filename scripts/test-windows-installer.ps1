@@ -231,10 +231,13 @@ try {
         Assert-True ([bool]$recoveredFunnel.enabled -and $cleanupRequired) 'Upgraded Manager discarded the retained enabled Funnel state.'
         Assert-True ([string]$recoveredFunnel.url -eq 'https://installer-preserve.test-tailnet.ts.net') 'Upgraded Manager changed the retained public Funnel hostname.'
         Assert-True ([string]$recoveredFunnel.networkKind -eq 'public-funnel') 'Upgraded Manager reverted to the obsolete private remote-access controller.'
+        # The synthetic enabled record has no real provider route to disable.
+        # An explicit stop must therefore accept the local signal but leave the
+        # Manager open, preserving the password and retained exposure evidence.
         $restartShutdown = Start-Process -FilePath $managerExecutable -ArgumentList @('shutdown', "--listen=127.0.0.1:$restartPort", "--tautweekly-root=$installRoot") -WorkingDirectory $installRoot -Wait -PassThru -WindowStyle Hidden
-        Assert-True ($restartShutdown.ExitCode -eq 0) 'Upgraded Manager rejected graceful shutdown after restart recovery.'
+        Assert-True ($restartShutdown.ExitCode -eq 0) 'Upgraded Manager rejected the local shutdown signal after restart recovery.'
         $restartShutdown.Dispose()
-        Assert-True ($restartedManager.WaitForExit(10000)) 'Upgraded Manager did not exit cleanly after restart recovery.'
+        Assert-True (-not $restartedManager.WaitForExit(2000)) 'Upgraded Manager exited even though synthetic public Funnel shutdown could not be verified.'
     }
     finally {
         if (-not $restartedManager.HasExited) { Stop-Process -Id $restartedManager.Id -Force -ErrorAction SilentlyContinue; [void]$restartedManager.WaitForExit(10000) }

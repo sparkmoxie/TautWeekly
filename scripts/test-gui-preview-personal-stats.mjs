@@ -37,6 +37,7 @@ assert.ok(normal.includes(".stats-tv-media-card .watched-list{grid-template-colu
 assert.ok(normal.includes("YOU CLOCKED") && normal.includes("total watch time"), "normal preview lost the personal-time eyebrow or renamed label");
 assert.ok(normal.includes("51h 18m") && normal.includes("6h 4m watched"), "personal and qualifying Binge Champion durations were incorrectly forced to match");
 assert.ok(normal.includes("YOU WON") && normal.includes('metric compact gold'), "winner preview lost its gold Binge Champion treatment");
+assert.ok(normal.includes("2 TV shows: 7 episodes"), "winner preview lost the cumulative Binge episode count");
 assert.ok(normal.includes("Rotten Tomatoes critic score") && normal.includes("Rotten Tomatoes audience score"), "personal movie rows lost eligible Rotten Tomatoes ratings");
 assert.ok(normal.includes('alt="IMDb">8.2') && normal.includes('alt="IMDb">8.0'), "personal TV rows lost eligible IMDb ratings");
 assert.ok(normal.includes(".watched-row>img{width:38px;height:56px;object-fit:cover") && !normal.includes(".watched-row img{"), "preview poster sizing can still override nested rating images");
@@ -51,6 +52,7 @@ const uneven = preview.html("demo-history");
 assert.equal(occurrences(uneven, 'class="watched-row"'), 6, "uneven preview did not render five movie rows and one TV row");
 assert.ok(uneven.includes(">5</div><div class=\"stats-heading-label\">MOVIES WATCHED") && uneven.includes(">1</div><div class=\"stats-heading-label\">TV SHOWS WATCHED"), "uneven preview reported the wrong unique-title counts");
 assert.ok(uneven.includes("THIS WEEK'S") && !uneven.includes('metric compact gold'), "non-winner preview retained the winner treatment");
+assert.ok(uneven.includes("2 TV shows: 7 episodes"), "non-winner preview lost the cumulative Binge episode count");
 
 const quiet = preview.html("demo-quiet");
 assert.ok(!quiet.includes('class="stats-summary-grid"') && !quiet.includes("YOU CLOCKED"), "zero-activity preview rendered populated personal summary cards");
@@ -92,6 +94,8 @@ const galleryNormal = gallery.email(gallery.states[3]);
 assert.ok(galleryNormal.includes('width="26" height="26" alt="Watched"') && galleryNormal.includes('width="16" height="16" alt="Watched"'), "gallery watched markers are stale");
 assert.ok(!gallery.statsBlock(gallery.states[3]).includes('alt="Watched"'), "gallery footer contains a watched mark");
 assert.ok(gallery.statsBlock(gallery.states[3]).includes("font-size:27px;line-height:1.1;font-weight:800"), "gallery Binge value is stale");
+assert.ok(gallery.statsBlock(gallery.states[3]).includes("2 TV shows: 7 episodes"), "gallery winner lost the cumulative Binge episode count");
+assert.ok(gallery.statsBlock(gallery.states[2]).includes("2 TV shows: 7 episodes"), "gallery non-winner lost the cumulative Binge episode count");
 assert.ok(gallery.tvCard({title:"Fictional fallback",poster:"local.jpg",episodes:[["S01 EP01","Episode",null]],imdb:"8.1"}).includes(">8.1</span>"), "gallery lost show-level IMDb fallback");
 assert.ok(gallery.tvCard({title:"Fictional fallback",poster:"local.jpg",episodes:[],imdb:"8.1"}).includes(">8.1</span>"), "gallery lost no-episode IMDb fallback");
 assert.equal(gallery.asset("movies.gif"), "../gui-preview/media/movies.gif", "gallery uses remote or stale stock artwork");

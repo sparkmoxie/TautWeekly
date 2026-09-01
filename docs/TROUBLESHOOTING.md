@@ -35,19 +35,35 @@ and it does not display or copy private configuration, logs, or output.
 
 ## SMTP authentication or TLS fails
 
-- Use the exact SMTP submission hostname from the provider's account settings.
-- Use a supported STARTTLS submission port, normally 587. TautWeekly does not
-  support implicit-TLS port 465.
-- Confirm whether authentication is required and whether the username is a full
-  email address.
-- Keep `FromEmail` equal to the authenticated account or a sender identity or
-  alias that the account is permitted to use.
-- Use an application password when the provider requires one.
-- Preserve password whitespace unless the provider displays grouped characters
-  and `SmtpStripPasswordSpaces` is intentionally enabled.
-- `verify` proves that the SMTP host is reachable; it does not authenticate or
-  submit mail. Use a numeric ID from `list-users` with `send-test` for the
-  authoritative delivery check. Listing users does not save a default.
+Start with the sanitized failure stage and numeric SMTP response in Manager.
+Do not paste credentials, addresses, private hostnames, response text, or raw
+logs into a support report.
+
+Use the exact SMTP submission hostname and STARTTLS submission port issued for
+the account; TautWeekly does not support implicit-TLS port 465. Confirm whether
+the username is a full address or another issued identifier and use an
+application password when account policy requires one. The normal `verify`
+operation does not authenticate or submit mail.
+
+| Stage | Provider-neutral checks |
+|---|---|
+| `configuration` | Confirm a nonblank submission host, port 1-65535 other than unsupported implicit-TLS port 465, timeout 5-300 seconds, and both username and password when authentication is enabled. |
+| `connect` or `greeting` | Resolve and reach the exact outbound SMTP host from the TautWeekly runtime. Check egress firewall/DNS, the documented submission port, and whether the service is accepting connections. |
+| `ehlo`, `starttls`, or `tls` | Use the service's STARTTLS endpoint with `SmtpEnableSsl=true`. Confirm it advertises STARTTLS, the host clock is correct, and the operating system trusts the certificate chain for the configured hostname. |
+| `auth` | Use the exact issued username and an SMTP-capable password or application-specific credential. Keep `SmtpAuthenticationMethod=Auto` unless the administrator explicitly requires advertised `LOGIN` or `PLAIN`; keep `SmtpStripPasswordSpaces=false` unless displayed spaces are separators. |
+| `mail-from` | Set `FromEmail` to the authenticated account or another sender identity that account is explicitly authorized to use. Changing `FromName` or `ReplyToEmail` does not authorize a sender. |
+| `rcpt-to` | Confirm the controlled test address is valid and the account may send to it. Test with one recipient before a batch. |
+| `data-command` or `data-acceptance` | Check account quota/policy, message acceptance, and any temporary service condition. Unknown final-DATA acceptance is treated as batch-fatal so TautWeekly does not risk duplicate sends. |
+
+A 4xx response is temporary; stop repeated tests and allow the service's stated
+quiet period. A 5xx response is a permanent rejection of that attempt; correct
+the relevant account, sender, recipient, or policy setting before retrying.
+`verify` proves only configuration shape and TCP reachability. Use one numeric
+ID from `list-users` with `send-test` (or Manager TestEmail) for the authoritative
+STARTTLS/authentication/submission check. Listing users never saves a default.
+If Manager reports success but the message is absent, inspect the controlled
+mailbox's junk/quarantine and the mail administrator's delivery trace; do not
+increase batch volume to test delivery.
 
 ## SMTP provider temporarily locks or limits the account
 

@@ -25,6 +25,32 @@ paths, URLs, filenames, arbitrary MIME types, and arbitrary CIDs are rejected.
 Email attaches only the selected referenced asset, and the Manager serves the
 same local files without a runtime font or network dependency.
 
+## SMTP submission
+
+Use the mail service's outbound submission endpoint, not an incoming-mail host
+or webmail URL. Keep `SmtpEnableSsl=true` so the connection upgrades with
+STARTTLS and validates the configured hostname against the operating-system
+trust store. Implicit TLS on port 465 is unsupported. Disable authentication
+only for an explicitly administered, network-restricted relay that authorizes
+the TautWeekly runtime without credentials.
+
+Use a dedicated SMTP-capable or application-specific credential when account
+policy supports it, grant only the sender identities needed by `FromEmail`, and
+rotate the credential after exposure or account changes. `SmtpPassword` is
+stored in private `config.json` and its backups; Manager returns only a fixed
+presence marker unless an authenticated password re-entry authorizes a
+short-lived reveal. Do not place credentials in environment examples, logs,
+screenshots, issues, or generated previews.
+
+Verification checks reachability without authenticating. Perform the first
+real check with one controlled TestEmail recipient. Each production message has
+exactly one envelope recipient, and the transport stops a batch on
+authentication failure, temporary service rejection, batch-wide rejection,
+transport failure, or unknown final-DATA acceptance. Diagnostics retain only
+the sanitized failure category/stage, numeric response code, acceptance state,
+attempt count, and local support code—not provider response text, addresses,
+credentials, or message content.
+
 ## Deleted-item cache
 
 The persistent cache is private media-library data even though it contains no
@@ -180,11 +206,12 @@ Disabling the feature stops access but does not erase the existing cache.
 ## Recipient privacy
 
 Scheduled weekly messages share only the Binge Champion's anonymous aggregate:
-total watch time plus nonzero unique movie and TV-show counts. The champion's
-friendly name, username, user ID, and watched titles are not disclosed. Only
-the winning recipient sees the gold **YOU WON** treatment. Detailed personal
-recap rows remain private to each recipient, and one-off welcome messages do not
-contain the award.
+total watch time, total plays, and nonzero unique movie and TV-show counts. When
+more than one episode qualifies, the cumulative episode count across those TV
+shows is included. The champion's friendly name, username, user ID, and watched
+titles are not disclosed. Only the winning recipient sees the gold **YOU WON**
+treatment. Detailed personal recap rows remain private to each recipient, and
+one-off welcome messages do not contain the award.
 
 ## Credential rotation
 
