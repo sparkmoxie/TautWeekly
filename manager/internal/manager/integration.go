@@ -63,6 +63,38 @@ type TautulliDiscoveryResult struct {
 	SuggestedPreviewUserID string              `json:"suggestedPreviewUserId,omitempty"`
 	LegacyRuleCount        int                 `json:"legacyRuleCount,omitempty"`
 	MatchedLegacyRuleCount int                 `json:"matchedLegacyRuleCount,omitempty"`
+	Retained               bool                `json:"retained,omitempty"`
+}
+
+type tautulliDiscoveryError struct {
+	stage string
+	err   error
+}
+
+func (e *tautulliDiscoveryError) Error() string {
+	return "Tautulli " + e.stage + " discovery failed"
+}
+
+func (e *tautulliDiscoveryError) Unwrap() error {
+	return e.err
+}
+
+func wrapTautulliDiscoveryError(stage string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &tautulliDiscoveryError{stage: stage, err: err}
+}
+
+func tautulliDiscoveryFailureStage(err error) string {
+	var discoveryErr *tautulliDiscoveryError
+	if errors.As(err, &discoveryErr) {
+		switch discoveryErr.stage {
+		case "libraries", "users":
+			return discoveryErr.stage
+		}
+	}
+	return "connection"
 }
 
 type IntegrationCheckStep struct {
@@ -95,6 +127,10 @@ type tautulliEnvelope struct {
 }
 
 type tautulliUsersTable struct {
+	Data []map[string]any `json:"data"`
+}
+
+type tautulliLibrariesTable struct {
 	Data []map[string]any `json:"data"`
 }
 
@@ -175,33 +211,52 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 	apiKey := configMapString(values, "ApiKey")
 
 	var rawLibraries []map[string]any
-	if err := tautulliCommand(checkContext, client, base, apiKey, "get_libraries", &rawLibraries); err != nil {
-		return TautulliDiscoveryResult{}, err
+	libraryErr := tautulliCommand(checkContext, client, base, apiKey, "get_libraries", &rawLibraries)
+	libraries := normalizeDiscoveredLibraries(rawLibraries)
+	if libraryErr != nil || len(libraries) == 0 {
+		var table tautulliLibrariesTable
+		tableErr := tautulliCommandWithParams(checkContext, client, base, apiKey, "get_libraries_table", discoveryTableParams(), &table)
+		if tableErr == nil {
+			libraries = normalizeDiscoveredLibraries(table.Data)
+		}
+		if len(libraries) == 0 {
+			cause := libraryErr
+			if cause == nil {
+				cause = tableErr
+			}
+			if cause == nil {
+				cause = errIntegrationResponse
+			}
+			return TautulliDiscoveryResult{}, wrapTautulliDiscoveryError("libraries", cause)
+		}
 	}
 	var rawNames []map[string]any
 	nameErr := tautulliCommand(checkContext, client, base, apiKey, "get_user_names", &rawNames)
 	var rawUsers []map[string]any
 	detailErr := tautulliCommand(checkContext, client, base, apiKey, "get_users", &rawUsers)
-	if nameErr != nil && detailErr != nil {
-		return TautulliDiscoveryResult{}, errIntegrationResponse
-	}
-
 	legacyRules := normalizedLegacyExclusionRules(values["ExcludedEmails"])
 	users, matchedLegacyRules := normalizeDiscoveredUsers(rawNames, rawUsers, legacyRules)
-	if matchedLegacyRules < len(legacyRules) {
+	var tableErr error
+	if nameErr != nil || detailErr != nil || len(users) == 0 || matchedLegacyRules < len(legacyRules) {
 		var table tautulliUsersTable
-		params := url.Values{
-			"start":  {"0"},
-			"length": {strconv.Itoa(maximumDiscoveryChoices)},
-		}
-		if err := tautulliCommandWithParams(checkContext, client, base, apiKey, "get_users_table", params, &table); err == nil {
+		tableErr = tautulliCommandWithParams(checkContext, client, base, apiKey, "get_users_table", discoveryTableParams(), &table)
+		if tableErr == nil {
 			rawUsers = mergeDiscoveredUserDetails(rawUsers, table.Data)
 			users, matchedLegacyRules = normalizeDiscoveredUsers(rawNames, rawUsers, legacyRules)
 		}
 	}
-	libraries := normalizeDiscoveredLibraries(rawLibraries)
-	if len(libraries) == 0 {
-		return TautulliDiscoveryResult{}, fmt.Errorf("%w: no active movie or TV libraries", errIntegrationResponse)
+	if len(users) == 0 {
+		cause := nameErr
+		if cause == nil {
+			cause = detailErr
+		}
+		if cause == nil {
+			cause = tableErr
+		}
+		if cause == nil {
+			cause = errIntegrationResponse
+		}
+		return TautulliDiscoveryResult{}, wrapTautulliDiscoveryError("users", cause)
 	}
 	return TautulliDiscoveryResult{
 		Mode:                   "real-lan-discovery",
@@ -214,6 +269,13 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 		LegacyRuleCount:        len(legacyRules),
 		MatchedLegacyRuleCount: matchedLegacyRules,
 	}, nil
+}
+
+func discoveryTableParams() url.Values {
+	return url.Values{
+		"start":  {"0"},
+		"length": {strconv.Itoa(maximumDiscoveryChoices)},
+	}
 }
 
 func normalizeDiscoveredLibraries(values []map[string]any) []DiscoveredLibrary {

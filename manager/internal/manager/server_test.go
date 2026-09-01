@@ -578,6 +578,109 @@ func TestDiscoveryCacheAPIRequiresAuthenticationAndSurvivesManagerRestart(t *tes
 	}
 }
 
+func TestDiscoveryLiveFailureKeepsCacheAndReportsSanitizedStage(t *testing.T) {
+	const secret = "fictional-retained-discovery-secret"
+	tautulli := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2" || r.URL.Query().Get("apikey") != secret {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		switch r.URL.Query().Get("cmd") {
+		case "get_libraries", "get_libraries_table":
+			_ = json.NewEncoder(w).Encode(map[string]any{"response": map[string]any{
+				"result":  "error",
+				"message": "private upstream detail must not escape",
+				"data":    map[string]any{"private": "private library response"},
+			}})
+		default:
+			http.Error(w, "unexpected command", http.StatusBadRequest)
+		}
+	}))
+	defer tautulli.Close()
+
+	root := integrationConfigRoot(t, tautulli.URL, secret, "", "")
+	data := t.TempDir()
+	server, err := New(Options{
+		DataDir:        data,
+		TautWeeklyRoot: root,
+		Version:        "test",
+		Now:            func() time.Time { return time.Date(2031, 4, 18, 16, 35, 0, 0, time.UTC) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := ReadConfigEditor(root).Revision
+	cached := TautulliDiscoveryResult{
+		Mode:            "real-lan-discovery",
+		NetworkBoundary: "private-and-loopback-only",
+		CompletedAtUTC:  "2031-04-18T16:30:00Z",
+		ConfigRevision:  revision,
+		Libraries:       []DiscoveredLibrary{{ID: "10", Name: "Fictional Cached Movies", MediaType: "movie"}},
+		Users:           []DiscoveredUser{{ID: "1", Name: "Fictional Cached Owner", Eligibility: "eligible", Role: "owner"}},
+	}
+	if err := server.discovery.Save(cached); err != nil {
+		t.Fatal(err)
+	}
+	session, err := server.auth.newSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{Name: sessionCookieName, Value: session.Token}
+	body, err := json.Marshal(TautulliDiscoveryRequest{ExpectedRevision: revision, ConfirmRealNetwork: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := mutationRequestForTest(server, http.MethodPost, "/api/v1/discovery/tautulli", body, cookie, session.CSRFToken)
+	if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), "\"code\":\"discovery-libraries-failed\"") {
+		t.Fatalf("live discovery failure: got %d, body %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "Live Tautulli library roster refresh failed") ||
+		!strings.Contains(response.Body.String(), "fresh Tautulli/Plex check") {
+		t.Fatalf("live discovery failure did not provide safe stage guidance: %s", response.Body.String())
+	}
+	for _, private := range []string{secret, tautulli.URL, "private upstream detail", "private library response", root, "config.json"} {
+		if strings.Contains(strings.ToLower(response.Body.String()), strings.ToLower(private)) {
+			t.Fatalf("live discovery failure returned private value %q: %s", private, response.Body.String())
+		}
+	}
+
+	retained := requestForTest(server, http.MethodGet, "/api/v1/discovery/tautulli", nil, cookie)
+	if retained.Code != http.StatusOK || !strings.Contains(retained.Body.String(), "\"retained\":true") ||
+		!strings.Contains(retained.Body.String(), "Fictional Cached Movies") ||
+		!strings.Contains(retained.Body.String(), cached.CompletedAtUTC) {
+		t.Fatalf("failed live refresh changed or hid the retained cache: %d %s", retained.Code, retained.Body.String())
+	}
+	status := server.configuration.Load(revision)
+	choiceStep := status.Steps["choices"]
+	if choiceStep.State != "failed" || !strings.Contains(choiceStep.Summary, "previous sanitized choices remain retained and usable") {
+		t.Fatalf("retained/live setup evidence is ambiguous: %+v", choiceStep)
+	}
+	history := server.diagnostics.History()
+	if len(history.Events) == 0 || history.Events[0].Code != "discovery-libraries-failed" ||
+		!strings.Contains(history.Events[0].Summary, "prior sanitized choice cache was left unchanged") {
+		t.Fatalf("missing sanitized discovery-stage diagnostic: %+v", history.Events)
+	}
+}
+
+func TestFailedDiscoveryCopyClassifiesWrappedErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "authentication", err: errors.New("authentication rejected: HTTP 401"), want: "rejected the saved API credential"},
+		{name: "http status", err: errors.New("unexpected HTTP status: 503"), want: "unexpected HTTP status"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, message := failedDiscoveryCopy("users", wrapTautulliDiscoveryError("users", test.err), false)
+			if !strings.Contains(message, test.want) || strings.Contains(message, test.err.Error()) {
+				t.Fatalf("wrapped failure was not classified and sanitized: %q", message)
+			}
+		})
+	}
+}
+
 func TestConfigurationMutationRequiresCSRFAndNeverReturnsSecrets(t *testing.T) {
 	root := t.TempDir()
 	server, err := New(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Version: "test"})

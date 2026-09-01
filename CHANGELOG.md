@@ -6,6 +6,55 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.2] - 2026-09-01
+
+### Changed
+
+- Binge Champion winner and non-winner summaries retain total plays plus unique
+  movie and TV-show counts, and now append the cumulative qualifying episode
+  count when it is greater than one, with correct singular/plural labels.
+- Central Markdown documentation now provides a more detailed, provider-neutral
+  SMTP setup, verification, security, and stage-by-stage troubleshooting path;
+  platform Quickstarts remain focused on package operation.
+- The Manager header now places a locally bundled Tailscale-light badge after
+  the access lock. Verified Active and Publication pending use the source SVG's
+  default bright/faded-dot appearance; Off, unsupported, unconfigured,
+  disabled, blocked, failed, and every other non-active state use one uniform
+  off appearance. Its animated tooltip reports the exact sanitized state.
+- The Dashboard Tailscale Funnel row is now borderless, uses a smoother hover
+  transition and animated accessible tooltip, and its deep link clears the
+  sticky header so the beginning of the complete Settings card is visible.
+
+### Fixed
+
+- Restored the direct Unraid Apps catalog shortcut on the NAS / Docker landing
+  card and added a documentation contract to prevent it from disappearing
+  while the combined NAS/Docker/QNAP/Unraid Quickstart remains the main guide.
+- Removed the Unraid template's optional literal-loopback `WebUI` metadata,
+  which Community Apps automatically blacklisted under its launch-URL policy.
+  The fixed loopback publish, SSH recovery path, and verified Funnel option are
+  unchanged; validation now prevents the rejected metadata from returning.
+- Manager discovery now falls back to Tautulli's table-backed library and user
+  rosters when the primary Plex-backed commands fail or return a valid empty
+  response, and accepts the supported numeric, string, and Boolean response
+  variants returned by real Tautulli installations.
+- A failed discovery refresh still reports HTTP 502 and a failed Choices step,
+  while a valid exact-revision cache remains readable and usable with an
+  explicit retained marker and timestamp. Older Tautulli, Plex, and SMTP
+  connection results are labeled as separate retained evidence instead of
+  contradicting the current discovery failure.
+- Discovery diagnostics expose only allowlisted connection, library-roster,
+  and user-roster codes with sanitized guidance; raw provider output and
+  private server data remain excluded.
+- Windows Manager/installer updates no longer invoke destructive
+  `remote-access-cleanup` before package replacement. The password lock,
+  verified public hostname, publication proof, enabled preference, and fixed
+  loopback Funnel route remain retained through update and rollback.
+- Corrected the native Linux wrapper and candidate installer so subsequent
+  verified updates also preserve retained Funnel state and the fixed route.
+  Explicit Disable, stop, access reset/recovery, adapter revocation, and
+  uninstall remain fail-closed cleanup operations on every applicable package.
+
 ## [0.25.1] - 2026-09-01
 
 ### Changed

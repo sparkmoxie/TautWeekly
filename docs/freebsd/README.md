@@ -210,10 +210,11 @@ credential, arbitrary command, hostname, port, path, or CLI argument.
 
 Use `sudo tautweekly remote-access-disable` before maintenance or when public
 access is no longer wanted. The rc.d wrapper disables and verifies the exact
-owned route before deliberate stop, reset, update, recovery, or removal and
+owned route before deliberate stop, reset, recovery, or removal and
 fails closed if cleanup cannot be proven. Normal Manager restart preserves
-Funnel; an update leaves it off for explicit re-enable. Abrupt power loss or
-`SIGKILL` cannot run cleanup, so retain local access for recovery.
+Funnel; verified package/image update, recreate, and rollback preserve it.
+Abrupt power loss or `SIGKILL` cannot run cleanup, so retain local access for
+recovery.
 
 ## Operations
 

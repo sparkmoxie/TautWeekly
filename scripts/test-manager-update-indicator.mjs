@@ -90,7 +90,11 @@ const previewMock = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-previ
 const funnelDefinitionsStart = productionJS.indexOf("const funnelIntegrationStates");
 const funnelDefinitionsEnd = productionJS.indexOf("\nfunction renderStatus()", funnelDefinitionsStart);
 assert.ok(funnelDefinitionsStart >= 0 && funnelDefinitionsEnd > funnelDefinitionsStart, "Funnel Dashboard presentation functions are missing");
-const funnelDefinitions = productionJS.slice(funnelDefinitionsStart, funnelDefinitionsEnd);
+const tailscaleStateStart = productionJS.indexOf("function tailscaleStatePresentation(remote)");
+const tailscaleStateEnd = productionJS.indexOf("\nfunction validTailscaleURL", tailscaleStateStart);
+assert.ok(tailscaleStateStart >= 0 && tailscaleStateEnd > tailscaleStateStart, "Funnel Settings state presentation is missing");
+const funnelDefinitions = productionJS.slice(funnelDefinitionsStart, funnelDefinitionsEnd) +
+  "\n" + productionJS.slice(tailscaleStateStart, tailscaleStateEnd);
 assert.doesNotMatch(funnelDefinitions, /request\(/, "ordinary Dashboard rendering can invoke a Funnel API or provider operation");
 const funnelContext = vm.createContext({ console });
 const funnelHarnessSource = [
@@ -98,7 +102,8 @@ const funnelHarnessSource = [
   "const elements = new Map();",
   "function element(id) {",
   "  if (!elements.has(id)) elements.set(id, {",
-  "    className: \"\", textContent: \"\", title: \"\", attributes: {},",
+  "    className: \"\", textContent: \"\", attributes: {}, dataset: {},",
+  "    classList: { values: {}, toggle(name, enabled) { this.values[name] = Boolean(enabled); } },",
   "    setAttribute(name, value) { this.attributes[name] = value; },",
   "  });",
   "  return elements.get(id);",
@@ -129,6 +134,8 @@ const funnelHarnessSource = [
   "      funnelState: element(\"funnel-state\").textContent,",
   "      funnelDetail: element(\"funnel-detail\").textContent,",
   "      funnelValue: element(\"funnel-integration-value\"),",
+  "      funnelLink: element(\"funnel-settings-link\"),",
+  "      tailscaleButton: element(\"tailscale-status-button\"),",
   "    }));",
   "  },",
   "};",
@@ -158,7 +165,24 @@ for (const [name, remote, label, detail, tone, outcome, overallLabel, overallTon
   assert.equal(rendered.chip.tone, overallTone, name + " aggregate tone");
   assert.equal(rendered.funnelState, label, name + " visible row label");
   assert.match(rendered.funnelValue.attributes["aria-label"], new RegExp(label, "i"), name + " accessible row label");
+  assert.match(rendered.funnelLink.dataset.tooltip, /Tailscale Funnel/, name + " animated navigation tooltip");
+  const badgeActive = remote.state === "active" || remote.state === "starting";
+  assert.equal(rendered.tailscaleButton.classList.values.active, badgeActive, name + " header badge active appearance");
+  assert.equal(rendered.tailscaleButton.classList.values.off, !badgeActive, name + " header badge off appearance");
+  const expectedBadgeState = remote.state === "inactive" ? "Off"
+    : remote.state === "unsupported" ? "Unsupported"
+      : remote.state === "starting" ? "Publication pending"
+        : remote.state === "active" ? "Active"
+          : remote.state === "manager-password-required" ? "Password required"
+            : remote.state === "needs-attention" ? "Needs attention"
+              : remote.state === "tailscale-required" ? "Tailscale required"
+                : "Unavailable";
+  assert.equal(rendered.tailscaleButton.dataset.tooltip, `Tailscale Funnel: ${expectedBadgeState}`, name + " exact-state header tooltip");
 }
+const loadingBadge = funnelContext.funnelDashboardTest.render(null).tailscaleButton;
+assert.equal(loadingBadge.classList.values.active, false, "loading retained Funnel state used active badge appearance");
+assert.equal(loadingBadge.classList.values.off, true, "loading retained Funnel state omitted off badge appearance");
+assert.equal(loadingBadge.dataset.tooltip, "Tailscale Funnel: Checking retained status", "loading badge tooltip is not truthful");
 const sanitizedPresentation = funnelContext.funnelDashboardTest.present({
   ...funnelBase,
   enabled: true,
@@ -176,8 +200,19 @@ const loadTailscaleSource = productionJS.slice(loadTailscaleStart, loadTailscale
 assert.match(loadTailscaleSource, /request\("\/api\/v1\/remote-access\/tailscale"\)/, "Dashboard does not reuse the retained typed Funnel status endpoint");
 assert.doesNotMatch(loadTailscaleSource, /\/verify|method:\s*"(?:POST|PUT)"/, "passive Funnel status loading can trigger verification or mutation");
 assert.match(productionHTML, /id="icon-deployed-code-update"/);
+assert.match(productionHTML, /id="icon-tailscale" viewBox="0 0 512 512"/);
+assert.match(productionHTML, /id="tailscale-status-button"[^>]+class="access-status-button tailscale-status-button off"|class="access-status-button tailscale-status-button off"[^>]+id="tailscale-status-button"/);
+assert.match(productionHTML, /id="funnel-settings-link"[^>]+data-tooltip=/);
+assert.doesNotMatch(productionHTML, /id="funnel-settings-link"[^>]+title=/);
 assert.match(productionHTML, /id="update-status-button"[^>]+aria-controls="update-settings-panel"[^>]+hidden/);
 assert.match(productionHTML, /id="update-settings-heading" tabindex="-1"/);
+assert.match(productionCSS, /[.]tailscale-settings-panel{scroll-margin-top:90px/);
+assert.match(productionCSS, /[.]metric-link{[^}]*border:0[^}]*transition:[^}]*cubic-bezier/);
+assert.match(productionCSS, /[.]metric-link:after{content:attr\(data-tooltip\)/);
+assert.match(productionCSS, /[.]tailscale-status-button[.]active [.]tailscale-fade{opacity:[.]2}/);
+assert.match(productionCSS, /[.]tailscale-status-button [.]tailscale-fade{opacity:1/);
+assert.match(productionJS, /const active = settingsAvailable && remote\.enabled === true &&\s+\(\(remote\.state === "active" && remote\.active === true\) \|\| remote\.state === "starting"\)/);
+assert.doesNotMatch(productionJS, /funnelValue\.title|funnelLink\.disabled/);
 assert.match(productionCSS, /color:var\(--violet\)/);
 assert.match(productionCSS, /animation:hero-pulse 2\.9s ease-out infinite/);
 for (const [name, css, javascript] of [["production", productionCSS, productionJS], ["preview", previewCSS, previewJS]]) {

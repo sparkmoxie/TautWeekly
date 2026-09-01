@@ -231,15 +231,6 @@ case "$cmd" in
     ;;
   update)
     require_root
-    if ! run_as_service_user "$app_root/bin/tautweekly-manager" remote-access-cleanup \
-      --data-dir "$data_root/manager" \
-      --tautweekly-root "$app_root" \
-      --listen 127.0.0.1:8788 \
-      --runtime-mode linux \
-      --confirm; then
-      echo "Update stopped because the exact TautWeekly Funnel could not be disabled and verified." >&2
-      exit 75
-    fi
     TAUTWEEKLY_PACKAGE_KIND=linux TAUTWEEKLY_PACKAGE_ROOT="$app_root" \
       exec /usr/local/libexec/tautweekly-package-update apply
     ;;

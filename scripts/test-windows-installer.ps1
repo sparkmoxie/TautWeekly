@@ -174,10 +174,9 @@ try {
     $privateManagerFixtures = [ordered]@{
         'operation-history.jsonl' = '{"schemaVersion":1,"id":"synthetic-history-preserve"}'
         'schedule-operation.json' = '{"schemaVersion":1,"state":"synthetic-schedule-preserve"}'
-        # Keep the virtual lifecycle inactive so it cannot invoke the host's
-        # real Tailscale client. Enabled-route cleanup is covered with fake
-        # runners in the Manager controller tests.
-        'windows-funnel.json' = '{"schemaVersion":2,"enabled":false}'
+        # This valid synthetic record proves update preservation without
+        # contacting Tailscale. Ordinary update must never invoke the provider.
+        'windows-funnel.json' = '{"schemaVersion":2,"enabled":true,"hostname":"installer-preserve.test-tailnet.ts.net","publiclyPublished":true}'
     }
     foreach ($fixture in $privateManagerFixtures.GetEnumerator()) {
         [IO.File]::WriteAllText((Join-Path $dataRoot $fixture.Key), $fixture.Value, [Text.UTF8Encoding]::new($false))
@@ -229,17 +228,24 @@ try {
         Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$restartPort/api/v1/auth/login" -Method Post -ContentType 'application/json' -WebSession $restartSession -Body '{"password":"synthetic installer preservation password"}' -TimeoutSec 3 | Out-Null
         $recoveredFunnel = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$restartPort/api/v1/remote-access/tailscale" -WebSession $restartSession -TimeoutSec 3
         $cleanupRequired = if ($null -eq $recoveredFunnel.PSObject.Properties['cleanupRequired']) { $false } else { [bool]$recoveredFunnel.cleanupRequired }
-        Assert-True (-not [bool]$recoveredFunnel.enabled -and -not [bool]$recoveredFunnel.active -and -not $cleanupRequired) 'Upgraded Manager did not preserve the inactive Funnel state safely.'
+        Assert-True ([bool]$recoveredFunnel.enabled -and $cleanupRequired) 'Upgraded Manager discarded the retained enabled Funnel state.'
+        Assert-True ([string]$recoveredFunnel.url -eq 'https://installer-preserve.test-tailnet.ts.net') 'Upgraded Manager changed the retained public Funnel hostname.'
         Assert-True ([string]$recoveredFunnel.networkKind -eq 'public-funnel') 'Upgraded Manager reverted to the obsolete private remote-access controller.'
+        # The synthetic enabled record has no real provider route to disable.
+        # An explicit stop must therefore accept the local signal but leave the
+        # Manager open, preserving the password and retained exposure evidence.
         $restartShutdown = Start-Process -FilePath $managerExecutable -ArgumentList @('shutdown', "--listen=127.0.0.1:$restartPort", "--tautweekly-root=$installRoot") -WorkingDirectory $installRoot -Wait -PassThru -WindowStyle Hidden
-        Assert-True ($restartShutdown.ExitCode -eq 0) 'Upgraded Manager rejected graceful shutdown after restart recovery.'
+        Assert-True ($restartShutdown.ExitCode -eq 0) 'Upgraded Manager rejected the local shutdown signal after restart recovery.'
         $restartShutdown.Dispose()
-        Assert-True ($restartedManager.WaitForExit(10000)) 'Upgraded Manager did not exit cleanly after restart recovery.'
+        Assert-True (-not $restartedManager.WaitForExit(2000)) 'Upgraded Manager exited even though synthetic public Funnel shutdown could not be verified.'
     }
     finally {
         if (-not $restartedManager.HasExited) { Stop-Process -Id $restartedManager.Id -Force -ErrorAction SilentlyContinue; [void]$restartedManager.WaitForExit(10000) }
         $restartedManager.Dispose()
     }
+    # Explicit uninstall remains fail-closed. Return the synthetic state to Off
+    # before that separate lifecycle test so no host Tailscale client is used.
+    [IO.File]::WriteAllText((Join-Path $dataRoot 'windows-funnel.json'), '{"schemaVersion":2,"enabled":false}', [Text.UTF8Encoding]::new($false))
 
     $portableExtractRoot = Join-Path $testRoot 'portable-extract'
     Expand-Archive -LiteralPath (Join-Path $DistPath 'TautWeekly-windows.zip') -DestinationPath $portableExtractRoot

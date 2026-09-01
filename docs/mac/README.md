@@ -216,11 +216,11 @@ host executable, TUN device, host network, added networking capability,
 credential, arbitrary command, hostname, port, path, or CLI argument.
 
 Disable from Settings or run `./tautweekly.sh remote-access-disable` before
-maintenance. Stop, update, reset, recovery, and removal use the same verified
+maintenance. Stop, reset, recovery, and removal use the same verified
 cleanup and fail closed if the exact owned public route cannot be disabled.
-Normal Manager restart preserves Funnel; an update leaves it off for explicit
-re-enable. Retain local access for recovery after abrupt host power loss or
-`SIGKILL`, when no process can perform shutdown cleanup.
+Normal Manager restart, verified package/image update, recreate, and rollback
+preserve Funnel. Retain local access for recovery after abrupt host power loss
+or `SIGKILL`, when no process can perform shutdown cleanup.
 
 ## Newsletter behavior
 

@@ -259,9 +259,10 @@ page is public. Every successful login has full administration; there is no
 read-only role and this release adds no new Internet login-attempt limiter, so
 use a unique password and retain local recovery.
 
-An ordinary `sudo tautweekly restart` preserves the selected persistent
-Funnel. Explicit stop, update, access reset, adapter revocation, and uninstall
-first disable and verify the exact owned route or stop safely. Use
+Ordinary `sudo tautweekly restart`, verified update, and rollback preserve the
+selected persistent Funnel and fixed loopback route. Explicit stop, access
+reset, adapter revocation, and uninstall first disable and verify the exact
+owned route or stop safely. Use
 `sudo tautweekly remote-access-revoke` to perform that cleanup and remove the
 fixed host authorization. A legacy exact private Serve route is never silently
 converted; Settings requires explicit migration or verified cleanup.

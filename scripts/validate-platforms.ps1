@@ -788,10 +788,6 @@ Require-Text 'platforms/windows/Windows-Update.ps1' @(
     'Assert-ManifestFiles',
     'Assert-PowerShellSyntax',
     'Get-InstalledManagerProcesses',
-    'Resolve-ManagerDataRoot',
-    'Disable-InstalledPublicRoute',
-    'remote-access-cleanup',
-    'exact TautWeekly Funnel could not be disabled and verified',
     'Start-InstalledManager',
     'Get-HealthyManagerListenerProcessIds',
     'Get-NetTCPConnection.*LocalPort 8788',
@@ -800,6 +796,10 @@ Require-Text 'platforms/windows/Windows-Update.ps1' @(
     'TautWeekly Manager \$TargetVersion',
     '\.manager-data'
 )
+Forbid-Text 'platforms/windows/Windows-Update.ps1' @('remote-access-cleanup', 'Disable-InstalledPublicRoute')
+Forbid-Text 'platforms/linux/install-linux.sh' @('remote-access-cleanup')
+Forbid-Text 'platforms/linux/tautweekly' @('(?s)update\)\s+require_root\s+if ! run_as_service_user.*?remote-access-cleanup')
+Write-Host '[PASS] Ordinary Windows and native Linux updates preserve retained Funnel state and the fixed route.'
 Require-Text 'platforms/windows/START-MANAGER.ps1' @(
     '127\.0\.0\.1:8788',
     '\.manager-data',

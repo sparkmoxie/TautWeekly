@@ -37,6 +37,19 @@ Google's official Material Symbols guide and repository permit use and
 modification of the SVG assets under that license. No endorsement by Google is
 implied.
 
+## Homarr Labs Dashboard Icons
+
+The TautWeekly Manager locally embeds optimized path geometry from the
+[Tailscale light icon](https://github.com/homarr-labs/dashboard-icons/blob/1cdb6d737c3623705109fb8f4aee890adab58d3b/svg/tailscale-light.svg)
+in Homarr Labs Dashboard Icons (commit
+`1cdb6d737c3623705109fb8f4aee890adab58d3b`). The local copy removes SVG
+editor metadata and uses Manager-controlled state colors; it is never fetched
+from a CDN at runtime. Tailscale's mark remains the property of Tailscale Inc.,
+and its use identifies the optional integration without implying endorsement.
+
+Homarr Labs Dashboard Icons is licensed under the
+[Apache License, Version 2.0](https://github.com/homarr-labs/dashboard-icons/blob/1cdb6d737c3623705109fb8f4aee890adab58d3b/LICENSE).
+
 The required license copy follows.
 
 ### Apache License, Version 2.0

@@ -1286,9 +1286,12 @@ func (s *Server) handleTautulliDiscovery(w http.ResponseWriter, r *http.Request)
 		writeAPIError(w, http.StatusUnprocessableEntity, "discovery-boundary", "The configured Tautulli destination is outside the private or loopback network boundary.")
 		return
 	case err != nil:
-		s.updateConfigurationStep(request.ExpectedRevision, "choices", "failed", "Tautulli libraries and users could not be loaded from the saved connection.")
-		s.recordDiagnostic("tautulli-discovery", "failed", "discovery-failed")
-		writeAPIError(w, http.StatusBadGateway, "discovery-failed", "Tautulli choices could not be loaded. Confirm the saved address, API key, and service availability.")
+		stage := tautulliDiscoveryFailureStage(err)
+		retained := s.discovery.Load(request.ExpectedRevision) != nil
+		summary, message := failedDiscoveryCopy(stage, err, retained)
+		s.updateConfigurationStep(request.ExpectedRevision, "choices", "failed", summary)
+		s.recordDiagnostic("tautulli-discovery", "failed", "discovery-"+stage+"-failed")
+		writeAPIError(w, http.StatusBadGateway, "discovery-"+stage+"-failed", message)
 		return
 	}
 	s.configMu.Lock()
@@ -1310,6 +1313,48 @@ func (s *Server) handleTautulliDiscovery(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, result)
+}
+
+func failedDiscoveryCopy(stage string, err error, retained bool) (summary, message string) {
+	label := discoveryStageLabel(stage)
+	summary = "Live Tautulli " + label + " refresh failed."
+	if retained {
+		summary += " The previous sanitized choices remain retained and usable."
+	}
+	switch {
+	case errors.Is(err, errIntegrationConnection), errors.Is(err, context.DeadlineExceeded):
+		message = "Live Tautulli " + label + " refresh failed because the saved service could not be reached before the bounded timeout."
+	case errorChainContains(err, "authentication rejected"):
+		message = "Live Tautulli " + label + " refresh failed because Tautulli rejected the saved API credential."
+	case errorChainContains(err, "unexpected HTTP status"):
+		message = "Live Tautulli " + label + " refresh failed because Tautulli returned an unexpected HTTP status."
+	case errors.Is(err, errIntegrationResponse):
+		message = "Live Tautulli " + label + " refresh failed because neither the primary response nor its table-backed fallback contained usable choices."
+	default:
+		message = "Live Tautulli " + label + " refresh failed safely."
+	}
+	message += " Run a fresh Tautulli/Plex check under Verify to compare current connection evidence."
+	return summary, message
+}
+
+func errorChainContains(err error, fragment string) bool {
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		if strings.Contains(current.Error(), fragment) {
+			return true
+		}
+	}
+	return false
+}
+
+func discoveryStageLabel(stage string) string {
+	switch stage {
+	case "libraries":
+		return "library roster"
+	case "users":
+		return "user roster"
+	default:
+		return "connection"
+	}
 }
 
 func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {

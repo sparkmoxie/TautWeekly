@@ -33,10 +33,10 @@ TautWeekly never stores auth keys, control-plane tokens, raw CLI output,
 tailnet identities, device lists, private IPs, or sensitive paths. A verified
 public `.ts.net` hostname is retained only to enforce exact Host/origin
 admission. Funnel enablement requires an active Manager password lock. Access
-reset, password-lock disable, update, explicit Exit, and uninstall first verify
-the owned Funnel off; Windows installer updates preserve the password verifier
-but leave Funnel off for explicit re-enable. Native Linux update follows the
-same disable-and-verify rule before replacement.
+reset, password-lock disable, explicit Exit or stop, adapter revocation, and
+uninstall first verify the owned Funnel off. Ordinary Windows, native Linux,
+container, macOS, and FreeBSD updates preserve the password verifier, retained
+Funnel preference, and fixed route through replacement and rollback.
 
 An exact local Funnel is reported as **Publication pending** until its hostname
 resolves through the fixed `1.1.1.1` public resolver to a globally routable IPv4
@@ -294,6 +294,43 @@ these keys; a missing title-GIF key means `none`.
 | `SmtpTimeoutSeconds` | Connection and protocol timeout; defaults to 30 seconds |
 | `TestEmail` | Controlled recipient for all test modes |
 
+### Provider-neutral SMTP setup
+
+Before opening Manager Config, obtain the submission settings from the mail
+service administrator. You need the outbound SMTP hostname, STARTTLS port,
+whether authentication is required, the exact username format, an SMTP-capable
+credential, and the sender addresses that account may use. Do not substitute an
+incoming IMAP/POP host, a webmail URL, or settings copied from an unrelated
+account.
+
+1. Set `SmtpHost` to the submission hostname and `SmtpPort` to its documented
+   STARTTLS port. Port 587 is common, but the administrator's submission setting
+   is authoritative. Port 465 uses implicit TLS and is intentionally rejected.
+2. Keep `SmtpEnableSsl=true` for STARTTLS. TautWeekly connects, reads the SMTP
+   greeting, sends `EHLO`, requires the advertised `STARTTLS` capability,
+   validates the TLS certificate with the operating-system trust store, then
+   sends a second `EHLO` over the protected connection.
+3. Keep `SmtpUseAuthentication=true` unless the administrator explicitly
+   provides a network-restricted relay that accepts this TautWeekly runtime
+   without credentials. Enter the username exactly as issued; it may be a full
+   address, a short account name, or another service-defined identifier.
+4. Store the SMTP password or application-specific credential in
+   `SmtpPassword`. Leave `SmtpStripPasswordSpaces=false` unless the credential
+   is displayed in grouped blocks whose spaces are presentation separators.
+   Leave `SmtpAuthenticationMethod=Auto`; it selects a supported `LOGIN` or
+   `PLAIN` exchange advertised by the server. Expert/recovery configuration may
+   pin `Login` or `Plain` only when the service administrator requires that
+   exact advertised method.
+5. Set `FromEmail` to an envelope sender the account is authorized to use.
+   `FromName` is display text and `ReplyToEmail` is the reply destination; they
+   do not grant sender permission. Set `TestEmail` to one controlled mailbox
+   you can inspect.
+6. Validate and save in Manager. **Verify** checks configuration shape and TCP
+   reachability but deliberately does not authenticate or submit a message.
+   Run one controlled TestEmail/`send-test` to verify STARTTLS, authentication,
+   sender authorization, recipient acceptance, final DATA acceptance, and
+   actual delivery before enabling or relying on the schedule.
+
 Implicit SMTPS on port 465 is not the supported transport. Use a provider's
 STARTTLS settings. The SMTP transport completes authentication and requires a
 successful `235` response before it sends `MAIL FROM`. The platform verifier
@@ -388,7 +425,10 @@ card, and new movie/TV shelves retain their established behavior.
 **Binge Champion** considers qualified movie and episode rows and ranks users
 by qualified watch time, play count, unique movie/TV-show count, then recency.
 Its supporting line places total plays first, for example
-`7 plays • 3 movies • 2 TV shows`, omitting a zero media category.
+`7 plays • 3 movies • 2 TV shows: 5 episodes`, omitting a zero media category.
+The episode suffix appears only when more than one episode qualifies and totals
+qualified episode plays across every included TV show; it never repeats the
+unique TV-show count.
 
 A report window with no new movies is a Trending state. When new TV exists, one
 authentic movie-only **TRENDING THIS WEEK** result is used as the hero when

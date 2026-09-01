@@ -545,7 +545,17 @@ function setupWorkflowPresentation(workflow = state.setupWorkflow) {
   const states = steps.map((step) => step.state);
   const active = state.setupWorkflowRunning || states.includes("running");
   if (active) return { label: "Running", tone: "pending", summary: "Safe setup checks are running and each result is retained as it completes." };
-  if (states.includes("failed")) return { label: "Needs review", tone: "bad", summary: "One or more saved setup checks need review before live delivery." };
+  if (states.includes("failed")) {
+    const retainedChoices = state.setupWorkflow?.steps?.choices?.state === "failed" &&
+      state.discovery?.configRevision === state.editor?.revision;
+    return {
+      label: "Needs review",
+      tone: "bad",
+      summary: retainedChoices
+        ? "Live Tautulli choice refresh failed. Cached library and user choices remain retained; other check labels are separate retained evidence."
+        : "One or more saved setup checks need review before live delivery.",
+    };
+  }
   if (states.every((stepState) => stepState === "not-run")) return { label: "Not run", tone: "neutral", summary: "Validate and save to run the five safe setup checks." };
   if (states.includes("waiting")) return { label: "Waiting", tone: "waiting", summary: "One or more setup checks are waiting for a prerequisite." };
   if (states.some((stepState) => ["warning", "skipped"].includes(stepState))) return { label: "Completed with notes", tone: states.includes("warning") ? "warning" : "neutral", summary: "The saved configuration was checked; review the noted result before live delivery." };
@@ -633,6 +643,34 @@ function funnelIntegrationPresentation(remote) {
   return { label: "Failed", detail: "Blocked · retained status invalid", tone: "bad", outcome: "failed" };
 }
 
+function tailscaleStatusBadgePresentation(remote) {
+  if (!remote || typeof remote !== "object") {
+    return { active: false, label: "Checking retained status", settingsAvailable: false };
+  }
+  const settingsAvailable = remote.supported === true;
+  const active = settingsAvailable && remote.enabled === true &&
+    ((remote.state === "active" && remote.active === true) || remote.state === "starting");
+  let label = "Unavailable";
+  if (!settingsAvailable) label = remote.state === "unsupported" ? "Unsupported" : "Unavailable";
+  else if (remote.state === "inactive") label = "Off";
+  else label = tailscaleStatePresentation(remote).label;
+  return { active, label, settingsAvailable };
+}
+
+function renderTailscaleStatusButton(remote = state.tailscale) {
+  const button = byId("tailscale-status-button");
+  if (!button) return;
+  const presentation = !remote && state.tailscaleError
+    ? { active: false, label: "Unavailable", settingsAvailable: false }
+    : tailscaleStatusBadgePresentation(remote);
+  const tooltip = `Tailscale Funnel: ${presentation.label}`;
+  button.classList.toggle("active", presentation.active);
+  button.classList.toggle("off", !presentation.active);
+  button.setAttribute("aria-disabled", String(!presentation.settingsAvailable));
+  button.setAttribute("aria-label", tooltip);
+  button.dataset.tooltip = tooltip;
+}
+
 function renderIntegrationStatus() {
   const last = state.verification?.last || null;
   const smtp = state.verification?.smtp || null;
@@ -652,12 +690,16 @@ function renderIntegrationStatus() {
   const funnelValue = byId("funnel-integration-value");
   funnelValue.className = `integration-value ${funnel.tone}`;
   funnelValue.setAttribute("aria-label", `Tailscale Funnel status: ${funnel.label}; ${funnel.detail}`);
-  funnelValue.title = `${funnel.label} — ${funnel.detail}`;
   const funnelLink = byId("funnel-settings-link");
-  funnelLink.disabled = state.tailscale?.supported !== true;
-  funnelLink.setAttribute("aria-label", funnelLink.disabled
+  const settingsAvailable = state.tailscale?.supported === true;
+  funnelLink.setAttribute("aria-disabled", String(!settingsAvailable));
+  funnelLink.dataset.tooltip = settingsAvailable
+    ? `Open Settings > Tailscale Funnel · ${funnel.detail}`
+    : `Tailscale Funnel settings unavailable · ${funnel.detail}`;
+  funnelLink.setAttribute("aria-label", !settingsAvailable
     ? `Tailscale Funnel: ${funnel.label}; Settings unavailable on this surface`
     : "Tailscale Funnel. Open Settings, Tailscale Funnel.");
+  renderTailscaleStatusButton();
 
   const baseOutcomes = [last?.overall || retainedLANState, smtp?.overall || retainedSMTPState].filter(Boolean);
   const outcomes = [...baseOutcomes, funnel.outcome].filter(Boolean);
@@ -670,9 +712,11 @@ function renderIntegrationStatus() {
   const overallTone = verificationActive ? "pending" : overall === "passed" ? "good" : overall === "failed" ? "bad" : overall === "warning" ? "warning" : "neutral";
   const overallLabel = verificationActive ? "Running" : overall === "not-run" ? "Not run" : overall === "warning" ? "Attention" : titleCase(overall);
   setChip("integration-chip", overallLabel, overallTone);
-  setText("integration-copy", outcomes.length
-    ? "Latest checks from validation or a targeted retest are retained for this saved configuration."
-    : "Safe real checks run after a successful save or when you start a manual retest.");
+  setText("integration-copy", state.discoveryError && outcomes.length
+    ? "Tautulli/Plex and SMTP labels are retained checks with their own timestamps; the failed live choices refresh did not rerun them."
+    : outcomes.length
+      ? "Latest checks from validation or a targeted retest are retained for this saved configuration."
+      : "Safe real checks run after a successful save or when you start a manual retest.");
   return { overallLabel, overallTone, funnel };
 }
 
@@ -1123,10 +1167,18 @@ function renderDiscovery() {
     return;
   }
   byId("discovery-results").hidden = false;
-  byId("discovery-message").textContent = state.discoveryError || `Choices loaded ${formatDate(state.discovery.completedAtUtc)} and retained locally for this saved configuration.`;
+  byId("discovery-message").textContent = state.discoveryError || (state.discovery.retained
+    ? `Cached choices from ${formatDate(state.discovery.completedAtUtc)} are retained locally for this saved configuration.`
+    : `Fresh choices loaded ${formatDate(state.discovery.completedAtUtc)} and retained locally for this saved configuration.`);
   renderDiscoveredLibraries();
   renderDiscoveredUsers();
   renderUserComboboxes();
+}
+
+function discoveryFailureMessage(message) {
+  const retained = state.discovery?.configRevision === state.editor?.revision ? state.discovery : null;
+  if (!retained) return message;
+  return `Live refresh failed. Cached choices from ${formatDate(retained.completedAtUtc)} remain visible and usable. ${message}`;
 }
 
 function currentListField(name) {
@@ -1372,8 +1424,8 @@ async function runTautulliDiscovery(options = {}) {
     if (announceGlobalStatus) setGlobalStatus("Tautulli choices loaded and retained locally.", true);
   } catch (error) {
     if (discoveryAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return false;
-    state.discoveryError = error.message;
-    if (announceGlobalStatus) setGlobalStatus(error.message, true);
+    state.discoveryError = discoveryFailureMessage(error.message);
+    if (announceGlobalStatus) setGlobalStatus(state.discoveryError, true);
   } finally {
     if (discoveryAuthenticationEpoch === authenticationEpoch && !byId("app-shell").hidden) {
       try {
@@ -1972,8 +2024,8 @@ async function runPostSaveSetup(revision, plan) {
       updateSetupWorkflowStep("choices", "passed", `${discovered.libraries?.length || 0} active libraries and ${discovered.users?.length || 0} users loaded and retained locally.`);
     } catch (error) {
       discoveryFailed = true;
-      state.discoveryError = error.message;
-      updateSetupWorkflowStep("choices", "failed", error.message);
+      state.discoveryError = discoveryFailureMessage(error.message);
+      updateSetupWorkflowStep("choices", "failed", state.discoveryError);
     } finally {
       state.discoveryRunning = false;
       renderDiscovery();
@@ -2522,7 +2574,7 @@ function renderVerification() {
   const retainedLANState = retainedSetupCheckState("lan");
   const retainedSMTPState = retainedSetupCheckState("smtp");
   if (last) {
-    setText("verification-observed", `Completed ${formatDate(last.completedAtUtc)} · ${titleCase(last.networkBoundary)}.`);
+    setText("verification-observed", `Completed ${formatDate(last.completedAtUtc)} · ${titleCase(last.networkBoundary)}.${state.discoveryError ? " Separate retained evidence from the failed live choices refresh." : ""}`);
     for (const step of last.steps || []) {
       appendVerificationResult(results, step.service === "plex" ? "Direct Plex" : titleCase(step.service), step.state, step.summary);
     }
@@ -3499,6 +3551,7 @@ function renderTailscaleSettings() {
   const panel = byId("tailscale-settings-panel");
   if (!panel) return;
   const remote = state.tailscale || {};
+  renderTailscaleStatusButton(state.tailscale);
   panel.hidden = !remote.supported;
   if (!remote.supported) return;
   const windows = state.runtimeMode === "windows";
@@ -3508,6 +3561,7 @@ function renderTailscaleSettings() {
   const displayRemote = publicFunnel && state.tailscaleSaving
     ? { ...remote, state: state.tailscaleRequestedOperation === "enable" ? "starting" : "stopping" }
     : remote;
+  renderTailscaleStatusButton(displayRemote);
   const presentation = tailscaleStatePresentation(displayRemote);
   const passwordLocked = Boolean(state.authAccess?.passwordLockEnabled);
   setText("tailscale-settings-eyebrow", "Optional public remote access");
@@ -3585,7 +3639,7 @@ function renderTailscaleSettings() {
   else message.textContent = remote.enabled && remote.active
     ? "The public address opens the password-protected Manager; remote viewers do not need Tailscale."
     : presentation.status;
-  byId("tailscale-recovery-copy").innerHTML = "<strong>Local access remains the recovery path.</strong> Password-lock disable, local access reset, stop, update, recovery, and uninstall first turn off and verify only the exact TautWeekly Funnel. If verification fails, the password and application stay in place. Explicit lifecycle actions leave Funnel off for deliberate re-enable.";
+  byId("tailscale-recovery-copy").innerHTML = "<strong>Local access remains the recovery path.</strong> Password-lock disable, local access reset, explicit stop, recovery, adapter revocation, and uninstall first turn off and verify only the exact TautWeekly Funnel. If verification fails, the password and application stay in place. Ordinary update and rollback preserve the retained Funnel preference and fixed route.";
 }
 
 async function updateTailscaleAccess() {
@@ -3695,6 +3749,7 @@ function openAccessSettings() {
 }
 
 function openTailscaleSettings() {
+  if (state.tailscale?.supported !== true) return;
   selectView("about", { section: "tailscale" });
 }
 
@@ -4432,6 +4487,7 @@ byId("tailscale-refresh-button").addEventListener("click", refreshTailscaleAcces
 byId("tailscale-copy-button").addEventListener("click", copyTailscaleURL);
 byId("tailscale-copy-authorization").addEventListener("click", copyTailscaleAuthorizationCommand);
 byId("funnel-settings-link").addEventListener("click", openTailscaleSettings);
+byId("tailscale-status-button").addEventListener("click", openTailscaleSettings);
 byId("update-check-button").addEventListener("click", checkForUpdates);
 byId("update-install-confirm").addEventListener("change", renderUpdates);
 byId("update-install-button").addEventListener("click", installUpdate);

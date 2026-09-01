@@ -110,8 +110,13 @@ ssh -N -L 8787:127.0.0.1:8787 root@UNRAID_HOST
 Open `http://127.0.0.1:8787/`, pair the browser, and use the guided Manager to
 configure, verify, generate previews, send controlled TestEmail messages, and
 enable the embedded schedule. The Unraid template deliberately creates no
-broad host-port mapping. The legacy Console helpers remain available for
-recovery, but they are no longer the normal setup path.
+broad host-port mapping. It also deliberately omits Community Apps' optional
+**WebUI** launch button: CA rejects a literal loopback host, while substituting
+the Unraid LAN address would be unreachable and would misrepresent the
+loopback-only boundary. Use the SSH forward above for local recovery or the
+independently verified Funnel address for ordinary remote access. The legacy
+Console helpers remain available for recovery, but they are no longer the
+normal setup path.
 
 Community Applications listings are moderated. The template can be audited
 directly from its [raw URL](https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/templates/tautweekly.xml).
@@ -462,11 +467,12 @@ template, apply the container update, then run the same command in the
 container Console. Do not add an auth key or token to the template.
 
 Disable from Manager Settings or run `./tautweekly.sh remote-access-disable`
-before a deliberate stop, reset, update, recovery, or removal. The supplied
+before a deliberate stop, reset, recovery, or removal. The supplied
 launchers also disable and verify the exact owned route before those lifecycle
-operations and fail closed if cleanup cannot be proven. Normal Manager restart
-preserves Funnel; an update leaves it off for explicit re-enable. Abrupt host
-power loss or `SIGKILL` cannot run cleanup, so retain local access and use the
+operations and fail closed if cleanup cannot be proven. Normal Manager restart,
+verified host-package/image update, recreate, and rollback preserve Funnel.
+Abrupt host power loss or `SIGKILL` cannot run cleanup, so retain local access
+and use the
 disable command before maintenance whenever possible.
 
 When TautWeekly for Plex and Tautulli share a user-defined Docker network, a service URL
