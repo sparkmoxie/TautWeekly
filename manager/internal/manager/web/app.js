@@ -687,7 +687,7 @@ function renderIntegrationStatus() {
   setText("funnel-state", funnel.label);
   setText("funnel-detail", funnel.detail);
   const funnelValue = byId("funnel-integration-value");
-  funnelValue.className = `integration-value ${funnel.tone}`;
+    funnelValue.className = "integration-value neutral";
   funnelValue.setAttribute("aria-label", `Tailscale Funnel status: ${funnel.label}; ${funnel.detail}`);
   const funnelLink = byId("funnel-settings-link");
   const settingsAvailable = state.tailscale?.supported === true;
