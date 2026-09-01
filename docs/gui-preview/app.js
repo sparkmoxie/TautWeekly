@@ -545,7 +545,17 @@ function setupWorkflowPresentation(workflow = state.setupWorkflow) {
   const states = steps.map((step) => step.state);
   const active = state.setupWorkflowRunning || states.includes("running");
   if (active) return { label: "Running", tone: "pending", summary: "Safe setup checks are running and each result is retained as it completes." };
-  if (states.includes("failed")) return { label: "Needs review", tone: "bad", summary: "One or more saved setup checks need review before live delivery." };
+  if (states.includes("failed")) {
+    const retainedChoices = state.setupWorkflow?.steps?.choices?.state === "failed" &&
+      state.discovery?.configRevision === state.editor?.revision;
+    return {
+      label: "Needs review",
+      tone: "bad",
+      summary: retainedChoices
+        ? "Live Tautulli choice refresh failed. Cached library and user choices remain retained; other check labels are separate retained evidence."
+        : "One or more saved setup checks need review before live delivery.",
+    };
+  }
   if (states.every((stepState) => stepState === "not-run")) return { label: "Not run", tone: "neutral", summary: "Validate and save to run the five safe setup checks." };
   if (states.includes("waiting")) return { label: "Waiting", tone: "waiting", summary: "One or more setup checks are waiting for a prerequisite." };
   if (states.some((stepState) => ["warning", "skipped"].includes(stepState))) return { label: "Completed with notes", tone: states.includes("warning") ? "warning" : "neutral", summary: "The saved configuration was checked; review the noted result before live delivery." };
@@ -702,9 +712,11 @@ function renderIntegrationStatus() {
   const overallTone = verificationActive ? "pending" : overall === "passed" ? "good" : overall === "failed" ? "bad" : overall === "warning" ? "warning" : "neutral";
   const overallLabel = verificationActive ? "Running" : overall === "not-run" ? "Not run" : overall === "warning" ? "Attention" : titleCase(overall);
   setChip("integration-chip", overallLabel, overallTone);
-  setText("integration-copy", outcomes.length
-    ? "Latest checks from validation or a targeted retest are retained for this saved configuration."
-    : "Safe real checks run after a successful save or when you start a manual retest.");
+  setText("integration-copy", state.discoveryError && outcomes.length
+    ? "Tautulli/Plex and SMTP labels are retained checks with their own timestamps; the failed live choices refresh did not rerun them."
+    : outcomes.length
+      ? "Latest checks from validation or a targeted retest are retained for this saved configuration."
+      : "Safe real checks run after a successful save or when you start a manual retest.");
   return { overallLabel, overallTone, funnel };
 }
 
@@ -1155,10 +1167,18 @@ function renderDiscovery() {
     return;
   }
   byId("discovery-results").hidden = false;
-  byId("discovery-message").textContent = state.discoveryError || `Choices loaded ${formatDate(state.discovery.completedAtUtc)} and retained locally for this saved configuration.`;
+  byId("discovery-message").textContent = state.discoveryError || (state.discovery.retained
+    ? `Cached choices from ${formatDate(state.discovery.completedAtUtc)} are retained locally for this saved configuration.`
+    : `Fresh choices loaded ${formatDate(state.discovery.completedAtUtc)} and retained locally for this saved configuration.`);
   renderDiscoveredLibraries();
   renderDiscoveredUsers();
   renderUserComboboxes();
+}
+
+function discoveryFailureMessage(message) {
+  const retained = state.discovery?.configRevision === state.editor?.revision ? state.discovery : null;
+  if (!retained) return message;
+  return `Live refresh failed. Cached choices from ${formatDate(retained.completedAtUtc)} remain visible and usable. ${message}`;
 }
 
 function currentListField(name) {
@@ -1404,8 +1424,8 @@ async function runTautulliDiscovery(options = {}) {
     if (announceGlobalStatus) setGlobalStatus("Tautulli choices loaded and retained locally.", true);
   } catch (error) {
     if (discoveryAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return false;
-    state.discoveryError = error.message;
-    if (announceGlobalStatus) setGlobalStatus(error.message, true);
+    state.discoveryError = discoveryFailureMessage(error.message);
+    if (announceGlobalStatus) setGlobalStatus(state.discoveryError, true);
   } finally {
     if (discoveryAuthenticationEpoch === authenticationEpoch && !byId("app-shell").hidden) {
       try {
@@ -2004,8 +2024,8 @@ async function runPostSaveSetup(revision, plan) {
       updateSetupWorkflowStep("choices", "passed", `${discovered.libraries?.length || 0} active libraries and ${discovered.users?.length || 0} users loaded and retained locally.`);
     } catch (error) {
       discoveryFailed = true;
-      state.discoveryError = error.message;
-      updateSetupWorkflowStep("choices", "failed", error.message);
+      state.discoveryError = discoveryFailureMessage(error.message);
+      updateSetupWorkflowStep("choices", "failed", state.discoveryError);
     } finally {
       state.discoveryRunning = false;
       renderDiscovery();
@@ -2554,7 +2574,7 @@ function renderVerification() {
   const retainedLANState = retainedSetupCheckState("lan");
   const retainedSMTPState = retainedSetupCheckState("smtp");
   if (last) {
-    setText("verification-observed", `Completed ${formatDate(last.completedAtUtc)} · ${titleCase(last.networkBoundary)}.`);
+    setText("verification-observed", `Completed ${formatDate(last.completedAtUtc)} · ${titleCase(last.networkBoundary)}.${state.discoveryError ? " Separate retained evidence from the failed live choices refresh." : ""}`);
     for (const step of last.steps || []) {
       appendVerificationResult(results, step.service === "plex" ? "Direct Plex" : titleCase(step.service), step.state, step.summary);
     }

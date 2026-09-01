@@ -54,6 +54,7 @@ func (s *tautulliDiscoveryStore) Load(configRevision string) *TautulliDiscoveryR
 	if !ok || clean.ConfigRevision != configRevision {
 		return nil
 	}
+	clean.Retained = true
 	return &clean
 }
 
