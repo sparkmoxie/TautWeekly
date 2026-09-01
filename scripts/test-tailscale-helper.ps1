@@ -36,7 +36,9 @@ Require-Pattern 'provider-approval-required' 'Helper does not sanitize first-use
 Require-Pattern 'not-running' 'Helper does not sanitize the stopped-service state.'
 Require-Pattern 'unsupported' 'Helper does not sanitize unsupported clients.'
 Require-Pattern 'Send-Result' 'Helper does not use the bounded nonce callback.'
-Require-Pattern 'Resolve-DnsName -Name \$hostname -Type A -Server ''1\.1\.1\.1''' 'Helper does not bypass private MagicDNS with the fixed public resolver.'
+Require-Pattern 'System32\\nslookup\.exe' 'Helper does not use the trusted Windows DNS diagnostic executable.'
+Require-Pattern '-type=A -timeout=2 -retry=1 \$Hostname 1\.1\.1\.1' 'Helper does not bypass Windows NRPT with the fixed public resolver.'
+Require-Pattern 'Get-NslookupPublicIPv4Addresses' 'Helper does not parse the bounded public DNS response.'
 Require-Pattern 'Test-PublicIPv4Address' 'Helper does not reject private and non-routable DNS answers.'
 Require-Pattern 'BeginAuthenticateAsClient\(\$hostname' 'Helper does not perform a certificate-validated public TLS handshake.'
 Require-Pattern 'if \(-not \$authentication\.AsyncWaitHandle\.WaitOne\(5000\)\) \{ continue \}' 'Helper could treat a public-edge TLS stall as published.'
@@ -47,6 +49,7 @@ Forbid-Pattern '(?i)tailscale(?:\.exe)?\s+(?:serve|funnel)\s+reset' 'Helper cont
 Forbid-Pattern '(?i)authkey|oauth|control-plane|device list|tailscale status(?:\s|$)' 'Helper contains a credential or inventory surface.'
 Forbid-Pattern '(?i)New-NetFirewallRule|Set-NetFirewallRule|netsh\s+advfirewall|portproxy' 'Helper changes Windows firewall or ingress rules.'
 Forbid-Pattern '(?i)Restart-Service|Stop-Service|Start-Service|sc(?:\.exe)?\s+(?:stop|start)' 'Helper silently restarts the Tailscale Windows service.'
+Forbid-Pattern 'Resolve-DnsName\s+-Name' 'Helper uses an NRPT-aware DNS cmdlet for the public publication check.'
 
 $publicAddressFunction = $scriptAst.Find({
     param($node)
@@ -78,4 +81,43 @@ foreach ($octets in @(
     if (Test-PublicIPv4Address $value) { throw "Non-public DNS/TLS fixture was accepted: $value" }
 }
 
-Write-Host '[PASS] Windows Funnel helper syntax, typed operations, fixed target, exact postconditions, legacy cleanup, and privacy boundaries are virtual-test safe.' -ForegroundColor Green
+$nslookupParser = $scriptAst.Find({
+    param($node)
+    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-NslookupPublicIPv4Addresses'
+}, $true)
+if ($null -eq $nslookupParser) { throw 'Public nslookup parser function is missing.' }
+Invoke-Expression $nslookupParser.Extent.Text
+$publicLookup = @'
+Server:  one.one.one.one
+Address:  1.1.1.1
+
+Non-authoritative answer:
+Name:    manager.example-tailnet.ts.net
+Addresses:  8.8.8.8
+          9.9.9.9
+'@
+$publicAnswers = @(Get-NslookupPublicIPv4Addresses $publicLookup)
+if (($publicAnswers -join ',') -ne '8.8.8.8,9.9.9.9') {
+    throw "Public nslookup answers were not parsed exactly: $($publicAnswers -join ',')"
+}
+$privateLookup = @'
+Server:  one.one.one.one
+Address:  1.1.1.1
+
+Name:    manager.example-tailnet.ts.net
+Address:  100.122.161.75
+'@
+if (@(Get-NslookupPublicIPv4Addresses $privateLookup).Count -ne 0) {
+    throw 'A private MagicDNS answer was accepted as public.'
+}
+$missingLookup = @'
+Server:  one.one.one.one
+Address:  1.1.1.1
+
+*** one.one.one.one can't find manager.example-tailnet.ts.net: Non-existent domain
+'@
+if (@(Get-NslookupPublicIPv4Addresses $missingLookup).Count -ne 0) {
+    throw 'An NXDOMAIN response was accepted as public.'
+}
+
+Write-Host '[PASS] Windows Funnel helper syntax, NRPT-bypassing public DNS, fixed target, exact postconditions, legacy cleanup, and privacy boundaries are virtual-test safe.' -ForegroundColor Green

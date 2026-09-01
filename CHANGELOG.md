@@ -49,6 +49,11 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Fixed the Windows public-publication probe so a fixed-resolver lookup cannot
+  be intercepted by Tailscale's Windows NRPT/MagicDNS policy. The elevated
+  helper now invokes the system `nslookup.exe` against `1.1.1.1`, accepts only
+  bounded globally routable IPv4 answers, and retains the trusted-TLS
+  postcondition before reporting **Active**.
 - Stopped native Funnel from reporting **Active** when Tailscale had only saved
   the local route. Enable and Verify now require public DNS through a fixed
   public resolver plus a certificate-validated TLS handshake before the green

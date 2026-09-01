@@ -176,8 +176,11 @@ password-gated public Funnel.
 - A successful CLI configuration check does not replace public edge acceptance.
   TautWeekly queries the exact intended-public hostname through `1.1.1.1`,
   rejects non-public answers, and requires a trusted TLS certificate before
-  showing **Active**. No DNS answer, certificate, raw CLI output, or private
-  network detail is returned to Manager or written to diagnostics.
+  showing **Active**. On Windows, it uses the system `nslookup.exe` diagnostic
+  path so NRPT and MagicDNS cannot intercept the fixed public-resolver query;
+  `Resolve-DnsName -Server` still honors that split-DNS policy and is not a
+  valid public-publication check. No DNS answer, certificate, raw CLI output,
+  or private network detail is returned to Manager or written to diagnostics.
   From a separate network, open the generated HTTPS address, sign in, verify a
   read and a CSRF-protected change, sign out, and confirm the local Dashboard
   still works. Do not expose port 8788 or add a firewall/router rule.

@@ -143,8 +143,15 @@ Do not create an A record, open a firewall/router port, repeatedly reset
 certificates, replace the transport, or report the Funnel active to work around
 those states. Tailscale documents up to 10 minutes for public DNS propagation;
 after that window, a route still remains pending until both independent checks
-pass. Merge and release remain gated on real Windows public DNS and trusted-TLS
-acceptance plus the live matrix in the v0.25.0 release notes.
+pass.
+
+Sanitized Windows validation has now demonstrated public A/AAAA publication and
+trusted edge TLS after changing away from one hostname that reproducibly
+remained NXDOMAIN. That establishes external publication for the replacement
+name while treating the old name as a stale per-hostname control-plane
+condition. It does not substitute for installing the corrected NRPT-bypassing
+candidate, seeing **Running** in Manager, or completing the authenticated remote
+browser and lifecycle matrix. Merge and release remain gated on those checks.
 
 Official provider references:
 

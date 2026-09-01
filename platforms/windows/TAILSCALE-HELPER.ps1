@@ -182,19 +182,59 @@ function Test-PublicIPv4Address {
     return $true
 }
 
+function Get-NslookupPublicIPv4Addresses {
+    param([string]$Output)
+    if ([string]::IsNullOrWhiteSpace($Output) -or $Output.Length -gt 65536) { return @() }
+    $matches = [regex]::Matches($Output, '(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])')
+    return @($matches |
+        ForEach-Object { [string]$_.Value } |
+        Where-Object { $_ -ne '1.1.1.1' -and (Test-PublicIPv4Address $_) } |
+        Select-Object -Unique |
+        Select-Object -First 4)
+}
+
+function Resolve-PublicFunnelIPv4Addresses {
+    param([string]$Hostname)
+    if ($Hostname -notmatch '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.ts\.net$') { return @() }
+    $systemRoot = [string]$env:SystemRoot
+    if ([string]::IsNullOrWhiteSpace($systemRoot)) { return @() }
+    $nslookupPath = Join-Path $systemRoot 'System32\nslookup.exe'
+    if (-not (Test-Path -LiteralPath $nslookupPath -PathType Leaf)) { return @() }
+    $startInfo = New-Object Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $nslookupPath
+    $startInfo.Arguments = "-type=A -timeout=2 -retry=1 $Hostname 1.1.1.1"
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $process = New-Object Diagnostics.Process
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) { return @() }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(6000)) {
+            try { $process.Kill() } catch { }
+            [void]$process.WaitForExit(2000)
+            return @()
+        }
+        $output = [string]($stdoutTask.GetAwaiter().GetResult()) + [string]($stderrTask.GetAwaiter().GetResult())
+        if ($process.ExitCode -ne 0) { return @() }
+        return @(Get-NslookupPublicIPv4Addresses $output)
+    }
+    catch { return @() }
+    finally { $process.Dispose() }
+}
+
 function Test-PublicFunnelPublished {
     param([object]$Status, [string]$ExpectedTarget)
     if (-not (Test-OwnedFunnelStatus $Status $ExpectedTarget)) { return $false }
     $webEntry = @($Status.PSObject.Properties['Web'].Value.PSObject.Properties)[0]
     $hostname = ([string]$webEntry.Name).Substring(0, ([string]$webEntry.Name).Length - 4)
     if ($hostname -notmatch '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.ts\.net$') { return $false }
-    try {
-        # Query a fixed public recursive resolver explicitly so MagicDNS cannot
-        # turn a private tailnet result into a false public-success signal.
-        $records = @(Resolve-DnsName -Name $hostname -Type A -Server '1.1.1.1' -DnsOnly -NoHostsFile -QuickTimeout -ErrorAction Stop)
-    }
-    catch { return $false }
-    $addresses = @($records | ForEach-Object { [string](Get-PropertyValue $_ 'IPAddress' '') } | Where-Object { Test-PublicIPv4Address $_ } | Select-Object -Unique | Select-Object -First 4)
+    # Resolve-DnsName honors Windows NRPT even with -Server, so use the system
+    # nslookup client against a fixed public resolver to bypass MagicDNS.
+    $addresses = @(Resolve-PublicFunnelIPv4Addresses $hostname)
     foreach ($address in $addresses) {
         $client = New-Object Net.Sockets.TcpClient
         try {
