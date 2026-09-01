@@ -132,17 +132,14 @@ devices, DNS, or authentication state.
 
 ## Lifecycle rules
 
-- Password-lock disable, access reset/recovery, explicit stop, update, rollback
-  preparation, adapter revocation, and uninstall first disable and verify only
-  the exact owned Funnel. Failure preserves the password/application boundary
-  and stops the requested action.
-- Windows and native Linux ordinary Manager restarts may preserve an already
-  selected route. Their explicit stop/update/recovery paths leave Funnel off for
-  deliberate re-enable.
-- Container stop, recreate, update, and recovery ask the running Manager to
-  disable and verify Funnel before the adapter exits. The next container starts
-  with Funnel off until explicitly re-enabled; provider state and Manager data
-  remain separate and preserved.
+- Password-lock disable, access reset/recovery, explicit stop, adapter
+  revocation, and uninstall first disable and verify only the exact owned
+  Funnel. Failure preserves the password/application boundary and stops the
+  requested action.
+- Ordinary Manager restart, verified package update, container recreate, and
+  rollback preserve the retained preference and fixed route. Manager may be
+  briefly unavailable while its process or container is replaced.
+- Deliberate stop and recovery paths leave Funnel off for deliberate re-enable.
 - An abrupt host power loss or forced `SIGKILL` cannot run any package cleanup.
   The isolated proxy process stops with the container; on recovery, verify the
   saved state before re-enabling.

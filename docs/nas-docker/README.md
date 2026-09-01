@@ -462,11 +462,12 @@ template, apply the container update, then run the same command in the
 container Console. Do not add an auth key or token to the template.
 
 Disable from Manager Settings or run `./tautweekly.sh remote-access-disable`
-before a deliberate stop, reset, update, recovery, or removal. The supplied
+before a deliberate stop, reset, recovery, or removal. The supplied
 launchers also disable and verify the exact owned route before those lifecycle
-operations and fail closed if cleanup cannot be proven. Normal Manager restart
-preserves Funnel; an update leaves it off for explicit re-enable. Abrupt host
-power loss or `SIGKILL` cannot run cleanup, so retain local access and use the
+operations and fail closed if cleanup cannot be proven. Normal Manager restart,
+verified host-package/image update, recreate, and rollback preserve Funnel.
+Abrupt host power loss or `SIGKILL` cannot run cleanup, so retain local access
+and use the
 disable command before maintenance whenever possible.
 
 When TautWeekly for Plex and Tautulli share a user-defined Docker network, a service URL

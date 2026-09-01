@@ -106,11 +106,12 @@ Disabling the feature stops access but does not erase the existing cache.
   sensitive paths. Password-lock disable, local access reset, and uninstall
   first disable and verify the owned Funnel or fail closed. Password changes
   keep Funnel and the current session but revoke other sessions. Installer
-  Windows, native Linux, and package updates preserve private Manager data and
-  the selected remote-access preference, but first disable and verify the route
-  and leave Funnel off for explicit re-enable. Ordinary Manager restart
-  preserves the persistent route. Legacy exact-owned Serve state is parsed only
-  during migration or cleanup and is never offered as a deployment mode.
+  Windows, native Linux, and package updates preserve private Manager data,
+  the selected remote-access preference, and its fixed route across replacement
+  and rollback. Explicit stop, access recovery, adapter revocation, and
+  uninstall still disable and verify the route first. Legacy exact-owned Serve
+  state is parsed only during migration or cleanup and is never offered as a
+  deployment mode.
   See the [remote-access architecture](REMOTE-ACCESS.md) for the complete
   platform and lifecycle matrix.
 - Maintained packages keep recovery on loopback and use only the independently

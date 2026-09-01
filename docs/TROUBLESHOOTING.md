@@ -193,7 +193,7 @@ choice. Setup never scans drives or guesses an installation path.
   From a separate network, open the generated HTTPS address, sign in, verify a
   read and a CSRF-protected change, sign out, and confirm the local Dashboard
   still works. Do not expose port 8788 or add a firewall/router rule.
-- If password-lock disable, access reset, explicit stop, update, adapter
+- If password-lock disable, access reset, explicit stop, adapter
   revocation, or uninstall refuses, restore the official Tailscale service and
   the fixed platform adapter, then retry so TautWeekly can verify its owned
   Funnel is off. On Windows approve the fixed UAC shutdown; on Linux restore
@@ -211,7 +211,7 @@ choice. Setup never scans drives or guesses an installation path.
   DNS and trusted TLS have not both passed. Check MagicDNS, HTTPS certificates,
   and the applicable Funnel node attribute, wait for provider publication, then
   choose Verify. Do not add DNS, firewall, or router rules.
-- If disable, stop, reset, update, recovery, or removal refuses, restore the
+- If disable, stop, reset, recovery, or removal refuses, restore the
   adapter and its root-only state and retry exact-route cleanup. Do not remove
   the Manager password first.
 - The remote viewer needs only an ordinary browser and the Manager password.

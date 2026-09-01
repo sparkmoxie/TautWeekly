@@ -633,6 +633,34 @@ function funnelIntegrationPresentation(remote) {
   return { label: "Failed", detail: "Blocked · retained status invalid", tone: "bad", outcome: "failed" };
 }
 
+function tailscaleStatusBadgePresentation(remote) {
+  if (!remote || typeof remote !== "object") {
+    return { active: false, label: "Checking retained status", settingsAvailable: false };
+  }
+  const settingsAvailable = remote.supported === true;
+  const active = settingsAvailable && remote.enabled === true &&
+    ((remote.state === "active" && remote.active === true) || remote.state === "starting");
+  let label = "Unavailable";
+  if (!settingsAvailable) label = remote.state === "unsupported" ? "Unsupported" : "Unavailable";
+  else if (remote.state === "inactive") label = "Off";
+  else label = tailscaleStatePresentation(remote).label;
+  return { active, label, settingsAvailable };
+}
+
+function renderTailscaleStatusButton(remote = state.tailscale) {
+  const button = byId("tailscale-status-button");
+  if (!button) return;
+  const presentation = !remote && state.tailscaleError
+    ? { active: false, label: "Unavailable", settingsAvailable: false }
+    : tailscaleStatusBadgePresentation(remote);
+  const tooltip = `Tailscale Funnel: ${presentation.label}`;
+  button.classList.toggle("active", presentation.active);
+  button.classList.toggle("off", !presentation.active);
+  button.setAttribute("aria-disabled", String(!presentation.settingsAvailable));
+  button.setAttribute("aria-label", tooltip);
+  button.dataset.tooltip = tooltip;
+}
+
 function renderIntegrationStatus() {
   const last = state.verification?.last || null;
   const smtp = state.verification?.smtp || null;
@@ -652,12 +680,16 @@ function renderIntegrationStatus() {
   const funnelValue = byId("funnel-integration-value");
   funnelValue.className = `integration-value ${funnel.tone}`;
   funnelValue.setAttribute("aria-label", `Tailscale Funnel status: ${funnel.label}; ${funnel.detail}`);
-  funnelValue.title = `${funnel.label} — ${funnel.detail}`;
   const funnelLink = byId("funnel-settings-link");
-  funnelLink.disabled = state.tailscale?.supported !== true;
-  funnelLink.setAttribute("aria-label", funnelLink.disabled
+  const settingsAvailable = state.tailscale?.supported === true;
+  funnelLink.setAttribute("aria-disabled", String(!settingsAvailable));
+  funnelLink.dataset.tooltip = settingsAvailable
+    ? `Open Settings > Tailscale Funnel · ${funnel.detail}`
+    : `Tailscale Funnel settings unavailable · ${funnel.detail}`;
+  funnelLink.setAttribute("aria-label", !settingsAvailable
     ? `Tailscale Funnel: ${funnel.label}; Settings unavailable on this surface`
     : "Tailscale Funnel. Open Settings, Tailscale Funnel.");
+  renderTailscaleStatusButton();
 
   const baseOutcomes = [last?.overall || retainedLANState, smtp?.overall || retainedSMTPState].filter(Boolean);
   const outcomes = [...baseOutcomes, funnel.outcome].filter(Boolean);
@@ -3499,6 +3531,7 @@ function renderTailscaleSettings() {
   const panel = byId("tailscale-settings-panel");
   if (!panel) return;
   const remote = state.tailscale || {};
+  renderTailscaleStatusButton(state.tailscale);
   panel.hidden = !remote.supported;
   if (!remote.supported) return;
   const windows = state.runtimeMode === "windows";
@@ -3508,6 +3541,7 @@ function renderTailscaleSettings() {
   const displayRemote = publicFunnel && state.tailscaleSaving
     ? { ...remote, state: state.tailscaleRequestedOperation === "enable" ? "starting" : "stopping" }
     : remote;
+  renderTailscaleStatusButton(displayRemote);
   const presentation = tailscaleStatePresentation(displayRemote);
   const passwordLocked = Boolean(state.authAccess?.passwordLockEnabled);
   setText("tailscale-settings-eyebrow", "Optional public remote access");
@@ -3585,7 +3619,7 @@ function renderTailscaleSettings() {
   else message.textContent = remote.enabled && remote.active
     ? "The public address opens the password-protected Manager; remote viewers do not need Tailscale."
     : presentation.status;
-  byId("tailscale-recovery-copy").innerHTML = "<strong>Local access remains the recovery path.</strong> Password-lock disable, local access reset, stop, update, recovery, and uninstall first turn off and verify only the exact TautWeekly Funnel. If verification fails, the password and application stay in place. Explicit lifecycle actions leave Funnel off for deliberate re-enable.";
+  byId("tailscale-recovery-copy").innerHTML = "<strong>Local access remains the recovery path.</strong> Password-lock disable, local access reset, explicit stop, recovery, adapter revocation, and uninstall first turn off and verify only the exact TautWeekly Funnel. If verification fails, the password and application stay in place. Ordinary update and rollback preserve the retained Funnel preference and fixed route.";
 }
 
 async function updateTailscaleAccess() {
@@ -3695,6 +3729,7 @@ function openAccessSettings() {
 }
 
 function openTailscaleSettings() {
+  if (state.tailscale?.supported !== true) return;
   selectView("about", { section: "tailscale" });
 }
 
@@ -4432,6 +4467,7 @@ byId("tailscale-refresh-button").addEventListener("click", refreshTailscaleAcces
 byId("tailscale-copy-button").addEventListener("click", copyTailscaleURL);
 byId("tailscale-copy-authorization").addEventListener("click", copyTailscaleAuthorizationCommand);
 byId("funnel-settings-link").addEventListener("click", openTailscaleSettings);
+byId("tailscale-status-button").addEventListener("click", openTailscaleSettings);
 byId("update-check-button").addEventListener("click", checkForUpdates);
 byId("update-install-confirm").addEventListener("change", renderUpdates);
 byId("update-install-button").addEventListener("click", installUpdate);

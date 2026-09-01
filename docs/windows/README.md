@@ -198,11 +198,11 @@ Local `http://127.0.0.1:8788` remains the recovery path. Disabling the password
 lock, using the access-reset shortcut, or uninstalling first disables and
 verifies the exact TautWeekly Funnel. If that cannot be verified, the password
 or application remains in place. Changing the password keeps Funnel available
-and keeps the current session while revoking other sessions. An ordinary
-restart preserves the selected persistent Funnel for the next process.
-Explicit notification-area Exit and installer update first disable and verify
-the exact route; Funnel remains off for explicit re-enable after update.
-Removal preserves the private data directory after safe cleanup.
+and keeps the current session while revoking other sessions. Ordinary restart,
+verified installer update, and rollback preserve the selected persistent Funnel
+and its fixed loopback route for the next process. Explicit notification-area
+Exit, access reset, password-lock disable, and removal first disable and verify
+the exact route. Removal preserves the private data directory after safe cleanup.
 
 ## Notification area and sign-in startup
 

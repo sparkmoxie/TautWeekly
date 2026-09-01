@@ -324,6 +324,7 @@ def main() -> int:
         failures.append("Manager startup toggle availability does not transition smoothly")
     for control in (
         "integration-status-card",
+        "tailscale-status-button",
         "funnel-settings-link",
         "funnel-integration-value",
         "funnel-state",
@@ -353,8 +354,16 @@ def main() -> int:
     funnel_position = integration_card.find('class="funnel-integration-row"')
     if integration_card_start < 0 or integration_card_end < 0 or smtp_position < 0 or funnel_position <= smtp_position:
         failures.append("Dashboard Integrations card does not place Tailscale Funnel directly below SMTP")
+    if 'id="funnel-settings-link"' not in integration_card or "data-tooltip=" not in integration_card or "title=" in integration_card:
+        failures.append("Dashboard Funnel row does not use the animated tooltip contract or retains a native title")
+    if 'id="access-status-button"' not in html or html.find('id="tailscale-status-button"') <= html.find('id="access-status-button"'):
+        failures.append("Tailscale Funnel status badge is not placed immediately after the access lock")
+    if 'id="icon-tailscale" viewBox="0 0 512 512"' not in html or "cdn.jsdelivr.net" in combined:
+        failures.append("Tailscale status badge is not bundled locally from the approved SVG geometry")
     for marker in (
         "function funnelIntegrationPresentation(remote)",
+        "function tailscaleStatusBadgePresentation(remote)",
+        "function renderTailscaleStatusButton(remote = state.tailscale)",
         'setText("funnel-state", funnel.label);',
         'setText("funnel-detail", funnel.detail);',
         'funnelValue.setAttribute("aria-label"',
@@ -370,6 +379,20 @@ def main() -> int:
         failures.append("Dashboard Funnel deep link cannot move focus to the Settings heading")
     if ".metric-link:focus-visible" not in css or ".integration-value.publication-pending span" not in css:
         failures.append("Dashboard Funnel row lacks visible focus or gold Attention styling")
+    if ".metric-link:after{content:attr(data-tooltip)" not in css or ".metric-link:hover:after" not in css:
+        failures.append("Dashboard Funnel row lacks its animated non-native tooltip")
+    if ".metric-link{position:relative;padding:0;border:0;appearance:none" not in css:
+        failures.append("Dashboard Funnel link retains a surrounding button box")
+    if ".tailscale-settings-panel{scroll-margin-top:90px" not in css:
+        failures.append("Dashboard Funnel deep link does not clear the sticky header at the beginning of the card")
+    if '.tailscale-status-button.active .tailscale-fade{opacity:.2}' not in css or '.tailscale-status-button .tailscale-fade{opacity:1' not in css:
+        failures.append("Tailscale badge does not preserve the active/default and uniform off SVG appearances")
+    if '((remote.state === "active" && remote.active === true) || remote.state === "starting")' not in javascript:
+        failures.append("Tailscale badge active color is not restricted to active or publication-pending state")
+    if 'button.dataset.tooltip = tooltip;' not in javascript or 'button.setAttribute("aria-label", tooltip);' not in javascript:
+        failures.append("Tailscale badge tooltip does not reflect its exact retained state")
+    if "funnelValue.title" in javascript or "funnelLink.disabled" in javascript:
+        failures.append("Dashboard Funnel row still relies on a native title or disabled-button tooltip suppression")
     if "@media(max-width:580px){.funnel-integration-row" not in css:
         failures.append("Dashboard Funnel row lacks its narrow mobile layout")
     if "prefers-reduced-motion:reduce" not in css or "forced-colors:active" not in css:

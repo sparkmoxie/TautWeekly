@@ -33,10 +33,10 @@ TautWeekly never stores auth keys, control-plane tokens, raw CLI output,
 tailnet identities, device lists, private IPs, or sensitive paths. A verified
 public `.ts.net` hostname is retained only to enforce exact Host/origin
 admission. Funnel enablement requires an active Manager password lock. Access
-reset, password-lock disable, update, explicit Exit, and uninstall first verify
-the owned Funnel off; Windows installer updates preserve the password verifier
-but leave Funnel off for explicit re-enable. Native Linux update follows the
-same disable-and-verify rule before replacement.
+reset, password-lock disable, explicit Exit or stop, adapter revocation, and
+uninstall first verify the owned Funnel off. Ordinary Windows, native Linux,
+container, macOS, and FreeBSD updates preserve the password verifier, retained
+Funnel preference, and fixed route through replacement and rollback.
 
 An exact local Funnel is reported as **Publication pending** until its hostname
 resolves through the fixed `1.1.1.1` public resolver to a globally routable IPv4

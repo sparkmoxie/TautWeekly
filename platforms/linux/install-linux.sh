@@ -91,17 +91,6 @@ if [[ "$mode" == "--upgrade" ]]; then
     exit 75
   fi
 fi
-if [[ "$mode" == "--upgrade" ]] && { [[ -f /var/lib/tautweekly/manager/linux-funnel.json ]] || [[ -f /var/lib/tautweekly/manager/remote-access.json ]]; }; then
-  if ! runuser -u tautweekly -- "$manager_source" remote-access-cleanup \
-    --data-dir /var/lib/tautweekly/manager \
-    --tautweekly-root /opt/tautweekly \
-    --listen 127.0.0.1:8788 \
-    --runtime-mode linux \
-    --confirm; then
-    echo "Upgrade stopped because the exact TautWeekly Funnel or legacy Serve route could not be disabled and verified." >&2
-    exit 75
-  fi
-fi
 if [[ "$mode" == "--upgrade" ]] && systemctl is-active --quiet tautweekly.service; then
   systemctl stop tautweekly.service
   was_active=true
