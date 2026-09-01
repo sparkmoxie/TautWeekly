@@ -16,6 +16,8 @@ param(
 
     [switch]$SimulatePostInstallFailure,
 
+    [switch]$SimulateManagerStopFailure,
+
     [switch]$InstallerTestMode
 )
 
@@ -297,8 +299,10 @@ function Get-InstalledManagerProcesses {
 }
 
 function Stop-InstalledManager {
-    $managerProcesses = @(Get-InstalledManagerProcesses)
-    if ($managerProcesses.Count -eq 0) { return $false }
+    param([Parameter(Mandatory = $true)][Collections.IEnumerable]$ManagerProcesses)
+
+    $managerProcesses = @($ManagerProcesses)
+    if ($managerProcesses.Count -eq 0) { return }
     # The ordinary shutdown command deliberately disables and verifies Funnel.
     # An update-internal restart must preserve the retained preference and fixed route.
     foreach ($managerProcess in $managerProcesses) {
@@ -314,7 +318,9 @@ function Stop-InstalledManager {
     if (@(Get-InstalledManagerProcesses).Count -ne 0) {
         throw 'The exact packaged Manager process is still running after the update stop.'
     }
-    return $true
+    if ($SimulateManagerStopFailure) {
+        throw 'Simulated post-stop failure for Manager recovery validation.'
+    }
 }
 
 function Resolve-ManagerDataRoot {
@@ -379,6 +385,24 @@ function Start-InstalledManager {
     throw 'The packaged Manager did not become ready after the update.'
 }
 
+function Ensure-InstalledManagerRunning {
+    $deadline = (Get-Date).AddSeconds(10)
+    do {
+        $managerProcesses = @(Get-InstalledManagerProcesses)
+        if ($managerProcesses.Count -eq 0) { break }
+        $healthyOwners = @(Get-HealthyManagerListenerProcessIds)
+        if (@($managerProcesses | Where-Object { $healthyOwners -contains $_.Id }).Count -gt 0) {
+            return
+        }
+        Start-Sleep -Milliseconds 200
+    } while ((Get-Date) -lt $deadline)
+
+    if (@(Get-InstalledManagerProcesses).Count -ne 0) {
+        throw 'The exact packaged Manager process is still running but did not become healthy during update recovery.'
+    }
+    Start-InstalledManager
+}
+
 function Remove-OwnedFiles {
     param(
         [Parameter(Mandatory = $true)][Collections.IEnumerable]$RelativePaths,
@@ -431,6 +455,9 @@ if ($InstallerTestMode) {
         throw 'Installer test mode is restricted to an isolated TautWeekly installer test directory.'
     }
 }
+elseif ($SimulateManagerStopFailure) {
+    throw 'Manager stop-failure simulation is available only in isolated installer test mode.'
+}
 
 $candidateManifest = Read-ReleaseManifest -Root $CandidateRoot
 $requiredFiles = @(
@@ -464,7 +491,13 @@ $managerRestarted = $false
 try {
     $operationLock = Enter-TautWeeklyOperationLock -Root $InstallRoot -Purpose "update to $TargetVersion"
 
-    $managerWasRunning = Stop-InstalledManager
+    # Capture this before termination. If Windows reports a post-stop error,
+    # recovery must still know that it owns the responsibility to relaunch.
+    $managerProcesses = @(Get-InstalledManagerProcesses)
+    $managerWasRunning = $managerProcesses.Count -gt 0
+    if ($managerWasRunning) {
+        Stop-InstalledManager -ManagerProcesses $managerProcesses
+    }
 
     $task = if ($InstallerTestMode) { $null } else { Get-ScheduledNewsletterTask }
     if ($null -ne $task) {
@@ -568,7 +601,7 @@ catch {
 
     if ($managerWasRunning -and -not $managerRestarted) {
         try {
-            Start-InstalledManager
+            Ensure-InstalledManagerRunning
             $managerRestarted = $true
         }
         catch {
