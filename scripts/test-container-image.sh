@@ -20,18 +20,24 @@ named_volume_created=false
 
 remove_runtime_temp_dir() {
   local path="$1"
+  local owner_uid owner_gid
   [[ -d "$path" ]] || return 0
   if rm -rf "$path" 2>/dev/null; then
     return 0
   fi
+  owner_uid="$(id -u)"
+  owner_gid="$(id -g)"
   docker run --rm \
     --network none \
     --read-only \
     --user 0:0 \
     --entrypoint /bin/sh \
+    -e "CLEANUP_UID=$owner_uid" \
+    -e "CLEANUP_GID=$owner_gid" \
     -v "$path:/cleanup" \
     "$image" \
-    -c 'find /cleanup -mindepth 1 -delete' >/dev/null 2>&1 || true
+    -c 'find /cleanup -mindepth 1 -delete && chown "$CLEANUP_UID:$CLEANUP_GID" /cleanup' \
+    >/dev/null 2>&1 || true
   rm -rf "$path"
 }
 
