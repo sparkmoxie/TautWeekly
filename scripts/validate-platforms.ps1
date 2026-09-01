@@ -586,6 +586,9 @@ Require-Text 'platforms/nas-docker/Dockerfile' @(
     'io\.tautweekly\.image-repository="ghcr\.io/sparkmoxie/tautweekly"',
     'io\.tautweekly\.runtime-profiles="desktop,server,unraid"'
 )
+Require-Text 'platforms/nas-docker/Dockerfile.dockerignore' @(
+    '!THIRD_PARTY_NOTICES\.md'
+)
 Require-Text 'platforms/nas-docker/app/entrypoint.sh' @(
     '/tmp/tautweekly/home',
     '/tmp/tautweekly/share',
@@ -646,6 +649,9 @@ Require-Text 'platforms/mac-docker/Dockerfile.registry' @(
     'io\.tautweekly\.host-adapter-api="4"',
     'FROM tailscale/tailscale:v1\.102\.2 AS tailscale-runtime',
     'TAUTWEEKLY_MANAGER_LISTEN=0\.0\.0\.0:8080'
+)
+Require-Text 'platforms/mac-docker/Dockerfile.registry.dockerignore' @(
+    '!THIRD_PARTY_NOTICES\.md'
 )
 Require-Text 'platforms/mac-docker/compose.yaml' @(
     'image:\s*tautweekly-mac:stable',

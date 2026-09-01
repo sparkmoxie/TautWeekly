@@ -63,7 +63,6 @@ set_funnel_adapter()
   chmod 0600 "$temp_file"
   mv -f "$temp_file" "$env_file"
   trap - EXIT HUP INT TERM
-  TAUTWEEKLY_FUNNEL_ADAPTER="$value"
 }
 
 disable_remote_access()
