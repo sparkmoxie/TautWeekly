@@ -6,6 +6,8 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.2] - 2026-09-01
+
 ### Changed
 
 - The Manager header now places a locally bundled Tailscale-light badge after
@@ -19,6 +21,18 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Manager discovery now falls back to Tautulli's table-backed library and user
+  rosters when the primary Plex-backed commands fail or return a valid empty
+  response, and accepts the supported numeric, string, and Boolean response
+  variants returned by real Tautulli installations.
+- A failed discovery refresh still reports HTTP 502 and a failed Choices step,
+  while a valid exact-revision cache remains readable and usable with an
+  explicit retained marker and timestamp. Older Tautulli, Plex, and SMTP
+  connection results are labeled as separate retained evidence instead of
+  contradicting the current discovery failure.
+- Discovery diagnostics expose only allowlisted connection, library-roster,
+  and user-roster codes with sanitized guidance; raw provider output and
+  private server data remain excluded.
 - Windows Manager/installer updates no longer invoke destructive
   `remote-access-cleanup` before package replacement. The password lock,
   verified public hostname, publication proof, enabled preference, and fixed
