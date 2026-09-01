@@ -432,7 +432,7 @@ function renderCapabilities() {
   const linux = isLinuxService();
   const mac = isMacDocker();
   const service = isServiceRuntime();
-  setText("mode-pill-label", nas ? "NAS / container" : linux ? "Native Linux" : mac ? "macOS Docker Desktop" : "Windows setup");
+  setText("mode-pill-label", nas ? "NAS / container" : linux ? "Native Linux" : mac ? "macOS Docker" : "Windows");
   setText("schedule-nav-copy", service ? "Embedded scheduler" : "Windows lifecycle");
   setText("configuration-platform-label", nas ? "Guided NAS setup" : linux ? "Guided Linux setup" : mac ? "Guided Mac setup" : "Guided Windows setup");
   setText("config-nav-copy", nas ? "Guided NAS setup" : linux ? "Guided Linux setup" : mac ? "Guided Mac setup" : "Guided local setup");
