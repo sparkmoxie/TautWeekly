@@ -323,7 +323,13 @@ def main() -> int:
     if '.startup-setting{display:flex' not in css or 'cursor:pointer;transition:opacity .18s ease}' not in css:
         failures.append("Manager startup toggle availability does not transition smoothly")
     for control in (
+        "integration-status-card",
+        "funnel-settings-link",
+        "funnel-integration-value",
+        "funnel-state",
+        "funnel-detail",
         "tailscale-settings-panel",
+        "tailscale-settings-heading",
         "tailscale-settings-chip",
         "tailscale-enabled",
         "tailscale-host-authorization",
@@ -340,6 +346,34 @@ def main() -> int:
     ):
         if f'id="{control}"' not in combined:
             failures.append(f"Tailscale remote access card omits accessible control: {control}")
+    integration_card_start = html.find('id="integration-status-card"')
+    integration_card_end = html.find("</article>", integration_card_start)
+    integration_card = html[integration_card_start:integration_card_end]
+    smtp_position = integration_card.find('id="smtp-state"')
+    funnel_position = integration_card.find('class="funnel-integration-row"')
+    if integration_card_start < 0 or integration_card_end < 0 or smtp_position < 0 or funnel_position <= smtp_position:
+        failures.append("Dashboard Integrations card does not place Tailscale Funnel directly below SMTP")
+    for marker in (
+        "function funnelIntegrationPresentation(remote)",
+        'setText("funnel-state", funnel.label);',
+        'setText("funnel-detail", funnel.detail);',
+        'funnelValue.setAttribute("aria-label"',
+        'funnelLink.setAttribute("aria-label"',
+        'addEventListener("click", openTailscaleSettings)',
+        'selectView("about", { section: "tailscale" });',
+        'byId("tailscale-settings-heading").focus',
+        'renderIntegrationStatus();',
+    ):
+        if marker not in javascript:
+            failures.append(f"Dashboard Funnel status interaction contract is missing: {marker}")
+    if 'id="tailscale-settings-heading" tabindex="-1"' not in html:
+        failures.append("Dashboard Funnel deep link cannot move focus to the Settings heading")
+    if ".metric-link:focus-visible" not in css or ".integration-value.publication-pending span" not in css:
+        failures.append("Dashboard Funnel row lacks visible focus or gold Attention styling")
+    if "@media(max-width:580px){.funnel-integration-row" not in css:
+        failures.append("Dashboard Funnel row lacks its narrow mobile layout")
+    if "prefers-reduced-motion:reduce" not in css or "forced-colors:active" not in css:
+        failures.append("Dashboard Funnel row lacks reduced-motion or forced-color support")
     for marker in (
         'request("/api/v1/remote-access/tailscale")',
         'method: "PUT"',

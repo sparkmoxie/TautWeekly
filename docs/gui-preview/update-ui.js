@@ -72,6 +72,7 @@
     try { value = decodeURIComponent(value); } catch (_) { return { view: "dashboard", section: "" }; }
     value = value.toLowerCase();
     if (value === "settings/application-and-package-status") return { view: "about", section: "updates" };
+    if (value === "settings/tailscale-funnel") return { view: "about", section: "tailscale" };
     if (value === "settings") return { view: "about", section: "" };
     if (routedViews.has(value)) return { view: value, section: "" };
     return { view: "dashboard", section: "" };
@@ -79,6 +80,7 @@
 
   function hashForRoute(view, section = "") {
     if (view === "about" && section === "updates") return "#settings/application-and-package-status";
+    if (view === "about" && section === "tailscale") return "#settings/tailscale-funnel";
     if (view === "about") return "#settings";
     return routedViews.has(view) ? `#${view}` : "#dashboard";
   }

@@ -109,6 +109,25 @@ const mockContext = vm.createContext({
 const mockSource = fs.readFileSync(path.join(root, "docs/gui-preview/mock-api.js"), "utf8");
 vm.runInContext(mockSource, mockContext);
 const controls = mockContext.window.TautWeeklyDemoControls;
+for (const [scenario, expected] of Object.entries({
+  off: { state: "inactive", enabled: false, active: false, supported: true },
+  active: { state: "active", enabled: true, active: true, supported: true },
+  pending: { state: "starting", enabled: true, active: false, supported: true },
+  blocked: { state: "needs-attention", enabled: true, active: false, supported: true },
+  "not-configured": { state: "tailscale-required", enabled: false, active: false, supported: true },
+  unsupported: { state: "unsupported", enabled: false, active: false, supported: false },
+})) {
+  controls.setFunnelScenario(scenario);
+  const remote = (await (async () => {
+    const response = await mockContext.window.fetch("/api/v1/remote-access/tailscale");
+    return response.json();
+  })());
+  for (const [field, value] of Object.entries(expected)) {
+    assert.equal(remote[field], value, scenario + " Funnel visual fixture drifted at " + field);
+  }
+  assert.equal(Boolean(remote.url && remote.url.includes("token")), false, scenario + " Funnel fixture disclosed a token");
+}
+controls.setProfile("windows");
 const expectedVersion = fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8").match(/^## \[(\d+\.\d+\.\d+)\]/m)[1];
 assert.equal(controls.version, expectedVersion, "GUI preview represents an old release");
 const api = async (route, method = "GET", body = {}) => {

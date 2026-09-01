@@ -35,9 +35,20 @@
     byId("update-release-notes").hidden = false;
     if (!state.updateChecking) byId("update-settings-message").textContent = "Fictional release metadata only. No GitHub request, download, installer, or host update runs.";
   });
+  const funnelFixture = new URLSearchParams(window.location.search).get("funnel") || "off";
+  if (["off", "active", "pending", "blocked", "not-configured", "unsupported"].includes(funnelFixture)) {
+    window.TautWeeklyDemoControls.setFunnelScenario(funnelFixture);
+    byId("demo-funnel-scenario").value = funnelFixture;
+  }
   byId("demo-profile").addEventListener("change", async (event) => {
     window.TautWeeklyDemoControls.setProfile(event.target.value);
+    byId("demo-funnel-scenario").value = "off";
     await loadAll();
+  });
+  byId("demo-funnel-scenario").addEventListener("change", async (event) => {
+    window.TautWeeklyDemoControls.setFunnelScenario(event.target.value);
+    await loadAll();
+    selectView("dashboard");
   });
   byId("demo-release-scenario").addEventListener("change", (event) => {
     window.TautWeeklyPreviewDemo.setReleaseScenario(event.target.value);

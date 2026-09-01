@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
@@ -70,10 +71,12 @@ for (const packageKind of ["windows-installer", "linux-native", "mac-docker", "f
 }
 
 assert.deepEqual(updateUI.routeFromHash("#settings/application-and-package-status"), { view: "about", section: "updates" });
+assert.deepEqual(updateUI.routeFromHash("#settings/tailscale-funnel"), { view: "about", section: "tailscale" });
 assert.deepEqual(updateUI.routeFromHash("#settings"), { view: "about", section: "" });
 assert.deepEqual(updateUI.routeFromHash("#configuration"), { view: "configuration", section: "" });
 assert.deepEqual(updateUI.routeFromHash("#pair=synthetic-token"), { view: "dashboard", section: "" });
 assert.equal(updateUI.hashForRoute("about", "updates"), "#settings/application-and-package-status");
+assert.equal(updateUI.hashForRoute("about", "tailscale"), "#settings/tailscale-funnel");
 assert.equal(updateUI.hashForRoute("about"), "#settings");
 
 const productionHTML = fs.readFileSync(path.join(repositoryRoot, "manager", "internal", "manager", "web", "index.html"), "utf8");
@@ -83,6 +86,95 @@ const productionJS = fs.readFileSync(path.join(repositoryRoot, "manager", "inter
 const previewCSS = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "app.css"), "utf8");
 const previewJS = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "app.js"), "utf8");
 const previewMock = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "mock-api.js"), "utf8");
+
+const funnelDefinitionsStart = productionJS.indexOf("const funnelIntegrationStates");
+const funnelDefinitionsEnd = productionJS.indexOf("\nfunction renderStatus()", funnelDefinitionsStart);
+assert.ok(funnelDefinitionsStart >= 0 && funnelDefinitionsEnd > funnelDefinitionsStart, "Funnel Dashboard presentation functions are missing");
+const funnelDefinitions = productionJS.slice(funnelDefinitionsStart, funnelDefinitionsEnd);
+assert.doesNotMatch(funnelDefinitions, /request\(/, "ordinary Dashboard rendering can invoke a Funnel API or provider operation");
+const funnelContext = vm.createContext({ console });
+const funnelHarnessSource = [
+  "let state = {};",
+  "const elements = new Map();",
+  "function element(id) {",
+  "  if (!elements.has(id)) elements.set(id, {",
+  "    className: \"\", textContent: \"\", title: \"\", attributes: {},",
+  "    setAttribute(name, value) { this.attributes[name] = value; },",
+  "  });",
+  "  return elements.get(id);",
+  "}",
+  "function byId(id) { return element(id); }",
+  "function setText(id, value) { element(id).textContent = value; }",
+  "function setChip(id, label, tone) { Object.assign(element(id), { label, tone }); }",
+  "function titleCase(value) { return String(value || \"\").split(/[- ]/).filter(Boolean).map((part) => part[0].toUpperCase() + part.slice(1)).join(\" \"); }",
+].join("\n") + "\n" + funnelDefinitions + "\n" + [
+  "globalThis.funnelDashboardTest = {",
+  "  present(remote) { return JSON.parse(JSON.stringify(funnelIntegrationPresentation(remote))); },",
+  "  render(remote) {",
+  "    elements.clear();",
+  "    state = {",
+  "      tailscale: remote,",
+  "      verification: {",
+  "        last: { overall: \"passed\", steps: [{ service: \"tautulli\", state: \"passed\" }, { service: \"plex\", state: \"passed\" }] },",
+  "        smtp: { overall: \"passed\", state: \"passed\" },",
+  "      },",
+  "      setupWorkflow: null,",
+  "      verificationRunning: false,",
+  "      smtpVerificationRunning: false,",
+  "    };",
+  "    const result = renderIntegrationStatus();",
+  "    return JSON.parse(JSON.stringify({",
+  "      result,",
+  "      chip: element(\"integration-chip\"),",
+  "      funnelState: element(\"funnel-state\").textContent,",
+  "      funnelDetail: element(\"funnel-detail\").textContent,",
+  "      funnelValue: element(\"funnel-integration-value\"),",
+  "    }));",
+  "  },",
+  "};",
+].join("\n");
+vm.runInContext(funnelHarnessSource, funnelContext);
+
+const funnelBase = { supported: true, installed: true, enabled: false, active: false, state: "inactive" };
+const funnelMatrix = [
+  ["safely off", funnelBase, "Passed", "Off", "good", "passed", "Passed", "good"],
+  ["verified active", { ...funnelBase, enabled: true, active: true, state: "active", cleanupRequired: true }, "Passed", "Active", "good", "passed", "Passed", "good"],
+  ["publication pending", { ...funnelBase, enabled: true, state: "starting", cleanupRequired: true }, "Attention", "Publication pending", "publication-pending", "warning", "Attention", "warning"],
+  ["password lock missing while enabled", { ...funnelBase, enabled: true, state: "manager-password-required", passwordRequired: true, cleanupRequired: true }, "Failed", "password lock required", "bad", "failed", "Failed", "bad"],
+  ["route mismatch", { ...funnelBase, enabled: true, state: "needs-attention", cleanupRequired: true }, "Failed", "verification failed", "bad", "failed", "Failed", "bad"],
+  ["failed cleanup", { ...funnelBase, state: "needs-attention", cleanupRequired: true }, "Failed", "cleanup or verification required", "bad", "failed", "Failed", "bad"],
+  ["unsupported surface", { supported: false, installed: false, enabled: false, active: false, state: "unsupported" }, "Not applicable", "Unsupported", "neutral", "", "Passed", "good"],
+  ["not configured", { ...funnelBase, installed: false, state: "tailscale-required" }, "Not configured", "Not configured", "neutral", "", "Passed", "good"],
+  ["malformed retained state", { ...funnelBase, state: "private-raw-state" }, "Failed", "retained status invalid", "bad", "failed", "Failed", "bad"],
+];
+for (const [name, remote, label, detail, tone, outcome, overallLabel, overallTone] of funnelMatrix) {
+  const presentation = funnelContext.funnelDashboardTest.present(remote);
+  assert.equal(presentation.label, label, name);
+  assert.match(presentation.detail, new RegExp(detail, "i"), name);
+  assert.equal(presentation.tone, tone, name);
+  assert.equal(presentation.outcome, outcome, name);
+  const rendered = funnelContext.funnelDashboardTest.render(remote);
+  assert.equal(rendered.chip.label, overallLabel, name + " aggregate label");
+  assert.equal(rendered.chip.tone, overallTone, name + " aggregate tone");
+  assert.equal(rendered.funnelState, label, name + " visible row label");
+  assert.match(rendered.funnelValue.attributes["aria-label"], new RegExp(label, "i"), name + " accessible row label");
+}
+const sanitizedPresentation = funnelContext.funnelDashboardTest.present({
+  ...funnelBase,
+  enabled: true,
+  active: true,
+  state: "active",
+  url: "https://private-device.example.ts.net/?token=secret",
+  errorCode: "private-tailnet-identity",
+  rawOutput: "secret provider output",
+});
+assert.equal(JSON.stringify(sanitizedPresentation), JSON.stringify({ label: "Passed", detail: "Active", tone: "good", outcome: "passed" }));
+assert.doesNotMatch(JSON.stringify(sanitizedPresentation), /secret|private-device|tailnet-identity|provider output/i, "Dashboard Funnel row disclosed provider or private state");
+const loadTailscaleStart = productionJS.indexOf("async function loadTailscaleAccess()");
+const loadTailscaleEnd = productionJS.indexOf("\nasync function copyTailscaleURL", loadTailscaleStart);
+const loadTailscaleSource = productionJS.slice(loadTailscaleStart, loadTailscaleEnd);
+assert.match(loadTailscaleSource, /request\("\/api\/v1\/remote-access\/tailscale"\)/, "Dashboard does not reuse the retained typed Funnel status endpoint");
+assert.doesNotMatch(loadTailscaleSource, /\/verify|method:\s*"(?:POST|PUT)"/, "passive Funnel status loading can trigger verification or mutation");
 assert.match(productionHTML, /id="icon-deployed-code-update"/);
 assert.match(productionHTML, /id="update-status-button"[^>]+aria-controls="update-settings-panel"[^>]+hidden/);
 assert.match(productionHTML, /id="update-settings-heading" tabindex="-1"/);

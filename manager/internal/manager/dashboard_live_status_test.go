@@ -1,10 +1,22 @@
 package manager
 
 import (
+	"context"
 	"io/fs"
+	"net/http"
 	"strings"
 	"testing"
 )
+
+type passiveDashboardFunnelRunner struct {
+	calls int
+}
+
+func (f *passiveDashboardFunnelRunner) Available() bool { return true }
+func (f *passiveDashboardFunnelRunner) RunPublicRoute(context.Context, string, string) (publicRemoteAccessObservation, error) {
+	f.calls++
+	return publicRemoteAccessObservation{RouteState: publicRemoteAccessRouteEmpty}, nil
+}
 
 func TestDashboardEmbedsLiveDeliveryAndTimelineStates(t *testing.T) {
 	tests := []struct {
@@ -52,5 +64,39 @@ func TestDashboardEmbedsLiveDeliveryAndTimelineStates(t *testing.T) {
 				t.Errorf("%s does not contain %q", test.name, required)
 			}
 		}
+	}
+}
+
+func TestPassiveDashboardFunnelStatusUsesRetainedStateWithoutProviderCommand(t *testing.T) {
+	dataDir := t.TempDir()
+	runner := &passiveDashboardFunnelRunner{}
+	controller := newPublicFunnelController(dataDir, "127.0.0.1:8788", "test-funnel.json", true, runner)
+	server, err := New(Options{
+		DataDir: dataDir, TautWeeklyRoot: t.TempDir(), Version: "test", RuntimeMode: runtimeModeWindows,
+		remoteAccessController: controller,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := server.auth.newSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{Name: sessionCookieName, Value: session.Token}
+	response := requestForTest(server, http.MethodGet, "/api/v1/remote-access/tailscale", nil, cookie)
+	if response.Code != http.StatusOK {
+		t.Fatalf("passive Funnel status: got %d, body %s", response.Code, response.Body.String())
+	}
+	if runner.calls != 0 {
+		t.Fatalf("passive Dashboard status invoked the provider runner %d times", runner.calls)
+	}
+	body := response.Body.String()
+	for _, forbidden := range []string{"127.0.0.1", "test-funnel.json", "private address", "raw output", "token"} {
+		if strings.Contains(strings.ToLower(body), strings.ToLower(forbidden)) {
+			t.Fatalf("passive Funnel status disclosed implementation or private state %q: %s", forbidden, body)
+		}
+	}
+	if !strings.Contains(body, `"state":"manager-password-required"`) || !strings.Contains(body, `"passwordRequired":true`) {
+		t.Fatalf("passive Funnel status did not preserve the typed password boundary: %s", body)
 	}
 }

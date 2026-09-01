@@ -33,7 +33,7 @@ const state = {
   startupSaving: false,
   startupError: "",
   authAccess: null,
-  tailscale: { supported: false, installed: false, enabled: false, active: false, state: "unsupported" },
+  tailscale: null,
   tailscaleSaving: false,
   tailscaleVerifying: false,
   tailscaleRequestedOperation: "",
@@ -572,6 +572,66 @@ function renderDashboardConfigStatus() {
   }
 }
 
+const funnelIntegrationStates = new Set([
+  "active", "inactive", "starting", "stopping", "manager-password-required", "approval-required", "ready",
+  "authorization-required", "tailscale-required", "sign-in-required", "not-running", "funnel-unsupported",
+  "migration-required", "needs-attention", "unavailable", "unsupported",
+]);
+
+function funnelIntegrationPresentation(remote) {
+  if (remote === null || remote === undefined) {
+    return { label: "Not checked", detail: "Loading retained status", tone: "neutral", outcome: "" };
+  }
+  const validShape = typeof remote === "object" && remote !== null &&
+    typeof remote.supported === "boolean" && typeof remote.installed === "boolean" &&
+    typeof remote.enabled === "boolean" && typeof remote.active === "boolean" &&
+    typeof remote.state === "string" && funnelIntegrationStates.has(remote.state) &&
+    (remote.cleanupRequired === undefined || typeof remote.cleanupRequired === "boolean") &&
+    (remote.passwordRequired === undefined || typeof remote.passwordRequired === "boolean");
+  if (!validShape) return { label: "Failed", detail: "Blocked · retained status invalid", tone: "bad", outcome: "failed" };
+
+  const cleanupRequired = remote.cleanupRequired === true;
+  const passwordRequired = remote.passwordRequired === true;
+  if (!remote.supported) {
+    if (remote.enabled || remote.active || cleanupRequired || remote.state !== "unsupported") {
+      return { label: "Failed", detail: "Blocked · retained status invalid", tone: "bad", outcome: "failed" };
+    }
+    return { label: "Not applicable", detail: "Unsupported on this surface", tone: "neutral", outcome: "" };
+  }
+  if (remote.active) {
+    if (remote.enabled && !passwordRequired && remote.state === "active") {
+      return { label: "Passed", detail: "Active", tone: "good", outcome: "passed" };
+    }
+    return { label: "Failed", detail: "Blocked · retained status invalid", tone: "bad", outcome: "failed" };
+  }
+  if (remote.enabled) {
+    if (remote.state === "starting" && !passwordRequired) {
+      return { label: "Attention", detail: "Publication pending", tone: "publication-pending", outcome: "warning" };
+    }
+    if (remote.state === "stopping") {
+      return { label: "Attention", detail: "Cleanup pending", tone: "publication-pending", outcome: "warning" };
+    }
+    return { label: "Failed", detail: passwordRequired ? "Blocked · password lock required" : "Blocked · verification failed", tone: "bad", outcome: "failed" };
+  }
+  if (cleanupRequired || ["migration-required", "needs-attention", "unavailable"].includes(remote.state)) {
+    return { label: "Failed", detail: "Blocked · cleanup or verification required", tone: "bad", outcome: "failed" };
+  }
+  if (["inactive", "ready", "approval-required", "manager-password-required"].includes(remote.state)) {
+    return { label: "Passed", detail: passwordRequired ? "Off · password required before enable" : "Off", tone: "good", outcome: "passed" };
+  }
+  if (["tailscale-required", "authorization-required", "sign-in-required", "not-running", "funnel-unsupported"].includes(remote.state)) {
+    const details = {
+      "tailscale-required": "Not configured",
+      "authorization-required": "Not configured · host approval required",
+      "sign-in-required": "Not configured · sign-in required",
+      "not-running": "Not configured · Tailscale stopped",
+      "funnel-unsupported": "Not configured · client update required",
+    };
+    return { label: "Not configured", detail: details[remote.state], tone: "neutral", outcome: "" };
+  }
+  return { label: "Failed", detail: "Blocked · retained status invalid", tone: "bad", outcome: "failed" };
+}
+
 function renderIntegrationStatus() {
   const last = state.verification?.last || null;
   const smtp = state.verification?.smtp || null;
@@ -585,20 +645,34 @@ function renderIntegrationStatus() {
   setText("plex-state", titleCase(plexState));
   setText("smtp-state", titleCase(smtpState));
 
-  const outcomes = [last?.overall || retainedLANState, smtp?.overall || retainedSMTPState].filter(Boolean);
+  const funnel = funnelIntegrationPresentation(state.tailscale);
+  setText("funnel-state", funnel.label);
+  setText("funnel-detail", funnel.detail);
+  const funnelValue = byId("funnel-integration-value");
+  funnelValue.className = `integration-value ${funnel.tone}`;
+  funnelValue.setAttribute("aria-label", `Tailscale Funnel status: ${funnel.label}; ${funnel.detail}`);
+  funnelValue.title = `${funnel.label} — ${funnel.detail}`;
+  const funnelLink = byId("funnel-settings-link");
+  funnelLink.disabled = state.tailscale?.supported !== true;
+  funnelLink.setAttribute("aria-label", funnelLink.disabled
+    ? `Tailscale Funnel: ${funnel.label}; Settings unavailable on this surface`
+    : "Tailscale Funnel. Open Settings, Tailscale Funnel.");
+
+  const baseOutcomes = [last?.overall || retainedLANState, smtp?.overall || retainedSMTPState].filter(Boolean);
+  const outcomes = [...baseOutcomes, funnel.outcome].filter(Boolean);
   let overall = "not-run";
   if (outcomes.includes("failed")) overall = "failed";
   else if (outcomes.includes("warning")) overall = "warning";
-  else if (outcomes.length === 2 && outcomes.every((outcome) => outcome === "passed")) overall = "passed";
+  else if (baseOutcomes.length === 2 && outcomes.every((outcome) => outcome === "passed")) overall = "passed";
   else if (outcomes.length) overall = "partial";
   const verificationActive = state.verificationRunning || state.smtpVerificationRunning;
-  const overallTone = verificationActive ? "pending" : overall === "passed" ? "good" : overall === "failed" ? "bad" : "neutral";
-  const overallLabel = verificationActive ? "Running" : overall === "not-run" ? "Not run" : titleCase(overall);
+  const overallTone = verificationActive ? "pending" : overall === "passed" ? "good" : overall === "failed" ? "bad" : overall === "warning" ? "warning" : "neutral";
+  const overallLabel = verificationActive ? "Running" : overall === "not-run" ? "Not run" : overall === "warning" ? "Attention" : titleCase(overall);
   setChip("integration-chip", overallLabel, overallTone);
   setText("integration-copy", outcomes.length
     ? "Latest checks from validation or a targeted retest are retained for this saved configuration."
     : "Safe real checks run after a successful save or when you start a manual retest.");
-  return { overallLabel, overallTone };
+  return { overallLabel, overallTone, funnel };
 }
 
 function retainedSetupCheckState(name) {
@@ -3536,6 +3610,7 @@ async function updateTailscaleAccess() {
     state.tailscaleSaving = false;
     state.tailscaleRequestedOperation = "";
     renderTailscaleSettings();
+    renderIntegrationStatus();
   }
 }
 
@@ -3572,6 +3647,7 @@ async function refreshTailscaleAccess() {
     state.tailscaleVerifying = false;
     state.tailscaleRequestedOperation = "";
     renderTailscaleSettings();
+    renderIntegrationStatus();
   }
 }
 
@@ -3582,6 +3658,11 @@ async function loadTailscaleAccess() {
     state.tailscaleError = error.message;
   }
   renderTailscaleSettings();
+  renderIntegrationStatus();
+  const route = window.TautWeeklyUpdateUI.routeFromHash(window.location.hash);
+  if (route.view === "about" && route.section === "tailscale") {
+    selectView(route.view, { section: route.section, updateHistory: false });
+  }
 }
 
 async function copyTailscaleURL() {
@@ -3610,6 +3691,10 @@ function openAccessSettings() {
     byId("access-settings-panel").scrollIntoView({ block: "center", behavior: "smooth" });
     byId("access-password").focus({ preventScroll: true });
   });
+}
+
+function openTailscaleSettings() {
+  selectView("about", { section: "tailscale" });
 }
 
 async function submitAccessPassword(event) {
@@ -4062,6 +4147,11 @@ function selectView(name, options = {}) {
       byId("update-settings-panel").scrollIntoView({ block: "start", behavior: "smooth" });
       byId("update-settings-heading").focus({ preventScroll: true });
     });
+  } else if (section === "tailscale" && name === "about" && !byId("tailscale-settings-panel").hidden) {
+    requestAnimationFrame(() => {
+      byId("tailscale-settings-panel").scrollIntoView({ block: "start", behavior: "smooth" });
+      byId("tailscale-settings-heading").focus({ preventScroll: true });
+    });
   } else if (section === "cache" && name === "configuration") {
     requestAnimationFrame(() => {
       const cacheToggle = byId("config-DeletedItemCacheEnabled");
@@ -4340,6 +4430,7 @@ byId("tailscale-password-setup-button").addEventListener("click", openAccessSett
 byId("tailscale-refresh-button").addEventListener("click", refreshTailscaleAccess);
 byId("tailscale-copy-button").addEventListener("click", copyTailscaleURL);
 byId("tailscale-copy-authorization").addEventListener("click", copyTailscaleAuthorizationCommand);
+byId("funnel-settings-link").addEventListener("click", openTailscaleSettings);
 byId("update-check-button").addEventListener("click", checkForUpdates);
 byId("update-install-confirm").addEventListener("change", renderUpdates);
 byId("update-install-button").addEventListener("click", installUpdate);

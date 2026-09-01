@@ -304,10 +304,17 @@ and opens the password controls directly. Its tooltip is platform-aware
 (`Browser access`, `Container access`, or `Manager access`), so the same control
 and password-update route carry into maintained container and native packages.
 
-Windows also exposes an optional Tailscale Funnel card below Browser access.
-Passive Dashboard and tray refreshes never invoke Tailscale or request
-elevation. Funnel enablement is unavailable until a unique Manager password is
-configured and active. Explicit Enable, Disable, and Verify actions use the
+Every maintained applicable Manager exposes an optional Tailscale Funnel card
+below Browser access. The Dashboard Integrations card reuses that retained,
+sanitized typed state as a fourth row directly below SMTP: verified Off and
+Active are Passed with distinct supporting text, publication pending is gold
+Attention, blocked or inconsistent state is Failed, and unsupported or
+genuinely unconfigured surfaces are neutral. The row routes accessibly to
+Settings > Tailscale Funnel. Passive Dashboard and tray refreshes never invoke
+Tailscale or request elevation.
+
+Funnel enablement is unavailable until a unique Manager password is configured
+and active. On Windows, explicit Enable, Disable, and Verify actions use the
 fixed packaged `TAILSCALE-HELPER.ps1`, which requests UAC and accepts only the
 Manager-owned typed operation and fixed loopback target. It refuses unrelated
 routes, never resets all Serve/Funnel configuration, and returns a strict
