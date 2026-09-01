@@ -6,6 +6,18 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.4] - 2026-09-01
+
+### Changed
+
+- Recolor the Manager header update badge, border, focus state, and animated halo from violet to the established Manager blue.
+- Label the top-right Windows package badge Windows Manager while retaining the compact macOS Docker label.
+
+### Fixed
+
+- Preserve an active Windows Tailscale Funnel across Manager-driven update and rollback by keeping the update-internal process restart separate from the explicit shutdown lifecycle that deliberately disables public access.
+- Apply the upstream Tailscale light SVG fill and opacity directly to its inline paths so active or publication-pending states show four bright and five muted circles while every other state mutes all nine circles.
+
 ## [0.25.3] - 2026-09-01
 
 ### Changed

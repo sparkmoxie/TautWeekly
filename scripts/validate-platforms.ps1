@@ -798,7 +798,7 @@ Require-Text 'platforms/windows/Windows-Update.ps1' @(
     'TautWeekly Manager \$TargetVersion',
     '\.manager-data'
 )
-Forbid-Text 'platforms/windows/Windows-Update.ps1' @('remote-access-cleanup', 'Disable-InstalledPublicRoute')
+Forbid-Text 'platforms/windows/Windows-Update.ps1' @('remote-access-cleanup', 'Disable-InstalledPublicRoute', '&\s+\$managerPath\s+shutdown')
 Forbid-Text 'platforms/linux/install-linux.sh' @('remote-access-cleanup')
 Forbid-Text 'platforms/linux/tautweekly' @('(?s)update\)\s+require_root\s+if ! run_as_service_user.*?remote-access-cleanup')
 Write-Host '[PASS] Ordinary Windows and native Linux updates preserve retained Funnel state and the fixed route.'
