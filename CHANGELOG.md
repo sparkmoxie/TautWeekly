@@ -6,6 +6,33 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-09-01
+
+### Changed
+
+- The Dashboard Integrations card now includes Tailscale Funnel directly below
+  SMTP on every maintained Manager. Safely disabled and independently verified
+  Active routes contribute **Passed** while visible supporting text distinguishes
+  **Off** from **Active**.
+- Local route configuration that is still waiting for independent public DNS
+  and trusted-TLS postconditions now contributes gold **Attention**. Missing
+  password protection while enablement is retained, route mismatch, stale or
+  malformed state, and incomplete cleanup contribute **Failed**; unsupported or
+  genuinely unconfigured surfaces remain neutral and do not fail the optional
+  integration.
+- The Funnel row links to the canonical **Settings > Tailscale Funnel** panel
+  with focus transfer, browser history, mobile reflow, reduced-motion, and
+  forced-color support. The synchronized fictional GUI preview exposes the same
+  behavior without contacting a provider or host.
+
+### Security
+
+- Passive Dashboard rendering reuses the existing authenticated, sanitized,
+  typed retained-status API and never invokes a Tailscale provider command or
+  independent verification. The row renders only fixed state copy and never
+  exposes a command, argument, target, hostname, URL, raw output, identity,
+  address, token, or sensitive path.
+
 ## [0.25.0] - 2026-08-31
 
 ### Added

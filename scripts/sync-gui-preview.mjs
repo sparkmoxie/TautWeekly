@@ -41,6 +41,7 @@ export function generatedPreviewFiles(base = root) {
         <span>Fictional data · temporary in-memory changes. Do not enter real credentials.</span>
         <span>No services, email, files, credentials, or schedulers are contacted</span>
         <label>Package example <select id="demo-profile"><option value="windows">Windows</option><option value="nas">NAS / Docker</option><option value="mac">macOS Docker</option><option value="linux">Native Linux</option><option value="freebsd">FreeBSD / Podman</option></select></label>
+        <label>Funnel status <select id="demo-funnel-scenario"><option value="off">Passed · Off</option><option value="active">Passed · Active</option><option value="pending">Attention · Publication pending</option><option value="blocked">Failed · Blocked</option><option value="not-configured">Neutral · Not configured</option><option value="unsupported">Neutral · Unsupported</option></select></label>
         <label>Release activity <select id="demo-release-scenario"><option value="new">New movies + TV</option><option value="tv-only">New TV only</option><option value="quiet">No new additions</option></select></label>
         <button class="button button-secondary" id="demo-update-scenario" type="button">Simulate an available update</button>
         <a href="../">Back to Quickstart</a>

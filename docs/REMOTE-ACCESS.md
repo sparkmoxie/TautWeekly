@@ -105,6 +105,26 @@ logout, secret boundaries, no-index behavior, and sanitized diagnostics.
 Funnel adds no read-only role and this release adds no login rate limiter, so a
 unique Manager password remains essential.
 
+### Retained Dashboard status
+
+The Dashboard Integrations card shows Tailscale Funnel directly below SMTP
+without running a provider command or an independent verification. It reuses
+the authenticated, sanitized typed state retained by the Manager and renders
+only fixed copy:
+
+| Retained state | Dashboard row | Integrations aggregate |
+|---|---|---|
+| Exact route is safely off | **Passed** with **Off** supporting text | Pass contribution |
+| Exact route plus public DNS and trusted TLS are verified | **Passed** with **Active** supporting text | Pass contribution |
+| Exact local route is configured but publication is not proven | Gold **Attention** with **Publication pending** | Attention contribution |
+| Password lock is missing while enabled, route/state is inconsistent, or cleanup is incomplete | **Failed** with **Blocked** supporting text | Fail contribution |
+| Surface is unsupported or the optional adapter is genuinely not configured | Neutral informational text | No contribution |
+
+The row links to **Settings > Tailscale Funnel** when that panel applies. It
+never displays the public hostname or URL, provider output, identity, device
+data, private address, token, command, argument, port, target, or state-file
+path.
+
 The host administrator must satisfy Tailscale's current Funnel prerequisites:
 MagicDNS, HTTPS certificates, and a `funnel` node attribute targeting the
 actual node identity. TautWeekly neither reads nor edits tailnet policy, tags,

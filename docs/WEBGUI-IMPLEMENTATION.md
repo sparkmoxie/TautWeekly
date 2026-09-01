@@ -315,7 +315,7 @@ Health is a shared product contract, not a single green badge.
 | Readiness | Can configured work run safely? | Config parses, private data is writable, timezone resolves, assets exist |
 | Scheduler | Is automatic delivery active and fresh? | Enabled, heartbeat age, active timezone, next attempt |
 | Delivery | What happened most recently? | Last attempt, last success, outcome, counts, duration |
-| Integrations | Are dependencies reachable? | Tautulli, optional Plex, SMTP network check |
+| Integrations | Are dependencies reachable or safely retained? | Tautulli, optional Plex, SMTP network check, optional retained Funnel state |
 
 ### 7.2 Endpoints
 
@@ -655,6 +655,12 @@ steps. Automatic delivery remains disabled until explicitly enabled.
 
 - Overall state and concise explanation
 - Manager, configuration, preview, scheduler, and integration cards
+- Integrations lists Tailscale Funnel directly below SMTP. Verified Off and
+  Active contribute Passed with distinct supporting text; publication pending
+  contributes gold Attention; password, mismatch, stale/malformed, and cleanup
+  blockers contribute Failed; unsupported or genuinely unconfigured surfaces
+  remain neutral. The row deep-links and transfers focus to Settings > Tailscale
+  Funnel.
 - Last attempted delivery
 - Last successful delivery
 - Upcoming send with timezone

@@ -2,8 +2,8 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.25.0";
-  const PREVIOUS_VERSION = "0.24.1";
+  const DEMO_VERSION = "0.25.1";
+  const PREVIOUS_VERSION = "0.25.0";
   const PROFILES = {
     windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows" },
     nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker" },
@@ -290,7 +290,7 @@
       const authorizationCommand = name === "linux" || name === "freebsd"
         ? "sudo tautweekly remote-access-authorize"
         : name === "windows" ? "" : "./tautweekly.sh remote-access-login";
-      Object.assign(model.tailscale, { enabled: false, active: false,
+      Object.assign(model.tailscale, { supported: true, installed: true, enabled: false, active: false,
         state: name === "windows" ? "manager-password-required" : "authorization-required", url: "",
         provider: "tailscale", networkKind: "public-funnel",
         passwordRequired: name === "windows", cleanupRequired: false,
@@ -309,6 +309,22 @@
       model.update.guidance.summary = serviceProfile()
         ? "This example keeps installation with the package host. No browser action changes a host, service, or container."
         : "The Windows example simulates the verified updater; it never launches a process or changes a file.";
+    },
+    setFunnelScenario(name) {
+      const scenarios = {
+        off: { supported: true, installed: true, enabled: false, active: false, state: "inactive", passwordRequired: false, cleanupRequired: false, url: "" },
+        active: { supported: true, installed: true, enabled: true, active: true, state: "active", passwordRequired: false, cleanupRequired: true, url: "https://manager.demo.invalid" },
+        pending: { supported: true, installed: true, enabled: true, active: false, state: "starting", passwordRequired: false, cleanupRequired: true, url: "https://manager.demo.invalid" },
+        blocked: { supported: true, installed: true, enabled: true, active: false, state: "needs-attention", passwordRequired: false, cleanupRequired: true, url: "" },
+        "not-configured": { supported: true, installed: false, enabled: false, active: false, state: "tailscale-required", passwordRequired: false, cleanupRequired: false, url: "" },
+        unsupported: { supported: false, installed: false, enabled: false, active: false, state: "unsupported", passwordRequired: false, cleanupRequired: false, url: "" },
+      };
+      if (!Object.hasOwn(scenarios, name)) throw new Error("Unknown fictional Funnel status.");
+      model.lockEnabled = serviceProfile() || ["active", "pending", "blocked"].includes(name);
+      Object.assign(model.tailscale, scenarios[name], {
+        provider: "tailscale", networkKind: "public-funnel", management: "integrated",
+        hostAuthorizationRequired: false, hostAuthorizationCommand: "",
+      });
     },
     offerUpdate() {
       Object.assign(model.update, { managerVersion: PREVIOUS_VERSION, applicationVersion: PREVIOUS_VERSION,
@@ -609,7 +625,7 @@
         Object.assign(model.tailscale, { enabled, active: false, cleanupRequired: enabled,
           passwordRequired: !model.lockEnabled, state: enabled ? "starting" : "inactive",
           url: enabled ? "https://manager.demo.invalid" : "" });
-      } else if (model.tailscale.enabled) {
+      } else if (path === "/api/v1/remote-access/tailscale/verify" && method === "POST" && model.tailscale.enabled) {
         Object.assign(model.tailscale, { active: true, state: "active" });
       }
       return json(model.tailscale);
