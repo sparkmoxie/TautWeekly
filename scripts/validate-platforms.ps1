@@ -167,6 +167,7 @@ Require-Text 'platforms/nas-docker/app/run-service.sh' @(
     'service-heartbeat\.json',
     'write_service_heartbeat',
     'active newsletter operation to finish',
+    "trap 'term; exit 0' TERM INT",
     'Manager exited unexpectedly',
     'Scheduler exited unexpectedly'
 )
@@ -597,8 +598,7 @@ Require-Text 'platforms/nas-docker/app/entrypoint.sh' @(
     'tautweekly_select_runtime_profile',
     'Unified container profile'
     'TAUTWEEKLY_FUNNEL_ADAPTER',
-    'tautweekly-manager shutdown',
-    '127\.0\.0\.1:8080',
+    'kill -TERM "\$service_pid"',
     'termination_requested',
     'Verified Funnel shutdown failed; the container remains running'
 )
@@ -740,12 +740,13 @@ Require-Text 'platforms/mac-docker/app/run-service.sh' @(
     'health/live',
     'wait_for_delivery',
     'SHUTDOWN_DELIVERY_GRACE_SECONDS',
-    'ManagerProcessId'
+    'ManagerProcessId',
+    "trap 'term; exit 0' TERM INT"
 )
 Require-Text 'platforms/mac-docker/app/healthcheck.sh' @('health/live', 'service-heartbeat\.json')
 Require-Text 'platforms/mac-docker/app/entrypoint.sh' @(
     'gosu "\$PUID:\$PGID" /opt/tautweekly/run-service\.sh',
-    'tautweekly-manager shutdown',
+    'kill -TERM "\$service_pid"',
     'funnel-adapter\.sh',
     'chown -R "\$PUID:\$PGID" /data',
     '/tmp/tautweekly/home',

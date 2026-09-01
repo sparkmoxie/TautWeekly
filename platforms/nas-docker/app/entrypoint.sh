@@ -54,8 +54,7 @@ stop_service() {
   [[ "$shutting_down" == false ]] || return 0
   shutting_down=true
   if [[ -n "$service_pid" ]] && kill -0 "$service_pid" 2>/dev/null; then
-    if ! gosu "$PUID:$PGID" /opt/tautweekly/bin/tautweekly-manager shutdown \
-      --listen 127.0.0.1:8080 --tautweekly-root /opt/tautweekly; then
+    if ! kill -TERM "$service_pid" 2>/dev/null; then
       echo "[ERROR] The container stayed running because the Manager could not begin verified Funnel shutdown." >&2
       shutting_down=false
       return 70
@@ -104,6 +103,7 @@ while true; do
     echo "[ERROR] Verified Funnel shutdown failed; the container remains running with its password boundary intact." >&2
   fi
   if wait "$service_pid"; then status=0; else status=$?; fi
+  [[ "$termination_requested" == false ]] || continue
   kill -0 "$service_pid" 2>/dev/null || break
 done
 service_pid=""

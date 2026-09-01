@@ -207,10 +207,14 @@ func serve(args []string) error {
 	signals := make(chan os.Signal, 2)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)
-	go func() {
-		<-signals
-		requestShutdown()
-	}()
+	go waitForVerifiedShutdownSignal(
+		signals,
+		server.EnsurePublicRemoteAccessInactive,
+		requestShutdown,
+		func(err error) {
+			log.Printf("WARNING: Manager stayed open because the TautWeekly Funnel could not be disabled and verified: %v", err)
+		},
+	)
 	if shutdownRequested := instance.ShutdownRequested(); shutdownRequested != nil {
 		go func() {
 			<-shutdownRequested
@@ -298,6 +302,20 @@ func serve(args []string) error {
 		return nil
 	}
 	return err
+}
+
+func waitForVerifiedShutdownSignal(signals <-chan os.Signal, ensureInactive func(context.Context) error, requestShutdown func(), reportFailure func(error)) {
+	for range signals {
+		ctx, cancel := context.WithTimeout(context.Background(), tailscaleLifecycleTimeout)
+		err := ensureInactive(ctx)
+		cancel()
+		if err != nil {
+			reportFailure(err)
+			continue
+		}
+		requestShutdown()
+		return
+	}
 }
 
 func waitForExistingManager(address string) error {

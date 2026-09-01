@@ -91,7 +91,8 @@ term() {
   wait_for_delivery || true
   [[ -z "$SCHED_PID" ]] || kill -TERM "$SCHED_PID" 2>/dev/null || true
 }
-trap term TERM INT EXIT
+trap 'term; exit 0' TERM INT
+trap term EXIT
 
 "$app_root/bin/tautweekly-manager" serve \
   --runtime-mode "$manager_runtime_mode" \
