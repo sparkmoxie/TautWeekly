@@ -210,38 +210,101 @@ try {
     Assert-True ((Get-Content -LiteralPath (Join-Path $rollbackBackups[0].FullName 'config.json') -Raw) -eq '{"private":"preserve"}') 'Upgrade rollback backup did not preserve private config.json.'
     Assert-True (Test-Path -LiteralPath (Join-Path $rollbackBackups[0].FullName 'INSTALL-METADATA.txt') -PathType Leaf) 'Upgrade rollback backup did not capture the installed application state.'
 
-    $restartListener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
-    $restartListener.Start()
-    $restartPort = ([Net.IPEndPoint]$restartListener.LocalEndpoint).Port
-    $restartListener.Stop()
-    $restartedManager = Start-Process -FilePath $managerExecutable -ArgumentList @('serve', "--listen=127.0.0.1:$restartPort", "--tautweekly-root=$installRoot", "--data-dir=$dataRoot") -WorkingDirectory $installRoot -WindowStyle Hidden -PassThru
+    $existingFixedPortOwners = @(Get-NetTCPConnection -State Listen -LocalPort 8788 -ErrorAction SilentlyContinue |
+        Where-Object { [string]$_.LocalAddress -in @('127.0.0.1', '::1') } |
+        Select-Object -ExpandProperty OwningProcess -Unique)
+    Assert-True ($existingFixedPortOwners.Count -eq 0) 'Automatic update relaunch test requires 127.0.0.1:8788 to be available.'
+    $relaunchExtractRoot = Join-Path $testRoot 'update-relaunch-candidate'
+    Expand-Archive -LiteralPath (Join-Path $DistPath 'TautWeekly-windows.zip') -DestinationPath $relaunchExtractRoot
+    $relaunchCandidateRoot = Join-Path $relaunchExtractRoot 'TautWeekly-windows'
+    $candidateVersionMatch = [regex]::Match(
+        (Get-Content -LiteralPath (Join-Path $relaunchCandidateRoot 'RELEASE-METADATA.txt') -Raw),
+        '(?m)^Repository version:\s*v?(?<version>\d+\.\d+\.\d+)\s*$'
+    )
+    Assert-True $candidateVersionMatch.Success 'Automatic update relaunch candidate has invalid release metadata.'
+    $candidateVersion = [string]$candidateVersionMatch.Groups['version'].Value
+    $relaunchResultPath = Join-Path $dataRoot 'automatic-relaunch-result.json'
+    $runningManager = Start-Process -FilePath $managerExecutable -ArgumentList @('serve', '--listen=127.0.0.1:8788', "--tautweekly-root=$installRoot", "--data-dir=$dataRoot") -WorkingDirectory $installRoot -WindowStyle Hidden -PassThru
+    $restartedManagerId = 0
     try {
         $restartDeadline = (Get-Date).AddSeconds(10)
         $restartHealthy = $false
         do {
             Start-Sleep -Milliseconds 200
-            if ($restartedManager.HasExited) { throw "Upgraded Manager stopped during restart recovery with exit code $($restartedManager.ExitCode)." }
-            try { $restartHealthy = [string](Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$restartPort/health/live" -TimeoutSec 2).status -eq 'alive' } catch { }
+            if ($runningManager.HasExited) { throw "Upgraded Manager stopped before automatic update recovery with exit code $($runningManager.ExitCode)." }
+            try { $restartHealthy = [string](Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/health/live' -TimeoutSec 2).status -eq 'alive' } catch { }
         } while (-not $restartHealthy -and (Get-Date) -lt $restartDeadline)
-        Assert-True $restartHealthy 'Upgraded Manager did not restart with preserved password and remote-access state.'
+        Assert-True $restartHealthy 'Upgraded Manager was not healthy before automatic update recovery.'
+
+        # Match the in-Manager update path: the staged helper receives no
+        # ManagerDataRoot and must recover the recorded private directory.
+        $updateArguments = @{
+            InstallRoot = $installRoot
+            CandidateRoot = $relaunchCandidateRoot
+            TargetVersion = $candidateVersion
+            ResultPath = $relaunchResultPath
+            InstallerTestMode = $true
+        }
+        & (Join-Path $relaunchCandidateRoot 'Windows-Update.ps1') @updateArguments
+        Assert-True (Test-Path -LiteralPath $relaunchResultPath -PathType Leaf) 'Automatic update did not write its relaunch result.'
+        $relaunchResult = Get-Content -LiteralPath $relaunchResultPath -Raw | ConvertFrom-Json
+        Assert-True ([string]$relaunchResult.Status -eq 'success') "Automatic update failed to relaunch the Manager: $([string]$relaunchResult.Message)"
+        Assert-True ($runningManager.WaitForExit(20000)) 'Automatic update did not stop the original Manager process.'
+
+        $restartDeadline = (Get-Date).AddSeconds(10)
+        $restartHealthy = $false
+        $restartOwners = @()
+        do {
+            Start-Sleep -Milliseconds 200
+            try {
+                $restartHealthy = [string](Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/health/live' -TimeoutSec 2).status -eq 'alive'
+                if ($restartHealthy) {
+                    $restartOwners = @(Get-NetTCPConnection -State Listen -LocalPort 8788 -ErrorAction Stop |
+                        Where-Object { [string]$_.LocalAddress -in @('127.0.0.1', '::1') } |
+                        Select-Object -ExpandProperty OwningProcess -Unique)
+                }
+            }
+            catch { }
+        } while ((-not $restartHealthy -or $restartOwners.Count -ne 1) -and (Get-Date) -lt $restartDeadline)
+        Assert-True ($restartHealthy -and $restartOwners.Count -eq 1) 'Automatic update did not restore the Manager listener on 127.0.0.1:8788.'
+        $restartedManagerId = [int]$restartOwners[0]
+        Assert-True ($restartedManagerId -ne $runningManager.Id) 'Automatic update did not replace the original Manager process.'
+        $restartedManager = Get-Process -Id $restartedManagerId -ErrorAction Stop
+        Assert-True (([IO.Path]::GetFullPath([string]$restartedManager.Path)) -ieq ([IO.Path]::GetFullPath($managerExecutable))) 'Automatic update restarted a Manager from the wrong installation.'
+
         $restartSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-        Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$restartPort/api/v1/auth/login" -Method Post -ContentType 'application/json' -WebSession $restartSession -Body '{"password":"synthetic installer preservation password"}' -TimeoutSec 3 | Out-Null
-        $recoveredFunnel = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$restartPort/api/v1/remote-access/tailscale" -WebSession $restartSession -TimeoutSec 3
+        Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/api/v1/auth/login' -Method Post -ContentType 'application/json' -WebSession $restartSession -Body '{"password":"synthetic installer preservation password"}' -TimeoutSec 3 | Out-Null
+        $recoveredFunnel = Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/api/v1/remote-access/tailscale' -WebSession $restartSession -TimeoutSec 3
         $cleanupRequired = if ($null -eq $recoveredFunnel.PSObject.Properties['cleanupRequired']) { $false } else { [bool]$recoveredFunnel.cleanupRequired }
-        Assert-True ([bool]$recoveredFunnel.enabled -and $cleanupRequired) 'Upgraded Manager discarded the retained enabled Funnel state.'
-        Assert-True ([string]$recoveredFunnel.url -eq 'https://installer-preserve.test-tailnet.ts.net') 'Upgraded Manager changed the retained public Funnel hostname.'
-        Assert-True ([string]$recoveredFunnel.networkKind -eq 'public-funnel') 'Upgraded Manager reverted to the obsolete private remote-access controller.'
+        Assert-True ([bool]$recoveredFunnel.enabled -and $cleanupRequired) 'Automatically relaunched Manager discarded the retained enabled Funnel state.'
+        Assert-True ([string]$recoveredFunnel.url -eq 'https://installer-preserve.test-tailnet.ts.net') 'Automatically relaunched Manager changed the retained public Funnel hostname.'
+        Assert-True ([string]$recoveredFunnel.networkKind -eq 'public-funnel') 'Automatically relaunched Manager reverted to the obsolete private remote-access controller.'
         # The synthetic enabled record has no real provider route to disable.
         # An explicit stop must therefore accept the local signal but leave the
         # Manager open, preserving the password and retained exposure evidence.
-        $restartShutdown = Start-Process -FilePath $managerExecutable -ArgumentList @('shutdown', "--listen=127.0.0.1:$restartPort", "--tautweekly-root=$installRoot") -WorkingDirectory $installRoot -Wait -PassThru -WindowStyle Hidden
+        $restartShutdown = Start-Process -FilePath $managerExecutable -ArgumentList @('shutdown', '--listen=127.0.0.1:8788', "--tautweekly-root=$installRoot") -WorkingDirectory $installRoot -Wait -PassThru -WindowStyle Hidden
         Assert-True ($restartShutdown.ExitCode -eq 0) 'Upgraded Manager rejected the local shutdown signal after restart recovery.'
         $restartShutdown.Dispose()
-        Assert-True (-not $restartedManager.WaitForExit(2000)) 'Upgraded Manager exited even though synthetic public Funnel shutdown could not be verified.'
+        Start-Sleep -Seconds 2
+        Assert-True ($null -ne (Get-Process -Id $restartedManagerId -ErrorAction SilentlyContinue)) 'Upgraded Manager exited even though synthetic public Funnel shutdown could not be verified.'
     }
     finally {
-        if (-not $restartedManager.HasExited) { Stop-Process -Id $restartedManager.Id -Force -ErrorAction SilentlyContinue; [void]$restartedManager.WaitForExit(10000) }
-        $restartedManager.Dispose()
+        if (-not $runningManager.HasExited) { Stop-Process -Id $runningManager.Id -Force -ErrorAction SilentlyContinue; [void]$runningManager.WaitForExit(10000) }
+        $runningManager.Dispose()
+        if ($restartedManagerId -gt 0) {
+            $processToStop = Get-Process -Id $restartedManagerId -ErrorAction SilentlyContinue
+            if ($null -ne $processToStop) {
+                try {
+                    if (([IO.Path]::GetFullPath([string]$processToStop.Path)) -ieq ([IO.Path]::GetFullPath($managerExecutable))) {
+                        Stop-Process -Id $restartedManagerId -Force -ErrorAction SilentlyContinue
+                        [void]$processToStop.WaitForExit(10000)
+                    }
+                }
+                finally {
+                    $processToStop.Dispose()
+                }
+            }
+        }
     }
     # Explicit uninstall remains fail-closed. Return the synthetic state to Off
     # before that separate lifecycle test so no host Tailscale client is used.

@@ -6,6 +6,17 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.3] - 2026-09-01
+
+### Changed
+
+- Match the Manager header's Tailscale badge to the upstream light icon: active or publication-pending states retain its four full-opacity circles, while every other state mutes all nine circles.
+- Shorten the Manager package badge to Windows for both installed and ZIP Windows Managers and macOS Docker for the macOS Docker Desktop package.
+
+### Fixed
+
+- Restore Windows Manager data-directory resolution in the update helper so an update or rollback can relaunch a Manager that was running when the update began.
+
 ## [0.25.2] - 2026-09-01
 
 ### Changed

@@ -789,6 +789,8 @@ Require-Text 'platforms/windows/Windows-Update.ps1' @(
     'Assert-PowerShellSyntax',
     'Get-InstalledManagerProcesses',
     'Start-InstalledManager',
+    'Resolve-ManagerDataRoot',
+    'INSTALL-METADATA\.txt',
     'Get-HealthyManagerListenerProcessIds',
     'Get-NetTCPConnection.*LocalPort 8788',
     'OwningProcess',

@@ -75,6 +75,8 @@ try {
     $updaterSource = Get-Content -LiteralPath $updater -Raw -Encoding UTF8
     Assert-True ($updaterSource -match 'Test-OwnedNewsletterTask') 'Windows updater does not verify scheduled-task ownership.'
     Assert-True ($updaterSource -match 'It was left untouched') 'Windows updater does not fail closed for a same-named unowned task.'
+    Assert-True ($updaterSource -match 'function Resolve-ManagerDataRoot') 'Windows updater cannot recover the Manager private-data directory before automatic relaunch.'
+    Assert-True ($updaterSource -match '\$dataRoot = Resolve-ManagerDataRoot') 'Windows updater automatic relaunch does not use the resolved Manager private-data directory.'
     foreach ($privateName in @('last-run.json', 'scheduler-heartbeat.json', 'service-heartbeat.json', 'config.backup.*.json')) {
         Assert-True ($updaterSource.Contains($privateName)) "Windows updater private-path guard is missing $privateName."
     }

@@ -360,6 +360,11 @@ def main() -> int:
         failures.append("Tailscale Funnel status badge is not placed immediately after the access lock")
     if 'id="icon-tailscale" viewBox="0 0 512 512"' not in html or "cdn.jsdelivr.net" in combined:
         failures.append("Tailscale status badge is not bundled locally from the approved SVG geometry")
+    tailscale_symbol_start = html.find('id="icon-tailscale" viewBox="0 0 512 512"')
+    tailscale_symbol_end = html.find("</symbol>", tailscale_symbol_start)
+    tailscale_symbol = html[tailscale_symbol_start:tailscale_symbol_end]
+    if tailscale_symbol_start < 0 or tailscale_symbol_end < 0 or tailscale_symbol.count("<path") != 7 or tailscale_symbol.count('class="tailscale-fade"') != 4:
+        failures.append("Tailscale status badge does not retain the upstream seven-path geometry and four muted path groups")
     for marker in (
         "function funnelIntegrationPresentation(remote)",
         "function tailscaleStatusBadgePresentation(remote)",
@@ -385,10 +390,18 @@ def main() -> int:
         failures.append("Dashboard Funnel link retains a surrounding button box")
     if ".tailscale-settings-panel{scroll-margin-top:90px" not in css:
         failures.append("Dashboard Funnel deep link does not clear the sticky header at the beginning of the card")
-    if '.tailscale-status-button.active .tailscale-fade{opacity:.2}' not in css or '.tailscale-status-button .tailscale-fade{opacity:1' not in css:
-        failures.append("Tailscale badge does not preserve the active/default and uniform off SVG appearances")
+    if (
+        '.tailscale-status-button .tailscale-logo{width:21px;height:21px;display:block;fill:#f0f0f0}' not in css
+        or '.tailscale-status-button .tailscale-logo path{opacity:.2' not in css
+        or '.tailscale-status-button.active .tailscale-logo path:not(.tailscale-fade){opacity:1}' not in css
+        or '.tailscale-status-button.active .tailscale-fade{opacity:.2}' not in css
+    ):
+        failures.append("Tailscale badge does not preserve the exact upstream active/default and uniform off SVG appearances")
     if '((remote.state === "active" && remote.active === true) || remote.state === "starting")' not in javascript:
         failures.append("Tailscale badge active color is not restricted to active or publication-pending state")
+    expected_mode_badge = 'setText("mode-pill-label", nas ? "NAS / container" : linux ? "Native Linux" : mac ? "macOS Docker" : "Windows");'
+    if expected_mode_badge not in javascript:
+        failures.append("Package badge does not use the compact Windows and macOS Docker labels")
     if 'button.dataset.tooltip = tooltip;' not in javascript or 'button.setAttribute("aria-label", tooltip);' not in javascript:
         failures.append("Tailscale badge tooltip does not reflect its exact retained state")
     if "funnelValue.title" in javascript or "funnelLink.disabled" in javascript:

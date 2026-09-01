@@ -323,6 +323,24 @@ function Stop-InstalledManager {
     return $true
 }
 
+function Resolve-ManagerDataRoot {
+    $dataRoot = if ([string]::IsNullOrWhiteSpace($ManagerDataRoot)) { Join-Path $InstallRoot '.manager-data' } else { [IO.Path]::GetFullPath($ManagerDataRoot) }
+    if ([string]::IsNullOrWhiteSpace($ManagerDataRoot)) {
+        $installMetadata = Join-Path $InstallRoot 'INSTALL-METADATA.txt'
+        if (Test-Path -LiteralPath $installMetadata -PathType Leaf) {
+            $dataLine = Get-Content -LiteralPath $installMetadata | Where-Object { $_ -match '^DataDirectory=(?<path>.+)$' } | Select-Object -First 1
+            if ($null -ne $dataLine -and $dataLine -match '^DataDirectory=(?<path>.+)$') {
+                $candidateDataRoot = [IO.Path]::GetFullPath([string]$Matches['path'])
+                if ($candidateDataRoot -eq [IO.Path]::GetFullPath($InstallRoot)) {
+                    throw 'Installer metadata contains an unsafe Manager data directory.'
+                }
+                $dataRoot = $candidateDataRoot
+            }
+        }
+    }
+    return [IO.Path]::GetFullPath($dataRoot)
+}
+
 function Get-HealthyManagerListenerProcessIds {
     try {
         $health = Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/health/live' -TimeoutSec 2
