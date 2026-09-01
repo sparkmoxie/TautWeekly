@@ -50,21 +50,20 @@ stop_service() {
   shutting_down=true
   if [[ -n "$service_pid" ]] && kill -0 "$service_pid" 2>/dev/null; then
     if ! kill -TERM "$service_pid" 2>/dev/null; then
-      echo "[ERROR] The container stayed running because the Manager could not begin verified Funnel shutdown." >&2
-      shutting_down=false
-      return 70
+      if kill -0 "$service_pid" 2>/dev/null; then
+        echo "[ERROR] The container stayed running because the Manager could not begin verified Funnel shutdown." >&2
+        shutting_down=false
+        return 70
+      fi
     fi
-    for _ in $(seq 1 330); do
-      kill -0 "$service_pid" 2>/dev/null || break
-      sleep 1
-    done
-    if kill -0 "$service_pid" 2>/dev/null; then
-      echo "[ERROR] The container stayed running because verified Funnel shutdown did not finish." >&2
-      shutting_down=false
-      return 70
-    fi
+    # Reap the non-root supervisor directly. Polling kill -0 can continue to
+    # report a completed child until it is reaped, causing Docker to exhaust
+    # its stop timeout and SIGKILL an otherwise verified shutdown. The
+    # supervisor itself waits indefinitely when Manager Funnel cleanup fails,
+    # so this remains fail closed while the root adapter is still available.
+    wait "$service_pid" 2>/dev/null || true
+    service_pid=""
   fi
-  [[ -z "$service_pid" ]] || wait "$service_pid" 2>/dev/null || true
   [[ -z "$adapter_pid" ]] || kill -TERM "$adapter_pid" 2>/dev/null || true
   [[ -z "$adapter_pid" ]] || wait "$adapter_pid" 2>/dev/null || true
 }
