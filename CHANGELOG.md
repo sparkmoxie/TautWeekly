@@ -30,6 +30,10 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Restored the direct Unraid Apps catalog shortcut on the NAS / Docker landing
   card and added a documentation contract to prevent it from disappearing
   while the combined NAS/Docker/QNAP/Unraid Quickstart remains the main guide.
+- Removed the Unraid template's optional literal-loopback `WebUI` metadata,
+  which Community Apps automatically blacklisted under its launch-URL policy.
+  The fixed loopback publish, SSH recovery path, and verified Funnel option are
+  unchanged; validation now prevents the rejected metadata from returning.
 - Manager discovery now falls back to Tautulli's table-backed library and user
   rosters when the primary Plex-backed commands fail or return a valid empty
   response, and accepts the supported numeric, string, and Boolean response

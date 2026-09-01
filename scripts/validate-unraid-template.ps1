@@ -34,7 +34,7 @@ Require-Value $profile.CommunityApplications.WebPage 'ca_profile.xml/WebPage'
 
 $container = $template.Container
 if ([string]$container.version -ne '2') { Add-Failure 'Unraid Container version must be 2.' }
-foreach ($field in @('Name','Repository','Registry','Network','Shell','Privileged','Icon','WebUI','Overview','Support','Project','TemplateURL','ReadMe','Category','License')) {
+foreach ($field in @('Name','Repository','Registry','Network','Shell','Privileged','Icon','Overview','Support','Project','TemplateURL','ReadMe','Category','License')) {
     Require-Value $container.$field "Container/$field"
 }
 
@@ -72,9 +72,11 @@ if ($null -ne $appdata -and [string]$appdata.Default -cne '/mnt/user/appdata/tau
 if ($configs | Where-Object { [string]$_.Type -ceq 'Port' -or [string]$_.Target -ceq '8080' }) {
     Add-Failure 'Unraid must not generate a broad host port mapping through a Port Config entry.'
 }
-if ([string]$container.ExtraParams -notmatch '(?:^| )--publish 127[.]0[.]0[.]1:8787:8080/tcp(?: |$)' -or
-    [string]$container.WebUI -cne 'http://127.0.0.1:8787/') {
+if ([string]$container.ExtraParams -notmatch '(?:^| )--publish 127[.]0[.]0[.]1:8787:8080/tcp(?: |$)') {
     Add-Failure 'Unraid Manager recovery must use the fixed loopback-only port mapping.'
+}
+if ($null -ne $container.SelectSingleNode('WebUI')) {
+    Add-Failure 'Unraid must omit optional WebUI launch metadata because Community Apps rejects literal loopback hosts.'
 }
 $packageKind = $configs | Where-Object { [string]$_.Target -ceq 'TAUTWEEKLY_PACKAGE_KIND' } | Select-Object -First 1
 if ($null -ne $packageKind -and [string]$packageKind.Default -cne 'unraid') {
@@ -96,7 +98,9 @@ $tailscaleState = $configs | Where-Object { [string]$_.Target -ceq '/var/lib/tau
 if ($null -ne $tailscaleState -and [string]$tailscaleState.Default -cne '/mnt/user/appdata/tautweekly-tailscale') {
     Add-Failure 'Unraid Tailscale state must remain separate from Manager appdata.'
 }
-if ([string]$container.Overview -notmatch 'authenticated TautWeekly Manager' -or [string]$container.Overview -notmatch 'access-bootstrap') {
+if ([string]$container.Overview -notmatch 'authenticated TautWeekly Manager' -or
+    [string]$container.Overview -notmatch 'use an SSH local forward' -or
+    [string]$container.Overview -notmatch 'access-bootstrap') {
     Add-Failure 'Unraid overview must describe authenticated Manager bootstrap from the container Console.'
 }
 if ([string]$container.Overview -notmatch 'Unraid owns container lifecycle and stable image updates' -or
