@@ -219,7 +219,7 @@ try {
     $relaunchCandidateRoot = Join-Path $relaunchExtractRoot 'TautWeekly-windows'
     $candidateVersionMatch = [regex]::Match(
         (Get-Content -LiteralPath (Join-Path $relaunchCandidateRoot 'RELEASE-METADATA.txt') -Raw),
-        '(?m)^Repository version:\s*v?(?<version>\d+\.\d+\.\d+)\s*$'
+        '(?m)^Repository version:\s*v?(?<version>[0-9A-Za-z][0-9A-Za-z._-]*)\s*$'
     )
     Assert-True $candidateVersionMatch.Success 'Automatic update relaunch candidate has invalid release metadata.'
     $candidateVersion = [string]$candidateVersionMatch.Groups['version'].Value
