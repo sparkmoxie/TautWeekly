@@ -789,6 +789,8 @@ Require-Text 'platforms/windows/Windows-Update.ps1' @(
     'Assert-PowerShellSyntax',
     'Get-InstalledManagerProcesses',
     'Start-InstalledManager',
+    'Ensure-InstalledManagerRunning',
+    '\$managerWasRunning\s*=\s*\$managerProcesses\.Count\s+-gt\s+0',
     'Resolve-ManagerDataRoot',
     'INSTALL-METADATA\.txt',
     'Get-HealthyManagerListenerProcessIds',

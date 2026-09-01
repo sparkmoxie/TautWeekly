@@ -236,6 +236,50 @@ try {
         } while (-not $restartHealthy -and (Get-Date) -lt $restartDeadline)
         Assert-True $restartHealthy 'Upgraded Manager was not healthy before automatic update recovery.'
 
+        # Reproduce the v0.25.4 stranding window: the exact Manager has exited,
+        # but post-stop verification fails before package mutation begins. The
+        # updater must remember that it owns relaunch responsibility.
+        $stopFailureResultPath = Join-Path $dataRoot 'post-stop-recovery-result.json'
+        $stopFailureArguments = @{
+            InstallRoot = $installRoot
+            CandidateRoot = $relaunchCandidateRoot
+            TargetVersion = $candidateVersion
+            ResultPath = $stopFailureResultPath
+            InstallerTestMode = $true
+            SimulateManagerStopFailure = $true
+        }
+        $stopFailureObserved = $false
+        try {
+            & (Join-Path $relaunchCandidateRoot 'Windows-Update.ps1') @stopFailureArguments
+        }
+        catch {
+            $stopFailureObserved = $_.Exception.Message -match 'Simulated post-stop failure'
+        }
+        Assert-True $stopFailureObserved 'Post-stop recovery fixture did not report the simulated updater failure.'
+        Assert-True ($runningManager.WaitForExit(20000)) 'Post-stop recovery fixture did not stop the original Manager process.'
+        $stopFailureResult = Get-Content -LiteralPath $stopFailureResultPath -Raw | ConvertFrom-Json
+        Assert-True ([string]$stopFailureResult.Status -eq 'failed') 'Post-stop recovery fixture did not retain the expected failed update result.'
+
+        $restartDeadline = (Get-Date).AddSeconds(10)
+        $restartHealthy = $false
+        $stopRecoveryOwners = @()
+        do {
+            Start-Sleep -Milliseconds 200
+            try {
+                $restartHealthy = [string](Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/health/live' -TimeoutSec 2).status -eq 'alive'
+                if ($restartHealthy) {
+                    $stopRecoveryOwners = @(Get-NetTCPConnection -State Listen -LocalPort 8788 -ErrorAction Stop |
+                        Where-Object { [string]$_.LocalAddress -in @('127.0.0.1', '::1') } |
+                        Select-Object -ExpandProperty OwningProcess -Unique)
+                }
+            }
+            catch { }
+        } while ((-not $restartHealthy -or $stopRecoveryOwners.Count -ne 1) -and (Get-Date) -lt $restartDeadline)
+        Assert-True ($restartHealthy -and $stopRecoveryOwners.Count -eq 1) 'Post-stop updater failure stranded the Manager listener.'
+        Assert-True ([int]$stopRecoveryOwners[0] -ne $runningManager.Id) 'Post-stop updater failure did not replace the terminated Manager process.'
+        $runningManager.Dispose()
+        $runningManager = Get-Process -Id ([int]$stopRecoveryOwners[0]) -ErrorAction Stop
+
         # Match the in-Manager update path: the staged helper receives no
         # ManagerDataRoot and must recover the recorded private directory.
         $updateArguments = @{

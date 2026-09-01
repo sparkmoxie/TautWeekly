@@ -6,6 +6,13 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.5] - 2026-09-01
+
+### Fixed
+
+- Prevent a Manager-driven Windows update from leaving the local Dashboard offline when process teardown succeeds but Windows reports a post-stop verification failure. The updater now records relaunch responsibility before termination and recovers either the exact healthy Manager or a new verified instance without changing retained Tailscale Funnel state.
+- Extend the Windows installer lifecycle test with the post-stop failure window that escaped v0.25.4 validation, proving both failure recovery and the subsequent normal update path restore the fixed loopback listener.
+
 ## [0.25.4] - 2026-09-01
 
 ### Changed

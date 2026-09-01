@@ -79,6 +79,8 @@ try {
     Assert-True ($updaterSource -match '\$dataRoot = Resolve-ManagerDataRoot') 'Windows updater automatic relaunch does not use the resolved Manager private-data directory.'
     Assert-True ($updaterSource -notmatch '&\s+\$managerPath\s+shutdown') 'Windows updater invokes the user-lifecycle shutdown path, which disables retained Funnel publication.'
     Assert-True ($updaterSource -match 'Stop-Process -Id \$managerProcess\.Id -Force') 'Windows updater does not stop only the exact installed Manager process for its internal restart.'
+    Assert-True ($updaterSource -match '(?s)\$managerProcesses\s*=\s*@\(Get-InstalledManagerProcesses\).*?\$managerWasRunning\s*=\s*\$managerProcesses\.Count\s+-gt\s+0.*?Stop-InstalledManager -ManagerProcesses \$managerProcesses') 'Windows updater does not record restart ownership before stopping the Manager.'
+    Assert-True ($updaterSource -match 'function Ensure-InstalledManagerRunning') 'Windows updater cannot recover a healthy or stopped Manager after a post-stop failure.'
     foreach ($privateName in @('last-run.json', 'scheduler-heartbeat.json', 'service-heartbeat.json', 'config.backup.*.json')) {
         Assert-True ($updaterSource.Contains($privateName)) "Windows updater private-path guard is missing $privateName."
     }
