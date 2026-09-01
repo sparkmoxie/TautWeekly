@@ -120,6 +120,16 @@ repeats the same saved-revision, confirmed, LAN-only Tautulli library/user
 discovery when configuration is ready; it never contacts Plex or SMTP and never
 starts newsletter preview work. The dedicated Config discovery control
 continues to require its own confirmation and retains setup-preview recovery.
+Discovery accepts the primary Tautulli library and user rosters and falls back
+to the corresponding table-backed rosters when the live PMS-backed commands
+return an empty or unusable primary response. A failed live refresh
+remains **Failed**: sanitized choices from the last successful refresh stay
+visible and usable for that unchanged configuration revision, but they are
+clearly labeled as cached and do not make the new refresh pass. Retained
+Tautulli/Plex check labels keep their own timestamps and are not evidence that
+the failed choices refresh reran successfully. Diagnostics identify only the
+failed connection, library-roster, or user-roster stage and never retain the
+address, API key, response body, library names, or user details.
 A successful **Validate, save, and verify** action uses a typed backend impact
 plan and runs affected work: Tautulli changes rerun discovery and integration
 checks, Plex changes rerun integration checks, SMTP-card changes rerun SMTP

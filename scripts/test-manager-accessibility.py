@@ -561,7 +561,7 @@ def main() -> int:
         'scheduleUpdateCheckAvailabilityRefresh(cooldown);',
         'clearUpdateCheckAvailabilityTimer();',
         'if (refreshed && recoverPendingPreviews) await recoverPendingPreviewsFromChoices(discoveryAuthenticationEpoch);',
-        'state.discoveryError = error.message;',
+        'state.discoveryError = discoveryFailureMessage(error.message);',
         'authenticationEpoch += 1;',
         'const loadAuthenticationEpoch = authenticationEpoch;',
         'const discoveryAuthenticationEpoch = authenticationEpoch;',

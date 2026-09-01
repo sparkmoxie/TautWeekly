@@ -54,6 +54,7 @@ const functions = [
   "enterApplication",
   "updateCheckIsAvailable",
   "renderDiscovery",
+  "discoveryFailureMessage",
   "refreshApplicationStatus",
   "runTautulliDiscovery",
   "runUpdateCheck",
@@ -385,7 +386,9 @@ async function flushAsyncWork() {
   const harness = createHarness({ checkResults: [checked], discoveryResults: [Promise.reject(failure)], initialDiscovery: discoveredChoices });
   await harness.context.testAPI.refreshApplicationStatus();
   assert.equal(harness.state.updates, checked, "Tautulli failure suppressed the update result");
-  assert.equal(harness.discoveryMessage.textContent, failure.message, "Tautulli failure was not retained on its scoped surface");
+  assert.ok(harness.discoveryMessage.textContent.includes("Live refresh failed. Cached choices from 2031-04-18T16:31:00Z remain visible and usable."),
+    "Tautulli failure did not distinguish retained choices from the failed live refresh");
+  assert.ok(harness.discoveryMessage.textContent.endsWith(failure.message), "sanitized live failure detail was lost");
   assert.equal(harness.state.discovery, discoveredChoices, "Tautulli failure discarded the retained choices");
   assert.equal(harness.globalStatuses.at(-1).message, "Stable update found.", "suppressed Tautulli failure replaced the update result");
 }
@@ -475,7 +478,7 @@ for (const [name, source] of [["production", productionJS], ["preview", previewJ
   assert.match(source, /if \(applicationRefreshPromise\) return applicationRefreshPromise;[\s\S]+recoverPendingPreviews: false,[\s\S]+updateCheckIsAvailable\(\)[\s\S]+Promise\.allSettled\(refreshes\)/, `${name} header Refresh does not serialize and isolate local, Tautulli, and update work`);
   assert.match(source, /JSON\.stringify\(\{ expectedRevision: state\.editor\.revision, confirmRealNetwork: true \}\)/, `${name} header Tautulli refresh changed the safe saved-revision request`);
   assert.match(source, /requireConfirmation && !byId\("discovery-confirm"\)\.checked/, `${name} dedicated Tautulli refresh lost confirmation`);
-  assert.match(source, /state\.discoveryError = error\.message;[\s\S]+renderDiscovery\(\)/, `${name} discovery failures are not retained through rerendering`);
+  assert.match(source, /state\.discoveryError = discoveryFailureMessage\(error\.message\);[\s\S]+renderDiscovery\(\)/, `${name} discovery failures do not distinguish retained choices from the failed live refresh`);
   assert.match(source, /scheduleUpdateCheckAvailabilityRefresh\(cooldown\)/, `${name} cooldown does not schedule an expiry render`);
   assert.match(source, /function showAuthentication\(\) \{[\s\S]+clearUpdateCheckAvailabilityTimer\(\)/, `${name} authentication boundary retains the cooldown timer`);
   assert.match(source, /function showAuthentication\(\) \{\s+authenticationEpoch \+= 1;/, `${name} authentication boundary does not invalidate in-flight completions`);

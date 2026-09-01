@@ -29,7 +29,7 @@ func TestTautulliDiscoveryStorePersistsOnlyCurrentSanitizedChoices(t *testing.T)
 		t.Fatal(err)
 	}
 	loaded := store.Load(revision)
-	if loaded == nil || loaded.SuggestedPreviewUserID != "1" || len(loaded.Libraries) != 1 || len(loaded.Users) != 1 || !loaded.Users[0].LegacyRuleExcluded || loaded.LegacyRuleCount != 2 || loaded.MatchedLegacyRuleCount != 1 {
+	if loaded == nil || !loaded.Retained || loaded.SuggestedPreviewUserID != "1" || len(loaded.Libraries) != 1 || len(loaded.Users) != 1 || !loaded.Users[0].LegacyRuleExcluded || loaded.LegacyRuleCount != 2 || loaded.MatchedLegacyRuleCount != 1 {
 		t.Fatalf("unexpected cached discovery: %+v", loaded)
 	}
 	if strings.Contains(loaded.Libraries[0].Name, "\r") || strings.Contains(loaded.Users[0].Name, "\n") {
@@ -46,6 +46,9 @@ func TestTautulliDiscoveryStorePersistsOnlyCurrentSanitizedChoices(t *testing.T)
 		if strings.Contains(strings.ToLower(string(raw)), forbidden) {
 			t.Fatalf("cache retained forbidden value %q: %s", forbidden, raw)
 		}
+	}
+	if strings.Contains(string(raw), "\"retained\"") {
+		t.Fatal("cache persisted a presentation-only retained marker")
 	}
 }
 
