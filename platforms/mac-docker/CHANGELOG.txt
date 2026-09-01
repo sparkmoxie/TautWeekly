@@ -1,11 +1,11 @@
 TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 ================================
 
-v1.6.1 Portable
+v1.7.0 Portable
 ---------------
-- retains exact private Tailscale Serve for the maintained Docker Desktop package
-- explicitly refuses public Funnel because container Manager cannot own and verify a macOS host-client route
-- preserves the no-Docker-socket, non-root, host-owned update and rollback boundaries
+- adds password-gated public Tailscale Funnel to the maintained Docker Desktop package
+- replaces the private Serve sidecar with an isolated official userspace runtime and exact fixed-target lifecycle adapter
+- preserves the no-Docker-socket, non-root, host-owned update and rollback boundaries without auth keys or host control
 
 v1.6.0 Portable
 ---------------

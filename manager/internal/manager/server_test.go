@@ -150,43 +150,12 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 		t.Fatal("static application shell omitted the explicit production-recipient policy")
 	}
 	app := requestForTest(server, http.MethodGet, "/app.js", nil, nil)
-	if app.Code != http.StatusOK || !strings.Contains(app.Body.String(), "no-eligible-recipients") || !strings.Contains(app.Body.String(), "origin-host-mismatch") || !strings.Contains(app.Body.String(), "httpHostHeader") || !strings.Contains(app.Body.String(), "No configuration was saved") || !strings.Contains(app.Body.String(), "(unsaved)") {
+	if app.Code != http.StatusOK || !strings.Contains(app.Body.String(), "no-eligible-recipients") || !strings.Contains(app.Body.String(), "origin-host-mismatch") || !strings.Contains(app.Body.String(), "exact loopback recovery URL") || !strings.Contains(app.Body.String(), "independently verified Funnel address") || !strings.Contains(app.Body.String(), "No configuration was saved") || !strings.Contains(app.Body.String(), "(unsaved)") {
 		t.Fatalf("production JavaScript omitted recipient/origin guidance: status=%d", app.Code)
 	}
 	favicon := requestForTest(server, http.MethodGet, "/favicon.ico", nil, nil)
 	if favicon.Code != http.StatusOK || favicon.Header().Get("Content-Type") != "image/x-icon" || len(favicon.Body.Bytes()) < 4 || !bytes.Equal(favicon.Body.Bytes()[:4], []byte{0, 0, 1, 0}) {
 		t.Fatalf("Windows Manager favicon contract failed: status=%d type=%q bytes=%d", favicon.Code, favicon.Header().Get("Content-Type"), favicon.Body.Len())
-	}
-}
-
-func TestExternalPrivateManagerDoesNotExposePublicSocialMetadataOrAsset(t *testing.T) {
-	t.Parallel()
-	root := t.TempDir()
-	assetPath := filepath.Join(root, filepath.FromSlash(windowsManagerSocialImageRelativePath))
-	if err := os.MkdirAll(filepath.Dir(assetPath), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(assetPath, []byte{0xff, 0xd8, 0xff, 0xd9}, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	server, err := New(Options{
-		DataDir:                t.TempDir(),
-		TautWeeklyRoot:         root,
-		Version:                "test",
-		RuntimeMode:            runtimeModeMac,
-		remoteAccessController: newExternalTailscaleRemoteAccessController(t.TempDir(), "0.0.0.0:8788"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rootResponse := requestForTest(server, http.MethodGet, "/", nil, nil)
-	if rootResponse.Code != http.StatusOK || strings.Contains(rootResponse.Body.String(), "og:image") || !strings.Contains(rootResponse.Body.String(), "<title>TautWeekly Manager</title>") {
-		t.Fatalf("external-only Manager sharing boundary changed: code=%d", rootResponse.Code)
-	}
-	assetResponse := requestForTest(server, http.MethodGet, windowsManagerSocialImagePath, nil, nil)
-	if assetResponse.Code != http.StatusNotFound {
-		t.Fatalf("external-only Manager served the public social image: code=%d", assetResponse.Code)
 	}
 }
 

@@ -53,10 +53,12 @@ Kubernetes nodes need an explicit tag-targeted attribute. Manager never reads
 or edits that policy, and local `Funnel on` is not accepted as proof of public
 publication on any platform.
 
-Container/NAS, macOS Docker, and FreeBSD Podman packages retain external
-private Serve. They intentionally refuse integrated public Funnel because
-Manager cannot own and verify host/sidecar cleanup without forbidden root,
-Docker/Podman socket, host executable, or privileged networking access. See the
+Container/NAS, QNAP/Synology, Unraid, macOS Docker, and FreeBSD Podman use the
+same public controller through an opt-in isolated userspace adapter. Set
+`TAUTWEEKLY_FUNNEL_ADAPTER=enabled`, preserve the separate root-only provider
+state mount, restart with the package tool, and run its fixed interactive login
+command. Manager receives no root, Docker/Podman socket, host executable,
+provider CLI, auth key, token, or arbitrary target. See the
 [remote-access architecture and platform matrix](REMOTE-ACCESS.md).
 
 ## Bundled artwork and updates
@@ -558,7 +560,7 @@ enabling delivery.
 | `PREVIEW_PORT` | Compatibility name for the host Manager port, normally `8787` |
 | `PREVIEW_BASE_URL` | Public/local Manager base URL used for authenticated preview links |
 | `MANAGER_ALLOWED_HOSTS` | Comma-separated exact DNS names accepted in addition to IP literals/localhost; no wildcards or ports |
-| `MANAGER_SECURE_COOKIES` | Set `true` only when the Manager is reached through a trusted HTTPS reverse proxy |
+| `MANAGER_SECURE_COOKIES` | Leave `false` for loopback recovery; verified Funnel requests enforce the public HTTPS cookie boundary automatically |
 
 Never paste live values into an issue, pull request, repository file, or public
 release archive.

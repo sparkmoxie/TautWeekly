@@ -34,12 +34,18 @@ package_update() {
   exec bash "$updater" "$@"
 }
 
+remote_cleanup() {
+  if compose_cmd ps --status running --services 2>/dev/null | grep -Fxq tautweekly; then
+    compose_cmd exec -T tautweekly /opt/tautweekly/bin/tautweekly-funnel disable
+  fi
+}
+
 cmd="${1:-help}"; shift || true
 case "$cmd" in
   install) exec ./mac-install.sh ;;
   up|start) compose_cmd up -d ;;
-  down|stop) compose_cmd down ;;
-  restart) compose_cmd up -d --no-build --force-recreate tautweekly ;;
+  down|stop) remote_cleanup; compose_cmd down ;;
+  restart) remote_cleanup; compose_cmd up -d --no-build --force-recreate tautweekly ;;
   status) compose_cmd ps ;;
   logs) compose_cmd logs -f --tail=200 tautweekly ;;
   shell) compose_cmd exec tautweekly /opt/tautweekly/bin/run-as-user.sh bash ;;
@@ -90,10 +96,16 @@ case "$cmd" in
     echo "Newsletter configuration, schedules, output, and delivery state are preserved."
     confirm "Reset Manager access and restart the Docker Desktop service?" || exit 0
     compose_cmd exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
-      /opt/tautweekly/bin/tautweekly-manager access-recover --data-dir /data/manager --confirm
+      /opt/tautweekly/bin/tautweekly-manager access-recover --data-dir /data/manager \
+      --tautweekly-root /opt/tautweekly --listen 0.0.0.0:8080 --runtime-mode mac \
+      --package-kind "${TAUTWEEKLY_PACKAGE_KIND:-mac-docker}" --confirm
     compose_cmd restart tautweekly
     echo "Run ./tautweekly.sh manager-bootstrap to retrieve the new one-time pairing token."
     ;;
+  remote-access-login|remote-access-authorize)
+    compose_cmd exec tautweekly /opt/tautweekly/bin/tautweekly-funnel login
+    ;;
+  remote-access-disable) remote_cleanup ;;
   schedule-status) compose_cmd exec tautweekly /opt/tautweekly/bin/run-script.sh Schedule-Control.ps1 -Action Status ;;
   schedule-enable)
     confirm "Enable the configured automatic weekly send?" || exit 0
@@ -111,7 +123,7 @@ case "$cmd" in
     echo "Created tautweekly-data-backup-$stamp.tar.gz"
     ;;
   check-update) package_update check ;;
-  update) package_update apply ;;
+  update) remote_cleanup; package_update apply ;;
   open-manager|open-preview)
     base_url="http://localhost:8787"
     if [[ -f .env ]]; then
@@ -128,6 +140,8 @@ TautWeekly for Plex Mac Portable commands
   ./tautweekly.sh open-manager
   ./tautweekly.sh manager-bootstrap
   ./tautweekly.sh manager-reset-access
+  ./tautweekly.sh remote-access-login
+  ./tautweekly.sh remote-access-disable
   ./tautweekly.sh setup                 # expert/recovery fallback
   ./tautweekly.sh verify                # expert/recovery fallback
   ./tautweekly.sh cache-status

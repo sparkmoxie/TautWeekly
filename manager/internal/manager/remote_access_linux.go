@@ -13,34 +13,62 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 const (
-	linuxRemoteAccessSocket = "/run/tautweekly/remote-access.sock"
-	linuxRemoteAccessTarget = "http://127.0.0.1:8788"
-	linuxFunnelStateFile    = "linux-funnel.json"
+	linuxRemoteAccessSocket     = "/run/tautweekly/remote-access.sock"
+	linuxRemoteAccessTarget     = "http://127.0.0.1:8788"
+	containerRemoteAccessSocket = "/run/tautweekly-remote-access/adapter.sock"
+	containerRemoteAccessTarget = "http://127.0.0.1:8080"
+	containerTailscaleSocket    = "/run/tautweekly-tailscale/tailscaled.sock"
+	linuxFunnelStateFile        = "linux-funnel.json"
+	containerFunnelStateFile    = "container-funnel.json"
 )
 
 type linuxTailscaleRunner struct {
-	socket        string
-	target        string
-	tailscalePath string
+	socket               string
+	target               string
+	tailscalePath        string
+	requireLocalCLI      bool
+	authorizationCommand string
 }
 
 func newPlatformRemoteAccessController(options Options) remoteAccessController {
 	if normalizedRuntimeMode(options.RuntimeMode) == runtimeModeLinux {
 		target := tailscaleLoopbackTarget(options.ListenAddress)
 		if target == linuxRemoteAccessTarget {
-			runner := &linuxTailscaleRunner{socket: linuxRemoteAccessSocket, target: target}
+			runner := &linuxTailscaleRunner{
+				socket: linuxRemoteAccessSocket, target: target, requireLocalCLI: true,
+				authorizationCommand: "sudo tautweekly remote-access-authorize",
+			}
 			return newPublicFunnelController(options.DataDir, options.ListenAddress, linuxFunnelStateFile, true, runner)
 		}
-		return newExternalTailscaleRemoteAccessController(options.DataDir, options.ListenAddress)
+		return newPublicFunnelController(options.DataDir, options.ListenAddress, linuxFunnelStateFile, false, nil)
+	}
+	if isContainerRuntimeMode(options.RuntimeMode) && strings.TrimSpace(options.ListenAddress) == "0.0.0.0:8080" {
+		runner := &linuxTailscaleRunner{
+			socket: containerRemoteAccessSocket, target: containerRemoteAccessTarget,
+			authorizationCommand: containerFunnelAuthorizationCommand(options.PackageKind),
+		}
+		return newPublicFunnelController(options.DataDir, "127.0.0.1:8080", containerFunnelStateFile, true, runner)
 	}
 	if isManagedServiceRuntimeMode(options.RuntimeMode) {
-		return newExternalTailscaleRemoteAccessController(options.DataDir, options.ListenAddress)
+		return newPublicFunnelController(options.DataDir, options.ListenAddress, containerFunnelStateFile, false, nil)
 	}
-	return newTailscaleRemoteAccessController(options.DataDir, options.ListenAddress, false, nil)
+	return newPublicFunnelController(options.DataDir, options.ListenAddress, containerFunnelStateFile, false, nil)
+}
+
+func containerFunnelAuthorizationCommand(packageKind string) string {
+	switch strings.TrimSpace(packageKind) {
+	case packageKindFreeBSD:
+		return "sudo tautweekly remote-access-authorize"
+	case packageKindUnraid:
+		return "/opt/tautweekly/bin/tautweekly-funnel login"
+	default:
+		return "./tautweekly.sh remote-access-login"
+	}
 }
 
 func fixedLinuxTailscalePath() string {
@@ -57,23 +85,32 @@ func (r *linuxTailscaleRunner) Availability() string {
 	if r == nil {
 		return "not-installed"
 	}
-	path := r.tailscalePath
-	if path == "" {
-		path = fixedLinuxTailscalePath()
+	if r.requireLocalCLI {
+		path := r.tailscalePath
+		if path == "" {
+			path = fixedLinuxTailscalePath()
+		}
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			return "not-installed"
+		}
 	}
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		return "not-installed"
-	}
-	info, err = os.Lstat(r.socket)
+	info, err := os.Lstat(r.socket)
 	if err != nil || info.Mode()&os.ModeSocket == 0 {
 		return "authorization-required"
 	}
 	return "available"
 }
 
+func (r *linuxTailscaleRunner) HostAuthorizationCommand() string {
+	if r == nil {
+		return ""
+	}
+	return r.authorizationCommand
+}
+
 func (r *linuxTailscaleRunner) Available() bool {
-	return r != nil && r.target == linuxRemoteAccessTarget && r.Availability() == "available"
+	return r != nil && validLinuxRemoteAccessTarget(r.target) && r.Availability() == "available"
 }
 
 func (*linuxTailscaleRunner) RequiresApproval() bool { return false }

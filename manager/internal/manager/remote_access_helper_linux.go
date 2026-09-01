@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -34,6 +35,90 @@ func RunLinuxRemoteAccessHelper(input, output *os.File) error {
 	if err := requireLinuxRemoteAccessPeer(input); err != nil {
 		return err
 	}
+	return handleLinuxRemoteAccessRequest(input, output, linuxRemoteAccessTarget)
+}
+
+// RunContainerRemoteAccessHelper serves the package-local Funnel adapter. The
+// helper and official Tailscale daemon live inside the same isolated container
+// as the unprivileged Manager, but only this root process can reach the
+// provider CLI. Its Unix socket is owned by the configured non-root Manager UID
+// and accepts only the three fixed operations for the fixed container target.
+func RunContainerRemoteAccessHelper() error {
+	if os.Geteuid() != 0 {
+		return errors.New("the container remote-access helper must run as root")
+	}
+	uidValue := strings.TrimSpace(os.Getenv("TAUTWEEKLY_REMOTE_ACCESS_UID"))
+	uid, err := strconv.ParseUint(uidValue, 10, 32)
+	if err != nil || uid == 0 {
+		return errors.New("the container remote-access helper requires a non-root numeric Manager UID")
+	}
+	directory := filepath.Dir(containerRemoteAccessSocket)
+	if info, statErr := os.Lstat(directory); statErr == nil {
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("the container remote-access socket directory is unsafe")
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid != 0 || info.Mode().Perm()&0o022 != 0 {
+			return errors.New("the container remote-access socket directory ownership is unsafe")
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return errors.New("the container remote-access socket directory is unavailable")
+	} else if mkdirErr := os.MkdirAll(directory, 0o711); mkdirErr != nil {
+		return errors.New("the container remote-access socket directory could not be created")
+	}
+	if err := os.Chmod(directory, 0o711); err != nil {
+		return errors.New("the container remote-access socket directory permissions could not be restricted")
+	}
+	if info, statErr := os.Lstat(containerRemoteAccessSocket); statErr == nil {
+		if info.Mode()&os.ModeSocket == 0 {
+			return errors.New("the container remote-access socket path is unsafe")
+		}
+		if removeErr := os.Remove(containerRemoteAccessSocket); removeErr != nil {
+			return errors.New("the stale container remote-access socket could not be removed")
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return errors.New("the container remote-access socket path is unavailable")
+	}
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: containerRemoteAccessSocket, Net: "unix"})
+	if err != nil {
+		return errors.New("the container remote-access socket could not be opened")
+	}
+	defer listener.Close()
+	defer os.Remove(containerRemoteAccessSocket)
+	if err := os.Chown(containerRemoteAccessSocket, int(uid), int(uid)); err != nil {
+		return errors.New("the container remote-access socket owner could not be restricted")
+	}
+	if err := os.Chmod(containerRemoteAccessSocket, 0o600); err != nil {
+		return errors.New("the container remote-access socket permissions could not be restricted")
+	}
+	for {
+		connection, acceptErr := listener.AcceptUnix()
+		if acceptErr != nil {
+			return errors.New("the container remote-access socket stopped")
+		}
+		if peerErr := requireContainerRemoteAccessPeer(connection, uint32(uid)); peerErr == nil {
+			_ = handleLinuxRemoteAccessRequest(connection, connection, containerRemoteAccessTarget)
+		}
+		_ = connection.Close()
+	}
+}
+
+func requireContainerRemoteAccessPeer(connection *net.UnixConn, expectedUID uint32) error {
+	raw, err := connection.SyscallConn()
+	if err != nil {
+		return errors.New("the container remote-access helper could not inspect its peer")
+	}
+	var credentials *syscall.Ucred
+	var socketErr error
+	if err := raw.Control(func(fd uintptr) {
+		credentials, socketErr = syscall.GetsockoptUcred(int(fd), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
+	}); err != nil || socketErr != nil || credentials == nil || credentials.Uid != expectedUID {
+		return errors.New("the container remote-access helper rejected an unauthorized peer")
+	}
+	return nil
+}
+
+func handleLinuxRemoteAccessRequest(input io.Reader, output io.Writer, expectedTarget string) error {
 	raw, err := io.ReadAll(io.LimitReader(input, 16<<10))
 	if err != nil || len(raw) == 0 || len(raw) >= 16<<10 {
 		return errors.New("the Linux remote-access helper request was invalid")
@@ -42,7 +127,7 @@ func RunLinuxRemoteAccessHelper(input, output *os.File) error {
 	decoder.DisallowUnknownFields()
 	var request tailscaleHelperRequest
 	if err := decoder.Decode(&request); err != nil || decoder.Decode(&struct{}{}) != io.EOF ||
-		request.SchemaVersion != 1 || !validHelperNonce(request.Nonce) || request.Target != linuxRemoteAccessTarget ||
+		request.SchemaVersion != 1 || !validHelperNonce(request.Nonce) || request.Target != expectedTarget ||
 		(request.Action != "inspect" && request.Action != "enable" && request.Action != "disable") {
 		return errors.New("the Linux remote-access helper request was rejected")
 	}
@@ -87,7 +172,7 @@ func validHelperNonce(value string) bool {
 
 func runLinuxTailscaleAction(parent context.Context, action, target string) tailscaleHelperResult {
 	result := tailscaleHelperResult{Code: "verification-failed"}
-	if target != linuxRemoteAccessTarget || (action != "inspect" && action != "enable" && action != "disable") {
+	if !validLinuxRemoteAccessTarget(target) || (action != "inspect" && action != "enable" && action != "disable") {
 		return result
 	}
 	path := fixedLinuxTailscalePath()
@@ -95,11 +180,11 @@ func runLinuxTailscaleAction(parent context.Context, action, target string) tail
 		result.Code = "not-installed"
 		return result
 	}
-	if backendCode := linuxTailscaleBackendCode(parent, path); backendCode != "" {
+	if backendCode := linuxTailscaleBackendCode(parent, path, target); backendCode != "" {
 		result.Code = backendCode
 		return result
 	}
-	serve, raw, err := readLinuxTailscaleFunnel(parent, path)
+	serve, raw, err := readLinuxTailscaleFunnel(parent, path, target)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrTailscaleFunnelUnsupported):
@@ -134,10 +219,10 @@ func runLinuxTailscaleAction(parent context.Context, action, target string) tail
 		if ownedLegacy {
 			command = "serve"
 		}
-		if _, _, err := runBoundedLinuxTailscale(parent, path, tailscaleCommandTimeout, command, "--yes", "--https=443", "off"); err != nil {
+		if _, _, err := runBoundedLinuxTailscaleForTarget(parent, path, target, tailscaleCommandTimeout, command, "--yes", "--https=443", "off"); err != nil {
 			return result
 		}
-		serve, raw, err = readLinuxTailscaleFunnel(parent, path)
+		serve, raw, err = readLinuxTailscaleFunnel(parent, path, target)
 		if err != nil || !serveStatusEmpty(serve) {
 			return result
 		}
@@ -159,7 +244,7 @@ func runLinuxTailscaleAction(parent context.Context, action, target string) tail
 				return result
 			}
 		}
-		stdout, stderr, commandErr := runBoundedLinuxTailscale(parent, path, 15*time.Second, "funnel", "--bg", "--yes", "--https=443", target)
+		stdout, stderr, commandErr := runBoundedLinuxTailscaleForTarget(parent, path, target, 15*time.Second, "funnel", "--bg", "--yes", "--https=443", target)
 		if setupURL := tailscaleApprovalURL(string(stdout) + "\n" + string(stderr)); setupURL != "" {
 			result.Code = "provider-approval-required"
 			result.SetupURL = setupURL
@@ -175,7 +260,7 @@ func runLinuxTailscaleAction(parent context.Context, action, target string) tail
 			case strings.Contains(message, "unknown command"), strings.Contains(message, "unknown subcommand"), strings.Contains(message, "does not support funnel"):
 				result.Code = "unsupported"
 			case errors.Is(commandErr, context.DeadlineExceeded):
-				after, afterRaw, afterErr := readLinuxTailscaleFunnel(parent, path)
+				after, afterRaw, afterErr := readLinuxTailscaleFunnel(parent, path, target)
 				if afterErr == nil {
 					if _, owned := ownedTailscaleFunnel(after, target); owned {
 						result.Code = "enabled"
@@ -186,7 +271,7 @@ func runLinuxTailscaleAction(parent context.Context, action, target string) tail
 			}
 			return result
 		}
-		serve, raw, err = readLinuxTailscaleFunnel(parent, path)
+		serve, raw, err = readLinuxTailscaleFunnel(parent, path, target)
 		if err != nil {
 			return result
 		}
@@ -201,6 +286,10 @@ func runLinuxTailscaleAction(parent context.Context, action, target string) tail
 	return result
 }
 
+func validLinuxRemoteAccessTarget(target string) bool {
+	return target == linuxRemoteAccessTarget || target == containerRemoteAccessTarget
+}
+
 func trustedRootExecutable(path string) bool {
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 {
@@ -210,8 +299,8 @@ func trustedRootExecutable(path string) bool {
 	return ok && stat.Uid == 0
 }
 
-func linuxTailscaleBackendCode(parent context.Context, path string) string {
-	stdout, stderr, err := runBoundedLinuxTailscale(parent, path, tailscaleCommandTimeout, "status", "--json")
+func linuxTailscaleBackendCode(parent context.Context, path, target string) string {
+	stdout, stderr, err := runBoundedLinuxTailscaleForTarget(parent, path, target, tailscaleCommandTimeout, "status", "--json")
 	if err != nil {
 		return classifyLinuxTailscaleBackend(stdout, stderr, err)
 	}
@@ -246,8 +335,8 @@ func classifyLinuxTailscaleBackend(stdout, stderr []byte, commandErr error) stri
 	}
 }
 
-func readLinuxTailscaleFunnel(parent context.Context, path string) (tailscaleServeStatus, json.RawMessage, error) {
-	stdout, stderr, err := runBoundedLinuxTailscale(parent, path, tailscaleCommandTimeout, "funnel", "status", "--json")
+func readLinuxTailscaleFunnel(parent context.Context, path, target string) (tailscaleServeStatus, json.RawMessage, error) {
+	stdout, stderr, err := runBoundedLinuxTailscaleForTarget(parent, path, target, tailscaleCommandTimeout, "funnel", "status", "--json")
 	if err != nil {
 		message := strings.ToLower(string(stdout) + "\n" + string(stderr))
 		switch {
@@ -366,6 +455,13 @@ func runBoundedLinuxTailscale(parent context.Context, path string, timeout time.
 		return stdout.buffer.Bytes(), stderr.buffer.Bytes(), context.DeadlineExceeded
 	}
 	return stdout.buffer.Bytes(), stderr.buffer.Bytes(), err
+}
+
+func runBoundedLinuxTailscaleForTarget(parent context.Context, path, target string, timeout time.Duration, arguments ...string) ([]byte, []byte, error) {
+	if target == containerRemoteAccessTarget {
+		arguments = append([]string{"--socket=" + containerTailscaleSocket}, arguments...)
+	}
+	return runBoundedLinuxTailscale(parent, path, timeout, arguments...)
 }
 
 func tailscaleApprovalURL(output string) string {

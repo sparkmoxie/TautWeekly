@@ -2,8 +2,8 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.24.1";
-  const PREVIOUS_VERSION = "0.24.0";
+  const DEMO_VERSION = "0.25.0";
+  const PREVIOUS_VERSION = "0.24.1";
   const PROFILES = {
     windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows" },
     nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker" },
@@ -287,13 +287,15 @@
       profileName = name;
       model.lockEnabled = serviceProfile();
       model.startup.supported = !serviceProfile();
-      const integratedFunnel = name === "windows" || name === "linux";
+      const authorizationCommand = name === "linux" || name === "freebsd"
+        ? "sudo tautweekly remote-access-authorize"
+        : name === "windows" ? "" : "./tautweekly.sh remote-access-login";
       Object.assign(model.tailscale, { enabled: false, active: false,
-        state: name === "windows" ? "manager-password-required" : name === "linux" ? "ready" : "external-ready", url: "",
-        provider: "tailscale", networkKind: integratedFunnel ? "public-funnel" : "private-tailnet",
+        state: name === "windows" ? "manager-password-required" : "authorization-required", url: "",
+        provider: "tailscale", networkKind: "public-funnel",
         passwordRequired: name === "windows", cleanupRequired: false,
-        management: integratedFunnel ? "integrated" : "external",
-        hostAuthorizationRequired: false, hostAuthorizationCommand: "" });
+        management: "integrated",
+        hostAuthorizationRequired: name !== "windows", hostAuthorizationCommand: authorizationCommand });
       Object.assign(model.update, { managerVersion: DEMO_VERSION, applicationVersion: DEMO_VERSION,
         packageVersion: DEMO_VERSION, runtimeProfile: profile().runtimeProfile, packageKind: profile().packageKind, packageLabel: profile().label + " (fictional)",
         imageVersion: ["nas", "mac", "freebsd"].includes(name) ? DEMO_VERSION : "",
@@ -599,22 +601,15 @@
     }
     if (path === "/api/v1/remote-access/tailscale" || path === "/api/v1/remote-access/tailscale/verify") {
       if (method === "PUT") {
-        if (["windows", "linux"].includes(profileName)) {
-          if (!['enable', 'disable'].includes(body.operation) || Object.hasOwn(body, 'enabled') || Object.hasOwn(body, 'url'))
-            return json({ error: { code: "invalid-operation", message: "Only the synthetic typed Funnel operation is accepted." } }, 400);
-          if (body.operation === "enable" && !model.lockEnabled)
-            return json({ error: { code: "manager-password-required", message: "Set the synthetic Manager password first." } }, 409);
-          const enabled = body.operation === "enable";
-          Object.assign(model.tailscale, { enabled, active: false, cleanupRequired: enabled,
-            passwordRequired: !model.lockEnabled, state: enabled ? "starting" : "inactive",
-            url: enabled ? "https://manager.demo.invalid" : "" });
-        } else {
-          if (body.enabled && model.tailscale.management === "external" && !body.confirmedPrivate)
-            return json({ error: { code: "private-confirmation-required", message: "Confirm the fictional private-access boundary." } }, 400);
-          Object.assign(model.tailscale, { enabled: Boolean(body.enabled), active: Boolean(body.enabled),
-            state: body.enabled ? "enabled" : "disabled", url: body.enabled ? "https://manager.demo.invalid" : "" });
-        }
-      } else if (["windows", "linux"].includes(profileName) && model.tailscale.enabled) {
+        if (!['enable', 'disable'].includes(body.operation) || Object.keys(body).some((key) => key !== 'operation'))
+          return json({ error: { code: "invalid-operation", message: "Only the synthetic typed Funnel operation is accepted." } }, 400);
+        if (body.operation === "enable" && !model.lockEnabled)
+          return json({ error: { code: "manager-password-required", message: "Set the synthetic Manager password first." } }, 409);
+        const enabled = body.operation === "enable";
+        Object.assign(model.tailscale, { enabled, active: false, cleanupRequired: enabled,
+          passwordRequired: !model.lockEnabled, state: enabled ? "starting" : "inactive",
+          url: enabled ? "https://manager.demo.invalid" : "" });
+      } else if (model.tailscale.enabled) {
         Object.assign(model.tailscale, { active: true, state: "active" });
       }
       return json(model.tailscale);

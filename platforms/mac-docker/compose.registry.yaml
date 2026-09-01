@@ -15,11 +15,13 @@ services:
       TAUTWEEKLY_PREVIEW_BASE_URL: ${PREVIEW_BASE_URL:-http://localhost:8787}
       TAUTWEEKLY_MANAGER_ALLOWED_HOSTS: ${MANAGER_ALLOWED_HOSTS:-}
       TAUTWEEKLY_MANAGER_SECURE_COOKIES: ${MANAGER_SECURE_COOKIES:-false}
+      TAUTWEEKLY_FUNNEL_ADAPTER: ${TAUTWEEKLY_FUNNEL_ADAPTER:-disabled}
       TAUTWEEKLY_PACKAGE_KIND: "container-desktop"
       TAUTWEEKLY_PACKAGE_VERSION: "${TAUTWEEKLY_VERSION:-__TAUTWEEKLY_RELEASE_VERSION__}"
-      TAUTWEEKLY_HOST_ADAPTER_API: "3"
+      TAUTWEEKLY_HOST_ADAPTER_API: "4"
     volumes:
       - tautweekly-data:/data
+      - tautweekly-tailscale-state:/var/lib/tautweekly-tailscale
     ports:
       - "${PREVIEW_BIND:-127.0.0.1}:${PREVIEW_PORT:-8787}:8080"
     healthcheck:
@@ -31,6 +33,7 @@ services:
     stop_grace_period: 30m
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=256m,mode=1777
+      - /run:rw,noexec,nosuid,size=16m,mode=0755
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -44,3 +47,4 @@ services:
 
 volumes:
   tautweekly-data:
+  tautweekly-tailscale-state:

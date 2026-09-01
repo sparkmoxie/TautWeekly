@@ -106,7 +106,7 @@ func TestLinuxTailscaleRunnerDistinguishesInstallationAndHostAuthorization(t *te
 	}
 }
 
-func TestLinuxRuntimeSelectsIntegratedAdapterOnlyForFixedNativeService(t *testing.T) {
+func TestLinuxRuntimeSelectsIntegratedFunnelAdaptersForFixedNativeAndContainerServices(t *testing.T) {
 	integrated := newPlatformRemoteAccessController(Options{
 		RuntimeMode: runtimeModeLinux, ListenAddress: "127.0.0.1:8788", DataDir: t.TempDir(),
 	})
@@ -118,8 +118,14 @@ func TestLinuxRuntimeSelectsIntegratedAdapterOnlyForFixedNativeService(t *testin
 		t.Fatalf("native Linux Funnel capability was not fail-closed before host authorization: %+v", status)
 	}
 
+	unsupported := newPlatformRemoteAccessController(Options{
+		RuntimeMode: runtimeModeLinux, ListenAddress: "127.0.0.1:9876", DataDir: t.TempDir(),
+	})
+	if status := unsupported.Status(context.Background()); status.Supported || status.NetworkKind != "public-funnel" {
+		t.Fatalf("non-fixed native service did not fail closed as unsupported Funnel: %+v", status)
+	}
+
 	for _, options := range []Options{
-		{RuntimeMode: runtimeModeLinux, ListenAddress: "127.0.0.1:9876", DataDir: t.TempDir()},
 		{RuntimeMode: runtimeModeNAS, ListenAddress: "0.0.0.0:8080", PackageKind: packageKindNAS, DataDir: t.TempDir()},
 		{RuntimeMode: runtimeModeNAS, ListenAddress: "0.0.0.0:8080", PackageKind: packageKindQNAP, DataDir: t.TempDir()},
 		{RuntimeMode: runtimeModeNAS, ListenAddress: "0.0.0.0:8080", PackageKind: packageKindUnraid, DataDir: t.TempDir()},
@@ -127,8 +133,27 @@ func TestLinuxRuntimeSelectsIntegratedAdapterOnlyForFixedNativeService(t *testin
 		{RuntimeMode: runtimeModeMac, ListenAddress: "0.0.0.0:8080", PackageKind: packageKindMac, DataDir: t.TempDir()},
 	} {
 		controller := newPlatformRemoteAccessController(options)
-		if _, ok := controller.(*externalTailscaleRemoteAccessController); !ok {
-			t.Errorf("host-managed package %s/%s did not receive the external adapter: %T", options.RuntimeMode, options.PackageKind, controller)
+		if _, ok := controller.(*publicFunnelController); !ok {
+			t.Errorf("container package %s/%s did not receive the public Funnel adapter: %T", options.RuntimeMode, options.PackageKind, controller)
+			continue
+		}
+		status := controller.Status(context.Background())
+		if status.NetworkKind != "public-funnel" || status.Management != "integrated" || !status.HostAuthorizationRequired {
+			t.Errorf("container package %s/%s did not fail closed before adapter authorization: %+v", options.RuntimeMode, options.PackageKind, status)
+		}
+	}
+}
+
+func TestContainerFunnelAuthorizationCommandsAreFixedByPackage(t *testing.T) {
+	tests := map[string]string{
+		packageKindFreeBSD: "sudo tautweekly remote-access-authorize",
+		packageKindUnraid:  "/opt/tautweekly/bin/tautweekly-funnel login",
+		packageKindMac:     "./tautweekly.sh remote-access-login",
+		packageKindQNAP:    "./tautweekly.sh remote-access-login",
+	}
+	for packageKind, want := range tests {
+		if got := containerFunnelAuthorizationCommand(packageKind); got != want {
+			t.Errorf("authorization command for %s: got %q, want %q", packageKind, got, want)
 		}
 	}
 }

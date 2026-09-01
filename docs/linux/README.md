@@ -11,13 +11,13 @@ If a Debian, Ubuntu, or other Linux server uses Docker or Compose, use the
 [NAS/Docker distribution](../nas-docker/README.md) instead. “NAS” is only the
 container distribution name; dedicated NAS hardware is not required. Both
 distributions use the same Manager and newsletter behavior. Their access model
-differs: Native Linux keeps Manager on loopback and uses an SSH tunnel or
-private Tailscale, while NAS/Docker normally serves an authenticated trusted-LAN
-URL.
+differs only in lifecycle ownership: both keep the host Manager endpoint on
+loopback and use an SSH local forward for recovery or their optional
+password-gated public Tailscale Funnel for an ordinary remote browser.
 
 [Open the Native Linux Quickstart](https://sparkmoxie.github.io/TautWeekly/linux/)
 
-Current source baseline: **1.3.0**.
+Current source baseline: **1.4.0**.
 
 ## Supported target
 
@@ -219,11 +219,9 @@ port:
 ssh -L 8788:127.0.0.1:8788 admin@example.com
 ```
 
-Then open `http://127.0.0.1:8788/` locally. If a reverse proxy is required,
-keep the backend on loopback, set its exact DNS name in
-`TAUTWEEKLY_MANAGER_ALLOWED_HOSTS`, set
-`TAUTWEEKLY_MANAGER_SECURE_COOKIES=true`, terminate TLS at the proxy, and
-restart the service. Do not publish the loopback listener directly.
+Then open `http://127.0.0.1:8788/` locally. Keep the recovery listener on
+loopback and do not publish it through a LAN bind, router, or firewall. The
+selected public ingress is the fixed-target Tailscale Funnel below.
 
 ### Optional public Tailscale Funnel
 
@@ -430,8 +428,10 @@ sudo systemctl daemon-reload
   rerun the installer.
 - `systemd is required`: use the NAS/Docker edition on that host.
 - Manager works locally but not remotely: keep the localhost bind and use the
-  SSH tunnel above, or verify the optional private Tailscale route and tailnet
-  device access.
+  SSH tunnel above, or inspect **Settings > Tailscale Funnel**. Gold
+  **Publication pending** means the exact local route exists but public DNS or
+  trusted TLS has not passed; it is not Active. Confirm the fixed adapter is
+  authorized with `tautweekly remote-access-status` and use Verify again.
 - Forgotten Manager password: run `sudo tautweekly manager-reset-access`, then
   `sudo tautweekly manager-bootstrap`; this preserves configuration, schedules,
   output, delivery history, and newsletter state.

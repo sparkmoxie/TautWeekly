@@ -4,8 +4,8 @@
         "help","build","up","down","restart","status","logs","shell",
         "setup","verify","list-users","preview","preview-all",
         "send-test","send-test-all","welcome","send-all","roster",
-        "repair-assets","manager-bootstrap","manager-reset-access","schedule-status","schedule-enable",
-        "schedule-disable","schedule-reset","check-update","update"
+        "repair-assets","manager-bootstrap","manager-reset-access","remote-access-login","remote-access-disable",
+        "schedule-status","schedule-enable","schedule-disable","schedule-reset","check-update","update"
     )]
     [string]$Command = "help",
 
@@ -64,6 +64,11 @@ function Invoke-DockerCapture {
 
 function Get-ContainerId {
     return (Invoke-ComposeCapture @('ps','-q','tautweekly')).Split([Environment]::NewLine)[0].Trim()
+}
+
+function Disable-PublicRemoteAccess {
+    if ([string]::IsNullOrWhiteSpace((Get-ContainerId))) { return }
+    Invoke-Compose @('exec','-T','tautweekly','/opt/tautweekly/bin/tautweekly-funnel','disable')
 }
 
 function Get-ImageVersion {
@@ -339,6 +344,10 @@ function Invoke-ContainerUpdate {
     }
     $beforeVersion = Get-ImageVersion $before
 
+    if ($Apply -and -not [string]::IsNullOrWhiteSpace($containerId)) {
+        Disable-PublicRemoteAccess
+    }
+
     $lockHeld = $false
     if ($Apply -and -not [string]::IsNullOrWhiteSpace($containerId)) {
         Start-ContainerOperationLock
@@ -470,8 +479,8 @@ switch ($Command) {
         throw "The release Compose file pulls a published image. Source builds use: docker build -f platforms/nas-docker/Dockerfile ."
     }
     "up" { Invoke-Compose @("up","-d") }
-    "down" { Invoke-Compose @("down") }
-    "restart" { Invoke-Compose @("restart","tautweekly") }
+    "down" { Disable-PublicRemoteAccess; Invoke-Compose @("down") }
+    "restart" { Disable-PublicRemoteAccess; Invoke-Compose @("restart","tautweekly") }
     "status" { Invoke-Compose @("ps") }
     "logs" { Invoke-Compose @("logs","-f","--tail=200","tautweekly") }
     "shell" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-as-user.sh","bash") }
@@ -517,11 +526,13 @@ switch ($Command) {
     "manager-reset-access" {
         Write-Warning "This resets only the Manager password and active browser sessions. Newsletter data is preserved."
         if (Confirm-Action "Reset Manager access and restart the container?") {
-            Invoke-Compose @("exec","-T","tautweekly","/opt/tautweekly/bin/run-as-user.sh","/opt/tautweekly/bin/tautweekly-manager","access-recover","--data-dir","/data/manager","--confirm")
+            Invoke-Compose @("exec","-T","tautweekly","/opt/tautweekly/bin/run-as-user.sh","/opt/tautweekly/bin/tautweekly-manager","access-recover","--data-dir","/data/manager","--tautweekly-root","/opt/tautweekly","--listen","0.0.0.0:8080","--runtime-mode","nas","--package-kind","container-compose","--confirm")
             Invoke-Compose @("restart","tautweekly")
             Write-Host "Run .\tautweekly-docker.ps1 manager-bootstrap to retrieve the new one-time pairing token."
         }
     }
+    "remote-access-login" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/tautweekly-funnel","login") }
+    "remote-access-disable" { Disable-PublicRemoteAccess }
     "schedule-status" { Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-script.sh","Schedule-Control.ps1","-Action","Status") }
     "schedule-enable" {
         if (Confirm-Action "Enable the configured automatic weekly send?") {
@@ -547,6 +558,8 @@ TautWeekly for Plex Docker Desktop / PowerShell commands
   .\tautweekly-docker.ps1 verify
   .\tautweekly-docker.ps1 manager-bootstrap
   .\tautweekly-docker.ps1 manager-reset-access
+  .\tautweekly-docker.ps1 remote-access-login
+  .\tautweekly-docker.ps1 remote-access-disable
   .\tautweekly-docker.ps1 list-users
   .\tautweekly-docker.ps1 preview-all USER_ID
   .\tautweekly-docker.ps1 send-test-all USER_ID

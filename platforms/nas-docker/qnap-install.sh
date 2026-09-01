@@ -9,20 +9,6 @@ compose_cmd() {
   exit 1
 }
 
-detect_nas_ip() {
-  local found=""
-  if command -v hostname >/dev/null 2>&1; then
-    found="$(hostname -I 2>/dev/null | tr ' ' '\n' | awk '/^[0-9]+\./ && $0 !~ /^127\./ {print; exit}')"
-  fi
-  if [[ -z "$found" ]] && command -v ip >/dev/null 2>&1; then
-    found="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}')"
-  fi
-  if [[ -z "$found" ]] && command -v ip >/dev/null 2>&1; then
-    found="$(ip -4 addr show scope global 2>/dev/null | awk '/inet / {sub(/\/.*/,"",$2); print $2; exit}')"
-  fi
-  printf '%s' "${found:-nas.example.test}"
-}
-
 wait_for_container() {
   local attempts=60
   printf 'Waiting for the TautWeekly for Plex container to become ready'
@@ -73,17 +59,15 @@ if [[ ! -f .env ]]; then
 
   TZ_VALUE="Etc/UTC"
   if [[ -s /etc/timezone ]]; then TZ_VALUE="$(tr -d '\r\n' </etc/timezone)"; fi
-  NAS_IP="$(detect_nas_ip)"
-
   cat > .env <<EOF
 COMPOSE_PROJECT_NAME=tautweekly
 TZ=$TZ_VALUE
 PUID=$PUID_VALUE
 PGID=$PGID_VALUE
 UMASK=077
-PREVIEW_BIND=0.0.0.0
+PREVIEW_BIND=127.0.0.1
 PREVIEW_PORT=8787
-PREVIEW_BASE_URL=http://$NAS_IP:8787
+PREVIEW_BASE_URL=http://127.0.0.1:8787
 MANAGER_ALLOWED_HOSTS=
 MANAGER_SECURE_COOKIES=false
 EOF
@@ -101,17 +85,19 @@ cat <<'EOF'
 
 Installation is complete.
 
-The authenticated Manager is available on the trusted LAN at the URL saved in
-PREVIEW_BASE_URL in .env. Retrieve the one-time pairing token explicitly in
-this administrator terminal; the token is never printed to container logs:
+The authenticated Manager is available only through QNAP loopback. From the
+administrator workstation, keep this local forward open while using Manager:
+
+  ssh -N -L 8787:127.0.0.1:8787 ADMIN@QNAP_HOST
+
+Retrieve the one-time pairing token explicitly in this administrator terminal;
+the token is never printed to container logs:
 
   ./tautweekly.sh manager-bootstrap
 
-Then open the Manager URL, create the administrator password, and complete the
+Then open http://127.0.0.1:8787/, create the administrator password, and complete the
 guided configuration, verification, preview, and TestEmail checks. Automatic
 sending remains disabled until it is explicitly enabled in the Manager.
-
-If the hostname shown in your browser is not the NAS IP address, add that exact
-DNS name to MANAGER_ALLOWED_HOSTS in .env and restart the container. Never
-port-forward the plain-HTTP Manager directly to the public internet.
+Optional public access uses only the independently verified Funnel URL; do not
+add a broad bind, router port, firewall rule, or alternate proxy.
 EOF

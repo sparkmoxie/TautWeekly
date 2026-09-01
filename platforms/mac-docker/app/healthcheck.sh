@@ -14,6 +14,15 @@ fail() {
 [[ "$heartbeat_max_age" =~ ^[0-9]+$ ]] || fail 'TAUTWEEKLY_HEALTH_HEARTBEAT_MAX_SECONDS must be a positive integer.'
 (( heartbeat_max_age > 0 )) || fail 'TAUTWEEKLY_HEALTH_HEARTBEAT_MAX_SECONDS must be greater than zero.'
 
+case "${TAUTWEEKLY_FUNNEL_ADAPTER:-disabled}" in
+  disabled) ;;
+  enabled)
+    [[ -S /run/tautweekly-tailscale/tailscaled.sock ]] || fail 'The private Tailscale daemon socket is unavailable.'
+    [[ -S /run/tautweekly-remote-access/adapter.sock ]] || fail 'The fixed-operation Funnel adapter socket is unavailable.'
+    ;;
+  *) fail 'TAUTWEEKLY_FUNNEL_ADAPTER must be exactly disabled or enabled.' ;;
+esac
+
 if ! curl -fsS --max-time 3 "${health_base_url%/}/health/live" >/dev/null; then
   fail "Manager liveness did not respond at ${health_base_url%/}/health/live."
 fi

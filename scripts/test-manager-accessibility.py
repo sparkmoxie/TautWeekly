@@ -328,11 +328,7 @@ def main() -> int:
         "tailscale-enabled",
         "tailscale-host-authorization",
         "tailscale-copy-authorization",
-        "tailscale-external-setup",
-        "tailscale-external-url",
-        "tailscale-private-confirm",
-        "tailscale-external-guide",
-        "tailscale-serve-status",
+        "tailscale-funnel-status",
         "tailscale-url",
         "tailscale-password-status",
         "tailscale-password-setup-button",
@@ -347,16 +343,16 @@ def main() -> int:
     for marker in (
         'request("/api/v1/remote-access/tailscale")',
         'method: "PUT"',
-        'confirmedPrivate: external ? byId("tailscale-private-confirm").checked : false',
-        'JSON.stringify(publicFunnel ? { operation: state.tailscaleRequestedOperation }',
+        'JSON.stringify({ operation: state.tailscaleRequestedOperation })',
         'navigator.clipboard.writeText(state.tailscale.url)',
         'parsed.search === "" && parsed.hash === "" && parsed.hostname.endsWith(".ts.net")',
         'panel.setAttribute("aria-busy", String(state.tailscaleSaving));',
     ):
         if marker not in javascript:
             failures.append(f"Tailscale remote access interaction contract is missing: {marker}")
-    if "Private HTTPS only; Funnel is off" not in combined:
-        failures.append("external package adapters no longer disclose the private Serve/Funnel-off boundary")
+    for retired_marker in ('tailscale-private-confirm', 'tailscale-external-url', 'confirmedPrivate'):
+        if retired_marker in combined:
+            failures.append(f"retired private Serve control remains in the Funnel-only Manager: {retired_marker}")
     for marker in (
         "Funnel makes the Manager login page publicly reachable over HTTPS",
         "Remote viewers do not need Tailscale or a VPN",
@@ -369,10 +365,16 @@ def main() -> int:
     ):
         if marker not in combined:
             failures.append(f"Integrated Funnel disclosure or accessible state is missing: {marker}")
-    if "No credentials belong here." not in combined or "remote.hostAuthorizationCommand === \"sudo tautweekly remote-access-authorize\"" not in javascript:
-        failures.append("Tailscale adapters do not keep credentials out of Manager or pin Linux host authorization to the packaged command")
-    if 'remote.management === "external"' not in javascript or 'remote.management' not in javascript:
-        failures.append("Tailscale card does not distinguish integrated and host-managed package adapters")
+    for marker in (
+        "Manager remains non-root and receives no credential or provider CLI",
+        '"sudo tautweekly remote-access-authorize"',
+        '"./tautweekly.sh remote-access-login"',
+        '"/opt/tautweekly/bin/tautweekly-funnel login"',
+    ):
+        if marker not in combined:
+            failures.append(f"Funnel adapter credential/command boundary is missing: {marker}")
+    if 'remote.management' in javascript:
+        failures.append("Funnel-only card still branches into the retired host-managed private architecture")
     if 'panel.classList.toggle("enabled-glow", Boolean(remote.enabled && remote.active));' not in javascript:
         failures.append("Active Tailscale state does not drive the full-card glow")
     if 'panel.classList.toggle("publication-pending-glow", Boolean(publicFunnel && remote.enabled && remote.state === "starting"));' not in javascript:
@@ -380,7 +382,7 @@ def main() -> int:
     tailscale_renderer_start = javascript.find("function renderTailscaleSettings()")
     tailscale_renderer_end = javascript.find("\n}\n\nasync function updateTailscaleAccess", tailscale_renderer_start)
     tailscale_renderer = javascript[tailscale_renderer_start:tailscale_renderer_end]
-    funnel_declaration = tailscale_renderer.find('const publicFunnel = remote.networkKind === "public-funnel";')
+    funnel_declaration = tailscale_renderer.find("const publicFunnel = true;")
     funnel_first_use = tailscale_renderer.find("const displayRemote = publicFunnel")
     if tailscale_renderer_start < 0 or tailscale_renderer_end < 0 or funnel_declaration < 0 or funnel_first_use < 0 or funnel_declaration > funnel_first_use:
         failures.append("Integrated Funnel renderer uses publicFunnel before its declaration")

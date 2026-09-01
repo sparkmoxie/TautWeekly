@@ -1,7 +1,6 @@
 # NAS / Docker installation
 
 [Open the NAS/Docker/QNAP/Unraid Quickstart](https://sparkmoxie.github.io/TautWeekly/nas-docker/)
-· [Install from the published Unraid Apps listing](https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb)
 
 TautWeekly publishes one shared `ghcr.io/sparkmoxie/tautweekly` OCI image for
 QNAP Container Station, Unraid, general Linux Docker hosts, Docker Desktop,
@@ -12,14 +11,14 @@ without duplicating the application payload.
 
 Despite the distribution name, dedicated NAS hardware is not required. A
 Debian, Ubuntu, or other Linux server that runs Docker or Compose should use
-this NAS/Docker distribution. It is fully headless: normally open the
-authenticated Manager from a browser on another trusted-LAN device at
-`http://SERVER_LAN_IP:8787/`; everyday Manager use needs neither SSH nor a
-desktop on the server. The Docker and Native Linux distributions use the same
-Manager and newsletter behavior, but Native Linux keeps Manager on loopback and
-uses an SSH tunnel or optional private Tailscale access.
+this NAS/Docker distribution. It is fully headless. The host Manager recovery
+port stays on `127.0.0.1:8787`; use a short-lived SSH local forward for initial
+setup and recovery. Optional password-gated Tailscale Funnel supplies the only
+public ingress and opens from an ordinary remote browser without installing
+Tailscale on that viewer. The Docker and Native Linux distributions use the
+same Manager and newsletter behavior with package-specific lifecycle adapters.
 
-Current source baseline: **1.6.0**.
+Current source baseline: **1.7.0**.
 
 > [!IMPORTANT]
 > The authenticated Manager is the setup source for every target in this
@@ -37,10 +36,10 @@ Current source baseline: **1.6.0**.
   complete movie RT critic/audience ratings, exact-episode IMDb/RT ratings,
   backgrounds, and selected logos.
 - A Tautulli API key.
-- A trusted-LAN host port for the authenticated Manager; default 8787.
-- A browser on another trusted-LAN device that can reach the Docker server by IP
-  address, or an explicit
-  `MANAGER_ALLOWED_HOSTS` entry when a DNS name or reverse proxy is used.
+- Loopback host port 8787 for authenticated local recovery, reached directly on
+  a desktop host or through an administrator-controlled SSH local forward.
+- For optional public access, a separately created Tailscale account, explicit
+  interactive container sign-in, and a Manager password lock.
 
 ## Required Manager authentication
 
@@ -67,8 +66,8 @@ docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
 
 In a vendor container Console such as Unraid, run only the command beginning
 with `/opt/tautweekly/bin/run-as-user.sh`; do not prefix it with
-`docker compose exec`. Open `http://SERVER_LAN_IP:8787/` from another trusted
-device, enter the token, and create an administrator
+`docker compose exec`. Open `http://127.0.0.1:8787/` on the Docker host or
+forward that loopback port over SSH, enter the token, and create an administrator
 password of at least eight characters. The Manager stores only a salted,
 iterated password hash; sessions are in memory, expire after eight hours, use
 HttpOnly SameSite=Strict cookies, and require a per-session CSRF token for
@@ -79,7 +78,7 @@ not change the password, newsletter schedule, or a newsletter already running.
 ## Install from Unraid Apps
 
 In Unraid Community Applications, search for **TautWeekly for Plex**, review
-the port and appdata path, and select **Install**. The maintained template is
+the loopback recovery and appdata paths, and select **Install**. The maintained template is
 [`templates/tautweekly.xml`](../../templates/tautweekly.xml), selects the
 validated `unraid` profile, and pulls `ghcr.io/sparkmoxie/tautweekly:latest`
 for amd64 or arm64. This mutable reference is an Unraid Apps lifecycle
@@ -101,11 +100,18 @@ After installation, open **Docker > TautWeekly for Plex > Console** and run:
   access-bootstrap --data-dir /data/manager
 ```
 
-Open `http://UNRAID_HOST:8787/`, pair the browser, and use the guided Manager
-to configure, verify, generate previews, send controlled TestEmail messages,
-and enable the embedded schedule. The legacy Console helpers remain available
-for recovery, but they are no longer the normal setup path. Never port-forward
-plain HTTP Manager access to the public internet.
+From the administrator workstation, establish the local recovery tunnel and
+keep it open while configuring Manager:
+
+```bash
+ssh -N -L 8787:127.0.0.1:8787 root@UNRAID_HOST
+```
+
+Open `http://127.0.0.1:8787/`, pair the browser, and use the guided Manager to
+configure, verify, generate previews, send controlled TestEmail messages, and
+enable the embedded schedule. The Unraid template deliberately creates no
+broad host-port mapping. The legacy Console helpers remain available for
+recovery, but they are no longer the normal setup path.
 
 Community Applications listings are moderated. The template can be audited
 directly from its [raw URL](https://raw.githubusercontent.com/sparkmoxie/TautWeekly/main/templates/tautweekly.xml).
@@ -117,7 +123,9 @@ and [repository XML format](https://ca.unraid.net/submit/help/repository-xml).
 QNAP's Docker-native path is **Container Station > Create Application**. Paste
 [`compose.qnap.yaml`](../../platforms/nas-docker/compose.qnap.yaml), change the
 timezone and non-root PUID/PGID, and confirm the host data path before creating
-the application. QNAP documents Compose applications in Container Station;
+the application. The supplied Compose application binds Manager to QNAP
+loopback; use `ssh -N -L 8787:127.0.0.1:8787 ADMIN@QNAP_HOST` for setup and
+recovery. QNAP documents Compose applications in Container Station;
 App Center repositories distribute native QPKG applications instead, so this
 Docker edition is not presented as a QPKG.
 
@@ -139,18 +147,18 @@ The guided SSH installer remains available from the release archive:
 
 Download and verify the release's standalone server Compose asset. It pins the
 full semantic version, explicitly selects `TAUTWEEKLY_RUNTIME_PROFILE=server`,
-uses the `container-compose` package identity, exposes the Manager on the
-trusted LAN by default, and bind-mounts `./data` at `/data`:
+uses the `container-compose` package identity, binds Manager only to host
+loopback, and bind-mounts `./data` at `/data`:
 
 ```bash
 mkdir -p TautWeekly && cd TautWeekly
-TAUTWEEKLY_VERSION=0.23.0
+TAUTWEEKLY_VERSION=0.25.0
 curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/TautWeekly-compose.yaml"
 curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/SHA256SUMS.txt"
 grep '  TautWeekly-compose.yaml$' SHA256SUMS.txt | sha256sum -c -
 mv TautWeekly-compose.yaml compose.yaml
 mkdir -p data
-# Set a private .env with TZ, PUID, PGID, UMASK, bind/port, and host policy.
+# Set a private .env with TZ, PUID, PGID, UMASK, and the fixed loopback port.
 docker compose pull tautweekly
 docker compose up -d tautweekly
 docker compose ps
@@ -160,7 +168,7 @@ docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
 ```
 
 For reviewed deployments use
-`ghcr.io/sparkmoxie/tautweekly:0.23.0`. For unattended automation append the
+`ghcr.io/sparkmoxie/tautweekly:0.25.0`. For unattended automation append the
 published manifest digest. Minor, `latest`, and `edge` are mutable and are not
 recommended promotion pins. The host owns every pull and recreate; the Manager
 has no Docker socket or engine credentials.
@@ -191,11 +199,11 @@ docker compose port tautweekly 8080
 ```
 
 Here `./tautweekly.sh manager-bootstrap` is the host-side release-archive
-wrapper. Open `http://SERVER_LAN_IP:8787/` from another trusted-LAN device, pair
-the browser, and complete guided setup. A DNS name such as
-`tautweekly.example.test` must be listed exactly in
-`MANAGER_ALLOWED_HOSTS`; IP-literal access needs no entry. Do not add schemes,
-paths, ports, or wildcards.
+wrapper. Open `http://127.0.0.1:8787/` on the Docker host, or use
+`ssh -N -L 8787:127.0.0.1:8787 ADMIN@DOCKER_HOST` from the administrator
+workstation, then pair the browser and complete guided setup. Keep the host
+mapping on loopback; ordinary remote-browser access is supplied only by the
+verified Funnel URL.
 
 Use a hostname reachable from inside the container, for example
 `http://media.example.test:8181`. Do not use `127.0.0.1` for Tautulli unless it
@@ -396,25 +404,17 @@ or schedule settings.
 
 ## Networking
 
-The default Compose file publishes container port 8080 as host port 8787. The
-compatibility variable names `PREVIEW_BIND` and `PREVIEW_PORT` are retained, but
-they control the authenticated Manager's host mapping. Set
-`PREVIEW_BIND=127.0.0.1` for host-only access or bind to a trusted LAN interface
-when LAN Manager access is required. IP-literal Host headers are accepted in
-NAS mode. DNS names are rejected unless listed exactly, comma-separated, in
-`MANAGER_ALLOWED_HOSTS`; this keeps the default usable with dynamic NAS
-addresses while resisting DNS-rebinding through attacker-controlled names.
-The Manager ignores `Forwarded` and `X-Forwarded-*` headers and never infers
-trust, client identity, host, or TLS from them.
+Every maintained Compose/vendor definition keeps container port 8080 on host
+loopback port 8787. `PREVIEW_BIND` and `PREVIEW_PORT` are retained for package
+compatibility, but the supported value is `127.0.0.1:8787`; do not override it
+with `0.0.0.0`, a LAN address, host networking, or a router/firewall rule. Use
+an SSH local forward for setup and recovery. The selected public ingress is the
+fixed-target Funnel adapter below.
 
-For remote access, place the Manager behind a reverse proxy that terminates
-TLS, preserves the original `Host` header, and does not publish the port
-directly. Add the public DNS name to `MANAGER_ALLOWED_HOSTS`, verify HTTPS end
-to end, then set `MANAGER_SECURE_COOKIES=true` and recreate the container.
-That setting forces Secure cookies and HSTS; enabling it on a plain HTTP URL
-makes login intentionally fail. TautWeekly does not provision certificates or
-declare any proxy trusted. Prefer a VPN for administration and never expose
-plain HTTP to the public internet.
+Exact Host/origin admission, CSRF, HttpOnly/SameSite sessions, and the public
+Secure-cookie decision remain backend-owned. An independently verified active
+Funnel hostname is admitted automatically. The Manager ignores `Forwarded` and
+`X-Forwarded-*` and never trusts them for host, origin, client identity, or TLS.
 
 For the generic Compose package, `./tautweekly.sh restart` performs that
 single-service recreation and applies current `.env` values while preserving
@@ -422,88 +422,52 @@ the image, volumes, `.env`, and `data/`. NAS vendor controls must use their
 equivalent recreate/update-container action; a process-only restart cannot
 apply changed container environment values.
 
-### Optional private Tailscale access
+### Optional public Tailscale Funnel
 
-Manager **Settings > Tailscale** supports every maintained container package
-without granting the web process host control. First create a private HTTPS
-Tailscale Serve route on the Docker/NAS host to its mapped loopback port (8787
-by default), then paste only the resulting exact `https://...ts.net` address,
-confirm that Funnel is off, and enable it. Manager saves one hostname, enforces
-it as an exact Host value, uses Secure cookies/HSTS and HTTPS same-origin rules
-for that host, and keeps its independent password required. It does not accept
-an auth key, tunnel token, provider credential, wildcard, port, or URL path.
+Every maintained container package can expose its password-protected Manager
+through a public Tailscale Funnel URL. The remote viewer needs only an ordinary
+browser and the Manager password; the viewer does not install Tailscale or join
+a tailnet. Manager stays on its fixed container-local target, and the adapter
+does not open a router or firewall port.
 
-Public Funnel is intentionally unsupported through Docker/NAS Manager,
-including QNAP, Synology, Unraid, and the bundled sidecar. The container has no
-Docker socket, host executable, privileged network mode, root identity, or NAS
-control plane, so it cannot prove route ownership or disable and verify a
-public route before access reset, shutdown, update, rollback, or removal. Do
-not work around that refusal by mounting host control into Manager. Use the
-documented separately administered private Serve topology only.
+The package copies the pinned official Tailscale userspace runtime into the
+TautWeekly image. Its root-only adapter owns a separate persistent identity and
+accepts only inspect, enable, and disable for `http://127.0.0.1:8080`. The
+non-root Manager receives no Docker/Podman socket, host executable, TUN device,
+host networking, added network capability, auth key, OAuth secret, arbitrary
+command, hostname, port, path, or CLI argument. Authentication is an explicit
+interactive administrator step; auth-key and token environments fail closed.
 
-- **Unraid 7:** use the recommended Tailscale Plugin, sign the server into the
-  tailnet, and create a private Serve route to the mapped TautWeekly port. Do
-  not put a Tailscale key in the Community Apps template.
-- **QNAP:** use the Tailscale App Center package and its documented SSH CLI path
-  to create the private Serve route. Container Station continues to own
-  TautWeekly; Manager receives no QNAP privilege.
-- **Generic Linux/NAS:** prefer the host's supported Tailscale package and a
-  private Serve route to `http://127.0.0.1:8787` (or the configured mapped
-  port). This is simpler than adding another container.
+For generic Compose, Synology, or another compatible NAS:
 
-On first use Tailscale may open a consent page where Funnel is preselected.
-Enable **HTTPS certificates only** and turn **Funnel off**. Every remote device
-must run Tailscale and be allowed by tailnet policy. For optional mobile use,
-install and sign in to the Tailscale app on the phone or tablet, then open the
-private address shown by Manager. Every Manager session still has full
-administration; no read-only role exists. Local or host access is the recovery
-path. Disabling in Manager blocks the saved hostname immediately, but the host
-administrator must remove an externally owned Serve route separately.
+1. Set `TAUTWEEKLY_FUNNEL_ADAPTER=enabled` in the private `.env` file.
+2. Recreate the service with `./tautweekly.sh restart`.
+3. Run `./tautweekly.sh remote-access-login` and complete the official
+   Tailscale browser sign-in. TautWeekly never sees the account credential.
+4. Create and enable the Manager password lock locally.
+5. Open **Settings > Tailscale Funnel** and choose **Enable**. Share the address
+   only after status is green **Active**; gold **Publication pending** means the
+   local route exists but public DNS or trusted TLS is not ready.
 
-#### Optional userspace Compose sidecar
+For QNAP, change `TAUTWEEKLY_FUNNEL_ADAPTER` to `enabled` in the Container
+Station application and recreate it while preserving the configured
+`tailscale-state` storage. Open the container console and run:
 
-Use the shipped sidecar only when the host has no supported Tailscale client.
-It uses the official pinned image in userspace mode and a fixed private Serve
-config that proxies only to `http://tautweekly:8080`. It has no host network,
-Docker socket, `/dev/net/tun`, added Linux capability, Manager credential, or
-Funnel entry.
+```sh
+/opt/tautweekly/bin/tautweekly-funnel login
+```
 
-Public declarative sidecars have a different provider contract: the exact
-`${TS_CERT_DOMAIN}:443` route must set `AllowFunnel` to true and the tailnet
-policy must grant `funnel` to the sidecar's actual tag, for example
-`tag:containers`. The shipped config deliberately supplies neither public
-capability. Do not add one or both to this package: Manager cannot verify and
-remove the independently owned public route during password reset, shutdown,
-update, rollback, or uninstall, so TautWeekly continues to refuse public Funnel
-on Docker/NAS. This container-only requirement does not apply to native Windows.
+For Unraid, set **Public Funnel adapter** to `enabled` in the Community Apps
+template, apply the container update, then run the same command in the
+container Console. Do not add an auth key or token to the template.
 
-1. In the Tailscale console, create a **one-off** auth key for this node. If the
-   tailnet uses device approval or restrictive grants, approve only the intended
-   node and users.
-2. Create `tailscale/authkey.local` beside the Compose files with mode 0600 and
-   place the key there. The path is ignored by Git and excluded from releases.
-3. Start the overlay:
-
-   ```bash
-   docker compose -f compose.yaml -f compose.tailscale.yaml up -d
-   ```
-
-4. Confirm the node is connected and enable **HTTPS certificates only** in the
-   provider console. The bundled `${TS_CERT_DOMAIN}` Serve config then creates
-   the private address. Never enable Funnel or add `AllowFunnel`; the packaged
-   capability/refusal tests require this sidecar to remain private.
-5. Empty `tailscale/authkey.local` after the persistent node state is written;
-   the one-off key is no longer needed. Keep `tailscale/state/` private and back
-   it up or deliberately re-enroll the node after loss.
-6. Copy the exact Serve address into Manager Settings and confirm it from a
-   separately enrolled device. To stop the sidecar, disable the Manager setting
-   first, then run the same two-file Compose command with `stop tailscale` and
-   remove only that sidecar deliberately when its retained identity is no longer
-   required.
-
-QNAP/Unraid vendor clients are preferred because their host lifecycle and
-recovery surfaces are clearer than a sidecar. Never place an auth key in `.env`,
-Compose YAML, Community Apps XML, logs, screenshots, or Manager fields.
+Disable from Manager Settings or run `./tautweekly.sh remote-access-disable`
+before a deliberate stop, reset, update, recovery, or removal. The supplied
+launchers also disable and verify the exact owned route before those lifecycle
+operations and fail closed if cleanup cannot be proven. Normal Manager restart
+preserves Funnel; an update leaves it off for explicit re-enable. Abrupt host
+power loss or `SIGKILL` cannot run cleanup, so retain local access and use the
+disable command before maintenance whenever possible.
 
 When TautWeekly for Plex and Tautulli share a user-defined Docker network, a service URL
 such as `http://tautulli:8181` is appropriate. Otherwise, use a DNS name the
@@ -543,12 +507,10 @@ docker compose port tautweekly 8080
 docker compose exec tautweekly tail -n 40 /data/logs/manager.log
 ```
 
-Confirm the container is running and healthy, the published host port is the
-one used in the browser, and a firewall is not blocking that host port. From a
-separate trusted-LAN device, open the real server name or address reported by
-the mapping—not Docker's `*:8787` port-listing notation. No SSH session or
-server desktop is required once Manager is reachable. The container exits with
-a clear error if its Manager
+Confirm the container is running and healthy and that the mapping reports
+`127.0.0.1:8787`, never `*:8787`. Open the loopback URL on the host or recreate
+the SSH local forward from the administrator workstation. The container exits
+with a clear error if its Manager
 cannot bind, allowing the restart policy and health status to expose the
 failure.
 

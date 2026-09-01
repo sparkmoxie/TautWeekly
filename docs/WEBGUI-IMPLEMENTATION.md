@@ -702,14 +702,14 @@ containing user identity, raw logs, credentials, and private network details.
 ### 13.1 Binding defaults
 
 - Windows on-demand: loopback only
-- macOS Docker: loopback host mapping by default
-- Native Linux: loopback only by default
-- NAS Docker: trusted-LAN access is expected, so authentication is mandatory
-- FreeBSD Podman: loopback host mapping by default
+- macOS Docker: loopback host mapping only
+- Native Linux: loopback only
+- NAS Docker, QNAP/Synology, and Unraid: loopback host mapping only
+- FreeBSD Podman: loopback host mapping only
 
-Any non-loopback bind requires authentication. Public-internet exposure is
-unsupported. Documentation should recommend a trusted VPN or an authenticated
-reverse proxy for deliberate remote administration.
+Maintained packages do not offer a broad bind. Local recovery uses loopback or
+an SSH local forward. Optional public-internet exposure uses only the exact
+password-gated Tailscale Funnel route after public DNS and trusted TLS verify.
 
 ### 13.2 Bootstrap and local access
 
@@ -1030,12 +1030,13 @@ persisted and admitted; Secure/HttpOnly/SameSite cookies, HTTPS origin, CSRF,
 HSTS, authenticated endpoints, and secret boundaries apply through the proxy.
 
 Container, macOS, FreeBSD, QNAP, Synology, Unraid, and compatible Docker modes
-keep the host-managed private contract: the browser submits one exact HTTPS
-`.ts.net` URL plus explicit private-Serve/Funnel-off confirmation. They do not
-accept provider credentials or gain a host control plane. Public Funnel is
-refused because lifecycle ownership cannot be proven without forbidden
-container privilege. The detailed state model, inventory, and adapter boundary
-are in [REMOTE-ACCESS.md](REMOTE-ACCESS.md).
+use the same public controller through an isolated userspace adapter copied
+from the pinned official Tailscale image. A root-only process owns separate
+provider state and the fixed local target; the non-root Manager receives no
+provider credential, Docker/Podman socket, host executable, TUN device,
+network privilege, arbitrary command, hostname, port, path, or CLI argument.
+Browser requests remain typed operations only. The detailed state model,
+inventory, and adapter boundary are in [REMOTE-ACCESS.md](REMOTE-ACCESS.md).
 
 ## 20. Decision gates
 

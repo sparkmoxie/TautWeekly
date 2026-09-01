@@ -6,11 +6,15 @@ build_context="${2:-}"
 runtime_profile="${3:-server}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 container_name="tautweekly-smoke-$RANDOM-$$"
+funnel_container="tautweekly-funnel-$RANDOM-$$"
 named_container="tautweekly-volume-$RANDOM-$$"
 named_volume="tautweekly-volume-$RANDOM-$$"
 data_root="$(mktemp -d)"
+funnel_data_root="$(mktemp -d)"
+funnel_state_root="$(mktemp -d)"
 generated_context=""
 container_started=false
+funnel_container_started=false
 named_container_started=false
 named_volume_created=false
 
@@ -18,13 +22,16 @@ cleanup() {
   if [[ "$container_started" == true ]]; then
     docker rm -f "$container_name" >/dev/null 2>&1 || true
   fi
+  if [[ "$funnel_container_started" == true ]]; then
+    docker rm -f "$funnel_container" >/dev/null 2>&1 || true
+  fi
   if [[ "$named_container_started" == true ]]; then
     docker rm -f "$named_container" >/dev/null 2>&1 || true
   fi
   if [[ "$named_volume_created" == true ]]; then
     docker volume rm -f "$named_volume" >/dev/null 2>&1 || true
   fi
-  rm -rf "$data_root"
+  rm -rf "$data_root" "$funnel_data_root" "$funnel_state_root"
   if [[ -n "$generated_context" ]]; then
     rm -rf "$generated_context"
   fi
@@ -36,6 +43,10 @@ fail() {
   if [[ "$container_started" == true ]]; then
     docker inspect "$container_name" >&2 || true
     docker logs "$container_name" >&2 || true
+  fi
+  if [[ "$funnel_container_started" == true ]]; then
+    docker inspect "$funnel_container" >&2 || true
+    docker logs "$funnel_container" >&2 || true
   fi
   exit 1
 }
@@ -134,6 +145,7 @@ if [[ "$host_gid" -eq 0 ]]; then host_gid=1000; fi
 security_args=(
   --read-only
   --tmpfs '/tmp:rw,noexec,nosuid,size=256m,mode=1777'
+  --tmpfs '/run:rw,noexec,nosuid,size=16m,mode=0755'
   --security-opt no-new-privileges:true
   --cap-drop ALL
   --cap-add CHOWN
@@ -150,7 +162,8 @@ runtime_env_args=(
   -e 'TZ=Etc/UTC'
   -e "TAUTWEEKLY_PACKAGE_KIND=$package_kind"
   -e 'TAUTWEEKLY_PACKAGE_VERSION=ci'
-  -e 'TAUTWEEKLY_HOST_ADAPTER_API=3'
+  -e 'TAUTWEEKLY_HOST_ADAPTER_API=4'
+  -e 'TAUTWEEKLY_FUNNEL_ADAPTER=disabled'
 )
 
 image_version="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$image")"
@@ -366,4 +379,79 @@ if [[ "$active_runtime_profile" == desktop ]]; then
   fi
 fi
 
-printf '[PASS] Container boot, health, runtime, persistence, and root-refusal checks (%s): %s\n' "$runtime_profile" "$image"
+# Exercise the integrated official userspace Funnel runtime without network
+# access, authentication, a real route, host networking, a TUN device, or any
+# published port. This validates the exact socket boundary and refusal paths
+# while keeping all provider state synthetic and disposable.
+if [[ "$runtime_profile" == server || "$runtime_profile" == mac-registry ]]; then
+  docker run --detach \
+    --name "$funnel_container" \
+    --network none \
+    "${security_args[@]}" \
+    "${runtime_env_args[@]}" \
+    -e 'TAUTWEEKLY_FUNNEL_ADAPTER=enabled' \
+    -v "$funnel_data_root:/data" \
+    -v "$funnel_state_root:/var/lib/tautweekly-tailscale" \
+    "$image" >/dev/null
+  funnel_container_started=true
+
+  funnel_healthy=false
+  for _ in {1..150}; do
+    running="$(docker inspect --format '{{.State.Running}}' "$funnel_container")"
+    [[ "$running" == true ]] || fail 'Unauthenticated Funnel adapter container exited during startup.'
+    if docker exec "$funnel_container" /opt/tautweekly/healthcheck.sh >/dev/null 2>&1; then
+      funnel_healthy=true
+      break
+    fi
+    sleep 0.2
+  done
+  [[ "$funnel_healthy" == true ]] || fail 'Unauthenticated Funnel adapter never became healthy.'
+
+  [[ "$(docker exec "$funnel_container" stat -c '%u:%g:%a' /run/tautweekly-remote-access)" == '0:0:711' ]] ||
+    fail 'Funnel adapter directory is not root-owned execute-only traversal.'
+  [[ "$(docker exec "$funnel_container" stat -c '%u:%a' /run/tautweekly-remote-access/adapter.sock)" == "$host_uid:600" ]] ||
+    fail 'Funnel adapter socket is not restricted to the Manager UID.'
+  docker exec "$funnel_container" /opt/tautweekly/bin/run-as-user.sh test -S /run/tautweekly-remote-access/adapter.sock ||
+    fail 'The non-root Manager identity cannot reach its fixed adapter socket.'
+  docker exec "$funnel_container" test ! -e /var/run/docker.sock || fail 'Funnel adapter unexpectedly received the Docker socket.'
+  docker exec "$funnel_container" test ! -e /dev/net/tun || fail 'Funnel adapter unexpectedly received a TUN device.'
+
+  funnel_bootstrap="$(docker exec "$funnel_container" /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager)"
+  pair_manager "$funnel_container" "$funnel_bootstrap"
+  funnel_session="$(docker exec "$funnel_container" curl -fsS -b "$manager_cookie_path" http://127.0.0.1:8080/api/v1/auth/session)"
+  funnel_csrf="$(printf '%s' "$funnel_session" | python3 -c 'import json,sys; print(json.load(sys.stdin)["csrfToken"])')"
+  [[ -n "$funnel_csrf" ]] || fail 'Funnel adapter test could not obtain its synthetic CSRF token.'
+
+  malformed_status="$(printf '%s' '{"operation":"enable","hostname":"attacker.invalid","port":443}' | docker exec -i "$funnel_container" curl -sS -o /tmp/funnel-response.json -w '%{http_code}' -b "$manager_cookie_path" -H "X-CSRF-Token: $funnel_csrf" -H 'Content-Type: application/json' --data-binary @- -X PUT http://127.0.0.1:8080/api/v1/remote-access/tailscale)"
+  [[ "$malformed_status" == 400 ]] || fail 'Funnel browser API accepted a hostname or port.'
+  grep -Fq '"code":"invalid-request"' < <(docker exec "$funnel_container" cat /tmp/funnel-response.json) ||
+    fail 'Malformed Funnel browser input did not fail with the typed request boundary.'
+
+  unsigned_status="$(printf '%s' '{"operation":"enable"}' | docker exec -i "$funnel_container" curl -sS -o /tmp/funnel-response.json -w '%{http_code}' -b "$manager_cookie_path" -H "X-CSRF-Token: $funnel_csrf" -H 'Content-Type: application/json' --data-binary @- -X PUT http://127.0.0.1:8080/api/v1/remote-access/tailscale)"
+  [[ "$unsigned_status" == 409 ]] || fail 'Unauthenticated official Tailscale runtime did not refuse Funnel enablement.'
+  grep -Fq '"code":"tailscale-sign-in-required"' < <(docker exec "$funnel_container" cat /tmp/funnel-response.json) ||
+    fail 'Unauthenticated Funnel enablement was not sanitized as sign-in-required.'
+  docker exec "$funnel_container" test ! -e /data/manager/container-funnel.json ||
+    fail 'Failed Funnel enablement persisted a public route state.'
+
+  set +e
+  argument_output="$(docker exec "$funnel_container" /opt/tautweekly/bin/tautweekly-funnel login unexpected-argument 2>&1)"
+  argument_status=$?
+  set -e
+  [[ "$argument_status" -eq 64 ]] || fail 'Interactive login accepted a browser-controlled or administrator-supplied CLI argument.'
+  grep -Fq 'login accepts no host, port, key, token, or CLI arguments' <<<"$argument_output" || fail 'Interactive login argument refusal was not explicit.'
+
+  docker stop --time 30 "$funnel_container" >/dev/null || fail 'Container did not complete verified no-route Funnel shutdown.'
+  [[ "$(docker inspect --format '{{.State.ExitCode}}' "$funnel_container")" == 0 ]] || fail 'Verified Funnel shutdown did not exit cleanly.'
+  docker rm "$funnel_container" >/dev/null
+  funnel_container_started=false
+
+  set +e
+  refused_output="$(docker run --rm --network none "${security_args[@]}" "${runtime_env_args[@]}" -e 'TAUTWEEKLY_FUNNEL_ADAPTER=enabled' -e 'TS_AUTHKEY=synthetic-refused-value' -v "$funnel_data_root:/data" -v "$funnel_state_root:/var/lib/tautweekly-tailscale" "$image" 2>&1)"
+  refused_status=$?
+  set -e
+  [[ "$refused_status" -eq 64 ]] || fail "Synthetic auth-key refusal exited $refused_status instead of 64."
+  grep -Fq 'TS_AUTHKEY is refused' <<<"$refused_output" || fail 'Synthetic auth-key refusal was not explicit.'
+fi
+
+printf '[PASS] Container boot, health, runtime, Funnel isolation, persistence, and refusal checks (%s): %s\n' "$runtime_profile" "$image"

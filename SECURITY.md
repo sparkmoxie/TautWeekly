@@ -25,15 +25,14 @@ requires host acceptance testing before scheduled use.
 - Keep `config.json`, `.env`, state files, the deleted-item cache, logs,
   previews, and backups private.
 - Use provider-specific application passwords where available.
-- Bind the preview service to localhost unless LAN access is intentional and
-  protected by host firewall rules.
-- Never expose preview port 8787 directly to the public internet.
-- On Windows, optional Tailscale Funnel exposes the password-protected Manager
-  login page publicly over HTTPS while the backend remains on loopback. Use a
-  unique Manager password; remote viewers need no Tailscale client, and every
-  authenticated session has full administration. Other packages retain
-  private Tailscale Serve with Funnel off or require a deliberately hardened
-  HTTPS proxy.
+- Keep the Manager/preview recovery listener on localhost. Do not replace that
+  boundary with a LAN/all-interface bind, router port, or firewall rule.
+- Optional Tailscale Funnel exposes the password-protected Manager login page
+  publicly over HTTPS while the backend remains on its fixed local target. Use
+  a unique Manager password; remote viewers need no Tailscale client, and every
+  authenticated session has full administration. Container packages keep the
+  official userspace runtime isolated from the non-root Manager and require an
+  explicit console sign-in without auth keys or tokens.
 - Preview and test with a controlled recipient before enabling scheduled sends.
 - Revoke and replace any credential that may have entered a commit, log, issue,
   or release archive.

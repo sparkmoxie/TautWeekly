@@ -351,7 +351,7 @@ func (s *Server) staticHandler() http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		if s.capabilities.RuntimeMode == runtimeModeWindows || isPublicRemoteAccess(s.remoteAccess) {
+		if s.capabilities.RuntimeMode == runtimeModeWindows || publicRemoteAccessSupported(s.remoteAccess) {
 			if cleaned == "/" || cleaned == "/index.html" {
 				document, ok := s.windowsManagerIndexDocument(r, indexDocument)
 				if !ok {

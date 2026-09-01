@@ -128,9 +128,8 @@ sha256:982252b1140acf5ee2448668f14fb18683ea27801e218eb09704621232ae03fa.
 
 For Mac-hosted Plex or Tautulli, continue to use host.docker.internal. Container
 localhost still refers to TautWeekly. The desktop Compose default publishes the
-Manager only on 127.0.0.1. Set PREVIEW_BIND=0.0.0.0 only for intentional trusted
-LAN access, retain Manager authentication, and use an exact-host TLS proxy for
-remote access.
+Manager only on 127.0.0.1. Keep that fixed loopback mapping; use Tailscale
+Funnel for optional public remote access.
 
 To roll back, restore the prior Compose file or set the recorded old image
 reference, keep the same /data volume, and recreate. Do not restore an older

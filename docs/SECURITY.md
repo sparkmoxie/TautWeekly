@@ -65,10 +65,13 @@ Disabling the feature stops access but does not erase the existing cache.
   firewall. macOS binds to Mac loopback by default; changing that bind requires
   the same explicit allowed-host and TLS review as any other network-reachable
   Manager.
-- Native Windows and native Linux optional remote access use public HTTPS
-  Tailscale Funnel while Manager remains bound to loopback. The Windows fixed
-  UAC helper or Linux root-owned one-shot socket adapter accepts only the exact
-  TautWeekly operation and target, and verifies the observed route. A
+- Every maintained package can opt in to public HTTPS Tailscale Funnel while
+  the Manager remains on its fixed local target. Native Windows uses a fixed
+  UAC helper, native Linux uses a root-owned one-shot socket adapter, and the
+  Docker/NAS, macOS Docker Desktop, FreeBSD/Podman, QNAP, Synology, and Unraid
+  packages use an isolated userspace adapter built from the pinned official
+  Tailscale image. Each adapter accepts only the exact TautWeekly operation and
+  target and verifies the observed route. A
   green active state additionally requires the exact public hostname to resolve
   through the fixed `1.1.1.1` resolver to a globally routable IPv4 address and
   complete a certificate-validated TLS handshake. Only that intended-public
@@ -80,39 +83,41 @@ Disabling the feature stops access but does not erase the existing cache.
   Tailscale client or VPN because the login page is public; use a unique
   password and retain local recovery because Internet brute-force risk remains.
   This delivery adds no new Internet login-attempt limiter.
-- Container/host-managed packages retain one exact private HTTPS `.ts.net`
-  hostname after an authenticated administrator confirms Funnel is off. Those
-  packages never accept a Tailscale credential or gain a Docker/Podman/host
-  control plane. Their independent Manager password remains required, and
-  integrated public Funnel is deliberately refused because cleanup ownership
-  cannot be proven across reset, shutdown, update, rollback, and removal.
+- The container adapter has its own root-only Tailscale state and runtime
+  sockets. The non-root Manager has no Docker/Podman socket, host executable,
+  TUN device, host network, added networking capability, auth key, OAuth
+  secret, or arbitrary CLI input. The adapter uses userspace networking,
+  authenticates only through an explicit interactive administrator command,
+  and proxies only to the fixed Manager target inside the same container.
+  Adapter state is separate from `/data` and is never exposed in diagnostics.
 - Every remote session has full Manager administration because no read-only
-  role exists. Keep the host client updated and signed in. For private Serve
-  packages, also restrict tailnet grants, use MFA at the identity provider, and
-  promptly revoke lost devices.
-- A saved external Tailscale address means Manager will accept that exact Host;
-  it does not prove the host-owned route is still present or private. Recheck
-  Serve and Funnel state after host/client updates. Disable in Manager first so
-  the hostname is blocked immediately, then remove the external route. Never
-  expose or retain auth keys in Manager, Compose YAML, `.env`, Community Apps
-  templates, screenshots, logs, or support bundles.
-- Native Funnel state contains only a schema version, selected state, and the
+  role exists. Keep the installed or bundled official Tailscale runtime
+  current, protect the tailnet identity with MFA, and promptly revoke a lost
+  node. A remote viewer needs only an ordinary browser and the independent
+  Manager password.
+- The browser API accepts only allowlisted `enable`, `disable`, and `verify`
+  operations. It never accepts a hostname, port, URL, path, command, executable,
+  CLI argument, credential, or raw provider response. Never expose or retain
+  auth keys in Manager, Compose YAML, `.env`, Community Apps templates,
+  screenshots, logs, or support bundles.
+- Funnel state contains only a schema version, selected state, and the
   exact verified public hostname. It never stores raw CLI output, auth keys,
   control-plane tokens, tailnet identity, device lists, private IPs, or
   sensitive paths. Password-lock disable, local access reset, and uninstall
   first disable and verify the owned Funnel or fail closed. Password changes
   keep Funnel and the current session but revoke other sessions. Installer
-  Windows and native Linux updates preserve private Manager data, but first
-  disable and verify the route and leave Funnel off for explicit re-enable.
-  Ordinary Manager restart preserves the persistent route.
+  Windows, native Linux, and package updates preserve private Manager data and
+  the selected remote-access preference, but first disable and verify the route
+  and leave Funnel off for explicit re-enable. Ordinary Manager restart
+  preserves the persistent route. Legacy exact-owned Serve state is parsed only
+  during migration or cleanup and is never offered as a deployment mode.
   See the [remote-access architecture](REMOTE-ACCESS.md) for the complete
   platform and lifecycle matrix.
-- For a trusted TLS reverse proxy, allow only its exact DNS host, preserve the
-  original Host header, and enable secure Manager cookies. Do not trust broad
-  wildcards or publish the plain HTTP backend. Remove proxy Host rewrites,
-  including a Cloudflare Tunnel `httpHostHeader` override; never allowlist the
-  rewritten backend address as a workaround. The Manager does not infer TLS or
-  client identity from forwarded headers. Same-origin comparison
+- Maintained packages keep recovery on loopback and use only the independently
+  verified Funnel hostname for public ingress. Do not add LAN/all-interface
+  binds, proxy Host rewrites, wildcard hosts, router ports, or firewall rules as
+  a workaround. The Manager does not infer TLS or client identity from
+  forwarded headers. Same-origin comparison
   lower-cases DNS, removes one trailing dot, and normalizes omitted/default
   `:80` or `:443`; malformed origins, different hosts, and Tailscale HTTP
   mutations remain rejected with sanitized reason codes.
@@ -142,7 +147,7 @@ Disabling the feature stops access but does not erase the existing cache.
   socket, privileged helper, root identity, `sudo`, Podman, systemd, or rc.d
   authority; Settings reports the exact host-owned next step instead.
 - Use HTTPS for remote Tautulli/Plex endpoints when your environment provides a
-  trusted TLS reverse proxy.
+  trusted certificate.
 - Best-effort hosted deleted-item recovery sends only Tautulli's retained exact media GUID and the
   configured administrator/server Plex token to
   `https://metadata.provider.plex.tv`. It sends no recipient identity, email,

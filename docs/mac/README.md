@@ -14,7 +14,7 @@ controlled TestEmail delivery, scheduling, profile/image status, and recovery.
 The verified Mac archive and local image build remain a supported break-fix
 fallback. The unified registry deployment is the preferred installation.
 
-Current source baseline: **1.6.0**.
+Current source baseline: **1.7.0**.
 
 ## Requirements
 
@@ -27,11 +27,11 @@ Current source baseline: **1.6.0**.
 ## Registry-first install
 
 The release Compose asset pins a full semantic version. `latest` is published
-only as a convenience and is not the supported automation pin. For v0.23.0:
+only as a convenience and is not the supported automation pin. For v0.25.0:
 
 ```bash
 mkdir -p ~/TautWeekly && cd ~/TautWeekly
-TAUTWEEKLY_VERSION=0.23.0
+TAUTWEEKLY_VERSION=0.25.0
 curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/TautWeekly-mac-compose.yaml"
 curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/SHA256SUMS.txt"
 grep '  TautWeekly-mac-compose.yaml$' SHA256SUMS.txt | shasum -a 256 -c -
@@ -50,13 +50,13 @@ startup may take up to the configured 90-second health start period.
 For CI/CD, keep the full tag or pin the same manifest by digest:
 
 ```yaml
-image: ghcr.io/sparkmoxie/tautweekly:0.23.0@sha256:<manifest-digest>
+image: ghcr.io/sparkmoxie/tautweekly:0.25.0@sha256:<manifest-digest>
 ```
 
 Inspect the release manifest with
-`docker buildx imagetools inspect ghcr.io/sparkmoxie/tautweekly:0.23.0`.
+`docker buildx imagetools inspect ghcr.io/sparkmoxie/tautweekly:0.25.0`.
 A digest pin is immutable; a full-semver pin is the readable supported default.
-The `0.23`, `latest`, and `edge` tags are mutable and unsuitable for unattended
+The `0.25`, `latest`, and `edge` tags are mutable and unsuitable for unattended
 promotion.
 
 ## First-run Manager setup
@@ -179,69 +179,48 @@ therefore configuration, credentials, Manager access state, schedules, output,
 and delivery history—remains attached. The archive fallback offers equivalent
 commands through `./tautweekly.sh`.
 
-## Network, reverse proxy, and TLS
+## Network and TLS
 
-The standalone Compose default keeps `PREVIEW_BIND=127.0.0.1`; that variable
-controls the authenticated Manager host port. Keep loopback unless trusted LAN
-access is intentional. The Manager always requires authentication. Put explicit
-overrides in a private `.env` beside `compose.yaml`, for example:
+Both macOS Compose paths keep the authenticated Manager on
+`127.0.0.1:8787`. Keep that fixed loopback mapping; do not override it with
+`0.0.0.0`, a LAN address, host networking, or a router/firewall rule. Local
+recovery uses `http://127.0.0.1:8787/`; the selected public ingress is the
+fixed-target Tailscale Funnel below.
 
-```dotenv
-PREVIEW_BIND=0.0.0.0
-PREVIEW_PORT=8787
-MANAGER_ALLOWED_HOSTS=weekly.example.com
-MANAGER_SECURE_COOKIES=true
-```
+Exact Host/origin admission, CSRF, HttpOnly/SameSite sessions, and the public
+Secure-cookie decision remain backend-owned. An independently verified active
+Funnel hostname is admitted automatically. `Forwarded` and `X-Forwarded-*`
+never override Host, origin, or TLS checks. `GET /health/live` exposes only
+liveness; configuration, paths, versions, credentials, and newsletter state
+remain authenticated.
 
-For a deliberate DNS name, add the hostname only (for example,
-`weekly.example.com`, with no scheme, port, wildcard, path, or trailing value)
-to `MANAGER_ALLOWED_HOSTS`. For HTTPS behind a trusted reverse proxy, preserve
-that exact original `Host` header, set `MANAGER_SECURE_COOKIES=true`, terminate
-TLS at the proxy, and do not publish the plain HTTP backend. Run
-`docker compose up -d --force-recreate tautweekly` after an `.env` change.
-`Forwarded` and `X-Forwarded-*` never override Host, origin, or TLS
-checks. `GET /health/live` is unauthenticated and exposes only liveness;
-configuration, paths, versions, credentials, and newsletter state remain
-authenticated.
+### Optional public Tailscale Funnel
 
-For Cloudflare Tunnel, leave the TautWeekly ingress route without an
-`httpHostHeader` override. Rewriting Host to `127.0.0.1`, the container name,
-or another backend address causes a deliberate `origin-host-mismatch` because
-the browser origin no longer matches the Host received by the Manager.
+The maintained macOS Docker Desktop package includes the same isolated Funnel
+adapter as NAS/Docker. A remote viewer needs only an ordinary browser and the
+Manager password; the viewer does not install Tailscale or join a tailnet.
+Manager stays on its fixed container-local target.
 
-### Optional private Tailscale access
+1. Set `TAUTWEEKLY_FUNNEL_ADAPTER=enabled` in `.env`.
+2. Run `./tautweekly.sh restart` to recreate the service.
+3. Run `./tautweekly.sh remote-access-login` and complete the official browser
+   sign-in. TautWeekly never receives an auth key, token, or account password.
+4. Create and enable the Manager password lock locally.
+5. In **Settings > Tailscale Funnel**, choose **Enable**. Use the public address
+   only after status is green **Active**. Gold **Publication pending** means the
+   exact local route exists but public DNS or trusted TLS is not ready.
 
-Install and sign in to the Tailscale macOS client, install its CLI integration,
-and create a private background Serve route to the loopback Manager:
+The root-only userspace adapter owns separate persistent state and only the
+fixed target `http://127.0.0.1:8080`. The non-root Manager has no Docker socket,
+host executable, TUN device, host network, added networking capability,
+credential, arbitrary command, hostname, port, path, or CLI argument.
 
-```bash
-tailscale serve --bg --yes --https=443 http://127.0.0.1:8787
-```
-
-If Tailscale presents a provider consent page, enable **HTTPS certificates
-only** and turn **Funnel off**. Copy the resulting exact `https://...ts.net`
-address into Manager **Settings > Tailscale**, confirm private Serve/Funnel-off,
-and enable it. Manager stores only that exact hostname; it receives no
-Tailscale credential or Docker control. The Manager password remains required,
-and remote sessions have full administration. For optional mobile access,
-install and sign in to Tailscale on the phone or tablet, then open the private
-address shown by Manager.
-
-The maintained macOS package is the Docker Desktop package, not a native Mac
-Manager. Public Funnel is therefore intentionally unsupported through Manager:
-the container cannot prove ownership of a host-client route or disable and
-verify it during password reset, shutdown, update, rollback, or removal.
-Manager will not receive a Docker socket, host executable, privileged network
-mode, or macOS control plane to bypass that boundary.
-
-For Docker-only hosts that cannot install the native client, the fallback archive also
-includes an optional `compose.tailscale.yaml` userspace sidecar. Follow the
-[NAS/Docker sidecar procedure](../nas-docker/README.md#optional-userspace-compose-sidecar).
-It has no Docker socket, `/dev/net/tun`, added capability, host-network access,
-or public Funnel configuration. Its declarative Serve config intentionally
-omits `AllowFunnel`; adding that field and a tag-targeted provider policy would
-create an independently owned public route that TautWeekly refuses to manage.
-The native Mac client is the simpler default.
+Disable from Settings or run `./tautweekly.sh remote-access-disable` before
+maintenance. Stop, update, reset, recovery, and removal use the same verified
+cleanup and fail closed if the exact owned public route cannot be disabled.
+Normal Manager restart preserves Funnel; an update leaves it off for explicit
+re-enable. Retain local access for recovery after abrupt host power loss or
+`SIGKILL`, when no process can perform shutdown cleanup.
 
 ## Newsletter behavior
 
@@ -328,8 +307,8 @@ To upgrade:
    immutable CI/CD pin, the reviewed manifest digest in `.env`:
 
    ```dotenv
-   TAUTWEEKLY_VERSION=0.23.0
-   TAUTWEEKLY_IMAGE=ghcr.io/sparkmoxie/tautweekly:0.23.0@sha256:<manifest-digest>
+   TAUTWEEKLY_VERSION=0.25.0
+   TAUTWEEKLY_IMAGE=ghcr.io/sparkmoxie/tautweekly:0.25.0@sha256:<manifest-digest>
    ```
 
 3. Pull and recreate only the service:

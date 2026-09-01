@@ -93,8 +93,8 @@
     </aside>
 
     <main class="content" id="main-content" tabindex="-1">
-      <aside class="demo-banner" role="note" aria-label="GUI preview boundary" data-preview-release="v0.24.1">
-        <strong>Interactive GUI Preview · v0.24.1</strong>
+      <aside class="demo-banner" role="note" aria-label="GUI preview boundary" data-preview-release="v0.25.0">
+        <strong>Interactive GUI Preview · v0.25.0</strong>
         <span>Fictional data · temporary in-memory changes. Do not enter real credentials.</span>
         <span>No services, email, files, credentials, or schedulers are contacted</span>
         <label>Package example <select id="demo-profile"><option value="windows">Windows</option><option value="nas">NAS / Docker</option><option value="mac">macOS Docker</option><option value="linux">Native Linux</option><option value="freebsd">FreeBSD / Podman</option></select></label>
@@ -305,14 +305,9 @@
         <section class="tailscale-settings-panel" id="tailscale-settings-panel" aria-labelledby="tailscale-settings-heading" hidden>
           <div class="tailscale-settings-heading"><div><span class="eyebrow" id="tailscale-settings-eyebrow">Optional remote access</span><h2 id="tailscale-settings-heading">Tailscale Funnel</h2><p id="tailscale-settings-copy">Open the Manager from an ordinary remote browser through a stable public HTTPS address. The Manager remains bound to loopback; Funnel proxies only the fixed local target.</p></div><span class="state-chip pending" id="tailscale-settings-chip">Checking</span></div>
           <label class="tailscale-setting" for="tailscale-enabled"><span><strong id="tailscale-toggle-label">Make the Manager remotely available</strong><small id="tailscale-toggle-help">Tailscale must already be installed, running, and signed in. Windows asks for administrator approval only when you Enable, Disable, or Verify.</small></span><span class="config-toggle"><input id="tailscale-enabled" name="tailscaleEnabled" type="checkbox" aria-describedby="tailscale-toggle-help tailscale-security-boundary"><span aria-hidden="true"></span><em>Off</em></span></label>
-          <div class="tailscale-host-authorization" id="tailscale-host-authorization" hidden><div><strong>One-time Linux host authorization required</strong><p>The authenticated Manager cannot grant itself host privileges. Run this fixed command through your existing SSH or console session.</p><code id="tailscale-host-authorization-command">sudo tautweekly remote-access-authorize</code></div><button class="button button-secondary" id="tailscale-copy-authorization" type="button">Copy command</button></div>
-          <div class="tailscale-external-setup" id="tailscale-external-setup" hidden>
-            <label for="tailscale-external-url"><strong>Private Tailscale address</strong><input id="tailscale-external-url" name="tailscaleExternalUrl" type="url" inputmode="url" autocomplete="url" maxlength="2048" placeholder="https://your-node.your-tailnet.ts.net"><small>Create the private HTTPS Serve route with the package host or optional sidecar first, then paste its exact generated address. No credentials belong here.</small></label>
-            <label class="tailscale-private-confirm" for="tailscale-private-confirm"><input id="tailscale-private-confirm" name="tailscalePrivateConfirm" type="checkbox"><span><strong>Private HTTPS only; Funnel is off</strong><small>I confirmed the route is Tailscale Serve, uses HTTPS, and is not publicly exposed with Funnel.</small></span></label>
-            <a id="tailscale-external-guide" href="../nas-docker/#security" target="_blank" rel="noopener noreferrer">Open package-specific setup guidance</a>
-          </div>
+          <div class="tailscale-host-authorization" id="tailscale-host-authorization" hidden><div><strong>One-time host authorization required</strong><p>The authenticated Manager cannot grant itself host privileges or authenticate Tailscale. Run this fixed package command through your existing console session.</p><code id="tailscale-host-authorization-command">sudo tautweekly remote-access-authorize</code></div><button class="button button-secondary" id="tailscale-copy-authorization" type="button">Copy command</button></div>
           <dl class="tailscale-status-grid">
-            <div><dt id="tailscale-status-label">Funnel status</dt><dd id="tailscale-serve-status">Checking</dd></div>
+            <div><dt id="tailscale-status-label">Funnel status</dt><dd id="tailscale-funnel-status">Checking</dd></div>
             <div><dt id="tailscale-address-label">Public HTTPS address</dt><dd><a id="tailscale-url" href="#" target="_blank" rel="noopener noreferrer" hidden></a><span id="tailscale-url-empty">Available after setup</span></dd></div>
             <div><dt>Manager password</dt><dd id="tailscale-password-status">Checking</dd></div>
           </dl>
@@ -346,7 +341,7 @@
             <a class="update-docs-link" id="update-docs-link" href="../" target="_blank" rel="noopener noreferrer">Open platform update guide</a>
           </div>
           <label class="update-install-confirm" id="update-install-confirm-row" for="update-install-confirm" hidden><input id="update-install-confirm" type="checkbox"><span><strong>Install the verified stable Windows update</strong><small>Windows will request administrator approval. The existing updater verifies release URLs, archive checksums, internal manifests, rollback, and post-update health.</small></span></label>
-          <div class="update-settings-actions"><button class="button button-secondary" id="update-check-button" type="button">Check now</button><button class="button button-primary" id="update-install-button" type="button" hidden disabled>Install update</button><a id="update-release-notes" href="../releases/v0.24.1.md" target="_blank" rel="noopener noreferrer" hidden>Read stable release notes</a></div>
+          <div class="update-settings-actions"><button class="button button-secondary" id="update-check-button" type="button">Check now</button><button class="button button-primary" id="update-install-button" type="button" hidden disabled>Install update</button><a id="update-release-notes" href="../releases/v0.25.0.md" target="_blank" rel="noopener noreferrer" hidden>Read stable release notes</a></div>
           <p class="verification-message" id="update-settings-message" role="status" aria-live="polite">Normal Manager and dashboard health never depend on Internet availability.</p>
           <p class="update-security-boundary"><strong>The Manager never gains host control.</strong> Container profiles do not mount the Docker socket, add a privileged helper, run the web process as root, or mutate the host. Use the reported full-semver reference or its manifest digest; minor, latest, and edge tags are mutable. Native Unix packages keep installation in their existing host wrappers.</p>
         </section>

@@ -8,7 +8,7 @@ backups in `/var/db/tautweekly`.
 
 [Open the FreeBSD Podman Quickstart](https://sparkmoxie.github.io/TautWeekly/freebsd/)
 
-Current source baseline: **1.2.0**.
+Current source baseline: **1.3.0**.
 
 ## Supported target
 
@@ -180,37 +180,40 @@ ssh -L 8787:127.0.0.1:8787 admin@example.com
 
 Open `http://127.0.0.1:8787/` locally. There is no default password. Sessions
 are HttpOnly/SameSite, state changes require CSRF protection, and repeated
-failed logins are throttled. Do not publish plain HTTP to the internet. For a
-trusted TLS reverse proxy, retain a narrow host bind, set the exact DNS name in
-`TAUTWEEKLY_MANAGER_ALLOWED_HOSTS`, set
-`TAUTWEEKLY_MANAGER_SECURE_COOKIES=true`, and restart the service.
+failed logins are throttled. Keep the recovery listener on loopback and do not
+publish it through a LAN bind, router, or firewall. The selected public ingress
+is the fixed-target Tailscale Funnel below. Leave
+`TAUTWEEKLY_MANAGER_ALLOWED_HOSTS` empty for loopback recovery; the exact
+active Funnel hostname and Secure-cookie boundary are applied automatically
+only after backend verification.
 
-### Optional private Tailscale access
+### Optional public Tailscale Funnel
 
-FreeBSD Tailscale support is community-maintained. Install and sign in to the
-host client using the current FreeBSD/Tailscale guidance, then create a private
-HTTPS Serve route to the loopback Manager:
+The maintained FreeBSD package runs the pinned official Linux Tailscale
+userspace runtime inside the existing Podman container. It does not depend on
+the community-maintained FreeBSD host client. A remote viewer needs only an
+ordinary browser and the Manager password; the viewer does not install
+Tailscale or join a tailnet.
 
-```sh
-sudo tailscale serve --bg --yes --https=443 http://127.0.0.1:8787
-```
+1. Run `sudo tautweekly remote-access-authorize`. The wrapper enables the
+   isolated adapter, recreates the container, and starts the official
+   interactive browser sign-in. TautWeekly never receives an auth key or token.
+2. Create and enable the Manager password lock locally.
+3. In **Settings > Tailscale Funnel**, choose **Enable**. Use the public address
+   only after status is green **Active**. Gold **Publication pending** means the
+   exact local route exists but public DNS or trusted TLS is not ready.
 
-Enable **HTTPS certificates only** and turn **Funnel off** if the provider asks
-for consent. Copy the resulting exact `https://...ts.net` address into Manager
-**Settings > Tailscale**, confirm private Serve/Funnel-off, and enable it. The
-containerized Manager stores only the exact hostname and never receives root,
-rc.d, Podman, or Tailscale control. Its independent password remains required;
-all remote sessions have full administration. Disable the Manager setting
-first, then remove the host Serve route if private access is no longer wanted.
-For optional mobile use, install and sign in to Tailscale on the phone or
-tablet, then open the private address shown by Manager.
+The root-only adapter owns separate persistent state and accepts only the fixed
+Manager target inside the container. The non-root Manager has no Podman socket,
+host executable, TUN device, host network, added networking capability,
+credential, arbitrary command, hostname, port, path, or CLI argument.
 
-Public Funnel is intentionally unsupported through the maintained FreeBSD
-Podman package. Tailscale support on FreeBSD is community-maintained, and the
-container cannot own or verify host-client cleanup across rc.d stop, rollback,
-or uninstall. Manager receives no root, Podman socket, host executable, or
-Tailscale control plane. Keep Funnel off and use only the separately
-administered private Serve route described above.
+Use `sudo tautweekly remote-access-disable` before maintenance or when public
+access is no longer wanted. The rc.d wrapper disables and verifies the exact
+owned route before deliberate stop, reset, update, recovery, or removal and
+fails closed if cleanup cannot be proven. Normal Manager restart preserves
+Funnel; an update leaves it off for explicit re-enable. Abrupt power loss or
+`SIGKILL` cannot run cleanup, so retain local access for recovery.
 
 ## Operations
 
@@ -320,7 +323,7 @@ backup and record the current image ID:
 
 ```sh
 sudo tautweekly backup
-sudo podman image inspect ghcr.io/sparkmoxie/tautweekly:0.23.0 --format '{{.Id}}'
+sudo podman image inspect ghcr.io/sparkmoxie/tautweekly:0.25.0 --format '{{.Id}}'
 sudo tautweekly check-update
 sudo tautweekly update
 # sign back in; verify Settings > Updates, then Verify, PreviewAll, and TestEmail
@@ -363,7 +366,7 @@ Manager **Config > Configuration backups** can permanently delete one selected
 configuration backup only after **Confirm delete**. The current configuration
 is unchanged and the deleted backup cannot be recovered.
 
-The v0.23.0 package defaults `TAUTWEEKLY_IMAGE` to the full release semver and
+The v0.25.0 package defaults `TAUTWEEKLY_IMAGE` to the full release semver and
 sets `TAUTWEEKLY_RUNTIME_PROFILE=server`. For immutable automation, append the
 published manifest digest in
 `/usr/local/etc/tautweekly/tautweekly.env`, then restart the service. The release archive also contains the

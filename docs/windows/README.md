@@ -38,12 +38,15 @@ Use `127.0.0.1` only for a service running on the same Windows computer.
    Get-FileHash .\TautWeekly-Setup.exe -Algorithm SHA256
    ```
 
-3. Run Setup and review the selected folder and action before continuing:
+3. Run Setup and review the reported folder and action before continuing. A
+   validated existing Setup installation uses its registered folder directly;
+   Setup opens the folder picker only for a new or unresolved installation or
+   an explicit portable migration:
 
    | Situation | Folder to select | Setup action that must appear |
    |---|---|---|
    | Fresh installation | An empty permanent writable folder | **Install** |
-   | Existing Setup installation | Keep the registered folder that Setup preselects | **Update** |
+   | Existing Setup installation | Setup reads the validated current-user registration and uses that folder directly | **Update** |
    | Older portable/BAT installation | The exact existing TautWeekly folder containing `config.json`, the numbered BAT files, and a valid release ownership manifest | **Migrate** |
 
    Do not continue a BAT migration unless the button reads **Migrate**. Setup
@@ -69,7 +72,9 @@ backup before replacement and automatically performs a rollback of
 release-owned files if verification fails. The backup can contain credentials
 and must not be shared.
 
-When updating an existing Setup installation, keep its registered folder.
+When updating an existing Setup installation, Setup reads the validated
+current-user registration through the native Windows Registry API and uses that
+folder directly instead of depending on legacy folder-picker preselection.
 Changing the installed folder requires uninstalling the application first;
 normal uninstall preserves private data. Setup never installs a periodic update
 task and never follows GitHub `main` or a container `edge` tag.
@@ -153,9 +158,10 @@ Turning Funnel on or off, or choosing **Verify with Windows**, requests a normal
 Windows administrator confirmation. Manager itself stays unelevated. The fixed
 helper accepts only exact typed operations for the fixed loopback target,
 refuses unrelated Tailscale routes, and verifies the postcondition. For Enable
-and Verify, it also queries the exact intended-public hostname through the fixed
-`1.1.1.1` public resolver and performs a certificate-validated TLS handshake to
-a returned globally routable address. The only application-level value the
+and Verify, it invokes the system `nslookup.exe` against the fixed `1.1.1.1`
+public resolver so Windows NRPT/MagicDNS cannot intercept the query, then
+performs a certificate-validated TLS handshake to a returned globally routable
+address. The only application-level value the
 check discloses is that public hostname, sent to the fixed resolver and as the
 TLS server name. DNS answers,
 certificates, CLI output, credentials, Manager data, and private network details

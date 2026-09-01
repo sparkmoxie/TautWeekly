@@ -55,11 +55,11 @@ Manager release updates:
 - An optional custom text card before the newsletter release-count/date block,
   with configurable border color/opacity, optional title and subheading, and a
   required plain-text body when enabled.
-- Optional public HTTPS administration on native Windows and native Linux
-  through password-gated **Tailscale Funnel**, so an ordinary remote browser
-  needs no VPN client. Container/NAS, macOS Docker, and FreeBSD Podman packages
-  deliberately retain externally managed private Serve because Manager cannot
-  own and clean up a host public route safely.
+- Optional public HTTPS administration through password-gated **Tailscale
+  Funnel** on every maintained package, so an ordinary remote browser needs no
+  VPN client. Native packages use fixed host adapters; container/NAS, macOS,
+  Unraid, QNAP/Synology, and FreeBSD/Podman use the isolated opt-in userspace
+  adapter with root-only provider state and explicit interactive sign-in.
 - Capability-aware **Settings > Updates** status for application, package, image,
   and host-adapter layers. A header SVG appears only for a validated newer
   release; Windows can launch its verified updater, while other packages keep
@@ -73,10 +73,12 @@ steps.
 
 ### Windows Manager
 
-Run the native Setup EXE, choose the permanent application folder, and finish
-the guided local GUI. Windows adds tray health/actions, optional sign-in startup
-and password lock, plus an independent Scheduled Task; **Settings > Updates**
-can start the existing verified elevated updater.
+Run the native Setup EXE, choose the permanent application folder for a new
+installation, and finish the guided local GUI. A validated existing Setup
+installation reuses its registered folder directly during update. Windows adds
+tray health/actions, optional sign-in startup and password lock, plus an
+independent Scheduled Task; **Settings > Updates** can start the existing
+verified elevated updater.
 
 ### NAS / Docker Manager
 
@@ -84,9 +86,9 @@ Use the unified `ghcr.io/sparkmoxie/tautweekly` image with the explicit
 `server` or `unraid` profile, bootstrap the authenticated Manager, and keep
 private state under `/data`. QNAP/Compose wrappers and Unraid Apps retain
 their host-owned verified update and recovery paths. The service is fully
-headless: normally open `http://SERVER_LAN_IP:8787/` from a browser on another
-trusted-LAN device. The Docker server needs neither a desktop nor an SSH
-session for everyday Manager use.
+headless: local recovery stays at `http://127.0.0.1:8787/` on the Docker host
+and is reached through an SSH local forward when needed. Optional public
+Manager access uses only the independently verified Tailscale Funnel URL.
 
 ### macOS Manager
 
@@ -131,8 +133,8 @@ The responsive Manager is the primary workflow on every maintained package:
   newsletter states, and controlled TestEmail delivery stays separate from
   production recipients.
 - **Operate deliberately:** Schedule reports and controls only the package's
-  supported delivery lifecycle; Settings covers access, native public Funnel
-  or package-private Tailscale HTTPS, capability-aware update status, release notes, diagnostics,
+  supported delivery lifecycle; Settings covers access, public Tailscale Funnel
+  on every maintained package, capability-aware update status, release notes, diagnostics,
   and recovery. Manual and scheduled production delivery share one guarded
   live-roster refresh and eligibility path, 30-second default attempt spacing,
   and fail-fast handling for batch-wide SMTP failures. Host-owned packages keep

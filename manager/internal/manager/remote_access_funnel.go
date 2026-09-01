@@ -197,6 +197,13 @@ func (c *publicFunnelController) runnerError() error {
 	return ErrTailscaleUnavailable
 }
 
+func (c *publicFunnelController) hostAuthorizationCommand() string {
+	if command, ok := c.runner.(tailscaleHostAuthorizationCommand); ok {
+		return command.HostAuthorizationCommand()
+	}
+	return "sudo tautweekly remote-access-authorize"
+}
+
 func (c *publicFunnelController) status() TailscaleRemoteAccessStatus {
 	state, stateErr := c.savedState()
 	result := TailscaleRemoteAccessStatus{
@@ -227,7 +234,7 @@ func (c *publicFunnelController) status() TailscaleRemoteAccessStatus {
 		result.CleanupRequired = true
 		if availability == "authorization-required" {
 			result.HostAuthorizationRequired = true
-			result.HostAuthorizationCommand = "sudo tautweekly remote-access-authorize"
+			result.HostAuthorizationCommand = c.hostAuthorizationCommand()
 		}
 		return result
 	}
@@ -237,7 +244,7 @@ func (c *publicFunnelController) status() TailscaleRemoteAccessStatus {
 			result.State = "authorization-required"
 			result.ErrorCode = "tailscale-host-authorization-required"
 			result.HostAuthorizationRequired = true
-			result.HostAuthorizationCommand = "sudo tautweekly remote-access-authorize"
+			result.HostAuthorizationCommand = c.hostAuthorizationCommand()
 			return result
 		}
 		result.Installed = false

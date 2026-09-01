@@ -281,8 +281,9 @@ USER_ID is the numeric value shown by list-users. Omit it only in an
 interactive terminal when you want the wrapper to prompt for it.
 
 The authenticated Manager at http://127.0.0.1:8788 is the primary setup and
-daily administration surface. Reach it through an SSH tunnel or a deliberately
-configured TLS reverse proxy. These CLI commands remain recovery/expert paths.
+daily administration surface. Reach it through an SSH tunnel for recovery or
+the independently verified Funnel URL for public access. These CLI commands
+remain recovery/expert paths.
 EOF
     ;;
 esac

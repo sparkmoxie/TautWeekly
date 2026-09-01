@@ -274,6 +274,8 @@ $expected = [ordered]@{
         'TautWeekly-nas-docker/app/Schedule-Time.ps1',
         'TautWeekly-nas-docker/app/healthcheck.sh',
         'TautWeekly-nas-docker/app/bin/run-as-user.sh',
+        'TautWeekly-nas-docker/app/bin/funnel-adapter.sh',
+        'TautWeekly-nas-docker/app/bin/tautweekly-funnel',
         'TautWeekly-nas-docker/app/bin/run-mode.sh',
         'TautWeekly-nas-docker/app/bin/run-script.sh',
         'TautWeekly-nas-docker/app/product-branding/favicon.ico',
@@ -282,8 +284,6 @@ $expected = [ordered]@{
         'TautWeekly-nas-docker/package-update.sh',
         'TautWeekly-nas-docker/container-update.sh',
         'TautWeekly-nas-docker/compose.yaml',
-        'TautWeekly-nas-docker/compose.tailscale.yaml',
-        'TautWeekly-nas-docker/tailscale/config/serve.json',
         'TautWeekly-nas-docker/RELEASE-FILES.txt',
         'TautWeekly-nas-docker/README.md'
     )
@@ -296,6 +296,8 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/app/Smtp-Transport.ps1',
         'TautWeekly-mac-docker/app/Schedule-Time.ps1',
         'TautWeekly-mac-docker/app/bin/run-as-user.sh',
+        'TautWeekly-mac-docker/app/bin/funnel-adapter.sh',
+        'TautWeekly-mac-docker/app/bin/tautweekly-funnel',
         'TautWeekly-mac-docker/app/bin/run-mode.sh',
         'TautWeekly-mac-docker/app/bin/run-script.sh',
         'TautWeekly-mac-docker/manager/tautweekly-manager-linux-amd64',
@@ -303,8 +305,6 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/app/product-branding/favicon.ico',
         'TautWeekly-mac-docker/app/product-branding/tautweekly-app-icon-128.png',
         'TautWeekly-mac-docker/tautweekly.sh',
-        'TautWeekly-mac-docker/compose.tailscale.yaml',
-        'TautWeekly-mac-docker/tailscale/config/serve.json',
         'TautWeekly-mac-docker/check-release.sh',
         'TautWeekly-mac-docker/mac-update.sh',
         'TautWeekly-mac-docker/package-update.sh',
@@ -463,15 +463,14 @@ foreach ($archiveName in $expected.Keys) {
             try { $identityText = $composeReader.ReadToEnd() } finally { $composeReader.Dispose() }
             Assert-True ($identityText -notmatch '__TAUTWEEKLY_RELEASE_VERSION__') "$archiveName retains an unresolved release-version token in $($composeEntry.FullName)."
             Assert-True ($identityText -match 'TAUTWEEKLY_PACKAGE_KIND' -and $identityText -match 'TAUTWEEKLY_PACKAGE_VERSION') "$archiveName omits package identity from $($composeEntry.FullName)."
-            Assert-True ($identityText -match 'TAUTWEEKLY_HOST_ADAPTER_API:\s*"3"') "$archiveName has a stale host-adapter API in $($composeEntry.FullName)."
+            Assert-True ($identityText -match 'TAUTWEEKLY_HOST_ADAPTER_API:\s*"4"') "$archiveName has a stale host-adapter API in $($composeEntry.FullName)."
+            Assert-True ($identityText -match 'TAUTWEEKLY_FUNNEL_ADAPTER' -and $identityText -match '/var/lib/tautweekly-tailscale') "$archiveName omits the explicit Funnel adapter or root-only provider state from $($composeEntry.FullName)."
+            Assert-True ($identityText -notmatch '(?m)^\s*-\s*["'']?(?:0[.]0[.]0[.]0:|\$\{PREVIEW_BIND:-0[.]0[.]0[.]0\})') "$archiveName broadly publishes Manager in $($composeEntry.FullName)."
+            if ($composeEntry.FullName -match '/compose[.]qnap[.]yaml$') {
+                Assert-True ($identityText -match '127[.]0[.]0[.]1:8787:8080') "$archiveName QNAP Compose asset is not loopback-only."
+            }
         }
-        $sidecarServeEntries = @($archive.Entries | Where-Object { $_.FullName -match '/tailscale/config/serve[.]json$' })
-        foreach ($sidecarServeEntry in $sidecarServeEntries) {
-            $sidecarReader = New-Object IO.StreamReader($sidecarServeEntry.Open())
-            try { $sidecarServe = $sidecarReader.ReadToEnd() | ConvertFrom-Json } finally { $sidecarReader.Dispose() }
-            Assert-True ($null -eq $sidecarServe.PSObject.Properties['AllowFunnel']) "$archiveName packages public AllowFunnel in its private sidecar config."
-            Assert-True ($null -ne $sidecarServe.PSObject.Properties['Web'].Value.PSObject.Properties['${TS_CERT_DOMAIN}:443']) "$archiveName changed the fixed private sidecar certificate-domain route."
-        }
+        Assert-True (@($entryNames | Where-Object { $_ -match '/compose[.]tailscale[.]yaml$|/tailscale/config/serve[.]json$' }).Count -eq 0) "$archiveName still contains the retired private Serve deployment."
         foreach ($requiredEntry in $expected[$archiveName]) {
             Assert-True ($entryNames -ccontains $requiredEntry) "$archiveName is missing $requiredEntry"
         }
@@ -484,6 +483,7 @@ foreach ($archiveName in $expected.Keys) {
         try { $thirdPartyNoticeText = $thirdPartyNoticeReader.ReadToEnd() }
         finally { $thirdPartyNoticeReader.Dispose() }
         Assert-True ($thirdPartyNoticeText.Contains('Simple Icons 9.21.0') -and $thirdPartyNoticeText.Contains('CC0 1.0 Universal')) "$archiveName omits the bundled platform glyph provenance."
+        Assert-True ($thirdPartyNoticeText.Contains('tailscale/tailscale:v1.102.2') -and $thirdPartyNoticeText.Contains('Copyright (c) 2020 Tailscale Inc & contributors.')) "$archiveName omits the bundled Tailscale runtime provenance or BSD license."
 
         if ($archiveName -ne 'TautWeekly-windows.zip') {
             foreach ($entry in $archive.Entries) {
@@ -913,7 +913,7 @@ Assert-True (-not $serverCompose.Contains('__TAUTWEEKLY_RELEASE_VERSION__')) 'Th
 Assert-True ($serverCompose.Contains("ghcr.io/sparkmoxie/tautweekly:$repositoryVersion")) 'The standalone server Compose asset does not default to the unified release-semver image.'
 Assert-True ($serverCompose.Contains('TAUTWEEKLY_RUNTIME_PROFILE: "server"')) 'The standalone server Compose asset does not select the server profile.'
 Assert-True ($serverCompose.Contains('TAUTWEEKLY_PACKAGE_KIND: "container-compose"')) 'The standalone server Compose asset does not report unified Compose ownership.'
-Assert-True ($serverCompose.Contains('${PREVIEW_BIND:-0.0.0.0}:${PREVIEW_PORT:-8787}:8080')) 'The standalone server Compose asset does not preserve intentional trusted-LAN binding.'
+Assert-True ($serverCompose.Contains('${PREVIEW_BIND:-127.0.0.1}:${PREVIEW_PORT:-8787}:8080')) 'The standalone server Compose asset is not loopback-first for public Funnel ingress.'
 Assert-True ($serverCompose.Contains('./data:/data')) 'The standalone server Compose asset does not preserve its bind-mounted /data path.'
 Assert-True ($serverCompose.Contains('read_only: true') -and $serverCompose.Contains('no-new-privileges:true') -and $serverCompose.Contains('stop_grace_period: 30m')) 'The standalone server Compose asset is missing security or graceful-stop controls.'
 Assert-True ($serverCompose -notmatch '(?m)^\s*build\s*:') 'The standalone server Compose asset unexpectedly requires a local source build.'

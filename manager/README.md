@@ -336,13 +336,14 @@ runtime modes.
 
 Native Linux uses the same route-ownership contract through a root-owned
 systemd accepted socket. Its one-shot helper verifies the Unix peer is exactly
-the packaged `tautweekly` service UID and maps only the fixed protocol actions
-to the fixed loopback target. Container, macOS Docker, FreeBSD Podman, Unraid,
-QNAP, and compatible Docker modes use an external adapter instead: the
-authenticated administrator must create private Serve outside Manager, confirm
-Funnel is off, and save one exact HTTPS `.ts.net` URL. Manager never receives a
-Tailscale key, Docker socket, host command channel, root identity, or wildcard
-host. All non-Windows modes retain mandatory Manager authentication.
+the packaged `tautweekly` service UID and maps only fixed protocol actions to
+the fixed loopback target. Container, macOS Docker, FreeBSD Podman, Unraid,
+QNAP, and compatible Docker modes use a package-local userspace adapter. A root
+helper owns the official CLI and provider state; the authenticated non-root
+Manager can send only inspect/enable/disable over a UID-checked socket for
+`http://127.0.0.1:8080`. Manager never receives a Tailscale key, Docker socket,
+host command channel, root identity, arbitrary URL, or wildcard host. All
+non-Windows modes retain mandatory Manager authentication.
 
 The implementation specification is
 [docs/WEBGUI-IMPLEMENTATION.md](../docs/WEBGUI-IMPLEMENTATION.md).

@@ -6,12 +6,15 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-08-31
+
 ### Added
 
-- Replaced the native Windows and native Linux Managers' private Tailscale
-  Serve workflows with an
-  explicit, password-gated Tailscale Funnel that keeps Manager on loopback and
-  provides a stable public HTTPS `.ts.net` address to ordinary remote browsers.
+- Replaced maintained private Tailscale Serve deployments with an explicit,
+  password-gated Tailscale Funnel that keeps Manager on its fixed local target
+  and provides a stable public HTTPS `.ts.net` address to ordinary remote
+  browsers on Windows, native Linux, Docker/NAS, QNAP/Synology, Unraid, macOS
+  Docker Desktop, and FreeBSD/Podman.
 - Added Windows Funnel states, setup guidance, sanitized diagnostics,
   notification-area status, and deterministic recovery, access-reset, and
   uninstall cleanup for the exact TautWeekly-owned route.
@@ -20,24 +23,31 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   trusted-TLS verification, and fail-closed lifecycle cleanup.
 - Added native Linux Funnel states and a root-owned, socket-activated fixed
   adapter while keeping Manager unprivileged.
+- Added an opt-in container/NAS Funnel adapter that pins the official Tailscale
+  runtime, uses userspace networking and separate root-only state, refuses auth
+  keys/tokens, requires interactive console sign-in, and exposes only a
+  UID-checked fixed-operation Unix socket to the non-root Manager.
 - Added native Manager link previews with an optimized 1280×640 product card,
   concise Open Graph and large-card metadata, canonical Funnel HTTPS URLs, and
   explicit ICO, PNG, touch-icon, and manifest declarations.
 
 ### Changed
 
-- Native Funnel changes use only fixed typed enable/disable/verify operations,
-  the official installed Tailscale CLI, and exact postcondition verification.
-  Docker/NAS, macOS Docker, QNAP, Synology, Unraid, and FreeBSD Podman retain
-  private Serve and explicitly refuse public Funnel because safe host-route
-  lifecycle ownership cannot be proven.
-- Documented the provider prerequisites and cross-platform publication failure
-  classes: MagicDNS, HTTPS certificates, and a matching Funnel `nodeAttrs`
-  target are host-admin responsibilities, tagged nodes require an explicit
-  tag-targeted attribute, a declarative container route also requires exact
-  `AllowFunnel`, and local `Funnel on` never substitutes for public DNS plus
-  trusted-TLS verification. Shipped sidecars remain private and refuse both
-  public-capability inputs.
+- All Funnel changes use only fixed typed enable/disable/verify operations and
+  exact postcondition verification. Native packages use the official installed
+  Tailscale CLI; container packages ship the declared pinned official binaries
+  without installing or controlling Tailscale on the host.
+- Kept every host recovery surface on loopback. Generic Compose, QNAP, macOS,
+  and FreeBSD bind host port 8787 to `127.0.0.1`; the Unraid template replaces
+  its generated broad Port entry with a fixed package-owned loopback publish.
+  Setup/recovery may use an SSH local forward, while Funnel is the only public
+  ordinary-browser ingress.
+- Removed the maintained `compose.tailscale.yaml`, static Serve configuration,
+  auth-key file, private URL input, and Funnel-off confirmation surfaces. Serve
+  remains backend-only for exact legacy ownership detection and cleanup.
+- Documented MagicDNS, HTTPS certificates, and a matching Funnel `nodeAttrs`
+  target as host-admin prerequisites. Local `Funnel on` never substitutes for
+  independent public DNS plus trusted-TLS verification.
 - Installer updates preserve Manager configuration, password verification
   material, history, previews, and schedule, but first disable and verify the
   exact public route. Funnel stays off for explicit re-enable after update.
@@ -90,6 +100,10 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Public Funnel enablement requires the Windows Manager password lock. Disabling
   that lock first disables and verifies the owned Funnel or refuses safely;
   changing the password preserves the route while revoking other sessions.
+- Container Manager remains non-root and cannot read provider state, execute
+  the provider CLI, access Docker/Podman, use a TUN device, or receive an auth
+  key. Normal stop/update/recovery asks Manager to disable and verify its exact
+  route before the isolated adapter exits.
 - Manager remains loopback-bound. Public-host admission, secure/HttpOnly/
   SameSite cookies, same-origin and CSRF checks, authenticated sensitive
   endpoints, and secret-reveal boundaries remain enforced through Funnel.

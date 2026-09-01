@@ -41,10 +41,10 @@ formatting. No Plex token or private server data is embedded.
 A Debian, Ubuntu, or other Linux server that runs Docker uses the **NAS/Docker**
 distribution; “NAS” is a deployment label and does not require dedicated NAS
 hardware. That distribution is fully headless and normally exposes its
-authenticated Manager at `http://SERVER_LAN_IP:8787/` to another trusted-LAN
-device, without SSH or a server desktop. **Native Linux** is also headless, but
-its loopback-only Manager is reached through the documented SSH tunnel or
-optional private Tailscale access. Both paths use the same Manager workflow and
+authenticated Manager only on host loopback. Use the documented SSH local
+forward for setup/recovery or its optional password-gated public Tailscale
+Funnel for an ordinary remote browser. **Native Linux** uses the same
+loopback/SSH/Funnel boundary. Both paths use the same Manager workflow and
 produce the same newsletter behavior.
 
 Every Quickstart follows the same GUI-first path: install the package, open and
@@ -68,15 +68,14 @@ Only Windows can start its existing verified updater from the GUI; every other
 guide names the exact host-owned command or platform-native flow and its
 limitations.
 
-Every maintained package exposes a package-aware **Settings > Tailscale**
-card. Native Windows and native Linux have narrow, package-owned public Funnel
-adapters with a mandatory password lock, fixed loopback target, and verified
-public DNS/TLS state. macOS, FreeBSD, QNAP, Synology, Unraid, and other
-Docker/NAS packages accept only a separately created exact private Serve
-hostname because their container Manager cannot own and clean up a host public
-route safely. The complete inventory and refusal boundary are in the
+Every maintained package exposes a package-aware **Settings > Tailscale
+Funnel** card with a mandatory password lock, fixed local target, and verified
+public DNS/TLS state. Native Windows/Linux use narrow host adapters; macOS,
+FreeBSD, QNAP, Synology, Unraid, and other Docker/NAS packages use the isolated
+opt-in userspace adapter with root-only provider state and explicit interactive
+sign-in. The complete inventory and threat boundary are in the
 [remote-access architecture](REMOTE-ACCESS.md). An active card uses a
-motion-safe full-card glow so the additional administration boundary remains
+motion-safe full-card glow so the public administration boundary remains
 visible.
 
 ## Documentation

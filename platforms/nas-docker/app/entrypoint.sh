@@ -4,6 +4,7 @@ PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
 UMASK_VALUE="${UMASK:-077}"
 HOST_ADAPTER_API="${TAUTWEEKLY_HOST_ADAPTER_API:-legacy}"
+FUNNEL_ADAPTER="${TAUTWEEKLY_FUNNEL_ADAPTER:-disabled}"
 umask "$UMASK_VALUE"
 
 # shellcheck source=bin/runtime-profile.sh
@@ -11,8 +12,13 @@ source /opt/tautweekly/bin/runtime-profile.sh
 tautweekly_select_runtime_profile
 echo "[INFO] Unified container profile '$TAUTWEEKLY_RUNTIME_PROFILE' selected for package '$TAUTWEEKLY_PACKAGE_KIND'."
 
-if [[ "$HOST_ADAPTER_API" != 3 ]]; then
-  echo "[WARN] Host adapter API ${HOST_ADAPTER_API} is older than image API 3. The Manager can start, but Settings > Updates will report the legacy adapter until the host package or saved container template is current." >&2
+if [[ "$HOST_ADAPTER_API" != 4 ]]; then
+  echo "[WARN] Host adapter API ${HOST_ADAPTER_API} is older than image API 4. The Manager can start, but Settings > Updates will report the legacy adapter until the host package or saved container template is current." >&2
+fi
+
+if [[ "$FUNNEL_ADAPTER" != disabled && "$FUNNEL_ADAPTER" != enabled ]]; then
+  echo "TAUTWEEKLY_FUNNEL_ADAPTER must be exactly disabled or enabled." >&2
+  exit 64
 fi
 
 if ! [[ "$PUID" =~ ^[0-9]+$ && "$PGID" =~ ^[0-9]+$ ]]; then
@@ -39,4 +45,68 @@ chown -R "$PUID:$PGID" /data
 chmod 700 /data 2>/dev/null || true
 [[ ! -f /data/config.json ]] || chmod 600 /data/config.json 2>/dev/null || true
 
-exec gosu "$PUID:$PGID" /opt/tautweekly/run-service.sh
+adapter_pid=""
+service_pid=""
+shutting_down=false
+termination_requested=false
+
+stop_service() {
+  [[ "$shutting_down" == false ]] || return 0
+  shutting_down=true
+  if [[ -n "$service_pid" ]] && kill -0 "$service_pid" 2>/dev/null; then
+    if ! gosu "$PUID:$PGID" /opt/tautweekly/bin/tautweekly-manager shutdown \
+      --listen 127.0.0.1:8080 --tautweekly-root /opt/tautweekly; then
+      echo "[ERROR] The container stayed running because the Manager could not begin verified Funnel shutdown." >&2
+      shutting_down=false
+      return 70
+    fi
+    for _ in $(seq 1 330); do
+      kill -0 "$service_pid" 2>/dev/null || break
+      sleep 1
+    done
+    if kill -0 "$service_pid" 2>/dev/null; then
+      echo "[ERROR] The container stayed running because verified Funnel shutdown did not finish." >&2
+      shutting_down=false
+      return 70
+    fi
+  fi
+  [[ -z "$service_pid" ]] || wait "$service_pid" 2>/dev/null || true
+  [[ -z "$adapter_pid" ]] || kill -TERM "$adapter_pid" 2>/dev/null || true
+  [[ -z "$adapter_pid" ]] || wait "$adapter_pid" 2>/dev/null || true
+}
+request_termination() {
+  termination_requested=true
+}
+trap request_termination TERM INT
+trap 'stop_service || true' EXIT
+
+if [[ "$FUNNEL_ADAPTER" == enabled ]]; then
+  /opt/tautweekly/bin/funnel-adapter.sh &
+  adapter_pid=$!
+  for _ in $(seq 1 150); do
+    [[ -S /run/tautweekly-remote-access/adapter.sock ]] && break
+    kill -0 "$adapter_pid" 2>/dev/null || { wait "$adapter_pid"; exit $?; }
+    sleep 0.1
+  done
+  [[ -S /run/tautweekly-remote-access/adapter.sock ]] || { echo "The public Funnel adapter did not become ready." >&2; exit 70; }
+fi
+
+gosu "$PUID:$PGID" /opt/tautweekly/run-service.sh &
+service_pid=$!
+status=0
+while true; do
+  if [[ "$termination_requested" == true ]]; then
+    if stop_service; then
+      status=0
+      break
+    fi
+    termination_requested=false
+    echo "[ERROR] Verified Funnel shutdown failed; the container remains running with its password boundary intact." >&2
+  fi
+  if wait "$service_pid"; then status=0; else status=$?; fi
+  kill -0 "$service_pid" 2>/dev/null || break
+done
+service_pid=""
+stop_service || status=$?
+trap - TERM INT EXIT
+exit "$status"

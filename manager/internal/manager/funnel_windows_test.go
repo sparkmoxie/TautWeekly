@@ -24,6 +24,17 @@ type fixtureWindowsFunnelRunner struct {
 	publiclyPublished bool
 }
 
+func legacyServeStatusJSON(hostname, target string) []byte {
+	value := map[string]any{
+		"TCP": map[string]any{"443": map[string]any{"HTTPS": true}},
+		"Web": map[string]any{hostname + ":443": map[string]any{
+			"Handlers": map[string]any{"/": map[string]any{"Proxy": target}},
+		}},
+	}
+	raw, _ := json.Marshal(value)
+	return raw
+}
+
 func (f *fixtureWindowsFunnelRunner) Available() bool        { return f.available }
 func (f *fixtureWindowsFunnelRunner) RequiresApproval() bool { return true }
 func (f *fixtureWindowsFunnelRunner) Run(context.Context, ...string) ([]byte, error) {
@@ -121,7 +132,7 @@ func TestWindowsFunnelMigratesLegacyPrivateServeOnlyAfterExplicitEnable(t *testi
 	if err := writePrivateJSON(filepath.Join(dataDir, remoteAccessStateFile), remoteAccessFile{SchemaVersion: remoteAccessSchemaVersion, Enabled: true, Hostname: hostname}); err != nil {
 		t.Fatal(err)
 	}
-	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: ownedTailscaleServeJSON(hostname, target), errors: map[string]error{}, publiclyPublished: true}
+	runner := &fixtureWindowsFunnelRunner{available: true, hostname: hostname, target: target, observed: legacyServeStatusJSON(hostname, target), errors: map[string]error{}, publiclyPublished: true}
 	controller := newWindowsFunnelController(dataDir, "127.0.0.1:8788", true, runner)
 	status := controller.Status(context.Background())
 	if status.State != "migration-required" || !status.Installed || !status.CleanupRequired || controller.AllowsHost(hostname) {

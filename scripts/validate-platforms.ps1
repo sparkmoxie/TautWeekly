@@ -116,7 +116,10 @@ Require-Text 'platforms/freebsd-podman/rc.d/tautweekly' @(
     'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
     'TAUTWEEKLY_PACKAGE_KIND=freebsd-podman',
     'TAUTWEEKLY_PACKAGE_VERSION=',
-    'TAUTWEEKLY_HOST_ADAPTER_API=3',
+    'TAUTWEEKLY_HOST_ADAPTER_API=4',
+    'TAUTWEEKLY_FUNNEL_ADAPTER=',
+    '/var/lib/tautweekly-tailscale',
+    '--tmpfs /run:rw,noexec,nosuid,size=16m',
     '--read-only',
     '--security-opt no-new-privileges',
     '--cap-drop ALL',
@@ -320,7 +323,8 @@ Require-Text 'docs/nas-docker/manager.html' @(
     'manager-bootstrap',
     'manager-reset-access',
     'MANAGER_ALLOWED_HOSTS',
-    'MANAGER_SECURE_COOKIES=true',
+    'Secure session boundary',
+    'Funnel hostname receives Secure cookies and HSTS automatically',
     '\/health\/live',
     'same image and Manager core',
     'wrapper does not exist inside an Unraid Apps container',
@@ -336,7 +340,7 @@ Require-Text 'docs/freebsd/README.md' @(
     'manager-reset-access',
     'Manager Config',
     'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
-    'TAUTWEEKLY_MANAGER_SECURE_COOKIES=true',
+    'Secure-cookie boundary are applied automatically',
     'up to 30 minutes'
 )
 Forbid-Text 'docs/freebsd/README.md' @('unauthenticated\s+preview server', 'sudo tautweekly setup\s*# Complete')
@@ -531,78 +535,54 @@ foreach ($relative in @('platforms/nas-docker/compose.yaml', 'platforms/nas-dock
         'stop_grace_period: 30m',
         'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
         'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
+        'TAUTWEEKLY_FUNNEL_ADAPTER',
         'TAUTWEEKLY_PACKAGE_KIND',
         'TAUTWEEKLY_RUNTIME_PROFILE',
         'TAUTWEEKLY_PACKAGE_VERSION.*__TAUTWEEKLY_RELEASE_VERSION__',
-        'TAUTWEEKLY_HOST_ADAPTER_API'
+        'TAUTWEEKLY_HOST_ADAPTER_API: "4"',
+        '/var/lib/tautweekly-tailscale',
+        '/run:rw,noexec,nosuid,size=16m,mode=0755'
     )
+    Forbid-Text $relative @('TS_AUTHKEY', 'TS_CLIENT_SECRET', 'TS_SERVE_CONFIG', 'compose\.tailscale', '(?m)^\s*privileged:')
 }
-foreach ($relative in @('platforms/nas-docker/compose.tailscale.yaml', 'platforms/mac-docker/compose.tailscale.yaml')) {
+foreach ($retired in @(
+    'platforms/nas-docker/compose.tailscale.yaml',
+    'platforms/nas-docker/tailscale/config/serve.json',
+    'platforms/mac-docker/compose.tailscale.yaml',
+    'platforms/mac-docker/tailscale/config/serve.json'
+)) {
+    if (Test-Path -LiteralPath (Join-Path $Root $retired)) { throw "Retired private Serve deployment still exists: $retired" }
+}
+foreach ($relative in @('platforms/nas-docker/app/bin/funnel-adapter.sh', 'platforms/mac-docker/app/bin/funnel-adapter.sh')) {
     Require-Text $relative @(
-        'tailscale/tailscale:v1\.102\.2',
-        'TS_AUTHKEY: file:/run/secrets/tailscale_authkey',
-        'TS_AUTH_ONCE: "true"',
-        'TS_SERVE_CONFIG: /config/serve\.json',
-        'TS_USERSPACE: "true"',
-        'read_only: true',
-        'no-new-privileges:true',
-        'cap_drop:',
-        '- ALL'
+        '--tun=userspace-networking',
+        '--state="\$state_root/tailscaled\.state"',
+        '--socket="\$daemon_socket"',
+        'TAUTWEEKLY_REMOTE_ACCESS_UID',
+        'remote-access-sidecar',
+        'TS_AUTHKEY TS_AUTH_KEY TS_CLIENT_ID TS_CLIENT_SECRET TS_ID_TOKEN TS_AUDIENCE TS_AUTHKEY_FILE',
+        'chmod 700 "\$state_root"',
+        'chmod 711 /run/tautweekly-remote-access'
     )
-    Forbid-Text $relative @(
-        '(?i)funnel',
-        '(?i)docker\.sock',
-        '(?m)^\s*privileged:',
-        '(?m)^\s*cap_add:',
-        '(?i)/dev/net/tun',
-        '(?i)tskey-'
-    )
+    Forbid-Text $relative @('(?i)docker\.sock', '(?i)/dev/net/tun', '(?i)tskey-', '(?m)^\s*privileged')
 }
-foreach ($relative in @('platforms/nas-docker/tailscale/config/serve.json', 'platforms/mac-docker/tailscale/config/serve.json')) {
-    Require-Text $relative @(
-        '"HTTPS": true',
-        '"\$\{TS_CERT_DOMAIN\}:443"',
-        '"Proxy": "http://tautweekly:8080"'
-    )
-    Forbid-Text $relative @('(?i)funnel')
-    $privateServe = Read-RepoFile $relative | ConvertFrom-Json
-    if ($null -ne $privateServe.PSObject.Properties['AllowFunnel']) {
-        throw "Shipped private sidecar config unexpectedly enables public Funnel: $relative"
-    }
+foreach ($relative in @('platforms/nas-docker/app/bin/tautweekly-funnel', 'platforms/mac-docker/app/bin/tautweekly-funnel')) {
+    Require-Text $relative @('login\|disable', '--socket="\$daemon_socket" login', 'remote-access-cleanup', '--listen 0\.0\.0\.0:8080')
+    Forbid-Text $relative @('(?i)authkey=', '(?i)logout', '(?i)status --json')
 }
-
-function Test-TaggedPublicSidecarContract([object]$ServeConfig, [object[]]$NodeAttrs, [string]$TagTarget) {
-    $allowFunnel = $ServeConfig.PSObject.Properties['AllowFunnel']
-    if ($null -eq $allowFunnel) { return $false }
-    $route = $allowFunnel.Value.PSObject.Properties['${TS_CERT_DOMAIN}:443']
-    if ($null -eq $route -or -not [bool]$route.Value) { return $false }
-    foreach ($nodeAttr in @($NodeAttrs)) {
-        if (@($nodeAttr.target) -contains $TagTarget -and @($nodeAttr.attr) -contains 'funnel') { return $true }
-    }
-    return $false
-}
-
-$syntheticPublicServe = '{"AllowFunnel":{"${TS_CERT_DOMAIN}:443":true}}' | ConvertFrom-Json
-$syntheticTaggedPolicy = '{"nodeAttrs":[{"target":["tag:containers"],"attr":["funnel"]}]}' | ConvertFrom-Json
-$syntheticMemberPolicy = '{"nodeAttrs":[{"target":["autogroup:member"],"attr":["funnel"]}]}' | ConvertFrom-Json
-if (-not (Test-TaggedPublicSidecarContract $syntheticPublicServe $syntheticTaggedPolicy.nodeAttrs 'tag:containers')) {
-    throw 'Tagged public-sidecar capability fixture did not require exact AllowFunnel and tag-targeted nodeAttrs.'
-}
-if (Test-TaggedPublicSidecarContract ([PSCustomObject]@{}) $syntheticTaggedPolicy.nodeAttrs 'tag:containers') {
-    throw 'A tagged sidecar without AllowFunnel was treated as public-capable.'
-}
-if (Test-TaggedPublicSidecarContract $syntheticPublicServe $syntheticMemberPolicy.nodeAttrs 'tag:containers') {
-    throw 'The default member nodeAttr was treated as permission for a tagged sidecar.'
-}
-Write-Host '[PASS] Container-only public Funnel requires exact AllowFunnel plus a matching tag-targeted nodeAttr; shipped sidecars remain private.'
+Write-Host '[PASS] Container packages use explicit userspace Funnel adapters with fixed operations, root-only state, and no stored authentication key.'
 Require-Text 'platforms/nas-docker/Dockerfile' @(
     'FROM golang:1\.26\.6-bookworm AS manager-build',
     'GOOS=linux GOARCH="\$\{TARGETARCH:-amd64\}"',
     'tautweekly-manager',
+    'FROM tailscale/tailscale:v1\.102\.2 AS tailscale-runtime',
+    'COPY --from=tailscale-runtime /usr/local/bin/tailscale',
+    'COPY --from=tailscale-runtime /usr/local/bin/tailscaled',
     'HOME=/tmp/tautweekly/home',
     'XDG_DATA_HOME=/tmp/tautweekly/share',
     'EXPOSE 8080',
-    'io\.tautweekly\.host-adapter-api="3"',
+    'io\.tautweekly\.host-adapter-api="4"',
+    'io\.tautweekly\.remote-access="tailscale-funnel"',
     'io\.tautweekly\.image-repository="ghcr\.io/sparkmoxie/tautweekly"',
     'io\.tautweekly\.runtime-profiles="desktop,server,unraid"'
 )
@@ -613,13 +593,22 @@ Require-Text 'platforms/nas-docker/app/entrypoint.sh' @(
     'runtime-profile\.sh',
     'tautweekly_select_runtime_profile',
     'Unified container profile'
+    'TAUTWEEKLY_FUNNEL_ADAPTER',
+    'tautweekly-manager shutdown',
+    '127\.0\.0\.1:8080',
+    'termination_requested',
+    'Verified Funnel shutdown failed; the container remains running'
 )
 Require-Text 'templates/tautweekly.xml' @(
     '--read-only',
+    '--publish 127\.0\.0\.1:8787:8080/tcp',
     '--stop-timeout 1800',
     'TAUTWEEKLY_PACKAGE_KIND',
     'TAUTWEEKLY_HOST_ADAPTER_API',
     'TAUTWEEKLY_RUNTIME_PROFILE',
+    'TAUTWEEKLY_FUNNEL_ADAPTER',
+    '/var/lib/tautweekly-tailscale',
+    '--tmpfs /run:rw,noexec,nosuid,size=16m,mode=0755',
     '--security-opt no-new-privileges:true',
     '--cap-drop ALL'
 )
@@ -654,7 +643,8 @@ Require-Text 'platforms/mac-docker/Dockerfile.registry' @(
     'COPY platforms/mac-docker/app/ /opt/tautweekly/',
     'org\.opencontainers\.image\.version="\$BUILD_VERSION"',
     'io\.tautweekly\.runtime-profile="mac"',
-    'io\.tautweekly\.host-adapter-api="3"',
+    'io\.tautweekly\.host-adapter-api="4"',
+    'FROM tailscale/tailscale:v1\.102\.2 AS tailscale-runtime',
     'TAUTWEEKLY_MANAGER_LISTEN=0\.0\.0\.0:8080'
 )
 Require-Text 'platforms/mac-docker/compose.yaml' @(
@@ -667,16 +657,21 @@ Require-Text 'platforms/mac-docker/compose.yaml' @(
     'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
     'TAUTWEEKLY_PACKAGE_KIND:\s*"mac-docker"',
     'TAUTWEEKLY_PACKAGE_VERSION.*__TAUTWEEKLY_RELEASE_VERSION__',
-    'TAUTWEEKLY_HOST_ADAPTER_API:\s*"3"',
+    'TAUTWEEKLY_HOST_ADAPTER_API:\s*"4"',
+    'TAUTWEEKLY_FUNNEL_ADAPTER',
+    '/var/lib/tautweekly-tailscale',
+    'PREVIEW_BIND:-127\.0\.0\.1',
     'TAUTWEEKLY_HOST_ADAPTER_API'
 )
-Forbid-Text 'platforms/mac-docker/compose.yaml' @('(?m)^\s*build:')
+Forbid-Text 'platforms/mac-docker/compose.yaml' @('(?m)^\s*build:', 'PREVIEW_BIND:-0\.0\.0\.0')
 Require-Text 'platforms/mac-docker/compose.registry.yaml' @(
     'ghcr\.io/sparkmoxie/tautweekly:__TAUTWEEKLY_RELEASE_VERSION__',
     'TAUTWEEKLY_RUNTIME_PROFILE:\s*"desktop"',
     'TAUTWEEKLY_PACKAGE_KIND:\s*"container-desktop"',
     'TAUTWEEKLY_PACKAGE_VERSION.*TAUTWEEKLY_VERSION:-__TAUTWEEKLY_RELEASE_VERSION__',
-    'TAUTWEEKLY_HOST_ADAPTER_API:\s*"3"',
+    'TAUTWEEKLY_HOST_ADAPTER_API:\s*"4"',
+    'TAUTWEEKLY_FUNNEL_ADAPTER',
+    '/var/lib/tautweekly-tailscale',
     'PREVIEW_BIND:-127\.0\.0\.1',
     'tautweekly-data:/data',
     'read_only:\s*true',
@@ -743,7 +738,9 @@ Require-Text 'platforms/mac-docker/app/run-service.sh' @(
 )
 Require-Text 'platforms/mac-docker/app/healthcheck.sh' @('health/live', 'service-heartbeat\.json')
 Require-Text 'platforms/mac-docker/app/entrypoint.sh' @(
-    'exec gosu "\$PUID:\$PGID"',
+    'gosu "\$PUID:\$PGID" /opt/tautweekly/run-service\.sh',
+    'tautweekly-manager shutdown',
+    'funnel-adapter\.sh',
     'chown -R "\$PUID:\$PGID" /data',
     '/tmp/tautweekly/home',
     '/tmp/tautweekly/share'
