@@ -42,6 +42,40 @@ container_exec()
   fi
 }
 
+set_funnel_adapter()
+{
+  require_root
+  value="$1"
+  [ "$value" = enabled ] || [ "$value" = disabled ] || exit 64
+  temp_file="$(mktemp "${env_file}.funnel.XXXXXX")"
+  trap 'rm -f "$temp_file"' EXIT HUP INT TERM
+  awk -v value="$value" '
+    BEGIN { found=0 }
+    /^TAUTWEEKLY_FUNNEL_ADAPTER=/ {
+      if (!found) print "TAUTWEEKLY_FUNNEL_ADAPTER=" value
+      found=1
+      next
+    }
+    { print }
+    END { if (!found) print "TAUTWEEKLY_FUNNEL_ADAPTER=" value }
+  ' "$env_file" >"$temp_file"
+  chown root:wheel "$temp_file"
+  chmod 0600 "$temp_file"
+  mv -f "$temp_file" "$env_file"
+  trap - EXIT HUP INT TERM
+}
+
+disable_remote_access()
+{
+  require_root
+  if "$podman" container exists "$TAUTWEEKLY_CONTAINER" >/dev/null 2>&1; then
+    running="$($podman inspect --format '{{.State.Running}}' "$TAUTWEEKLY_CONTAINER" 2>/dev/null || true)"
+    if [ "$running" = true ]; then
+      container_exec /opt/tautweekly/bin/tautweekly-funnel disable
+    fi
+  fi
+}
+
 run_mode()
 {
   container_exec /opt/tautweekly/bin/run-mode.sh "$@"
@@ -193,9 +227,22 @@ case "$cmd" in
     echo "Newsletter configuration, schedules, output, and delivery state are preserved."
     confirm "Reset Manager access and restart the rc.d service?" || exit 0
     container_exec /opt/tautweekly/bin/run-as-user.sh \
-      /opt/tautweekly/bin/tautweekly-manager access-recover --data-dir /data/manager --confirm
+      /opt/tautweekly/bin/tautweekly-manager access-recover --data-dir /data/manager \
+      --tautweekly-root /opt/tautweekly --listen 0.0.0.0:8080 --runtime-mode nas \
+      --package-kind freebsd-podman --confirm
     service tautweekly restart
     echo "Run sudo tautweekly manager-bootstrap to retrieve the new one-time pairing token."
+    ;;
+  remote-access-authorize|remote-access-login)
+    require_root
+    set_funnel_adapter enabled
+    service tautweekly restart
+    container_exec /opt/tautweekly/bin/tautweekly-funnel login
+    ;;
+  remote-access-disable)
+    disable_remote_access
+    set_funnel_adapter disabled
+    service tautweekly restart
     ;;
   schedule-status) run_script Schedule-Control.ps1 -Action Status ;;
   schedule-enable)
@@ -208,9 +255,13 @@ case "$cmd" in
     confirm "Clear the guard?" || exit 0
     run_script Schedule-Control.ps1 -Action ResetToday
     ;;
-  start|stop|restart|status)
+  start|restart|status)
     require_root
     service tautweekly "$cmd"
+    ;;
+  stop)
+    disable_remote_access
+    service tautweekly stop
     ;;
   logs)
     require_root
@@ -310,6 +361,8 @@ TautWeekly for Plex FreeBSD Podman commands
 
   sudo tautweekly manager-bootstrap
   sudo tautweekly manager-reset-access
+  sudo tautweekly remote-access-authorize
+  sudo tautweekly remote-access-disable
   sudo tautweekly setup
   sudo tautweekly verify
   sudo tautweekly cache-status

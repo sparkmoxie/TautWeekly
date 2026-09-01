@@ -2,8 +2,8 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.24.1";
-  const PREVIOUS_VERSION = "0.24.0";
+  const DEMO_VERSION = "0.25.0";
+  const PREVIOUS_VERSION = "0.24.1";
   const PROFILES = {
     windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows" },
     nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker" },
@@ -233,7 +233,9 @@
   }), DIAGNOSTIC_LIMIT);
   const model = {
     startup: { supported: true, state: "disabled", startManager: false, openDashboard: false },
-    tailscale: { supported: true, installed: true, enabled: false, active: false, state: "disabled", management: "managed", url: "" },
+    tailscale: { supported: true, installed: true, enabled: false, active: false,
+      state: "manager-password-required", provider: "tailscale", networkKind: "public-funnel",
+      management: "integrated", passwordRequired: true, cleanupRequired: false, url: "" },
     schedule: { installed: true, enabled: true, owned: true, ownership: "verified", state: "ready" },
     operation: completedPreview,
     operationStartedMS: 0,
@@ -283,9 +285,17 @@
     setProfile(name) {
       if (!Object.hasOwn(PROFILES, name)) throw new Error("Unknown fictional package profile.");
       profileName = name;
+      model.lockEnabled = serviceProfile();
       model.startup.supported = !serviceProfile();
-      Object.assign(model.tailscale, { enabled: false, active: false, state: "disabled", url: "",
-        management: ["nas", "mac", "freebsd"].includes(name) ? "external" : "managed" });
+      const authorizationCommand = name === "linux" || name === "freebsd"
+        ? "sudo tautweekly remote-access-authorize"
+        : name === "windows" ? "" : "./tautweekly.sh remote-access-login";
+      Object.assign(model.tailscale, { enabled: false, active: false,
+        state: name === "windows" ? "manager-password-required" : "authorization-required", url: "",
+        provider: "tailscale", networkKind: "public-funnel",
+        passwordRequired: name === "windows", cleanupRequired: false,
+        management: "integrated",
+        hostAuthorizationRequired: name !== "windows", hostAuthorizationCommand: authorizationCommand });
       Object.assign(model.update, { managerVersion: DEMO_VERSION, applicationVersion: DEMO_VERSION,
         packageVersion: DEMO_VERSION, runtimeProfile: profile().runtimeProfile, packageKind: profile().packageKind, packageLabel: profile().label + " (fictional)",
         imageVersion: ["nas", "mac", "freebsd"].includes(name) ? DEMO_VERSION : "",
@@ -566,10 +576,19 @@
     if (path === "/api/v1/auth/session" || path === "/api/v1/auth/login" || path === "/api/v1/auth/pair") return json({ authenticated: true, csrfToken: "synthetic-demo-token", expiresAtUtc: new Date(Date.now() + 86400000).toISOString() });
     if (path === "/api/v1/auth/logout") return json({ signedOut: true });
     if (path === "/api/v1/auth/access" && method === "GET") return json(access());
-    if (path === "/api/v1/auth/access/password") { model.lockEnabled = true; return json(access()); }
+    if (path === "/api/v1/auth/access/password") {
+      model.lockEnabled = true;
+      if (profileName === "windows" && !model.tailscale.enabled)
+        Object.assign(model.tailscale, { state: "inactive", passwordRequired: false });
+      return json(access());
+    }
     if (path === "/api/v1/auth/access/disable") {
       if (serviceProfile()) return json({ error: { code: "authentication-required", message: "This package example requires login." } }, 409);
-      model.lockEnabled = false; return json(access());
+      if (model.tailscale.enabled || model.tailscale.cleanupRequired)
+        return json({ error: { code: "funnel-shutdown-required", message: "The synthetic password lock stayed enabled until Funnel shutdown is verified." } }, 409);
+      model.lockEnabled = false;
+      Object.assign(model.tailscale, { state: "manager-password-required", passwordRequired: true });
+      return json(access());
     }
     if (path === "/api/v1/capabilities") return json({ ...profile(), supportsStartup: !serviceProfile(),
       accessLabel: serviceProfile() ? "Required login (fictional)" : "Optional lock (fictional)",
@@ -582,10 +601,16 @@
     }
     if (path === "/api/v1/remote-access/tailscale" || path === "/api/v1/remote-access/tailscale/verify") {
       if (method === "PUT") {
-        if (body.enabled && model.tailscale.management === "external" && !body.confirmedPrivate)
-          return json({ error: { code: "private-confirmation-required", message: "Confirm the fictional private-access boundary." } }, 400);
-        Object.assign(model.tailscale, { enabled: Boolean(body.enabled), active: Boolean(body.enabled),
-          state: body.enabled ? "enabled" : "disabled", url: body.enabled ? "https://manager.demo.invalid" : "" });
+        if (!['enable', 'disable'].includes(body.operation) || Object.keys(body).some((key) => key !== 'operation'))
+          return json({ error: { code: "invalid-operation", message: "Only the synthetic typed Funnel operation is accepted." } }, 400);
+        if (body.operation === "enable" && !model.lockEnabled)
+          return json({ error: { code: "manager-password-required", message: "Set the synthetic Manager password first." } }, 409);
+        const enabled = body.operation === "enable";
+        Object.assign(model.tailscale, { enabled, active: false, cleanupRequired: enabled,
+          passwordRequired: !model.lockEnabled, state: enabled ? "starting" : "inactive",
+          url: enabled ? "https://manager.demo.invalid" : "" });
+      } else if (model.tailscale.enabled) {
+        Object.assign(model.tailscale, { active: true, state: "active" });
       }
       return json(model.tailscale);
     }

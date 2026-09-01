@@ -56,7 +56,7 @@ Require-Text 'platforms/linux/systemd/tautweekly-remote-access@.service' @(
     'CapabilityBoundingSet=',
     'NoNewPrivileges=true',
     'ProtectSystem=strict',
-    'RestrictAddressFamilies=AF_UNIX'
+    'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6'
 )
 Require-Text 'platforms/linux/tautweekly.env.example' @(
     'TAUTWEEKLY_PREVIEW_BIND=127\.0\.0\.1',
@@ -116,7 +116,10 @@ Require-Text 'platforms/freebsd-podman/rc.d/tautweekly' @(
     'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
     'TAUTWEEKLY_PACKAGE_KIND=freebsd-podman',
     'TAUTWEEKLY_PACKAGE_VERSION=',
-    'TAUTWEEKLY_HOST_ADAPTER_API=3',
+    'TAUTWEEKLY_HOST_ADAPTER_API=4',
+    'TAUTWEEKLY_FUNNEL_ADAPTER=',
+    '/var/lib/tautweekly-tailscale',
+    '--tmpfs /run:rw,noexec,nosuid,size=16m',
     '--read-only',
     '--security-opt no-new-privileges',
     '--cap-drop ALL',
@@ -164,6 +167,7 @@ Require-Text 'platforms/nas-docker/app/run-service.sh' @(
     'service-heartbeat\.json',
     'write_service_heartbeat',
     'active newsletter operation to finish',
+    "trap 'term; exit 0' TERM INT",
     'Manager exited unexpectedly',
     'Scheduler exited unexpectedly'
 )
@@ -320,7 +324,8 @@ Require-Text 'docs/nas-docker/manager.html' @(
     'manager-bootstrap',
     'manager-reset-access',
     'MANAGER_ALLOWED_HOSTS',
-    'MANAGER_SECURE_COOKIES=true',
+    'Secure session boundary',
+    'Funnel hostname receives Secure cookies and HSTS automatically',
     '\/health\/live',
     'same image and Manager core',
     'wrapper does not exist inside an Unraid Apps container',
@@ -336,7 +341,7 @@ Require-Text 'docs/freebsd/README.md' @(
     'manager-reset-access',
     'Manager Config',
     'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
-    'TAUTWEEKLY_MANAGER_SECURE_COOKIES=true',
+    'Secure-cookie boundary are applied automatically',
     'up to 30 minutes'
 )
 Forbid-Text 'docs/freebsd/README.md' @('unauthenticated\s+preview server', 'sudo tautweekly setup\s*# Complete')
@@ -531,51 +536,59 @@ foreach ($relative in @('platforms/nas-docker/compose.yaml', 'platforms/nas-dock
         'stop_grace_period: 30m',
         'TAUTWEEKLY_MANAGER_ALLOWED_HOSTS',
         'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
+        'TAUTWEEKLY_FUNNEL_ADAPTER',
         'TAUTWEEKLY_PACKAGE_KIND',
         'TAUTWEEKLY_RUNTIME_PROFILE',
         'TAUTWEEKLY_PACKAGE_VERSION.*__TAUTWEEKLY_RELEASE_VERSION__',
-        'TAUTWEEKLY_HOST_ADAPTER_API'
+        'TAUTWEEKLY_HOST_ADAPTER_API: "4"',
+        '/var/lib/tautweekly-tailscale',
+        '/run:rw,noexec,nosuid,size=16m,mode=0755'
     )
+    Forbid-Text $relative @('TS_AUTHKEY', 'TS_CLIENT_SECRET', 'TS_SERVE_CONFIG', 'compose\.tailscale', '(?m)^\s*privileged:')
 }
-foreach ($relative in @('platforms/nas-docker/compose.tailscale.yaml', 'platforms/mac-docker/compose.tailscale.yaml')) {
+foreach ($retired in @(
+    'platforms/nas-docker/compose.tailscale.yaml',
+    'platforms/nas-docker/tailscale/config/serve.json',
+    'platforms/mac-docker/compose.tailscale.yaml',
+    'platforms/mac-docker/tailscale/config/serve.json'
+)) {
+    if (Test-Path -LiteralPath (Join-Path $Root $retired)) { throw "Retired private Serve deployment still exists: $retired" }
+}
+foreach ($relative in @('platforms/nas-docker/app/bin/funnel-adapter.sh', 'platforms/mac-docker/app/bin/funnel-adapter.sh')) {
     Require-Text $relative @(
-        'tailscale/tailscale:v1\.102\.2',
-        'TS_AUTHKEY: file:/run/secrets/tailscale_authkey',
-        'TS_AUTH_ONCE: "true"',
-        'TS_SERVE_CONFIG: /config/serve\.json',
-        'TS_USERSPACE: "true"',
-        'read_only: true',
-        'no-new-privileges:true',
-        'cap_drop:',
-        '- ALL'
+        '--tun=userspace-networking',
+        '--state="\$state_root/tailscaled\.state"',
+        '--socket="\$daemon_socket"',
+        'TAUTWEEKLY_REMOTE_ACCESS_UID',
+        'remote-access-sidecar',
+        'TS_AUTHKEY TS_AUTH_KEY TS_CLIENT_ID TS_CLIENT_SECRET TS_ID_TOKEN TS_AUDIENCE TS_AUTHKEY_FILE',
+        'chmod 700 "\$state_root"',
+        'chmod 711 /run/tautweekly-remote-access'
     )
-    Forbid-Text $relative @(
-        '(?i)funnel',
-        '(?i)docker\.sock',
-        '(?m)^\s*privileged:',
-        '(?m)^\s*cap_add:',
-        '(?i)/dev/net/tun',
-        '(?i)tskey-'
-    )
+    Forbid-Text $relative @('(?i)docker\.sock', '(?i)/dev/net/tun', '(?i)tskey-', '(?m)^\s*privileged')
 }
-foreach ($relative in @('platforms/nas-docker/tailscale/config/serve.json', 'platforms/mac-docker/tailscale/config/serve.json')) {
-    Require-Text $relative @(
-        '"HTTPS": true',
-        '"\$\{TS_CERT_DOMAIN\}:443"',
-        '"Proxy": "http://tautweekly:8080"'
-    )
-    Forbid-Text $relative @('(?i)funnel')
+foreach ($relative in @('platforms/nas-docker/app/bin/tautweekly-funnel', 'platforms/mac-docker/app/bin/tautweekly-funnel')) {
+    Require-Text $relative @('login\|disable', '--socket="\$daemon_socket" login', 'remote-access-cleanup', '--listen 0\.0\.0\.0:8080')
+    Forbid-Text $relative @('(?i)authkey=', '(?i)logout', '(?i)status --json')
 }
+Write-Host '[PASS] Container packages use explicit userspace Funnel adapters with fixed operations, root-only state, and no stored authentication key.'
 Require-Text 'platforms/nas-docker/Dockerfile' @(
     'FROM golang:1\.26\.6-bookworm AS manager-build',
     'GOOS=linux GOARCH="\$\{TARGETARCH:-amd64\}"',
     'tautweekly-manager',
+    'FROM tailscale/tailscale:v1\.102\.2 AS tailscale-runtime',
+    'COPY --from=tailscale-runtime /usr/local/bin/tailscale',
+    'COPY --from=tailscale-runtime /usr/local/bin/tailscaled',
     'HOME=/tmp/tautweekly/home',
     'XDG_DATA_HOME=/tmp/tautweekly/share',
     'EXPOSE 8080',
-    'io\.tautweekly\.host-adapter-api="3"',
+    'io\.tautweekly\.host-adapter-api="4"',
+    'io\.tautweekly\.remote-access="tailscale-funnel"',
     'io\.tautweekly\.image-repository="ghcr\.io/sparkmoxie/tautweekly"',
     'io\.tautweekly\.runtime-profiles="desktop,server,unraid"'
+)
+Require-Text 'platforms/nas-docker/Dockerfile.dockerignore' @(
+    '!THIRD_PARTY_NOTICES\.md'
 )
 Require-Text 'platforms/nas-docker/app/entrypoint.sh' @(
     '/tmp/tautweekly/home',
@@ -584,13 +597,21 @@ Require-Text 'platforms/nas-docker/app/entrypoint.sh' @(
     'runtime-profile\.sh',
     'tautweekly_select_runtime_profile',
     'Unified container profile'
+    'TAUTWEEKLY_FUNNEL_ADAPTER',
+    'kill -TERM "\$service_pid"',
+    'termination_requested',
+    'Verified Funnel shutdown failed; the container remains running'
 )
 Require-Text 'templates/tautweekly.xml' @(
     '--read-only',
+    '--publish 127\.0\.0\.1:8787:8080/tcp',
     '--stop-timeout 1800',
     'TAUTWEEKLY_PACKAGE_KIND',
     'TAUTWEEKLY_HOST_ADAPTER_API',
     'TAUTWEEKLY_RUNTIME_PROFILE',
+    'TAUTWEEKLY_FUNNEL_ADAPTER',
+    '/var/lib/tautweekly-tailscale',
+    '--tmpfs /run:rw,noexec,nosuid,size=16m,mode=0755',
     '--security-opt no-new-privileges:true',
     '--cap-drop ALL'
 )
@@ -625,8 +646,12 @@ Require-Text 'platforms/mac-docker/Dockerfile.registry' @(
     'COPY platforms/mac-docker/app/ /opt/tautweekly/',
     'org\.opencontainers\.image\.version="\$BUILD_VERSION"',
     'io\.tautweekly\.runtime-profile="mac"',
-    'io\.tautweekly\.host-adapter-api="3"',
+    'io\.tautweekly\.host-adapter-api="4"',
+    'FROM tailscale/tailscale:v1\.102\.2 AS tailscale-runtime',
     'TAUTWEEKLY_MANAGER_LISTEN=0\.0\.0\.0:8080'
+)
+Require-Text 'platforms/mac-docker/Dockerfile.registry.dockerignore' @(
+    '!THIRD_PARTY_NOTICES\.md'
 )
 Require-Text 'platforms/mac-docker/compose.yaml' @(
     'image:\s*tautweekly-mac:stable',
@@ -638,16 +663,21 @@ Require-Text 'platforms/mac-docker/compose.yaml' @(
     'TAUTWEEKLY_MANAGER_SECURE_COOKIES',
     'TAUTWEEKLY_PACKAGE_KIND:\s*"mac-docker"',
     'TAUTWEEKLY_PACKAGE_VERSION.*__TAUTWEEKLY_RELEASE_VERSION__',
-    'TAUTWEEKLY_HOST_ADAPTER_API:\s*"3"',
+    'TAUTWEEKLY_HOST_ADAPTER_API:\s*"4"',
+    'TAUTWEEKLY_FUNNEL_ADAPTER',
+    '/var/lib/tautweekly-tailscale',
+    'PREVIEW_BIND:-127\.0\.0\.1',
     'TAUTWEEKLY_HOST_ADAPTER_API'
 )
-Forbid-Text 'platforms/mac-docker/compose.yaml' @('(?m)^\s*build:')
+Forbid-Text 'platforms/mac-docker/compose.yaml' @('(?m)^\s*build:', 'PREVIEW_BIND:-0\.0\.0\.0')
 Require-Text 'platforms/mac-docker/compose.registry.yaml' @(
     'ghcr\.io/sparkmoxie/tautweekly:__TAUTWEEKLY_RELEASE_VERSION__',
     'TAUTWEEKLY_RUNTIME_PROFILE:\s*"desktop"',
     'TAUTWEEKLY_PACKAGE_KIND:\s*"container-desktop"',
     'TAUTWEEKLY_PACKAGE_VERSION.*TAUTWEEKLY_VERSION:-__TAUTWEEKLY_RELEASE_VERSION__',
-    'TAUTWEEKLY_HOST_ADAPTER_API:\s*"3"',
+    'TAUTWEEKLY_HOST_ADAPTER_API:\s*"4"',
+    'TAUTWEEKLY_FUNNEL_ADAPTER',
+    '/var/lib/tautweekly-tailscale',
     'PREVIEW_BIND:-127\.0\.0\.1',
     'tautweekly-data:/data',
     'read_only:\s*true',
@@ -710,11 +740,14 @@ Require-Text 'platforms/mac-docker/app/run-service.sh' @(
     'health/live',
     'wait_for_delivery',
     'SHUTDOWN_DELIVERY_GRACE_SECONDS',
-    'ManagerProcessId'
+    'ManagerProcessId',
+    "trap 'term; exit 0' TERM INT"
 )
 Require-Text 'platforms/mac-docker/app/healthcheck.sh' @('health/live', 'service-heartbeat\.json')
 Require-Text 'platforms/mac-docker/app/entrypoint.sh' @(
-    'exec gosu "\$PUID:\$PGID"',
+    'gosu "\$PUID:\$PGID" /opt/tautweekly/run-service\.sh',
+    'kill -TERM "\$service_pid"',
+    'funnel-adapter\.sh',
     'chown -R "\$PUID:\$PGID" /data',
     '/tmp/tautweekly/home',
     '/tmp/tautweekly/share'
@@ -755,7 +788,16 @@ Require-Text 'platforms/windows/Windows-Update.ps1' @(
     'Assert-ManifestFiles',
     'Assert-PowerShellSyntax',
     'Get-InstalledManagerProcesses',
+    'Resolve-ManagerDataRoot',
+    'Disable-InstalledPublicRoute',
+    'remote-access-cleanup',
+    'exact TautWeekly Funnel could not be disabled and verified',
     'Start-InstalledManager',
+    'Get-HealthyManagerListenerProcessIds',
+    'Get-NetTCPConnection.*LocalPort 8788',
+    'OwningProcess',
+    'different TautWeekly Manager installation',
+    'TautWeekly Manager \$TargetVersion',
     '\.manager-data'
 )
 Require-Text 'platforms/windows/START-MANAGER.ps1' @(

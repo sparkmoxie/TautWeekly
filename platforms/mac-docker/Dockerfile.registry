@@ -8,6 +8,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH:-amd64}" \
     go build -trimpath -buildvcs=false -ldflags "-s -w -X main.version=${BUILD_VERSION}" \
     -o /out/tautweekly-manager ./cmd/tautweekly-manager
 
+FROM tailscale/tailscale:v1.102.2 AS tailscale-runtime
+
 FROM mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim
 
 ARG BUILD_VERSION=dev
@@ -18,9 +20,10 @@ LABEL org.opencontainers.image.title="TautWeekly for Plex macOS / Docker Desktop
       org.opencontainers.image.url="https://github.com/sparkmoxie/TautWeekly" \
       org.opencontainers.image.source="https://github.com/sparkmoxie/TautWeekly" \
       org.opencontainers.image.documentation="https://sparkmoxie.github.io/TautWeekly/mac/" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="MIT AND BSD-3-Clause" \
       io.tautweekly.runtime-profile="mac" \
-      io.tautweekly.host-adapter-api="3"
+      io.tautweekly.host-adapter-api="4" \
+      io.tautweekly.remote-access="tailscale-funnel"
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -41,12 +44,16 @@ RUN groupadd --gid 1000 tautweekly \
 
 WORKDIR /opt/tautweekly
 COPY platforms/mac-docker/app/ /opt/tautweekly/
+COPY THIRD_PARTY_NOTICES.md /usr/share/doc/tautweekly/THIRD_PARTY_NOTICES.md
 COPY --from=manager-build /out/tautweekly-manager /opt/tautweekly/bin/tautweekly-manager
+COPY --from=tailscale-runtime /usr/local/bin/tailscale /usr/local/bin/tailscale
+COPY --from=tailscale-runtime /usr/local/bin/tailscaled /usr/local/bin/tailscaled
 RUN chmod +x /opt/tautweekly/entrypoint.sh \
     /opt/tautweekly/run-service.sh \
     /opt/tautweekly/healthcheck.sh \
     /opt/tautweekly/bin/*.sh \
-    /opt/tautweekly/bin/tautweekly-manager
+    /opt/tautweekly/bin/tautweekly-manager \
+    /opt/tautweekly/bin/tautweekly-funnel
 
 ENV TAUTWEEKLY_DATA_DIR=/data \
     TAUTWEEKLY_CONFIG=/data/config.json \
@@ -59,6 +66,6 @@ ENV TAUTWEEKLY_DATA_DIR=/data \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     POWERSHELL_TELEMETRY_OPTOUT=1
 
-VOLUME ["/data"]
+VOLUME ["/data", "/var/lib/tautweekly-tailscale"]
 EXPOSE 8080
 ENTRYPOINT ["/usr/bin/tini","--","/opt/tautweekly/entrypoint.sh"]

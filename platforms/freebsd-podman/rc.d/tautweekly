@@ -32,6 +32,8 @@ tautweekly_load_env()
     : "${TAUTWEEKLY_RUNTIME_PROFILE:=server}"
     : "${TAUTWEEKLY_CONTAINER:=tautweekly}"
     : "${TAUTWEEKLY_DATA_DIR:=/var/db/tautweekly}"
+    : "${TAUTWEEKLY_TAILSCALE_STATE_DIR:=/var/db/tautweekly-tailscale}"
+    : "${TAUTWEEKLY_FUNNEL_ADAPTER:=disabled}"
     : "${TAUTWEEKLY_TIMEZONE:=Etc/UTC}"
     : "${TAUTWEEKLY_PUID:=8787}"
     : "${TAUTWEEKLY_PGID:=8787}"
@@ -53,6 +55,7 @@ tautweekly_start()
         return 1
     fi
     install -d -m 0700 -o "$TAUTWEEKLY_PUID" -g "$TAUTWEEKLY_PGID" "$TAUTWEEKLY_DATA_DIR"
+    install -d -m 0700 -o root -g wheel "$TAUTWEEKLY_TAILSCALE_STATE_DIR"
     "$PODMAN" rm -f "$TAUTWEEKLY_CONTAINER" >/dev/null 2>&1 || true
     "$PODMAN" run --detach \
         --name "$TAUTWEEKLY_CONTAINER" \
@@ -61,6 +64,7 @@ tautweekly_start()
         --stop-timeout=1800 \
         --read-only \
         --tmpfs /tmp:rw,noexec,nosuid,size=256m \
+        --tmpfs /run:rw,noexec,nosuid,size=16m \
         --security-opt no-new-privileges \
         --cap-drop ALL \
         --cap-add CHOWN \
@@ -78,11 +82,13 @@ tautweekly_start()
         -e "TAUTWEEKLY_MANAGER_LISTEN=0.0.0.0:8080" \
         -e "TAUTWEEKLY_MANAGER_ALLOWED_HOSTS=$TAUTWEEKLY_MANAGER_ALLOWED_HOSTS" \
         -e "TAUTWEEKLY_MANAGER_SECURE_COOKIES=$TAUTWEEKLY_MANAGER_SECURE_COOKIES" \
+        -e "TAUTWEEKLY_FUNNEL_ADAPTER=$TAUTWEEKLY_FUNNEL_ADAPTER" \
         -e "TAUTWEEKLY_PACKAGE_KIND=freebsd-podman" \
         -e "TAUTWEEKLY_PACKAGE_VERSION=$TAUTWEEKLY_PACKAGE_VERSION" \
-        -e "TAUTWEEKLY_HOST_ADAPTER_API=3" \
+        -e "TAUTWEEKLY_HOST_ADAPTER_API=4" \
         -p "$TAUTWEEKLY_PREVIEW_BIND:$TAUTWEEKLY_PREVIEW_PORT:8080/tcp" \
         -v "$TAUTWEEKLY_DATA_DIR:/data:rw" \
+        -v "$TAUTWEEKLY_TAILSCALE_STATE_DIR:/var/lib/tautweekly-tailscale:rw" \
         "$TAUTWEEKLY_IMAGE"
 }
 

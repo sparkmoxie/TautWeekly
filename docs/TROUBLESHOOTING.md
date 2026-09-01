@@ -124,32 +124,98 @@ steps.
 ## Manager or preview does not open
 
 The Docker/NAS and Native Linux services are both headless and use the same
-Manager and newsletter behavior, but do not assume they share an access path.
-Docker/NAS normally opens from another trusted-LAN device at
-`http://SERVER_LAN_IP:8787/`, without SSH or a server desktop. Native Linux
-keeps Manager on loopback and requires the documented SSH tunnel or private
-Tailscale access.
+Manager and newsletter behavior. Both keep local recovery on host loopback.
+Open it directly on the host or use the documented SSH local forward; optional
+password-gated public Funnel is the only ordinary remote-browser path.
 
-### Private Tailscale address does not open
+## Windows Setup asks for a folder during an update
 
-- Confirm the remote computer or mobile device is connected to the same
-  tailnet and permitted by its current grants. Disconnecting the remote client
-  is expected to make the private address unreachable.
-- In Manager **Settings > Tailscale**, distinguish **Connected** (integrated
-  route verified) from **Enabled** (an external exact hostname is allowlisted;
-  the host-owned route cannot be inspected by Manager).
-- On native Linux, run `tautweekly remote-access-status`. If authorization is
-  absent, run `sudo tautweekly remote-access-authorize`, then retry Settings.
-  Disable in Manager before using `sudo tautweekly remote-access-revoke`.
-- On Windows, choose **Verify with Windows** and approve the UAC prompt. A
-  conflicting existing Serve configuration is intentionally left unchanged.
-- For a first-use provider link, enable HTTPS certificates only and turn
-  Funnel off even if the provider page preselects it.
-- For macOS, FreeBSD, QNAP, Unraid, or another host-managed package, inspect the
-  host/client Serve state separately and confirm it still proxies the mapped
-  loopback Manager port. Disable the Manager setting before removing the route.
-- The Manager password remains required outside Windows; Windows keeps its
-  existing optional lock behavior. There is no read-only remote role.
+v0.25.0 reads a validated existing Setup installation through the native
+current-user Windows Registry API and uses that registered folder directly, so
+a normal Setup-managed update should not open the legacy folder picker. If it
+does, cancel instead of selecting an arbitrary directory and confirm the
+installed application is still registered and contains its valid release
+ownership marker. A fresh installation, an unresolved registration, or an
+explicit older portable/BAT migration still requires a deliberate folder
+choice. Setup never scans drives or guesses an installation path.
+
+### Native public Funnel address does not open
+
+- Remote viewers need only an ordinary HTTPS browser; they do not install or
+  connect Tailscale. Confirm the native Windows or Linux host has the official
+  Tailscale client installed, running, and signed in, then use **Settings >
+  Tailscale Funnel > Verify**. On Linux, `tautweekly
+  remote-access-status` must report authorized; otherwise run `sudo
+  tautweekly remote-access-authorize`. Do not share the real `.ts.net`
+  address in support material.
+- **Manager password required** means create and enable a unique password first.
+  **Approval required** means approve the Windows UAC prompt and any official
+  one-time Funnel page, then verify again. **Publication pending** means the
+  exact loopback route exists but the fixed public DNS and certificate-validated
+  TLS checks have not passed. The URL remains available and the card glows gold;
+  it is not an active public Funnel. **Needs attention** means the observed route
+  did not exactly match TautWeekly's fixed loopback target.
+- Confirm the tailnet has MagicDNS, HTTPS certificates, and a `funnel`
+  `nodeAttrs` policy target that includes this node. The default
+  `autogroup:member` target does not include a tagged service node; a separately
+  managed tagged container or Kubernetes node needs an explicit tag target.
+  TautWeekly never reads or changes policy, tags, devices, or authentication.
+- A separately managed declarative tagged sidecar also requires
+  `AllowFunnel=true` for the exact `${TS_CERT_DOMAIN}:443` entry. TautWeekly's
+  shipped NAS/macOS sidecar intentionally has neither that public entry nor a
+  policy file, and the container Manager refuses public lifecycle operations.
+  This is a container-only capability boundary from
+  [tailscale/tailscale#11849](https://github.com/tailscale/tailscale/issues/11849#issuecomment-2211623437),
+  not a Windows workaround. Do not modify Windows Tailscale state files or tag
+  an untagged member-owned Windows device to try it.
+- Tailscale documents that public DNS can take up to 10 minutes. After that,
+  choose **Verify**. On Windows only, restarting the official Tailscale service
+  once is a bounded diagnostic; it is not proof of publication. Open upstream
+  reports cover Windows missing DNS
+  ([#19508](https://github.com/tailscale/tailscale/issues/19508)), Linux/iOS and
+  Docker off-tailnet resolution failures
+  ([#11849](https://github.com/tailscale/tailscale/issues/11849)), Docker
+  userspace DNS failure ([#8680](https://github.com/tailscale/tailscale/issues/8680)),
+  and Linux public-DNS success followed by CDN-edge TLS stalls
+  ([#19290](https://github.com/tailscale/tailscale/issues/19290)). Local
+  `Funnel on` remains **Publication pending** until independent public DNS and
+  trusted TLS both pass. Do not create an A record, share the machine,
+  repeatedly reset certificates, add firewall/router rules, or replace the
+  transport; those actions do not satisfy TautWeekly's publication proof.
+- A successful CLI configuration check does not replace public edge acceptance.
+  TautWeekly queries the exact intended-public hostname through `1.1.1.1`,
+  rejects non-public answers, and requires a trusted TLS certificate before
+  showing **Active**. On Windows, it uses the system `nslookup.exe` diagnostic
+  path so NRPT and MagicDNS cannot intercept the fixed public-resolver query;
+  `Resolve-DnsName -Server` still honors that split-DNS policy and is not a
+  valid public-publication check. No DNS answer, certificate, raw CLI output,
+  or private network detail is returned to Manager or written to diagnostics.
+  From a separate network, open the generated HTTPS address, sign in, verify a
+  read and a CSRF-protected change, sign out, and confirm the local Dashboard
+  still works. Do not expose port 8788 or add a firewall/router rule.
+- If password-lock disable, access reset, explicit stop, update, adapter
+  revocation, or uninstall refuses, restore the official Tailscale service and
+  the fixed platform adapter, then retry so TautWeekly can verify its owned
+  Funnel is off. On Windows approve the fixed UAC shutdown; on Linux restore
+  the authorized socket. Do not remove the password boundary first.
+
+### Container-package Funnel is unavailable or publication remains pending
+
+- Confirm `TAUTWEEKLY_FUNNEL_ADAPTER=enabled`, recreate the container, and run
+  its documented `remote-access-login` or `remote-access-authorize` command.
+  Authentication is interactive; auth keys, OAuth secrets, and tokens are
+  deliberately refused.
+- Do not mount a Docker/Podman socket, host CLI, TUN device, or privileged
+  network access. The packaged official userspace runtime needs none of them.
+- **Publication pending** means the exact local Funnel is configured but public
+  DNS and trusted TLS have not both passed. Check MagicDNS, HTTPS certificates,
+  and the applicable Funnel node attribute, wait for provider publication, then
+  choose Verify. Do not add DNS, firewall, or router rules.
+- If disable, stop, reset, update, recovery, or removal refuses, restore the
+  adapter and its root-only state and retry exact-route cleanup. Do not remove
+  the Manager password first.
+- The remote viewer needs only an ordinary browser and the Manager password.
+  Every session has full administration; there is no read-only role.
 
 Windows, NAS/Docker, macOS Docker Desktop, native Linux, and FreeBSD serve previews through the
 authenticated Manager. NAS/Docker normally maps host port 8787 to container
@@ -253,10 +319,10 @@ docker compose port tautweekly 8080
 docker compose exec tautweekly tail -n 40 /data/logs/manager.log
 ```
 
-`docker compose port tautweekly 8080` reports the host mapping; open that port
-through the Docker server's real trusted-LAN name or address, not Docker's
-`*:PORT` display notation. A vendor UI or differently named service should use
-its equivalent status and port-mapping view.
+`docker compose port tautweekly 8080` must report a `127.0.0.1` host mapping,
+never Docker's `*:PORT` notation. Open it on the host or through the documented
+SSH local forward. A vendor UI or differently named service should use its
+equivalent status and port-mapping view.
 
 The container scheduler reads only `/data/config.json`, mapped from the
 distribution's `./data/config.json`, configured Unraid appdata directory, or
@@ -264,21 +330,17 @@ FreeBSD `/var/db/tautweekly`. If logs keep waiting for that file, sign in and
 complete Manager Config. Do not place configuration under `/opt/tautweekly`;
 that is the disposable application layer.
 
-For LAN or reverse-proxy access, verify the exact DNS name is listed in the
-platform's Manager allowed-host setting. Terminate TLS at a trusted reverse
-proxy, enable secure cookies, preserve the original Host header, and do not
-publish the plain HTTP backend. IP-literal access needs no DNS allowlist entry.
-If a Cloudflare Tunnel route uses an `httpHostHeader` override, remove that
-override for the TautWeekly route so cloudflared forwards the browser's public
-Host unchanged. Do not add the rewritten loopback or container address to the
-DNS allowlist.
+For public access, use only the URL returned by the active Funnel card. Its
+exact hostname is admitted only after backend route ownership, public DNS, and
+trusted TLS verification. Do not add a LAN/DNS host, proxy rewrite, wildcard,
+router port, or firewall rule as a workaround.
 An Origin rejection now reports a sanitized code: `invalid-origin` for a
 malformed value, `origin-host-mismatch` or `origin-scheme-mismatch` for a real
 same-origin difference, and `remote-http` when a saved Tailscale hostname was
 used over HTTP. Forwarded headers cannot override these checks. If default
-`http://localhost:8787` still fails, provide only the browser address scheme,
-sanitized Host shape (localhost, private DNS, or `.ts.net`), and whether a
-trusted TLS proxy is in use; do not post the private hostname or credentials.
+`http://localhost:8787` still fails, provide only the browser address scheme
+and sanitized Host shape (localhost or `.ts.net`); do not post the private
+hostname or credentials.
 
 ## Container permission errors
 

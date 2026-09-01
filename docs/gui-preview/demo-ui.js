@@ -26,8 +26,6 @@
     link.textContent = remote.enabled ? "https://manager.demo.invalid (fictional)" : "";
     byId("tailscale-url-empty").hidden = Boolean(remote.enabled);
     byId("tailscale-copy-button").hidden = true;
-    byId("tailscale-external-guide").href = "../";
-    byId("tailscale-external-url").placeholder = "https://manager.demo.invalid";
     byId("tailscale-settings-message").textContent = "Simulation only. Enabling, disabling, or verifying changes fictional page state; no Tailscale account, command, or network is contacted.";
     byId("tailscale-refresh-button").textContent = "Simulate verification";
   });

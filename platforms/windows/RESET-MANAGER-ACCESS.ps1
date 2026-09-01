@@ -35,9 +35,10 @@ foreach ($process in $running) {
     Stop-Process -Id $process.Id -Force -ErrorAction Stop
 }
 
+Write-Host 'Turning off and verifying any TautWeekly-owned public Funnel before resetting access...'
 & $manager 'access-reset' "--data-dir=$DataRoot"
 if ($LASTEXITCODE -ne 0) {
-    throw "Manager access reset failed with exit code $LASTEXITCODE."
+    throw "Manager access reset stopped safely with exit code $LASTEXITCODE. Restore Tailscale and retry so the owned Funnel can be verified off before the password lock is disabled."
 }
 
 Write-Host 'Opening TautWeekly Manager with trusted-local access...'

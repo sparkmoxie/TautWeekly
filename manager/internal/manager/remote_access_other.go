@@ -3,8 +3,5 @@
 package manager
 
 func newPlatformRemoteAccessController(options Options) remoteAccessController {
-	if isManagedServiceRuntimeMode(options.RuntimeMode) {
-		return newExternalTailscaleRemoteAccessController(options.DataDir, options.ListenAddress)
-	}
-	return newTailscaleRemoteAccessController(options.DataDir, options.ListenAddress, false, nil)
+	return newPublicFunnelController(options.DataDir, options.ListenAddress, "platform-funnel.json", false, nil)
 }

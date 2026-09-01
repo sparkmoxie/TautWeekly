@@ -175,6 +175,10 @@ func (s *authStore) login(password string) (session, error) {
 }
 
 func (s *authStore) setPasswordLock(password string) error {
+	return s.setPasswordLockForSession(password, "")
+}
+
+func (s *authStore) setPasswordLockForSession(password, preserveSessionToken string) error {
 	s.pairMu.Lock()
 	defer s.pairMu.Unlock()
 	if err := s.writePassword(password); err != nil {
@@ -190,6 +194,16 @@ func (s *authStore) setPasswordLock(password string) error {
 		return fmt.Errorf("invalidate pairing token: %w", err)
 	}
 	s.bootstrapToken = ""
+	// A password change must not leave sessions created with the prior
+	// credential valid. Preserve only the authenticated browser that performed
+	// the change so the Settings workflow remains continuous.
+	s.mu.Lock()
+	for token := range s.sessions {
+		if preserveSessionToken == "" || token != preserveSessionToken {
+			delete(s.sessions, token)
+		}
+	}
+	s.mu.Unlock()
 	return nil
 }
 

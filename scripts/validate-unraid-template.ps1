@@ -58,7 +58,7 @@ if ([string]$profile.CommunityApplications.Icon -cne $expectedIcon -or [string]$
 }
 
 $configs = @($container.Config)
-$requiredTargets = @('8080','/data','TZ','PUID','PGID','UMASK','TAUTWEEKLY_RUNTIME_PROFILE','TAUTWEEKLY_PREVIEW_BASE_URL','TAUTWEEKLY_MANAGER_ALLOWED_HOSTS','TAUTWEEKLY_MANAGER_SECURE_COOKIES','TAUTWEEKLY_PACKAGE_KIND','TAUTWEEKLY_HOST_ADAPTER_API')
+$requiredTargets = @('/data','/var/lib/tautweekly-tailscale','TZ','PUID','PGID','UMASK','TAUTWEEKLY_RUNTIME_PROFILE','TAUTWEEKLY_FUNNEL_ADAPTER','TAUTWEEKLY_PREVIEW_BASE_URL','TAUTWEEKLY_MANAGER_ALLOWED_HOSTS','TAUTWEEKLY_MANAGER_SECURE_COOKIES','TAUTWEEKLY_PACKAGE_KIND','TAUTWEEKLY_HOST_ADAPTER_API')
 foreach ($target in $requiredTargets) {
     if (-not ($configs | Where-Object { [string]$_.Target -ceq $target })) {
         Add-Failure "Missing Unraid Config target: $target"
@@ -69,12 +69,12 @@ $appdata = $configs | Where-Object { [string]$_.Target -ceq '/data' } | Select-O
 if ($null -ne $appdata -and [string]$appdata.Default -cne '/mnt/user/appdata/tautweekly') {
     Add-Failure 'Unraid appdata default must be /mnt/user/appdata/tautweekly.'
 }
-$webPort = $configs | Where-Object { [string]$_.Target -ceq '8080' } | Select-Object -First 1
-if ($null -ne $webPort -and ([string]$webPort.Default -cne '8787' -or [string]$webPort.Type -cne 'Port')) {
-    Add-Failure 'Unraid WebUI must map host port 8787 to container port 8080.'
+if ($configs | Where-Object { [string]$_.Type -ceq 'Port' -or [string]$_.Target -ceq '8080' }) {
+    Add-Failure 'Unraid must not generate a broad host port mapping through a Port Config entry.'
 }
-if ($null -ne $webPort -and ([string]$webPort.Name -cne 'Manager Web UI' -or [string]$webPort.Description -notmatch 'Authenticated Manager')) {
-    Add-Failure 'Unraid port metadata must identify the authenticated NAS Manager.'
+if ([string]$container.ExtraParams -notmatch '(?:^| )--publish 127[.]0[.]0[.]1:8787:8080/tcp(?: |$)' -or
+    [string]$container.WebUI -cne 'http://127.0.0.1:8787/') {
+    Add-Failure 'Unraid Manager recovery must use the fixed loopback-only port mapping.'
 }
 $packageKind = $configs | Where-Object { [string]$_.Target -ceq 'TAUTWEEKLY_PACKAGE_KIND' } | Select-Object -First 1
 if ($null -ne $packageKind -and [string]$packageKind.Default -cne 'unraid') {
@@ -85,15 +85,30 @@ if ($null -ne $runtimeProfile -and [string]$runtimeProfile.Default -cne 'unraid'
     Add-Failure 'Unraid runtime profile must remain unraid.'
 }
 $hostAdapter = $configs | Where-Object { [string]$_.Target -ceq 'TAUTWEEKLY_HOST_ADAPTER_API' } | Select-Object -First 1
-if ($null -ne $hostAdapter -and [string]$hostAdapter.Default -cne '3') {
+if ($null -ne $hostAdapter -and [string]$hostAdapter.Default -cne '4') {
     Add-Failure 'Unraid host-adapter API must match the current Manager contract.'
+}
+$funnelAdapter = $configs | Where-Object { [string]$_.Target -ceq 'TAUTWEEKLY_FUNNEL_ADAPTER' } | Select-Object -First 1
+if ($null -ne $funnelAdapter -and [string]$funnelAdapter.Default -cne 'disabled') {
+    Add-Failure 'Unraid public Funnel must remain explicit opt-in.'
+}
+$tailscaleState = $configs | Where-Object { [string]$_.Target -ceq '/var/lib/tautweekly-tailscale' } | Select-Object -First 1
+if ($null -ne $tailscaleState -and [string]$tailscaleState.Default -cne '/mnt/user/appdata/tautweekly-tailscale') {
+    Add-Failure 'Unraid Tailscale state must remain separate from Manager appdata.'
 }
 if ([string]$container.Overview -notmatch 'authenticated TautWeekly Manager' -or [string]$container.Overview -notmatch 'access-bootstrap') {
     Add-Failure 'Unraid overview must describe authenticated Manager bootstrap from the container Console.'
 }
 if ([string]$container.Overview -notmatch 'Unraid owns container lifecycle and stable image updates' -or
-    [string]$container.Description -notmatch 'No in-container updater, Docker socket, privileged mode, insecure default password, or edge image is enabled') {
+    [string]$container.Description -notmatch 'no auth key, Docker socket, privileged mode, host executable, router port, or firewall change') {
     Add-Failure 'Unraid update policy must remain host-managed, stable-only, and socket-free.'
+}
+if ([string]$container.ExtraParams -notmatch '(?:^| )--tmpfs /run:rw,noexec,nosuid,size=16m,mode=0755(?: |$)' -or
+    [string]$container.Description -notmatch 'Tailscale Funnel') {
+    Add-Failure 'Unraid Funnel must use only the private runtime tmpfs and fixed userspace adapter.'
+}
+if ([string]$container.ExtraParams -match '(?i)(?:--publish|-p)\s+(?:0[.]0[.]0[.]0:|[^ ]*::)' ) {
+    Add-Failure 'Unraid template contains a broad Manager publish mapping.'
 }
 
 $rawMetadata = (Get-Content -LiteralPath $profilePath -Raw) + "`n" + (Get-Content -LiteralPath $templatePath -Raw)

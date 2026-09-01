@@ -1,6 +1,12 @@
 TAUTWEEKLY FOR PLEX MAC PORTABLE CHANGELOG
 ================================
 
+v1.7.0 Portable
+---------------
+- adds password-gated public Tailscale Funnel to the maintained Docker Desktop package
+- replaces the private Serve sidecar with an isolated official userspace runtime and exact fixed-target lifecycle adapter
+- preserves the no-Docker-socket, non-root, host-owned update and rollback boundaries without auth keys or host control
+
 v1.6.0 Portable
 ---------------
 - migrates the preferred Docker Desktop route to ghcr.io/sparkmoxie/tautweekly with the desktop profile

@@ -582,6 +582,8 @@ try {
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/shared/package-update.sh') -Destination (Join-Path $linuxDestination 'package-update.sh') -Force
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/nas-docker/app') -Destination (Join-Path $linuxDestination 'app') -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/linux/preview-home.html') -Destination (Join-Path $linuxDestination 'app/preview-home.html') -Force
+    New-Item -ItemType Directory -Path (Join-Path $linuxDestination 'app/manager-assets') -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $Root 'platforms/windows/manager-assets/tautweekly-social-preview.jpg') -Destination (Join-Path $linuxDestination 'app/manager-assets/tautweekly-social-preview.jpg') -Force
     Remove-Item -LiteralPath (Join-Path $linuxDestination 'preview-home.html') -Force
     Build-LinuxManagers -Destination $linuxDestination
 

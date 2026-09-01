@@ -60,8 +60,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	if !opts.uninstall && !opts.testMode && !opts.installDirExplicit {
-		previousInstallDir := opts.installDir
+	if requiresInstallDirectorySelection(opts) {
 		selected, accepted, err := chooseInstallDirectory(opts.installDir)
 		if err != nil {
 			return err
@@ -79,9 +78,6 @@ func run(args []string) error {
 		}
 		if err := normalizeAndValidatePaths(&opts); err != nil {
 			return err
-		}
-		if !samePath(previousInstallDir, opts.installDir) && installedApplication(previousInstallDir) {
-			return fmt.Errorf("TautWeekly is already installed at:\n%s\n\nRun Setup again and keep that folder to update it safely. To change the application folder, remove the existing app first; private configuration and history will be preserved", previousInstallDir)
 		}
 	}
 	logger, closeLog, err := newLogger(opts.logPath)
@@ -116,6 +112,19 @@ func run(args []string) error {
 		return fmt.Errorf("Installation stopped safely. Existing configuration and history were not removed.\n\nReview the installer log for details:\n%s", opts.logPath)
 	}
 	return finishInstallation(opts, showCompletion, startDetached)
+}
+
+func requiresInstallDirectorySelection(opts options) bool {
+	if opts.uninstall || opts.testMode || opts.installDirExplicit {
+		return false
+	}
+	// A registry-derived path is accepted by preferredInstallDirectory only
+	// after its installer marker or portable ownership manifest has been
+	// validated. Use that exact path directly for Update or Migrate so a legacy
+	// Windows folder picker cannot silently replace a correct preselection with
+	// the profile directory. The confirmation dialog still identifies the path
+	// and operation before any files change.
+	return !installedApplication(opts.installDir) && !verifiedPortableApplication(opts.installDir)
 }
 
 func finishInstallation(opts options, completion func(string, string, bool) error, queueLaunch func(string, string) error) error {
@@ -451,14 +460,25 @@ func uninstall(opts options, logger *log.Logger) error {
 	if err != nil {
 		return err
 	}
-	if err := removeInstalledSchedule(opts.installDir, opts.testMode); err != nil {
-		return err
-	}
 	managerWasRunning, err := stopInstalledManager(opts.installDir, opts.testMode)
 	if err != nil {
 		return err
 	}
+	restoreRunningManager := func() {
+		if managerWasRunning {
+			_ = startDetached(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir)
+		}
+	}
+	if err := disableInstalledRemoteAccess(opts.installDir, opts.dataDir); err != nil {
+		restoreRunningManager()
+		return err
+	}
+	if err := removeInstalledSchedule(opts.installDir, opts.testMode); err != nil {
+		restoreRunningManager()
+		return err
+	}
 	if err := removeManagerStartup(opts.installDir, opts.testMode); err != nil {
+		restoreRunningManager()
 		return err
 	}
 	if !opts.testMode {
@@ -470,12 +490,48 @@ func uninstall(opts options, logger *log.Logger) error {
 			_ = reconcileManagerStartup(startupPreference, opts, opts.testMode)
 		}
 		if managerWasRunning {
-			_ = startDetached(filepath.Join(opts.installDir, "Open-TautWeekly.cmd"), opts.installDir)
+			restoreRunningManager()
 		}
 		return err
 	}
 	logger.Printf("uninstall complete private-data-preserved=%s", opts.dataDir)
 	return nil
+}
+
+func disableInstalledRemoteAccess(installDir, dataDir string) error {
+	managerPath := filepath.Join(installDir, "tautweekly-manager.exe")
+	info, err := os.Lstat(managerPath)
+	if errors.Is(err, os.ErrNotExist) {
+		for _, stateName := range []string{"windows-funnel.json", "remote-access.json"} {
+			if _, stateErr := os.Lstat(filepath.Join(dataDir, stateName)); stateErr == nil || !errors.Is(stateErr, os.ErrNotExist) {
+				return errors.New("installed Manager is missing, so saved remote-access state cannot be cleaned up safely; reinstall before removal")
+			}
+		}
+		return nil
+	}
+	if err != nil || !info.Mode().IsRegular() {
+		return errors.New("installed Manager is unavailable for public Funnel cleanup")
+	}
+	if err := runInstalledRemoteCleanup(managerPath, installDir, dataDir); err != nil {
+		return errors.New("removal stopped because the TautWeekly-owned public Funnel could not be disabled and verified")
+	}
+	return nil
+}
+
+var runInstalledRemoteCleanup = func(managerPath, installDir, dataDir string) error {
+	command := exec.Command(
+		managerPath,
+		"remote-access-cleanup",
+		"--confirm",
+		"--listen=127.0.0.1:8788",
+		"--tautweekly-root="+installDir,
+		"--data-dir="+dataDir,
+	)
+	command.Dir = installDir
+	command.Stdout = io.Discard
+	command.Stderr = io.Discard
+	hideProcessWindow(command)
+	return command.Run()
 }
 
 func verifyPayload() error {

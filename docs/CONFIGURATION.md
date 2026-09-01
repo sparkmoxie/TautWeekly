@@ -20,6 +20,47 @@ Manager operation history and configuration diagnostics each use count-only
 FIFO retention of the newest 20 completed records. Each new overflow record
 removes the oldest; record age does not otherwise expire an entry.
 
+## Native Manager public access
+
+Windows and native Linux Funnel state is Manager-owned private state, not a `config.json`
+setting. The Manager remains bound to `127.0.0.1:8788`; the backend owns that
+fixed target, Funnel HTTPS port 443, and every CLI argument. Browser requests
+can submit only the allowlisted `enable`, `disable`, or `verify` operation. They cannot
+supply a command, executable, port, hostname, target, or Tailscale argument.
+
+Install, start, and sign in to the official Tailscale client yourself.
+TautWeekly never stores auth keys, control-plane tokens, raw CLI output,
+tailnet identities, device lists, private IPs, or sensitive paths. A verified
+public `.ts.net` hostname is retained only to enforce exact Host/origin
+admission. Funnel enablement requires an active Manager password lock. Access
+reset, password-lock disable, update, explicit Exit, and uninstall first verify
+the owned Funnel off; Windows installer updates preserve the password verifier
+but leave Funnel off for explicit re-enable. Native Linux update follows the
+same disable-and-verify rule before replacement.
+
+An exact local Funnel is reported as **Publication pending** until its hostname
+resolves through the fixed `1.1.1.1` public resolver to a globally routable IPv4
+address and a certificate-validated TLS handshake succeeds. The check discloses
+only the intended-public hostname and stores neither the answer nor certificate.
+The URL remains copyable while pending; no DNS, Tailscale service, firewall, or
+router setting is changed automatically.
+
+Before enabling, the host administrator must ensure the tailnet has MagicDNS,
+HTTPS certificates, and a `funnel` `nodeAttrs` policy target for this node.
+Tailscale's default `autogroup:member` example does not cover a node whose user
+identity was replaced by a tag; separately managed tagged container or
+Kubernetes nodes need an explicit tag-targeted attribute. Manager never reads
+or edits that policy, and local `Funnel on` is not accepted as proof of public
+publication on any platform.
+
+Container/NAS, QNAP/Synology, Unraid, macOS Docker, and FreeBSD Podman use the
+same public controller through an opt-in isolated userspace adapter. Set
+`TAUTWEEKLY_FUNNEL_ADAPTER=enabled`, preserve the separate root-only provider
+state mount, restart with the package tool, and run its fixed interactive login
+command. Manager receives no root, Docker/Podman socket, host executable,
+provider CLI, auth key, token, or arbitrary target. See the
+[remote-access architecture and platform matrix](REMOTE-ACCESS.md).
+
 ## Bundled artwork and updates
 
 Bundled email assets are release-owned. An asset-bundle transition (including
@@ -519,7 +560,7 @@ enabling delivery.
 | `PREVIEW_PORT` | Compatibility name for the host Manager port, normally `8787` |
 | `PREVIEW_BASE_URL` | Public/local Manager base URL used for authenticated preview links |
 | `MANAGER_ALLOWED_HOSTS` | Comma-separated exact DNS names accepted in addition to IP literals/localhost; no wildcards or ports |
-| `MANAGER_SECURE_COOKIES` | Set `true` only when the Manager is reached through a trusted HTTPS reverse proxy |
+| `MANAGER_SECURE_COOKIES` | Leave `false` for loopback recovery; verified Funnel requests enforce the public HTTPS cookie boundary automatically |
 
 Never paste live values into an issue, pull request, repository file, or public
 release archive.

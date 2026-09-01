@@ -24,6 +24,15 @@ func TestHiddenChildProcessesDoNotInheritSetupHandles(t *testing.T) {
 	}
 }
 
+func TestElevatedUpdateLauncherWaitsForHelperProcessOnly(t *testing.T) {
+	if strings.Contains(elevatedUpdateLauncherScript, "-PassThru -Wait") {
+		t.Fatal("elevated update launcher waits for the helper process tree, which includes the restarted Manager")
+	}
+	if !strings.Contains(elevatedUpdateLauncherScript, "-PassThru;$process.WaitForExit()") {
+		t.Fatal("elevated update launcher does not wait explicitly for the finite update helper process")
+	}
+}
+
 func TestCreateShortcutAcceptsPathsWithSpaces(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "folder with spaces")
 	if err := os.MkdirAll(root, 0o755); err != nil {
@@ -100,6 +109,30 @@ func TestPreferredInstallDirectoryUsesValidatedInstallLocation(t *testing.T) {
 
 	if got := preferredInstallDirectory(filepath.Join(t.TempDir(), "fallback")); !samePath(got, installed) {
 		t.Fatalf("preferred install directory = %s, want %s", got, installed)
+	}
+}
+
+func TestCustomRegisteredInstallSkipsFolderSelection(t *testing.T) {
+	installed := filepath.Join(t.TempDir(), "Legacy Custom TautWeekly")
+	writeInstallerMarker(t, installed)
+	stubWindowsUninstallValues(t, map[string]string{"InstallLocation": installed})
+
+	opts := options{installDir: preferredInstallDirectory(filepath.Join(t.TempDir(), "fallback"))}
+	if !samePath(opts.installDir, installed) {
+		t.Fatalf("registered install directory = %s, want %s", opts.installDir, installed)
+	}
+	if requiresInstallDirectorySelection(opts) {
+		t.Fatal("validated custom registered install still opens the folder selector")
+	}
+}
+
+func TestWindowsUninstallRegistryPathUsesNativeSubkey(t *testing.T) {
+	const want = `Software\Microsoft\Windows\CurrentVersion\Uninstall\TautWeekly`
+	if windowsUninstallRegistrySubkey != want {
+		t.Fatalf("Windows uninstall registry subkey = %q, want %q", windowsUninstallRegistrySubkey, want)
+	}
+	if windowsUninstallRegistryKey != `HKCU\`+want {
+		t.Fatalf("Windows uninstall registry key = %q", windowsUninstallRegistryKey)
 	}
 }
 

@@ -15,13 +15,15 @@ services:
       TAUTWEEKLY_PREVIEW_BASE_URL: ""
       TAUTWEEKLY_MANAGER_ALLOWED_HOSTS: ""
       TAUTWEEKLY_MANAGER_SECURE_COOKIES: "false"
+      TAUTWEEKLY_FUNNEL_ADAPTER: "disabled"
       TAUTWEEKLY_PACKAGE_KIND: "qnap-container-station"
       TAUTWEEKLY_PACKAGE_VERSION: "__TAUTWEEKLY_RELEASE_VERSION__"
-      TAUTWEEKLY_HOST_ADAPTER_API: "3"
+      TAUTWEEKLY_HOST_ADAPTER_API: "4"
     volumes:
       - /share/Container/tautweekly/data:/data
+      - /share/Container/tautweekly/tailscale-state:/var/lib/tautweekly-tailscale
     ports:
-      - "8787:8080"
+      - "127.0.0.1:8787:8080"
     healthcheck:
       test: ["CMD", "/opt/tautweekly/healthcheck.sh"]
       interval: 60s
@@ -31,6 +33,7 @@ services:
     stop_grace_period: 30m
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=256m,mode=1777
+      - /run:rw,noexec,nosuid,size=16m,mode=0755
     security_opt:
       - no-new-privileges:true
     cap_drop:

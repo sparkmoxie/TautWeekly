@@ -13,34 +13,62 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"slices"
+	"strings"
 	"time"
 )
 
 const (
-	linuxRemoteAccessSocket = "/run/tautweekly/remote-access.sock"
-	linuxRemoteAccessTarget = "http://127.0.0.1:8788"
+	linuxRemoteAccessSocket     = "/run/tautweekly/remote-access.sock"
+	linuxRemoteAccessTarget     = "http://127.0.0.1:8788"
+	containerRemoteAccessSocket = "/run/tautweekly-remote-access/adapter.sock"
+	containerRemoteAccessTarget = "http://127.0.0.1:8080"
+	containerTailscaleSocket    = "/run/tautweekly-tailscale/tailscaled.sock"
+	linuxFunnelStateFile        = "linux-funnel.json"
+	containerFunnelStateFile    = "container-funnel.json"
 )
 
 type linuxTailscaleRunner struct {
-	socket        string
-	target        string
-	tailscalePath string
+	socket               string
+	target               string
+	tailscalePath        string
+	requireLocalCLI      bool
+	authorizationCommand string
 }
 
 func newPlatformRemoteAccessController(options Options) remoteAccessController {
 	if normalizedRuntimeMode(options.RuntimeMode) == runtimeModeLinux {
 		target := tailscaleLoopbackTarget(options.ListenAddress)
 		if target == linuxRemoteAccessTarget {
-			runner := &linuxTailscaleRunner{socket: linuxRemoteAccessSocket, target: target}
-			return newTailscaleRemoteAccessController(options.DataDir, options.ListenAddress, true, runner)
+			runner := &linuxTailscaleRunner{
+				socket: linuxRemoteAccessSocket, target: target, requireLocalCLI: true,
+				authorizationCommand: "sudo tautweekly remote-access-authorize",
+			}
+			return newPublicFunnelController(options.DataDir, options.ListenAddress, linuxFunnelStateFile, true, runner)
 		}
-		return newExternalTailscaleRemoteAccessController(options.DataDir, options.ListenAddress)
+		return newPublicFunnelController(options.DataDir, options.ListenAddress, linuxFunnelStateFile, false, nil)
+	}
+	if isContainerRuntimeMode(options.RuntimeMode) && strings.TrimSpace(options.ListenAddress) == "0.0.0.0:8080" {
+		runner := &linuxTailscaleRunner{
+			socket: containerRemoteAccessSocket, target: containerRemoteAccessTarget,
+			authorizationCommand: containerFunnelAuthorizationCommand(options.PackageKind),
+		}
+		return newPublicFunnelController(options.DataDir, "127.0.0.1:8080", containerFunnelStateFile, true, runner)
 	}
 	if isManagedServiceRuntimeMode(options.RuntimeMode) {
-		return newExternalTailscaleRemoteAccessController(options.DataDir, options.ListenAddress)
+		return newPublicFunnelController(options.DataDir, options.ListenAddress, containerFunnelStateFile, false, nil)
 	}
-	return newTailscaleRemoteAccessController(options.DataDir, options.ListenAddress, false, nil)
+	return newPublicFunnelController(options.DataDir, options.ListenAddress, containerFunnelStateFile, false, nil)
+}
+
+func containerFunnelAuthorizationCommand(packageKind string) string {
+	switch strings.TrimSpace(packageKind) {
+	case packageKindFreeBSD:
+		return "sudo tautweekly remote-access-authorize"
+	case packageKindUnraid:
+		return "/opt/tautweekly/bin/tautweekly-funnel login"
+	default:
+		return "./tautweekly.sh remote-access-login"
+	}
 }
 
 func fixedLinuxTailscalePath() string {
@@ -53,106 +81,119 @@ func fixedLinuxTailscalePath() string {
 	return ""
 }
 
+var findFixedLinuxTailscalePath = fixedLinuxTailscalePath
+
 func (r *linuxTailscaleRunner) Availability() string {
 	if r == nil {
 		return "not-installed"
 	}
-	path := r.tailscalePath
-	if path == "" {
-		path = fixedLinuxTailscalePath()
+	if r.requireLocalCLI {
+		path := r.tailscalePath
+		if path == "" {
+			path = findFixedLinuxTailscalePath()
+		}
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			return "not-installed"
+		}
 	}
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		return "not-installed"
-	}
-	info, err = os.Lstat(r.socket)
+	info, err := os.Lstat(r.socket)
 	if err != nil || info.Mode()&os.ModeSocket == 0 {
 		return "authorization-required"
 	}
 	return "available"
 }
 
-func (r *linuxTailscaleRunner) Available() bool {
-	return r != nil && r.target == linuxRemoteAccessTarget && r.Availability() == "available"
+func (r *linuxTailscaleRunner) HostAuthorizationCommand() string {
+	if r == nil {
+		return ""
+	}
+	return r.authorizationCommand
 }
 
-func (r *linuxTailscaleRunner) Run(ctx context.Context, arguments ...string) ([]byte, error) {
+func (r *linuxTailscaleRunner) Available() bool {
+	return r != nil && validLinuxRemoteAccessTarget(r.target) && r.Availability() == "available"
+}
+
+func (*linuxTailscaleRunner) RequiresApproval() bool { return false }
+
+func (r *linuxTailscaleRunner) RunPublicRoute(ctx context.Context, action, target string) (publicRemoteAccessObservation, error) {
 	if !r.Available() {
 		if r != nil && r.Availability() == "authorization-required" {
-			return nil, ErrTailscaleHostAuthorization
+			return publicRemoteAccessObservation{}, ErrTailscaleHostAuthorization
 		}
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
-	action := ""
-	switch {
-	case slices.Equal(arguments, []string{"serve", "status", "--json"}):
-		action = "inspect"
-	case len(arguments) == 5 && slices.Equal(arguments[:4], []string{"serve", "--bg", "--yes", "--https=443"}) && arguments[4] == r.target:
-		action = "enable"
-	case slices.Equal(arguments, []string{"serve", "--yes", "--https=443", "off"}):
-		action = "disable"
-	default:
-		return nil, ErrTailscaleConfigurationInvalid
+	if target != r.target || (action != "inspect" && action != "enable" && action != "disable") {
+		return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 	}
 
 	nonceBytes := make([]byte, 32)
 	if _, err := rand.Read(nonceBytes); err != nil {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	nonce := hex.EncodeToString(nonceBytes)
 	request := tailscaleHelperRequest{SchemaVersion: 1, Nonce: nonce, Action: action, Target: r.target}
 	rawRequest, err := json.Marshal(request)
 	if err != nil {
-		return nil, ErrTailscaleConfigurationInvalid
+		return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 	}
 
 	var dialer net.Dialer
 	connection, err := dialer.DialContext(ctx, "unix", r.socket)
 	if err != nil {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	defer connection.Close()
-	deadline := time.Now().Add(tailscaleCommandTimeout)
+	deadline := time.Now().Add(tailscaleResponseTimeout)
 	if value, ok := ctx.Deadline(); ok && value.Before(deadline) {
 		deadline = value
 	}
 	_ = connection.SetDeadline(deadline)
 	if _, err := connection.Write(rawRequest); err != nil {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	if unix, ok := connection.(*net.UnixConn); ok {
 		_ = unix.CloseWrite()
 	}
 	raw, err := io.ReadAll(io.LimitReader(connection, maximumTailscaleOutput+1))
 	if err != nil || len(raw) == 0 || len(raw) > maximumTailscaleOutput {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	var result tailscaleHelperResult
 	if err := decoder.Decode(&result); err != nil || decoder.Decode(&struct{}{}) != io.EOF || result.SchemaVersion != 1 || result.Nonce != nonce {
-		return nil, ErrTailscaleConfigurationInvalid
+		return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 	}
 	switch result.Code {
 	case "enabled", "disabled", "inspected":
 		if len(result.ServeStatus) == 0 || len(result.ServeStatus) > maximumTailscaleOutput {
-			return nil, ErrTailscaleConfigurationInvalid
+			return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 		}
-		return slices.Clone(result.ServeStatus), nil
+		serveStatus, err := decodeTailscaleServeStatus(result.ServeStatus)
+		if err != nil {
+			return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
+		}
+		return normalizeTailscalePublicObservation(serveStatus, target, result.PubliclyPublished), nil
 	case "conflict":
-		return nil, ErrTailscaleServeConflict
+		return publicRemoteAccessObservation{}, ErrTailscaleServeConflict
 	case "not-installed":
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
+	case "not-running":
+		return publicRemoteAccessObservation{}, ErrTailscaleNotRunning
+	case "unsupported":
+		return publicRemoteAccessObservation{}, ErrTailscaleFunnelUnsupported
 	case "sign-in-required":
-		return nil, ErrTailscaleSignInRequired
+		return publicRemoteAccessObservation{}, ErrTailscaleSignInRequired
 	case "provider-approval-required":
 		if !validTailscaleProviderURL(result.SetupURL) {
-			return nil, ErrTailscaleConfigurationInvalid
+			return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 		}
-		return nil, tailscaleProviderApprovalError{url: result.SetupURL}
+		return publicRemoteAccessObservation{}, tailscaleProviderApprovalError{url: result.SetupURL}
 	case "verification-failed":
-		return nil, ErrTailscaleConfigurationInvalid
+		return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 	default:
-		return nil, errors.New("the authorized Linux Tailscale helper returned an unsupported result")
+		return publicRemoteAccessObservation{}, errors.New("the authorized Linux Tailscale helper returned an unsupported result")
 	}
 }

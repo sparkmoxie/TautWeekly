@@ -1,5 +1,10 @@
 TautWeekly for Plex FreeBSD Podman platform changelog
 
+v1.3.0
+- adds password-gated public Tailscale Funnel through the isolated official Linux userspace runtime inside Podman
+- replaces dependency on a community-maintained host Serve route with exact fixed-target lifecycle ownership
+- preserves the no-Podman-socket, non-root, rc.d-owned lifecycle and rollback boundaries without auth keys or host control
+
 v1.2.4
 - optimizes all 32 email GIFs at twice their email display size while preserving frames, timing, loops, and transparency
 - refreshes every shipped persistent asset and the preview mirror on bundle change or legacy migration; preserves custom-only files and same-bundle restart edits

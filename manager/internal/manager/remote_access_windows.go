@@ -20,6 +20,14 @@ import (
 	"time"
 )
 
+const windowsFunnelStateFile = "windows-funnel.json"
+
+// Keep the proven Windows test vocabulary as aliases while the implementation
+// lives in the provider-neutral public Funnel controller.
+type windowsFunnelObservation = publicRemoteAccessObservation
+type windowsFunnelRunner = publicRemoteAccessRunner
+type windowsFunnelController = publicFunnelController
+
 type windowsTailscaleRunner struct {
 	path       string
 	powershell string
@@ -38,7 +46,11 @@ func newPlatformRemoteAccessController(options Options) remoteAccessController {
 		powershell: powershell,
 		helper:     filepath.Join(options.TautWeeklyRoot, "TAILSCALE-HELPER.ps1"),
 	}
-	return newTailscaleRemoteAccessController(options.DataDir, options.ListenAddress, options.RuntimeMode == runtimeModeWindows, runner)
+	return newWindowsFunnelController(options.DataDir, options.ListenAddress, options.RuntimeMode == runtimeModeWindows, runner)
+}
+
+func newWindowsFunnelController(dataDir, listenAddress string, supported bool, runner windowsFunnelRunner) *windowsFunnelController {
+	return newPublicFunnelController(dataDir, listenAddress, windowsFunnelStateFile, supported, runner)
 }
 
 func installedWindowsTailscalePath() string {
@@ -90,6 +102,10 @@ func (r *windowsTailscaleRunner) Run(ctx context.Context, arguments ...string) (
 			return nil, ErrTailscaleApprovalRequired
 		case strings.Contains(message, "not logged"), strings.Contains(message, "logged out"), strings.Contains(message, "needs login"), strings.Contains(message, "no current profile"):
 			return nil, ErrTailscaleSignInRequired
+		case strings.Contains(message, "service is not running"), strings.Contains(message, "failed to connect to local tailscaled"), strings.Contains(message, "no backend"):
+			return nil, ErrTailscaleNotRunning
+		case strings.Contains(message, "unknown command"), strings.Contains(message, "does not support funnel"):
+			return nil, ErrTailscaleFunnelUnsupported
 		case errors.Is(ctx.Err(), context.DeadlineExceeded), errors.Is(ctx.Err(), context.Canceled):
 			return nil, ctx.Err()
 		}
@@ -101,23 +117,23 @@ func (r *windowsTailscaleRunner) Run(ctx context.Context, arguments ...string) (
 	return output.buffer.Bytes(), nil
 }
 
-func (r *windowsTailscaleRunner) RunPrivileged(ctx context.Context, action, target string) ([]byte, error) {
+func (r *windowsTailscaleRunner) RunPublicRoute(ctx context.Context, action, target string) (publicRemoteAccessObservation, error) {
 	if !r.Available() || (action != "enable" && action != "disable" && action != "inspect") {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	defer listener.Close()
 	tcpListener, ok := listener.(*net.TCPListener)
 	if !ok {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	port := tcpListener.Addr().(*net.TCPAddr).Port
 	nonceBytes := make([]byte, 32)
 	if _, err := rand.Read(nonceBytes); err != nil {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	nonce := hex.EncodeToString(nonceBytes)
 	commandCtx, cancel := context.WithTimeout(ctx, tailscaleResponseTimeout-15*time.Second)
@@ -140,51 +156,59 @@ func (r *windowsTailscaleRunner) RunPrivileged(ctx context.Context, action, targ
 	command.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 	runErr := command.Run()
 	if errors.Is(commandCtx.Err(), context.DeadlineExceeded) || errors.Is(commandCtx.Err(), context.Canceled) {
-		return nil, commandCtx.Err()
+		return publicRemoteAccessObservation{}, commandCtx.Err()
 	}
 	if err := tcpListener.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	connection, acceptErr := tcpListener.AcceptTCP()
 	if acceptErr != nil {
 		var exitError *exec.ExitError
 		if errors.As(runErr, &exitError) && exitError.ExitCode() == 10 {
-			return nil, ErrTailscaleApprovalDeclined
+			return publicRemoteAccessObservation{}, ErrTailscaleApprovalDeclined
 		}
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 	defer connection.Close()
 	_ = connection.SetReadDeadline(time.Now().Add(2 * time.Second))
 	raw, readErr := io.ReadAll(io.LimitReader(connection, maximumTailscaleOutput+1))
 	if readErr != nil || len(raw) == 0 || len(raw) > maximumTailscaleOutput {
-		return nil, ErrTailscaleConfigurationInvalid
+		return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	var result tailscaleHelperResult
 	if err := decoder.Decode(&result); err != nil || decoder.Decode(&struct{}{}) != io.EOF || result.SchemaVersion != 1 || result.Nonce != nonce {
-		return nil, ErrTailscaleConfigurationInvalid
+		return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 	}
 	switch result.Code {
 	case "enabled", "disabled", "inspected":
 		if runErr != nil || len(result.ServeStatus) == 0 {
-			return nil, ErrTailscaleConfigurationInvalid
+			return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 		}
-		return result.ServeStatus, nil
+		serveStatus, err := decodeTailscaleServeStatus(result.ServeStatus)
+		if err != nil {
+			return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
+		}
+		return normalizeTailscalePublicObservation(serveStatus, target, result.PubliclyPublished), nil
 	case "conflict":
-		return nil, ErrTailscaleServeConflict
+		return publicRemoteAccessObservation{}, ErrTailscaleServeConflict
 	case "not-installed":
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
+	case "not-running":
+		return publicRemoteAccessObservation{}, ErrTailscaleNotRunning
+	case "unsupported":
+		return publicRemoteAccessObservation{}, ErrTailscaleFunnelUnsupported
 	case "sign-in-required":
-		return nil, ErrTailscaleSignInRequired
+		return publicRemoteAccessObservation{}, ErrTailscaleSignInRequired
 	case "provider-approval-required":
 		if !validTailscaleProviderURL(result.SetupURL) {
-			return nil, ErrTailscaleConfigurationInvalid
+			return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 		}
-		return nil, tailscaleProviderApprovalError{url: result.SetupURL}
+		return publicRemoteAccessObservation{}, tailscaleProviderApprovalError{url: result.SetupURL}
 	case "verification-failed":
-		return nil, ErrTailscaleConfigurationInvalid
+		return publicRemoteAccessObservation{}, ErrTailscaleConfigurationInvalid
 	default:
-		return nil, ErrTailscaleUnavailable
+		return publicRemoteAccessObservation{}, ErrTailscaleUnavailable
 	}
 }

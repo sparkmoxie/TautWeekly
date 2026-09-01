@@ -9,10 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -27,14 +24,17 @@ const (
 var (
 	ErrRemoteAccessUnsupported       = errors.New("remote access is unsupported on this platform")
 	ErrTailscaleUnavailable          = errors.New("Tailscale is unavailable")
-	ErrTailscaleApprovalRequired     = errors.New("Windows administrator approval is required for Tailscale Serve")
+	ErrTailscaleApprovalRequired     = errors.New("Windows administrator approval is required for Tailscale Funnel")
 	ErrTailscaleApprovalDeclined     = errors.New("Windows administrator approval was declined")
-	ErrTailscaleHostAuthorization    = errors.New("host administrator authorization is required for Tailscale Serve")
+	ErrTailscaleHostAuthorization    = errors.New("host administrator authorization is required for Tailscale remote access")
 	ErrTailscaleProviderApproval     = errors.New("Tailscale provider approval is required")
 	ErrTailscaleSignInRequired       = errors.New("Tailscale sign-in is required")
-	ErrTailscaleServeConflict        = errors.New("Tailscale Serve is already configured for another service")
-	ErrTailscaleConfigurationInvalid = errors.New("Tailscale Serve returned an unexpected configuration")
-	ErrTailscaleDisableIncomplete    = errors.New("local remote access was blocked, but Tailscale Serve cleanup is incomplete")
+	ErrTailscaleServeConflict        = errors.New("Tailscale already has a conflicting route")
+	ErrTailscaleConfigurationInvalid = errors.New("Tailscale Funnel returned an unexpected configuration")
+	ErrTailscaleDisableIncomplete    = errors.New("Tailscale Funnel cleanup is incomplete")
+	ErrManagerPasswordRequired       = errors.New("the Manager password lock is required for public remote access")
+	ErrTailscaleNotRunning           = errors.New("the Tailscale service is not running")
+	ErrTailscaleFunnelUnsupported    = errors.New("this Tailscale installation does not support Funnel")
 )
 
 type tailscaleProviderApprovalError struct {
@@ -57,15 +57,14 @@ type TailscaleRemoteAccessStatus struct {
 	Provider                  string `json:"provider"`
 	NetworkKind               string `json:"networkKind"`
 	Management                string `json:"management"`
-	RequiresURL               bool   `json:"requiresUrl"`
 	HostAuthorizationRequired bool   `json:"hostAuthorizationRequired"`
 	HostAuthorizationCommand  string `json:"hostAuthorizationCommand,omitempty"`
+	PasswordRequired          bool   `json:"passwordRequired,omitempty"`
+	CleanupRequired           bool   `json:"cleanupRequired,omitempty"`
 }
 
 type tailscaleRemoteAccessRequest struct {
-	Enabled          bool   `json:"enabled"`
-	URL              string `json:"url,omitempty"`
-	ConfirmedPrivate bool   `json:"confirmedPrivate,omitempty"`
+	Operation string `json:"operation"`
 }
 
 type remoteAccessController interface {
@@ -75,18 +74,58 @@ type remoteAccessController interface {
 	AllowsHost(string) bool
 }
 
-type tailscaleCommandRunner interface {
-	Available() bool
-	Run(context.Context, ...string) ([]byte, error)
+// publicRemoteAccessSafety is the provider-neutral public ingress boundary.
+// Implementations may report unsupported, but no maintained controller accepts
+// an administrator-supplied host, port, URL, executable, or CLI argument.
+type publicRemoteAccessSafety interface {
+	remoteAccessController
+	PublicExposureSupported() bool
+	PublicExposureConfigured() bool
+	EnsureInactive(context.Context) (TailscaleRemoteAccessStatus, error)
 }
 
-type privilegedTailscaleCommandRunner interface {
-	RunPrivileged(context.Context, string, string) ([]byte, error)
-	RequiresApproval() bool
+func isPublicRemoteAccess(controller remoteAccessController) bool {
+	_, ok := controller.(publicRemoteAccessSafety)
+	return ok
+}
+
+func publicRemoteAccessSupported(controller remoteAccessController) bool {
+	public, ok := controller.(publicRemoteAccessSafety)
+	return ok && public.PublicExposureSupported()
+}
+
+func cleanupPublicRemoteAccess(ctx context.Context, controller remoteAccessController) error {
+	public, ok := controller.(publicRemoteAccessSafety)
+	if !ok || !public.PublicExposureConfigured() {
+		return nil
+	}
+	status, err := public.EnsureInactive(ctx)
+	if err != nil || status.Enabled || status.Active || status.CleanupRequired {
+		if err != nil {
+			return err
+		}
+		return ErrTailscaleDisableIncomplete
+	}
+	return nil
+}
+
+// CleanupPublicRemoteAccess is used by local recovery, updates, shutdown, and
+// uninstall before any can remove the password boundary or application files.
+// It is a no-op when public exposure is unsupported or not configured.
+func CleanupPublicRemoteAccess(ctx context.Context, options Options) error {
+	return cleanupPublicRemoteAccess(ctx, newPlatformRemoteAccessController(options))
 }
 
 type tailscaleRunnerAvailability interface {
 	Availability() string
+}
+
+type tailscaleHostAuthorizationCommand interface {
+	HostAuthorizationCommand() string
+}
+
+type tailscaleApprovalRequirement interface {
+	RequiresApproval() bool
 }
 
 type tailscaleHelperRequest struct {
@@ -97,28 +136,18 @@ type tailscaleHelperRequest struct {
 }
 
 type tailscaleHelperResult struct {
-	SchemaVersion int             `json:"schemaVersion"`
-	Nonce         string          `json:"nonce"`
-	Code          string          `json:"code"`
-	ServeStatus   json.RawMessage `json:"serveStatus,omitempty"`
-	SetupURL      string          `json:"setupUrl,omitempty"`
+	SchemaVersion     int             `json:"schemaVersion"`
+	Nonce             string          `json:"nonce"`
+	Code              string          `json:"code"`
+	ServeStatus       json.RawMessage `json:"serveStatus,omitempty"`
+	SetupURL          string          `json:"setupUrl,omitempty"`
+	PubliclyPublished bool            `json:"publiclyPublished,omitempty"`
 }
 
 type remoteAccessFile struct {
 	SchemaVersion int    `json:"schemaVersion"`
 	Enabled       bool   `json:"enabled"`
 	Hostname      string `json:"hostname,omitempty"`
-}
-
-type tailscaleRemoteAccessController struct {
-	opMu       sync.Mutex
-	stateMu    sync.RWMutex
-	runner     tailscaleCommandRunner
-	statePath  string
-	target     string
-	supported  bool
-	state      remoteAccessFile
-	stateError error
 }
 
 type tailscaleServeStatus struct {
@@ -169,18 +198,6 @@ func (w *boundedCommandOutput) Write(value []byte) (int, error) {
 	return length, nil
 }
 
-func newTailscaleRemoteAccessController(dataDir, listenAddress string, supported bool, runner tailscaleCommandRunner) *tailscaleRemoteAccessController {
-	c := &tailscaleRemoteAccessController{
-		runner:    runner,
-		statePath: filepath.Join(dataDir, remoteAccessStateFile),
-		target:    tailscaleLoopbackTarget(listenAddress),
-		supported: supported,
-		state:     remoteAccessFile{SchemaVersion: remoteAccessSchemaVersion},
-	}
-	c.loadState()
-	return c
-}
-
 func tailscaleLoopbackTarget(listenAddress string) string {
 	host, port, err := net.SplitHostPort(strings.TrimSpace(listenAddress))
 	if err != nil || port == "" {
@@ -191,387 +208,6 @@ func tailscaleLoopbackTarget(listenAddress string) string {
 		return "http://127.0.0.1:8788"
 	}
 	return "http://127.0.0.1:" + port
-}
-
-func (c *tailscaleRemoteAccessController) loadState() {
-	raw, err := os.ReadFile(c.statePath)
-	if errors.Is(err, os.ErrNotExist) {
-		return
-	}
-	if err != nil {
-		c.stateError = err
-		return
-	}
-	if len(raw) > 64<<10 {
-		c.stateError = errors.New("remote access state is too large")
-		return
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	var saved remoteAccessFile
-	if err := decoder.Decode(&saved); err != nil {
-		c.stateError = err
-		return
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		c.stateError = errors.New("remote access state contains trailing data")
-		return
-	}
-	if saved.SchemaVersion != remoteAccessSchemaVersion || (saved.Enabled && !validTailscaleHostname(saved.Hostname)) || (!saved.Enabled && saved.Hostname != "") {
-		c.stateError = errors.New("remote access state is invalid")
-		return
-	}
-	c.state = saved
-}
-
-func (c *tailscaleRemoteAccessController) savedState() (remoteAccessFile, error) {
-	c.stateMu.RLock()
-	defer c.stateMu.RUnlock()
-	return c.state, c.stateError
-}
-
-func (c *tailscaleRemoteAccessController) saveState(next remoteAccessFile) error {
-	if err := writePrivateJSON(c.statePath, next); err != nil {
-		return err
-	}
-	c.stateMu.Lock()
-	c.state = next
-	c.stateError = nil
-	c.stateMu.Unlock()
-	return nil
-}
-
-func (c *tailscaleRemoteAccessController) AllowsHost(value string) bool {
-	host := hostnameOnly(value)
-	state, err := c.savedState()
-	return err == nil && state.Enabled && validTailscaleHostname(state.Hostname) && strings.EqualFold(state.Hostname, host)
-}
-
-func (c *tailscaleRemoteAccessController) Status(ctx context.Context) TailscaleRemoteAccessStatus {
-	c.opMu.Lock()
-	defer c.opMu.Unlock()
-	return c.status(ctx)
-}
-
-func (c *tailscaleRemoteAccessController) Verify(ctx context.Context) (TailscaleRemoteAccessStatus, error) {
-	c.opMu.Lock()
-	defer c.opMu.Unlock()
-	state, stateErr := c.savedState()
-	if !c.supported {
-		return c.status(ctx), ErrRemoteAccessUnsupported
-	}
-	if stateErr != nil {
-		return c.status(ctx), ErrTailscaleConfigurationInvalid
-	}
-	if c.runner == nil || !c.runner.Available() {
-		if runner, ok := c.runner.(tailscaleRunnerAvailability); ok && runner.Availability() == "authorization-required" {
-			return c.status(ctx), ErrTailscaleHostAuthorization
-		}
-		return c.status(ctx), ErrTailscaleUnavailable
-	}
-	var (
-		serve tailscaleServeStatus
-		err   error
-	)
-	if runner, ok := c.runner.(privilegedTailscaleCommandRunner); ok && runner.RequiresApproval() {
-		var raw []byte
-		raw, err = runner.RunPrivileged(ctx, "inspect", c.target)
-		if err == nil {
-			serve, err = decodeTailscaleServeStatus(raw)
-		}
-	} else {
-		serve, err = c.readServeStatus(ctx)
-	}
-	if err != nil {
-		return c.status(ctx), err
-	}
-	result := TailscaleRemoteAccessStatus{
-		Supported: true, Installed: true, Enabled: state.Enabled,
-		State: "ready", Provider: "tailscale", NetworkKind: "private-tailnet", Management: "integrated",
-	}
-	if state.Enabled {
-		result.URL = "https://" + state.Hostname
-	}
-	if serveStatusEmpty(serve) {
-		if state.Enabled {
-			result.State = "interrupted"
-			result.ErrorCode = "tailscale-serve-missing"
-		}
-		return result, nil
-	}
-	hostname, owned := ownedTailscaleServe(serve, c.target)
-	if !owned {
-		result.State = "conflict"
-		result.ErrorCode = "tailscale-serve-conflict"
-		return result, nil
-	}
-	if !state.Enabled {
-		result.State = "detected"
-		result.URL = "https://" + hostname
-		return result, nil
-	}
-	if !strings.EqualFold(state.Hostname, hostname) {
-		result.State = "conflict"
-		result.ErrorCode = "tailscale-hostname-changed"
-		return result, nil
-	}
-	result.Active = true
-	result.State = "enabled"
-	return result, nil
-}
-
-func (c *tailscaleRemoteAccessController) status(ctx context.Context) TailscaleRemoteAccessStatus {
-	state, stateErr := c.savedState()
-	result := TailscaleRemoteAccessStatus{
-		Supported:   c.supported,
-		Enabled:     stateErr == nil && state.Enabled,
-		State:       "unsupported",
-		Provider:    "tailscale",
-		NetworkKind: "private-tailnet",
-		Management:  "integrated",
-	}
-	if stateErr == nil && state.Enabled {
-		result.URL = "https://" + state.Hostname
-	}
-	if !c.supported {
-		result.ErrorCode = "platform-unsupported"
-		return result
-	}
-	if stateErr != nil {
-		result.State = "unavailable"
-		result.ErrorCode = "remote-state-invalid"
-		return result
-	}
-	if c.runner == nil || !c.runner.Available() {
-		if runner, ok := c.runner.(tailscaleRunnerAvailability); ok && runner.Availability() == "authorization-required" {
-			result.Installed = true
-			result.State = "authorization-required"
-			result.ErrorCode = "tailscale-host-authorization-required"
-			result.HostAuthorizationRequired = true
-			result.HostAuthorizationCommand = "sudo tautweekly remote-access-authorize"
-			return result
-		}
-		result.State = "not-installed"
-		result.ErrorCode = "tailscale-not-installed"
-		return result
-	}
-	result.Installed = true
-	if runner, ok := c.runner.(privilegedTailscaleCommandRunner); ok && runner.RequiresApproval() {
-		if state.Enabled {
-			result.State = "enabled-unverified"
-		} else {
-			result.State = "approval-required"
-		}
-		result.ErrorCode = "tailscale-approval-required"
-		return result
-	}
-	serve, err := c.readServeStatus(ctx)
-	if err != nil {
-		switch {
-		case errors.Is(err, ErrTailscaleApprovalRequired):
-			if state.Enabled {
-				result.State = "enabled-unverified"
-			} else {
-				result.State = "approval-required"
-			}
-			result.ErrorCode = "tailscale-approval-required"
-		case errors.Is(err, ErrTailscaleSignInRequired):
-			result.State = "sign-in-required"
-			result.ErrorCode = "tailscale-sign-in-required"
-		default:
-			result.State = "unavailable"
-			result.ErrorCode = "tailscale-status-unavailable"
-		}
-		return result
-	}
-	if serveStatusEmpty(serve) {
-		if state.Enabled {
-			result.State = "interrupted"
-			result.ErrorCode = "tailscale-serve-missing"
-		} else {
-			result.State = "ready"
-		}
-		return result
-	}
-	hostname, owned := ownedTailscaleServe(serve, c.target)
-	if !owned {
-		result.State = "conflict"
-		result.ErrorCode = "tailscale-serve-conflict"
-		return result
-	}
-	if state.Enabled {
-		if !strings.EqualFold(state.Hostname, hostname) {
-			result.State = "conflict"
-			result.ErrorCode = "tailscale-hostname-changed"
-			return result
-		}
-		result.Active = true
-		result.State = "enabled"
-		return result
-	}
-	result.State = "detected"
-	result.URL = "https://" + hostname
-	return result
-}
-
-func (c *tailscaleRemoteAccessController) Update(ctx context.Context, enabled bool, _ string, _ bool) (TailscaleRemoteAccessStatus, error) {
-	c.opMu.Lock()
-	defer c.opMu.Unlock()
-	if !c.supported {
-		return c.status(ctx), ErrRemoteAccessUnsupported
-	}
-	if enabled {
-		return c.enable(ctx)
-	}
-	return c.disable(ctx)
-}
-
-func (c *tailscaleRemoteAccessController) enable(ctx context.Context) (TailscaleRemoteAccessStatus, error) {
-	if c.runner == nil || !c.runner.Available() {
-		if runner, ok := c.runner.(tailscaleRunnerAvailability); ok && runner.Availability() == "authorization-required" {
-			return c.status(ctx), ErrTailscaleHostAuthorization
-		}
-		return c.status(ctx), ErrTailscaleUnavailable
-	}
-	if runner, ok := c.runner.(privilegedTailscaleCommandRunner); ok && runner.RequiresApproval() {
-		return c.enablePrivileged(ctx)
-	}
-	serve, err := c.readServeStatus(ctx)
-	if err != nil {
-		if errors.Is(err, ErrTailscaleApprovalRequired) {
-			return c.enablePrivileged(ctx)
-		}
-		return c.status(ctx), err
-	}
-	if !serveStatusEmpty(serve) {
-		hostname, owned := ownedTailscaleServe(serve, c.target)
-		if !owned {
-			return c.status(ctx), ErrTailscaleServeConflict
-		}
-		if err := c.saveState(remoteAccessFile{SchemaVersion: remoteAccessSchemaVersion, Enabled: true, Hostname: hostname}); err != nil {
-			return c.status(ctx), err
-		}
-		return c.status(ctx), nil
-	}
-	commandCtx, cancel := context.WithTimeout(ctx, tailscaleCommandTimeout)
-	_, commandErr := c.runner.Run(commandCtx, "serve", "--bg", "--yes", "--https=443", c.target)
-	cancel()
-	if commandErr != nil {
-		if errors.Is(commandErr, ErrTailscaleApprovalRequired) || errors.Is(commandErr, ErrTailscaleSignInRequired) {
-			return c.status(ctx), commandErr
-		}
-		return c.status(ctx), ErrTailscaleUnavailable
-	}
-	serve, err = c.readServeStatus(ctx)
-	if err != nil {
-		return c.status(ctx), ErrTailscaleConfigurationInvalid
-	}
-	hostname, owned := ownedTailscaleServe(serve, c.target)
-	if !owned {
-		return c.status(ctx), ErrTailscaleConfigurationInvalid
-	}
-	if err := c.saveState(remoteAccessFile{SchemaVersion: remoteAccessSchemaVersion, Enabled: true, Hostname: hostname}); err != nil {
-		return c.status(ctx), err
-	}
-	return c.status(ctx), nil
-}
-
-func (c *tailscaleRemoteAccessController) enablePrivileged(ctx context.Context) (TailscaleRemoteAccessStatus, error) {
-	runner, ok := c.runner.(privilegedTailscaleCommandRunner)
-	if !ok {
-		return c.status(ctx), ErrTailscaleApprovalRequired
-	}
-	raw, err := runner.RunPrivileged(ctx, "enable", c.target)
-	if err != nil {
-		return c.status(ctx), err
-	}
-	serve, err := decodeTailscaleServeStatus(raw)
-	if err != nil {
-		return c.status(ctx), ErrTailscaleConfigurationInvalid
-	}
-	hostname, owned := ownedTailscaleServe(serve, c.target)
-	if !owned {
-		return c.status(ctx), ErrTailscaleConfigurationInvalid
-	}
-	if err := c.saveState(remoteAccessFile{SchemaVersion: remoteAccessSchemaVersion, Enabled: true, Hostname: hostname}); err != nil {
-		return c.status(ctx), err
-	}
-	return TailscaleRemoteAccessStatus{
-		Supported: true, Installed: true, Enabled: true, Active: true, State: "enabled",
-		URL: "https://" + hostname, Provider: "tailscale", NetworkKind: "private-tailnet", Management: "integrated",
-	}, nil
-}
-
-func (c *tailscaleRemoteAccessController) disable(ctx context.Context) (TailscaleRemoteAccessStatus, error) {
-	if err := c.saveState(remoteAccessFile{SchemaVersion: remoteAccessSchemaVersion}); err != nil {
-		return c.status(ctx), err
-	}
-	if c.runner == nil || !c.runner.Available() {
-		return c.status(ctx), ErrTailscaleDisableIncomplete
-	}
-	if runner, ok := c.runner.(privilegedTailscaleCommandRunner); ok && runner.RequiresApproval() {
-		return c.disablePrivileged(ctx)
-	}
-	serve, err := c.readServeStatus(ctx)
-	if err != nil {
-		if errors.Is(err, ErrTailscaleApprovalRequired) {
-			return c.disablePrivileged(ctx)
-		}
-		return c.status(ctx), ErrTailscaleDisableIncomplete
-	}
-	if serveStatusEmpty(serve) {
-		return c.status(ctx), nil
-	}
-	if _, owned := ownedTailscaleServe(serve, c.target); !owned {
-		return c.status(ctx), nil
-	}
-	commandCtx, cancel := context.WithTimeout(ctx, tailscaleCommandTimeout)
-	_, commandErr := c.runner.Run(commandCtx, "serve", "--yes", "--https=443", "off")
-	cancel()
-	if commandErr != nil {
-		return c.status(ctx), ErrTailscaleDisableIncomplete
-	}
-	serve, err = c.readServeStatus(ctx)
-	if err != nil || !serveStatusEmpty(serve) {
-		return c.status(ctx), ErrTailscaleDisableIncomplete
-	}
-	return c.status(ctx), nil
-}
-
-func (c *tailscaleRemoteAccessController) disablePrivileged(ctx context.Context) (TailscaleRemoteAccessStatus, error) {
-	runner, ok := c.runner.(privilegedTailscaleCommandRunner)
-	if !ok {
-		return c.status(ctx), ErrTailscaleDisableIncomplete
-	}
-	raw, err := runner.RunPrivileged(ctx, "disable", c.target)
-	if err != nil {
-		return c.status(ctx), ErrTailscaleDisableIncomplete
-	}
-	serve, err := decodeTailscaleServeStatus(raw)
-	if err != nil {
-		return c.status(ctx), ErrTailscaleDisableIncomplete
-	}
-	result := TailscaleRemoteAccessStatus{
-		Supported: true, Installed: true, State: "ready", Provider: "tailscale", NetworkKind: "private-tailnet", Management: "integrated",
-	}
-	if !serveStatusEmpty(serve) {
-		if _, owned := ownedTailscaleServe(serve, c.target); owned {
-			return c.status(ctx), ErrTailscaleDisableIncomplete
-		}
-		result.State = "conflict"
-		result.ErrorCode = "tailscale-serve-conflict"
-	}
-	return result, nil
-}
-
-func (c *tailscaleRemoteAccessController) readServeStatus(ctx context.Context) (tailscaleServeStatus, error) {
-	commandCtx, cancel := context.WithTimeout(ctx, tailscaleCommandTimeout)
-	raw, err := c.runner.Run(commandCtx, "serve", "status", "--json")
-	cancel()
-	if err != nil {
-		return tailscaleServeStatus{}, err
-	}
-	return decodeTailscaleServeStatus(raw)
 }
 
 func decodeTailscaleServeStatus(raw []byte) (tailscaleServeStatus, error) {
@@ -660,11 +296,25 @@ func hostnameOnly(value string) string {
 }
 
 func (s *Server) handleTailscaleRemoteAccessStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.remoteAccess.Status(r.Context()))
+	writeJSON(w, http.StatusOK, s.remoteAccessStatus(r.Context()))
+}
+
+func (s *Server) remoteAccessStatus(ctx context.Context) TailscaleRemoteAccessStatus {
+	status := s.remoteAccess.Status(ctx)
+	if publicRemoteAccessSupported(s.remoteAccess) && !s.publicPasswordBoundaryActive() {
+		status.PasswordRequired = true
+		status.State = "manager-password-required"
+		status.ErrorCode = "manager-password-required"
+	}
+	return status
+}
+
+func (s *Server) publicPasswordBoundaryActive() bool {
+	return s.auth.authenticationRequired() && s.auth.passwordConfigured()
 }
 
 func (s *Server) handleVerifyTailscaleRemoteAccess(w http.ResponseWriter, r *http.Request) {
-	// Windows UAC and first-time HTTPS certificate provisioning can take longer
+	// Platform approval and first-time HTTPS certificate provisioning can take longer
 	// than the Manager's normal response deadline. Keep the stricter global
 	// timeout and extend only this explicit, authenticated interaction.
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(tailscaleResponseTimeout))
@@ -676,18 +326,28 @@ func (s *Server) handleVerifyTailscaleRemoteAccess(w http.ResponseWriter, r *htt
 			writeAPIError(w, http.StatusConflict, "platform-unsupported", "Tailscale remote access is not available for this package yet.")
 		case errors.Is(err, ErrTailscaleApprovalDeclined):
 			s.recordDiagnostic("remote-access", "warning", "tailscale-approval-declined")
-			writeAPIError(w, http.StatusConflict, "tailscale-approval-declined", "Windows administrator approval was cancelled. Tailscale Serve was not changed.")
+			message := "Windows administrator approval was cancelled. Tailscale Funnel was not changed."
+			if isPublicRemoteAccess(s.remoteAccess) {
+				message = "Windows administrator approval was cancelled. The TautWeekly Funnel was not changed."
+			}
+			writeAPIError(w, http.StatusConflict, "tailscale-approval-declined", message)
 		case errors.Is(err, ErrTailscaleHostAuthorization):
 			s.recordDiagnostic("remote-access", "warning", "tailscale-host-authorization-required")
-			writeAPIError(w, http.StatusConflict, "tailscale-host-authorization-required", "Run sudo tautweekly remote-access-authorize on the Linux host, then retry.")
+			writeAPIError(w, http.StatusConflict, "tailscale-host-authorization-required", "Run the fixed package authorization command shown in Settings, then retry.")
 		case errors.As(err, &providerApproval) && validTailscaleProviderURL(providerApproval.url):
 			s.recordDiagnostic("remote-access", "warning", "tailscale-provider-approval-required")
-			writeAPIFieldErrors(w, http.StatusConflict, "tailscale-provider-approval-required", "Tailscale requires one-time HTTPS approval before Serve can be enabled.", map[string]string{"setupUrl": providerApproval.url})
+			writeAPIFieldErrors(w, http.StatusConflict, "tailscale-provider-approval-required", "Tailscale requires one-time provider approval before remote access can be enabled.", map[string]string{"setupUrl": providerApproval.url})
 		case errors.Is(err, ErrTailscaleServeConflict):
-			writeAPIError(w, http.StatusConflict, "tailscale-serve-conflict", "Tailscale Serve already has a different configuration. TautWeekly left it unchanged.")
+			writeAPIError(w, http.StatusConflict, "tailscale-route-conflict", "Tailscale already has a different configuration. TautWeekly left it unchanged.")
+		case errors.Is(err, ErrTailscaleNotRunning):
+			s.recordDiagnostic("remote-access", "failed", "tailscale-not-running")
+			writeAPIError(w, http.StatusConflict, "tailscale-not-running", "Start the official Tailscale service on this host, then verify again.")
+		case errors.Is(err, ErrTailscaleFunnelUnsupported):
+			s.recordDiagnostic("remote-access", "failed", "tailscale-funnel-unsupported")
+			writeAPIError(w, http.StatusConflict, "tailscale-funnel-unsupported", "Update the official Tailscale client on this host to a version that supports Funnel, then verify again.")
 		case errors.Is(err, ErrTailscaleConfigurationInvalid):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-verification-failed")
-			writeAPIError(w, http.StatusBadGateway, "tailscale-verification-failed", "Tailscale returned an unexpected Serve configuration. Nothing was changed.")
+			writeAPIError(w, http.StatusBadGateway, "tailscale-verification-failed", "Tailscale returned an unexpected route configuration. Nothing was changed.")
 		default:
 			s.recordDiagnostic("remote-access", "failed", "tailscale-unavailable")
 			writeAPIError(w, http.StatusBadGateway, "tailscale-unavailable", "Tailscale status could not be verified.")
@@ -698,13 +358,29 @@ func (s *Server) handleVerifyTailscaleRemoteAccess(w http.ResponseWriter, r *htt
 	if status.State == "conflict" || status.State == "interrupted" {
 		outcome = "warning"
 	}
-	s.recordDiagnostic("remote-access", outcome, "tailscale-verified")
+	code := "tailscale-verified"
+	if isPublicRemoteAccess(s.remoteAccess) {
+		code = "tailscale-funnel-verified"
+		if status.State == "starting" {
+			outcome = "warning"
+			code = "tailscale-funnel-publication-pending"
+		} else if status.State == "needs-attention" || status.State == "migration-required" {
+			outcome = "warning"
+			code = "tailscale-funnel-needs-attention"
+		}
+	}
+	s.recordDiagnostic("remote-access", outcome, code)
+	if publicRemoteAccessSupported(s.remoteAccess) && !s.publicPasswordBoundaryActive() {
+		status.PasswordRequired = true
+		status.State = "manager-password-required"
+		status.ErrorCode = "manager-password-required"
+	}
 	writeJSON(w, http.StatusOK, status)
 }
 
 func (s *Server) handleUpdateTailscaleRemoteAccess(w http.ResponseWriter, r *http.Request) {
 	// See handleVerifyTailscaleRemoteAccess. This deadline covers the response;
-	// the elevated helper still owns and verifies the complete Serve operation.
+	// the platform adapter still owns and verifies the complete remote-access operation.
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(tailscaleResponseTimeout))
 	var request tailscaleRemoteAccessRequest
 	if err := decodeJSON(r, &request); err != nil {
@@ -712,7 +388,18 @@ func (s *Server) handleUpdateTailscaleRemoteAccess(w http.ResponseWriter, r *htt
 		writeAPIError(w, http.StatusBadRequest, "invalid-request", "The Tailscale remote access request was invalid.")
 		return
 	}
-	status, err := s.remoteAccess.Update(r.Context(), request.Enabled, request.URL, request.ConfirmedPrivate)
+	if request.Operation != "enable" && request.Operation != "disable" {
+		s.recordDiagnostic("remote-access", "failed", "remote-access-request-invalid")
+		writeAPIError(w, http.StatusBadRequest, "invalid-operation", "The Funnel operation must be exactly enable or disable; targets and command arguments are fixed by TautWeekly.")
+		return
+	}
+	enabled := request.Operation == "enable"
+	if enabled && publicRemoteAccessSupported(s.remoteAccess) && !s.publicPasswordBoundaryActive() {
+		s.recordDiagnostic("remote-access", "failed", "manager-password-required")
+		writeAPIError(w, http.StatusConflict, "manager-password-required", "Set and enable the Manager password lock before making its login page publicly reachable.")
+		return
+	}
+	status, err := s.remoteAccess.Update(r.Context(), enabled, "", false)
 	if err != nil {
 		var providerApproval tailscaleProviderApprovalError
 		switch {
@@ -721,55 +408,73 @@ func (s *Server) handleUpdateTailscaleRemoteAccess(w http.ResponseWriter, r *htt
 			writeAPIError(w, http.StatusConflict, "platform-unsupported", "Tailscale remote access is not available for this package yet.")
 		case errors.Is(err, ErrTailscaleServeConflict):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-serve-conflict")
-			writeAPIError(w, http.StatusConflict, "tailscale-serve-conflict", "Tailscale Serve already has a different configuration. TautWeekly left it unchanged.")
+			writeAPIError(w, http.StatusConflict, "tailscale-route-conflict", "Tailscale already has a different configuration. TautWeekly left it unchanged.")
 		case errors.Is(err, ErrTailscaleDisableIncomplete):
 			s.recordDiagnostic("remote-access", "warning", "tailscale-disable-incomplete")
-			writeAPIError(w, http.StatusBadGateway, "tailscale-disable-incomplete", "TautWeekly blocked the private hostname locally, but Tailscale Serve could not be cleaned up. Restore Tailscale access and try Disable again, or remove its HTTPS Serve route manually.")
+			message := "The Manager kept its password boundary active because the TautWeekly Funnel could not be disabled and verified. Restore Tailscale and try Disable again."
+			writeAPIError(w, http.StatusBadGateway, "tailscale-disable-incomplete", message)
 		case errors.Is(err, ErrTailscaleApprovalDeclined):
 			s.recordDiagnostic("remote-access", "warning", "tailscale-approval-declined")
-			writeAPIError(w, http.StatusConflict, "tailscale-approval-declined", "Windows administrator approval was cancelled. Tailscale Serve was not changed.")
+			message := "Windows administrator approval was cancelled. The TautWeekly Funnel was not changed."
+			writeAPIError(w, http.StatusConflict, "tailscale-approval-declined", message)
 		case errors.Is(err, ErrTailscaleHostAuthorization):
 			s.recordDiagnostic("remote-access", "warning", "tailscale-host-authorization-required")
-			writeAPIError(w, http.StatusConflict, "tailscale-host-authorization-required", "Run sudo tautweekly remote-access-authorize on the Linux host, then retry.")
+			writeAPIError(w, http.StatusConflict, "tailscale-host-authorization-required", "Run the fixed package authorization command shown in Settings, then retry.")
 		case errors.As(err, &providerApproval) && validTailscaleProviderURL(providerApproval.url):
 			s.recordDiagnostic("remote-access", "warning", "tailscale-provider-approval-required")
-			writeAPIFieldErrors(w, http.StatusConflict, "tailscale-provider-approval-required", "Tailscale requires one-time HTTPS approval before Serve can be enabled.", map[string]string{"setupUrl": providerApproval.url})
+			writeAPIFieldErrors(w, http.StatusConflict, "tailscale-provider-approval-required", "Tailscale requires one-time provider approval before remote access can be enabled.", map[string]string{"setupUrl": providerApproval.url})
 		case errors.Is(err, ErrTailscaleUnavailable):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-unavailable")
 			writeAPIError(w, http.StatusBadGateway, "tailscale-unavailable", "Tailscale is not installed, connected, or available to this package host.")
+		case errors.Is(err, ErrTailscaleNotRunning):
+			s.recordDiagnostic("remote-access", "failed", "tailscale-not-running")
+			writeAPIError(w, http.StatusConflict, "tailscale-not-running", "Start the official Tailscale service on this host, then verify again.")
+		case errors.Is(err, ErrTailscaleFunnelUnsupported):
+			s.recordDiagnostic("remote-access", "failed", "tailscale-funnel-unsupported")
+			writeAPIError(w, http.StatusConflict, "tailscale-funnel-unsupported", "Update the official Tailscale client on this host to a version that supports Funnel, then verify again.")
+		case errors.Is(err, ErrManagerPasswordRequired):
+			s.recordDiagnostic("remote-access", "failed", "manager-password-required")
+			writeAPIError(w, http.StatusConflict, "manager-password-required", "Set and enable the Manager password lock before making its login page publicly reachable.")
 		case errors.Is(err, ErrTailscaleApprovalRequired):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-approval-required")
-			writeAPIError(w, http.StatusConflict, "tailscale-approval-required", "Windows administrator approval is required to change Tailscale Serve. The Manager itself remains unelevated.")
+			message := "Windows administrator approval is required to change the TautWeekly Funnel. The Manager itself remains unelevated."
+			writeAPIError(w, http.StatusConflict, "tailscale-approval-required", message)
 		case errors.Is(err, ErrTailscaleSignInRequired):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-sign-in-required")
-			writeAPIError(w, http.StatusConflict, "tailscale-sign-in-required", "Sign in to Tailscale on this Windows computer, then refresh this status.")
+			writeAPIError(w, http.StatusConflict, "tailscale-sign-in-required", "Sign in to Tailscale on this host outside Manager, then refresh this status.")
 		case errors.Is(err, ErrTailscaleConfigurationInvalid):
 			s.recordDiagnostic("remote-access", "failed", "tailscale-verification-failed")
-			writeAPIError(w, http.StatusBadGateway, "tailscale-verification-failed", "Tailscale did not retain the expected private HTTPS route. TautWeekly did not allow the remote hostname.")
-		case errors.Is(err, ErrTailscaleURLRequired):
-			s.recordDiagnostic("remote-access", "failed", "remote-access-request-invalid")
-			writeAPIFieldErrors(w, http.StatusBadRequest, "tailscale-url-required", "Paste the exact private HTTPS address created by Tailscale Serve.", map[string]string{"url": "A private https://…ts.net address is required."})
-		case errors.Is(err, ErrTailscaleURLInvalid):
-			s.recordDiagnostic("remote-access", "failed", "remote-access-request-invalid")
-			writeAPIFieldErrors(w, http.StatusBadRequest, "tailscale-url-invalid", "The private Tailscale address was invalid.", map[string]string{"url": "Use an exact https://…ts.net address without a port, path, query, user information, or fragment."})
-		case errors.Is(err, ErrTailscalePrivateConfirmation):
-			s.recordDiagnostic("remote-access", "failed", "remote-access-request-invalid")
-			writeAPIFieldErrors(w, http.StatusBadRequest, "tailscale-private-confirmation-required", "Confirm that the host route uses private HTTPS Serve and that Funnel is off.", map[string]string{"confirmedPrivate": "Private HTTPS and Funnel-off confirmation is required."})
+			message := "Tailscale did not retain the exact TautWeekly Funnel route. The public hostname was not admitted."
+			writeAPIError(w, http.StatusBadGateway, "tailscale-verification-failed", message)
 		default:
 			s.recordDiagnostic("remote-access", "failed", "remote-access-state-write-failed")
-			writeAPIError(w, http.StatusInternalServerError, "remote-access-update-failed", "The private remote access setting could not be saved safely.")
+			message := "The public Funnel setting could not be saved safely. TautWeekly attempted to leave its route off."
+			writeAPIError(w, http.StatusInternalServerError, "remote-access-update-failed", message)
 		}
 		return
 	}
-	code := "tailscale-disabled"
+	code := "tailscale-funnel-disabled"
 	if status.Enabled && status.Active {
-		code = "tailscale-enabled"
+		code = "tailscale-funnel-enabled"
+	} else if status.Enabled && status.State == "starting" {
+		code = "tailscale-funnel-publication-pending"
 	}
-	s.recordDiagnostic("remote-access", "passed", code)
+	outcome := "passed"
+	if code == "tailscale-funnel-publication-pending" {
+		outcome = "warning"
+	}
+	s.recordDiagnostic("remote-access", outcome, code)
 	writeJSON(w, http.StatusOK, status)
 }
 
 func (s *Server) remoteRequestIsSecure(r *http.Request) bool {
 	authority, ok := canonicalAuthority(r.Host, "https")
-	return r.TLS != nil || s.options.SecureCookies || ok && authority.port == "443" && s.remoteAccess.AllowsHost(authority.host)
+	return r.TLS != nil || s.options.SecureCookies || ok && authority.port == "443" && s.remoteHostAllowed(authority.host)
+}
+
+func (s *Server) remoteHostAllowed(host string) bool {
+	if !s.remoteAccess.AllowsHost(host) {
+		return false
+	}
+	return !publicRemoteAccessSupported(s.remoteAccess) || s.publicPasswordBoundaryActive()
 }

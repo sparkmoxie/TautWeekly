@@ -304,30 +304,46 @@ and opens the password controls directly. Its tooltip is platform-aware
 (`Browser access`, `Container access`, or `Manager access`), so the same control
 and password-update route carry into maintained container and native packages.
 
-Windows also exposes an optional Tailscale card below Browser access. Passive
-Dashboard loads never invoke Tailscale or request elevation. Explicit Enable,
-Disable, and Verify actions use the fixed packaged `TAILSCALE-HELPER.ps1`, which
-requests UAC, accepts only Inspect, Enable, or Disable for the Manager loopback target, refuses unrelated Serve
-state, never enables Funnel or resets all Serve configuration, and returns a
-strict bounded result over a nonce-protected ephemeral loopback callback. The
-normal Manager process remains unelevated. The exact verified `.ts.net`
-hostname is the only provider value persisted in private Manager state and the
-only additional Host header accepted. Requests through that host require HTTPS
-origin semantics, Secure session cookies, and HSTS. Origin/Host authority
-comparison normalizes DNS case, one trailing dot, and equivalent default ports,
-but rejects malformed or different authorities and ignores proxy forwarding
-headers. Windows trusted-local and
-optional password-lock behavior remain unchanged.
+Windows also exposes an optional Tailscale Funnel card below Browser access.
+Passive Dashboard and tray refreshes never invoke Tailscale or request
+elevation. Funnel enablement is unavailable until a unique Manager password is
+configured and active. Explicit Enable, Disable, and Verify actions use the
+fixed packaged `TAILSCALE-HELPER.ps1`, which requests UAC and accepts only the
+Manager-owned typed operation and fixed loopback target. It refuses unrelated
+routes, never resets all Serve/Funnel configuration, and returns a strict
+bounded result over a nonce-protected ephemeral loopback callback. The normal
+Manager remains unelevated. Only the exact verified public `.ts.net` hostname
+is persisted and admitted as an additional Host. Requests through it require
+authentication, HTTPS origin semantics, Secure/HttpOnly/SameSite cookies,
+CSRF, and HSTS. Disabling the password lock, local access reset, and uninstall
+first disable and verify the owned Funnel or fail closed. Password changes keep
+the route and current session while revoking other sessions.
+
+Local Funnel JSON is not sufficient for an active result. The elevated helper
+queries only the exact intended-public hostname through the fixed `1.1.1.1`
+resolver, rejects non-public IPv4 answers, and completes a certificate-validated
+TLS handshake. Failure returns only a boolean postcondition and renders the
+configured route as gold **Publication pending**; DNS answers, certificate
+details, raw command output, and Manager data never enter Manager state or its
+diagnostics.
+
+On Windows only, the public login shell includes concise Open Graph and
+large-card metadata plus explicit favicon declarations. Canonical and image
+URLs derive from the same exact admitted Funnel Host and ignore forwarded host
+or protocol headers. The optimized social image is packaged outside newsletter
+assets, contains no EXIF/XMP/editor metadata, and is not exposed by other
+runtime modes.
 
 Native Linux uses the same route-ownership contract through a root-owned
 systemd accepted socket. Its one-shot helper verifies the Unix peer is exactly
-the packaged `tautweekly` service UID and maps only the fixed protocol actions
-to the fixed loopback target. Container, macOS Docker, FreeBSD Podman, Unraid,
-QNAP, and compatible Docker modes use an external adapter instead: the
-authenticated administrator must create private Serve outside Manager, confirm
-Funnel is off, and save one exact HTTPS `.ts.net` URL. Manager never receives a
-Tailscale key, Docker socket, host command channel, root identity, or wildcard
-host. All non-Windows modes retain mandatory Manager authentication.
+the packaged `tautweekly` service UID and maps only fixed protocol actions to
+the fixed loopback target. Container, macOS Docker, FreeBSD Podman, Unraid,
+QNAP, and compatible Docker modes use a package-local userspace adapter. A root
+helper owns the official CLI and provider state; the authenticated non-root
+Manager can send only inspect/enable/disable over a UID-checked socket for
+`http://127.0.0.1:8080`. Manager never receives a Tailscale key, Docker socket,
+host command channel, root identity, arbitrary URL, or wildcard host. All
+non-Windows modes retain mandatory Manager authentication.
 
 The implementation specification is
 [docs/WEBGUI-IMPLEMENTATION.md](../docs/WEBGUI-IMPLEMENTATION.md).

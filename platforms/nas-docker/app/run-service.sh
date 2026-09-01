@@ -91,7 +91,8 @@ term() {
   wait_for_delivery || true
   [[ -z "$SCHED_PID" ]] || kill -TERM "$SCHED_PID" 2>/dev/null || true
 }
-trap term TERM INT EXIT
+trap 'term; exit 0' TERM INT
+trap term EXIT
 
 "$app_root/bin/tautweekly-manager" serve \
   --runtime-mode "$manager_runtime_mode" \
@@ -121,13 +122,13 @@ if [[ "$manager_ready" != true ]]; then
   exit 70
 fi
 if [[ "$manager_runtime_mode" == linux ]]; then
-  echo "[INFO] Authenticated Linux Manager listening on ${manager_listen}; use the documented SSH tunnel or TLS reverse proxy."
+  echo "[INFO] Authenticated Linux Manager listening on ${manager_listen}; use the documented SSH tunnel or verified Funnel URL."
 elif [[ "${TAUTWEEKLY_RUNTIME_PROFILE:-}" == desktop ]]; then
-  echo "[INFO] Authenticated desktop-container Manager listening on ${manager_listen}; publish it to host loopback unless LAN access is intentional."
+  echo "[INFO] Authenticated desktop-container Manager listening on ${manager_listen}; keep the host mapping on loopback or use the verified Funnel URL."
 elif [[ "${TAUTWEEKLY_RUNTIME_PROFILE:-}" == unraid ]]; then
-  echo "[INFO] Authenticated Unraid Manager listening on ${manager_listen}; Unraid owns the mapped trusted-LAN port and image lifecycle."
+  echo "[INFO] Authenticated Unraid Manager listening on ${manager_listen}; Unraid owns the loopback recovery mapping and image lifecycle."
 else
-  echo "[INFO] Authenticated server-container Manager listening on ${manager_listen}; use the mapped trusted-LAN host port."
+  echo "[INFO] Authenticated server-container Manager listening on ${manager_listen}; use the loopback host mapping, SSH recovery tunnel, or verified Funnel URL."
 fi
 
 pwsh -NoLogo -NoProfile -NonInteractive -File "$app_root/Scheduler.ps1" -DataRoot "$data_root" &

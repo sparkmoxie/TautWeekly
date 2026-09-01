@@ -6,8 +6,7 @@
 **/*.key
 **/*.pfx
 **/tailscale/authkey.local
-**/tailscale/state/*
-!**/tailscale/state/.keep
+**/tailscale-state/*
 
 # TautWeekly for Plex runtime state
 **/state.json

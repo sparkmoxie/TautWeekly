@@ -41,10 +41,10 @@ formatting. No Plex token or private server data is embedded.
 A Debian, Ubuntu, or other Linux server that runs Docker uses the **NAS/Docker**
 distribution; “NAS” is a deployment label and does not require dedicated NAS
 hardware. That distribution is fully headless and normally exposes its
-authenticated Manager at `http://SERVER_LAN_IP:8787/` to another trusted-LAN
-device, without SSH or a server desktop. **Native Linux** is also headless, but
-its loopback-only Manager is reached through the documented SSH tunnel or
-optional private Tailscale access. Both paths use the same Manager workflow and
+authenticated Manager only on host loopback. Use the documented SSH local
+forward for setup/recovery or its optional password-gated public Tailscale
+Funnel for an ordinary remote browser. **Native Linux** uses the same
+loopback/SSH/Funnel boundary. Both paths use the same Manager workflow and
 produce the same newsletter behavior.
 
 Every Quickstart follows the same GUI-first path: install the package, open and
@@ -68,14 +68,15 @@ Only Windows can start its existing verified updater from the GUI; every other
 guide names the exact host-owned command or platform-native flow and its
 limitations.
 
-Every maintained package also exposes an optional **Settings > Tailscale**
-private-access card. Windows and native Linux have narrow, package-owned
-adapters; macOS, FreeBSD, QNAP, Unraid, and other Docker/NAS packages accept
-only a separately created exact private Serve hostname. TautWeekly never
-enables Funnel or treats tailnet membership as a replacement for the Manager
-login. Optional mobile access requires the Tailscale app signed in on the phone
-or tablet before opening the private address. An active card uses a motion-safe
-full-card glow so the additional remote administration boundary remains visible.
+Every maintained package exposes a package-aware **Settings > Tailscale
+Funnel** card with a mandatory password lock, fixed local target, and verified
+public DNS/TLS state. Native Windows/Linux use narrow host adapters; macOS,
+FreeBSD, QNAP, Synology, Unraid, and other Docker/NAS packages use the isolated
+opt-in userspace adapter with root-only provider state and explicit interactive
+sign-in. The complete inventory and threat boundary are in the
+[remote-access architecture](REMOTE-ACCESS.md). An active card uses a
+motion-safe full-card glow so the public administration boundary remains
+visible.
 
 ## Documentation
 
@@ -87,6 +88,7 @@ full-card glow so the additional remote administration boundary remains visible.
 - [FreeBSD Podman installation](freebsd/README.md)
 - [Configuration reference](CONFIGURATION.md)
 - [Security and hardening](SECURITY.md)
+- [Remote-access architecture and platform matrix](REMOTE-ACCESS.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
 - [Release process](RELEASING.md)
 

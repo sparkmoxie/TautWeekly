@@ -1,6 +1,6 @@
 [Unit]
 Description=TautWeekly for Plex optional Tailscale adapter socket
-Documentation=https://sparkmoxie.github.io/TautWeekly/linux/#optional-private-remote-access
+Documentation=https://sparkmoxie.github.io/TautWeekly/linux/#optional-public-tailscale-funnel
 ConditionPathExists=/etc/tautweekly/remote-access.enabled
 
 [Socket]

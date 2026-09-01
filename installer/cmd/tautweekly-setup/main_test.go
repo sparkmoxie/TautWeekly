@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,6 +84,27 @@ func TestParseOptionsExplicitPrivateDataDirectoryOverridesInstalledMetadata(t *t
 	}
 }
 
+func TestInstallDirectorySelectionBypassesValidatedExistingInstall(t *testing.T) {
+	installed := t.TempDir()
+	if err := os.WriteFile(filepath.Join(installed, "INSTALL-METADATA.txt"), []byte("Version=test\r\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if requiresInstallDirectorySelection(options{installDir: installed}) {
+		t.Fatal("validated existing installation still required the legacy folder picker")
+	}
+
+	newInstall := filepath.Join(t.TempDir(), "TautWeekly")
+	if !requiresInstallDirectorySelection(options{installDir: newInstall}) {
+		t.Fatal("new installation did not require application-folder selection")
+	}
+	if requiresInstallDirectorySelection(options{installDir: newInstall, installDirExplicit: true}) {
+		t.Fatal("explicit installation directory still required interactive selection")
+	}
+	if requiresInstallDirectorySelection(options{installDir: newInstall, testMode: true}) {
+		t.Fatal("installer test mode unexpectedly required interactive selection")
+	}
+}
+
 func TestExtractPayloadRejectsTraversal(t *testing.T) {
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
@@ -130,6 +152,58 @@ func TestRemoveOwnedInstallPreservesData(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(data, "config.json")); err != nil {
 		t.Fatalf("private data was removed: %v", err)
+	}
+}
+
+func TestDisableInstalledRemoteAccessUsesOnlyFixedCleanupOperation(t *testing.T) {
+	installDir := t.TempDir()
+	dataDir := filepath.Join(t.TempDir(), "private-data")
+	managerPath := filepath.Join(installDir, "tautweekly-manager.exe")
+	if err := os.WriteFile(managerPath, []byte("fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	original := runInstalledRemoteCleanup
+	t.Cleanup(func() { runInstalledRemoteCleanup = original })
+	called := false
+	runInstalledRemoteCleanup = func(actualManager, actualInstall, actualData string) error {
+		called = true
+		if actualManager != managerPath || actualInstall != installDir || actualData != dataDir {
+			t.Fatalf("cleanup received unexpected paths: %q %q %q", actualManager, actualInstall, actualData)
+		}
+		return nil
+	}
+	if err := disableInstalledRemoteAccess(installDir, dataDir); err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("installed Manager cleanup was not requested")
+	}
+}
+
+func TestDisableInstalledRemoteAccessFailsClosedWhenVerificationFails(t *testing.T) {
+	installDir := t.TempDir()
+	managerPath := filepath.Join(installDir, "tautweekly-manager.exe")
+	if err := os.WriteFile(managerPath, []byte("fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	original := runInstalledRemoteCleanup
+	t.Cleanup(func() { runInstalledRemoteCleanup = original })
+	runInstalledRemoteCleanup = func(string, string, string) error { return errors.New("fixture shutdown failure") }
+	err := disableInstalledRemoteAccess(installDir, t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "could not be disabled and verified") {
+		t.Fatalf("uninstall did not fail closed: %v", err)
+	}
+}
+
+func TestDisableInstalledRemoteAccessFailsClosedWhenManagerIsMissingButStateRemains(t *testing.T) {
+	installDir := t.TempDir()
+	dataDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dataDir, "windows-funnel.json"), []byte(`{"schemaVersion":1,"enabled":true,"hostname":"manager.synthetic-fixture.ts.net"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := disableInstalledRemoteAccess(installDir, dataDir)
+	if err == nil || !strings.Contains(err.Error(), "reinstall before removal") {
+		t.Fatalf("missing cleanup executable allowed saved public state to be orphaned: %v", err)
 	}
 }
 

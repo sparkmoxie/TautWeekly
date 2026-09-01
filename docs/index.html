@@ -54,14 +54,14 @@
         </div>
       </div>
       <div class="terminal" aria-label="Example authenticated Manager setup workflow">
-        <div class="terminal-head"><span></span><span></span><span></span><b>docker manager - headless LAN launch</b></div>
+        <div class="terminal-head"><span></span><span></span><span></span><b>docker manager - loopback recovery</b></div>
         <pre><span class="muted">$</span> docker compose up -d
 <span class="ok">✓</span> Replaceable service; persistent /data
 
 <span class="muted">$</span> ./tautweekly.sh manager-bootstrap
 <span class="ok">✓</span> Host-side release-archive wrapper; one-time token
 
-<span class="muted">$</span> Open http://SERVER_LAN_IP:8787/ from another trusted device
+<span class="muted">$</span> Open http://127.0.0.1:8787/ locally or through SSH forwarding
 <span class="gold">→</span> Config · Verify · PreviewAll · TestEmail
 
 <span class="muted">$</span> Enable Schedule only after review
@@ -69,17 +69,17 @@
       </div>
     </section>
 
-    <section class="section searchable" id="feature-spotlight" data-feature-release="v0.23.0" data-search="feature release unified container image profiles desktop server unraid compose migration semver digest amd64 arm64 rollback">
+    <section class="section searchable" id="feature-spotlight" data-feature-release="v0.25.0" data-search="feature release remote access tailscale funnel public https windows native linux loopback password dns tls lifecycle container refusal">
       <div class="section-heading">
-        <div><div class="eyebrow">v0.23.0 unified container platform</div><h2>One image. Three explicit profiles. Existing data stays put.</h2></div>
-        <p>The newest feature release consolidates Docker Desktop, Compose, NAS, QNAP, Unraid, and compatible container systems on one amd64/arm64 image.</p>
+        <div><div class="eyebrow">v0.25.0 secure native remote access</div><h2>Public when enabled. Loopback where it belongs.</h2></div>
+        <p>The newest feature release adds password-gated public HTTPS Funnel to the native Windows and Linux Managers without broadening their local bind.</p>
       </div>
       <article class="card featured">
-        <span class="tag">Containers · Docker Desktop · NAS · Unraid</span>
-        <h3>Shared payload, preserved platform behavior</h3>
-        <p>v0.23.0 publishes <code>ghcr.io/sparkmoxie/tautweekly</code> with validated <code>desktop</code>, <code>server</code>, and <code>unraid</code> profiles. Manager reports the active profile, unified repository, stable semver/digest guidance, migration state, and host-owned recovery without receiving Docker control.</p>
-        <ul><li>One public amd64 and arm64 manifest with provenance and SBOM</li><li>Checksummed no-clone server and transitional Mac Compose assets</li><li>Named-volume, bind-mount, PUID/PGID/UMASK, networking, and credential preservation</li><li>Release publication gated on the unified image and artifact validation</li><li>Old Mac image retained for rollback; native Windows/Linux routes unchanged</li></ul>
-        <div class="card-actions"><a href="CONTAINER-MIGRATION.md#profile-contract">Profile contract</a><a href="CONTAINER-MIGRATION.md#before-either-migration">Migration and rollback</a><a href="releases/v0.23.0.md">v0.23.0 release notes</a></div>
+        <span class="tag">Windows · Native Linux · Tailscale Funnel</span>
+        <h3>One shared controller, narrow host adapters</h3>
+        <p>v0.25.0 keeps Manager on its fixed loopback target while a typed, provider-neutral controller allows only exact enable, disable, and verify operations. Green Active requires the owned route, public DNS, trusted TLS, and the Manager password lock.</p>
+        <ul><li>Ordinary remote browsers use the generated public HTTPS address without joining the tailnet</li><li>Password disable, reset, update, stop, recovery, and uninstall clean up the exact owned route or fail closed</li><li>Windows uses a fixed UAC helper; native Linux uses a root-owned one-shot socket adapter</li><li>Docker/NAS, macOS Docker, Unraid, QNAP/Synology, and FreeBSD use an isolated official userspace Funnel runtime</li><li>Diagnostics omit raw CLI output, tailnet identity, addresses, credentials, and sensitive paths</li></ul>
+        <div class="card-actions"><a href="REMOTE-ACCESS.md">Architecture and support</a><a href="windows/#remote-access">Windows setup</a><a href="linux/#remote-access">Native Linux setup</a><a href="releases/v0.25.0.md">v0.25.0 release notes</a></div>
       </article>
     </section>
 
@@ -148,9 +148,9 @@
           <h3>NAS / Docker</h3>
           <p>A fully headless Docker service with persistent data and an internal
             scheduler for Debian, Ubuntu, other Linux servers, QNAP, and Unraid.
-            Open its authenticated Manager from another trusted-LAN device; no
-            server desktop or everyday SSH session is required.</p>
-          <ul><li>Source baseline 1.5.0</li><li>Authenticated Manager + Unraid Apps + GHCR</li><li>x86-64 and ARM64</li></ul>
+            Keep recovery on host loopback; use an SSH local forward when needed
+            or the optional verified Funnel URL from an ordinary remote browser.</p>
+          <ul><li>Source baseline 1.7.0</li><li>Authenticated Manager + public Funnel + Unraid Apps + GHCR</li><li>x86-64 and ARM64</li></ul>
           <div class="card-actions"><a href="nas-docker/">NAS/Docker/QNAP/Unraid Quickstart</a><a href="nas-docker/README.md">Documentation</a></div>
         </article>
         <article class="card">
@@ -159,7 +159,7 @@
           <h3>macOS</h3>
           <p>Registry-first Intel and Apple silicon deployment with a standalone
             Compose file and loopback-only Manager by default.</p>
-          <ul><li>Source baseline 1.5.0</li><li>Mac-specific GHCR image + authenticated Manager</li><li>Intel + Apple silicon</li></ul>
+          <ul><li>Source baseline 1.7.0</li><li>Mac-specific GHCR image + authenticated Manager + public Funnel</li><li>Intel + Apple silicon</li></ul>
           <div class="card-actions"><a href="mac/">macOS Quickstart</a><a href="mac/README.md">Documentation</a></div>
         </article>
         <article class="card">
@@ -168,8 +168,8 @@
           <h3>Linux</h3>
           <p>A headless, Docker-free systemd service with protected private storage.
             Its localhost-only authenticated Manager is reached through an SSH
-            tunnel or optional private Tailscale access.</p>
-          <ul><li>Source baseline 1.3.0</li><li>Authenticated Manager + PowerShell 7.2+</li><li>Ubuntu, Debian, and RHEL</li></ul>
+            tunnel or optional password-gated public Tailscale Funnel.</p>
+          <ul><li>Source baseline 1.4.0</li><li>Authenticated Manager + public Funnel + PowerShell 7.2+</li><li>Ubuntu, Debian, and RHEL</li></ul>
           <div class="card-actions"><a href="linux/">Native Linux Quickstart</a><a href="linux/README.md">Documentation</a></div>
         </article>
         <article class="card">
@@ -178,7 +178,7 @@
           <h3>FreeBSD</h3>
           <p>The maintained Linux OCI Manager and renderer under FreeBSD Podman,
             controlled by rc.d with private host storage.</p>
-          <ul><li>Source baseline 1.2.0</li><li>Authenticated Manager on loopback</li><li>FreeBSD 15.1+ amd64 beta</li></ul>
+          <ul><li>Source baseline 1.3.0</li><li>Authenticated Manager + isolated public Funnel</li><li>FreeBSD 15.1+ amd64 beta</li></ul>
           <div class="card-actions"><a href="freebsd/">FreeBSD Podman Quickstart</a><a href="freebsd/README.md">Documentation</a></div>
         </article>
       </div>
@@ -235,13 +235,14 @@
             reveal recipients and server activity. Weekly Binge Champion cards
             share only anonymous watch time plus nonzero unique movie/TV-show counts; the
             champion's identity and titles remain private.</p>
-          <p>Optional private Tailscale Serve is available on every package.
-            Windows and native Linux use narrow fixed helpers; host-managed
-            packages save only an exact private <code>.ts.net</code> address.
-            For optional mobile access, sign the phone or tablet into the same
-            tailnet with the Tailscale app before opening that address. Funnel
-            stays off, Manager authentication remains independent, and every
-            remote session has full administration.</p>
+          <p>Native Windows and Linux can optionally publish their
+            password-protected, loopback Manager through Tailscale Funnel. The
+            login page becomes publicly reachable over HTTPS, and remote
+            viewers need no Tailscale or VPN client. Container/NAS, macOS
+            Docker, FreeBSD/Podman, QNAP, Synology, and Unraid use an isolated
+            userspace Funnel adapter with exact fixed-target cleanup. Every
+            remote session has full administration, so Manager authentication
+            and local recovery remain independent boundaries.</p>
           <a class="button primary" href="SECURITY.md">Read the hardening guide</a>
         </div>
         <ul><li>Never commit live config or `.env`</li><li>Keep port 8787 private</li><li>Binge Champion identity stays private</li><li>Use application passwords</li><li>Rotate exposed credentials</li></ul>

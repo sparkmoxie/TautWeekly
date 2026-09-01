@@ -80,7 +80,7 @@
           <a href="#previews">Previews and TestEmail</a>
           <a href="#schedule">Schedule</a>
           <a href="#updates">Update or migrate</a>
-          <a href="#tailscale">Private remote access</a>
+          <a href="#tailscale">Public remote access</a>
           <a href="#password">Password protection</a>
           <a href="#data">Private data</a>
           <a href="#metadata-readiness">Metadata readiness</a>
@@ -110,7 +110,7 @@
           <div class="setup-visual" aria-label="Windows setup flow">
             <div class="setup-head"><img src="../assets/branding/tautweekly-app-icon-180.png" alt="" width="54" height="54"><div><small>TAUTWEEKLY</small><strong>Windows Manager</strong></div></div>
             <div class="setup-flow">
-              <div><b>1</b><span>Run Setup<small>Choose a permanent application folder</small></span></div>
+              <div><b>1</b><span>Run Setup<small>Choose a folder for new installs; registered updates reuse theirs</small></span></div>
               <div><b>2</b><span>Open Config<small>Enter or review the saved settings</small></span></div>
               <div><b>3</b><span>Validate and verify<small>Four persistent, non-sending setup checks</small></span></div>
               <div><b>4</b><span>Preview and TestEmail<small>Approve all six newsletter states</small></span></div>
@@ -208,10 +208,11 @@
         <div class="callout blue"><div><strong>Windows is the only Manager with an Install update button.</strong><p>After a fresh verified check and separate confirmation, the Manager starts the existing fixed updater. It accepts no browser-supplied URL, path, version, command, or arguments; Windows elevation, checksums, the internal manifest, backup, health verification, and rollback still apply. No unattended updater is installed.</p></div></div>
         <div class="table"><table><thead><tr><th>Your current installation</th><th>Folder choice</th><th>Required action</th></tr></thead><tbody>
           <tr><td><strong>Fresh</strong></td><td>Choose an empty permanent folder.</td><td><span class="state install">Install</span></td></tr>
-          <tr><td><strong>Installed by Setup</strong></td><td>Keep the registered folder Setup preselects.</td><td><span class="state update">Update</span></td></tr>
+          <tr><td><strong>Installed by Setup</strong></td><td>Setup reads the validated current-user registration and uses that folder directly; no folder picker is needed.</td><td><span class="state update">Update</span></td></tr>
           <tr><td><strong>Older portable/BAT release</strong></td><td>Choose the exact old portable folder for <strong>Migrate</strong>; it must contain the valid release ownership manifest.</td><td><span class="state migrate">Migrate</span></td></tr>
         </tbody></table></div>
-        <div class="callout red"><div><strong>Do not continue a migration if Setup says Install.</strong><p>Cancel and select the exact folder containing the old <code>config.json</code> and numbered BAT files. Setup does not scan drives or guess.</p></div></div>
+        <div class="callout blue"><div><strong>Existing Setup installations bypass the legacy folder picker.</strong><p>The native Windows Registry API supplies the validated registered folder directly. New and unresolved installs still require a folder choice.</p></div></div>
+        <div class="callout red"><div><strong>Do not continue a portable migration if Setup says Install.</strong><p>Cancel and select the exact folder containing the old <code>config.json</code> and numbered BAT files. Setup does not scan drives or guess.</p></div></div>
         <div class="grid3" style="margin-top:15px">
           <div class="card"><div class="icon">A</div><h3>Private backup</h3><p>Setup creates a timestamped sibling backup before replacement. It can contain credentials.</p></div>
           <div class="card"><div class="icon">B</div><h3>Preserved data</h3><p>Config, state, output, logs, cache, custom assets, Manager history, and compatible task state remain.</p></div>
@@ -219,13 +220,13 @@
         </div>
       </section>
 
-      <section class="section searchable" id="tailscale" data-search="tailscale remote mobile private serve https funnel vpn tailnet">
-        <div class="section-head"><div><span class="eyebrow">Optional private remote access</span><h2>Private HTTPS through your tailnet</h2></div><p>Settings can create and verify one exact Tailscale Serve route without making the Manager public.</p></div>
+      <section class="section searchable" id="tailscale" data-search="tailscale remote mobile public https funnel ordinary browser password loopback">
+        <div class="section-head"><div><span class="eyebrow">Optional public remote access</span><h2>Public HTTPS through Tailscale Funnel</h2></div><p>Open the password-protected Manager from an ordinary remote browser while the backend remains bound to loopback.</p></div>
         <div class="grid2">
-          <div class="card blue"><div class="icon">TS</div><h3>Install, sign in, enable</h3><p>Install Tailscale on this Windows host and every remote computer or mobile device. In <strong>Settings &gt; Tailscale</strong>, enable private access and approve the fixed Windows helper.</p></div>
-          <div class="card"><div class="icon">HTTPS</div><h3>HTTPS only; Funnel off</h3><p>If Tailscale opens its consent page, enable HTTPS certificates only and turn Funnel off. TautWeekly never needs a router port or public URL.</p></div>
+          <div class="card blue"><div class="icon">TS</div><h3>Host prerequisite</h3><p>Install the official Tailscale Windows client, start it, and sign in on this host. Confirm MagicDNS, HTTPS certificates, and a Funnel node attribute that targets this device. TautWeekly does not install, authenticate, or edit tailnet policy. Remote viewers need no Tailscale client or VPN.</p></div>
+          <div class="card"><div class="icon">HTTPS</div><h3>Enable and verify</h3><p>Create a unique Manager password, enable Funnel, approve the fixed Windows helper and any one-time Tailscale page, then verify the exact generated <code>https://…ts.net</code> address. Local Funnel on is insufficient: green Active requires independent public DNS and trusted TLS; a gold Publication pending card means only the exact local route is confirmed.</p></div>
         </div>
-        <div class="callout"><div><strong>The Windows password lock stays optional.</strong><p>Tailnet policy decides who can reach the host. With the Manager lock off, every permitted tailnet user or device receives full Manager administration; there is no read-only role. Local loopback access remains the recovery path.</p></div></div>
+        <div class="callout"><div><strong>Funnel makes the login page public, so the password lock is mandatory while it is active.</strong><p>Manager remains on <code>127.0.0.1</code>; no router or firewall ingress port is opened. Verification uses the system <code>nslookup.exe</code> against the fixed <code>1.1.1.1</code> resolver so Windows NRPT/MagicDNS cannot intercept the intended-public query, rejects non-public answers, and validates TLS without storing DNS or certificate details. Remote sessions have full administration. Use a unique password because Internet brute-force risk remains. Password-lock disable, access reset, and uninstall first turn off and verify only the TautWeekly Funnel or refuse safely.</p></div></div>
       </section>
 
       <section class="section searchable" id="password" data-search="password protection lock settings trusted local pairing token recovery reset eight characters">
@@ -234,7 +235,7 @@
           <div class="card"><div class="icon">U</div><h3>Unlocked by default</h3><p>No first-run pairing token is required. A gold unlocked icon reports <strong>Browser access unlocked</strong> and links to Settings.</p></div>
           <div class="card green"><div class="icon">L</div><h3>Optional password lock</h3><p>Use at least 8 characters. Enable or change the lock under Settings. A green icon reports <strong>Browser access locked</strong>. Passwords are stored only as a salted local verifier.</p></div>
         </div>
-        <div class="callout"><div><strong>Recovery does not erase TautWeekly.</strong><p>Use the Start Menu <strong>Reset TautWeekly Manager Access</strong> shortcut or <code>Reset-TautWeekly-Access.cmd</code>. Only the Manager lock is disabled; configuration, credentials, schedules, history, and previews remain.</p></div></div>
+        <div class="callout"><div><strong>Recovery does not erase TautWeekly.</strong><p>Use the Start Menu <strong>Reset TautWeekly Manager Access</strong> shortcut or <code>Reset-TautWeekly-Access.cmd</code>. It first disables and verifies the exact owned Funnel, then disables only the Manager lock. If Funnel shutdown cannot be verified, recovery stops safely. Configuration, credentials, schedules, history, and previews remain.</p></div></div>
       </section>
 
       <section class="section searchable" id="data" data-search="private data config state output previews logs installer diagnostics settings backup privacy">

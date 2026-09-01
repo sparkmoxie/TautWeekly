@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+daemon_socket="/run/tautweekly-tailscale/tailscaled.sock"
+manager_mode="${TAUTWEEKLY_MANAGER_RUNTIME_MODE:-mac}"
+package_kind="${TAUTWEEKLY_PACKAGE_KIND:-mac-docker}"
+fail() { printf '[ERROR] %s\n' "$1" >&2; exit 64; }
+[[ "$(id -u)" -eq 0 ]] || fail 'run this host-administrator command as container root.'
+[[ "${TAUTWEEKLY_FUNNEL_ADAPTER:-disabled}" == enabled ]] || fail 'enable TAUTWEEKLY_FUNNEL_ADAPTER in the package settings and restart first.'
+for forbidden in TS_AUTHKEY TS_AUTH_KEY TS_CLIENT_ID TS_CLIENT_SECRET TS_ID_TOKEN TS_AUDIENCE TS_AUTHKEY_FILE; do
+  [[ -z "${!forbidden:-}" ]] || fail "$forbidden is refused; TautWeekly never accepts Tailscale credentials."
+done
+case "${1:-}" in
+  login)
+    [[ "$#" -eq 1 ]] || fail 'login accepts no host, port, key, token, or CLI arguments.'
+    [[ -S "$daemon_socket" ]] || fail 'the private Tailscale daemon socket is unavailable.'
+    exec /usr/local/bin/tailscale --socket="$daemon_socket" login
+    ;;
+  disable)
+    [[ "$#" -eq 1 ]] || fail 'disable accepts no arguments.'
+    exec /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager remote-access-cleanup --data-dir /data/manager --tautweekly-root /opt/tautweekly --listen 0.0.0.0:8080 --runtime-mode "$manager_mode" --package-kind "$package_kind" --confirm
+    ;;
+  *) fail 'usage: tautweekly-funnel login|disable' ;;
+esac

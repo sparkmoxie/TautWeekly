@@ -38,12 +38,15 @@ Use `127.0.0.1` only for a service running on the same Windows computer.
    Get-FileHash .\TautWeekly-Setup.exe -Algorithm SHA256
    ```
 
-3. Run Setup and review the selected folder and action before continuing:
+3. Run Setup and review the reported folder and action before continuing. A
+   validated existing Setup installation uses its registered folder directly;
+   Setup opens the folder picker only for a new or unresolved installation or
+   an explicit portable migration:
 
    | Situation | Folder to select | Setup action that must appear |
    |---|---|---|
    | Fresh installation | An empty permanent writable folder | **Install** |
-   | Existing Setup installation | Keep the registered folder that Setup preselects | **Update** |
+   | Existing Setup installation | Setup reads the validated current-user registration and uses that folder directly | **Update** |
    | Older portable/BAT installation | The exact existing TautWeekly folder containing `config.json`, the numbered BAT files, and a valid release ownership manifest | **Migrate** |
 
    Do not continue a BAT migration unless the button reads **Migrate**. Setup
@@ -69,7 +72,9 @@ backup before replacement and automatically performs a rollback of
 release-owned files if verification fails. The backup can contain credentials
 and must not be shared.
 
-When updating an existing Setup installation, keep its registered folder.
+When updating an existing Setup installation, Setup reads the validated
+current-user registration through the native Windows Registry API and uses that
+folder directly instead of depending on legacy folder-picker preselection.
 Changing the installed folder requires uninstalling the application first;
 normal uninstall preserves private data. Setup never installs a periodic update
 task and never follows GitHub `main` or a container `edge` tag.
@@ -128,37 +133,76 @@ private backup of the original file.
 Opening or refreshing the Dashboard does not contact Tautulli, Plex, or SMTP and
 does not change configuration.
 
-## Optional private access with Tailscale
+## Optional public access with Tailscale Funnel
 
-Under **Settings > Tailscale**, Windows can publish the loopback Manager through
-Tailscale Serve as private HTTPS. TautWeekly never enables Funnel, opens a
-router port, or creates a public URL. There is no URL to paste into Config: after
-Tailscale verifies the route, Manager displays the exact generated `.ts.net`
-address.
+Under **Settings > Tailscale Funnel**, Windows can publish the loopback Manager
+through a stable public HTTPS `.ts.net` address. The remote viewer uses an
+ordinary browser and does not install Tailscale or connect to a VPN. Manager
+stays bound to `http://127.0.0.1:8788`; Funnel proxies only that fixed target,
+and TautWeekly never opens a router or firewall ingress port.
 
-Prerequisites are irreducible: install Tailscale on this computer, sign it into
-your tailnet, and install/sign in to Tailscale on each remote computer or mobile
-device that should connect. Tailnet grants still decide which enrolled users
-and devices can reach this computer. The remote address is not usable from an
-ordinary Internet browser without a Tailscale client.
+On the Windows host, install the official Tailscale client, start it, and sign
+in. TautWeekly never installs Tailscale silently, authenticates an account, or
+accepts an auth key. If Tailscale is absent, stopped, signed out, too old, or
+needs one-time Funnel approval, Settings reports that sanitized prerequisite
+and links to the official next step without returning account or tailnet data.
 
-Turning the switch on or off, or choosing **Verify with Windows**, requests a
-normal Windows administrator confirmation. Manager itself stays unelevated.
-The fixed packaged helper accepts only Inspect, Enable, or Disable for Manager's fixed
-loopback port, refuses an unrelated Serve configuration, and verifies the exact
-HTTPS route after changing it. Opening or refreshing Dashboard never prompts
-for administrator access. On a tailnet that has not enabled HTTPS certificates,
-Tailscale may also require its own one-time web consent before setup can finish.
-That provider page can preselect **Tailscale Funnel**. Enable **HTTPS
-certificates only** and turn Funnel off; TautWeekly never needs public Funnel
-access.
+Create and enable a unique Manager password under **Settings > Browser
+access** before Funnel can be enabled. The enable control stays unavailable
+without it and links back to password setup. Funnel makes the Manager login
+page publicly reachable over HTTPS; there is no read-only role. This release
+adds no new Internet login-attempt limiter, so brute-force attempts remain a
+risk even though the existing Manager authentication protections stay active.
 
-The Windows Manager password remains optional. With the lock off, every user or
-device permitted by the tailnet to reach this computer receives full Manager
-administration; there is no read-only remote role. Enabling the independent
-Manager password adds a second login without changing Tailscale membership.
-Local `http://127.0.0.1:8788` remains the recovery path. Disable blocks the saved
-private hostname locally before attempting to remove the owned Serve route.
+Turning Funnel on or off, or choosing **Verify with Windows**, requests a normal
+Windows administrator confirmation. Manager itself stays unelevated. The fixed
+helper accepts only exact typed operations for the fixed loopback target,
+refuses unrelated Tailscale routes, and verifies the postcondition. For Enable
+and Verify, it invokes the system `nslookup.exe` against the fixed `1.1.1.1`
+public resolver so Windows NRPT/MagicDNS cannot intercept the query, then
+performs a certificate-validated TLS handshake to a returned globally routable
+address. The only application-level value the
+check discloses is that public hostname, sent to the fixed resolver and as the
+TLS server name. DNS answers,
+certificates, CLI output, credentials, Manager data, and private network details
+are neither returned nor stored. Opening or refreshing
+Dashboard and the notification-area status never invokes Tailscale.
+
+The green **Active** badge and card glow appear only when the exact local route,
+public DNS, and public TLS checks all pass. If Tailscale saves the route but has
+not published it, the URL remains available while the badge and full card glow
+gold as **Publication pending**. Wait up to 10 minutes and choose **Verify with
+Windows** again. If it remains pending, restart the official Tailscale Windows
+service once and verify again. Do not create an A record, share the machine,
+open a firewall/router port, or install Tailscale on the viewing device.
+The tailnet must have MagicDNS, HTTPS certificates, and a `funnel` node
+attribute that includes this device. The official CLI approval may configure
+those prerequisites, but local `Funnel on` is still not publication proof.
+Open upstream reports show the same DNS-or-TLS failure distinction on Windows,
+Linux, and container hosts; TautWeekly therefore applies the public checks
+without a platform exception.
+
+The Docker-only `AllowFunnel` plus tag-targeted `nodeAttrs` requirement is not
+a Windows recovery step. An untagged member-owned Windows device is already in
+the default member target. Do not edit Tailscale Windows state files or tag the
+device merely to try a container workaround; continue to require independent
+public DNS and trusted TLS.
+
+Once the public address resolves, links to the Manager render a TautWeekly
+large-card preview with a concise title and description. The preview image and
+favicon are served by the Windows Manager itself; canonical preview URLs use
+only its validated Funnel Host, never browser-forwarded host or scheme headers.
+The login shell remains marked no-index.
+
+Local `http://127.0.0.1:8788` remains the recovery path. Disabling the password
+lock, using the access-reset shortcut, or uninstalling first disables and
+verifies the exact TautWeekly Funnel. If that cannot be verified, the password
+or application remains in place. Changing the password keeps Funnel available
+and keeps the current session while revoking other sessions. An ordinary
+restart preserves the selected persistent Funnel for the next process.
+Explicit notification-area Exit and installer update first disable and verify
+the exact route; Funnel remains off for explicit re-enable after update.
+Removal preserves the private data directory after safe cleanup.
 
 ## Notification area and sign-in startup
 
@@ -169,6 +213,10 @@ Manager:
   to bring an existing visible Dashboard browser window to the foreground,
   opening one only when no Dashboard window is available. Opening TautWeekly
   again also reuses this same Manager; it does not create a second server, tray
+
+- The hover text and status action show only a sanitized Funnel state such as
+  active, inactive, or needs attention. They never display the `.ts.net`
+  hostname or other Tailscale identity.
   process, or visible duplicate Dashboard window.
 - Right-click to see one native status row: **Healthy**, **Needs attention**, or
   **Failed**. The row includes a colored native menu icon, while the text keeps

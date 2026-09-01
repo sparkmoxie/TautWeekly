@@ -21,7 +21,7 @@ const (
 	updateCacheSchemaVersion  = 1
 	maximumUpdateCacheBytes   = 16 << 10
 	maximumReleaseBytes       = 256 << 10
-	currentHostAdapterAPI     = "3"
+	currentHostAdapterAPI     = "4"
 	stableReleaseEndpoint     = "https://api.github.com/repos/sparkmoxie/TautWeekly/releases/latest"
 	stableReleaseBaseURL      = "https://github.com/sparkmoxie/TautWeekly/releases/tag/v"
 	stableReleaseDownloadURL  = "https://github.com/sparkmoxie/TautWeekly/releases/download/v"

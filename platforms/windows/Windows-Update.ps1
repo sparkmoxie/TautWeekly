@@ -323,11 +323,7 @@ function Stop-InstalledManager {
     return $true
 }
 
-function Start-InstalledManager {
-    $managerPath = Join-Path $InstallRoot 'tautweekly-manager.exe'
-    if (-not (Test-Path -LiteralPath $managerPath -PathType Leaf)) {
-        throw 'The packaged Manager executable is unavailable after the update.'
-    }
+function Resolve-ManagerDataRoot {
     $dataRoot = if ([string]::IsNullOrWhiteSpace($ManagerDataRoot)) { Join-Path $InstallRoot '.manager-data' } else { [IO.Path]::GetFullPath($ManagerDataRoot) }
     if ([string]::IsNullOrWhiteSpace($ManagerDataRoot)) {
         $installMetadata = Join-Path $InstallRoot 'INSTALL-METADATA.txt'
@@ -342,6 +338,53 @@ function Start-InstalledManager {
             }
         }
     }
+    return [IO.Path]::GetFullPath($dataRoot)
+}
+
+function Disable-InstalledPublicRoute {
+    $dataRoot = Resolve-ManagerDataRoot
+    $funnelState = Join-Path $dataRoot 'windows-funnel.json'
+    $legacyState = Join-Path $dataRoot 'remote-access.json'
+    if (-not (Test-Path -LiteralPath $funnelState -PathType Leaf) -and
+        -not (Test-Path -LiteralPath $legacyState -PathType Leaf)) {
+        return
+    }
+    $managerPath = Join-Path $InstallRoot 'tautweekly-manager.exe'
+    if (-not (Test-Path -LiteralPath $managerPath -PathType Leaf)) {
+        throw 'Update stopped because the existing Manager cannot verify public Funnel shutdown.'
+    }
+    & $managerPath remote-access-cleanup `
+        "--data-dir=$dataRoot" `
+        "--tautweekly-root=$InstallRoot" `
+        --listen=127.0.0.1:8788 `
+        --confirm
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Update stopped because the exact TautWeekly Funnel could not be disabled and verified.'
+    }
+}
+
+function Get-HealthyManagerListenerProcessIds {
+    try {
+        $health = Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/health/live' -TimeoutSec 2
+        $setup = Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/api/v1/setup' -TimeoutSec 2
+        if ([string]$health.status -ne 'alive' -or $null -eq $setup.PSObject.Properties['paired']) { return @() }
+        return @(Get-NetTCPConnection -State Listen -LocalPort 8788 -ErrorAction Stop |
+            Where-Object { [string]$_.LocalAddress -in @('127.0.0.1', '::1') } |
+            Select-Object -ExpandProperty OwningProcess -Unique)
+    }
+    catch { return @() }
+}
+
+function Start-InstalledManager {
+    $managerPath = Join-Path $InstallRoot 'tautweekly-manager.exe'
+    if (-not (Test-Path -LiteralPath $managerPath -PathType Leaf)) {
+        throw 'The packaged Manager executable is unavailable after the update.'
+    }
+    $reportedVersion = @(& $managerPath version 2>$null | Select-Object -First 1)
+    if ($LASTEXITCODE -ne 0 -or $reportedVersion.Count -ne 1 -or [string]$reportedVersion[0] -ne "TautWeekly Manager $TargetVersion") {
+        throw 'The packaged Manager executable does not report the requested update version.'
+    }
+    $dataRoot = Resolve-ManagerDataRoot
     if (-not (Test-Path -LiteralPath $dataRoot -PathType Container)) {
         New-Item -ItemType Directory -Path $dataRoot | Out-Null
     }
@@ -351,14 +394,14 @@ function Start-InstalledManager {
     do {
         Start-Sleep -Milliseconds 200
         if ($process.HasExited) {
+            $otherOwners = @(Get-HealthyManagerListenerProcessIds)
+            if ($otherOwners.Count -gt 0 -and $otherOwners -notcontains $process.Id) {
+                throw 'A different TautWeekly Manager installation still owns 127.0.0.1:8788. Exit that Manager and run Setup from the installation you intend to update.'
+            }
             throw "The packaged Manager stopped during restart with exit code $($process.ExitCode)."
         }
-        try {
-            $health = Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/health/live' -TimeoutSec 2
-            $setup = Invoke-RestMethod -UseBasicParsing -Uri 'http://127.0.0.1:8788/api/v1/setup' -TimeoutSec 2
-            if ([string]$health.status -eq 'alive' -and $null -ne $setup.PSObject.Properties['paired']) { return }
-        }
-        catch { }
+        $owners = @(Get-HealthyManagerListenerProcessIds)
+        if ($owners -contains $process.Id) { return }
     } while ((Get-Date) -lt $deadline)
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
     throw 'The packaged Manager did not become ready after the update.'
@@ -449,6 +492,7 @@ $managerRestarted = $false
 try {
     $operationLock = Enter-TautWeeklyOperationLock -Root $InstallRoot -Purpose "update to $TargetVersion"
 
+    Disable-InstalledPublicRoute
     $managerWasRunning = Stop-InstalledManager
 
     $task = if ($InstallerTestMode) { $null } else { Get-ScheduledNewsletterTask }

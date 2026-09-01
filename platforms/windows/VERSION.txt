@@ -1,3 +1,3 @@
-TautWeekly for Plex Windows v1.10.4
+TautWeekly for Plex Windows v1.11.0
 Platform: Windows PowerShell 5.1+
-Feature: One-click Setup EXE and local Manager
+Feature: Password-gated public Manager access with Tailscale Funnel

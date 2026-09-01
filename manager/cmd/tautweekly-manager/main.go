@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -25,10 +26,11 @@ import (
 var version = "local"
 
 const (
-	runtimeModeWindows = "windows"
-	runtimeModeNAS     = "nas"
-	runtimeModeLinux   = "linux"
-	runtimeModeMac     = "mac"
+	runtimeModeWindows        = "windows"
+	runtimeModeNAS            = "nas"
+	runtimeModeLinux          = "linux"
+	runtimeModeMac            = "mac"
+	tailscaleLifecycleTimeout = 5 * time.Minute
 )
 
 func main() {
@@ -61,6 +63,13 @@ func run(args []string) error {
 			return errors.New("the internal remote-access helper does not accept arguments")
 		}
 		return manager.RunLinuxRemoteAccessHelper(os.Stdin, os.Stdout)
+	case "remote-access-sidecar":
+		if len(args) != 0 {
+			return errors.New("the internal container remote-access helper does not accept arguments")
+		}
+		return manager.RunContainerRemoteAccessHelper()
+	case "remote-access-cleanup":
+		return cleanupRemoteAccess(args)
 	case "status":
 		return printStatus(args)
 	case "shutdown":
@@ -69,7 +78,7 @@ func run(args []string) error {
 		fmt.Printf("TautWeekly Manager %s\n", version)
 		return nil
 	default:
-		return fmt.Errorf("unknown command %q; use serve, open, access-reset, access-bootstrap, access-recover, status, shutdown, or version", command)
+		return fmt.Errorf("unknown command %q; use serve, open, access-reset, access-bootstrap, access-recover, remote-access-cleanup, status, shutdown, or version", command)
 	}
 }
 
@@ -105,7 +114,7 @@ func serve(args []string) error {
 	hostAdapterVersion := flags.String("host-adapter-version", os.Getenv("TAUTWEEKLY_HOST_ADAPTER_API"), "host adapter compatibility version")
 	updateChannel := flags.String("update-channel", os.Getenv("TAUTWEEKLY_UPDATE_CHANNEL"), "release update channel (stable)")
 	allowedHosts := flags.String("allowed-hosts", os.Getenv("TAUTWEEKLY_MANAGER_ALLOWED_HOSTS"), "comma-separated DNS hostnames accepted by a network-reachable Manager")
-	secureCookies := flags.Bool("secure-cookies", envBoolean("TAUTWEEKLY_MANAGER_SECURE_COOKIES"), "require HTTPS-secure session cookies behind a TLS reverse proxy")
+	secureCookies := flags.Bool("secure-cookies", envBoolean("TAUTWEEKLY_MANAGER_SECURE_COOKIES"), "force HTTPS-secure session cookies for a fixed trusted ingress")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -198,18 +207,37 @@ func serve(args []string) error {
 	signals := make(chan os.Signal, 2)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)
-	go func() {
-		<-signals
-		requestShutdown()
-	}()
+	go waitForVerifiedShutdownSignal(
+		signals,
+		server.EnsurePublicRemoteAccessInactive,
+		requestShutdown,
+		func(err error) {
+			log.Printf("WARNING: Manager stayed open because the TautWeekly Funnel could not be disabled and verified: %v", err)
+		},
+	)
 	if shutdownRequested := instance.ShutdownRequested(); shutdownRequested != nil {
 		go func() {
 			<-shutdownRequested
+			ctx, cancel := context.WithTimeout(context.Background(), tailscaleLifecycleTimeout)
+			defer cancel()
+			if err := server.EnsurePublicRemoteAccessInactive(ctx); err != nil {
+				log.Printf("WARNING: Manager stayed open because the TautWeekly Funnel could not be disabled and verified: %v", err)
+				return
+			}
 			requestShutdown()
 		}()
 	}
 	var tray managerTray = disabledManagerTray{}
 	if mode == runtimeModeWindows {
+		requestSafeExit := func() {
+			ctx, cancel := context.WithTimeout(context.Background(), tailscaleLifecycleTimeout)
+			defer cancel()
+			if err := server.EnsurePublicRemoteAccessInactive(ctx); err != nil {
+				log.Printf("WARNING: Manager stayed open because the TautWeekly Funnel could not be disabled and verified: %v", err)
+				return
+			}
+			requestShutdown()
+		}
 		tray, err = startManagerTray(trayOptions{
 			IconPath: filepath.Join(*rootDir, "TautWeekly.ico"),
 			Status: func(ctx context.Context) trayHealth {
@@ -220,12 +248,30 @@ func serve(args []string) error {
 				})
 				return trayHealthFromOverall(snapshot.Overall)
 			},
+			RemoteStatus: func(ctx context.Context) string {
+				status := server.RemoteAccessStatus(ctx)
+				if status.NetworkKind != "public-funnel" {
+					return ""
+				}
+				switch status.State {
+				case "active":
+					return "Funnel active"
+				case "starting":
+					return "Funnel starting"
+				case "stopping":
+					return "Funnel stopping"
+				case "inactive", "manager-password-required":
+					return "Funnel inactive"
+				default:
+					return "Funnel needs attention"
+				}
+			},
 			Open: func() {
 				if err := openLocalBrowser(startURL); err != nil {
 					log.Printf("WARNING: the local browser could not be opened from the notification area: %v", err)
 				}
 			},
-			Exit: requestShutdown,
+			Exit: requestSafeExit,
 		})
 		if err != nil {
 			_ = listener.Close()
@@ -256,6 +302,20 @@ func serve(args []string) error {
 		return nil
 	}
 	return err
+}
+
+func waitForVerifiedShutdownSignal(signals <-chan os.Signal, ensureInactive func(context.Context) error, requestShutdown func(), reportFailure func(error)) {
+	for range signals {
+		ctx, cancel := context.WithTimeout(context.Background(), tailscaleLifecycleTimeout)
+		err := ensureInactive(ctx)
+		cancel()
+		if err != nil {
+			reportFailure(err)
+			continue
+		}
+		requestShutdown()
+		return
+	}
 }
 
 func waitForExistingManager(address string) error {
@@ -320,13 +380,57 @@ func resetAccess(args []string) error {
 	}
 	flags := flag.NewFlagSet("access-reset", flag.ContinueOnError)
 	dataDir := flags.String("data-dir", filepath.Join(root, ".manager-data"), "private manager state directory")
+	rootDir := flags.String("tautweekly-root", root, "TautWeekly package directory")
+	listen := flags.String("listen", "127.0.0.1:8788", "loopback address for the local manager")
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if err := requireLoopback(*listen); err != nil {
+		return err
+	}
+	if err := manager.CleanupPublicRemoteAccess(context.Background(), manager.Options{
+		DataDir: *dataDir, TautWeeklyRoot: *rootDir, ListenAddress: *listen, RuntimeMode: runtimeModeWindows,
+	}); err != nil {
+		return errors.New("the Manager password lock stayed enabled because public Funnel shutdown could not be verified")
 	}
 	if err := manager.ResetLocalAccess(*dataDir); err != nil {
 		return err
 	}
 	fmt.Println("The optional local Manager password lock is disabled. TautWeekly configuration and runtime data were not changed.")
+	return nil
+}
+
+func cleanupRemoteAccess(args []string) error {
+	defaultMode := localRuntimeMode()
+	if defaultMode == "" {
+		return errors.New("integrated public Funnel cleanup is unavailable on this operating system")
+	}
+	root, err := defaultTautWeeklyRoot()
+	if err != nil {
+		return err
+	}
+	flags := flag.NewFlagSet("remote-access-cleanup", flag.ContinueOnError)
+	dataDir := flags.String("data-dir", filepath.Join(root, ".manager-data"), "private manager state directory")
+	rootDir := flags.String("tautweekly-root", root, "TautWeekly package directory")
+	listen := flags.String("listen", "127.0.0.1:8788", "loopback address for the local manager")
+	runtimeMode := flags.String("runtime-mode", defaultMode, "integrated package runtime: windows, linux, nas, or mac")
+	packageKind := flags.String("package-kind", os.Getenv("TAUTWEEKLY_PACKAGE_KIND"), "fixed package adapter identity")
+	confirm := flags.Bool("confirm", false, "confirm disabling only the TautWeekly-owned Funnel")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if !*confirm {
+		return errors.New("public Funnel cleanup requires --confirm")
+	}
+	if err := requireRemoteAccessCleanupListen(*runtimeMode, *listen); err != nil {
+		return err
+	}
+	if err := manager.CleanupPublicRemoteAccess(context.Background(), manager.Options{
+		DataDir: *dataDir, TautWeeklyRoot: *rootDir, ListenAddress: *listen, RuntimeMode: *runtimeMode, PackageKind: *packageKind,
+	}); err != nil {
+		return errors.New("the TautWeekly-owned Funnel could not be disabled and verified")
+	}
+	fmt.Println("The TautWeekly-owned public Funnel is inactive. No Tailscale account, device, or unrelated route was changed.")
 	return nil
 }
 
@@ -347,12 +451,26 @@ func showBootstrapToken(args []string) error {
 func recoverRequiredAccess(args []string) error {
 	flags := flag.NewFlagSet("access-recover", flag.ContinueOnError)
 	dataDir := flags.String("data-dir", ".manager-data", "private manager state directory")
+	rootDir := flags.String("tautweekly-root", ".", "TautWeekly package directory")
+	listen := flags.String("listen", "127.0.0.1:8788", "loopback address for the local manager")
+	runtimeMode := flags.String("runtime-mode", "", "optional integrated public-Funnel runtime: windows, linux, nas, or mac")
+	packageKind := flags.String("package-kind", os.Getenv("TAUTWEEKLY_PACKAGE_KIND"), "fixed package adapter identity")
 	confirm := flags.Bool("confirm", false, "confirm resetting only Manager authentication")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if !*confirm {
 		return errors.New("access recovery requires --confirm")
+	}
+	if *runtimeMode != "" {
+		if err := requireRemoteAccessCleanupListen(*runtimeMode, *listen); err != nil {
+			return err
+		}
+		if err := manager.CleanupPublicRemoteAccess(context.Background(), manager.Options{
+			DataDir: *dataDir, TautWeeklyRoot: *rootDir, ListenAddress: *listen, RuntimeMode: *runtimeMode, PackageKind: *packageKind,
+		}); err != nil {
+			return errors.New("Manager authentication stayed in place because public Funnel shutdown could not be verified")
+		}
 	}
 	if err := manager.RecoverRequiredAccess(*dataDir); err != nil {
 		return err
@@ -361,9 +479,34 @@ func recoverRequiredAccess(args []string) error {
 	return nil
 }
 
+func requireRemoteAccessCleanupListen(mode, listen string) error {
+	switch mode {
+	case runtimeModeWindows, runtimeModeLinux:
+		return requireLoopback(listen)
+	case runtimeModeNAS, runtimeModeMac:
+		if strings.TrimSpace(listen) != "0.0.0.0:8080" {
+			return errors.New("container public Funnel cleanup requires the fixed internal Manager listener 0.0.0.0:8080")
+		}
+		return nil
+	default:
+		return errors.New("public Funnel cleanup runtime must be windows, linux, nas, or mac")
+	}
+}
+
 func envBoolean(name string) bool {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv(name)))
 	return value == "1" || value == "true" || value == "yes" || value == "on"
+}
+
+func localRuntimeMode() string {
+	switch runtime.GOOS {
+	case "windows":
+		return runtimeModeWindows
+	case "linux":
+		return runtimeModeLinux
+	default:
+		return ""
+	}
 }
 
 func splitAllowedHosts(value string) []string {
