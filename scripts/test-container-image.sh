@@ -18,6 +18,23 @@ funnel_container_started=false
 named_container_started=false
 named_volume_created=false
 
+remove_runtime_temp_dir() {
+  local path="$1"
+  [[ -d "$path" ]] || return 0
+  if rm -rf "$path" 2>/dev/null; then
+    return 0
+  fi
+  docker run --rm \
+    --network none \
+    --read-only \
+    --user 0:0 \
+    --entrypoint /bin/sh \
+    -v "$path:/cleanup" \
+    "$image" \
+    -c 'find /cleanup -mindepth 1 -delete' >/dev/null 2>&1 || true
+  rm -rf "$path"
+}
+
 cleanup() {
   if [[ "$container_started" == true ]]; then
     docker rm -f "$container_name" >/dev/null 2>&1 || true
@@ -31,7 +48,9 @@ cleanup() {
   if [[ "$named_volume_created" == true ]]; then
     docker volume rm -f "$named_volume" >/dev/null 2>&1 || true
   fi
-  rm -rf "$data_root" "$funnel_data_root" "$funnel_state_root"
+  remove_runtime_temp_dir "$data_root"
+  remove_runtime_temp_dir "$funnel_data_root"
+  remove_runtime_temp_dir "$funnel_state_root"
   if [[ -n "$generated_context" ]]; then
     rm -rf "$generated_context"
   fi

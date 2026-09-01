@@ -94,7 +94,10 @@ func TestLinuxTailscaleRunnerUsesOnlyAuthorizedSocketProtocol(t *testing.T) {
 func TestLinuxTailscaleRunnerDistinguishesInstallationAndHostAuthorization(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "tailscale")
-	runner := &linuxTailscaleRunner{socket: filepath.Join(root, "missing.sock"), target: linuxRemoteAccessTarget, tailscalePath: path}
+	runner := &linuxTailscaleRunner{
+		socket: filepath.Join(root, "missing.sock"), target: linuxRemoteAccessTarget,
+		tailscalePath: path, requireLocalCLI: true,
+	}
 	if runner.Availability() != "not-installed" {
 		t.Fatalf("missing CLI availability: %s", runner.Availability())
 	}
@@ -107,6 +110,15 @@ func TestLinuxTailscaleRunnerDistinguishesInstallationAndHostAuthorization(t *te
 }
 
 func TestLinuxRuntimeSelectsIntegratedFunnelAdaptersForFixedNativeAndContainerServices(t *testing.T) {
+	root := t.TempDir()
+	tailscalePath := filepath.Join(root, "tailscale")
+	if err := os.WriteFile(tailscalePath, []byte("fixture"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	originalFind := findFixedLinuxTailscalePath
+	findFixedLinuxTailscalePath = func() string { return tailscalePath }
+	t.Cleanup(func() { findFixedLinuxTailscalePath = originalFind })
+
 	integrated := newPlatformRemoteAccessController(Options{
 		RuntimeMode: runtimeModeLinux, ListenAddress: "127.0.0.1:8788", DataDir: t.TempDir(),
 	})

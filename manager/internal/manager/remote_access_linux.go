@@ -81,6 +81,8 @@ func fixedLinuxTailscalePath() string {
 	return ""
 }
 
+var findFixedLinuxTailscalePath = fixedLinuxTailscalePath
+
 func (r *linuxTailscaleRunner) Availability() string {
 	if r == nil {
 		return "not-installed"
@@ -88,7 +90,7 @@ func (r *linuxTailscaleRunner) Availability() string {
 	if r.requireLocalCLI {
 		path := r.tailscalePath
 		if path == "" {
-			path = fixedLinuxTailscalePath()
+			path = findFixedLinuxTailscalePath()
 		}
 		info, err := os.Lstat(path)
 		if err != nil || !info.Mode().IsRegular() {
