@@ -935,6 +935,10 @@ $nasComparisonRow = @($rootReadme -split "`r?`n" | Where-Object { $_ -match '^\|
 if ($nasComparisonRow.Count -ne 1 -or -not $nasComparisonRow[0].Contains("[Unraid Apps]($unraidCatalogUrl)")) {
     throw 'The NAS platform comparison row must retain its direct Unraid Apps catalog link.'
 }
+$docsIndex = [IO.File]::ReadAllText((Join-Path $docs 'index.html'))
+if (-not $docsIndex.Contains("<a href=`"$unraidCatalogUrl`">Unraid Apps</a>")) {
+    throw 'The NAS / Docker landing-page card must retain its direct Unraid Apps catalog link.'
+}
 
 $markdownFiles = Get-ChildItem -LiteralPath $Root -Recurse -File -Filter '*.md' | Where-Object {
     $_.FullName -notmatch '[\\/]\.git(?:[\\/]|$)'
