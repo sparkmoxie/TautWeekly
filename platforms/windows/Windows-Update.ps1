@@ -299,26 +299,20 @@ function Get-InstalledManagerProcesses {
 function Stop-InstalledManager {
     $managerProcesses = @(Get-InstalledManagerProcesses)
     if ($managerProcesses.Count -eq 0) { return $false }
-    $managerPath = Join-Path $InstallRoot 'tautweekly-manager.exe'
-    try {
-        & $managerPath shutdown --listen=127.0.0.1:8788 "--tautweekly-root=$InstallRoot" 2>$null
-    }
-    catch { }
-    $deadline = (Get-Date).AddSeconds(10)
+    # The ordinary shutdown command deliberately disables and verifies Funnel.
+    # An update-internal restart must preserve the retained preference and fixed route.
     foreach ($managerProcess in $managerProcesses) {
-        $remaining = [Math]::Max(0, [int]($deadline - (Get-Date)).TotalMilliseconds)
-        if (-not $managerProcess.HasExited -and $remaining -gt 0) {
-            [void]$managerProcess.WaitForExit($remaining)
+        if (-not $managerProcess.HasExited) {
+            Stop-Process -Id $managerProcess.Id -Force -ErrorAction Stop
         }
     }
-    $remainingProcesses = @(Get-InstalledManagerProcesses)
-    foreach ($managerProcess in $remainingProcesses) {
-        Stop-Process -Id $managerProcess.Id -Force -ErrorAction Stop
-    }
-    foreach ($managerProcess in $remainingProcesses) {
-        if (-not $managerProcess.WaitForExit(10000)) {
+    foreach ($managerProcess in $managerProcesses) {
+        if (-not $managerProcess.HasExited -and -not $managerProcess.WaitForExit(10000)) {
             throw 'The exact packaged Manager process did not stop for the update.'
         }
+    }
+    if (@(Get-InstalledManagerProcesses).Count -ne 0) {
+        throw 'The exact packaged Manager process is still running after the update stop.'
     }
     return $true
 }

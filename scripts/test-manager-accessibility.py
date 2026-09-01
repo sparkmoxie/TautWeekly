@@ -358,12 +358,12 @@ def main() -> int:
         failures.append("Dashboard Funnel row does not use the animated tooltip contract or retains a native title")
     if 'id="access-status-button"' not in html or html.find('id="tailscale-status-button"') <= html.find('id="access-status-button"'):
         failures.append("Tailscale Funnel status badge is not placed immediately after the access lock")
-    if 'id="icon-tailscale" viewBox="0 0 512 512"' not in html or "cdn.jsdelivr.net" in combined:
+    tailscale_button_start = html.find('id="tailscale-status-button"')
+    tailscale_button_end = html.find("</button>", tailscale_button_start)
+    tailscale_button = html[tailscale_button_start:tailscale_button_end]
+    if tailscale_button_start < 0 or tailscale_button_end < 0 or 'class="tailscale-logo" viewBox="0 0 512 512"' not in tailscale_button or "cdn.jsdelivr.net" in combined:
         failures.append("Tailscale status badge is not bundled locally from the approved SVG geometry")
-    tailscale_symbol_start = html.find('id="icon-tailscale" viewBox="0 0 512 512"')
-    tailscale_symbol_end = html.find("</symbol>", tailscale_symbol_start)
-    tailscale_symbol = html[tailscale_symbol_start:tailscale_symbol_end]
-    if tailscale_symbol_start < 0 or tailscale_symbol_end < 0 or tailscale_symbol.count("<path") != 7 or tailscale_symbol.count('class="tailscale-fade"') != 4:
+    if tailscale_button.count("<path") != 7 or tailscale_button.count('class="tailscale-fade"') != 4 or "<use" in tailscale_button:
         failures.append("Tailscale status badge does not retain the upstream seven-path geometry and four muted path groups")
     for marker in (
         "function funnelIntegrationPresentation(remote)",
@@ -391,17 +391,17 @@ def main() -> int:
     if ".tailscale-settings-panel{scroll-margin-top:90px" not in css:
         failures.append("Dashboard Funnel deep link does not clear the sticky header at the beginning of the card")
     if (
-        '.tailscale-status-button .tailscale-logo{width:21px;height:21px;display:block;fill:#f0f0f0}' not in css
-        or '.tailscale-status-button .tailscale-logo path{opacity:.2' not in css
+        '.tailscale-status-button .tailscale-logo{width:21px;height:21px;display:block}' not in css
+        or '.tailscale-status-button .tailscale-logo path{fill:#f0f0f0;opacity:.2' not in css
         or '.tailscale-status-button.active .tailscale-logo path:not(.tailscale-fade){opacity:1}' not in css
         or '.tailscale-status-button.active .tailscale-fade{opacity:.2}' not in css
     ):
         failures.append("Tailscale badge does not preserve the exact upstream active/default and uniform off SVG appearances")
     if '((remote.state === "active" && remote.active === true) || remote.state === "starting")' not in javascript:
         failures.append("Tailscale badge active color is not restricted to active or publication-pending state")
-    expected_mode_badge = 'setText("mode-pill-label", nas ? "NAS / container" : linux ? "Native Linux" : mac ? "macOS Docker" : "Windows");'
+    expected_mode_badge = 'setText("mode-pill-label", nas ? "NAS / container" : linux ? "Native Linux" : mac ? "macOS Docker" : "Windows Manager");'
     if expected_mode_badge not in javascript:
-        failures.append("Package badge does not use the compact Windows and macOS Docker labels")
+        failures.append("Package badge does not use the Windows Manager and compact macOS Docker labels")
     if 'button.dataset.tooltip = tooltip;' not in javascript or 'button.setAttribute("aria-label", tooltip);' not in javascript:
         failures.append("Tailscale badge tooltip does not reflect its exact retained state")
     if "funnelValue.title" in javascript or "funnelLink.disabled" in javascript:
@@ -619,8 +619,8 @@ def main() -> int:
         failures.append("Manager connection-boundary copy still claims Header Refresh performs no network work")
     if 'Update available — Version' in args.html.read_text(encoding="utf-8"):
         failures.append("static header markup exposes a stale update version before validated state is rendered")
-    if ".update-status-button" not in css or "color:var(--violet)" not in css or "animation:hero-pulse" not in css:
-        failures.append("header update notification does not reuse the violet badge and established halo pulse")
+    if ".update-status-button" not in css or "color:var(--blue)" not in css or "rgba(114,174,247,.44)" not in css or "animation:hero-pulse" not in css:
+        failures.append("header update notification does not reuse the Manager blue badge and established halo pulse")
     if 'case "update-available": return { label: "Update available", tone: "update-available"' not in javascript or ".state-chip.update-available" not in css or "animation:state-pulse-update" not in css:
         failures.append("update-available status chip does not use the dedicated violet pulse")
     if "forced-colors:active" not in css or ".update-status-halo{animation:none!important" not in css:
