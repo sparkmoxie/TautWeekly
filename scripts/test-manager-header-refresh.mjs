@@ -510,3 +510,51 @@ assert.match(functionSource(productionJS, "recoverPendingPreviewsFromChoices"), 
 assert.doesNotMatch(functionSource(productionJS, "refreshApplicationStatus"), /recoverPendingPreviewsFromChoices/, "header Refresh directly inherited setup-preview recovery");
 
 console.log("[PASS] Header Refresh local-first Tautulli/update parity, cooldown expiry, confirmation, concurrency, failure isolation, entry, and manual contracts.");
+// Schedule summaries refreshed with status must present configured wall-clock values,
+// including noon/midnight, without changing saved fields or timezone context.
+for (const [name, source] of [["Manager", productionJS], ["preview", previewJS]]) {
+  for (const [provider, label] of [["windows-task-scheduler", "local Windows time"], ["embedded-linux", "in the configured service timezone"]]) {
+    const nodes = new Map();
+    const node = (id) => {
+      if (!nodes.has(id)) nodes.set(id, { classList: { add() {}, toggle() {} }, checked: true });
+      return nodes.get(id);
+    };
+    const state = {
+      status: { schedule: { provider, supported: true, installed: false, owned: true, state: "ready" } },
+      editor: { state: "ready", fields: [{ name: "ScheduleDay", value: "Friday" }, { name: "ScheduleTime", value: "15:30" }] },
+      capabilities: { scheduleActions: ["install", "enable"] },
+      schedulePendingAction: provider.startsWith("embedded-") ? "enable" : "install",
+    };
+    const context = vm.createContext({ state, byId: node, document: { querySelectorAll: () => [] },
+      setText: (id, text) => { node(id).textContent = text; }, setChip() {},
+      setSwappingText() {}, setSwappingButtonText() {}, operationIsActive: () => false,
+      embeddedRuntimeLabel: () => "service", isServiceRuntime: () => provider.startsWith("embedded-"),
+      isLinuxService: () => true, isMacDocker: () => false,
+      formatDate: () => "Not recorded", yesNo: String, titleCase: String, renderScheduleOperation() {},
+    });
+    vm.runInContext(["formatScheduleTime", "configEditorValue", "scheduleOperationIsActive", "scheduleActionCopy", "renderSchedule"]
+      .map((fn) => functionSource(source, fn)).join("\n"), context);
+    for (const [saved, display] of [["15:30", "3:30 PM"], ["00:00", "12:00 AM"], ["00:05", "12:05 AM"],
+      ["09:30", "9:30 AM"], ["11:59", "11:59 AM"], ["12:00", "12:00 PM"], ["12:05", "12:05 PM"], ["23:59", "11:59 PM"]]) {
+      state.editor.fields[1].value = saved;
+      for (const installed of [false, true]) {
+        state.status.schedule.installed = installed;
+        vm.runInContext("renderSchedule()", context);
+        assert.equal(node("schedule-configured-window").textContent, `Friday at ${display} ${label}`, name);
+        assert.ok(node("schedule-confirmation-copy").textContent.includes(`Friday at ${display} ${label}`), name);
+        assert.equal(state.editor.fields[1].value, saved, "rendering must preserve saved HH:mm");
+      }
+    }
+    for (const invalid of ["24:00", "12:60", "bad", null]) {
+      context.invalid = invalid;
+      assert.equal(vm.runInContext("formatScheduleTime(invalid)", context), "Invalid time");
+    }
+    state.editor.fields[1].value = "";
+    vm.runInContext("renderSchedule()", context);
+    assert.equal(node("schedule-configured-window").textContent, `Friday at 9:30 AM ${label}`);
+    state.editor.state = "unconfigured";
+    vm.runInContext("renderSchedule()", context);
+    assert.equal(node("schedule-configured-window").textContent, "Complete configuration first");
+  }
+}
+console.log("[PASS] Manager/preview schedule windows and confirmations use AM/PM while preserving saved time and timezone context.");
