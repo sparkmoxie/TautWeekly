@@ -6,6 +6,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.26.3] - 2026-10-02
+
+### Fixed
+
+- Display the Manager Schedule configured window and its confirmation in 12-hour AM/PM time, preserving the saved 24-hour schedule and its Windows or embedded-runtime timezone.
+
 ## [0.26.2] - 2026-09-09
 
 ### Fixed
