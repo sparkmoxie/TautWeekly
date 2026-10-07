@@ -191,6 +191,16 @@ assert.doesNotMatch(integrationSource.match(/type DiscoveredUser struct \{[\s\S]
 assert.match(previewMock, /\["secret", "user-email-map", "user-bcc-map"\]\.includes\(item\.type\)[\s\S]+type: "secret"/, "the public preview's redacted config response exposes its synthetic address map");
 assert.doesNotMatch(functionSource("renderManagedUserDeliveryAddresses"), /TestEmail/, "managed-user assignments became coupled to TestEmail");
 
+const copyInput = { value: '{"42":["copy@example.org"],"999":null}' };
+const copyContext = { byId: () => copyInput };
+vm.createContext(copyContext);
+vm.runInContext(functionSource("currentHouseholdCopies"), copyContext);
+assert.deepEqual(JSON.parse(JSON.stringify(copyContext.currentHouseholdCopies())), { "42": ["copy@example.org"], "999": [] });
+for (const malformed of ["null", "[]", "bad-json"]) {
+  copyInput.value = malformed;
+  assert.deepEqual(JSON.parse(JSON.stringify(copyContext.currentHouseholdCopies())), {}, "malformed saved copy map crashed guided editing");
+}
+
 const [playwrightModule, browserExecutable, previewURL] = process.argv.slice(2);
 if (playwrightModule || browserExecutable || previewURL) {
   assert(playwrightModule && browserExecutable && previewURL, "browser QA requires PLAYWRIGHT_MODULE, BROWSER_EXE, and PREVIEW_URL");

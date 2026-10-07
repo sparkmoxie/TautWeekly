@@ -1210,7 +1210,11 @@ function clearHouseholdPrimary() {
   document.querySelectorAll("[data-household-primary]").forEach((node) => { node.textContent = "Primary address hidden"; });
 }
 function currentHouseholdCopies() {
-  try { return JSON.parse(byId("config-UserBccAddresses")?.value || "{}"); } catch (_) { return {}; }
+  try {
+    const parsed = JSON.parse(byId("config-UserBccAddresses")?.value || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).map(([id, addresses]) => [id, Array.isArray(addresses) ? addresses.map((address) => String(address ?? "")) : []]));
+  } catch (_) { return {}; }
 }
 function storeHouseholdCopies(assignments) {
   const input = byId("config-UserBccAddresses");
@@ -1223,7 +1227,7 @@ function renderHouseholdCopies() {
   clearHouseholdPrimary();
   container.replaceChildren();
   const saved = state.editor?.fields?.find((field) => field.name === "UserBccAddresses")?.value || {};
-  const savedCount = Object.values(saved).filter((addresses) => addresses.length).length;
+  const savedCount = Object.values(saved).filter((addresses) => Array.isArray(addresses) && addresses.length).length;
   setText("household-copy-count", `${savedCount} saved assignment${savedCount === 1 ? "" : "s"}`);
   const users = discoveredNewsletterUsers();
   const select = byId("household-user-select");
