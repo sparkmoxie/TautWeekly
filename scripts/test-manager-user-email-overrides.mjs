@@ -188,8 +188,18 @@ assert.match(css, /\.managed-user-delivery-row[\s\S]+@media\(max-width:800px\)/,
 assert.match(configSource, /privateConfigKeys[\s\S]+"useremailoverrides"/, "redacted configuration does not classify the address map as private");
 assert.match(integrationSource, /NeedsDeliveryAddress\s+bool\s+`json:"needsDeliveryAddress,omitempty"`/, "sanitized discovery lacks the address-needed signal");
 assert.doesNotMatch(integrationSource.match(/type DiscoveredUser struct \{[\s\S]+?\n\}/)?.[0] || "", /Email/, "sanitized discovery exposes an email field");
-assert.match(previewMock, /\["secret", "user-email-map"\]\.includes\(item\.type\)[\s\S]+type: "secret"/, "the public preview's redacted config response exposes its synthetic address map");
+assert.match(previewMock, /\["secret", "user-email-map", "user-bcc-map"\]\.includes\(item\.type\)[\s\S]+type: "secret"/, "the public preview's redacted config response exposes its synthetic address map");
 assert.doesNotMatch(functionSource("renderManagedUserDeliveryAddresses"), /TestEmail/, "managed-user assignments became coupled to TestEmail");
+
+const copyInput = { value: '{"42":["copy@example.org"],"999":null}' };
+const copyContext = { byId: () => copyInput };
+vm.createContext(copyContext);
+vm.runInContext(functionSource("currentHouseholdCopies"), copyContext);
+assert.deepEqual(JSON.parse(JSON.stringify(copyContext.currentHouseholdCopies())), { "42": ["copy@example.org"], "999": [] });
+for (const malformed of ["null", "[]", "bad-json"]) {
+  copyInput.value = malformed;
+  assert.deepEqual(JSON.parse(JSON.stringify(copyContext.currentHouseholdCopies())), {}, "malformed saved copy map crashed guided editing");
+}
 
 const [playwrightModule, browserExecutable, previewURL] = process.argv.slice(2);
 if (playwrightModule || browserExecutable || previewURL) {
@@ -219,6 +229,20 @@ if (playwrightModule || browserExecutable || previewURL) {
         assert.equal(await input.getAttribute("aria-invalid"), "true");
         await input.fill("shared@example.org");
         assert.equal(await page.locator("#managed-user-address-41003-status").textContent(), "Assigned");
+        const household = page.locator("#household-copies");
+        await household.locator("summary").click();
+        assert(await page.locator("#household-41003-0").isVisible());
+        assert.equal(await page.locator("#household-41003-0").inputValue(), "household@example.org");
+        await household.getByRole("button", { name: "View primary address" }).click();
+        await page.getByText("family-inbox@example.org (fallback)", { exact: true }).waitFor();
+        await page.locator('[data-view="dashboard"]').click();
+        await page.locator('[data-view="configuration"]').click();
+        assert.equal(await page.locator("[data-household-primary]").textContent(), "Primary address hidden");
+        await household.getByRole("button", { name: "Add copy address" }).click();
+        await page.locator("#household-41003-1").fill("second@example.org");
+        assert.equal(JSON.parse(await page.locator("#config-UserBccAddresses").inputValue())["41003"][1], "second@example.org");
+        await household.getByRole("button", { name: "Remove copy 2" }).click();
+        assert.equal(await page.locator("#household-41003-1").count(), 0);
         const metrics = await page.evaluate(() => ({ documentWidth: document.documentElement.scrollWidth, viewportWidth: window.innerWidth }));
         assert(metrics.documentWidth <= metrics.viewportWidth, `${viewport.width}px browser view has horizontal overflow: ${JSON.stringify(metrics)}`);
       } finally {

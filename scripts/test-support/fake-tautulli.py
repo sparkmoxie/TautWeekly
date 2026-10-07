@@ -59,7 +59,10 @@ def virtual_clear_logo_png() -> bytes:
 
 def media_rows(scenario: str) -> dict[str, list[dict[str, object]]]:
     now = int(time.time())
-    old = now - (30 * 86400)
+    # Quiet fallback candidates must be older than the 7-day release window
+    # but inside every calendar month (28-31 days). Thirty days makes the
+    # selected TV episode disappear in shorter months before the assertion.
+    old = now - (14 * 86400)
     movie_added = now if scenario in ("active", "personal-many", "platform-tie", "last-platform", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
     tv_added = now if scenario in ("active", "personal-many", "tv-only", "sparse-episode-metadata", "rating-export-fallback", "direct-rating-optional", "direct-rating-xml-fallback", "direct-episode-rt-fallback", "cache-prime") else old
     rows = {

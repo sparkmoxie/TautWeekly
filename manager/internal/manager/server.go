@@ -317,6 +317,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/checks/smtp-network", s.protected(s.handleRunSMTPNetworkCheck, true))
 	mux.HandleFunc("POST /api/v1/checks/deleted-item-cache", s.protected(s.handleRunDeletedItemCacheCheck, true))
 	mux.HandleFunc("GET /api/v1/discovery/tautulli", s.protected(s.handleTautulliDiscoveryState, false))
+	mux.HandleFunc("POST /api/v1/config/household-primary", s.protected(s.handleHouseholdPrimary, true))
 	mux.HandleFunc("POST /api/v1/discovery/tautulli", s.protected(s.handleTautulliDiscovery, true))
 	mux.HandleFunc("POST /api/v1/operations", s.protected(s.handleCreateOperation, true))
 	mux.HandleFunc("GET /api/v1/operations/current", s.protected(s.handleCurrentOperation, false))

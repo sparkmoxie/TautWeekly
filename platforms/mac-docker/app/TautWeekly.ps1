@@ -29,6 +29,8 @@ $script:TautWeeklyResultStartedAtUtc = [DateTime]::UtcNow
 $script:TautWeeklyResultWritten = $false
 $script:TautWeeklyResultWriting = $false
 $script:TautWeeklyResultSmtpAcceptedCount = 0
+$script:TautWeeklyResultBccAcceptedCount = 0
+$script:TautWeeklyResultBccRejectedCount = 0
 $script:TautWeeklyResultSkippedCount = 0
 $script:TautWeeklyResultFailedCount = 0
 $script:TautWeeklyResultSmtpFailure = $null
@@ -64,6 +66,10 @@ function Write-TautWeeklyStructuredResult {
         return
     }
 
+    if ($Outcome -eq 'succeeded' -and $script:TautWeeklyResultBccRejectedCount -gt 0) {
+        $Outcome = 'partial'
+        $script:TautWeeklyResultErrorCategory = ''
+    }
     $script:TautWeeklyResultWriting = $true
     $temporaryPath = ""
     try {
@@ -82,7 +88,7 @@ function Write-TautWeeklyStructuredResult {
                 Sort-Object -Unique
         )
         $result = [ordered]@{
-            schemaVersion = 3
+            schemaVersion = 4
             mode = [string]$Mode
             outcome = $Outcome
             errorCategory = $(if ($Outcome -in @("failed", "partial")) { [string]$script:TautWeeklyResultErrorCategory } else { "" })
@@ -91,6 +97,8 @@ function Write-TautWeeklyStructuredResult {
             finishedAtUtc = $finishedAtUtc.ToString("o")
             durationMs = $durationMs
             smtpAcceptedCount = [Math]::Max(0, [int]$script:TautWeeklyResultSmtpAcceptedCount)
+            bccAcceptedCount = [int]$script:TautWeeklyResultBccAcceptedCount
+            bccRejectedCount = [int]$script:TautWeeklyResultBccRejectedCount
             skippedCount = [Math]::Max(0, [int]$script:TautWeeklyResultSkippedCount)
             failedCount = [Math]::Max(0, [int]$script:TautWeeklyResultFailedCount)
             smtpFailure = $script:TautWeeklyResultSmtpFailure
@@ -637,6 +645,48 @@ function Assert-TautWeeklyUserEmailOverrides {
 }
 
 Assert-TautWeeklyUserEmailOverrides
+
+function Initialize-TautWeeklyHouseholdCopies {
+    $script:TautWeeklyHouseholdCopies = @{}
+    $property = $Config.PSObject.Properties['UserBccAddresses']
+    if ($null -eq $property) { return }
+    if ($property.Value -isnot [pscustomobject]) { throw 'UserBccAddresses must be an object.' }
+    $entries = @($property.Value.PSObject.Properties)
+    if ($entries.Count -gt 2000) { throw 'UserBccAddresses supports at most 2000 assignments.' }
+    foreach ($entry in $entries) {
+        $id = ([string]$entry.Name).Trim()
+        [UInt64]$number = 0
+        if ($id -notmatch '^[0-9]{1,20}$' -or -not [UInt64]::TryParse($id, [ref]$number) -or $number -eq 0) { throw 'Household source IDs must be nonzero numeric Tautulli IDs.' }
+        $id = $number.ToString()
+        if ($script:TautWeeklyHouseholdCopies.ContainsKey($id)) { throw 'Duplicate household source ID.' }
+        if ($entry.Value -isnot [array] -or $entry.Value.Count -gt 20) { throw 'Assign at most 20 household copy addresses per user.' }
+        $addresses = @()
+        foreach ($value in $entry.Value) {
+            if ($value -isnot [string] -or $value -match '\p{Cc}') { throw 'Household copies require bare email addresses without control characters.' }
+            $address = $value.Trim().ToLowerInvariant()
+            if ($address -eq '') { continue }
+            if (-not (Test-TautWeeklyDeliveryEmailAddress -Address $address)) { throw 'A household copy address is invalid.' }
+            if ($address -notin $addresses) { $addresses += $address }
+        }
+        $script:TautWeeklyHouseholdCopies[$id] = $addresses
+    }
+}
+
+function Get-TautWeeklyHouseholdCopies {
+    param([object]$User)
+    if ($Mode -notin @('SendAll', 'SendWelcome') -or -not [string]::IsNullOrWhiteSpace((Get-UserSkipReason -User $User))) { return }
+    $id = ([UInt64]$User.UserId).ToString()
+    if (-not $script:TautWeeklyHouseholdCopies.ContainsKey($id)) { return }
+    $excluded = @()
+    if ($null -ne $Config.PSObject.Properties['ExcludedEmails']) {
+        $excluded = @($Config.ExcludedEmails | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() })
+    }
+    foreach ($address in $script:TautWeeklyHouseholdCopies[$id]) {
+        if ($address -notin $excluded -and $address -ine $User.DeliveryEmail) { $address }
+    }
+}
+
+Initialize-TautWeeklyHouseholdCopies
 . (Join-Path $ScriptRoot "DeletedItemCache.ps1")
 Initialize-TautWeeklyDeletedItemCache `
     -CacheRoot (Join-Path (Join-Path $DataRoot "cache") "deleted-items") `
@@ -9171,6 +9221,7 @@ ${plexButtonLabel}: $plexWebUrl
 function Send-NewsletterMail {
     param(
         [string]$To,
+        [string[]]$EnvelopeBcc = @(),
         [string]$Subject,
         [string]$Html,
         [string]$PlainText,
@@ -9392,7 +9443,12 @@ function Send-NewsletterMail {
         $mail.AlternateViews.Add($plainView)
         $mail.AlternateViews.Add($htmlView)
 
-        Send-TautWeeklySmtpMessage -MailMessage $mail -Config $Config
+        $delivery = Send-TautWeeklySmtpMessage -MailMessage $mail -Config $Config -EnvelopeBcc $EnvelopeBcc
+        $script:TautWeeklyResultBccAcceptedCount += $delivery.BccAcceptedCount
+        $script:TautWeeklyResultBccRejectedCount += $delivery.BccRejectedCount
+        if ($delivery.BccRejectedCount -gt 0) {
+            Write-Log ("Primary newsletter accepted; {0} household copies accepted and {1} rejected." -f $delivery.BccAcceptedCount, $delivery.BccRejectedCount) "WARN"
+        }
     }
     finally {
         if ($null -ne $mail) { $mail.Dispose() }
@@ -9714,6 +9770,7 @@ if ($Mode -eq "SendWelcome") {
     Write-Log "Sending ONE-OFF welcome to $($user.FriendlyName) <$($user.DeliveryEmail)>..."
     Send-NewsletterMail `
         -To $user.DeliveryEmail `
+        -EnvelopeBcc @(Get-TautWeeklyHouseholdCopies -User $user) `
         -Subject $subject `
         -Html $html `
         -PlainText $plain `
@@ -10546,6 +10603,7 @@ if ($Mode -eq "SendAll") {
             $attemptedSmtp = $true
             Send-NewsletterMail `
                 -To $result.User.DeliveryEmail `
+                -EnvelopeBcc @(Get-TautWeeklyHouseholdCopies -User $result.User) `
                 -Subject $subject `
                 -Html $result.Html `
                 -PlainText $result.Plain `

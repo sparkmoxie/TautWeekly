@@ -49,6 +49,13 @@ class ClassifierTests(unittest.TestCase):
             {"manager", "package", "installer", "container", "container_arm64"},
         )
 
+    def test_household_manager_files_select_consumers(self):
+        self.assert_gates(
+            ["manager/internal/manager/household.go", "manager/internal/manager/household_test.go"],
+            {"manager", "package", "installer", "container", "container_arm64"},
+            {"renderer"},
+        )
+
     def test_installer_does_not_select_renderer_or_container(self):
         self.assert_gates(
             ["installer/cmd/tautweekly-setup/main.go"],

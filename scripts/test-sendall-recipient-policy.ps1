@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [string]$Root = '',
-    [string]$PythonPath = 'python'
+    [string]$PythonPath = 'python',
+    [string]$ScenarioPattern = '*',
+    [string]$EnginePattern = '*'
 )
 
 Set-StrictMode -Version Latest
@@ -49,6 +51,27 @@ function New-VirtualUser([string]$Id, [string]$Email, [int]$Active = 1, [int]$No
 }
 
 $scenarios = @(
+    [PSCustomObject]@{
+        Name = 'household-copies-isolation-and-exclusions'
+        Users = @((New-VirtualUser '1' 'primary@example.org'), (New-VirtualUser '2' ''), (New-VirtualUser '3' 'excluded@example.org'), (New-VirtualUser '4' ''))
+        UserEmailOverrides = [ordered]@{ '2' = 'primary@example.org' }
+        UserBccAddresses = [ordered]@{ '1' = @('copy@example.org', 'COPY@example.org', 'primary@example.org', 'blocked@example.org'); '2' = @('copy@example.org'); '3' = @('excluded-copy@example.org'); '4' = @('missing-copy@example.org'); '999' = @('unavailable@example.org') }
+        ExcludedUserIds = @('3'); ExcludedEmails = @('blocked@example.org')
+        RejectRecipient = ''; FreshAccessState = $false; ExitCode = 0; Outcome = 'succeeded'; ErrorCategory = ''
+        Accepted = 2; Skipped = 2; Failed = 0; Reasons = @(0,1,1,0)
+        ExpectedRecipients = @('primary@example.org','copy@example.org','primary@example.org','copy@example.org')
+        ExpectedConnections = 2; BccAccepted = 2; BccRejected = 0
+    },
+    [PSCustomObject]@{
+        Name = 'household-copy-rejection-keeps-primary'
+        Users = @((New-VirtualUser '1' 'primary@example.org'))
+        UserBccAddresses = [ordered]@{ '1' = @('copy@example.org', 'rejected@example.org') }
+        ExcludedUserIds = @(); ExcludedEmails = @(); RejectRecipient = 'rejected@example.org'
+        FreshAccessState = $false; ExitCode = 0; Outcome = 'partial'; ErrorCategory = ''
+        Accepted = 1; Skipped = 0; Failed = 0; Reasons = @(0,0,0,0)
+        ExpectedRecipients = @('primary@example.org','copy@example.org','rejected@example.org')
+        ExpectedConnections = 1; BccAccepted = 1; BccRejected = 1
+    },
     [PSCustomObject]@{
         Name = 'all-legacy-notify-disabled'
         Users = @(
@@ -129,16 +152,18 @@ $scenarios = @(
         }
         ExcludedUserIds = @()
         ExcludedEmails = @()
-        RejectRecipient = ''
+        UserBccAddresses = [ordered]@{ '1' = @('household@example.org', 'rejected-copy@example.org') }
+        BccAccepted = 1; BccRejected = 1
+        RejectRecipient = 'rejected-copy@example.org'
         FreshAccessState = $false
         ExitCode = 0
-        Outcome = 'succeeded'
+        Outcome = 'partial'
         ErrorCategory = ''
         Accepted = 3
         Skipped = 0
         Failed = 0
         Reasons = @(0, 0, 0, 0)
-        ExpectedRecipients = @('shared-managed@example.com', 'native2@example.com', 'shared-managed@example.com')
+        ExpectedRecipients = @('shared-managed@example.com', 'household@example.org', 'rejected-copy@example.org', 'native2@example.com', 'shared-managed@example.com')
         ExpectedConnections = 3
     },
     [PSCustomObject]@{
@@ -361,7 +386,7 @@ $engines = @(
 )
 
 $executed = 0
-foreach ($engine in $engines) {
+foreach ($engine in @($engines | Where-Object { $_.Name -like $EnginePattern })) {
     if ([string]::IsNullOrWhiteSpace([string]$engine.Host) -or -not (Test-Path -LiteralPath $engine.Host)) {
         Write-Warning "Skipping $($engine.Name) because its PowerShell runtime is unavailable."
         continue
@@ -405,7 +430,7 @@ foreach ($engine in $engines) {
             $configPath = Join-Path $appRoot 'config.json'
         }
 
-        foreach ($scenario in $scenarios) {
+        foreach ($scenario in @($scenarios | Where-Object { $_.Name -like $ScenarioPattern })) {
             $discoveryUsers = if ($null -ne $scenario.PSObject.Properties['DiscoveryUsers']) { @($scenario.DiscoveryUsers) } else { @($scenario.Users) }
             ConvertTo-Json -InputObject @($discoveryUsers) -Depth 8 | Set-Content -LiteralPath $usersFile -Encoding UTF8
             if ($null -ne $scenario.PSObject.Properties['DiscoveryUsers']) {
@@ -428,7 +453,9 @@ foreach ($engine in $engines) {
             $smtpReady = Join-Path $tempRoot ("smtp-$($scenario.Name)-ready.txt")
             $smtpStdout = Join-Path $tempRoot ("smtp-$($scenario.Name).stdout.txt")
             $smtpStderr = Join-Path $tempRoot ("smtp-$($scenario.Name).stderr.txt")
+            $mimeDirectory = Join-Path $tempRoot ("mime-$($engine.Name)-$($scenario.Name)")
             $smtpArguments = @('-u', $fakeSmtp, '--port', [string]$smtpPort, '--call-log', $smtpLog, '--ready-file', $smtpReady)
+            $smtpArguments += @('--data-directory', $mimeDirectory)
             if (-not [string]::IsNullOrWhiteSpace([string]$scenario.RejectRecipient)) {
                 $smtpArguments += @('--reject-recipient', [string]$scenario.RejectRecipient)
             }
@@ -453,6 +480,7 @@ foreach ($engine in $engines) {
                     TautulliUrl = $baseUrl; ApiKey = 'virtual-api-key'; PlexServerUrl = $baseUrl; PlexToken = 'virtual-plex-token'
                     FooterServerName = 'Virtual Plex'; IncludedLibraryIds = @('10', '20')
                     ExcludedUserIds = @($scenario.ExcludedUserIds); ExcludedEmails = @($scenario.ExcludedEmails)
+                    UserBccAddresses = (Get-ScenarioValue -Scenario $scenario -Name 'UserBccAddresses' -Default ([ordered]@{}))
                     UserEmailOverrides = (Get-ScenarioValue -Scenario $scenario -Name 'UserEmailOverrides' -Default ([ordered]@{}))
                     DaysBack = 7; MaxMovies = 2; MaxTv = 2; SendDelaySeconds = [int](Get-ScenarioValue -Scenario $scenario -Name 'SendDelay' -Default 0)
                     SmtpHost = '127.0.0.1'; SmtpPort = $smtpPort; SmtpEnableSsl = $false; SmtpUseAuthentication = ($fakeSmtpMode -eq 'auth-failure'); SmtpTimeoutSeconds = 5
@@ -521,9 +549,10 @@ foreach ($engine in $engines) {
                 Assert-True (Test-Path -LiteralPath $resultPath) "$($engine.Name)/$($scenario.Name) omitted its structured result."
                 $resultRaw = Get-Content -LiteralPath $resultPath -Raw -Encoding UTF8
                 $result = $resultRaw | ConvertFrom-Json
-                Assert-True ($result.schemaVersion -eq 3 -and $result.outcome -eq $scenario.Outcome) "$($engine.Name)/$($scenario.Name) reported schema $($result.schemaVersion) / outcome $($result.outcome) / category $($result.errorCategory), expected 3 / $($scenario.Outcome)."
+                Assert-True ($result.schemaVersion -eq 4 -and $result.outcome -eq $scenario.Outcome) "$($engine.Name)/$($scenario.Name) reported schema $($result.schemaVersion) / outcome $($result.outcome) / category $($result.errorCategory), expected 4 / $($scenario.Outcome)."
                 Assert-True ([string]$result.errorCategory -eq [string]$scenario.ErrorCategory) "$($engine.Name)/$($scenario.Name) reported the wrong fixed error category."
                 Assert-True ($result.smtpAcceptedCount -eq $scenario.Accepted -and $result.skippedCount -eq $scenario.Skipped -and $result.failedCount -eq $scenario.Failed) "$($engine.Name)/$($scenario.Name) reported inconsistent delivery aggregates."
+                Assert-True ($result.bccAcceptedCount -eq [int](Get-ScenarioValue $scenario 'BccAccepted' 0) -and $result.bccRejectedCount -eq [int](Get-ScenarioValue $scenario 'BccRejected' 0)) "Household copy counts did not match final acceptance."
                 $actualReasons = @($result.skipReasonCounts.inactiveOrDeleted, $result.skipReasonCounts.missingEmail, $result.skipReasonCounts.excludedUserId, $result.skipReasonCounts.excludedEmail)
                 Assert-True (($actualReasons -join ',') -eq (@($scenario.Reasons) -join ',')) "$($engine.Name)/$($scenario.Name) reported inconsistent fixed skip reasons."
                 $expectedSmtpCategory = [string](Get-ScenarioValue -Scenario $scenario -Name 'SmtpFailureCategory' -Default '')
@@ -607,6 +636,20 @@ foreach ($engine in $engines) {
                         Assert-True (-not $resultRaw.Contains($privateValue)) "$($engine.Name)/$($scenario.Name) exposed a recipient identity in its structured result."
                     }
                 }
+                $copyMap = Get-ScenarioValue $scenario 'UserBccAddresses' ([ordered]@{})
+                $capturedMime = @(Get-ChildItem -LiteralPath $mimeDirectory -Filter '*.eml' -ErrorAction SilentlyContinue)
+                foreach ($entry in $copyMap.GetEnumerator()) {
+                    foreach ($copy in $entry.Value) {
+                        # Primary addresses may intentionally be present as To.
+                        if (@($scenario.Users | Where-Object { $_.email -ieq $copy }).Count -gt 0) { continue }
+                        Assert-True (-not $resultRaw.ToLowerInvariant().Contains($copy.ToLowerInvariant())) 'Copy address leaked in structured result.'
+                        $logText = [string](Get-Content $stdout -Raw)
+                        Assert-True (-not $logText.ToLowerInvariant().Contains($copy.ToLowerInvariant())) 'Copy address leaked in renderer output.'
+                        foreach ($mime in $capturedMime) {
+                            Assert-True (-not ([IO.File]::ReadAllText($mime.FullName)).ToLowerInvariant().Contains($copy.ToLowerInvariant())) 'Copy address leaked into serialized MIME.'
+                        }
+                    }
+                }
 				$userEmailOverrides = Get-ScenarioValue -Scenario $scenario -Name 'UserEmailOverrides' -Default ([ordered]@{})
 				foreach ($entry in $userEmailOverrides.GetEnumerator()) {
 					Assert-True (-not $resultRaw.Contains([string]$entry.Value)) "$($engine.Name)/$($scenario.Name) exposed a managed-user delivery address in its structured result."
@@ -675,7 +718,14 @@ foreach ($engine in $engines) {
 							Select-Object -Skip $recipientBaseline |
 							ForEach-Object { [regex]::Match([string]$_.command, '^RCPT TO:<([^>]+)>$').Groups[1].Value }
 					)
-					Assert-True (($newRecipients -join ',') -ceq 'test@example.com,shared-managed@example.com') "$($engine.Name) did not isolate SendTest to TestEmail and route SendWelcome to the mapped address: $($newRecipients -join ',')."
+					Assert-True (($newRecipients -join ',') -ceq 'test@example.com,shared-managed@example.com,household@example.org,rejected-copy@example.org') "$($engine.Name) did not isolate SendTest to TestEmail and route SendWelcome to the mapped address: $($newRecipients -join ',')."
+                    $testEvidence = Get-Content $testResultPath -Raw | ConvertFrom-Json
+                    $welcomeEvidence = Get-Content $welcomeResultPath -Raw | ConvertFrom-Json
+                    Assert-True ($testEvidence.bccAcceptedCount -eq 0 -and $testEvidence.bccRejectedCount -eq 0) 'TestEmail included household copies.'
+                    Assert-True ($welcomeEvidence.smtpAcceptedCount -eq 1 -and $welcomeEvidence.bccAcceptedCount -eq 1 -and $welcomeEvidence.bccRejectedCount -eq 1 -and $welcomeEvidence.outcome -eq 'partial') 'Welcome did not preserve primary acceptance with copy warnings.'
+                    $welcomeState = Get-Content $accessStatePath -Raw | ConvertFrom-Json
+                    Assert-True (-not [string]::IsNullOrWhiteSpace([string]$welcomeState.Users.'1'.WelcomeSentUtc)) 'Accepted primary welcome was not recorded.'
+                    Assert-True ($null -eq $welcomeState.Users.PSObject.Properties['household@example.org']) 'A copy created independent welcome state.'
 					foreach ($resultFile in @($testResultPath, $welcomeResultPath)) {
 						$managedResult = Get-Content -LiteralPath $resultFile -Raw -Encoding UTF8
 						Assert-True (-not $managedResult.Contains('shared-managed@example.com')) "$($engine.Name) exposed the mapped address in a renderer result."
@@ -803,7 +853,7 @@ foreach ($engine in $engines) {
                     Assert-True (Test-Path -LiteralPath $testAllResultPath) "$($engine.Name) TestEmail authentication failure omitted its structured result."
                     $testAllResultRaw = Get-Content -LiteralPath $testAllResultPath -Raw -Encoding UTF8
                     $testAllResult = $testAllResultRaw | ConvertFrom-Json
-                    Assert-True ($testAllResult.schemaVersion -eq 3 -and $testAllResult.mode -eq 'SendTestAll' -and $testAllResult.outcome -eq 'failed') "$($engine.Name) TestEmail authentication failure reported an invalid result envelope."
+                    Assert-True ($testAllResult.schemaVersion -eq 4 -and $testAllResult.mode -eq 'SendTestAll' -and $testAllResult.outcome -eq 'failed') "$($engine.Name) TestEmail authentication failure reported an invalid result envelope."
                     Assert-True ([string]$testAllResult.errorCategory -eq 'smtp-auth-failed') "$($engine.Name) TestEmail authentication failure omitted its fixed error category."
                     Assert-True ($testAllResult.smtpAcceptedCount -eq 0 -and $testAllResult.skippedCount -eq 0 -and $testAllResult.failedCount -eq 1) "$($engine.Name) TestEmail authentication failure reported inconsistent aggregates."
                     Assert-True ($null -ne $testAllResult.smtpFailure) "$($engine.Name) TestEmail authentication failure omitted typed SMTP evidence."

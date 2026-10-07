@@ -57,6 +57,8 @@ type OperationRecord struct {
 	FinishedAtUTC       string                    `json:"finishedAtUtc,omitempty"`
 	DurationMS          int64                     `json:"durationMs,omitempty"`
 	DeliveryScope       string                    `json:"deliveryScope,omitempty"`
+	BCCAcceptedCount    int                       `json:"bccAcceptedCount,omitempty"`
+	BCCRejectedCount    int                       `json:"bccRejectedCount,omitempty"`
 	SMTPAcceptedCount   int                       `json:"smtpAcceptedCount,omitempty"`
 	SkippedCount        int                       `json:"skippedCount,omitempty"`
 	FailedCount         int                       `json:"failedCount,omitempty"`
@@ -339,6 +341,8 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 		record.DurationMS = structuredResult.DurationMS
 		record.DeliveryScope = structuredResult.DeliveryScope
 		record.SMTPAcceptedCount = structuredResult.SMTPAcceptedCount
+		record.BCCAcceptedCount = structuredResult.BCCAcceptedCount
+		record.BCCRejectedCount = structuredResult.BCCRejectedCount
 		record.SkippedCount = structuredResult.SkippedCount
 		record.FailedCount = structuredResult.FailedCount
 		record.SMTPFailure = structuredResult.SMTPFailure
@@ -357,7 +361,7 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 		record.Outcome = "failed"
 		record.ErrorCategory = "platform-unsupported"
 		record.SupportCode = operationSupportCode(record.ID)
-	case record.Type == "send-all" && resultErr == nil && structuredResult.Outcome == "partial":
+	case (record.Type == "send-all" || record.Type == "send-welcome") && resultErr == nil && structuredResult.Outcome == "partial":
 		record.State = "partial"
 		record.Outcome = "partial"
 		record.ErrorCategory = structuredResult.ErrorCategory
@@ -445,11 +449,15 @@ func (c *operationCoordinator) finishRecoveredDelivery(record OperationRecord, r
 	record.DurationMS = result.DurationMS
 	record.DeliveryScope = result.DeliveryScope
 	record.SMTPAcceptedCount = result.SMTPAcceptedCount
+	record.BCCAcceptedCount = result.BCCAcceptedCount
+	record.BCCRejectedCount = result.BCCRejectedCount
 	record.SkippedCount = result.SkippedCount
 	record.FailedCount = result.FailedCount
 	record.SkipReasonCounts = result.SkipReasonCounts
+	record.SMTPFailure = result.SMTPFailure
+	record.ErrorCategory = result.ErrorCategory
 	switch {
-	case record.Type == "send-all" && result.Outcome == "partial":
+	case (record.Type == "send-all" || record.Type == "send-welcome") && result.Outcome == "partial":
 		record.State = "partial"
 		record.Outcome = "partial"
 		record.SupportCode = operationSupportCode(record.ID)

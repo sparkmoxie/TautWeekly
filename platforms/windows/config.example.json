@@ -42,6 +42,7 @@
   "IncludedLibraryIds": [],
   "ExcludedUserIds": [],
   "UserEmailOverrides": {},
+  "UserBccAddresses": {},
   "ExcludedEmails": [],
   "RecentAccessDays": 7,
   "SendDelaySeconds": 30

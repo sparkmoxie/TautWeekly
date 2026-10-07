@@ -51,7 +51,7 @@ const state = {
 };
 const byId = (id) => document.getElementById(id);
 const titleCase = (value) => String(value || "unknown").replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-const guidedConfigFields = new Set(["IncludedLibraryIds", "ExcludedUserIds", "UserEmailOverrides"]);
+const guidedConfigFields = new Set(["IncludedLibraryIds", "ExcludedUserIds", "UserEmailOverrides", "UserBccAddresses"]);
 const noTitleGifChoice = Object.freeze({ id: "none", label: "None", file: "" });
 const titleGifChoices = Object.freeze([
   { id: "celebrate", label: "Celebrate", file: "celebrate.gif" },
@@ -770,7 +770,7 @@ function renderStatus() {
     ? deliveryFailureCopy || "Application evidence records SMTP acceptance, not inbox delivery."
     : "Task execution is not presented as SMTP acceptance or inbox delivery.");
   setText("timeline-last-copy", rendererEvidence
-    ? `${snapshot.delivery.smtpAcceptedCount || 0} accepted by SMTP · ${snapshot.delivery.skippedCount || 0} skipped · ${snapshot.delivery.failedCount || 0} failed.`
+    ? `${snapshot.delivery.smtpAcceptedCount || 0} accepted by SMTP · ${snapshot.delivery.skippedCount || 0} skipped · ${snapshot.delivery.failedCount || 0} failed.${householdCopyReport(snapshot.delivery)}`
     : "No sanitized renderer result has been recorded.");
   if (deliveryRunning) {
     setText("delivery-copy", "A production delivery is running. SMTP acceptance will appear automatically when the run finishes.");
@@ -1072,6 +1072,7 @@ function renderConfigEditor() {
   const sections = byId("config-sections");
   clearConfigErrors();
   clearAllRevealedSecrets();
+  clearHouseholdPrimary();
   sections.replaceChildren();
   setChip("config-chip", titleCase(editor.state), editor.state === "ready" ? "good" : editor.valid ? "neutral" : "bad");
   form.hidden = !editor.valid;
@@ -1112,7 +1113,7 @@ function renderConfigEditor() {
     input.type = "hidden";
     input.id = `config-${field.name}`;
     input.name = field.name;
-    input.value = field.type === "user-email-map"
+    input.value = ["user-email-map", "user-bcc-map"].includes(field.type)
       ? JSON.stringify(field.value && typeof field.value === "object" && !Array.isArray(field.value) ? field.value : {})
       : Array.isArray(field.value) ? field.value.join(", ") : field.value ?? "";
     sections.append(input);
@@ -1203,6 +1204,93 @@ function savedListField(name) {
   return Array.isArray(field?.value) ? field.value.map((value) => String(value).trim()).filter(Boolean) : [];
 }
 
+let householdLookupEpoch = 0;
+function clearHouseholdPrimary() {
+  householdLookupEpoch += 1;
+  document.querySelectorAll("[data-household-primary]").forEach((node) => { node.textContent = "Primary address hidden"; });
+}
+function currentHouseholdCopies() {
+  try {
+    const parsed = JSON.parse(byId("config-UserBccAddresses")?.value || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).map(([id, addresses]) => [id, Array.isArray(addresses) ? addresses.map((address) => String(address ?? "")) : []]));
+  } catch (_) { return {}; }
+}
+function storeHouseholdCopies(assignments) {
+  const input = byId("config-UserBccAddresses");
+  if (input) input.value = JSON.stringify(assignments);
+  updateConfigSaveAvailability();
+}
+function renderHouseholdCopies() {
+  const container = byId("household-copy-list");
+  if (!container) return;
+  clearHouseholdPrimary();
+  container.replaceChildren();
+  const saved = state.editor?.fields?.find((field) => field.name === "UserBccAddresses")?.value || {};
+  const savedCount = Object.values(saved).filter((addresses) => Array.isArray(addresses) && addresses.length).length;
+  setText("household-copy-count", `${savedCount} saved assignment${savedCount === 1 ? "" : "s"}`);
+  const users = discoveredNewsletterUsers();
+  const select = byId("household-user-select");
+  const search = byId("household-user-search");
+  const updateChoices = () => {
+    const previous = select.value;
+    select.replaceChildren(new Option("Choose a source user", ""));
+    for (const user of users.filter((user) => user.name.toLowerCase().includes(search.value.toLowerCase()))) {
+      select.add(new Option(user.name, String(user.id)));
+    }
+    select.value = previous;
+  };
+  search.oninput = updateChoices;
+  updateChoices();
+  byId("household-add-user").onclick = () => {
+    if (!validPreviewUserID(select.value)) return;
+    const assignments = currentHouseholdCopies();
+    if (!assignments[select.value]) assignments[select.value] = [];
+    storeHouseholdCopies(assignments);
+    renderHouseholdCopies();
+  };
+  for (const [id, addresses] of Object.entries(currentHouseholdCopies())) {
+    const user = users.find((candidate) => String(candidate.id) === id);
+    const row = document.createElement("section"); row.className = "household-copy-row";
+    const title = document.createElement("h4"); title.textContent = user?.name || `Unavailable user ${id}`;
+    const status = document.createElement("p");
+    status.textContent = !user ? "Unavailable: assignment retained until the user returns." : userExcludedBySavedPolicy(user) ? "Excluded: no copies will be sent." : user.eligibility === "skipped" ? "Inactive: no copies will be sent." : user.needsDeliveryAddress && !savedUserEmailOverrides()[id] ? "No primary address: add a fallback delivery address first." : "Copies follow this user's production newsletter and Manual Welcome.";
+    const primary = document.createElement("p"); primary.dataset.householdPrimary = ""; primary.textContent = "Primary address hidden";
+    const view = document.createElement("button"); view.type = "button"; view.className = "button button-secondary"; view.textContent = "View primary address";
+    view.disabled = !user;
+    view.onclick = async () => {
+      const epoch = authenticationEpoch, lookup = householdLookupEpoch, revision = state.editor?.revision;
+      view.disabled = true;
+      try {
+        const result = await request("/api/v1/config/household-primary", { method: "POST", body: JSON.stringify({ expectedRevision: revision, userId: id }) });
+        if (epoch !== authenticationEpoch || lookup !== householdLookupEpoch || revision !== state.editor?.revision || byId("view-configuration").hidden || !primary.isConnected) return;
+        primary.textContent = result.source === "missing" ? "No primary address" : `${result.address} (${result.source})`;
+      } catch (_) {
+        if (epoch === authenticationEpoch && lookup === householdLookupEpoch && primary.isConnected) primary.textContent = "Address lookup unavailable. Refresh saved configuration and try again.";
+      } finally { if (primary.isConnected) view.disabled = !user; }
+    };
+    const remove = document.createElement("button"); remove.type = "button"; remove.className = "button button-secondary"; remove.textContent = "Remove assignment";
+    remove.onclick = () => { const current = currentHouseholdCopies(); delete current[id]; storeHouseholdCopies(current); renderHouseholdCopies(); };
+    row.append(title, status, view, primary);
+    for (const [index, address] of addresses.entries()) {
+      const line = document.createElement("div"); line.className = "household-address-row";
+      const label = document.createElement("label"); label.htmlFor = `household-${id}-${index}`; label.textContent = `Copy address ${index + 1}`;
+      const input = document.createElement("input"); input.id = label.htmlFor; input.type = "email"; input.required = true; input.maxLength = 254; input.autocomplete = "off"; input.value = address;
+      input.oninput = () => { const current = currentHouseholdCopies(); current[id][index] = input.value; storeHouseholdCopies(current); input.setAttribute("aria-invalid", String(!input.validity.valid)); };
+      const drop = document.createElement("button"); drop.type = "button"; drop.className = "button button-secondary"; drop.textContent = `Remove copy ${index + 1}`;
+      drop.onclick = () => { const current = currentHouseholdCopies(); current[id].splice(index, 1); storeHouseholdCopies(current); renderHouseholdCopies(); };
+      line.append(label, input, drop); row.append(line);
+    }
+    const add = document.createElement("button"); add.type = "button"; add.className = "button button-secondary"; add.textContent = "Add copy address"; add.disabled = addresses.length >= 20;
+    add.onclick = () => { const current = currentHouseholdCopies(); current[id].push(""); storeHouseholdCopies(current); renderHouseholdCopies(); byId(`household-${id}-${current[id].length - 1}`)?.focus(); };
+    row.append(add, remove); container.append(row);
+  }
+}
+function householdCopyReport(result) {
+  const accepted = result?.bccAcceptedCount || 0, rejected = result?.bccRejectedCount || 0;
+  return accepted || rejected ? ` Household copies: ${accepted} accepted, ${rejected} rejected.` : "";
+}
+
 function currentUserEmailOverrides() {
   const input = byId("config-UserEmailOverrides");
   if (!input || !input.value) return {};
@@ -1283,6 +1371,7 @@ function reconcileOperationUserSelections() {
 }
 
 function renderManagedUserDeliveryAddresses() {
+  renderHouseholdCopies();
   const card = byId("managed-user-delivery-addresses");
   const container = byId("managed-user-delivery-list");
   const users = discoveredNewsletterUsers()
@@ -2041,6 +2130,8 @@ function collectConfigSaveRequest() {
       values[field.name] = input.value === "" ? null : Number(input.value);
     } else if (field.type === "string-list" || field.type === "email-list") {
       values[field.name] = input.value.split(/[\n,]/).map((value) => value.trim()).filter(Boolean);
+    } else if (field.type === "user-bcc-map") {
+      values[field.name] = currentHouseholdCopies();
     } else if (field.type === "user-email-map") {
       values[field.name] = currentUserEmailOverrides();
     } else {
@@ -3168,9 +3259,9 @@ function renderOperationHistory() {
     chip.textContent = titleCase(operation.outcome || operation.state);
     const count = document.createElement("small");
     count.textContent = operation.type === "send-test-all" || operation.type === "send-welcome"
-      ? `${operation.smtpAcceptedCount || 0} accepted by SMTP`
+      ? `${operation.smtpAcceptedCount || 0} accepted by SMTP${householdCopyReport(operation)}`
       : operation.type === "send-all"
-        ? `${operation.smtpAcceptedCount || 0} accepted · ${operation.skippedCount || 0} skipped · ${operation.failedCount || 0} failed`
+        ? `${operation.smtpAcceptedCount || 0} accepted · ${operation.skippedCount || 0} skipped · ${operation.failedCount || 0} failed${householdCopyReport(operation)}`
         : operation.type === "cache-warm"
           ? "All included users and selected libraries"
         : `${operation.generatedPreviewIds?.length || 0} preview${operation.generatedPreviewIds?.length === 1 ? "" : "s"}`;
@@ -3197,7 +3288,8 @@ function operationSummary(operation) {
     switch (operation.state) {
     case "queued": return { heading: "Manual Welcome queued", copy: "One selected-user welcome newsletter is waiting to start." };
     case "running": return { heading: "Sending one Manual Welcome", copy: "One selected Plex user is being processed. Cancellation is disabled once delivery begins." };
-    case "succeeded": return { heading: "Manual Welcome accepted by SMTP", copy: "One welcome message was accepted by SMTP. The selected user's welcome state was updated; inbox delivery is not asserted." };
+    case "succeeded": return { heading: "Manual Welcome accepted by SMTP", copy: `One welcome message was accepted by SMTP.${householdCopyReport(operation)} The selected user's welcome state was updated; inbox delivery is not asserted.` };
+    case "partial": return { heading: "Welcome accepted with household copy warnings", copy: `The primary welcome was accepted and its welcome state updated.${householdCopyReport(operation)} Inbox delivery is not asserted.` };
     case "failed": return { heading: "Manual Welcome delivery failed", copy: `${rendererFailureCopy(operation.errorCategory, operation.supportCode)}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
     default: return { heading: "Manual Welcome delivery recorded", copy: "Review aggregate SMTP acceptance without exposing the selected recipient." };
     }
@@ -3210,12 +3302,12 @@ function operationSummary(operation) {
     switch (operation.state) {
     case "queued": return { heading: "Manual newsletter delivery queued", copy: "The fixed production delivery is waiting to start." };
     case "running": return { heading: "Sending the production newsletter", copy: "Eligible recipients are being processed. Cancellation is disabled once delivery begins." };
-    case "succeeded": return { heading: "Manual newsletter accepted by SMTP", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted by SMTP and ${skipped} recipient${skipped === 1 ? " was" : "s were"} skipped.${reasonCopy} Inbox delivery is not asserted.` };
-    case "partial": return { heading: "Manual newsletter stopped after a partial delivery", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy} ${operation.errorCategory ? rendererFailureCopy(operation.errorCategory, operation.supportCode) : "One or more recipient attempts failed."}${smtpFailureEvidenceCopy(operation.smtpFailure)} Inbox delivery is not asserted.` };
+    case "succeeded": return { heading: "Manual newsletter accepted by SMTP", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted by SMTP and ${skipped} recipient${skipped === 1 ? " was" : "s were"} skipped.${reasonCopy}${householdCopyReport(operation)} Inbox delivery is not asserted.` };
+    case "partial": return { heading: "Manual newsletter accepted with delivery warnings", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy} ${operation.errorCategory ? rendererFailureCopy(operation.errorCategory, operation.supportCode) : operation.bccRejectedCount ? "Some household copies were rejected." : "One or more recipient attempts failed."}${smtpFailureEvidenceCopy(operation.smtpFailure)}${householdCopyReport(operation)} Inbox delivery is not asserted.` };
     case "failed": return operation.errorCategory === "no-eligible-recipients"
       ? { heading: "No eligible production recipients", copy: `No message was accepted by SMTP.${reasonCopy} Checked exclusion boxes mean excluded.${operation.supportCode ? ` Support code: ${operation.supportCode}.` : ""}` }
       : { heading: "Manual newsletter delivery failed", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
-    default: return { heading: "Manual newsletter delivery recorded", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy} Inbox delivery is not asserted.` };
+    default: return { heading: "Manual newsletter delivery recorded", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy}${householdCopyReport(operation)} Inbox delivery is not asserted.` };
     }
   }
   if (operation.type === "send-test-all") {
@@ -4328,7 +4420,7 @@ function selectView(name, options = {}) {
       lastRoutedURL = window.location.href;
     }
   }
-  if (name !== "configuration") clearAllRevealedSecrets();
+  if (name !== "configuration") { clearAllRevealedSecrets(); clearHouseholdPrimary(); }
   document.querySelectorAll("[data-user-combobox].open").forEach((container) => setUserComboboxOpen(container, false));
   document.querySelectorAll("[data-panel]").forEach((panel) => { panel.hidden = panel.dataset.panel !== name; });
   document.querySelectorAll("[data-view]").forEach((button) => {
@@ -4410,6 +4502,8 @@ async function logout() {
 
 function showAuthentication() {
   authenticationEpoch += 1;
+  clearHouseholdPrimary();
+  byId("household-copy-list").replaceChildren();
   applicationRefreshPromise = null;
   byId("refresh-button").disabled = false;
   stopUpdateInstallPolling();
