@@ -94,8 +94,8 @@
     </aside>
 
     <main class="content" id="main-content" tabindex="-1">
-      <aside class="demo-banner" role="note" aria-label="GUI preview boundary" data-preview-release="v0.26.3">
-        <strong>Interactive GUI Preview · v0.26.3</strong>
+      <aside class="demo-banner" role="note" aria-label="GUI preview boundary" data-preview-release="v0.27.0">
+        <strong>Interactive GUI Preview · v0.27.0</strong>
         <span>Fictional data · temporary in-memory changes. Do not enter real credentials.</span>
         <span>No services, email, files, credentials, or schedulers are contacted</span>
         <label>Package example <select id="demo-profile"><option value="windows">Windows</option><option value="nas">NAS / Docker</option><option value="mac">macOS Docker</option><option value="linux">Native Linux</option><option value="freebsd">FreeBSD / Podman</option></select></label>
@@ -165,6 +165,16 @@
             <section><div class="panel-heading"><h3>User exclusions — checked means excluded everywhere</h3><small id="discovery-user-count"></small></div><p>After a successful save, checked users are blocked from personalized previews, TestEmail runs, Manual Welcome, and manual or scheduled delivery. They remain visible here for policy review but are removed from operation selectors. Included users may still be used for safe preview or TestEmail sampling without a production address, and TestEmail delivery remains isolated to the configured test inbox. Tautulli notification-agent settings do not control TautWeekly delivery or personalized operation access. Repeat lookup refreshes these Manager choices only; every production send separately refreshes the live roster so a new eligible user is included unless excluded.</p><div class="choice-list" id="discovery-users" role="group" aria-label="User exclusion choices for every personalized newsletter mode; checked means excluded" tabindex="0"></div></section>
           </div>
           <section class="managed-user-delivery-card" id="managed-user-delivery-addresses" aria-labelledby="managed-user-delivery-heading" hidden><div class="panel-heading"><h3 id="managed-user-delivery-heading">Managed-user delivery addresses</h3><small id="managed-user-delivery-count"></small></div><p>Active Tautulli users without a native email can receive their own personalized newsletter through a private fallback address. Native Tautulli email always wins, exclusions still apply, and multiple profiles may use the same inbox. Clearing an assignment returns that user to missing-email status.</p><div class="managed-user-delivery-list" id="managed-user-delivery-list" role="list" aria-label="Managed-user delivery address assignments"></div></section>
+          <details class="managed-user-delivery-card" id="household-copies">
+            <summary><strong>Household copies (BCC)</strong> <span id="household-copy-count"></span></summary>
+            <p>Each copy receives the selected account's exact personalized newsletter, including its activity. Copy addresses are hidden; the primary recipient remains visible. Excluding the source user suppresses all its copies. A primary address is required. Test emails go only to TestEmail.</p>
+            <label for="household-user-search">Find a source user</label><input id="household-user-search" type="search" autocomplete="off" placeholder="Search users">
+            <label for="household-user-select">Source user</label><select id="household-user-select"></select>
+            <button class="button button-secondary" id="household-add-user" type="button">Add source user</button>
+            <div id="household-copy-list" class="household-copy-list"></div>
+            <p id="household-message" role="status" aria-live="polite"></p>
+            <p>Use Save configuration below to save these assignments. Saving copies does not send mail or regenerate previews.</p>
+          </details>
         </section>
         <div class="config-alert" id="config-errors" role="alert" hidden><strong>Configuration needs attention</strong><ul id="config-error-list"></ul></div>
         <div class="config-blocked" id="config-blocked" hidden><h2>Automatic editing is unavailable</h2><p>The current config.json is invalid or unreadable. The Manager will not overwrite it or guess at its contents.</p></div>
@@ -344,7 +354,7 @@
             <a class="update-docs-link" id="update-docs-link" href="../" target="_blank" rel="noopener noreferrer">Open platform update guide</a>
           </div>
           <label class="update-install-confirm" id="update-install-confirm-row" for="update-install-confirm" hidden><input id="update-install-confirm" type="checkbox"><span><strong>Install the verified stable Windows update</strong><small>Windows will request administrator approval. The existing updater verifies release URLs, archive checksums, internal manifests, rollback, and post-update health.</small></span></label>
-          <div class="update-settings-actions"><button class="button button-secondary" id="update-check-button" type="button">Check now</button><button class="button button-primary" id="update-install-button" type="button" hidden disabled>Install update</button><a id="update-release-notes" href="../releases/v0.26.3.md" target="_blank" rel="noopener noreferrer" hidden>Read stable release notes</a></div>
+          <div class="update-settings-actions"><button class="button button-secondary" id="update-check-button" type="button">Check now</button><button class="button button-primary" id="update-install-button" type="button" hidden disabled>Install update</button><a id="update-release-notes" href="../releases/v0.27.0.md" target="_blank" rel="noopener noreferrer" hidden>Read stable release notes</a></div>
           <p class="verification-message" id="update-settings-message" role="status" aria-live="polite">Normal Manager and dashboard health never depend on Internet availability.</p>
           <p class="update-security-boundary"><strong>The Manager never gains host control.</strong> Container profiles do not mount the Docker socket, add a privileged helper, run the web process as root, or mutate the host. Use the reported full-semver reference or its manifest digest; minor, latest, and edge tags are mutable. Native Unix packages keep installation in their existing host wrappers.</p>
         </section>

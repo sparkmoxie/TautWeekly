@@ -21,6 +21,7 @@ var secretConfigKeys = map[string]struct{}{
 
 var privateConfigKeys = map[string]struct{}{
 	"useremailoverrides": {},
+	"userbccaddresses":   {},
 }
 
 type SecretStatus struct {

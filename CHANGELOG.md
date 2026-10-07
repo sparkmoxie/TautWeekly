@@ -6,6 +6,22 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-07
+
+### Added
+
+- Add Household copies (BCC) in Config: map additional email addresses to a source Tautulli user so each receives that account's exact personalized newsletter, including activity, without requiring another Plex account.
+- Reveal only the selected user's effective primary address on demand through an authenticated, revision-checked private-network lookup. Native email remains authoritative and managed-user fallback addresses still apply only when native email is missing.
+
+### Changed
+
+- Send one primary-first SMTP envelope and one message body per source user. Household copies follow production and Manual Welcome eligibility and exclusions; TestEmail remains isolated. Report accepted and rejected copies separately from primary newsletters, including partial-copy warnings.
+- Treat copy-only saves as delivery-addressing changes without discovery, preview regeneration, cache warming, or sending email.
+
+### Security
+
+- Keep private copy maps out of generic configuration, discovery caches, diagnostics, and delivery history. Pass copies only as SMTP envelope recipients, never through MIME Bcc or pickup X-Receiver headers. A rejected primary suppresses its copies; provider-wide failures stop safely and an accepted primary is never automatically resent.
+
 ## [0.26.3] - 2026-10-02
 
 ### Fixed

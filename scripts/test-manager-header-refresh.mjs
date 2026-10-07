@@ -179,6 +179,7 @@ function createHarness({
     setSwappingButtonText() { events.push("discovery:button"); },
     stopUpdateInstallPolling() { events.push("install-poll:stop"); },
     clearAllRevealedSecrets() { events.push("secrets:clear"); },
+    clearHouseholdPrimary() { events.push("household-primary:clear"); },
     closeSecretRevealDialog() { events.push("secret-dialog:close"); },
     concealMaskedInputs() { events.push("secrets:conceal"); },
     renderUserComboboxes() { events.push("users:render"); },
@@ -200,6 +201,7 @@ function createHarness({
       if (id === "login-password") return loginPassword;
       if (id === "discovery-libraries") return discoveryLibraries;
       if (id === "discovery-users") return discoveryUsers;
+      if (id === "household-copy-list") return managedUserDeliveryList;
       if (id === "managed-user-delivery-list") return managedUserDeliveryList;
       if (id === "managed-user-delivery-addresses") return managedUserDeliveryCard;
       if (id === "app-shell") return appShell;
@@ -320,6 +322,7 @@ async function flushAsyncWork() {
   const inFlight = harness.context.testAPI.runTautulliDiscovery();
   await flushAsyncWork();
   harness.context.testAPI.expireAuthentication();
+  assert(harness.events.includes("household-primary:clear"), "logout retained the selected primary address");
   const discoveryRenderCount = harness.events.filter((event) => event === "discovered-users:render").length;
   const verificationRenderCount = harness.events.filter((event) => event === "verification:render").length;
   lateDiscovery.resolve({ ...discoveredChoices, completedAtUtc: "2031-04-18T16:32:00Z" });

@@ -185,6 +185,7 @@ func configDefinitions() []configDefinition {
 		{Name: "CustomTextCardBody", Label: "Card body (required when enabled)", Group: "Custom text card", Type: "textarea", Default: "", Max: customBodyMax, Help: "Plain text only. Line breaks are preserved and HTML is always escaped."},
 		{Name: "IncludedLibraryIds", Label: "Included library IDs", Group: "Advanced", Type: "string-list", Help: "Comma-separated Tautulli section IDs. Empty retains legacy all-library scope.", Default: []string{}},
 		{Name: "ExcludedUserIds", Label: "Excluded user IDs", Group: "Advanced", Type: "string-list", Help: "Comma-separated Tautulli user IDs.", Default: []string{}},
+		{Name: "UserBccAddresses", Label: "Household copies (BCC)", Group: "Advanced", Type: "user-bcc-map", Help: "Private household copy addresses keyed by source Tautulli user ID.", Default: map[string][]string{}},
 		{Name: "UserEmailOverrides", Label: "Managed-user delivery addresses", Group: "Advanced", Type: "user-email-map", Help: "Private fallback delivery addresses keyed by numeric Tautulli user ID. Manager exposes assignments only in the authenticated guided Config flow.", Default: map[string]string{}},
 		{Name: "ExcludedEmails", Label: "Excluded email addresses", Group: "Advanced", Type: "email-list", Help: "Legacy config-file exclusion list preserved by the Manager but not exposed in the GUI.", Default: []string{}},
 	}
@@ -422,6 +423,8 @@ func classifyConfigPostSave(current, next map[string]any, existed bool) ConfigPo
 			category["libraries"] = true
 			cacheCoverageChanged = true
 			plan.GeneratePreviews = true
+		case name == "UserBccAddresses":
+			category["delivery"] = true
 		case name == "ExcludedUserIds" || name == "ExcludedEmails" || name == "UserEmailOverrides":
 			category["recipients"] = true
 			cacheCoverageChanged = true
@@ -639,6 +642,8 @@ func parseAndValidateConfigValue(raw json.RawMessage, definition configDefinitio
 			}
 		}
 		return result, ""
+	case "user-bcc-map":
+		return validateUserBccAddresses(raw, value)
 	case "user-email-map":
 		if hasDuplicateUserEmailOverrideKeys(raw) {
 			return nil, "Each Tautulli user ID may appear only once."

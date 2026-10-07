@@ -42,6 +42,8 @@ type DeliveryStatus struct {
 	LastSuccessUTC    string                    `json:"lastSuccessUtc,omitempty"`
 	Result            string                    `json:"result"`
 	Evidence          string                    `json:"evidence"`
+	BCCAcceptedCount  int                       `json:"bccAcceptedCount"`
+	BCCRejectedCount  int                       `json:"bccRejectedCount"`
 	SMTPAcceptedCount int                       `json:"smtpAcceptedCount"`
 	SkippedCount      int                       `json:"skippedCount"`
 	FailedCount       int                       `json:"failedCount"`
@@ -301,6 +303,8 @@ func applyActiveDelivery(snapshot *StatusSnapshot, active deliveryRunSignal) {
 	snapshot.Delivery.LastAttemptUTC = active.StartedAtUTC
 	snapshot.Delivery.ExitCode = nil
 	snapshot.Delivery.SMTPAcceptedCount = 0
+	snapshot.Delivery.BCCAcceptedCount = 0
+	snapshot.Delivery.BCCRejectedCount = 0
 	snapshot.Delivery.SkippedCount = 0
 	snapshot.Delivery.FailedCount = 0
 	snapshot.Delivery.SMTPFailure = nil
@@ -351,6 +355,8 @@ func applyLatestRendererDelivery(snapshot *StatusSnapshot, root string) {
 	snapshot.Delivery.LastAttemptUTC = result.StartedAtUTC
 	snapshot.Delivery.Evidence = "renderer-result"
 	snapshot.Delivery.SMTPAcceptedCount = result.SMTPAcceptedCount
+	snapshot.Delivery.BCCAcceptedCount = result.BCCAcceptedCount
+	snapshot.Delivery.BCCRejectedCount = result.BCCRejectedCount
 	snapshot.Delivery.SkippedCount = result.SkippedCount
 	snapshot.Delivery.FailedCount = result.FailedCount
 	snapshot.Delivery.SMTPFailure = result.SMTPFailure

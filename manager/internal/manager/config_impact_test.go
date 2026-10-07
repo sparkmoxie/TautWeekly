@@ -64,6 +64,7 @@ func TestEveryConfigFieldHasExplicitSaveImpact(t *testing.T) {
 		"CustomTextCardBody":            {category: "custom-text-card", preview: true},
 		"IncludedLibraryIds":            {category: "libraries", preview: true, warmCache: true},
 		"ExcludedUserIds":               {category: "recipients", preview: true, warmCache: true},
+		"UserBccAddresses":              {category: "delivery"},
 		"UserEmailOverrides":            {category: "recipients", discovery: true, preview: true, warmCache: true},
 		"ExcludedEmails":                {category: "recipients", discovery: true, preview: true, warmCache: true},
 	}

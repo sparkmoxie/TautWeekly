@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 import os
 import shutil
 import socketserver
@@ -22,6 +23,9 @@ class SmtpState:
     def __init__(self, mechanisms: tuple[str, ...], reject_password: bool = False) -> None:
         self.mechanisms = mechanisms
         self.reject_password = reject_password
+        self.reject_recipient = ""
+        self.reject_code = "550 5.1.1 Rejected"
+        self.data_response = "250 2.0.0 Queued"
         self.commands: list[str] = []
         self.data_lines: list[str] = []
         self.error: BaseException | None = None
@@ -98,7 +102,7 @@ class SmtpHandler(socketserver.StreamRequestHandler):
                     else:
                         self._send("250 2.1.0 Sender accepted")
                 elif upper.startswith("RCPT TO:"):
-                    self._send("250 2.1.5 Recipient accepted")
+                    self._send(state.reject_code if state.reject_recipient and state.reject_recipient in line else "250 2.1.5 Recipient accepted")
                 elif upper == "DATA":
                     self._send("354 End data with <CR><LF>.<CR><LF>")
                     while True:
@@ -106,7 +110,8 @@ class SmtpHandler(socketserver.StreamRequestHandler):
                         if data_line == ".":
                             break
                         state.data_lines.append(data_line)
-                    self._send("250 2.0.0 Queued")
+                    if state.data_response is None: return
+                    self._send(state.data_response)
                 elif upper == "QUIT":
                     self._send("221 2.0.0 Bye")
                     break
@@ -135,7 +140,8 @@ def powershell_executable() -> str:
     raise RuntimeError("PowerShell was not found")
 
 
-def run_client(helper: Path, port: int, method: str) -> subprocess.CompletedProcess[str]:
+def run_client(helper: Path, port: int, method: str, copies: tuple[str, ...] = ()) -> subprocess.CompletedProcess[str]:
+    envelope = ",".join("'" + address.replace("'", "''") + "'" for address in copies)
     script = f"""
 $ErrorActionPreference = 'Stop'
 . '{str(helper).replace("'", "''")}'
@@ -167,7 +173,7 @@ try {{
         SmtpAuthenticationMethod = '{method}'
         SmtpTimeoutSeconds = 10
     }}
-    Send-TautWeeklySmtpMessage -MailMessage $mail -Config $config
+    Send-TautWeeklySmtpMessage -MailMessage $mail -Config $config -EnvelopeBcc @({envelope}) | ConvertTo-Json -Compress
 }}
 finally {{
     $mail.Dispose()
@@ -218,6 +224,48 @@ def scenario(helper: Path, mechanisms: tuple[str, ...], method: str, reject: boo
     return state
 
 
+def household_scenarios(helper: Path) -> None:
+    for name, reject, code, data, expected in [
+        ("accepted", "", "", "250 Queued", (2, 0)),
+        ("copy rejected", "copy@example.org", "550 5.1.1 Rejected", "250 Queued", (1, 1)),
+        ("primary rejected", "recipient@example.com", "550 5.1.1 Rejected", "250 Queued", None),
+        ("copy rate limit", "copy@example.org", "452 4.7.0 Rate limit", "250 Queued", None),
+        ("copy provider policy", "copy@example.org", "550 5.7.1 Policy", "250 Queued", None),
+        ("DATA rejected", "", "", "554 5.7.1 Refused", None),
+        ("DATA acknowledgement lost", "", "", None, None),
+        ("header injection", "", "", "250 Queued", None),
+    ]:
+        state = SmtpState(("LOGIN",))
+        state.reject_recipient, state.reject_code, state.data_response = reject, code, data
+        with TestServer(state) as server:
+            thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+            try:
+                copies = (" Copy@example.org ", "copy@example.org", "second@example.org", "RECIPIENT@example.com")
+                if name == "header injection": copies = ("copy@example.org\r\nBcc: injected@example.org",)
+                result = run_client(helper, server.server_address[1], "Auto", copies)
+            finally:
+                server.shutdown(); thread.join(timeout=5)
+        if state.error: raise state.error
+        rcpts = [line for line in state.commands if line.startswith("RCPT TO:")]
+        if name != "header injection":
+            assert rcpts[0] == "RCPT TO:<recipient@example.com>", name
+        if name == "primary rejected": assert len(rcpts) == 1 and "DATA" not in state.commands, name
+        if name in ("copy rate limit", "copy provider policy", "header injection"): assert "DATA" not in state.commands, name
+        if expected is not None:
+            assert result.returncode == 0, (name, result.stderr)
+            counts = json.loads(result.stdout)
+            assert (counts["BccAcceptedCount"], counts["BccRejectedCount"]) == expected, name
+            assert rcpts == ["RCPT TO:<recipient@example.com>", "RCPT TO:<copy@example.org>", "RCPT TO:<second@example.org>"], name
+            assert state.commands.count("DATA") == 1, name
+        else:
+            assert result.returncode != 0, name
+        mime = "\n".join(state.data_lines).lower()
+        assert "copy@example.org" not in mime and "second@example.org" not in mime, name
+        assert not any(line.lower().startswith(("bcc:", "cc:")) for line in state.data_lines), name
+        assert "copy@example.org" not in result.stdout + result.stderr, name
+    print("[PASS] BCC envelope isolation, primary-first delivery, deduplication, one DATA, sanitized failures and MIME privacy.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -230,6 +278,7 @@ def main() -> int:
     if not helper.is_file():
         raise FileNotFoundError(helper)
 
+    household_scenarios(helper)
     login = scenario(helper, ("LOGIN", "PLAIN"), "Auto")
     if "AUTH LOGIN" not in login.commands:
         raise AssertionError("Auto did not prefer challenge-style AUTH LOGIN")

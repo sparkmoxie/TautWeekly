@@ -4,7 +4,7 @@
 
 `config.json` stores a Tautulli API key and SMTP password in plain text, may
 store a Plex token, and may contain private managed-user fallback addresses in
-`UserEmailOverrides`. Limit filesystem access to the account that runs
+`UserEmailOverrides` and `UserBccAddresses`. Limit filesystem access to the account that runs
 TautWeekly for Plex. Docker installations use `UMASK=077` and a non-root UID/GID;
 Windows installations should use a private directory with appropriate NTFS
 permissions. Native Linux uses a dedicated service account and mode-0700
@@ -205,6 +205,20 @@ Disabling the feature stops access but does not erase the existing cache.
 - Do not bypass the confirmation switches or wrapper prompts.
 
 ## Recipient privacy
+
+Household copy addresses stay in private configuration and its private backups.
+Generic config, discovery caches, diagnostics, and delivery results expose no copy
+addresses. Authenticated guided Config editing may read and change the private map.
+The selected-user primary-address POST requires a session, CSRF token, exact user
+identity, current config revision, and the existing private/loopback network boundary;
+its response is `no-store` and never enters the discovery cache. The browser clears
+revealed addresses when leaving Config, changing revision, or logging out.
+
+Household copies are SMTP envelope recipients only. The To-only MIME serialization
+never receives a Bcc collection, avoiding pickup-directory `X-Receiver` disclosure.
+Primary acceptance remains a newsletter count; separate sanitized copy counts report
+partial copy rejection without exposing addresses or automatically resending messages.
+
 
 Managed-user fallback addresses are private configuration, not discovery data.
 Authenticated Config editing can read and change the map, and private backups

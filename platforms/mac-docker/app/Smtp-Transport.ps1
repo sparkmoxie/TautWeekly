@@ -189,7 +189,8 @@ function Send-TautWeeklySmtpMessage {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][System.Net.Mail.MailMessage]$MailMessage,
-        [Parameter(Mandatory = $true)][object]$Config
+        [Parameter(Mandatory = $true)][object]$Config,
+        [string[]]$EnvelopeBcc = @()
     )
 
     $hostName = ([string](Get-TautWeeklySmtpConfigValue -Config $Config -Name 'SmtpHost' -Default '')).Trim()
@@ -220,8 +221,22 @@ function Send-TautWeeklySmtpMessage {
     }
 
     $fromAddress = ([System.Net.Mail.MailAddress]$MailMessage.From).Address
-    if ($MailMessage.To.Count -ne 1) { throw (New-TautWeeklySmtpException -Stage 'configuration') }
+    if ($MailMessage.To.Count -ne 1 -or $MailMessage.CC.Count -ne 0 -or $MailMessage.Bcc.Count -ne 0) { throw (New-TautWeeklySmtpException -Stage 'configuration') }
     $toAddress = $MailMessage.To[0].Address
+    # Never populate MailMessage.Bcc: pickup serialization exposes X-Receiver.
+    if ($EnvelopeBcc.Count -gt 20) { throw (New-TautWeeklySmtpException -Stage 'configuration') }
+    $copies = [System.Collections.Generic.List[string]]::new()
+    $seen = @{}; $seen[$toAddress.ToLowerInvariant()] = $true
+    foreach ($rawAddress in $EnvelopeBcc) {
+        if ($rawAddress -match '\p{Cc}') { throw (New-TautWeeklySmtpException -Stage 'configuration') }
+        $address = $rawAddress.Trim().ToLowerInvariant()
+        try { $parsed = [System.Net.Mail.MailAddress]::new($address) }
+        catch { throw (New-TautWeeklySmtpException -Stage 'configuration') }
+        if ($address.Length -gt 254 -or $parsed.Address -cne $address) { throw (New-TautWeeklySmtpException -Stage 'configuration') }
+        if (-not $seen.ContainsKey($address)) { $copies.Add($address); $seen[$address] = $true }
+    }
+    $bccAccepted = 0
+    $bccRejected = 0
     try {
         $mimeText = ConvertTo-TautWeeklyMimeText -MailMessage $MailMessage
     }
@@ -318,6 +333,17 @@ function Send-TautWeeklySmtpMessage {
         [void](Invoke-TautWeeklySmtpCommand -Writer $writer -Reader $reader -Command "MAIL FROM:<$fromAddress>" -ExpectedCodes 250 -Label 'SMTP MAIL FROM' -Stage 'mail-from')
         $currentStage = 'rcpt-to'
         [void](Invoke-TautWeeklySmtpCommand -Writer $writer -Reader $reader -Command "RCPT TO:<$toAddress>" -ExpectedCodes @(250, 251) -Label 'SMTP RCPT TO' -Stage 'rcpt-to')
+        foreach ($copyAddress in $copies) {
+            try {
+                [void](Invoke-TautWeeklySmtpCommand -Writer $writer -Reader $reader -Command "RCPT TO:<$copyAddress>" -ExpectedCodes @(250, 251) -Label 'SMTP copy recipient' -Stage 'rcpt-to')
+                $bccAccepted++
+            }
+            catch {
+                if ($_.Exception -is [TautWeeklySmtpException] -and $_.Exception.Category -eq 'smtp-recipient-rejected' -and -not $_.Exception.BatchFatal) {
+                    $bccRejected++
+                } else { throw }
+            }
+        }
         $currentStage = 'data-command'
         [void](Invoke-TautWeeklySmtpCommand -Writer $writer -Reader $reader -Command 'DATA' -ExpectedCodes 354 -Label 'SMTP DATA' -Stage 'data-command')
         $currentStage = 'data-acceptance'
@@ -326,9 +352,11 @@ function Send-TautWeeklySmtpMessage {
         $accepted = Read-TautWeeklySmtpResponse -Reader $reader
         if ($accepted.Code -ne 250) { throw (New-TautWeeklySmtpException -Stage 'data-acceptance' -ResponseCode $accepted.Code -Acceptance 'rejected') }
 
+        $deliveryResult = [pscustomobject]@{ BccAcceptedCount = $bccAccepted; BccRejectedCount = $bccRejected }
         $currentStage = 'quit'
         try { [void](Invoke-TautWeeklySmtpCommand -Writer $writer -Reader $reader -Command 'QUIT' -ExpectedCodes 221 -Label 'SMTP QUIT' -Stage 'quit') }
         catch { }
+        return $deliveryResult
     }
     catch {
         if ($_.Exception -is [TautWeeklySmtpException]) {

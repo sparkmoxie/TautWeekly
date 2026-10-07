@@ -24,6 +24,8 @@ type rendererResult struct {
 	StartedAtUTC          string                    `json:"startedAtUtc"`
 	FinishedAtUTC         string                    `json:"finishedAtUtc"`
 	DurationMS            int64                     `json:"durationMs"`
+	BCCAcceptedCount      int                       `json:"bccAcceptedCount"`
+	BCCRejectedCount      int                       `json:"bccRejectedCount"`
 	SMTPAcceptedCount     int                       `json:"smtpAcceptedCount"`
 	SkippedCount          int                       `json:"skippedCount"`
 	FailedCount           int                       `json:"failedCount"`
@@ -71,7 +73,7 @@ func readRendererResult(path, expectedMode string) (rendererResult, error) {
 }
 
 func validRendererResult(result rendererResult, expectedMode string) bool {
-	if (result.SchemaVersion != 1 && result.SchemaVersion != 2 && result.SchemaVersion != 3) || result.Mode != expectedMode || expectedDeliveryScope(result.Mode) == "" {
+	if (result.SchemaVersion != 1 && result.SchemaVersion != 2 && result.SchemaVersion != 3 && result.SchemaVersion != 4) || result.Mode != expectedMode || expectedDeliveryScope(result.Mode) == "" {
 		return false
 	}
 	if result.Outcome != "succeeded" && result.Outcome != "partial" && result.Outcome != "failed" {
@@ -107,10 +109,21 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 	if startErr != nil || finishErr != nil || finished.Before(started) || result.DurationMS < 0 || result.DurationMS > int64((24*time.Hour)/time.Millisecond) {
 		return false
 	}
-	for _, count := range []int{result.SMTPAcceptedCount, result.SkippedCount, result.FailedCount} {
+	for _, count := range []int{result.SMTPAcceptedCount, result.SkippedCount, result.FailedCount, result.BCCAcceptedCount, result.BCCRejectedCount} {
 		if count < 0 || count > 1_000_000 {
 			return false
 		}
+	}
+	if result.BCCAcceptedCount > 0 || result.BCCRejectedCount > 0 {
+		if result.SchemaVersion < 4 || (result.Mode != "SendAll" && result.Mode != "SendWelcome") || result.SMTPAcceptedCount == 0 || result.BCCAcceptedCount+result.BCCRejectedCount > 20*result.SMTPAcceptedCount {
+			return false
+		}
+		if result.BCCRejectedCount > 0 && result.Outcome == "succeeded" {
+			return false
+		}
+	}
+	if result.Outcome == "partial" && result.Mode == "SendWelcome" && (result.SchemaVersion < 4 || result.SMTPAcceptedCount != 1 || result.FailedCount != 0 || result.BCCRejectedCount == 0 || result.ErrorCategory != "") {
+		return false
 	}
 	if result.SchemaVersion == 1 {
 		if result.SkipReasonCounts != nil {
@@ -171,7 +184,7 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 			return false
 		}
 	case "SendAll":
-		if len(seen) != 0 || (result.Outcome == "succeeded" && (result.FailedCount != 0 || (result.SchemaVersion >= 2 && result.SMTPAcceptedCount == 0))) || (result.Outcome == "partial" && (result.SMTPAcceptedCount == 0 || result.FailedCount == 0)) {
+		if len(seen) != 0 || (result.Outcome == "succeeded" && (result.FailedCount != 0 || (result.SchemaVersion >= 2 && result.SMTPAcceptedCount == 0))) || (result.Outcome == "partial" && (result.SMTPAcceptedCount == 0 || (result.FailedCount == 0 && result.BCCRejectedCount == 0))) {
 			return false
 		}
 		if result.ErrorCategory == "no-eligible-recipients" && (result.Outcome != "failed" || result.SMTPAcceptedCount != 0 || result.FailedCount != 0) {

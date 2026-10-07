@@ -348,6 +348,7 @@ authorization.
 | `IncludedLibraryIds` | `[]` | Stable Tautulli section IDs defining the global newsletter scope; empty means all active movie/TV libraries for backward compatibility |
 | `ExcludedUserIds` | `[]` | Users omitted by stable Tautulli ID |
 | `ExcludedEmails` | `[]` | Email addresses omitted from delivery |
+| `UserBccAddresses` | `{}` | Private source-user ID to household copy address arrays; production and Manual Welcome only |
 | `UserEmailOverrides` | `{}` | Private map from numeric Tautulli user ID to a fallback address, used only for an active user with no native email |
 | `RecentAccessDays` | 7 | New/recent access classification |
 | `SendDelaySeconds` | 30 | Pause between real production recipient attempts |
@@ -520,6 +521,48 @@ The consumed API contract was checked against
 Its SQL-backed history pagination preserves these parameters and fields.
 Synthetic fixtures cover pagination, graded watched status, omitted redundant
 section IDs, and the new HTTP error behavior for invalid metadata.
+
+### Household copies (BCC)
+
+Use **Config → Household copies (BCC)** below the user controls. Search for a
+source Tautulli user, add that source, and enter each copy address in its own field.
+Choose **Save configuration** to apply the assignments. The collapsed card shows
+the number of saved source assignments. Multiple sources can use the same inbox;
+each source still generates its own personalized message.
+
+Copies share the selected account's exact newsletter and activity. Copy addresses
+are hidden from the message; its primary recipient remains visible. **View primary
+address** reveals only that selected user's effective native/fallback address, from
+the saved configuration, until leaving Config, changing configuration, or logging out.
+A source with no primary cannot deliver copies. The separate managed-user delivery
+address card can supply a fallback when the native Tautulli address is blank.
+
+The private `UserBccAddresses` object maps nonzero numeric stable Tautulli IDs to
+arrays of bare email addresses. For example:
+
+```json
+"UserBccAddresses": {
+  "42": ["household@example.org", "another@example.org"]
+}
+```
+
+Use at most 2,000 source assignments and 20 addresses per source, each at most
+254 characters. Addresses are trimmed and deduplicated per source; display names,
+control characters, malformed addresses, and duplicate normalized IDs are rejected.
+Empty lists are removed. Temporarily unavailable users retain their saved assignments
+and can be removed from the card. Missing configuration defaults to `{}`.
+
+Production and Manual Welcome sends first enforce source eligibility and exclusions,
+then remove individually excluded copy addresses. An excluded source suppresses all
+its copies. Copies never create a new activity identity, cache identity, or welcome
+state. Every TestEmail mode remains TestEmail-only. Saving copies changes addressing
+without generating previews, warming cache, refreshing discovery, or sending mail.
+
+SMTP sends the primary recipient first. A rejected primary prevents copies and DATA.
+Recipient-specific copy rejections can leave the primary and other copies accepted;
+Manager reports a partial result with separate accepted/rejected copy counts. A
+provider-wide failure stops safely. No automatic retry resends an accepted primary.
+SMTP acceptance does not guarantee inbox delivery.
 
 ### Interactive user exclusions
 

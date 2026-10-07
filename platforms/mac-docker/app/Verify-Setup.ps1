@@ -123,6 +123,32 @@ if ($null -ne $userEmailOverrides) {
 }
 OK "Managed-user delivery addresses are valid"
 
+$householdProperty = $config.PSObject.Properties['UserBccAddresses']
+if ($null -ne $householdProperty) {
+    try {
+        if ($householdProperty.Value -isnot [pscustomobject]) { throw 'map' }
+        $entries = @($householdProperty.Value.PSObject.Properties)
+        if ($entries.Count -gt 2000) { throw 'limit' }
+        $seen = @{}
+        foreach ($entry in $entries) {
+            [UInt64]$id = 0
+            $key = ([string]$entry.Name).Trim()
+            if ($key -notmatch '^[0-9]{1,20}$' -or -not [UInt64]::TryParse($key, [ref]$id) -or $id -eq 0 -or $seen.ContainsKey($id.ToString())) { throw 'id' }
+            $seen[$id.ToString()] = $true
+            if ($entry.Value -isnot [array] -or $entry.Value.Count -gt 20) { throw 'addresses' }
+            foreach ($value in $entry.Value) {
+                if ($value -isnot [string] -or $value -match '\p{Cc}') { throw 'address' }
+                $address = $value.Trim()
+                if ($address -eq '') { continue }
+                $parsed = New-Object System.Net.Mail.MailAddress($address)
+                if ($address.Length -gt 254 -or $parsed.Address -cne $address) { throw 'address' }
+            }
+        }
+    } catch { FAIL "UserBccAddresses contains an invalid household assignment."; exit 1 }
+}
+OK "Household copy assignments are valid"
+
+
 $smtpAuth = $true
 if ($null -ne $config.PSObject.Properties["SmtpUseAuthentication"]) { $smtpAuth = [bool]$config.SmtpUseAuthentication }
 if ($smtpAuth) {

@@ -69,17 +69,17 @@
       </div>
     </section>
 
-    <section class="section searchable" id="feature-spotlight" data-feature-release="v0.26.0" data-search="feature release managed plex users delivery address fallback email personalized newsletter exclusions privacy">
+    <section class="section searchable" id="feature-spotlight" data-feature-release="v0.27.0" data-search="feature release household copies BCC additional email personalized newsletter activity privacy">
       <div class="section-heading">
-        <div><div class="eyebrow">v0.26.0 managed-user delivery</div><h2>Every managed profile can get its own recap.</h2></div>
-        <p>The newest feature release adds private fallback delivery addresses for active Tautulli users who do not have native email.</p>
+        <div><div class="eyebrow">v0.27.0 household copies</div><h2>One account. A recap for the household.</h2></div>
+        <p>The newest feature release adds private BCC copies of a selected account's personalized newsletter.</p>
       </div>
       <article class="card featured">
-        <span class="tag">All packages · Private configuration · Native-email safe</span>
-        <h3>A deliberate fallback, never a redirect</h3>
-        <p>Manager shows an accessible assignment card only for active native-email-blank users. TautWeekly keeps native email authoritative, applies the existing ID and effective-address exclusions, and uses the fallback only for production paths that already target the selected user.</p>
-        <ul><li>Assignments are keyed by stable numeric Tautulli user ID and may share one inbox</li><li>Clearing an assignment returns that profile to missing-email status without changing history</li><li>Failed discovery retains the last sanitized choices and private assignments</li><li>TestEmail remains isolated from production addresses</li><li>Recipient coverage changes regenerate previews and refresh enabled cache coverage</li><li>Sanitized caches, results, and diagnostics never contain the map or fallback addresses</li></ul>
-        <div class="card-actions"><a href="CONFIGURATION.md#interactive-user-exclusions">Configure managed users</a><a href="SECURITY.md#recipient-privacy">Privacy boundary</a><a href="releases/v0.26.0.md">v0.26.0 release notes</a></div>
+        <span class="tag">All packages · Private configuration · Personalized copies</span>
+        <h3>Share the same account's newsletter and activity</h3>
+        <p>Choose a source user in Config, add household email addresses, and save. Copies receive that user's exact message; copy addresses stay hidden while the primary recipient remains visible.</p>
+        <ul><li>Multiple source-user assignments with individual validated copy addresses</li><li>View only the selected user's primary address on demand</li><li>Production and Manual Welcome respect source and copy exclusions</li><li>TestEmail remains isolated and a primary address is always required</li><li>Separate copy acceptance counts and partial-delivery warnings</li><li>Copy-only saves do not regenerate previews or warm caches</li></ul>
+        <div class="card-actions"><a href="CONFIGURATION.md#household-copies-bcc">Configure household copies</a><a href="SECURITY.md#recipient-privacy">Privacy boundary</a><a href="releases/v0.27.0.md">v0.27.0 release notes</a></div>
       </article>
     </section>
 

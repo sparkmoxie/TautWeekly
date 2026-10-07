@@ -124,3 +124,23 @@
 .tailscale-status-button{border-color:rgba(173,140,255,.48);background:rgba(173,140,255,.09);box-shadow:0 0 18px rgba(173,140,255,.1)}.tailscale-status-button .tailscale-logo{width:21px;height:21px;display:block}.tailscale-status-button .tailscale-logo path{fill:#f0f0f0;opacity:.2;transition:opacity .24s ease}.tailscale-status-button.active{background:rgba(173,140,255,.14);box-shadow:0 0 20px rgba(173,140,255,.18)}.tailscale-status-button.active .tailscale-logo path:not(.tailscale-fade){opacity:1}.tailscale-status-button.active .tailscale-fade{opacity:.2}.tailscale-status-button[aria-disabled=true]{cursor:default}.tailscale-status-button[aria-disabled=true]:hover{transform:none}
 @media(prefers-reduced-motion:reduce){.metric-link,.metric-link:before,.metric-link:after,.tailscale-status-button .tailscale-logo path{transition:none!important}}
 @media(forced-colors:active){.tailscale-status-button,.tailscale-status-button.active{border-color:Highlight;color:LinkText;background:Canvas;box-shadow:none}.tailscale-status-button:focus-visible{outline-color:Highlight}.metric-link:before{border-bottom-color:CanvasText}.metric-link:after{border-color:CanvasText;color:CanvasText;background:Canvas;box-shadow:none}}
+
+.household-copy-list { display: grid; gap: 1rem; margin-top: 1rem; }
+.household-copy-row { padding: 1rem; border: 1px solid var(--line, #394255); border-radius: 12px; min-width: 0; }
+.household-copy-row p { overflow-wrap: anywhere; }
+.household-address-row { display: grid; grid-template-columns: 1fr auto; gap: .5rem; margin: .75rem 0; }
+.household-address-row label { grid-column: 1 / -1; }
+.household-address-row input { min-width: 0; width: 100%; }
+#household-copies summary { cursor: pointer; padding: .5rem 0; }
+#household-copies > input, #household-copies > select { width: 100%; margin: .5rem 0; }
+@media (max-width: 620px) { .household-address-row { grid-template-columns: 1fr; } }
+
+#household-copies { padding: 1rem; }
+#household-copies > p { padding: .75rem 0; }
+#household-copies label { font-size: .72rem; font-weight: 750; }
+#household-copies input, #household-copies select { min-height: 44px; padding: .68rem .78rem; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--text); background: #0b0c0c; }
+#household-copies input:focus, #household-copies select:focus { outline: 2px solid var(--gold); outline-offset: 2px; }
+#household-copies .button { margin: .25rem .35rem .25rem 0; }
+.household-copy-row h4 { margin: 0 0 .5rem; font-size: .85rem; }
+.household-copy-row p { color: var(--muted); font-size: .72rem; line-height: 1.55; }
+#household-copy-count { color: var(--muted); font-size: .72rem; }
