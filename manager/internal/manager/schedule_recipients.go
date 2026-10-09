@@ -13,8 +13,11 @@ func countDiscoveredPrimaryRecipients(users []map[string]any, values map[string]
 	if len(users) >= maximumDiscoveryChoices {
 		return nil
 	}
-	excludedIDs := normalizedLegacyExclusionRules(values["ExcludedUserIds"])
-	excludedEmails := normalizedLegacyExclusionRules(values["ExcludedEmails"])
+	excludedIDs, idsKnown := productionExclusionRules(values["ExcludedUserIds"])
+	excludedEmails, emailsKnown := productionExclusionRules(values["ExcludedEmails"])
+	if !idsKnown || !emailsKnown {
+		return nil
+	}
 	overrides := normalizedDiscoveryUserEmailOverrides(values["UserEmailOverrides"])
 	seen := map[string]bool{}
 	count := 0
@@ -66,4 +69,30 @@ func countDiscoveredPrimaryRecipients(users []map[string]any, values map[string]
 		count++
 	}
 	return &count
+}
+
+// The renderer compares exclusions case-insensitively without trimming them.
+// Preserve legacy config-file whitespace instead of applying UI normalization.
+func productionExclusionRules(value any) (map[string]struct{}, bool) {
+	rules := make(map[string]struct{})
+	switch entries := value.(type) {
+	case nil:
+	case string:
+		rules[strings.ToLower(entries)] = struct{}{}
+	case []string:
+		for _, entry := range entries {
+			rules[strings.ToLower(entry)] = struct{}{}
+		}
+	case []any:
+		for _, entry := range entries {
+			text, ok := entry.(string)
+			if !ok {
+				return nil, false
+			}
+			rules[strings.ToLower(text)] = struct{}{}
+		}
+	default:
+		return nil, false
+	}
+	return rules, true
 }

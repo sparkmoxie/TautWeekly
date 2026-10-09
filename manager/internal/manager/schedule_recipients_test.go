@@ -118,3 +118,29 @@ func TestDiscoveryReturnsOnlyAggregatePrimaryEvidence(t *testing.T) {
 		}
 	}
 }
+
+func TestScheduleRecipientCountPreservesLegacyExclusionWhitespace(t *testing.T) {
+	users := []map[string]any{{"user_id": "1", "email": "native@example.org", "is_active": 1}}
+	for _, config := range []map[string]any{
+		{"ExcludedEmails": []any{" native@example.org "}},
+		{"ExcludedUserIds": []any{" 1 "}},
+	} {
+		count := countDiscoveredPrimaryRecipients(users, config)
+		if count == nil || *count != 1 {
+			t.Fatal("count normalized a legacy exclusion that production would not match")
+		}
+	}
+	for _, config := range []map[string]any{
+		{"ExcludedEmails": []any{"NATIVE@example.org"}},
+		{"ExcludedEmails": "native@example.org"},
+		{"ExcludedUserIds": []any{"1"}},
+	} {
+		count := countDiscoveredPrimaryRecipients(users, config)
+		if count == nil || *count != 0 {
+			t.Fatal("count missed a production exclusion")
+		}
+	}
+	if count := countDiscoveredPrimaryRecipients(users, map[string]any{"ExcludedEmails": []any{12}}); count != nil {
+		t.Fatal("ambiguous legacy policy should remain unknown")
+	}
+}
