@@ -173,6 +173,7 @@ function createHarness({
     },
     renderUpdates() { events.push("updates:render"); },
     renderVerification() { events.push("verification:render"); },
+    renderDashboardScheduleSummary() {},
     renderDashboardGreeting() { events.push("dashboard:greeting"); },
     async refreshConfigurationStatus() { events.push("configuration:refresh"); },
     async recoverPendingPreviewsFromChoices() { events.push("previews:recover"); },
@@ -561,3 +562,44 @@ for (const [name, source] of [["Manager", productionJS], ["preview", previewJS]]
   }
 }
 console.log("[PASS] Manager/preview schedule windows and confirmations use AM/PM while preserving saved time and timezone context.");
+
+{
+const pathModule = path;
+for (const path of ["manager/internal/manager/web/", "docs/gui-preview/"]) {
+  const source = fs.readFileSync(pathModule.join(repositoryRoot, path, "app.js"), "utf8");
+  const extract = (name) => { const start = source.indexOf(`function ${name}(`); assert(start >= 0); return source.slice(start, source.indexOf("\nfunction ", start + 1)); };
+  const texts = {};
+  const state = { editor: { state: "ready", revision: "current" }, discovery: { configRevision: "current", primaryRecipientCount: 12, completedAtUtc: "2026-01-01T12:00:00Z", retained: true }, status: { observedAtUtc: new Date().toISOString(), schedule: {} } };
+  const context = vm.createContext({ state, Date, setText(id, value) { texts[id] = value; }, formatDate: (v) => v, titleCase: (v) => v });
+  vm.runInContext(["scheduleHasUpcomingRun", "renderDashboardScheduleSummary"].map(extract).join("\n"), context);
+  const render = () => vm.runInContext("renderDashboardScheduleSummary()", context);
+  for (const provider of ["windows-task-scheduler", "embedded-nas", "embedded-mac", "embedded-linux", "embedded-freebsd"]) {
+    state.status.schedule = { provider, supported: true, installed: true, enabled: true, owned: true, state: provider.startsWith("embedded-") ? "running" : "ready", nextRunUtc: "2099-01-01T12:00:00Z" };
+    render();
+    assert.equal(texts["schedule-state"], "Ready — 12 recipients (last lookup)");
+    assert.match(texts["schedule-next-run"], /2099.*your time/);
+    assert.match(texts["schedule-recipient-evidence"], /2026-01-01.*BCC copies are separate/);
+    for (const bad of ["heartbeat-stale", "probe-failed", "starting", "unknown", "error"]) {
+      const prior = state.status.schedule.state; state.status.schedule.state = bad; render();
+      assert.equal(texts["schedule-state"], bad); assert.equal(texts["schedule-next-run"], "Unavailable"); state.status.schedule.state = prior;
+    }
+    for (const key of ["installed", "enabled", "owned", "supported"]) {
+      state.status.schedule[key] = false; render(); assert(!texts["schedule-state"].startsWith("Ready —")); state.status.schedule[key] = true;
+    }
+  }
+  for (const count of [0, 1, 200]) { state.discovery.primaryRecipientCount = count; render(); assert.match(texts["schedule-state"], new RegExp(`${count} recipient${count === 1 ? " " : "s "}`)); }
+  for (const count of [undefined, -1, 1.5, "12"]) { state.discovery.primaryRecipientCount = count; render(); assert.match(texts["schedule-state"], /recipients unknown/); }
+  state.discovery.primaryRecipientCount = 12; state.discovery.configRevision = "obsolete"; render(); assert.match(texts["schedule-state"], /recipients unknown/);
+  state.discovery.configRevision = "current"; state.discoveryError = "failed"; render(); assert.match(texts["schedule-recipient-evidence"], /Latest refresh failed/);
+  state.status.schedule.nextRunUtc = "2020-01-01T00:00:00Z"; render(); assert.equal(texts["schedule-next-run"], "Unavailable");
+  state.status.schedule.nextRunUtc = "bad"; render(); assert.equal(texts["schedule-next-run"], "Unavailable");
+  state.status.schedule.installed = false;
+  state.status.schedule.enabled = false;
+  state.status.schedule.state = "probe-failed"; render(); assert.equal(texts["schedule-next-run"], "Unavailable");
+  for (const missing of ["not-installed", "notinstalled", "disabled"]) { state.status.schedule.state = missing; render(); assert.equal(texts["schedule-next-run"], "Not scheduled"); }
+  const html = fs.readFileSync(pathModule.join(repositoryRoot, path, "index.html"), "utf8");
+  assert.match(html, /id="schedule-installed">[^<]*<\/dd><\/div><div><dt>Next run<\/dt>/);
+}
+console.log("[PASS] Schedule summary: all package providers, cached/unknown/zero recipients, failures, disabled and stale schedules.");
+
+}

@@ -55,6 +55,7 @@ type DiscoveredUser struct {
 }
 
 type TautulliDiscoveryResult struct {
+	PrimaryRecipientCount  *int                `json:"primaryRecipientCount,omitempty"`
 	Mode                   string              `json:"mode"`
 	NetworkBoundary        string              `json:"networkBoundary"`
 	CompletedAtUTC         string              `json:"completedAtUtc"`
@@ -235,6 +236,20 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 	nameErr := tautulliCommand(checkContext, client, base, apiKey, "get_user_names", &rawNames)
 	var rawUsers []map[string]any
 	detailErr := tautulliCommand(checkContext, client, base, apiKey, "get_users", &rawUsers)
+	var primaryRecipientCount *int
+	if detailErr == nil {
+		primaryRecipientCount = countDiscoveredPrimaryRecipients(rawUsers, values)
+		// Names absent from the detailed roster make the aggregate incomplete.
+		detailedIDs := make(map[string]bool)
+		for _, user := range rawUsers {
+			detailedIDs[discoveryUserID(user["user_id"])] = true
+		}
+		for _, user := range rawNames {
+			if id := discoveryUserID(user["user_id"]); id != "" && !detailedIDs[id] {
+				primaryRecipientCount = nil
+			}
+		}
+	}
 	legacyRules := normalizedLegacyExclusionRules(values["ExcludedEmails"])
 	emailOverrides := normalizedDiscoveryUserEmailOverrides(values["UserEmailOverrides"])
 	users, matchedLegacyRules := normalizeDiscoveredUsers(rawNames, rawUsers, legacyRules, emailOverrides)
@@ -242,6 +257,8 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 	hasReservedRosterEntry := nameErr == nil && hasReservedDiscoveredUser(rawNames) || detailErr == nil && hasReservedDiscoveredUser(rawUsers)
 	var tableErr error
 	if nameErr != nil || detailErr != nil || len(users) == 0 || matchedLegacyRules < len(legacyRules) {
+		// Table fallback may be bounded or supply missing policy evidence.
+		primaryRecipientCount = nil
 		var table tautulliUsersTable
 		tableErr = tautulliCommandWithParams(checkContext, client, base, apiKey, "get_users_table", discoveryTableParams(), &table)
 		if tableErr == nil {
@@ -264,6 +281,7 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 		return TautulliDiscoveryResult{}, wrapTautulliDiscoveryError("users", cause)
 	}
 	return TautulliDiscoveryResult{
+		PrimaryRecipientCount:  primaryRecipientCount,
 		Mode:                   "real-lan-discovery",
 		NetworkBoundary:        "private-and-loopback-only",
 		CompletedAtUTC:         now().UTC().Format(time.RFC3339),

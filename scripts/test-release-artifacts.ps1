@@ -956,6 +956,22 @@ finally {
     $nasZip.Dispose()
     $macZip.Dispose()
 }
+# Mac's portable fallback and native Linux ship the same compiled Manager targets.
+$sharedMacZip = [IO.Compression.ZipFile]::OpenRead((Join-Path $DistPath 'TautWeekly-mac-docker.zip'))
+$sharedLinuxZip = [IO.Compression.ZipFile]::OpenRead((Join-Path $DistPath 'TautWeekly-linux.zip'))
+try {
+    foreach ($architecture in @('amd64', 'arm64')) {
+        $macManager = $sharedMacZip.GetEntry("TautWeekly-mac-docker/manager/tautweekly-manager-linux-$architecture")
+        $linuxManager = $sharedLinuxZip.GetEntry("TautWeekly-linux/manager/tautweekly-manager-linux-$architecture")
+        Assert-True ($null -ne $macManager -and $null -ne $linuxManager) "Shared $architecture Manager is missing."
+        Assert-True ((Get-ZipEntrySha256 $macManager) -ceq (Get-ZipEntrySha256 $linuxManager)) "Mac and Linux $architecture Manager binaries differ."
+    }
+}
+finally {
+    $sharedMacZip.Dispose()
+    $sharedLinuxZip.Dispose()
+}
+
 $checksumPath = Join-Path $DistPath 'SHA256SUMS.txt'
 Assert-True (Test-Path -LiteralPath $checksumPath) 'SHA256SUMS.txt is missing.'
 $checksumLines = @(Get-Content -LiteralPath $checksumPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })

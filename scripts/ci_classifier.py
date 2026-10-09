@@ -192,6 +192,15 @@ def classify_path(raw_path: str) -> dict[str, bool]:
         return result
 
     if path.startswith("scripts/"):
+        # The builder chooses renderer bytes, all platform payloads and native
+        # binaries. A package-only gate cannot prove changes to these consumers.
+        if path == "scripts/build-releases.ps1":
+            enable_all_validation(result)
+            return result
+        if path == "scripts/test-release-artifacts.ps1":
+            enable(result, "powershell", "renderer", "package", "installer")
+            return result
+
         if path in FAST_ONLY_SCRIPTS:
             return result
 

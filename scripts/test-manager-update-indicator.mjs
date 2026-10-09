@@ -265,3 +265,20 @@ assert.match(previewMock, /backgroundCheckRecommended: true/);
 assert.match(previewMock, /setTimeout\(\(\) => \{/);
 
 console.log("[PASS] Manager update indicator visibility, package matrix, routing, motion, mobile, and preview contracts.");
+
+const currentBadge = { ...checked, state: "current", updateAvailable: false, latestStableVersion: "1.2.3" };
+assert.deepEqual(updateUI.managerBadge(currentBadge), { version: "v1.2.3", status: "Latest" });
+for (const [changes, status] of [
+  [{ checkInProgress: true }, "Checking"], [{ lastFailure: { code: "offline" } }, "Check failed"],
+  [{ state: "legacy" }, "Legacy wrapper"], [{ state: "mismatched" }, "Version mismatch"],
+  [{ latestStableVersion: "bad" }, "Not checked"], [{ lastSuccessfulCheckUtc: "" }, "Not checked"],
+  [{ packageVersion: "1.2.2" }, "Not checked"], [{ imageVersion: "1.2.2" }, "Not checked"],
+  [{ updateChannel: "unsupported" }, "Not checked"], [{ latestStableVersion: "1.3.0" }, "Not checked"],
+]) assert.equal(updateUI.managerBadge({ ...currentBadge, ...changes }).status, status);
+assert.equal(updateUI.managerBadge(checked).status, "Update available");
+assert.equal(updateUI.managerBadge({ ...currentBadge, state: "newer", latestStableVersion: "1.2.2" }).status, "Newer than stable");
+assert.deepEqual(updateUI.managerBadge({}, "v1.2.3"), { version: "v1.2.3", status: "Not checked" });
+assert.match(productionHTML, /<button class="mode-pill"[^>]+id="manager-version-badge"[^>]+aria-controls="update-settings-panel"/);
+assert.match(productionCSS, /mode-pill:hover [.]manager-version-tooltip/);
+assert.match(productionCSS, /mode-pill:focus-visible [.]manager-version-tooltip/);
+console.log("[PASS] Manager badge version/currentness, failure/mismatch/unknown states and shared hover/focus tooltip.");

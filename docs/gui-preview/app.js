@@ -746,7 +746,7 @@ function renderStatus() {
   setText("schedule-installed", yesNo(snapshot.schedule.installed));
   setText("schedule-enabled", yesNo(snapshot.schedule.enabled));
   setText("schedule-ownership", titleCase(snapshot.schedule.ownership));
-  setText("schedule-state", titleCase(snapshot.schedule.state));
+  renderDashboardScheduleSummary();
   const scheduleOwned = !snapshot.schedule.installed || snapshot.schedule.owned;
   const embeddedSchedule = snapshot.schedule.provider?.startsWith("embedded-");
   const scheduleProbeFailed = ["probe-failed", "heartbeat-stale", "starting"].includes(snapshot.schedule.state);
@@ -810,6 +810,24 @@ function productionDeliveryStartedAt(snapshot = state.status) {
   return productionDeliveryOperationIsActive()
     ? state.operation?.startedAtUtc || snapshot?.delivery?.lastAttemptUtc
     : snapshot?.delivery?.lastAttemptUtc;
+}
+
+function renderDashboardScheduleSummary() {
+  const snapshot = state.status;
+  if (!snapshot) return;
+  const schedule = snapshot.schedule;
+  const upcoming = schedule.supported && scheduleHasUpcomingRun(snapshot) && new Date(schedule.nextRunUtc || schedule.nextRunLocal).getTime() > Date.now();
+  const unscheduled = schedule.supported && ["not-installed", "notinstalled", "disabled"].includes(schedule.state);
+  setText("schedule-next-run", upcoming ? `${formatDate(schedule.nextRunUtc || schedule.nextRunLocal)} (your time)` : unscheduled ? "Not scheduled" : "Unavailable");
+  const ready = schedule.supported && schedule.installed && schedule.enabled && schedule.owned && state.editor?.state === "ready" && (schedule.provider?.startsWith("embedded-") ? schedule.state === "running" : schedule.state === "ready");
+  const discovery = state.discovery;
+  const count = discovery?.primaryRecipientCount;
+  const known = discovery?.configRevision === state.editor?.revision && Number.isInteger(count) && count >= 0 && !Number.isNaN(Date.parse(discovery?.completedAtUtc));
+  setText("schedule-state", ready ? `Ready — ${known ? `${count} recipient${count === 1 ? "" : "s"} (last lookup)` : "recipients unknown"}` : titleCase(schedule.state));
+  setText("schedule-recipient-evidence", ready ? known
+    ? `Primary recipients as of ${formatDate(discovery.completedAtUtc)}. Household BCC copies are separate. ${state.discoveryError ? "Latest refresh failed. " : ""}Delivery rechecks the live roster; use Refresh to update this count.`
+    : "Refresh to check eligible primary recipients. Delivery rechecks the live roster; household BCC copies are separate."
+    : "");
 }
 
 function scheduleHasUpcomingRun(snapshot) {
@@ -1156,6 +1174,7 @@ function reviewDirectPlexFields() {
 }
 
 function renderDiscovery() {
+  renderDashboardScheduleSummary();
   if (state.discovery && state.discovery.configRevision !== state.editor?.revision) state.discovery = null;
   const confirm = byId("discovery-confirm");
   const button = byId("discovery-run-button");
@@ -4095,6 +4114,10 @@ function releaseAlignmentSummary(update) {
 function renderUpdates() {
   const update = state.updates || {};
   renderUpdateStatusButton(update);
+  const badge = window.TautWeeklyUpdateUI.managerBadge(update, state.about?.version);
+  setText("manager-badge-version", badge.version);
+  setText("manager-badge-status", badge.status);
+  byId("manager-version-badge").setAttribute("aria-label", `Application and package status: ${badge.version} — ${badge.status}${update.lastSuccessfulCheckUtc ? `. Last checked ${formatDate(update.lastSuccessfulCheckUtc)}` : ""}`);
   byId("update-settings-panel").classList.toggle("update-attention-glow", update.state !== "current");
   const presentation = updateStatePresentation(update);
   setChip("update-settings-chip", state.updateChecking || update.checkInProgress ? "Checking" : presentation.label, state.updateChecking || update.checkInProgress ? "pending" : presentation.tone);
@@ -4739,6 +4762,7 @@ byId("logout-button").addEventListener("click", logout);
 byId("refresh-button").addEventListener("click", refreshApplicationStatus);
 byId("access-status-button").addEventListener("click", openAccessSettings);
 byId("update-status-button").addEventListener("click", openUpdateSettings);
+byId("manager-version-badge").addEventListener("click", openUpdateSettings);
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => selectView(button.dataset.view)));
 document.querySelectorAll("[data-open-view]").forEach((button) => button.addEventListener("click", () => selectView(button.dataset.openView)));
 window.addEventListener("popstate", applyLocationRoute);

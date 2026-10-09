@@ -602,7 +602,11 @@ Require-Text 'platforms/nas-docker/Dockerfile' @(
     'io\.tautweekly\.runtime-profiles="desktop,server,unraid"'
 )
 Require-Text 'platforms/nas-docker/Dockerfile.dockerignore' @(
-    '!THIRD_PARTY_NOTICES\.md'
+    '!THIRD_PARTY_NOTICES\.md',
+    '(?m)^manager/bin/\r?$',
+    '(?m)^\*\*/\.manager-data/\r?$',
+    '(?m)^\*\*/config\.json\r?$',
+    '(?m)^\*\*/state\.json\r?$'
 )
 Require-Text 'platforms/nas-docker/app/entrypoint.sh' @(
     '/tmp/tautweekly/home',

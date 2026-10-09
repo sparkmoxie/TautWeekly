@@ -58,6 +58,28 @@
     return { visible: true, version, label: `Update available — Version ${version}` };
   }
 
+  function managerBadge(update = {}, fallbackVersion = "") {
+    const manager = parseVersion(update.managerVersion || fallbackVersion);
+    const version = manager ? `v${manager.normalized}` : "Version not reported";
+    let status = "Not checked";
+    if (update.checkInProgress) status = "Checking";
+    else if (update.lastFailure) status = "Check failed";
+    else if (update.state === "legacy") status = "Legacy wrapper";
+    else if (update.state === "mismatched") status = "Version mismatch";
+    else if (updateIndicator(update).visible) status = "Update available";
+    else if (manager && update.updateChannel === "stable" && Number.isFinite(Date.parse(update.lastSuccessfulCheckUtc))) {
+      const latest = parseVersion(update.latestStableVersion, true);
+      const layers = [update.applicationVersion, update.packageVersion, update.imageVersion].filter(Boolean);
+      const aligned = layers.every((value) => { const layer = parseVersion(value); return layer && compareVersions(manager, layer) === 0; });
+      if (latest && aligned && update.hostAdapterState !== "legacy") {
+        const comparison = compareVersions(manager, latest);
+        if (update.state === "current" && comparison === 0 && !update.updateAvailable) status = "Latest";
+        else if (update.state === "newer" && comparison > 0) status = "Newer than stable";
+      }
+    }
+    return { version, status };
+  }
+
   function updateCheckCooldown(update, nowMilliseconds = Date.now()) {
     const retryAt = Date.parse(String(update?.nextCheckAllowedAtUtc || ""));
     if (!Number.isFinite(retryAt) || !Number.isFinite(nowMilliseconds)) {
@@ -85,5 +107,5 @@
     return routedViews.has(view) ? `#${view}` : "#dashboard";
   }
 
-  return Object.freeze({ updateIndicator, updateCheckCooldown, routeFromHash, hashForRoute });
+  return Object.freeze({ managerBadge, updateIndicator, updateCheckCooldown, routeFromHash, hashForRoute });
 });

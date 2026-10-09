@@ -647,6 +647,21 @@ saved again.
 
 ## Scheduling
 
+The Dashboard Schedule card shows **Next run** beneath Installed using the
+scheduler's observed next-run timestamp, displayed in your browser's timezone.
+Disabled or missing schedules show Not scheduled; unavailable or past evidence
+is not presented as an upcoming run. The Schedule page retains the configured
+recurring day/time and runtime timezone.
+
+A ready scheduler shows the number of eligible **primary recipients at the last
+successful lookup**, with its timestamp. The count respects active/deleted state,
+stable-ID exclusions, native-address precedence, fallback addresses, and effective
+address exclusions. Household BCC copies are separate; two included source users
+sharing one inbox still count as two primary newsletters. Discovery fallback or
+incomplete evidence, older caches, and configuration changes can make the count
+unknown. Use **Refresh** to look up the current roster. No discovery or email is
+triggered by viewing the card, and every production delivery rechecks recipients.
+
 | Key | Purpose |
 |---|---|
 | `ScheduleDay`, `ScheduleTime` | Local delivery day and 24-hour time |

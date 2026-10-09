@@ -6,6 +6,19 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.27.1] - 2026-10-09
+
+### Changed
+
+- Show the observed next schedule date/time beneath Installed and a timestamped eligible-primary-recipient count in the Dashboard Schedule card across every Manager package. Unknown, stale, disabled, and failed evidence remains explicit; household BCC copies are separate and live delivery still rechecks the roster.
+- Give the Manager badge the shared downward animated tooltip with its version and verified update state, plus keyboard access to Application and package status.
+- Compile each Linux Manager architecture once per release build and reuse the identical binaries in the Mac fallback and native Linux packages.
+
+### Fixed
+
+- Exclude local Manager build output, private configuration, and runtime state from the unified Docker source build context.
+- Make release-builder changes select all affected CI gates and artifact-contract changes select renderer and installer coverage.
+
 ## [0.27.0] - 2026-10-07
 
 ### Added
