@@ -2,8 +2,8 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.27.0";
-  const PREVIOUS_VERSION = "0.26.3";
+  const DEMO_VERSION = "0.27.1";
+  const PREVIOUS_VERSION = "0.27.0";
   const PROFILES = {
     windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows" },
     nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker" },
@@ -172,6 +172,7 @@
     cache: cacheStatus,
   };
   const discovery = {
+    primaryRecipientCount: users.length - 2,
     mode: "synthetic-demo",
     networkBoundary: "no network",
     completedAtUtc: now(),
@@ -366,6 +367,8 @@
       schedule: {
         supported: true,
         ...model.schedule,
+        provider: serviceProfile() ? "embedded-" + profile().runtimeMode : "windows-task-scheduler",
+        state: serviceProfile() && model.schedule.state === "ready" ? "running" : model.schedule.state,
         nextRunUtc: model.schedule.installed ? next.toISOString() : "",
         nextRunLocal: model.schedule.installed ? next.toISOString() : "",
       },
@@ -666,6 +669,7 @@
         const changed = [...new Set([...changedValues, ...changedSecrets])];
         const plan = postSavePlan(changed, values);
         if (plan.materialChange) {
+          delete discovery.primaryRecipientCount;
           recordBackup(revision);
           recordDiagnostic("configuration", "passed", "config-saved", "Synthetic configuration validation completed.");
         }
@@ -706,7 +710,15 @@
       setupStatus.running = false;
       return json(cacheStatus);
     }
-    if (path === "/api/v1/discovery/tautulli") return json(method === "POST" ? discovery : { last: discovery });
+    if (path === "/api/v1/discovery/tautulli") {
+      if (method === "POST") {
+        const excluded = new Set(editorFields.find((item) => item.name === "ExcludedUserIds")?.value || []);
+        const overrides = editorFields.find((item) => item.name === "UserEmailOverrides")?.value || {};
+        discovery.primaryRecipientCount = users.filter((user) => !excluded.has(user.id) && (user.eligibility === "eligible" || user.needsDeliveryAddress && overrides[user.id])).length;
+        discovery.completedAtUtc = now();
+      }
+      return json(method === "POST" ? discovery : { last: discovery });
+    }
     if (path === "/api/v1/previews") return json({ previews });
     if (path === "/api/v1/operations" && method === "POST") return json(startOperation(body), 202);
     if (path === "/api/v1/operations/current") return json({ current: model.operation });

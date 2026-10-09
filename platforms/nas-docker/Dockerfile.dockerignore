@@ -6,3 +6,22 @@
 !platforms/nas-docker
 !platforms/nas-docker/app
 !platforms/nas-docker/app/**
+
+# Local build output and private state must never enter the source build context.
+manager/bin/
+**/.manager-data/
+**/config.json
+**/config.backup.*.json
+**/.env
+**/logs/
+**/output/
+**/cache/
+**/*.log
+**/state.json
+**/access-state.json
+**/scheduler-state.json
+**/scheduler-heartbeat.json
+**/service-heartbeat.json
+**/configuration-status.json
+**/last-run.json
+**/.tautweekly-operation.lock

@@ -85,6 +85,15 @@ class ClassifierTests(unittest.TestCase):
     def test_unknown_executable_input_fails_closed(self):
         self.assert_gates(["tools/new-build-helper.py"], set(GATES) - {"pages"})
 
+    def test_release_builder_selects_every_payload_consumer(self):
+        self.assert_gates(["scripts/build-releases.ps1"], set(GATES) - {"pages"})
+
+    def test_artifact_contracts_select_render_and_install_validation(self):
+        self.assert_gates(["scripts/test-release-artifacts.ps1"], {"powershell", "renderer", "package", "installer"}, {"container", "pages"})
+
+    def test_docker_context_privacy_selects_multiarch(self):
+        self.assert_gates(["platforms/nas-docker/Dockerfile.dockerignore"], {"package", "container", "container_arm64"}, {"renderer"})
+
     def test_manual_scopes_are_explicit(self):
         self.assertFalse(any(classify_paths(["manager/go.mod"], "fast").values()))
         self.assertTrue(all(classify_paths(["AGENTS.md"], "full").values()))

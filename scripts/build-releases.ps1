@@ -585,7 +585,9 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $linuxDestination 'app/manager-assets') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/windows/manager-assets/tautweekly-social-preview.jpg') -Destination (Join-Path $linuxDestination 'app/manager-assets/tautweekly-social-preview.jpg') -Force
     Remove-Item -LiteralPath (Join-Path $linuxDestination 'preview-home.html') -Force
-    Build-LinuxManagers -Destination $linuxDestination
+    # Both packages run the same versioned Linux Manager. Compile each target
+    # once, then copy the verified output instead of invoking Go a second time.
+    Copy-Item -LiteralPath (Join-Path $macDestination 'manager') -Destination (Join-Path $linuxDestination 'manager') -Recurse -Force
 
     $freeBsdDestination = Copy-Platform -SourceName 'freebsd-podman' -FolderName 'TautWeekly-freebsd-podman' -GuidePath 'docs/freebsd/README.md'
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/shared/package-update.sh') -Destination (Join-Path $freeBsdDestination 'package-update.sh') -Force

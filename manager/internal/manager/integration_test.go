@@ -575,6 +575,9 @@ func TestTautulliDiscoveryFallsBackToTableBackedLibrariesAndUsers(t *testing.T) 
 	if len(result.Libraries) != 2 || result.Libraries[0].ID != "10" || len(result.Users) != 2 {
 		t.Fatalf("unexpected table-backed discovery result: %+v", result)
 	}
+	if result.PrimaryRecipientCount != nil {
+		t.Fatal("table fallback claimed a complete production recipient count")
+	}
 	if result.SuggestedPreviewUserID != "1" || result.Users[0].Role != "owner" || result.Users[0].Eligibility != "eligible" {
 		t.Fatalf("table-backed user details were not normalized safely: %+v", result.Users)
 	}

@@ -83,6 +83,8 @@ func (s *tautulliDiscoveryStore) Rebase(previousRevision, nextRevision string) (
 	if !ok || clean.ConfigRevision != previousRevision {
 		return false, nil
 	}
+	// A rebased choice list is not new recipient-policy evidence.
+	clean.PrimaryRecipientCount = nil
 	clean.ConfigRevision = nextRevision
 	encoded, err := json.Marshal(clean)
 	if err != nil {
@@ -115,6 +117,10 @@ func sanitizeCachedDiscovery(stored TautulliDiscoveryResult) (TautulliDiscoveryR
 	}
 	if clean.MatchedLegacyRuleCount > clean.LegacyRuleCount {
 		return TautulliDiscoveryResult{}, false
+	}
+	if stored.PrimaryRecipientCount != nil && *stored.PrimaryRecipientCount >= 0 && *stored.PrimaryRecipientCount < maximumDiscoveryChoices {
+		count := *stored.PrimaryRecipientCount
+		clean.PrimaryRecipientCount = &count
 	}
 	seenLibraries := map[string]struct{}{}
 	for _, library := range stored.Libraries {
