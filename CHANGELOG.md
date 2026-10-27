@@ -6,6 +6,13 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.27.2] - 2026-10-27
+
+### Fixed
+
+- Preserve numeric `ExcludedUserIds` and `IncludedLibraryIds` through Manager configuration reads and unrelated saves. Convert valid decimal integer IDs to exact strings without floating-point precision loss, and reject malformed stored ID lists before a save can silently clear them.
+- Honor numeric saved user exclusions in Manager operation checks and scheduled-recipient counts, matching the maintained renderers. Email exclusions remain text-only.
+
 ## [0.27.1] - 2026-10-09
 
 ### Changed

@@ -209,6 +209,29 @@ $scenarios = @(
         Reasons = @(0, 0, 1, 1)
     },
     [PSCustomObject]@{
+        Name = 'all-numeric-user-ids-explicitly-excluded'
+        Users = @(
+            (New-VirtualUser -Id '12345678' -Email 'numeric-viewer1@example.com'),
+            (New-VirtualUser -Id '9007199254740993' -Email 'numeric-viewer2@example.com')
+        )
+        # Keep these as JSON numbers, including an ID beyond JavaScript's safe
+        # integer range, to exercise the renderer's existing numeric-ID policy.
+        ExcludedUserIds = @([int64]12345678, [int64]9007199254740993)
+        ExpectedNumericUserIds = @('12345678', '9007199254740993')
+        ExcludedEmails = @()
+        RejectRecipient = ''
+        FreshAccessState = $false
+        ExitCode = 3
+        Outcome = 'failed'
+        ErrorCategory = 'no-eligible-recipients'
+        Accepted = 0
+        Skipped = 2
+        Failed = 0
+        Reasons = @(0, 0, 2, 0)
+        ExpectedRecipients = @()
+        ExpectedConnections = 0
+    },
+    [PSCustomObject]@{
         Name = 'partial-smtp-failure'
         Users = @(
             (New-VirtualUser -Id '1' -Email 'viewer1@example.com'),
@@ -392,7 +415,11 @@ foreach ($engine in @($engines | Where-Object { $_.Name -like $EnginePattern }))
         continue
     }
 
-    $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-sendall-policy-' + [Guid]::NewGuid().ToString('N'))
+    $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+    $tempRoot = [IO.Path]::GetFullPath((Join-Path $tempParent ('tautweekly-sendall-policy-' + [Guid]::NewGuid().ToString('N'))))
+    if (-not $tempRoot.StartsWith($tempParent.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Refusing a recipient-policy test root outside the system temporary directory.'
+    }
     $appRoot = Join-Path $tempRoot 'app'
     $dataRoot = Join-Path $tempRoot 'data'
     $usersFile = Join-Path $tempRoot 'users.json'
@@ -489,6 +516,12 @@ foreach ($engine in @($engines | Where-Object { $_.Name -like $EnginePattern }))
                 }
                 foreach ($entry in $overrides.GetEnumerator()) { $config | Add-Member -NotePropertyName $entry.Key -NotePropertyValue $entry.Value -Force }
                 $config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $configPath -Encoding UTF8
+                $expectedNumericIds = $scenario.PSObject.Properties['ExpectedNumericUserIds']
+                if ($null -ne $expectedNumericIds) {
+                    $storedNumericIds = @((Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json).ExcludedUserIds)
+                    Assert-True (@($storedNumericIds | Where-Object { $_ -is [string] }).Count -eq 0) "$($engine.Name)/$($scenario.Name) converted numeric exclusions to strings before the renderer smoke test."
+                    Assert-True (($storedNumericIds -join ',') -ceq (@($expectedNumericIds.Value) -join ',')) "$($engine.Name)/$($scenario.Name) lost precision in the stored numeric exclusions."
+                }
 
                 $accessUsers = [ordered]@{}
                 foreach ($user in @($scenario.Users)) {

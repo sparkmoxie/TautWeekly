@@ -252,6 +252,28 @@ func SaveConfig(root string, request ConfigSaveRequest, now func() time.Time) (C
 	}
 
 	fieldErrors := make(map[string]string)
+	// Guided controls cannot represent arbitrary malformed stored IDs safely.
+	// Refuse the write before a browser can round-trip them as an empty list.
+	for _, definition := range definitions {
+		if !configDefinitionIsIDList(definition) {
+			continue
+		}
+		value, present := current[definition.Name]
+		if !present {
+			continue
+		}
+		encoded, err := json.Marshal(editorValue(value, definition))
+		if err != nil {
+			fieldErrors[definition.Name] = "The stored ID list could not be read safely."
+			continue
+		}
+		if _, message := parseAndValidateConfigValue(encoded, definition); message != "" {
+			fieldErrors[definition.Name] = "The stored ID list contains unsupported values. Correct it in config.json before saving; no configuration was changed."
+		}
+	}
+	if len(fieldErrors) > 0 {
+		return ConfigSaveResult{}, fieldErrors, nil
+	}
 	for name := range request.Values {
 		if _, ok := knownValues[name]; !ok {
 			fieldErrors[name] = "This field is not supported by the current Manager schema."
@@ -557,7 +579,59 @@ func secretConfigured(values map[string]any, name string) bool {
 	return name == "SmtpPassword" && configValueConfigured(values["SmtpAppPassword"])
 }
 
+// ID numbers are decoded with UseNumber. Convert only exact unsigned decimal
+// integers so IDs never pass through floating point or reach the browser as numbers.
+func configIDListItem(value any) (string, bool) {
+	if text, ok := value.(string); ok {
+		return text, true
+	}
+	number, ok := value.(json.Number)
+	if !ok {
+		return "", false
+	}
+	text := number.String()
+	if text == "" {
+		return "", false
+	}
+	for _, character := range text {
+		if character < '0' || character > '9' {
+			return "", false
+		}
+	}
+	if _, err := strconv.ParseUint(text, 10, 64); err != nil {
+		return "", false
+	}
+	return text, true
+}
+
+func configDefinitionIsIDList(definition configDefinition) bool {
+	return definition.Type == "string-list" && (definition.Name == "ExcludedUserIds" || definition.Name == "IncludedLibraryIds")
+}
+
+func editorIDList(value any) any {
+	switch values := value.(type) {
+	case []string:
+		return values
+	case []any:
+		result := make([]string, 0, len(values))
+		for _, item := range values {
+			text, ok := configIDListItem(item)
+			if !ok {
+				// Preserve invalid entries for visible validation.
+				return value
+			}
+			result = append(result, text)
+		}
+		return result
+	default:
+		return value
+	}
+}
+
 func editorValue(value any, definition configDefinition) any {
+	if configDefinitionIsIDList(definition) {
+		return editorIDList(value)
+	}
 	if definition.Type == "asset-id" {
 		return normalizeCustomTextCardTitleGif(value)
 	}
@@ -626,7 +700,13 @@ func parseAndValidateConfigValue(raw json.RawMessage, definition configDefinitio
 		result := []string{}
 		for _, item := range items {
 			text, ok := item.(string)
+			if configDefinitionIsIDList(definition) {
+				text, ok = configIDListItem(item)
+			}
 			if !ok {
+				if configDefinitionIsIDList(definition) {
+					return nil, "Every ID must be text or an unsigned whole number written in decimal notation."
+				}
 				return nil, "Every list value must be text."
 			}
 			text = strings.TrimSpace(text)

@@ -592,6 +592,20 @@ generation, welcome tracking, delivery, and cache recipient coverage. No
 manual exclusion is needed, and a saved fallback address cannot enable it.
 This rule uses the reserved ID, not the name: a real nonzero user named Local
 remains supported. Tautulli's anonymous playback history is not deleted.
+`ExcludedUserIds` and `IncludedLibraryIds` accept arrays of quoted ID strings
+or unsigned decimal integer IDs. Manager displays and saves valid numeric IDs as
+exact strings, including IDs larger than JavaScript's safe integer range. Mixed
+string/number arrays retain their scope during unrelated configuration saves.
+Malformed numeric forms (fractions, exponents, negatives, or values beyond the
+unsigned 64-bit range) and unsupported list members produce a validation error;
+correct the stored list in `config.json` before saving. They are never silently
+removed. Email exclusion values remain email-address strings.
+
+If a Manager save in v0.27.1 or earlier already cleared numeric exclusions,
+updating cannot recover the lost list automatically. Restore the intended IDs
+from the timestamped `config.backup.*.json` or reselect the excluded users, then
+review the saved policy before production delivery.
+
 Tautulli's legacy `do_notify` notification-agent value does not
 grant or revoke TautWeekly delivery; explicit `ExcludedUserIds` and
 `ExcludedEmails` remain the administrator-controlled opt-out policy. SendAll
