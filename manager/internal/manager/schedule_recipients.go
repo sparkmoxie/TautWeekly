@@ -13,8 +13,8 @@ func countDiscoveredPrimaryRecipients(users []map[string]any, values map[string]
 	if len(users) >= maximumDiscoveryChoices {
 		return nil
 	}
-	excludedIDs, idsKnown := productionExclusionRules(values["ExcludedUserIds"])
-	excludedEmails, emailsKnown := productionExclusionRules(values["ExcludedEmails"])
+	excludedIDs, idsKnown := productionExclusionRules(values["ExcludedUserIds"], true)
+	excludedEmails, emailsKnown := productionExclusionRules(values["ExcludedEmails"], false)
 	if !idsKnown || !emailsKnown {
 		return nil
 	}
@@ -73,7 +73,7 @@ func countDiscoveredPrimaryRecipients(users []map[string]any, values map[string]
 
 // The renderer compares exclusions case-insensitively without trimming them.
 // Preserve legacy config-file whitespace instead of applying UI normalization.
-func productionExclusionRules(value any) (map[string]struct{}, bool) {
+func productionExclusionRules(value any, numericIDs bool) (map[string]struct{}, bool) {
 	rules := make(map[string]struct{})
 	switch entries := value.(type) {
 	case nil:
@@ -86,6 +86,9 @@ func productionExclusionRules(value any) (map[string]struct{}, bool) {
 	case []any:
 		for _, entry := range entries {
 			text, ok := entry.(string)
+			if numericIDs {
+				text, ok = configIDListItem(entry)
+			}
 			if !ok {
 				return nil, false
 			}

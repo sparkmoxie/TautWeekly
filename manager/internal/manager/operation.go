@@ -264,6 +264,9 @@ func savedOperationUserExcluded(values map[string]any, userID string) bool {
 func configStringListContains(value any, candidate string, fold bool) bool {
 	matches := func(item any) bool {
 		text, ok := item.(string)
+		if !fold {
+			text, ok = configIDListItem(item)
+		}
 		if !ok {
 			return false
 		}
