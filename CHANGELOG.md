@@ -6,6 +6,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Expand FreeBSD image references in every packaged launcher and example, and document a complete repository context for local image builds.
+- Refuse native Linux no-op/downgrade updates, coordinate upgrade locks with service shutdown, and restore the previous program and service state when upgrade readiness fails.
+- Keep dashboard delivery polling independent of rendering so active-operation updates cannot postpone fresh status.
+
 ## [0.27.2] - 2026-10-27
 
 ### Fixed

@@ -56,6 +56,15 @@ class ClassifierTests(unittest.TestCase):
             {"renderer"},
         )
 
+    def test_release_input_tests_select_artifact_validation(self):
+        self.assert_gates(["scripts/test-release-package-inputs.ps1"], {"powershell", "renderer", "package", "installer"})
+
+    def test_status_polling_test_is_in_fast_layer(self):
+        self.assert_gates(["scripts/test-manager-status-polling.mjs"], set())
+
+    def test_native_linux_installer_test_selects_package_only(self):
+        self.assert_gates(["scripts/test-linux-installer.py"], {"package"})
+
     def test_installer_does_not_select_renderer_or_container(self):
         self.assert_gates(
             ["installer/cmd/tautweekly-setup/main.go"],

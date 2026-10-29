@@ -33,6 +33,7 @@ FAST_ONLY_SCRIPTS = {
     "scripts/test-manager-accessibility.py",
     "scripts/test-manager-cache-verification.mjs",
     "scripts/test-manager-header-refresh.mjs",
+    "scripts/test-manager-status-polling.mjs",
     "scripts/test-manager-preview-refresh.mjs",
     "scripts/test-manager-update-indicator.mjs",
     "scripts/test-manager-user-email-overrides.mjs",
@@ -197,7 +198,7 @@ def classify_path(raw_path: str) -> dict[str, bool]:
         if path == "scripts/build-releases.ps1":
             enable_all_validation(result)
             return result
-        if path == "scripts/test-release-artifacts.ps1":
+        if path in {"scripts/test-release-artifacts.ps1", "scripts/test-release-package-inputs.ps1"}:
             enable(result, "powershell", "renderer", "package", "installer")
             return result
 
@@ -206,6 +207,10 @@ def classify_path(raw_path: str) -> dict[str, bool]:
 
         if path == "scripts/validate-platforms.ps1":
             enable_all_validation(result)
+            return result
+
+        if path == "scripts/test-linux-installer.py":
+            enable(result, "package")
             return result
 
         if suffix == ".ps1":

@@ -465,6 +465,11 @@ foreach ($archiveName in $expected.Keys) {
             $_ -match '^(?:/|[A-Za-z]:)' -or @($_ -split '/' | Where-Object { $_ -eq '..' }).Count -gt 0
         })
         Assert-True ($unsafeEntries.Count -eq 0) "$archiveName contains unsafe archive paths: $($unsafeEntries -join ', ')"
+        foreach ($payloadEntry in $archive.Entries) {
+            if ([string]::IsNullOrEmpty($payloadEntry.Name) -or $payloadEntry.Length -eq 0) { continue }
+            $payloadBytes = Get-ZipEntryBytes $payloadEntry
+            Assert-True (-not [Text.Encoding]::ASCII.GetString($payloadBytes).Contains('__TAUTWEEKLY_RELEASE_VERSION__')) "$archiveName retains an unresolved release-version token in $($payloadEntry.FullName)."
+        }
         $composeEntries = @($archive.Entries | Where-Object { $_.FullName -match '/compose(?:\.qnap)?\.yaml$' })
         foreach ($composeEntry in $composeEntries) {
             $composeReader = New-Object IO.StreamReader($composeEntry.Open())
@@ -656,6 +661,26 @@ foreach ($archiveName in $expected.Keys) {
         Assert-True ($metadata -match '(?m)^Repository version:\s*(?<version>\S+)\s*$') "$archiveName does not identify its repository version."
         $packageReleaseVersion = $Matches['version']
         $releaseVersions.Add($packageReleaseVersion)
+        if ($archiveName -eq 'TautWeekly-freebsd-podman.zip') {
+            foreach ($relative in @('tautweekly.env.example', 'tautweekly', 'rc.d/tautweekly')) {
+                $identityEntry = $archive.GetEntry("TautWeekly-freebsd-podman/$relative")
+                Assert-True ($null -ne $identityEntry) "FreeBSD archive is missing $relative."
+                $identityText = [Text.Encoding]::UTF8.GetString((Get-ZipEntryBytes $identityEntry))
+                Assert-True ($identityText.Contains("ghcr.io/sparkmoxie/tautweekly:$packageReleaseVersion")) "FreeBSD $relative does not default to repository version $packageReleaseVersion."
+            }
+            $guideEntry = $archive.GetEntry('TautWeekly-freebsd-podman/README.md')
+            Assert-True ($null -ne $guideEntry) 'FreeBSD archive is missing its platform guide.'
+            $guideText = [Text.Encoding]::UTF8.GetString((Get-ZipEntryBytes $guideEntry))
+            Assert-True ($guideText.Contains('git clone --depth 1 --branch "v$release"') -and
+                $guideText.Contains('cd TautWeekly-source') -and
+                $guideText.Contains('-f platforms/nas-docker/Dockerfile')) 'FreeBSD local build instructions must use the complete source checkout and repository-root Dockerfile.'
+            $dockerfileEntry = $archive.GetEntry('TautWeekly-freebsd-podman/Dockerfile')
+            Assert-True ($null -ne $dockerfileEntry) 'FreeBSD archive is missing its reference Dockerfile.'
+            $dockerfileText = [Text.Encoding]::UTF8.GetString((Get-ZipEntryBytes $dockerfileEntry))
+            $canonicalDockerfile = [IO.File]::ReadAllText((Join-Path $Root 'platforms/nas-docker/Dockerfile'))
+            Assert-True (($dockerfileText -replace "`r`n", "`n").Trim() -ceq ($canonicalDockerfile -replace "`r`n", "`n").Trim()) 'FreeBSD reference Dockerfile differs from the documented repository build target.'
+        }
+
         foreach ($composeEntry in $composeEntries) {
             $composeReader = New-Object IO.StreamReader($composeEntry.Open())
             try { $identityText = $composeReader.ReadToEnd() } finally { $composeReader.Dispose() }

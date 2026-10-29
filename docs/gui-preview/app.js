@@ -322,6 +322,7 @@ async function loadAll() {
     renderAbout();
     manageOperationPolling();
     manageSchedulePolling();
+    manageDeliveryStatusPolling();
     setGlobalStatus("Local status refreshed.", true);
     void loadTailscaleAccess();
     void recoverPendingCacheWarm();
@@ -795,7 +796,6 @@ function renderStatus() {
   setTimelineCardState("timeline-previews-card", "timeline-ready", state.previews.length > 0);
   setText("sidebar-platform", `${titleCase(snapshot.platform)} · ${isNAS() ? "trusted LAN" : isLinuxService() ? "host loopback" : isMacDocker() ? "Mac loopback" : "local only"}`);
   setText("update-platform", titleCase(snapshot.platform));
-  manageDeliveryStatusPolling();
 }
 
 function productionDeliveryOperationIsActive() {
@@ -3482,25 +3482,31 @@ let operationPollTimer;
 let operationPollSequence = 0;
 let operationCompletionProcessedID = "";
 
-function manageDeliveryStatusPolling() {
+function manageDeliveryStatusPolling(delay = productionDeliveryIsRunning() ? 1500 : 5000) {
   clearTimeout(deliveryStatusPollTimer);
-  if (document.hidden || byId("app-shell").hidden || !state.status) return;
-  deliveryStatusPollTimer = setTimeout(pollDeliveryStatus, productionDeliveryIsRunning() ? 1500 : 5000);
+  if (deliveryStatusPollInFlight || document.hidden || byId("app-shell").hidden || !state.status) return;
+  deliveryStatusPollTimer = setTimeout(pollDeliveryStatus, delay);
 }
 
 async function pollDeliveryStatus() {
   clearTimeout(deliveryStatusPollTimer);
   if (deliveryStatusPollInFlight || document.hidden || byId("app-shell").hidden || !state.status) return;
+  const pollAuthenticationEpoch = authenticationEpoch;
+  let retryDelay;
   deliveryStatusPollInFlight = true;
   try {
-    state.status = await request("/api/v1/status");
+    const status = await request("/api/v1/status");
+    if (pollAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
+    state.status = status;
     renderStatus();
     if (state.editor) renderSchedule();
   } catch (error) {
+    if (pollAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
     if (error.status === 401) showAuthentication();
-    else deliveryStatusPollTimer = setTimeout(pollDeliveryStatus, 5000);
+    else retryDelay = 5000;
   } finally {
     deliveryStatusPollInFlight = false;
+    manageDeliveryStatusPolling(retryDelay);
   }
 }
 

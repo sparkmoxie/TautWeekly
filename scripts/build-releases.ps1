@@ -119,18 +119,29 @@ function Set-ReleaseVersionTokens {
     param([Parameter(Mandatory = $true)][string]$Destination)
 
     $token = '__TAUTWEEKLY_RELEASE_VERSION__'
-    foreach ($file in Get-ChildItem -LiteralPath $Destination -Recurse -File -Include '*.yaml','*.yml') {
-        $text = [IO.File]::ReadAllText($file.FullName)
-        if ($text.Contains($token)) {
-            $text = $text.Replace($token, $Version)
-            [IO.File]::WriteAllText($file.FullName, $text, [Text.UTF8Encoding]::new($false))
+    $files = @(Get-ChildItem -LiteralPath $Destination -Force -Recurse -File)
+    $utf8 = [Text.UTF8Encoding]::new($false, $true)
+    foreach ($file in $files) {
+        $bytes = [IO.File]::ReadAllBytes($file.FullName)
+        if (-not [Text.Encoding]::ASCII.GetString($bytes).Contains($token)) { continue }
+        $relative = $file.FullName.Substring($Destination.Length).TrimStart('\','/').Replace('\','/')
+        if (-not (Test-UnixTextReleaseFile -RelativePath $relative)) {
+            throw "Release version token found in an unsupported file; refusing to alter it: $relative"
         }
+        try { $text = $utf8.GetString($bytes) }
+        catch { throw "Release version token found in non-UTF-8 content; refusing to alter it: $relative" }
+        if ($text.IndexOf([char]0) -ge 0) {
+            throw "Release version token found in binary content; refusing to alter it: $relative"
+        }
+        $text = $text.Replace($token, $Version)
+        [IO.File]::WriteAllText($file.FullName, $text, [Text.UTF8Encoding]::new($false))
     }
-    $remaining = Get-ChildItem -LiteralPath $Destination -Recurse -File -Include '*.yaml','*.yml' | Where-Object {
-        [IO.File]::ReadAllText($_.FullName).Contains($token)
-    }
-    if ($remaining) {
-        throw "Release package version token was not replaced: $($remaining.FullName -join ', ')"
+    # Scan every payload file, including extensionless launchers and examples.
+    # Unknown/binary inputs must fail closed rather than ship an unresolved tag.
+    foreach ($file in $files) {
+        if ([Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($file.FullName)).Contains($token)) {
+            throw "Release package version token was not replaced: $($file.FullName)"
+        }
     }
 }
 

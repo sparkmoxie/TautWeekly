@@ -389,13 +389,26 @@ sudo tautweekly update
 The update downloads the matching stable TAR archive and `SHA256SUMS.txt`,
 verifies the published SHA-256 plus the archive's internal
 `RELEASE-FILES.txt`, and only then runs the packaged upgrade installer. An
-upgrade stores the previous application payload under
-`/var/lib/tautweekly/backups/program-<timestamp>.tar.gz`, replaces only
-`/opt/tautweekly`, and restarts an already configured service. It does not
-replace `config.json`, state, output, logs, the deleted-item cache, custom assets, or the environment
-file. The installer holds the same operation lock used by preview and send
-commands, records and verifies the repository release metadata, and confirms a
-previously active service becomes active again. Sign back into the Manager,
+upgrade stores a root-owned rollback snapshot under
+`/var/backups/tautweekly/program-<timestamp>.<unique>/`, including the previous
+application payload, package-owned host wrappers and systemd units. It preserves
+`config.json`, state, output, logs, the deleted-item cache, custom assets, and the
+environment file. An already-current package is a no-op; a newer installed
+package is never downgraded to stable.
+
+The installer refuses an active preview or delivery, releases the operation lock
+before stopping an active service, then reacquires it before replacing program
+files. If a terminal operation wins that race, installation is refused and the
+previous service state is restored. Concurrent installers are refused separately.
+Before accepting an update, the installer checks the candidate/installed Manager
+version and release metadata. A restarted service must provide a live Manager,
+fresh supervisor and scheduler heartbeats, and matching service-owned process
+identities. A stopped or disabled service retains that state after an upgrade.
+A failed copy, start, or readiness check automatically restores the previous
+program and host files plus the prior service state; an unsuccessful restoration
+reports the retained root-owned snapshot for administrator recovery.
+
+Sign back into the Manager,
 review **Settings > Updates** and **Dashboard**, rerun verification, PreviewAll, and TestEmail, and only
 then leave the schedule enabled for the next production delivery.
 Manager-triggered preview and delivery operations make one non-blocking lock

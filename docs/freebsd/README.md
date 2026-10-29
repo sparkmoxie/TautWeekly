@@ -376,14 +376,21 @@ Manager **Config > Configuration backups** can permanently delete one selected
 configuration backup only after **Confirm delete**. The current configuration
 is unchanged and the deleted backup cannot be recovered.
 
-The v0.25.0 package defaults `TAUTWEEKLY_IMAGE` to the full release semver and
+The package defaults `TAUTWEEKLY_IMAGE` to the full release semver and
 sets `TAUTWEEKLY_RUNTIME_PROFILE=server`. For immutable automation, append the
 published manifest digest in
-`/usr/local/etc/tautweekly/tautweekly.env`, then restart the service. The release archive also contains the
-Dockerfile and complete application source for local inspection or building:
+`/usr/local/etc/tautweekly/tautweekly.env`, then restart the service.
+
+The archive includes application files and a reference Dockerfile for inspection.
+A local image build requires a complete repository checkout because that
+Dockerfile uses repository-root paths, including the Manager source. With Git
+installed, check out the installed release and build from that repository root:
 
 ```sh
-sudo podman build --os=linux -t localhost/tautweekly:local .
+release="$(sed -n 's/^Repository version:[[:space:]]*//p' /usr/local/share/tautweekly/RELEASE-METADATA.txt)"
+git clone --depth 1 --branch "v$release" https://github.com/sparkmoxie/TautWeekly.git TautWeekly-source
+cd TautWeekly-source
+sudo podman build --os=linux --build-arg BUILD_VERSION="$release" -f platforms/nas-docker/Dockerfile -t localhost/tautweekly:local .
 ```
 
 Set `TAUTWEEKLY_IMAGE=localhost/tautweekly:local` and restart only after the
