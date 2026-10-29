@@ -1157,18 +1157,35 @@ function Get-RecipientWatchedMovies {
     if ([string]::IsNullOrWhiteSpace($ExpectedUserId)) { return $state }
 
     $candidateScoped = $PSBoundParameters.ContainsKey('Candidates')
-    $remaining = [Collections.Generic.List[object]]::new()
+    $pending = [Collections.Generic.List[object]]::new()
+    $pendingByRatingKey = @{}
+    $pendingByGuid = @{}
+    $remainingCount = 0
     if ($candidateScoped) {
         foreach ($candidate in @($Candidates)) {
             if ($null -eq $candidate -or (Get-OptionalStringProperty -InputObject $candidate -Name 'Type') -ne 'movie') { continue }
             $key = (Get-OptionalStringProperty -InputObject $candidate -Name 'RatingKey').Trim()
             $guid = (Get-OptionalStringProperty -InputObject $candidate -Name 'MetadataGuid').Trim()
             if (-not [string]::IsNullOrWhiteSpace($key) -or -not [string]::IsNullOrWhiteSpace($guid)) {
-                $remaining.Add([PSCustomObject]@{ RatingKey = $key; MetadataGuid = $guid })
+                $candidateIndex = $pending.Count
+                $pending.Add([PSCustomObject]@{ RatingKey = $key; MetadataGuid = $guid; Matched = $false })
+                if (-not [string]::IsNullOrWhiteSpace($key)) {
+                    if (-not $pendingByRatingKey.ContainsKey($key)) {
+                        $pendingByRatingKey[$key] = [Collections.Generic.HashSet[int]]::new()
+                    }
+                    [void]$pendingByRatingKey[$key].Add($candidateIndex)
+                }
+                if (-not [string]::IsNullOrWhiteSpace($guid)) {
+                    if (-not $pendingByGuid.ContainsKey($guid)) {
+                        $pendingByGuid[$guid] = [Collections.Generic.HashSet[int]]::new()
+                    }
+                    [void]$pendingByGuid[$guid].Add($candidateIndex)
+                }
             }
         }
         # No visible movie can receive a marker; do not scan a user's history.
-        if ($remaining.Count -eq 0) { return $state }
+        $remainingCount = $pending.Count
+        if ($remainingCount -eq 0) { return $state }
     }
 
     $watchedThreshold = if ($null -ne $Config.PSObject.Properties["WatchedPercent"]) {
@@ -1222,13 +1239,33 @@ function Get-RecipientWatchedMovies {
                     $ratingKey = (Get-OptionalStringProperty -InputObject $row -Name "rating_key").Trim()
                     $metadataGuid = (Get-OptionalStringProperty -InputObject $row -Name "guid").Trim()
                     if ($candidateScoped) {
+                        # Constant-time misses keep long unmatched histories
+                        # linear in their row count, regardless of shelf size.
+                        $keyMatches = $pendingByRatingKey[$ratingKey]
+                        $guidMatches = $pendingByGuid[$metadataGuid]
+                        if ($null -eq $keyMatches -and $null -eq $guidMatches) { continue }
+                        # Snapshot the union before removing either alias. A
+                        # single row may resolve multiple duplicate candidates
+                        # through its rating key and GUID independently.
+                        $matchedIndices = [Collections.Generic.HashSet[int]]::new()
+                        foreach ($index in $keyMatches) { [void]$matchedIndices.Add($index) }
+                        foreach ($index in $guidMatches) { [void]$matchedIndices.Add($index) }
                         $matched = $false
-                        for ($candidateIndex = $remaining.Count - 1; $candidateIndex -ge 0; $candidateIndex--) {
-                            $candidate = $remaining[$candidateIndex]
-                            if ((-not [string]::IsNullOrWhiteSpace($ratingKey) -and $ratingKey -eq $candidate.RatingKey) -or
-                                (-not [string]::IsNullOrWhiteSpace($metadataGuid) -and $metadataGuid -eq $candidate.MetadataGuid)) {
-                                $remaining.RemoveAt($candidateIndex)
-                                $matched = $true
+                        foreach ($candidateIndex in $matchedIndices) {
+                            $candidate = $pending[$candidateIndex]
+                            if ($candidate.Matched) { continue }
+                            $candidate.Matched = $true
+                            [void]($remainingCount--)
+                            $matched = $true
+                            if (-not [string]::IsNullOrWhiteSpace($candidate.RatingKey)) {
+                                $indices = $pendingByRatingKey[$candidate.RatingKey]
+                                [void]$indices.Remove($candidateIndex)
+                                if ($indices.Count -eq 0) { [void]$pendingByRatingKey.Remove($candidate.RatingKey) }
+                            }
+                            if (-not [string]::IsNullOrWhiteSpace($candidate.MetadataGuid)) {
+                                $indices = $pendingByGuid[$candidate.MetadataGuid]
+                                [void]$indices.Remove($candidateIndex)
+                                if ($indices.Count -eq 0) { [void]$pendingByGuid.Remove($candidate.MetadataGuid) }
                             }
                         }
                         if (-not $matched) { continue }
@@ -1238,7 +1275,7 @@ function Get-RecipientWatchedMovies {
                     # Stop only after every displayed candidate has a positive,
                     # recipient/library-checked all-time match. Unmatched items
                     # retain the complete historical pagination semantics.
-                    if ($candidateScoped -and $remaining.Count -eq 0) { return $state }
+                    if ($candidateScoped -and $remainingCount -eq 0) { return $state }
                 }
 
                 if ($rows.Count -lt $pageSize) { break }

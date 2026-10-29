@@ -73,11 +73,18 @@ foreach ($renderer in $renderers) {
     $script:HistoryFailure = $false
     $script:HistoryPagination = $false
     $script:HistoryFirstPageMatch = $false
+    $script:HistoryFixtureRows = $null
     function Invoke-TautulliApi {
         param([string]$Command, [hashtable]$Parameters)
         if ($Command -ne 'get_history') { throw "Unexpected command: $Command" }
         $script:HistoryCalls.Add($Parameters.Clone())
         if ($script:HistoryFailure) { throw 'Synthetic historical lookup failure' }
+        if ($null -ne $script:HistoryFixtureRows) {
+            $start = [int]$Parameters.start
+            $count = [Math]::Min([int]$Parameters.length, $script:HistoryFixtureRows.Count - $start)
+            $pageRows = @($script:HistoryFixtureRows.GetRange($start, $count).ToArray())
+            return [PSCustomObject]@{ data = $pageRows; recordsFiltered = $script:HistoryFixtureRows.Count }
+        }
         if ($script:HistoryPagination) {
             # v2.18.0 SQL pagination preserves the same API shape; history rows
             # omit redundant section_id while the query remains scoped.
@@ -173,6 +180,49 @@ foreach ($renderer in $renderers) {
     $foreignState = Get-RecipientWatchedMovies -ExpectedUserId '1' -Candidates $foreign
     Assert-True ($foreignState.RatingKeys.Count -eq 0 -and $foreignState.MetadataGuids.Count -eq 0) "$($renderer.Path) accepted a foreign user/library candidate match"
     Write-Host "[PASS] Watched synthetic pagination: baseline=2 requests; all candidates found=1; no movies=0; unmatched or late GUID=2."
+
+    # Shared keys, independent GUID aliases, and case-only duplicate candidates
+    # must resolve once. A later repeat of a resolved alias cannot consume the
+    # remaining count or add unrelated row identities to the scoped state.
+    $script:HistoryCalls.Clear()
+    $script:HistoryFixtureRows = [Collections.Generic.List[object]]::new()
+    $script:HistoryFixtureRows.Add([PSCustomObject]@{section_id='10';user_id='1';media_type='movie';rating_key='SHARED';guid='plex://movie/ROW-GUID';watched_status=1;percent_complete=100})
+    $script:HistoryFixtureRows.Add([PSCustomObject]@{section_id='10';user_id='1';media_type='movie';rating_key='repeat-must-not-appear';guid='plex://movie/GUID-A';watched_status=1;percent_complete=100})
+    foreach ($invalid in @(
+        @{section_id='10';user_id='2';media_type='movie';watched_status=1;percent_complete=100},
+        @{section_id='99';user_id='1';media_type='movie';watched_status=1;percent_complete=100},
+        @{section_id='10';media_type='movie';watched_status=1;percent_complete=100},
+        @{section_id='10';user_id='1';media_type='episode';watched_status=1;percent_complete=100},
+        @{section_id='10';user_id='1';media_type='movie';watched_status=0;percent_complete=0}
+    )) {
+        $invalid.rating_key = 'late-key'; $invalid.guid = 'plex://movie/guid-c'
+        $script:HistoryFixtureRows.Add([PSCustomObject]$invalid)
+    }
+    while ($script:HistoryFixtureRows.Count -lt 1000) {
+        $script:HistoryFixtureRows.Add([PSCustomObject]@{section_id='10';user_id='1';media_type='movie';rating_key='unmatched-padding';guid='plex://movie/unmatched-padding';watched_status=1;percent_complete=100})
+    }
+    $script:HistoryFixtureRows.Add([PSCustomObject]@{section_id='10';user_id='1';media_type='movie';rating_key='fresh-rekey';guid='plex://movie/GUID-C';watched_status=1;percent_complete=100})
+    $aliases = @(
+        [PSCustomObject]@{Type='movie';RatingKey='shared';MetadataGuid='plex://movie/guid-a'},
+        [PSCustomObject]@{Type='movie';RatingKey='shared';MetadataGuid='plex://movie/guid-b'},
+        [PSCustomObject]@{Type='movie';RatingKey='SHARED';MetadataGuid='plex://movie/GUID-A'},
+        [PSCustomObject]@{Type='movie';RatingKey='independent-key';MetadataGuid='plex://movie/row-guid'},
+        [PSCustomObject]@{Type='movie';RatingKey='late-key';MetadataGuid='plex://movie/guid-c'}
+    )
+    $aliasResults = @(Get-RecipientWatchedMovies -ExpectedUserId '1' -Candidates $aliases)
+    Assert-True ($aliasResults.Count -eq 1) "$($renderer.Path) leaked lookup-index mutator output"
+    $aliasState = $aliasResults[0]
+    Assert-True ($script:HistoryCalls.Count -eq 2) "$($renderer.Path) stopped early after a repeated resolved alias or foreign/unwatched row"
+    Assert-True ($aliasState.RatingKeys.Count -eq 2 -and $aliasState.RatingKeys.ContainsKey('shared') -and $aliasState.RatingKeys.ContainsKey('fresh-rekey')) "$($renderer.Path) lost key/GUID union matching or late rekey identity"
+    Assert-True ($aliasState.MetadataGuids.Count -eq 2 -and $aliasState.MetadataGuids.ContainsKey('plex://movie/row-guid') -and $aliasState.MetadataGuids.ContainsKey('plex://movie/guid-c')) "$($renderer.Path) lost case-insensitive GUID identity"
+    foreach ($notReturned in @('repeat-must-not-appear', 'independent-key', 'late-key', 'unmatched-padding')) {
+        Assert-True (-not $aliasState.RatingKeys.ContainsKey($notReturned)) "$($renderer.Path) emitted an unmatched, resolved-repeat, or unproven candidate identity"
+    }
+    foreach ($query in $script:HistoryCalls) {
+        Assert-True ($query.user_id -eq '1' -and $query.section_id -eq '10' -and $query.media_type -eq 'movie') "$($renderer.Path) widened indexed historical lookup scope"
+    }
+    $script:HistoryFixtureRows = $null
+    Write-Host '[PASS] Indexed watched lookup: duplicate/case aliases, key/GUID union, resolved repeats, late GUIDs, recipient/library/privacy refusal, and clean output.'
 
     $savedConfig = $script:Config
     $script:Config = [PSCustomObject]@{ WatchedPercent=85; MaxMovies=1; MaxTv=0 }
