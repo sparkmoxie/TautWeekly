@@ -57,6 +57,7 @@ RENDERER_TEST_MARKERS = (
     "renderer-collection",
     "sendall-recipient",
     "smtp-transport",
+    "smtp-streaming",
     "top-movie-genre",
     "user-exclusion",
 )
@@ -209,6 +210,14 @@ def classify_path(raw_path: str) -> dict[str, bool]:
 
         if path == "scripts/validate-platforms.ps1":
             enable_all_validation(result)
+            return result
+
+        if path == "scripts/test-runtime-logs.ps1":
+            enable(result, "powershell", "package", "container", "container_arm64")
+            return result
+
+        if path in {"scripts/container-candidate.py", "scripts/test-container-candidate.py"}:
+            enable(result, "container", "container_arm64")
             return result
 
         if path == "scripts/precompress-manager-assets.mjs":

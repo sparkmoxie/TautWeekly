@@ -56,8 +56,15 @@ class ClassifierTests(unittest.TestCase):
             {"renderer"},
         )
 
+    def test_runtime_log_tests_select_service_consumers(self):
+        self.assert_gates(["scripts/test-runtime-logs.ps1"], {"powershell", "package", "container", "container_arm64"})
+
+    def test_container_candidate_helpers_select_multiarch_publication(self):
+        for path in ["scripts/container-candidate.py", "scripts/test-container-candidate.py"]:
+            self.assert_gates([path], {"container", "container_arm64"})
+
     def test_email_optimization_tests_require_renderer_validation(self):
-        for path in ["scripts/test-email-optimizations.ps1", "scripts/test-email-size-budgets.py"]:
+        for path in ["scripts/test-email-optimizations.ps1", "scripts/test-email-size-budgets.py", "scripts/test-smtp-streaming.ps1"]:
             self.assert_gates([path], {"powershell", "renderer"})
 
     def test_static_compressor_selects_every_manager_consumer(self):

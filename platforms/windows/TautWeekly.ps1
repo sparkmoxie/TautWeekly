@@ -1130,8 +1130,20 @@ function Get-History {
     return $all.ToArray()
 }
 
+function Get-NewsletterWatchedMovieCandidates {
+    param([object]$ReleaseData, [AllowNull()][object]$HotRelease, [bool]$QuietReleaseMode)
+    $display = Get-NewsletterReleaseDisplayData -ReleaseData $ReleaseData -HotRelease $HotRelease -QuietReleaseMode $QuietReleaseMode
+    foreach ($item in @($display.Movies)) {
+        if ((Get-OptionalStringProperty -InputObject $item -Name 'Type') -eq 'movie') { $item }
+    }
+    if ($null -ne $HotRelease -and $null -ne $HotRelease.Item -and
+        (Get-OptionalStringProperty -InputObject $HotRelease.Item -Name 'Type') -eq 'movie') {
+        $HotRelease.Item
+    }
+}
+
 function Get-RecipientWatchedMovies {
-    param([string]$ExpectedUserId)
+    param([string]$ExpectedUserId, [AllowEmptyCollection()][object[]]$Candidates = $null)
 
     $ratingKeys = @{}
     $metadataGuids = @{}
@@ -1142,6 +1154,21 @@ function Get-RecipientWatchedMovies {
     }
 
     if ([string]::IsNullOrWhiteSpace($ExpectedUserId)) { return $state }
+
+    $candidateScoped = $PSBoundParameters.ContainsKey('Candidates')
+    $remaining = [Collections.Generic.List[object]]::new()
+    if ($candidateScoped) {
+        foreach ($candidate in @($Candidates)) {
+            if ($null -eq $candidate -or (Get-OptionalStringProperty -InputObject $candidate -Name 'Type') -ne 'movie') { continue }
+            $key = (Get-OptionalStringProperty -InputObject $candidate -Name 'RatingKey').Trim()
+            $guid = (Get-OptionalStringProperty -InputObject $candidate -Name 'MetadataGuid').Trim()
+            if (-not [string]::IsNullOrWhiteSpace($key) -or -not [string]::IsNullOrWhiteSpace($guid)) {
+                $remaining.Add([PSCustomObject]@{ RatingKey = $key; MetadataGuid = $guid })
+            }
+        }
+        # No visible movie can receive a marker; do not scan a user's history.
+        if ($remaining.Count -eq 0) { return $state }
+    }
 
     $watchedThreshold = if ($null -ne $Config.PSObject.Properties["WatchedPercent"]) {
         Safe-Int $Config.WatchedPercent
@@ -1192,14 +1219,25 @@ function Get-RecipientWatchedMovies {
                     if (-not $qualified) { continue }
 
                     $ratingKey = (Get-OptionalStringProperty -InputObject $row -Name "rating_key").Trim()
-                    if (-not [string]::IsNullOrWhiteSpace($ratingKey)) {
-                        $ratingKeys[$ratingKey] = $true
-                    }
-
                     $metadataGuid = (Get-OptionalStringProperty -InputObject $row -Name "guid").Trim()
-                    if (-not [string]::IsNullOrWhiteSpace($metadataGuid)) {
-                        $metadataGuids[$metadataGuid] = $true
+                    if ($candidateScoped) {
+                        $matched = $false
+                        for ($candidateIndex = $remaining.Count - 1; $candidateIndex -ge 0; $candidateIndex--) {
+                            $candidate = $remaining[$candidateIndex]
+                            if ((-not [string]::IsNullOrWhiteSpace($ratingKey) -and $ratingKey -eq $candidate.RatingKey) -or
+                                (-not [string]::IsNullOrWhiteSpace($metadataGuid) -and $metadataGuid -eq $candidate.MetadataGuid)) {
+                                $remaining.RemoveAt($candidateIndex)
+                                $matched = $true
+                            }
+                        }
+                        if (-not $matched) { continue }
                     }
+                    if (-not [string]::IsNullOrWhiteSpace($ratingKey)) { $ratingKeys[$ratingKey] = $true }
+                    if (-not [string]::IsNullOrWhiteSpace($metadataGuid)) { $metadataGuids[$metadataGuid] = $true }
+                    # Stop only after every displayed candidate has a positive,
+                    # recipient/library-checked all-time match. Unmatched items
+                    # retain the complete historical pagination semantics.
+                    if ($candidateScoped -and $remaining.Count -eq 0) { return $state }
                 }
 
                 if ($rows.Count -lt $pageSize) { break }
@@ -9629,7 +9667,6 @@ if ($Mode -eq "SendWelcome") {
         throw "This user is not eligible for welcome delivery: $welcomeSkipReason."
     }
     $recipientPlatform = Get-NewsletterLastPlatform -ExpectedUserId $user.UserId
-    $recipientWatchedMovies = Get-RecipientWatchedMovies -ExpectedUserId $user.UserId
 
     $accessState = Sync-AccessRoster
 
@@ -9691,6 +9728,7 @@ if ($Mode -eq "SendWelcome") {
     }
     else { $releaseData }
     $activeHero = if ($isQuietReleaseWeek) { $trendingHero } else { $hotRelease }
+    $recipientWatchedMovies = Get-RecipientWatchedMovies -ExpectedUserId $user.UserId -Candidates @(Get-NewsletterWatchedMovieCandidates -ReleaseData $activeReleaseData -HotRelease $activeHero -QuietReleaseMode $isQuietReleaseWeek)
     $trendingPosterItem = $null
     if ($null -ne $script:GlobalTrendingStat -and
         -not [string]::IsNullOrWhiteSpace([string]$script:GlobalTrendingStat.RatingKey)) {
@@ -9916,7 +9954,7 @@ function Build-ForUser {
     $history = Get-History -AfterDate $afterDate -BeforeDate $beforeDate -ForUserId $user.UserId
     $stats = Get-UserStats -History $history
     $recipientPlatform = Get-NewsletterPlatform -History $history -ExpectedUserId $user.UserId
-    $recipientWatchedMovies = Get-RecipientWatchedMovies -ExpectedUserId $user.UserId
+    $recipientWatchedMovies = Get-RecipientWatchedMovies -ExpectedUserId $user.UserId -Candidates @(Get-NewsletterWatchedMovieCandidates -ReleaseData $activeReleaseData -HotRelease $activeHero -QuietReleaseMode $isQuietReleaseWeek)
     if ($null -eq $recipientPlatform) {
         $recipientPlatform = Get-NewsletterLastPlatform -ExpectedUserId $user.UserId
     }
@@ -10028,7 +10066,7 @@ function Build-AllEmailVariants {
     }
 
     Write-Log "Loading real history for six-state email regression: $($user.FriendlyName)..."
-    $recipientWatchedMovies = Get-RecipientWatchedMovies -ExpectedUserId $user.UserId
+    $recipientWatchedMovies = Get-RecipientWatchedMovies -ExpectedUserId $user.UserId -Candidates @(Get-NewsletterWatchedMovieCandidates -ReleaseData $activeReleaseData -HotRelease $activeHero -QuietReleaseMode $isQuietReleaseWeek)
     $history = Get-History -AfterDate $afterDate -BeforeDate $beforeDate -ForUserId $user.UserId
     $realStats = Get-UserStats -History $history
     $recipientPlatform = Get-NewsletterPlatform -History $history -ExpectedUserId $user.UserId

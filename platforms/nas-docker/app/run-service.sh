@@ -101,7 +101,7 @@ trap term EXIT
   --tautweekly-root "$app_root" \
   --runtime-root "$data_root" \
   --data-dir "$data_root/manager" \
-  >>"$data_root/logs/manager.log" 2>&1 &
+  --log-file "$data_root/logs/manager.log" &
 MANAGER_PID=$!
 
 manager_ready=false

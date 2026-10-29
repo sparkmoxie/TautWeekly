@@ -148,7 +148,9 @@ $ErrorActionPreference = 'Stop'
 $probe = [IO.MemoryStream]::new()
 $probeWriter = [IO.StreamWriter]::new($probe, [Text.UTF8Encoding]::new($false), 1024, $true)
 $probeWriter.NewLine = "`r`n"
-Write-TautWeeklySmtpData -Writer $probeWriter -MimeText "first`r`n.leading dot"
+$probeReader = [IO.StringReader]::new("first`r`n.leading dot")
+try {{ Write-TautWeeklySmtpData -Writer $probeWriter -MimeReader $probeReader }}
+finally {{ $probeReader.Dispose() }}
 $probeWriter.Flush()
 $probeText = [Text.Encoding]::UTF8.GetString($probe.ToArray())
 $probeWriter.Dispose()
@@ -186,13 +188,17 @@ finally {{
         if os.name == "nt":
             command.extend(["-ExecutionPolicy", "Bypass"])
         command.extend(["-File", str(path)])
-        return subprocess.run(
+        result = subprocess.run(
             command,
             check=False,
             capture_output=True,
             text=True,
             timeout=30,
+            env=dict(os.environ, TEMP=temporary, TMP=temporary, TMPDIR=temporary),
         )
+        if list(Path(temporary).glob("tautweekly-smtp-*")):
+            raise AssertionError("private serialized MIME was retained after SMTP completion/failure")
+        return result
 
 
 def scenario(helper: Path, mechanisms: tuple[str, ...], method: str, reject: bool = False) -> SmtpState:

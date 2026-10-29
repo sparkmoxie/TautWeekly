@@ -656,7 +656,10 @@ Require-Text 'platforms/mac-docker/Dockerfile' @(
     'ARG BUILD_VERSION=dev',
     'ARG TARGETARCH',
     'org\.opencontainers\.image\.version="\$BUILD_VERSION"',
-    'tautweekly-manager-linux-\$manager_arch',
+    'FROM scratch AS manager-binaries',
+    'COPY --from=manager-binaries --chmod=0755 /tautweekly-manager-linux-\$\{TARGETARCH\}',
+    'FROM debian:bookworm-slim',
+    'ARG POWERSHELL_VERSION=7\.4\.16',
     'TAUTWEEKLY_MANAGER_LISTEN=0\.0\.0\.0:8080',
     'HOME=/tmp/tautweekly/home',
     'XDG_DATA_HOME=/tmp/tautweekly/share'
@@ -664,7 +667,8 @@ Require-Text 'platforms/mac-docker/Dockerfile' @(
 Require-Text 'platforms/mac-docker/Dockerfile.registry' @(
     'FROM golang:1\.26\.6-bookworm AS manager-build',
     'GOARCH="\$\{TARGETARCH:-amd64\}"',
-    'FROM mcr\.microsoft\.com/dotnet/sdk:8\.0-bookworm-slim',
+    'FROM debian:bookworm-slim',
+    'ARG POWERSHELL_VERSION=7\.4\.16',
     'COPY platforms/mac-docker/app/ /opt/tautweekly/',
     'org\.opencontainers\.image\.version="\$BUILD_VERSION"',
     'io\.tautweekly\.runtime-profile="mac"',
@@ -720,7 +724,10 @@ Require-Text '.github/workflows/container.yml' @(
     "'' server",
     "'' desktop",
     "'' unraid",
-    'platforms:\s*linux/arm64',
+    'TAUTWEEKLY_TEST_PLATFORM:\s*linux/arm64',
+    'localhost:5000/tautweekly/candidate',
+    'container-candidate\.py',
+    '--all --preserve-digests',
     'linux/amd64,linux/arm64',
     'provenance:\s*mode=max',
     'sbom:\s*true'
@@ -876,6 +883,7 @@ foreach ($relative in @(
     'app/bin/run-as-user.sh',
     'app/bin/run-script.sh',
     'app/Schedule-Time.ps1',
+    'app/Runtime-Logs.ps1',
     'app/Smtp-Transport.ps1'
 )) {
     $nas = Read-RepoFile ("platforms/nas-docker/$relative")

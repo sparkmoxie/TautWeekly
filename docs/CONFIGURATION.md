@@ -728,3 +728,26 @@ Native Linux reads root-owned non-secret service values from
 data path, Manager bind/port, and-on FreeBSD-the OCI image reference. Keep SMTP,
 Tautulli, and Plex secrets in the private `config.json`, not in service
 environment files.
+
+## Managed-service diagnostic logs
+
+NAS/Docker, macOS Docker, native Linux, and FreeBSD/Podman keep bounded local
+Manager and scheduler logs under the private data directory's `logs/` folder.
+`manager.log` retains up to three numbered backups; each file is limited to
+1 MiB, for a maximum of 4 MiB. The running Manager rotates and reopens its own
+file. Console and service-manager diagnostics continue alongside it.
+
+The scheduler chooses `scheduler_YYYYMMDD.log` from its configured local date
+on every write, including after midnight during a long session. It retains
+four scheduler log files across dates and numbered backups, each limited to
+1 MiB, for a maximum of 4 MiB. Oversized older managed-service logs retain
+their recent byte tail. Older content is discarded as the limits are reached;
+a retained tail may begin partway through a line. A scheduler file-write
+failure falls back to console diagnostics without stopping delivery scheduling.
+
+Retention recognizes only these Manager and scheduler filenames and refuses
+linked or nonregular log files. Renderer `tautweekly_*.log` files, private
+configuration/backups, delivery state, and history keep their existing policies.
+Windows Manager uses console diagnostics by default and does not create this
+persistent service-log set. These fixed caps add no configuration fields;
+container-engine and host journal retention remains controlled by the host.

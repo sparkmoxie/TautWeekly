@@ -280,6 +280,7 @@ $expected = [ordered]@{
         'TautWeekly-nas-docker/app/Configuration-Backups.ps1',
         'TautWeekly-nas-docker/app/Smtp-Transport.ps1',
         'TautWeekly-nas-docker/app/Schedule-Time.ps1',
+        'TautWeekly-nas-docker/app/Runtime-Logs.ps1',
         'TautWeekly-nas-docker/app/healthcheck.sh',
         'TautWeekly-nas-docker/app/bin/run-as-user.sh',
         'TautWeekly-nas-docker/app/bin/funnel-adapter.sh',
@@ -303,6 +304,7 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/app/Configuration-Backups.ps1',
         'TautWeekly-mac-docker/app/Smtp-Transport.ps1',
         'TautWeekly-mac-docker/app/Schedule-Time.ps1',
+        'TautWeekly-mac-docker/app/Runtime-Logs.ps1',
         'TautWeekly-mac-docker/app/bin/run-as-user.sh',
         'TautWeekly-mac-docker/app/bin/funnel-adapter.sh',
         'TautWeekly-mac-docker/app/bin/tautweekly-funnel',
@@ -328,6 +330,7 @@ $expected = [ordered]@{
         'TautWeekly-linux/app/Configuration-Backups.ps1',
         'TautWeekly-linux/app/Smtp-Transport.ps1',
         'TautWeekly-linux/app/Schedule-Time.ps1',
+        'TautWeekly-linux/app/Runtime-Logs.ps1',
         'TautWeekly-linux/app/bin/run-as-user.sh',
         'TautWeekly-linux/app/bin/run-mode.sh',
         'TautWeekly-linux/app/bin/run-script.sh',
@@ -355,6 +358,7 @@ $expected = [ordered]@{
         'TautWeekly-freebsd-podman/app/Configuration-Backups.ps1',
         'TautWeekly-freebsd-podman/app/Smtp-Transport.ps1',
         'TautWeekly-freebsd-podman/app/Schedule-Time.ps1',
+        'TautWeekly-freebsd-podman/app/Runtime-Logs.ps1',
         'TautWeekly-freebsd-podman/app/bin/run-as-user.sh',
         'TautWeekly-freebsd-podman/app/bin/run-mode.sh',
         'TautWeekly-freebsd-podman/app/bin/run-script.sh',
@@ -586,6 +590,12 @@ foreach ($archiveName in $expected.Keys) {
             Assert-True ($wrapperText -match 'manager-bootstrap' -and $wrapperText -match 'manager-reset-access' -and $wrapperText -match 'open-manager') 'Mac archive omits Manager bootstrap, recovery, or browser launch.'
             Assert-True ($serviceText -match 'runtime-profile\.sh' -and $serviceText -match '--runtime-mode "\$manager_runtime_mode"' -and $serviceText -match '--runtime-profile' -and $serviceText -match 'health/live' -and $serviceText -match 'wait_for_delivery') 'Mac archive omits unified profile selection, the tailored Manager runtime, or graceful delivery drain.'
             Assert-True ($composeText -match 'read_only:\s*true' -and $composeText -match 'stop_grace_period:\s*30m' -and $composeText -match 'no-new-privileges:true') 'Mac archive omits container hardening or graceful stop configuration.'
+            $dockerfileEntry = $archive.GetEntry('TautWeekly-mac-docker/Dockerfile')
+            Assert-True ($null -ne $dockerfileEntry) 'Mac archive lacks its standalone fallback Dockerfile.'
+            $dockerfileText = [Text.Encoding]::UTF8.GetString((Get-ZipEntryBytes $dockerfileEntry))
+            Assert-True ($dockerfileText.Contains('FROM debian:bookworm-slim') -and $dockerfileText.Contains('ARG POWERSHELL_VERSION=7.4.16') -and -not $dockerfileText.Contains('dotnet/sdk')) 'Mac archive fallback does not use the maintained minimal PowerShell runtime.'
+            Assert-True ($dockerfileText.Contains('FROM scratch AS manager-binaries') -and $dockerfileText.Contains('COPY --from=manager-binaries --chmod=0755 /tautweekly-manager-linux-${TARGETARCH}')) 'Mac archive fallback must copy only the selected architecture into its runtime image.'
+
             foreach ($architecture in @('amd64', 'arm64')) {
                 $path = "TautWeekly-mac-docker/manager/tautweekly-manager-linux-$architecture"
                 $managerEntry = @($archive.Entries | Where-Object { $_.FullName -ceq $path })

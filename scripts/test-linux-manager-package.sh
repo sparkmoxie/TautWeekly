@@ -48,7 +48,8 @@ log_file="$test_root/manager.log"
   --tautweekly-root "$package_root/app" \
   --runtime-root "$data_root" \
   --data-dir "$data_root/manager" \
-  >"$log_file" 2>&1 &
+  --log-file "$log_file" \
+  >"$test_root/manager-console.log" 2>&1 &
 manager_pid=$!
 
 ready=false
@@ -64,13 +65,15 @@ done
   sed -n '1,80p' "$log_file" >&2
   fail 'Packaged Linux Manager did not become ready'
 }
+[[ -s "$log_file" ]] || fail 'Packaged Linux Manager did not write its bounded service log'
+[[ "$(wc -c <"$log_file")" -le 1048576 ]] || fail 'Packaged Linux Manager log exceeded its byte cap'
 
 status="$(curl --silent --output "$test_root/unauthorized.json" --write-out '%{http_code}' "http://127.0.0.1:$port/api/v1/capabilities")"
 [[ "$status" == 401 ]] || fail "Linux Manager allowed unauthenticated capabilities access (HTTP $status)"
 
 bootstrap_token="$("$manager" access-bootstrap --data-dir "$data_root/manager")"
 [[ "$bootstrap_token" =~ ^[A-Za-z0-9_-]{20,}$ ]] || fail 'Explicit bootstrap command did not return a bounded one-time token'
-if grep -Fq -- "$bootstrap_token" "$log_file"; then
+if grep -Fq -- "$bootstrap_token" "$log_file" "$test_root/manager-console.log"; then
   fail 'Manager log exposed the one-time bootstrap token'
 fi
 
@@ -85,4 +88,4 @@ fi
 wait "$manager_pid"
 manager_pid=""
 
-printf '[PASS] Packaged native Linux Manager boot, authentication, token redaction, adapter, and shutdown validated.\n'
+printf '[PASS] Packaged native Linux Manager boot, bounded logging, authentication, token redaction, direct-child PID, adapter, and shutdown validated.\n'

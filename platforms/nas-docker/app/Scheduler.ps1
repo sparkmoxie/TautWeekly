@@ -7,6 +7,7 @@ $ErrorActionPreference = "Stop"
 $configPath = Join-Path $DataRoot "config.json"
 $appRoot = if ($env:TAUTWEEKLY_APP_DIR) { [string]$env:TAUTWEEKLY_APP_DIR } else { $PSScriptRoot }
 . (Join-Path $appRoot "Schedule-Time.ps1")
+. (Join-Path $appRoot "Runtime-Logs.ps1")
 $scheduleTimeZone = Get-TautWeeklyScheduleTimeZone
 $initialScheduleNow = Get-TautWeeklyScheduleNow -TimeZone $scheduleTimeZone
 $runModePath = Join-Path (Join-Path $appRoot "bin") "run-mode.sh"
@@ -14,12 +15,21 @@ $statePath = Join-Path $DataRoot "scheduler-state.json"
 $heartbeatPath = Join-Path $DataRoot "scheduler-heartbeat.json"
 $logDir = Join-Path $DataRoot "logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-$logPath = Join-Path $logDir ("scheduler_{0}.log" -f $initialScheduleNow.ToString("yyyyMMdd"))
+$script:TautWeeklySchedulerLogWarningShown = $false
 
 function Log([string]$Message, [string]$Level = "INFO") {
     $localNow = Get-TautWeeklyScheduleNow -TimeZone $scheduleTimeZone
     $line = "{0} [{1}] {2}" -f $localNow.ToString("yyyy-MM-dd HH:mm:ss zzz"), $Level, $Message
-    Add-Content -Path $logPath -Value $line -Encoding UTF8
+    try {
+        Write-TautWeeklySchedulerLog -LogDirectory $logDir -LocalNow $localNow -Line $line
+        $script:TautWeeklySchedulerLogWarningShown = $false
+    }
+    catch {
+        if (-not $script:TautWeeklySchedulerLogWarningShown) {
+            Write-Warning 'Scheduler file logging is unavailable; console diagnostics continue.' -WarningAction Continue
+            $script:TautWeeklySchedulerLogWarningShown = $true
+        }
+    }
     Write-Host $line
 }
 

@@ -105,7 +105,7 @@ try {
     }
     $tokens = $null; $errors = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile($helper, [ref]$tokens, [ref]$errors)
-    Invoke-Expression (Load-Function $ast 'ConvertTo-TautWeeklyMimeText')
+    Invoke-Expression (Load-Function $ast 'New-TautWeeklyMimeFile')
     Invoke-Expression (Load-Function $ast 'Get-TautWeeklyMimeSizeMetrics')
     $mail = [Net.Mail.MailMessage]::new('sender@example.org','recipient@example.org')
     try {
@@ -116,15 +116,18 @@ try {
         $resource.ContentId = 'synthetic'
         $view.LinkedResources.Add($resource)
         $mail.AlternateViews.Add($view)
-        $mime = ConvertTo-TautWeeklyMimeText -MailMessage $mail
-        $metrics = Get-TautWeeklyMimeSizeMetrics -MailMessage $mail -MimeText $mime
+        $mimeFile = New-TautWeeklyMimeFile -MailMessage $mail
+        $metrics = Get-TautWeeklyMimeSizeMetrics -MailMessage $mail -MimeBytes $mimeFile.Length
         Assert-True ($metrics.htmlBytes -eq [Text.Encoding]::UTF8.GetByteCount($html)) 'HTML metric must measure decoded UTF-8 bytes'
-        Assert-True ($metrics.mimeBytes -eq [Text.Encoding]::UTF8.GetByteCount($mime)) 'MIME metric does not match serialization bytes'
+        Assert-True ($metrics.mimeBytes -eq (Get-Item -LiteralPath $mimeFile.Path).Length) 'MIME metric does not match serialization bytes'
         Assert-True ($metrics.inlineImageCount -eq 1 -and $metrics.largestInlineImageBytes -eq $bytes.Length) 'Inline resource metrics differ from exact bytes'
         Assert-True (($metrics.Keys | Sort-Object) -join ',' -ceq 'htmlBytes,inlineImageCount,largestInlineImageBytes,mimeBytes') 'Metrics expose an unsupported field'
         Assert-True ($metrics.htmlBytes -lt 256 -and $metrics.mimeBytes -lt 4096) 'Small synthetic MIME fixture exceeds its regression budget'
         Write-Host "[PASS] Numeric-only email metrics match UTF-8 HTML, serialized MIME and exact inline resource sizes."
-    } finally { $mail.Dispose() }
+    } finally {
+        $mail.Dispose()
+        if ($null -ne $mimeFile) { Remove-Item -LiteralPath $mimeFile.Directory -Recurse -Force }
+    }
 } finally {
     Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

@@ -82,6 +82,63 @@ try {
         Assert-True (Test-Path -LiteralPath (Join-Path $Root $relative)) "Documented repository-root build lacks COPY source: $relative"
     }
     Write-Host '[PASS] FreeBSD source-build instructions use a complete versioned checkout with every local Docker COPY input present.'
+
+    $installer = [IO.File]::ReadAllText((Join-Path $destination 'install-freebsd.sh'))
+    $repair = [regex]::Match($installer, '(?ms)^repair_legacy_image_default\(\) \(\r?\n.*?^\)\r?\n')
+    Assert-True $repair.Success 'FreeBSD installer is missing its bounded legacy-default repair function.'
+    Assert-True ($repair.Value.Contains("'__TAUTWEEKLY_RELEASE_''VERSION__'")) 'Release expansion must preserve the split legacy repair token.'
+    $gitBash = if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) { Join-Path $env:ProgramFiles 'Git/bin/bash.exe' } else { '' }
+    $bashCommand = Get-Command bash -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $bash = if ($gitBash -and (Test-Path -LiteralPath $gitBash -PathType Leaf)) { $gitBash } elseif ($null -ne $bashCommand) { $bashCommand.Source } else { '' }
+    Assert-True (Test-Path -LiteralPath $bash -PathType Leaf) 'Bash is required for isolated FreeBSD repair fixtures.'
+    $script:fixtureNumber = 0
+    function Invoke-LegacyRepairFixture([string]$Image, [string]$Metadata, [bool]$Success, [bool]$Repaired, [bool]$MissingMetadata = $false) {
+        $script:fixtureNumber++
+        $fixture = Join-Path $testRoot ('freebsd-repair-' + $script:fixtureNumber)
+        New-Item -ItemType Directory -Path $fixture -Force | Out-Null
+        $envPath = Join-Path $fixture 'tautweekly.env'
+        $metadataPath = Join-Path $fixture 'metadata.txt'
+        $ownershipLog = Join-Path $fixture 'ownership.txt'
+        $original = "# private settings`nTAUTWEEKLY_IMAGE=$Image`nTAUTWEEKLY_TIMEZONE=Etc/UTC`nPRIVATE_SENTINEL='a & b / c | secret'`n"
+        [IO.File]::WriteAllText($envPath, $original, $utf8)
+        if (-not $MissingMetadata) { [IO.File]::WriteAllText($metadataPath, $Metadata, $utf8) }
+        $mock = @(
+            'ownership_log="$3"',
+            'chmod() { printf ''%s\n'' "$1" >>"$ownership_log"; command chmod "$@"; }',
+            'chown() { [ "$#" -eq 2 ] && [ "$1" = root:wheel ] && [ -f "$2" ]; printf ''%s\n'' "$1" >>"$ownership_log"; }',
+            'repair_legacy_image_default "$1" "$2"'
+        ) -join "`n"
+        $shell = "set -eu`n" + $repair.Value + "`n" + $mock + "`n"
+        # Windows PowerShell wraps redirected native stderr in error records.
+        # Capture expected refusal messages and judge the native exit code.
+        $previousErrorPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $result = $shell | & $bash -s -- ($envPath.Replace('\','/')) ($metadataPath.Replace('\','/')) ($ownershipLog.Replace('\','/')) 2>&1
+            $exitCode = $LASTEXITCODE
+        }
+        finally { $ErrorActionPreference = $previousErrorPreference }
+        Assert-True (($exitCode -eq 0) -eq $Success) "FreeBSD repair fixture exited $exitCode unexpectedly: $($result -join ' ')"
+        $expected = if ($Repaired) { $original.Replace("TAUTWEEKLY_IMAGE=$Image", "TAUTWEEKLY_IMAGE=ghcr.io/sparkmoxie/tautweekly:$Version") } else { $original }
+        Assert-True ([IO.File]::ReadAllText($envPath) -ceq $expected) 'FreeBSD repair changed custom/private content or failed to repair the exact legacy default.'
+        if ($Repaired) {
+            Assert-True (Test-Path -LiteralPath $ownershipLog) 'Repaired environment ownership was not set.'
+            Assert-True ([IO.File]::ReadAllText($ownershipLog).Replace("`r`n","`n") -ceq "0600`nroot:wheel`n") 'Repaired environment must be private and root-owned before atomic replacement.'
+        } else {
+            Assert-True (-not (Test-Path -LiteralPath $ownershipLog)) 'Unchanged environment unexpectedly had its mode or owner altered.'
+        }
+        Assert-True (@(Get-ChildItem -LiteralPath $fixture -Filter '*.repair.*' -File).Count -eq 0) 'FreeBSD repair left a temporary environment file.'
+    }
+    $legacyImage = 'ghcr.io/sparkmoxie/tautweekly:' + $token
+    Invoke-LegacyRepairFixture $legacyImage "Repository version: $Version`n" $true $true
+    Invoke-LegacyRepairFixture $legacyImage '' $false $false $true
+    foreach ($malformed in @('dev', '09.8.7', '9.8', '9.8.7;bad', "9.8.7`nRepository version: 9.8.6")) {
+        Invoke-LegacyRepairFixture $legacyImage "Repository version: $malformed`n" $false $false
+    }
+    foreach ($customImage in @('ghcr.io/sparkmoxie/tautweekly:0.27.2', ('ghcr.io/sparkmoxie/tautweekly:0.27.2@sha256:' + ('a' * 64)), 'localhost/tautweekly:custom', ("'" + $legacyImage + "'"))) {
+        Invoke-LegacyRepairFixture $customImage '' $true $false $true
+    }
+    Write-Host '[PASS] Only the literal legacy FreeBSD default is repaired; custom references/private fields remain unchanged, malformed metadata fails, and replacements are private/root-owned.'
 }
 finally {
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
