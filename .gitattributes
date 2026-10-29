@@ -8,6 +8,7 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.json text eol=lf
+*.webmanifest text eol=lf
 *.md text eol=lf
 *.html text eol=lf
 *.css text eol=lf
@@ -33,6 +34,8 @@ Dockerfile text eol=lf
 *.jpeg binary
 *.zip binary
 *.gz binary
+*.br binary
+*.mjs text eol=lf
 
 # Canonical and vendor-supplied artwork is validated byte-for-byte. Keep SVG
 # source bytes unchanged across Windows and Unix checkouts.

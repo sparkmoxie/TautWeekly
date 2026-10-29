@@ -373,3 +373,11 @@ non-Windows modes retain mandatory Manager authentication.
 
 The implementation specification is
 [docs/WEBGUI-IMPLEMENTATION.md](../docs/WEBGUI-IMPLEMENTATION.md).
+
+## Static assets and status polling
+
+Public embedded assets use content fingerprints, variant-specific ETags, and browser encoding negotiation (Brotli, gzip, then identity). Versioned asset URLs are immutable; unversioned URLs revalidate. Application HTML, authenticated APIs, configuration, and generated previews retain `no-store`. No runtime compressor is required.
+
+After changing Manager JS/CSS or public assets, run `node scripts/sync-gui-preview.mjs` and `node scripts/precompress-manager-assets.mjs` from the repository root. CI and release assembly reject stale variants; `--check` verifies hashes and exact decompression, and `--self-test` exercises the generator.
+
+Windows schedule observations are shared for at most 15 seconds, bounded by a three-second probe deadline and invalidated after configuration or schedule changes. The dashboard displays the probe observation time; current operation and renderer delivery evidence remains independent.

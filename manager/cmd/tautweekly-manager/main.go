@@ -94,7 +94,7 @@ func openManager(args []string) error {
 	return waitForExistingManager(*listen)
 }
 
-func serve(args []string) error {
+func serve(args []string) (serveError error) {
 	root, err := defaultTautWeeklyRoot()
 	if err != nil {
 		return err
@@ -115,6 +115,7 @@ func serve(args []string) error {
 	updateChannel := flags.String("update-channel", os.Getenv("TAUTWEEKLY_UPDATE_CHANNEL"), "release update channel (stable)")
 	allowedHosts := flags.String("allowed-hosts", os.Getenv("TAUTWEEKLY_MANAGER_ALLOWED_HOSTS"), "comma-separated DNS hostnames accepted by a network-reachable Manager")
 	secureCookies := flags.Bool("secure-cookies", envBoolean("TAUTWEEKLY_MANAGER_SECURE_COOKIES"), "force HTTPS-secure session cookies for a fixed trusted ingress")
+	logFile := flags.String("log-file", "", "bounded managed-service log file; console logging is also retained")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -148,6 +149,30 @@ func serve(args []string) error {
 		return waitForExistingManager(*listen)
 	}
 	defer instance.Close()
+	if *logFile != "" {
+		if mode == runtimeModeWindows {
+			return errors.New("persistent Manager logging is available only in managed service modes")
+		}
+		logPath, err := filepath.Abs(*logFile)
+		if err != nil {
+			return fmt.Errorf("resolve Manager log path: %w", err)
+		}
+		writer, err := newRotatingLogWriter(logPath, managerLogMaximumBytes, managerLogBackups)
+		if err != nil {
+			return fmt.Errorf("open bounded Manager log: %w", err)
+		}
+		previous := log.Writer()
+		log.SetOutput(io.MultiWriter(previous, writer))
+		defer func() {
+			// main reports the returned error to the console after this scope.
+			// Preserve it in the file as well, without duplicating console output.
+			if serveError != nil {
+				log.New(writer, "", log.LstdFlags).Printf("ERROR: %v", serveError)
+			}
+			log.SetOutput(previous)
+			_ = writer.Close()
+		}()
+	}
 	listener, err := net.Listen("tcp", *listen)
 	if err != nil {
 		return fmt.Errorf("listen on local Manager address: %w", err)

@@ -141,7 +141,7 @@ function Get-TautWeeklySmtpAuthMechanisms {
     return @($mechanisms)
 }
 
-function ConvertTo-TautWeeklyMimeText {
+function New-TautWeeklyMimeFile {
     param([Parameter(Mandatory = $true)][System.Net.Mail.MailMessage]$MailMessage)
 
     $pickupRoot = Join-Path ([IO.Path]::GetTempPath()) ("tautweekly-smtp-{0}" -f [Guid]::NewGuid().ToString('N'))
@@ -156,33 +156,69 @@ function ConvertTo-TautWeeklyMimeText {
 
         $files = @(Get-ChildItem -LiteralPath $pickupRoot -File)
         if ($files.Count -ne 1) { throw "MIME serialization produced $($files.Count) files instead of one." }
-        return [IO.File]::ReadAllText($files[0].FullName, [Text.Encoding]::UTF8)
+        return [PSCustomObject]@{ Directory = $pickupRoot; Path = $files[0].FullName; Length = [int64]$files[0].Length }
+    }
+    catch {
+        if (Test-Path -LiteralPath $pickupRoot) { Remove-Item -LiteralPath $pickupRoot -Recurse -Force }
+        throw
     }
     finally {
         if ($null -ne $pickupClient) { $pickupClient.Dispose() }
-        if (Test-Path -LiteralPath $pickupRoot) { Remove-Item -LiteralPath $pickupRoot -Recurse -Force }
+    }
+}
+
+function Remove-TautWeeklyMimeFile {
+    param([AllowNull()][object]$MimeFile)
+    if ($null -eq $MimeFile) { return }
+    try {
+        if (Test-Path -LiteralPath $MimeFile.Directory) { Remove-Item -LiteralPath $MimeFile.Directory -Recurse -Force -ErrorAction Stop }
+    }
+    catch {
+        # Cleanup must not turn an accepted message into a reported failure.
+        # Keep the warning fixed and free of content, addresses and file paths.
+        [Console]::Error.WriteLine('Temporary serialized email cleanup was incomplete.')
+    }
+}
+
+function Get-TautWeeklyMimeSizeMetrics {
+    param(
+        [Parameter(Mandatory = $true)][System.Net.Mail.MailMessage]$MailMessage,
+        [Parameter(Mandatory = $true)][int64]$MimeBytes
+    )
+    $htmlBytes = 0L
+    $inlineImageCount = 0
+    $largestInlineImageBytes = 0L
+    foreach ($view in $MailMessage.AlternateViews) {
+        if ($view.ContentType.MediaType -eq 'text/html') { $htmlBytes += $view.ContentStream.Length }
+        foreach ($resource in $view.LinkedResources) {
+            if ($resource.ContentType.MediaType.StartsWith('image/', [StringComparison]::OrdinalIgnoreCase)) {
+                $inlineImageCount++
+                $largestInlineImageBytes = [Math]::Max($largestInlineImageBytes, [int64]$resource.ContentStream.Length)
+            }
+        }
+    }
+    # Fixed aggregate numbers only: never include MIME content, paths or addresses.
+    return [ordered]@{
+        htmlBytes = [int64]$htmlBytes
+        mimeBytes = $MimeBytes
+        inlineImageCount = [int]$inlineImageCount
+        largestInlineImageBytes = [int64]$largestInlineImageBytes
     }
 }
 
 function Write-TautWeeklySmtpData {
     param(
         [Parameter(Mandatory = $true)][System.IO.StreamWriter]$Writer,
-        [Parameter(Mandatory = $true)][string]$MimeText
+        [Parameter(Mandatory = $true)][System.IO.TextReader]$MimeReader
     )
-
-    $normalized = $MimeText.Replace("`r`n", "`n").Replace("`r", "`n")
-    $stringReader = [IO.StringReader]::new($normalized)
-    try {
-        while ($null -ne ($line = $stringReader.ReadLine())) {
-            if ($line.StartsWith('.')) { $line = ".$line" }
-            $Writer.WriteLine($line)
-        }
-        $Writer.WriteLine('.')
-        $Writer.Flush()
+    # ReadLine handles CRLF, LF and CR without building a normalized message.
+    # The caller owns the reader; only a single MIME line is retained here.
+    while ($null -ne ($line = $MimeReader.ReadLine())) {
+        if ($line.StartsWith('.')) { $line = ".$line" }
+        $Writer.WriteLine($line)
     }
-    finally {
-        $stringReader.Dispose()
-    }
+    $Writer.WriteLine('.')
+    $Writer.Flush()
 }
 
 function Send-TautWeeklySmtpMessage {
@@ -190,7 +226,8 @@ function Send-TautWeeklySmtpMessage {
     param(
         [Parameter(Mandatory = $true)][System.Net.Mail.MailMessage]$MailMessage,
         [Parameter(Mandatory = $true)][object]$Config,
-        [string[]]$EnvelopeBcc = @()
+        [string[]]$EnvelopeBcc = @(),
+        [hashtable]$SizeMetrics = $null
     )
 
     $hostName = ([string](Get-TautWeeklySmtpConfigValue -Config $Config -Name 'SmtpHost' -Default '')).Trim()
@@ -237,10 +274,16 @@ function Send-TautWeeklySmtpMessage {
     }
     $bccAccepted = 0
     $bccRejected = 0
+    $mimeFile = $null
     try {
-        $mimeText = ConvertTo-TautWeeklyMimeText -MailMessage $MailMessage
+        $mimeFile = New-TautWeeklyMimeFile -MailMessage $MailMessage
+        if ($null -ne $SizeMetrics) {
+            $measured = Get-TautWeeklyMimeSizeMetrics -MailMessage $MailMessage -MimeBytes $mimeFile.Length
+            foreach ($name in $measured.Keys) { $SizeMetrics[$name] = $measured[$name] }
+        }
     }
     catch {
+        Remove-TautWeeklyMimeFile -MimeFile $mimeFile
         throw (New-TautWeeklySmtpException -Stage 'mime')
     }
 
@@ -347,7 +390,9 @@ function Send-TautWeeklySmtpMessage {
         $currentStage = 'data-command'
         [void](Invoke-TautWeeklySmtpCommand -Writer $writer -Reader $reader -Command 'DATA' -ExpectedCodes 354 -Label 'SMTP DATA' -Stage 'data-command')
         $currentStage = 'data-acceptance'
-        Write-TautWeeklySmtpData -Writer $writer -MimeText $mimeText
+        $mimeReader = [IO.StreamReader]::new($mimeFile.Path, [Text.Encoding]::UTF8)
+        try { Write-TautWeeklySmtpData -Writer $writer -MimeReader $mimeReader }
+        finally { $mimeReader.Dispose() }
         $dataTerminatorWritten = $true
         $accepted = Read-TautWeeklySmtpResponse -Reader $reader
         if ($accepted.Code -ne 250) { throw (New-TautWeeklySmtpException -Stage 'data-acceptance' -ResponseCode $accepted.Code -Acceptance 'rejected') }
@@ -370,5 +415,6 @@ function Send-TautWeeklySmtpMessage {
         if ($null -ne $writer) { $writer.Dispose() }
         if ($null -ne $stream) { $stream.Dispose() }
         if ($null -ne $tcpClient) { $tcpClient.Dispose() }
+        Remove-TautWeeklyMimeFile -MimeFile $mimeFile
     }
 }

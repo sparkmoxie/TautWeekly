@@ -321,6 +321,7 @@ async function loadAll() {
     renderAbout();
     manageOperationPolling();
     manageSchedulePolling();
+    manageDeliveryStatusPolling();
     setGlobalStatus("Local status refreshed.", true);
     void loadTailscaleAccess();
     void recoverPendingCacheWarm();
@@ -751,9 +752,10 @@ function renderStatus() {
   const scheduleProbeFailed = ["probe-failed", "heartbeat-stale", "starting"].includes(snapshot.schedule.state);
   const scheduleHealthy = snapshot.schedule.installed && snapshot.schedule.enabled && scheduleOwned;
   setChip("schedule-chip", scheduleProbeFailed ? "Status unavailable" : !scheduleOwned ? "Ownership warning" : scheduleHealthy ? "Active" : snapshot.schedule.installed ? "Disabled" : "Not installed", scheduleProbeFailed || !scheduleOwned ? "bad" : scheduleHealthy ? "good" : "neutral");
-  setText("schedule-copy", embeddedSchedule
+  const scheduleCopy = embeddedSchedule
     ? scheduleProbeFailed ? "The embedded scheduler heartbeat is unavailable or stale." : "Read from the package-managed scheduler heartbeat and persistent configuration."
-    : scheduleProbeFailed ? "Windows Task Scheduler status could not be verified." : !scheduleOwned ? "A same-named task exists but does not match this installation." : snapshot.schedule.supported ? "Read directly from Windows Task Scheduler." : "Schedule management is unavailable on this platform.");
+    : scheduleProbeFailed ? "Windows Task Scheduler status could not be verified." : !scheduleOwned ? "A same-named task exists but does not match this installation." : snapshot.schedule.supported ? "Read from Windows Task Scheduler." : "Schedule management is unavailable on this platform.";
+  setText("schedule-copy", snapshot.schedule.probeObservedAtUtc ? `${scheduleCopy} Observed ${formatDate(snapshot.schedule.probeObservedAtUtc)}.` : scheduleCopy);
   const deliveryRunning = productionDeliveryIsRunning(snapshot);
   const deliveryAttemptUTC = productionDeliveryStartedAt(snapshot);
   setText("last-attempt", formatDate(deliveryAttemptUTC));
@@ -794,7 +796,6 @@ function renderStatus() {
   setTimelineCardState("timeline-previews-card", "timeline-ready", state.previews.length > 0);
   setText("sidebar-platform", `${titleCase(snapshot.platform)} · ${isNAS() ? "trusted LAN" : isLinuxService() ? "host loopback" : isMacDocker() ? "Mac loopback" : "local only"}`);
   setText("update-platform", titleCase(snapshot.platform));
-  manageDeliveryStatusPolling();
 }
 
 function productionDeliveryOperationIsActive() {
@@ -3481,39 +3482,45 @@ let operationPollTimer;
 let operationPollSequence = 0;
 let operationCompletionProcessedID = "";
 
-function manageDeliveryStatusPolling() {
+function manageDeliveryStatusPolling(delay = productionDeliveryIsRunning() ? 1500 : 5000) {
   clearTimeout(deliveryStatusPollTimer);
-  if (document.hidden || byId("app-shell").hidden || !state.status) return;
-  deliveryStatusPollTimer = setTimeout(pollDeliveryStatus, productionDeliveryIsRunning() ? 1500 : 5000);
+  if (deliveryStatusPollInFlight || document.hidden || byId("app-shell").hidden || !state.status) return;
+  deliveryStatusPollTimer = setTimeout(pollDeliveryStatus, delay);
 }
 
 async function pollDeliveryStatus() {
   clearTimeout(deliveryStatusPollTimer);
   if (deliveryStatusPollInFlight || document.hidden || byId("app-shell").hidden || !state.status) return;
+  const pollAuthenticationEpoch = authenticationEpoch;
+  let retryDelay;
   deliveryStatusPollInFlight = true;
   try {
-    state.status = await request("/api/v1/status");
+    const status = await request("/api/v1/status");
+    if (pollAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
+    state.status = status;
     renderStatus();
     if (state.editor) renderSchedule();
   } catch (error) {
+    if (pollAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
     if (error.status === 401) showAuthentication();
-    else deliveryStatusPollTimer = setTimeout(pollDeliveryStatus, 5000);
+    else retryDelay = 5000;
   } finally {
     deliveryStatusPollInFlight = false;
+    manageDeliveryStatusPolling(retryDelay);
   }
 }
 
 function manageOperationPolling() {
   clearTimeout(operationPollTimer);
   operationPollSequence += 1;
-  if (!operationIsActive(state.operation)) return;
+  if (document.hidden || byId("app-shell").hidden || !operationIsActive(state.operation)) return;
   const expectedOperationID = state.operation?.id || "";
   const expectedSequence = operationPollSequence;
   operationPollTimer = setTimeout(() => pollOperation(expectedOperationID, expectedSequence), 1000);
 }
 
 function operationPollIsCurrent(expectedOperationID, expectedSequence) {
-  return expectedSequence === operationPollSequence && state.operation?.id === expectedOperationID;
+  return !document.hidden && !byId("app-shell").hidden && expectedSequence === operationPollSequence && state.operation?.id === expectedOperationID;
 }
 
 function successfulPreviewGeneration(operation) {
@@ -3521,6 +3528,7 @@ function successfulPreviewGeneration(operation) {
 }
 
 async function pollOperation(expectedOperationID = state.operation?.id || "", expectedSequence = operationPollSequence) {
+  if (document.hidden || byId("app-shell").hidden) return;
   if (!operationPollIsCurrent(expectedOperationID, expectedSequence)) return;
   if (!operationIsActive(state.operation) && operationCompletionProcessedID === expectedOperationID) return;
   const priorState = state.operation?.state;
@@ -3627,16 +3635,22 @@ function validScheduleAction(action) {
 }
 
 let schedulePollTimer;
+let schedulePollSequence = 0;
 function manageSchedulePolling() {
   clearTimeout(schedulePollTimer);
-  if (!scheduleOperationIsActive(state.scheduleOperation)) return;
-  schedulePollTimer = setTimeout(pollScheduleOperation, 1000);
+  schedulePollSequence += 1;
+  if (document.hidden || byId("app-shell").hidden || !scheduleOperationIsActive(state.scheduleOperation)) return;
+  const expectedSequence = schedulePollSequence;
+  schedulePollTimer = setTimeout(() => pollScheduleOperation(expectedSequence), 1000);
 }
 
-async function pollScheduleOperation() {
+async function pollScheduleOperation(expectedSequence = schedulePollSequence) {
+  if (expectedSequence !== schedulePollSequence || document.hidden || byId("app-shell").hidden) return;
+  const pollAuthenticationEpoch = authenticationEpoch;
   const priorState = state.scheduleOperation?.state;
   try {
     const response = await request("/api/v1/schedule/operation");
+    if (expectedSequence !== schedulePollSequence || pollAuthenticationEpoch !== authenticationEpoch || document.hidden || byId("app-shell").hidden) return;
     state.scheduleOperation = response.current || null;
     if (scheduleOperationIsActive(state.scheduleOperation)) {
       renderSchedule();
@@ -3644,7 +3658,9 @@ async function pollScheduleOperation() {
       manageSchedulePolling();
       return;
     }
-    state.status = await request("/api/v1/status");
+    const status = await request("/api/v1/status");
+    if (expectedSequence !== schedulePollSequence || pollAuthenticationEpoch !== authenticationEpoch || document.hidden || byId("app-shell").hidden) return;
+    state.status = status;
     renderStatus();
     renderSchedule();
     renderOperations();
@@ -3654,10 +3670,11 @@ async function pollScheduleOperation() {
       setGlobalStatus(`${action} schedule ${outcome}.`, true);
     }
   } catch (error) {
+    if (expectedSequence !== schedulePollSequence || pollAuthenticationEpoch !== authenticationEpoch || document.hidden || byId("app-shell").hidden) return;
     if (error.status === 401) showAuthentication();
     else {
       setGlobalStatus(error.message, true);
-      schedulePollTimer = setTimeout(pollScheduleOperation, 2500);
+      schedulePollTimer = setTimeout(() => pollScheduleOperation(expectedSequence), 2500);
     }
   }
 }
@@ -4584,16 +4601,21 @@ function setChip(id, text, tone, iconName = "") {
   } else if (!iconName && currentIcon) {
     currentIcon.remove();
   }
-  chip.dataset.iconName = iconName;
+  if (chip.dataset.iconName !== iconName) chip.dataset.iconName = iconName;
   setSwappingElementText(label, text);
-  chip.className = `state-chip ${resolvedTone}`;
+  const chipClass = `state-chip ${resolvedTone}`;
+  if (chip.className !== chipClass) chip.className = chipClass;
   const card = chip.closest(".health-card,.operation-strip,.current-operation,.setup-workflow-steps article,.setup-workflow");
-  if (card) {
+  if (card && !card.classList.contains(`state-card-${resolvedTone}`)) {
     card.classList.remove("state-card-good", "state-card-bad", "state-card-pending", "state-card-neutral", "state-card-waiting", "state-card-warning");
     card.classList.add(`state-card-${resolvedTone}`);
   }
 }
-function setText(id, value) { byId(id).textContent = value || "Not recorded"; }
+function setText(id, value) {
+  const element = byId(id);
+  const text = String(value || "Not recorded");
+  if (element.textContent !== text) element.textContent = text;
+}
 function setSwappingText(id, value) {
   setSwappingElementText(byId(id), value);
 }
@@ -4694,9 +4716,15 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     clearAllRevealedSecrets();
     clearTimeout(deliveryStatusPollTimer);
+    manageOperationPolling();
+    manageSchedulePolling();
     return;
   }
-  if (!byId("app-shell").hidden && state.status) void pollDeliveryStatus();
+  if (!byId("app-shell").hidden && state.status) {
+    void pollDeliveryStatus();
+    manageOperationPolling();
+    manageSchedulePolling();
+  }
 });
 materializeMaterialIcons();
 initializeMaskedInputToggles();

@@ -2,8 +2,8 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.27.2";
-  const PREVIOUS_VERSION = "0.27.1";
+  const DEMO_VERSION = "0.27.3";
+  const PREVIOUS_VERSION = "0.27.2";
   const PROFILES = {
     windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows" },
     nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker" },
@@ -368,6 +368,7 @@
         supported: true,
         ...model.schedule,
         provider: serviceProfile() ? "embedded-" + profile().runtimeMode : "windows-task-scheduler",
+        ...(serviceProfile() ? {} : { probeObservedAtUtc: observedAtUtc }),
         state: serviceProfile() && model.schedule.state === "ready" ? "running" : model.schedule.state,
         nextRunUtc: model.schedule.installed ? next.toISOString() : "",
         nextRunLocal: model.schedule.installed ? next.toISOString() : "",

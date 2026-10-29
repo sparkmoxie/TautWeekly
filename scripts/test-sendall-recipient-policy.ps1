@@ -582,7 +582,7 @@ foreach ($engine in @($engines | Where-Object { $_.Name -like $EnginePattern }))
                 Assert-True (Test-Path -LiteralPath $resultPath) "$($engine.Name)/$($scenario.Name) omitted its structured result."
                 $resultRaw = Get-Content -LiteralPath $resultPath -Raw -Encoding UTF8
                 $result = $resultRaw | ConvertFrom-Json
-                Assert-True ($result.schemaVersion -eq 4 -and $result.outcome -eq $scenario.Outcome) "$($engine.Name)/$($scenario.Name) reported schema $($result.schemaVersion) / outcome $($result.outcome) / category $($result.errorCategory), expected 4 / $($scenario.Outcome)."
+                Assert-True ($result.schemaVersion -eq 5 -and $result.outcome -eq $scenario.Outcome) "$($engine.Name)/$($scenario.Name) reported schema $($result.schemaVersion) / outcome $($result.outcome) / category $($result.errorCategory), expected 5 / $($scenario.Outcome)."
                 Assert-True ([string]$result.errorCategory -eq [string]$scenario.ErrorCategory) "$($engine.Name)/$($scenario.Name) reported the wrong fixed error category."
                 Assert-True ($result.smtpAcceptedCount -eq $scenario.Accepted -and $result.skippedCount -eq $scenario.Skipped -and $result.failedCount -eq $scenario.Failed) "$($engine.Name)/$($scenario.Name) reported inconsistent delivery aggregates."
                 Assert-True ($result.bccAcceptedCount -eq [int](Get-ScenarioValue $scenario 'BccAccepted' 0) -and $result.bccRejectedCount -eq [int](Get-ScenarioValue $scenario 'BccRejected' 0)) "Household copy counts did not match final acceptance."
@@ -886,7 +886,7 @@ foreach ($engine in @($engines | Where-Object { $_.Name -like $EnginePattern }))
                     Assert-True (Test-Path -LiteralPath $testAllResultPath) "$($engine.Name) TestEmail authentication failure omitted its structured result."
                     $testAllResultRaw = Get-Content -LiteralPath $testAllResultPath -Raw -Encoding UTF8
                     $testAllResult = $testAllResultRaw | ConvertFrom-Json
-                    Assert-True ($testAllResult.schemaVersion -eq 4 -and $testAllResult.mode -eq 'SendTestAll' -and $testAllResult.outcome -eq 'failed') "$($engine.Name) TestEmail authentication failure reported an invalid result envelope."
+                    Assert-True ($testAllResult.schemaVersion -eq 5 -and $testAllResult.mode -eq 'SendTestAll' -and $testAllResult.outcome -eq 'failed') "$($engine.Name) TestEmail authentication failure reported an invalid result envelope."
                     Assert-True ([string]$testAllResult.errorCategory -eq 'smtp-auth-failed') "$($engine.Name) TestEmail authentication failure omitted its fixed error category."
                     Assert-True ($testAllResult.smtpAcceptedCount -eq 0 -and $testAllResult.skippedCount -eq 0 -and $testAllResult.failedCount -eq 1) "$($engine.Name) TestEmail authentication failure reported inconsistent aggregates."
                     Assert-True ($null -ne $testAllResult.smtpFailure) "$($engine.Name) TestEmail authentication failure omitted typed SMTP evidence."

@@ -40,54 +40,13 @@ jobs:
   unified:
     name: Unified image validation and publication
     runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:3
+        ports:
+          - '127.0.0.1:5000:5000'
     steps:
       - uses: actions/checkout@v6
-      - name: Set up QEMU
-        if: inputs.test_arm64 || inputs.publish_mode == 'edge' || inputs.publish_mode == 'release'
-        uses: docker/setup-qemu-action@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - name: Validate runtime profile selection and refusal
-        if: inputs.smoke_test
-        run: ./scripts/test-container-profiles.sh
-      - name: Build amd64 smoke image
-        if: inputs.smoke_test
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: platforms/nas-docker/Dockerfile
-          platforms: linux/amd64
-          load: true
-          tags: tautweekly-unified-ci:amd64
-          build-args: BUILD_VERSION=ci
-          cache-from: type=gha,scope=unified
-      - name: Boot-test every unified profile on amd64
-        if: inputs.smoke_test
-        run: |
-          ./scripts/test-container-image.sh tautweekly-unified-ci:amd64 '' server
-          ./scripts/test-container-image.sh tautweekly-unified-ci:amd64 '' desktop
-          ./scripts/test-container-image.sh tautweekly-unified-ci:amd64 '' unraid
-      - name: Build arm64 smoke image through QEMU
-        if: inputs.smoke_test && inputs.test_arm64
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: platforms/nas-docker/Dockerfile
-          platforms: linux/arm64
-          load: true
-          tags: tautweekly-unified-ci:arm64
-          build-args: BUILD_VERSION=ci
-          cache-from: type=gha,scope=unified
-      - name: Boot-test the unified arm64 runtime through QEMU
-        if: inputs.smoke_test && inputs.test_arm64
-        run: ./scripts/test-container-image.sh tautweekly-unified-ci:arm64 '' server
-      - name: Log in to GitHub Container Registry
-        if: inputs.publish_mode == 'edge' || inputs.publish_mode == 'release'
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate unified image metadata
         if: inputs.publish_mode == 'edge' || inputs.publish_mode == 'release'
         id: meta
@@ -100,18 +59,116 @@ jobs:
             type=semver,pattern={{version}},value=${{ inputs.release_tag }},enable=${{ inputs.publish_mode == 'release' }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.release_tag }},enable=${{ inputs.publish_mode == 'release' }}
             type=raw,value=latest,enable=${{ inputs.publish_mode == 'release' }}
-      - name: Build and publish the unified image
-        if: inputs.publish_mode == 'edge' || inputs.publish_mode == 'release'
+      - name: Resolve final candidate version and platforms
+        id: plan
+        env:
+          PUBLISH_MODE: ${{ inputs.publish_mode || 'none' }}
+          BUILD_VERSION: ${{ steps.meta.outputs.version || 'ci' }}
+          SMOKE_TEST: ${{ inputs.smoke_test }}
+          TEST_ARM64: ${{ inputs.test_arm64 }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          case "$PUBLISH_MODE" in none|edge|release) ;; *) exit 64 ;; esac
+          [[ "$BUILD_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]] || exit 64
+          if [[ "$PUBLISH_MODE" == release ]]; then
+            [[ "$SMOKE_TEST" == true && "$TEST_ARM64" == true ]] || { echo 'Release publication requires both architecture boot tests.' >&2; exit 64; }
+            [[ "$RELEASE_TAG" == "v$BUILD_VERSION" ]] || exit 64
+          fi
+          architectures=amd64
+          if [[ "$TEST_ARM64" == true || "$PUBLISH_MODE" != none ]]; then architectures=amd64,arm64; fi
+          platforms=linux/amd64
+          if [[ "$architectures" == amd64,arm64 ]]; then platforms=linux/amd64,linux/arm64; fi
+          printf 'version=%s\narchitectures=%s\nplatforms=%s\n' "$BUILD_VERSION" "$architectures" "$platforms" >>"$GITHUB_OUTPUT"
+      - name: Set up QEMU
+        if: inputs.test_arm64 || inputs.publish_mode == 'edge' || inputs.publish_mode == 'release'
+        uses: docker/setup-qemu-action@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: network=host
+          buildkitd-config-inline: |
+            [registry."localhost:5000"]
+              http = true
+      - name: Validate runtime profile selection and refusal
+        if: inputs.smoke_test
+        run: ./scripts/test-container-profiles.sh
+      - name: Build final versioned candidate once in the job-local registry
+        id: candidate
         uses: docker/build-push-action@v7
         with:
           context: .
           file: platforms/nas-docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ steps.plan.outputs.platforms }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: localhost:5000/tautweekly/candidate:${{ github.run_id }}-${{ github.run_attempt }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: BUILD_VERSION=${{ steps.meta.outputs.version }}
+          build-args: BUILD_VERSION=${{ steps.plan.outputs.version }}
           cache-from: type=gha,scope=unified
           cache-to: type=gha,mode=max,scope=unified
           provenance: mode=max
           sbom: true
+      - name: Verify exact candidate platforms, version, SBOM and provenance
+        id: verified
+        env:
+          CANDIDATE_DIGEST: ${{ steps.candidate.outputs.digest }}
+          CANDIDATE_VERSION: ${{ steps.plan.outputs.version }}
+          CANDIDATE_ARCHITECTURES: ${{ steps.plan.outputs.architectures }}
+        run: |
+          python3 scripts/container-candidate.py --digest "$CANDIDATE_DIGEST" --version "$CANDIDATE_VERSION" \
+            --architectures "$CANDIDATE_ARCHITECTURES" --output "$RUNNER_TEMP/container-candidate.json" --github-output "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/container-candidate.json" >>"$GITHUB_STEP_SUMMARY"
+      - name: Boot-test every unified profile on the exact amd64 digest
+        if: inputs.smoke_test
+        env:
+          CANDIDATE_IMAGE: ${{ steps.verified.outputs.amd64_ref }}
+          TAUTWEEKLY_EXPECTED_IMAGE_VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          docker pull "$CANDIDATE_IMAGE"
+          ./scripts/test-container-image.sh "$CANDIDATE_IMAGE" '' server
+          ./scripts/test-container-image.sh "$CANDIDATE_IMAGE" '' desktop
+          ./scripts/test-container-image.sh "$CANDIDATE_IMAGE" '' unraid
+      - name: Boot-test the exact arm64 digest through QEMU
+        if: inputs.smoke_test && inputs.test_arm64
+        env:
+          CANDIDATE_IMAGE: ${{ steps.verified.outputs.arm64_ref }}
+          TAUTWEEKLY_TEST_PLATFORM: linux/arm64
+          TAUTWEEKLY_EXPECTED_IMAGE_VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          docker pull --platform linux/arm64 "$CANDIDATE_IMAGE"
+          ./scripts/test-container-image.sh "$CANDIDATE_IMAGE" '' server
+      - name: Install manifest-preserving publication tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends skopeo
+      - name: Prove complete index preservation within the job-local registry
+        env:
+          CANDIDATE_DIGEST: ${{ steps.candidate.outputs.digest }}
+        run: |
+          skopeo copy --src-tls-verify=false --dest-tls-verify=false --all --preserve-digests \
+            "docker://localhost:5000/tautweekly/candidate@$CANDIDATE_DIGEST" "docker://localhost:5000/tautweekly/verified:tested"
+          skopeo inspect --tls-verify=false --raw "docker://localhost:5000/tautweekly/verified:tested" >"$RUNNER_TEMP/copied-index.json"
+          python3 scripts/container-candidate.py --digest "$CANDIDATE_DIGEST" --verify-index "$RUNNER_TEMP/copied-index.json"
+      - name: Publish the verified index without rebuilding
+        if: inputs.publish_mode == 'edge' || inputs.publish_mode == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_DIGEST: ${{ steps.candidate.outputs.digest }}
+          PUBLICATION_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          authfile="$RUNNER_TEMP/container-publish-auth.json"
+          trap 'rm -f "$authfile"' EXIT
+          printf '%s' "$GH_TOKEN" | skopeo login --authfile "$authfile" --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          mapfile -t tags < <(printf '%s\n' "$PUBLICATION_TAGS" | sed '/^$/d')
+          (( ${#tags[@]} > 0 )) || exit 64
+          # No public image reference exists before all selected tests pass.
+          # Copy the complete OCI index; preservation failures must stop publication.
+          skopeo copy --authfile "$authfile" --src-tls-verify=false --all --preserve-digests \
+            "docker://localhost:5000/tautweekly/candidate@$CANDIDATE_DIGEST" "docker://${tags[0]}"
+          for tag in "${tags[@]}"; do
+            if [[ "$tag" != "${tags[0]}" ]]; then
+              skopeo copy --authfile "$authfile" --all --preserve-digests \
+                "docker://ghcr.io/sparkmoxie/tautweekly@$CANDIDATE_DIGEST" "docker://$tag"
+            fi
+            skopeo inspect --authfile "$authfile" --raw "docker://$tag" >"$RUNNER_TEMP/promoted-index.json"
+            python3 scripts/container-candidate.py --digest "$CANDIDATE_DIGEST" --verify-index "$RUNNER_TEMP/promoted-index.json"
+          done

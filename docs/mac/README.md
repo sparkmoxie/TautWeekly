@@ -14,6 +14,10 @@ controlled TestEmail delivery, scheduling, profile/image status, and recovery.
 The verified Mac archive and local image build remain a supported break-fix
 fallback. The unified registry deployment is the preferred installation.
 
+The archive fallback uses the same Debian and verified PowerShell runtime as the
+unified image. Its final image contains the Manager binary for the selected
+architecture; the full .NET SDK and the other architecture's binary are excluded.
+
 Current source baseline: **1.8.0**.
 
 Manager Config shows a separate **Managed-user delivery addresses** card when

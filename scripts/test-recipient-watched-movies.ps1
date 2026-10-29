@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([string]$Root = '')
 
 Set-StrictMode -Version Latest
@@ -27,6 +27,7 @@ $renderers = @(
 )
 $requiredFunctions = @(
     'Get-OptionalStringProperty', 'Safe-Int', 'Get-RecipientWatchedMovies',
+    'Get-NewsletterWatchedMovieCandidates', 'Get-NewsletterReleaseDisplayData',
     'Test-IncludedLibraryRow', 'Get-IncludedLibraryQueryScopes',
     'Test-RecipientHasWatchedMovie', 'Get-RecipientWatchedAssetSource',
     'Get-RecipientWatchedTitleIconHtml', 'Get-RecipientWatchedTitleHtml', 'Get-RecipientWatchedDesktopHeroPosterHtml',
@@ -43,7 +44,7 @@ foreach ($renderer in $renderers) {
     Assert-True ($parseErrors.Count -eq 0) "Parser errors prevent watched-state testing: $($renderer.Path)"
     foreach ($name in $requiredFunctions) {
         $definition = Get-RendererFunctionDefinition -Ast $ast -Name $name -Renderer $renderer.Path
-        if ($name -like '*Recipient*Watched*' -or $name -like 'Get-Stats*') {
+        if ($name -like '*Recipient*Watched*' -or $name -like 'Get-Stats*' -or $name -eq 'Get-NewsletterWatchedMovieCandidates') {
             if ($sharedDefinitions.ContainsKey($name)) {
                 Assert-True ($definition.Replace('../assets/', 'assets/') -ceq $sharedDefinitions[$name].Replace('../assets/', 'assets/')) "Renderer drift in shared $name"
             } else { $sharedDefinitions[$name] = $definition }
@@ -71,11 +72,19 @@ foreach ($renderer in $renderers) {
     $script:HistoryCalls = [Collections.Generic.List[hashtable]]::new()
     $script:HistoryFailure = $false
     $script:HistoryPagination = $false
+    $script:HistoryFirstPageMatch = $false
+    $script:HistoryFixtureRows = $null
     function Invoke-TautulliApi {
         param([string]$Command, [hashtable]$Parameters)
         if ($Command -ne 'get_history') { throw "Unexpected command: $Command" }
         $script:HistoryCalls.Add($Parameters.Clone())
         if ($script:HistoryFailure) { throw 'Synthetic historical lookup failure' }
+        if ($null -ne $script:HistoryFixtureRows) {
+            $start = [int]$Parameters.start
+            $count = [Math]::Min([int]$Parameters.length, $script:HistoryFixtureRows.Count - $start)
+            $pageRows = @($script:HistoryFixtureRows.GetRange($start, $count).ToArray())
+            return [PSCustomObject]@{ data = $pageRows; recordsFiltered = $script:HistoryFixtureRows.Count }
+        }
         if ($script:HistoryPagination) {
             # v2.18.0 SQL pagination preserves the same API shape; history rows
             # omit redundant section_id while the query remains scoped.
@@ -86,6 +95,10 @@ foreach ($renderer in $renderers) {
             } elseif ($Parameters.start -eq 1000) {
                 @([PSCustomObject]@{ user_id='1'; media_type='movie'; rating_key='historical-page-two'; guid='plex://movie/historical-page-two'; watched_status=1; percent_complete=100; started=1 })
             } else { throw 'Unexpected history offset' }
+            if ($script:HistoryFirstPageMatch -and $Parameters.start -eq 0) {
+                $pageRows[0].rating_key = 'historical-first-page'
+                $pageRows[0].watched_status = 1
+            }
             return [PSCustomObject]@{ recordsFiltered=1001; recordsTotal=1001; data=$pageRows }
         }
         [PSCustomObject]@{
@@ -142,7 +155,89 @@ foreach ($renderer in $renderers) {
         Assert-True ($pageQuery.length -eq 1000 -and $pageQuery.include_activity -eq 0 -and $pageQuery.user_id -eq '1' -and $pageQuery.section_id -eq '10') "$($renderer.Path) changed query scope while paging"
         Assert-True (-not $pageQuery.ContainsKey('after') -and -not $pageQuery.ContainsKey('before')) "$($renderer.Path) applied a weekly window while paging"
     }
+    $script:HistoryCalls.Clear()
+    $emptyState = Get-RecipientWatchedMovies -ExpectedUserId '1' -Candidates @()
+    $tvOnlyState = Get-RecipientWatchedMovies -ExpectedUserId '1' -Candidates @([PSCustomObject]@{Type='show';RatingKey='collision';MetadataGuid=''})
+    Assert-True ($script:HistoryCalls.Count -eq 0 -and $emptyState.RatingKeys.Count -eq 0 -and $tvOnlyState.RatingKeys.Count -eq 0) "$($renderer.Path) scanned history without a visible movie"
+    $script:HistoryFirstPageMatch = $true
+    $firstCandidate = [PSCustomObject]@{ Type='movie'; RatingKey='historical-first-page'; MetadataGuid='' }
+    $firstPageState = Get-RecipientWatchedMovies -ExpectedUserId '1' -Candidates @($firstCandidate,$firstCandidate)
+    Assert-True ($script:HistoryCalls.Count -eq 1 -and $firstPageState.RatingKeys.ContainsKey('historical-first-page')) "$($renderer.Path) did not stop after all displayed candidates matched positively"
+    $script:HistoryCalls.Clear()
+    $unmatched = [PSCustomObject]@{Type='movie';RatingKey='never-watched';MetadataGuid='plex://movie/not-seen'}
+    $unmatchedState = Get-RecipientWatchedMovies -ExpectedUserId '1' -Candidates @($firstCandidate,$unmatched)
+    Assert-True ($script:HistoryCalls.Count -eq 2 -and $unmatchedState.RatingKeys.ContainsKey('historical-first-page') -and -not $unmatchedState.RatingKeys.ContainsKey('never-watched')) "$($renderer.Path) truncated unmatched historical lookup"
+    $script:HistoryCalls.Clear()
+    $lateState = Get-RecipientWatchedMovies -ExpectedUserId '1' -Candidates @([PSCustomObject]@{Type='movie';RatingKey='replaced-key';MetadataGuid='plex://movie/historical-page-two'})
+    Assert-True ($script:HistoryCalls.Count -eq 2 -and $lateState.MetadataGuids.ContainsKey('plex://movie/historical-page-two')) "$($renderer.Path) lost a historical GUID-only match"
     $script:HistoryPagination = $false
+    $script:HistoryFirstPageMatch = $false
+    $script:HistoryCalls.Clear()
+    $foreign = @(
+        [PSCustomObject]@{Type='movie';RatingKey='other-user-key';MetadataGuid='plex://movie/other-user'},
+        [PSCustomObject]@{Type='movie';RatingKey='other-library-key';MetadataGuid='plex://movie/other-library'}
+    )
+    $foreignState = Get-RecipientWatchedMovies -ExpectedUserId '1' -Candidates $foreign
+    Assert-True ($foreignState.RatingKeys.Count -eq 0 -and $foreignState.MetadataGuids.Count -eq 0) "$($renderer.Path) accepted a foreign user/library candidate match"
+    Write-Host "[PASS] Watched synthetic pagination: baseline=2 requests; all candidates found=1; no movies=0; unmatched or late GUID=2."
+
+    # Shared keys, independent GUID aliases, and case-only duplicate candidates
+    # must resolve once. A later repeat of a resolved alias cannot consume the
+    # remaining count or add unrelated row identities to the scoped state.
+    $script:HistoryCalls.Clear()
+    $script:HistoryFixtureRows = [Collections.Generic.List[object]]::new()
+    $script:HistoryFixtureRows.Add([PSCustomObject]@{section_id='10';user_id='1';media_type='movie';rating_key='SHARED';guid='plex://movie/ROW-GUID';watched_status=1;percent_complete=100})
+    $script:HistoryFixtureRows.Add([PSCustomObject]@{section_id='10';user_id='1';media_type='movie';rating_key='repeat-must-not-appear';guid='plex://movie/GUID-A';watched_status=1;percent_complete=100})
+    foreach ($invalid in @(
+        @{section_id='10';user_id='2';media_type='movie';watched_status=1;percent_complete=100},
+        @{section_id='99';user_id='1';media_type='movie';watched_status=1;percent_complete=100},
+        @{section_id='10';media_type='movie';watched_status=1;percent_complete=100},
+        @{section_id='10';user_id='1';media_type='episode';watched_status=1;percent_complete=100},
+        @{section_id='10';user_id='1';media_type='movie';watched_status=0;percent_complete=0}
+    )) {
+        $invalid.rating_key = 'late-key'; $invalid.guid = 'plex://movie/guid-c'
+        $script:HistoryFixtureRows.Add([PSCustomObject]$invalid)
+    }
+    while ($script:HistoryFixtureRows.Count -lt 1000) {
+        $script:HistoryFixtureRows.Add([PSCustomObject]@{section_id='10';user_id='1';media_type='movie';rating_key='unmatched-padding';guid='plex://movie/unmatched-padding';watched_status=1;percent_complete=100})
+    }
+    $script:HistoryFixtureRows.Add([PSCustomObject]@{section_id='10';user_id='1';media_type='movie';rating_key='fresh-rekey';guid='plex://movie/GUID-C';watched_status=1;percent_complete=100})
+    $aliases = @(
+        [PSCustomObject]@{Type='movie';RatingKey='shared';MetadataGuid='plex://movie/guid-a'},
+        [PSCustomObject]@{Type='movie';RatingKey='shared';MetadataGuid='plex://movie/guid-b'},
+        [PSCustomObject]@{Type='movie';RatingKey='SHARED';MetadataGuid='plex://movie/GUID-A'},
+        [PSCustomObject]@{Type='movie';RatingKey='independent-key';MetadataGuid='plex://movie/row-guid'},
+        [PSCustomObject]@{Type='movie';RatingKey='late-key';MetadataGuid='plex://movie/guid-c'}
+    )
+    $aliasResults = @(Get-RecipientWatchedMovies -ExpectedUserId '1' -Candidates $aliases)
+    Assert-True ($aliasResults.Count -eq 1) "$($renderer.Path) leaked lookup-index mutator output"
+    $aliasState = $aliasResults[0]
+    Assert-True ($script:HistoryCalls.Count -eq 2) "$($renderer.Path) stopped early after a repeated resolved alias or foreign/unwatched row"
+    Assert-True ($aliasState.RatingKeys.Count -eq 2 -and $aliasState.RatingKeys.ContainsKey('shared') -and $aliasState.RatingKeys.ContainsKey('fresh-rekey')) "$($renderer.Path) lost key/GUID union matching or late rekey identity"
+    Assert-True ($aliasState.MetadataGuids.Count -eq 2 -and $aliasState.MetadataGuids.ContainsKey('plex://movie/row-guid') -and $aliasState.MetadataGuids.ContainsKey('plex://movie/guid-c')) "$($renderer.Path) lost case-insensitive GUID identity"
+    foreach ($notReturned in @('repeat-must-not-appear', 'independent-key', 'late-key', 'unmatched-padding')) {
+        Assert-True (-not $aliasState.RatingKeys.ContainsKey($notReturned)) "$($renderer.Path) emitted an unmatched, resolved-repeat, or unproven candidate identity"
+    }
+    foreach ($query in $script:HistoryCalls) {
+        Assert-True ($query.user_id -eq '1' -and $query.section_id -eq '10' -and $query.media_type -eq 'movie') "$($renderer.Path) widened indexed historical lookup scope"
+    }
+    $script:HistoryFixtureRows = $null
+    Write-Host '[PASS] Indexed watched lookup: duplicate/case aliases, key/GUID union, resolved repeats, late GUIDs, recipient/library/privacy refusal, and clean output.'
+
+    $savedConfig = $script:Config
+    $script:Config = [PSCustomObject]@{ WatchedPercent=85; MaxMovies=1; MaxTv=0 }
+    $displayMovies = @(
+        [PSCustomObject]@{ Type='movie'; RatingKey='display-one'; MetadataGuid=''; ReleaseKey='movie:one' },
+        [PSCustomObject]@{ Type='movie'; RatingKey='capped-away'; MetadataGuid=''; ReleaseKey='movie:two' }
+    )
+    $displayHero = [PSCustomObject]@{ Item=[PSCustomObject]@{Type='movie';RatingKey='hero-key';MetadataGuid='';ReleaseKey='movie:hero'};IsTrending=$false }
+    $visible = @(Get-NewsletterWatchedMovieCandidates -ReleaseData ([PSCustomObject]@{Movies=$displayMovies;TV=@()}) -HotRelease $displayHero -QuietReleaseMode $false)
+    Assert-True ($visible.Count -eq 2 -and @($visible.RatingKey) -contains 'display-one' -and @($visible.RatingKey) -contains 'hero-key' -and @($visible.RatingKey) -notcontains 'capped-away') "$($renderer.Path) widened the lookup beyond the displayed shelf/hero"
+    $script:Config.MaxMovies = 0
+    $displayHero.Item.Type = 'show'
+    $none = @(Get-NewsletterWatchedMovieCandidates -ReleaseData ([PSCustomObject]@{Movies=$displayMovies;TV=@()}) -HotRelease $displayHero -QuietReleaseMode $false)
+    Assert-True ($none.Count -eq 0) "$($renderer.Path) retained hidden movies or a TV hero"
+    $script:Config = $savedConfig
 
     $watched = [PSCustomObject]@{ Type='movie'; RatingKey='watched-key'; MetadataGuid=''; Title='Watched Movie'; PosterRatingKey='watched-key'; Summary='Synthetic summary' }
     $guid = [PSCustomObject]@{ Type='movie'; RatingKey='new-key'; MetadataGuid='plex://movie/guid-match'; Title='GUID Movie'; PosterRatingKey='new-key'; Summary='Synthetic summary' }

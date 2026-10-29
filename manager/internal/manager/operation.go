@@ -62,6 +62,7 @@ type OperationRecord struct {
 	SMTPAcceptedCount   int                       `json:"smtpAcceptedCount,omitempty"`
 	SkippedCount        int                       `json:"skippedCount,omitempty"`
 	FailedCount         int                       `json:"failedCount,omitempty"`
+	EmailSizeMetrics    *EmailSizeMetrics         `json:"emailSizeMetrics,omitempty"`
 	SMTPFailure         *SMTPFailureEvidence      `json:"smtpFailure,omitempty"`
 	SkipReasonCounts    *DeliverySkipReasonCounts `json:"skipReasonCounts,omitempty"`
 	ExitCode            *int                      `json:"exitCode,omitempty"`
@@ -350,6 +351,7 @@ func (c *operationCoordinator) run(ctx context.Context, record OperationRecord, 
 		record.FailedCount = structuredResult.FailedCount
 		record.SMTPFailure = structuredResult.SMTPFailure
 		record.SkipReasonCounts = structuredResult.SkipReasonCounts
+		record.EmailSizeMetrics = structuredResult.EmailSizeMetrics
 		if record.Type == "send-all" {
 			_ = writePrivateJSON(filepath.Join(c.runtimeRoot, "last-run.json"), structuredResult)
 		}
@@ -457,6 +459,7 @@ func (c *operationCoordinator) finishRecoveredDelivery(record OperationRecord, r
 	record.SkippedCount = result.SkippedCount
 	record.FailedCount = result.FailedCount
 	record.SkipReasonCounts = result.SkipReasonCounts
+	record.EmailSizeMetrics = result.EmailSizeMetrics
 	record.SMTPFailure = result.SMTPFailure
 	record.ErrorCategory = result.ErrorCategory
 	switch {

@@ -6,6 +6,23 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.27.3] - 2026-10-29
+
+### Changed
+
+- Bound long-running Manager and scheduler logs, stream MIME without whole-message copies, and limit watched-history requests to exact displayed movie candidates while retaining complete history for unmatched titles.
+- Use the minimal shared runtime and only the selected Manager architecture in Mac fallback images; boot-test versioned container candidates and promote their exact manifests with SBOM/provenance intact.
+
+- Serve fingerprinted public Manager assets using prebuilt Brotli/gzip variants with safe identity fallback, encoding-specific validators, and immutable caching for versioned URLs. Private responses remain uncached.
+- Share bounded Windows schedule observations, avoid redundant configuration conversion, and reduce hidden-tab polling and unchanged dashboard writes.
+- Reuse exact artwork within a newsletter run, request fallback hero art only when needed, and record numeric HTML/MIME size evidence without recipient details.
+
+### Fixed
+
+- Expand FreeBSD image references in every packaged launcher and example, repair the exact unresolved default left by an earlier failed install, and document a complete repository context for local image builds.
+- Refuse native Linux no-op/downgrade updates, coordinate upgrade locks with service shutdown, and restore the previous program and service state when upgrade readiness fails.
+- Keep dashboard delivery polling independent of rendering so active-operation updates cannot postpone fresh status.
+
 ## [0.27.2] - 2026-10-27
 
 ### Fixed

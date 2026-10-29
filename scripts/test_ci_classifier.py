@@ -56,6 +56,35 @@ class ClassifierTests(unittest.TestCase):
             {"renderer"},
         )
 
+    def test_checkout_attributes_select_every_build_consumer(self):
+        self.assert_gates([".gitattributes"], set(GATES))
+
+    def test_container_smoke_helper_selects_packaged_mac_consumer(self):
+        self.assert_gates(["scripts/test-container-image.sh"], {"package", "compose", "container", "container_arm64"})
+
+    def test_runtime_log_tests_select_service_consumers(self):
+        self.assert_gates(["scripts/test-runtime-logs.ps1"], {"powershell", "package", "container", "container_arm64"})
+
+    def test_container_candidate_helpers_select_multiarch_publication(self):
+        for path in ["scripts/container-candidate.py", "scripts/test-container-candidate.py"]:
+            self.assert_gates([path], {"container", "container_arm64"})
+
+    def test_email_optimization_tests_require_renderer_validation(self):
+        for path in ["scripts/test-email-optimizations.ps1", "scripts/test-email-size-budgets.py", "scripts/test-smtp-streaming.ps1"]:
+            self.assert_gates([path], {"powershell", "renderer"})
+
+    def test_static_compressor_selects_every_manager_consumer(self):
+        self.assert_gates(["scripts/precompress-manager-assets.mjs"], {"manager", "package", "installer", "container", "container_arm64"})
+
+    def test_release_input_tests_select_artifact_validation(self):
+        self.assert_gates(["scripts/test-release-package-inputs.ps1"], {"powershell", "renderer", "package", "installer"})
+
+    def test_status_polling_test_is_in_fast_layer(self):
+        self.assert_gates(["scripts/test-manager-status-polling.mjs"], set())
+
+    def test_native_linux_installer_test_selects_package_only(self):
+        self.assert_gates(["scripts/test-linux-installer.py"], {"package"})
+
     def test_installer_does_not_select_renderer_or_container(self):
         self.assert_gates(
             ["installer/cmd/tautweekly-setup/main.go"],
@@ -106,6 +135,10 @@ class WorkflowContractTests(unittest.TestCase):
         cls.container = Path(".github/workflows/container.yml").read_text(encoding="utf-8")
         cls.pages = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
         cls.release = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
+
+    def test_fingerprinted_web_manifests_have_fixed_checkout_bytes(self):
+        attributes = Path(".gitattributes").read_text(encoding="utf-8")
+        self.assertIn("*.webmanifest text eol=lf", attributes)
 
     def test_ci_events_are_pr_main_and_manual_only(self):
         on_block = self.ci.split("\npermissions:", 1)[0]

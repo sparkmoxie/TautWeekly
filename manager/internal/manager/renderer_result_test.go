@@ -348,3 +348,87 @@ func validPreviewAllRendererResult() rendererResult {
 		},
 	}
 }
+
+func TestRendererResultV5ValidatesSanitizedEmailSizeMetrics(t *testing.T) {
+	valid := rendererResult{SchemaVersion: 5, Mode: "SendTest", Outcome: "succeeded", DeliveryScope: "test", StartedAtUTC: "2031-04-18T16:30:00Z", FinishedAtUTC: "2031-04-18T16:30:01Z", DurationMS: 1000, SMTPAcceptedCount: 1, SkipReasonCounts: &DeliverySkipReasonCounts{}, EmailSizeMetrics: &EmailSizeMetrics{MessageCount: 1, MaxHTMLBytes: 100, MaxMIMEBytes: 5000, MaxInlineImageCount: 1, MaxInlineImageBytes: 1024}}
+	if !validRendererResult(valid, "SendTest") {
+		t.Fatal("valid numeric metrics rejected")
+	}
+	cases := []struct {
+		name   string
+		mutate func(*rendererResult)
+	}{
+		{"legacy schema", func(r *rendererResult) { r.SchemaVersion = 4 }},
+		{"missing accepted message metrics", func(r *rendererResult) { r.EmailSizeMetrics = nil }},
+		{"no serialized messages", func(r *rendererResult) { r.EmailSizeMetrics.MessageCount = 0 }},
+		{"negative HTML", func(r *rendererResult) { r.EmailSizeMetrics.MaxHTMLBytes = -1 }},
+		{"unbounded MIME", func(r *rendererResult) { r.EmailSizeMetrics.MaxMIMEBytes = 1 << 31 }},
+		{"MIME smaller than content", func(r *rendererResult) { r.EmailSizeMetrics.MaxMIMEBytes = 50 }},
+		{"unbounded image count", func(r *rendererResult) { r.EmailSizeMetrics.MaxInlineImageCount = 10001 }},
+		{"image count without bytes", func(r *rendererResult) { r.EmailSizeMetrics.MaxInlineImageBytes = 0 }},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			result := valid
+			metrics := *valid.EmailSizeMetrics
+			result.EmailSizeMetrics = &metrics
+			test.mutate(&result)
+			if validRendererResult(result, "SendTest") {
+				t.Fatal("invalid metrics accepted")
+			}
+		})
+	}
+	path := filepath.Join(t.TempDir(), "result.json")
+	encoded, err := json.Marshal(valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := readRendererResult(path, "SendTest")
+	if err != nil || parsed.EmailSizeMetrics.MaxMIMEBytes != 5000 {
+		t.Fatalf("metrics lost: %+v, %v", parsed, err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(encoded, &raw); err != nil {
+		t.Fatal(err)
+	}
+	raw["emailSizeMetrics"].(map[string]any)["recipientEmail"] = "private@example.test"
+	encoded, err = json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readRendererResult(path, "SendTest"); err == nil {
+		t.Fatal("private nested metric field accepted")
+	}
+	// Failures before serialization and non-email modes legitimately have no metrics.
+	valid.Outcome = "failed"
+	valid.SMTPAcceptedCount = 0
+	valid.FailedCount = 1
+	valid.EmailSizeMetrics = nil
+	if !validRendererResult(valid, "SendTest") {
+		t.Fatal("pre-serialization failure rejected")
+	}
+}
+
+func TestEmailSizeMetricsSurviveRecoveredDeliveryAndHistory(t *testing.T) {
+	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "synthetic-key", "", "")
+	coordinator, err := newOperationCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: root, Now: time.Now, operationRunner: &fixturePreviewRunner{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := OperationRecord{SchemaVersion: operationSchemaVersion, ID: "email-size-recovery", Type: "send-all", State: "running", StartedAtUTC: "2031-04-18T16:30:00Z"}
+	coordinator.current = &record
+	sizes := &EmailSizeMetrics{MessageCount: 2, MaxHTMLBytes: 200, MaxMIMEBytes: 7000, MaxInlineImageCount: 2, MaxInlineImageBytes: 1024}
+	result := rendererResult{SchemaVersion: 5, Mode: "SendAll", Outcome: "succeeded", DeliveryScope: "production", StartedAtUTC: record.StartedAtUTC, FinishedAtUTC: "2031-04-18T16:30:01Z", SMTPAcceptedCount: 2, SkipReasonCounts: &DeliverySkipReasonCounts{}, EmailSizeMetrics: sizes}
+	coordinator.finishRecoveredDelivery(record, ReadConfigEditor(root).Revision, result)
+	for _, saved := range append(coordinator.store.readHistory(), *coordinator.store.readCurrent()) {
+		if saved.EmailSizeMetrics == nil || *saved.EmailSizeMetrics != *sizes {
+			t.Fatalf("lost aggregate size evidence: %+v", saved)
+		}
+	}
+}

@@ -280,6 +280,7 @@ $expected = [ordered]@{
         'TautWeekly-nas-docker/app/Configuration-Backups.ps1',
         'TautWeekly-nas-docker/app/Smtp-Transport.ps1',
         'TautWeekly-nas-docker/app/Schedule-Time.ps1',
+        'TautWeekly-nas-docker/app/Runtime-Logs.ps1',
         'TautWeekly-nas-docker/app/healthcheck.sh',
         'TautWeekly-nas-docker/app/bin/run-as-user.sh',
         'TautWeekly-nas-docker/app/bin/funnel-adapter.sh',
@@ -303,6 +304,7 @@ $expected = [ordered]@{
         'TautWeekly-mac-docker/app/Configuration-Backups.ps1',
         'TautWeekly-mac-docker/app/Smtp-Transport.ps1',
         'TautWeekly-mac-docker/app/Schedule-Time.ps1',
+        'TautWeekly-mac-docker/app/Runtime-Logs.ps1',
         'TautWeekly-mac-docker/app/bin/run-as-user.sh',
         'TautWeekly-mac-docker/app/bin/funnel-adapter.sh',
         'TautWeekly-mac-docker/app/bin/tautweekly-funnel',
@@ -328,6 +330,7 @@ $expected = [ordered]@{
         'TautWeekly-linux/app/Configuration-Backups.ps1',
         'TautWeekly-linux/app/Smtp-Transport.ps1',
         'TautWeekly-linux/app/Schedule-Time.ps1',
+        'TautWeekly-linux/app/Runtime-Logs.ps1',
         'TautWeekly-linux/app/bin/run-as-user.sh',
         'TautWeekly-linux/app/bin/run-mode.sh',
         'TautWeekly-linux/app/bin/run-script.sh',
@@ -355,6 +358,7 @@ $expected = [ordered]@{
         'TautWeekly-freebsd-podman/app/Configuration-Backups.ps1',
         'TautWeekly-freebsd-podman/app/Smtp-Transport.ps1',
         'TautWeekly-freebsd-podman/app/Schedule-Time.ps1',
+        'TautWeekly-freebsd-podman/app/Runtime-Logs.ps1',
         'TautWeekly-freebsd-podman/app/bin/run-as-user.sh',
         'TautWeekly-freebsd-podman/app/bin/run-mode.sh',
         'TautWeekly-freebsd-podman/app/bin/run-script.sh',
@@ -465,6 +469,11 @@ foreach ($archiveName in $expected.Keys) {
             $_ -match '^(?:/|[A-Za-z]:)' -or @($_ -split '/' | Where-Object { $_ -eq '..' }).Count -gt 0
         })
         Assert-True ($unsafeEntries.Count -eq 0) "$archiveName contains unsafe archive paths: $($unsafeEntries -join ', ')"
+        foreach ($payloadEntry in $archive.Entries) {
+            if ([string]::IsNullOrEmpty($payloadEntry.Name) -or $payloadEntry.Length -eq 0) { continue }
+            $payloadBytes = Get-ZipEntryBytes $payloadEntry
+            Assert-True (-not [Text.Encoding]::ASCII.GetString($payloadBytes).Contains('__TAUTWEEKLY_RELEASE_VERSION__')) "$archiveName retains an unresolved release-version token in $($payloadEntry.FullName)."
+        }
         $composeEntries = @($archive.Entries | Where-Object { $_.FullName -match '/compose(?:\.qnap)?\.yaml$' })
         foreach ($composeEntry in $composeEntries) {
             $composeReader = New-Object IO.StreamReader($composeEntry.Open())
@@ -581,6 +590,12 @@ foreach ($archiveName in $expected.Keys) {
             Assert-True ($wrapperText -match 'manager-bootstrap' -and $wrapperText -match 'manager-reset-access' -and $wrapperText -match 'open-manager') 'Mac archive omits Manager bootstrap, recovery, or browser launch.'
             Assert-True ($serviceText -match 'runtime-profile\.sh' -and $serviceText -match '--runtime-mode "\$manager_runtime_mode"' -and $serviceText -match '--runtime-profile' -and $serviceText -match 'health/live' -and $serviceText -match 'wait_for_delivery') 'Mac archive omits unified profile selection, the tailored Manager runtime, or graceful delivery drain.'
             Assert-True ($composeText -match 'read_only:\s*true' -and $composeText -match 'stop_grace_period:\s*30m' -and $composeText -match 'no-new-privileges:true') 'Mac archive omits container hardening or graceful stop configuration.'
+            $dockerfileEntry = $archive.GetEntry('TautWeekly-mac-docker/Dockerfile')
+            Assert-True ($null -ne $dockerfileEntry) 'Mac archive lacks its standalone fallback Dockerfile.'
+            $dockerfileText = [Text.Encoding]::UTF8.GetString((Get-ZipEntryBytes $dockerfileEntry))
+            Assert-True ($dockerfileText.Contains('FROM debian:bookworm-slim') -and $dockerfileText.Contains('ARG POWERSHELL_VERSION=7.4.16') -and -not $dockerfileText.Contains('dotnet/sdk')) 'Mac archive fallback does not use the maintained minimal PowerShell runtime.'
+            Assert-True ($dockerfileText.Contains('FROM scratch AS manager-binaries') -and $dockerfileText.Contains('COPY --from=manager-binaries --chmod=0755 /tautweekly-manager-linux-${TARGETARCH}')) 'Mac archive fallback must copy only the selected architecture into its runtime image.'
+
             foreach ($architecture in @('amd64', 'arm64')) {
                 $path = "TautWeekly-mac-docker/manager/tautweekly-manager-linux-$architecture"
                 $managerEntry = @($archive.Entries | Where-Object { $_.FullName -ceq $path })
@@ -656,6 +671,26 @@ foreach ($archiveName in $expected.Keys) {
         Assert-True ($metadata -match '(?m)^Repository version:\s*(?<version>\S+)\s*$') "$archiveName does not identify its repository version."
         $packageReleaseVersion = $Matches['version']
         $releaseVersions.Add($packageReleaseVersion)
+        if ($archiveName -eq 'TautWeekly-freebsd-podman.zip') {
+            foreach ($relative in @('tautweekly.env.example', 'tautweekly', 'rc.d/tautweekly')) {
+                $identityEntry = $archive.GetEntry("TautWeekly-freebsd-podman/$relative")
+                Assert-True ($null -ne $identityEntry) "FreeBSD archive is missing $relative."
+                $identityText = [Text.Encoding]::UTF8.GetString((Get-ZipEntryBytes $identityEntry))
+                Assert-True ($identityText.Contains("ghcr.io/sparkmoxie/tautweekly:$packageReleaseVersion")) "FreeBSD $relative does not default to repository version $packageReleaseVersion."
+            }
+            $guideEntry = $archive.GetEntry('TautWeekly-freebsd-podman/README.md')
+            Assert-True ($null -ne $guideEntry) 'FreeBSD archive is missing its platform guide.'
+            $guideText = [Text.Encoding]::UTF8.GetString((Get-ZipEntryBytes $guideEntry))
+            Assert-True ($guideText.Contains('git clone --depth 1 --branch "v$release"') -and
+                $guideText.Contains('cd TautWeekly-source') -and
+                $guideText.Contains('-f platforms/nas-docker/Dockerfile')) 'FreeBSD local build instructions must use the complete source checkout and repository-root Dockerfile.'
+            $dockerfileEntry = $archive.GetEntry('TautWeekly-freebsd-podman/Dockerfile')
+            Assert-True ($null -ne $dockerfileEntry) 'FreeBSD archive is missing its reference Dockerfile.'
+            $dockerfileText = [Text.Encoding]::UTF8.GetString((Get-ZipEntryBytes $dockerfileEntry))
+            $canonicalDockerfile = [IO.File]::ReadAllText((Join-Path $Root 'platforms/nas-docker/Dockerfile'))
+            Assert-True (($dockerfileText -replace "`r`n", "`n").Trim() -ceq ($canonicalDockerfile -replace "`r`n", "`n").Trim()) 'FreeBSD reference Dockerfile differs from the documented repository build target.'
+        }
+
         foreach ($composeEntry in $composeEntries) {
             $composeReader = New-Object IO.StreamReader($composeEntry.Open())
             try { $identityText = $composeReader.ReadToEnd() } finally { $composeReader.Dispose() }

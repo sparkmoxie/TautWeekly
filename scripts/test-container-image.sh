@@ -4,6 +4,12 @@ set -euo pipefail
 image="${1:?Usage: test-container-image.sh IMAGE [BUILD_CONTEXT] [RUNTIME_PROFILE: server|desktop|unraid]}"
 build_context="${2:-}"
 runtime_profile="${3:-server}"
+expected_image_version="${TAUTWEEKLY_EXPECTED_IMAGE_VERSION:-ci}"
+test_platform="${TAUTWEEKLY_TEST_PLATFORM:-}"
+if [[ -n "$test_platform" ]]; then
+  case "$test_platform" in linux/amd64|linux/arm64) ;; *) echo 'Unsupported test platform.' >&2; exit 64 ;; esac
+  export DOCKER_DEFAULT_PLATFORM="$test_platform"
+fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 container_name="tautweekly-smoke-$RANDOM-$$"
 funnel_container="tautweekly-funnel-$RANDOM-$$"
@@ -145,9 +151,9 @@ esac
 if [[ -n "$build_context" ]]; then
   if [[ "$runtime_profile" == mac && ! -d "$build_context/manager" ]]; then
     command -v go >/dev/null 2>&1 || fail 'Go is required to stage the Mac Manager build context.'
-    case "$(uname -m)" in
-      x86_64|amd64) manager_arch=amd64 ;;
-      aarch64|arm64) manager_arch=arm64 ;;
+    case "${test_platform:-$(uname -m)}" in
+      linux/amd64|x86_64|amd64) manager_arch=amd64 ;;
+      linux/arm64|aarch64|arm64) manager_arch=arm64 ;;
       *) fail 'Mac image smoke staging requires a supported 64-bit host architecture.' ;;
     esac
     generated_context="$(mktemp -d)"
@@ -155,11 +161,11 @@ if [[ -n "$build_context" ]]; then
     mkdir -p "$generated_context/manager"
     (
       cd "$repo_root/manager"
-      CGO_ENABLED=0 GOOS=linux GOARCH="$manager_arch" go build -trimpath -buildvcs=false -ldflags '-s -w -X main.version=ci' -o "$generated_context/manager/tautweekly-manager-linux-$manager_arch" ./cmd/tautweekly-manager
+      CGO_ENABLED=0 GOOS=linux GOARCH="$manager_arch" go build -trimpath -buildvcs=false -ldflags "-s -w -X main.version=$expected_image_version" -o "$generated_context/manager/tautweekly-manager-linux-$manager_arch" ./cmd/tautweekly-manager
     )
     build_context="$generated_context"
   fi
-  docker build --build-arg BUILD_VERSION=ci --tag "$image" "$build_context"
+  docker build --build-arg BUILD_VERSION="$expected_image_version" --tag "$image" "$build_context"
 fi
 
 host_uid="$(id -u)"
@@ -186,13 +192,16 @@ runtime_env_args=(
   -e 'UMASK=077'
   -e 'TZ=Etc/UTC'
   -e "TAUTWEEKLY_PACKAGE_KIND=$package_kind"
-  -e 'TAUTWEEKLY_PACKAGE_VERSION=ci'
+  -e "TAUTWEEKLY_PACKAGE_VERSION=$expected_image_version"
   -e 'TAUTWEEKLY_HOST_ADAPTER_API=4'
   -e 'TAUTWEEKLY_FUNNEL_ADAPTER=disabled'
 )
 
 image_version="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$image")"
-[[ "$image_version" == ci ]] || fail "Image version label is $image_version instead of ci."
+[[ "$image_version" == "$expected_image_version" ]] || fail "Image version label is $image_version instead of $expected_image_version."
+printf '[INFO] Tested image %s platform=%s docker-reported-bytes=%s\n' "$image" "${test_platform:-native}" "$(docker image inspect --format '{{.Size}}' "$image")"
+manager_version="$(docker run --rm --network none --entrypoint /opt/tautweekly/bin/tautweekly-manager "$image" version)"
+[[ "$manager_version" == "TautWeekly Manager $expected_image_version" ]] || fail "Packaged Manager version is $manager_version instead of $expected_image_version."
 if [[ "$package_kind" == container-desktop || "$package_kind" == container-compose || "$package_kind" == unraid ]]; then
   image_runtime_profiles="$(docker image inspect --format '{{ index .Config.Labels "io.tautweekly.runtime-profiles" }}' "$image")"
   [[ "$image_runtime_profiles" == desktop,server,unraid ]] || fail "Unified image runtime profile label is $image_runtime_profiles."

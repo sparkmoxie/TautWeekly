@@ -15,6 +15,16 @@ const maximumRendererResultBytes = 64 << 10
 
 var errRendererResultInvalid = errors.New("renderer result is invalid")
 
+// EmailSizeMetrics contains only maxima over serialized messages in this run.
+// It deliberately retains no resource names, paths, addresses or MIME content.
+type EmailSizeMetrics struct {
+	MessageCount        int   `json:"messageCount"`
+	MaxHTMLBytes        int64 `json:"maxHtmlBytes"`
+	MaxMIMEBytes        int64 `json:"maxMimeBytes"`
+	MaxInlineImageCount int   `json:"maxInlineImageCount"`
+	MaxInlineImageBytes int64 `json:"maxInlineImageBytes"`
+}
+
 type rendererResult struct {
 	SchemaVersion         int                       `json:"schemaVersion"`
 	Mode                  string                    `json:"mode"`
@@ -29,6 +39,7 @@ type rendererResult struct {
 	SMTPAcceptedCount     int                       `json:"smtpAcceptedCount"`
 	SkippedCount          int                       `json:"skippedCount"`
 	FailedCount           int                       `json:"failedCount"`
+	EmailSizeMetrics      *EmailSizeMetrics         `json:"emailSizeMetrics,omitempty"`
 	SMTPFailure           *SMTPFailureEvidence      `json:"smtpFailure"`
 	SkipReasonCounts      *DeliverySkipReasonCounts `json:"skipReasonCounts,omitempty"`
 	GeneratedPreviewFiles []string                  `json:"generatedPreviewFiles"`
@@ -73,7 +84,7 @@ func readRendererResult(path, expectedMode string) (rendererResult, error) {
 }
 
 func validRendererResult(result rendererResult, expectedMode string) bool {
-	if (result.SchemaVersion != 1 && result.SchemaVersion != 2 && result.SchemaVersion != 3 && result.SchemaVersion != 4) || result.Mode != expectedMode || expectedDeliveryScope(result.Mode) == "" {
+	if (result.SchemaVersion != 1 && result.SchemaVersion != 2 && result.SchemaVersion != 3 && result.SchemaVersion != 4 && result.SchemaVersion != 5) || result.Mode != expectedMode || expectedDeliveryScope(result.Mode) == "" {
 		return false
 	}
 	if result.Outcome != "succeeded" && result.Outcome != "partial" && result.Outcome != "failed" {
@@ -99,6 +110,13 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 			return false
 		}
 	} else if structuredSMTPFailureCategory(result.ErrorCategory) {
+		return false
+	}
+	if result.EmailSizeMetrics != nil {
+		if result.SchemaVersion < 5 || !smtpDeliveryMode(result.Mode) || !validEmailSizeMetrics(*result.EmailSizeMetrics) || result.EmailSizeMetrics.MessageCount < result.SMTPAcceptedCount {
+			return false
+		}
+	} else if result.SchemaVersion >= 5 && result.SMTPAcceptedCount > 0 {
 		return false
 	}
 	if result.DeliveryScope != expectedDeliveryScope(result.Mode) {
@@ -199,6 +217,19 @@ func validRendererResult(result rendererResult, expectedMode string) bool {
 		}
 	}
 	return true
+}
+
+func validEmailSizeMetrics(metrics EmailSizeMetrics) bool {
+	if metrics.MessageCount <= 0 || metrics.MessageCount > 1_000_000 || metrics.MaxInlineImageCount < 0 || metrics.MaxInlineImageCount > 10_000 {
+		return false
+	}
+	for _, size := range []int64{metrics.MaxHTMLBytes, metrics.MaxMIMEBytes, metrics.MaxInlineImageBytes} {
+		if size < 0 || size > 1<<30 {
+			return false
+		}
+	}
+	return metrics.MaxHTMLBytes > 0 && metrics.MaxMIMEBytes >= metrics.MaxHTMLBytes && metrics.MaxMIMEBytes >= metrics.MaxInlineImageBytes &&
+		((metrics.MaxInlineImageCount == 0 && metrics.MaxInlineImageBytes == 0) || (metrics.MaxInlineImageCount > 0 && metrics.MaxInlineImageBytes > 0))
 }
 
 func validRendererErrorCategory(category string) bool {

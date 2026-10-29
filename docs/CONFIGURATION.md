@@ -20,6 +20,12 @@ Manager operation history and configuration diagnostics each use count-only
 FIFO retention of the newest 20 completed records. Each new overflow record
 removes the oldest; record age does not otherwise expire an entry.
 
+## Newsletter resource evidence
+
+Artwork is reused only within the current renderer process for the same exact server, item identity and image transform. A later run still obtains fresh live artwork; recipient history and watched state stay isolated. Existing image sizes, animation frames, timing and visual output are preserved.
+
+Sanitized renderer results may include `emailSizeMetrics`: message count and maximum HTML bytes, serialized MIME bytes, inline-image count and largest inline-image bytes. The measurements describe messages prepared before SMTP and do not prove acceptance or inbox delivery. Synthetic active/quiet/welcome and maximum-content fixtures enforce message-size budgets in CI.
+
 ## Native Manager public access
 
 Windows and native Linux Funnel state is Manager-owned private state, not a `config.json`
@@ -722,3 +728,26 @@ Native Linux reads root-owned non-secret service values from
 data path, Manager bind/port, and-on FreeBSD-the OCI image reference. Keep SMTP,
 Tautulli, and Plex secrets in the private `config.json`, not in service
 environment files.
+
+## Managed-service diagnostic logs
+
+NAS/Docker, macOS Docker, native Linux, and FreeBSD/Podman keep bounded local
+Manager and scheduler logs under the private data directory's `logs/` folder.
+`manager.log` retains up to three numbered backups; each file is limited to
+1 MiB, for a maximum of 4 MiB. The running Manager rotates and reopens its own
+file. Console and service-manager diagnostics continue alongside it.
+
+The scheduler chooses `scheduler_YYYYMMDD.log` from its configured local date
+on every write, including after midnight during a long session. It retains
+four scheduler log files across dates and numbered backups, each limited to
+1 MiB, for a maximum of 4 MiB. Oversized older managed-service logs retain
+their recent byte tail. Older content is discarded as the limits are reached;
+a retained tail may begin partway through a line. A scheduler file-write
+failure falls back to console diagnostics without stopping delivery scheduling.
+
+Retention recognizes only these Manager and scheduler filenames and refuses
+linked or nonregular log files. Renderer `tautweekly_*.log` files, private
+configuration/backups, delivery state, and history keep their existing policies.
+Windows Manager uses console diagnostics by default and does not create this
+persistent service-log set. These fixed caps add no configuration fields;
+container-engine and host journal retention remains controlled by the host.

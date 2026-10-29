@@ -33,6 +33,7 @@ FAST_ONLY_SCRIPTS = {
     "scripts/test-manager-accessibility.py",
     "scripts/test-manager-cache-verification.mjs",
     "scripts/test-manager-header-refresh.mjs",
+    "scripts/test-manager-status-polling.mjs",
     "scripts/test-manager-preview-refresh.mjs",
     "scripts/test-manager-update-indicator.mjs",
     "scripts/test-manager-user-email-overrides.mjs",
@@ -45,6 +46,8 @@ FAST_ONLY_SCRIPTS = {
 }
 
 RENDERER_TEST_MARKERS = (
+    "email-optimizations",
+    "email-size-budgets",
     "binge-champion",
     "cache-diagnostics",
     "deleted-item-cache",
@@ -54,6 +57,7 @@ RENDERER_TEST_MARKERS = (
     "renderer-collection",
     "sendall-recipient",
     "smtp-transport",
+    "smtp-streaming",
     "top-movie-genre",
     "user-exclusion",
 )
@@ -107,7 +111,7 @@ def classify_path(raw_path: str) -> dict[str, bool]:
     name = PurePosixPath(path).name
     suffix = PurePosixPath(path).suffix
 
-    if path in {"scripts/ci_classifier.py", "scripts/test_ci_classifier.py"}:
+    if path in {"scripts/ci_classifier.py", "scripts/test_ci_classifier.py", ".gitattributes"}:
         enable_all_validation(result)
         enable(result, "pages")
         return result
@@ -197,7 +201,7 @@ def classify_path(raw_path: str) -> dict[str, bool]:
         if path == "scripts/build-releases.ps1":
             enable_all_validation(result)
             return result
-        if path == "scripts/test-release-artifacts.ps1":
+        if path in {"scripts/test-release-artifacts.ps1", "scripts/test-release-package-inputs.ps1"}:
             enable(result, "powershell", "renderer", "package", "installer")
             return result
 
@@ -206,6 +210,26 @@ def classify_path(raw_path: str) -> dict[str, bool]:
 
         if path == "scripts/validate-platforms.ps1":
             enable_all_validation(result)
+            return result
+
+        if path == "scripts/test-container-image.sh":
+            enable(result, "package", "compose", "container", "container_arm64")
+            return result
+
+        if path == "scripts/test-runtime-logs.ps1":
+            enable(result, "powershell", "package", "container", "container_arm64")
+            return result
+
+        if path in {"scripts/container-candidate.py", "scripts/test-container-candidate.py"}:
+            enable(result, "container", "container_arm64")
+            return result
+
+        if path == "scripts/precompress-manager-assets.mjs":
+            enable(result, "manager", "package", "installer", "container", "container_arm64")
+            return result
+
+        if path == "scripts/test-linux-installer.py":
+            enable(result, "package")
             return result
 
         if suffix == ".ps1":

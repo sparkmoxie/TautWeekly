@@ -53,6 +53,7 @@ type scheduleCoordinator struct {
 	runner      scheduleMutationRunner
 	actions     []string
 	current     *ScheduleOperationRecord
+	probeCache  *windowsTaskProbeCache
 }
 
 func newScheduleCoordinator(options Options) (*scheduleCoordinator, error) {
@@ -76,6 +77,7 @@ func newScheduleCoordinator(options Options) (*scheduleCoordinator, error) {
 		now:         options.Now,
 		runner:      runner,
 		actions:     append([]string(nil), capabilitiesFor(options).ScheduleActions...),
+		probeCache:  options.taskProbeCache,
 	}
 	if coordinator.now == nil {
 		coordinator.now = time.Now
@@ -131,6 +133,7 @@ func (c *scheduleCoordinator) Start(action string, request ScheduleMutationReque
 		return ScheduleOperationRecord{}, err
 	}
 	c.current = &record
+	c.probeCache.Invalidate()
 	taskName := strings.TrimSpace(configMapString(values, "ScheduledTaskName"))
 	if taskName == "" {
 		taskName = "TautWeekly for Plex Newsletter"
@@ -152,6 +155,7 @@ func (c *scheduleCoordinator) run(record ScheduleOperationRecord, expectedRevisi
 		record.SupportCode = operationSupportCode(record.ID)
 	}
 	c.mu.Lock()
+	c.probeCache.Invalidate()
 	c.current = &record
 	_ = c.saveCurrent(record)
 	c.mu.Unlock()

@@ -163,6 +163,8 @@ jobs:
           ./scripts/validate-release-history.ps1
       - name: Validate JavaScript and Manager accessibility
         run: |
+          node scripts/precompress-manager-assets.mjs --check
+          node scripts/precompress-manager-assets.mjs --self-test
           node --check docs/assets/site.js
           node --check docs/gui-preview/mock-api.js
           node --check docs/gui-preview/rich-preview.js
@@ -174,6 +176,7 @@ jobs:
           node scripts/test-gui-preview-personal-stats.mjs
           node scripts/test-manager-update-indicator.mjs
           node scripts/test-manager-header-refresh.mjs
+          node scripts/test-manager-status-polling.mjs
           node scripts/test-manager-preview-refresh.mjs
           node scripts/test-manager-cache-verification.mjs
           node scripts/test-manager-user-email-overrides.mjs
@@ -190,6 +193,12 @@ jobs:
           ./scripts/test-container-profiles.sh
           ./scripts/test-platform-command-routing.sh
           ./scripts/test-update-management.sh
+          pwsh ./scripts/test-release-package-inputs.ps1
+          pwsh ./scripts/test-email-optimizations.ps1
+          pwsh ./scripts/test-runtime-logs.ps1
+          python3 -B scripts/test-email-size-budgets.py
+          python3 -B scripts/test-container-candidate.py
+          python3 -B scripts/test-linux-installer.py
           python3 -B scripts/optimize-email-gifs.py --check
           python3 -B scripts/test-asset-refresh.py
           python3 -B scripts/test_ci_classifier.py
@@ -232,6 +241,7 @@ jobs:
         shell: powershell
         run: |
           .\scripts\test-config-backup-retention.ps1
+          .\scripts\test-runtime-logs.ps1
           .\scripts\test-scheduler-timezone.ps1
           .\scripts\test-update-checks.ps1
 
@@ -246,6 +256,7 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/test-renderer-collections.ps1
+          ./scripts/test-smtp-streaming.ps1
           ./scripts/test-recipient-watched-movies.ps1
           ./scripts/test-deleted-item-cache.ps1
           ./scripts/test-cache-diagnostics.ps1
@@ -264,6 +275,7 @@ jobs:
         shell: powershell
         run: |
           .\scripts\test-renderer-collections.ps1
+          .\scripts\test-smtp-streaming.ps1
           .\scripts\test-recipient-watched-movies.ps1
           .\scripts\test-deleted-item-cache.ps1
           .\scripts\test-cache-diagnostics.ps1
@@ -296,6 +308,12 @@ jobs:
         run: |
           go test ./...
           go vet ./...
+      - name: Race-test shared probes and rotating log concurrency
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: manager
+        run: |
+          go test -race ./internal/manager -run TestWindowsTaskProbe
+          go test -race ./cmd/tautweekly-manager -run TestRotatingManagerLog
       - name: Cross-build maintained Manager targets once
         if: matrix.os == 'ubuntu-latest'
         shell: pwsh
@@ -322,6 +340,24 @@ jobs:
         run: ./scripts/test-release-artifacts.ps1
       - name: Boot-test the packaged native Linux Manager
         run: ./scripts/test-linux-manager-package.sh
+      - name: Set up QEMU for packaged Mac fallback validation
+        if: needs.classify.outputs.container == 'true'
+        uses: docker/setup-qemu-action@v4
+      - name: Set up Buildx for packaged Mac fallback validation
+        if: needs.classify.outputs.container == 'true'
+        uses: docker/setup-buildx-action@v4
+      - name: Build and boot the exact packaged Mac fallback on both architectures
+        if: needs.classify.outputs.container == 'true'
+        run: |
+          context_root="$(mktemp -d)"
+          trap 'rm -rf "$context_root"' EXIT
+          tar -xzf dist/TautWeekly-mac-docker.tar.gz -C "$context_root"
+          for arch in amd64 arm64; do
+            image="tautweekly-mac-package-ci:$arch"
+            docker buildx build --platform "linux/$arch" --load --build-arg BUILD_VERSION=ci --tag "$image" "$context_root/TautWeekly-mac-docker"
+            TAUTWEEKLY_TEST_PLATFORM="linux/$arch" TAUTWEEKLY_EXPECTED_IMAGE_VERSION=ci ./scripts/test-container-image.sh "$image" '' mac
+            docker image inspect "$image" --format 'Packaged Mac fallback {{.Architecture}}: {{.Size}} bytes'
+          done
       - name: Verify release archive reproducibility
         shell: pwsh
         run: ./scripts/test-release-reproducibility.ps1 -Version ci

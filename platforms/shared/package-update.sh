@@ -356,11 +356,13 @@ apply_update() {
   elif version_greater_than "$current" "$latest"; then
     echo "Installed host package $current is newer than stable $latest; no downgrade was applied."
     run_runtime_updater apply
+    return
   else
     needs_package=true
   fi
   if [[ "$needs_package" != true ]]; then
     run_runtime_updater apply
+    return
   fi
 
   work_root="$(mktemp -d "${TMPDIR:-/tmp}/tautweekly-package-update.XXXXXX")"
