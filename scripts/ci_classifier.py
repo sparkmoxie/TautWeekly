@@ -111,7 +111,7 @@ def classify_path(raw_path: str) -> dict[str, bool]:
     name = PurePosixPath(path).name
     suffix = PurePosixPath(path).suffix
 
-    if path in {"scripts/ci_classifier.py", "scripts/test_ci_classifier.py"}:
+    if path in {"scripts/ci_classifier.py", "scripts/test_ci_classifier.py", ".gitattributes"}:
         enable_all_validation(result)
         enable(result, "pages")
         return result
@@ -210,6 +210,10 @@ def classify_path(raw_path: str) -> dict[str, bool]:
 
         if path == "scripts/validate-platforms.ps1":
             enable_all_validation(result)
+            return result
+
+        if path == "scripts/test-container-image.sh":
+            enable(result, "package", "compose", "container", "container_arm64")
             return result
 
         if path == "scripts/test-runtime-logs.ps1":

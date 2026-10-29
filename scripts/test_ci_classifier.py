@@ -56,6 +56,12 @@ class ClassifierTests(unittest.TestCase):
             {"renderer"},
         )
 
+    def test_checkout_attributes_select_every_build_consumer(self):
+        self.assert_gates([".gitattributes"], set(GATES))
+
+    def test_container_smoke_helper_selects_packaged_mac_consumer(self):
+        self.assert_gates(["scripts/test-container-image.sh"], {"package", "compose", "container", "container_arm64"})
+
     def test_runtime_log_tests_select_service_consumers(self):
         self.assert_gates(["scripts/test-runtime-logs.ps1"], {"powershell", "package", "container", "container_arm64"})
 

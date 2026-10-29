@@ -199,7 +199,7 @@ runtime_env_args=(
 
 image_version="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$image")"
 [[ "$image_version" == "$expected_image_version" ]] || fail "Image version label is $image_version instead of $expected_image_version."
-printf '[INFO] Tested image %s platform=%s unpacked-bytes=%s\n' "$image" "${test_platform:-native}" "$(docker image inspect --format '{{.Size}}' "$image")"
+printf '[INFO] Tested image %s platform=%s docker-reported-bytes=%s\n' "$image" "${test_platform:-native}" "$(docker image inspect --format '{{.Size}}' "$image")"
 manager_version="$(docker run --rm --network none --entrypoint /opt/tautweekly/bin/tautweekly-manager "$image" version)"
 [[ "$manager_version" == "TautWeekly Manager $expected_image_version" ]] || fail "Packaged Manager version is $manager_version instead of $expected_image_version."
 if [[ "$package_kind" == container-desktop || "$package_kind" == container-compose || "$package_kind" == unraid ]]; then
