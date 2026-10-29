@@ -189,7 +189,8 @@ trap 'exit 143' TERM
 # This backup is deliberately outside service-owned /var/lib: root must never
 # restore executable code or systemd units from a service-writable snapshot.
 install -d -m 0700 -o root -g root /var/backups/tautweekly
-backup="$(mktemp -d /var/backups/tautweekly/program-$(date +%Y%m%d-%H%M%S).XXXXXX)"
+backup_stamp="$(date +%Y%m%d-%H%M%S)"
+backup="$(mktemp -d "/var/backups/tautweekly/program-$backup_stamp.XXXXXX")"
 chmod 0700 "$backup"
 if [[ "$fresh_install" == false ]]; then
   tar -czf "$backup/program.tar.gz" -C /opt tautweekly
