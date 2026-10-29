@@ -136,6 +136,14 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 		`<link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="16x16 24x24 32x32">`,
 		`<link rel="icon" href="/tautweekly-icon-192.png" type="image/png" sizes="192x192">`,
 	} {
+		for _, name := range []string{"favicon.ico", "tautweekly-icon-192.png"} {
+			raw, err := embeddedWeb.ReadFile("web/" + name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			digest := sha256.Sum256(raw)
+			expected = strings.ReplaceAll(expected, `href="/`+name+`"`, `href="/`+name+`?v=`+hex.EncodeToString(digest[:])+`"`)
+		}
 		if !strings.Contains(document, expected) {
 			t.Fatalf("Windows Manager document omitted sharing or favicon metadata: %s", expected)
 		}

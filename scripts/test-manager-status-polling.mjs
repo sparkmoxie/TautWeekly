@@ -48,7 +48,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function harness({ running = false, statusRequest = () => snapshot(running) } = {}) {
+function harness({ running = false, statusRequest = () => snapshot(running), operationRequest, scheduleRequest } = {}) {
   let now = 0, nextTimer = 0;
   const timers = new Map(), elements = new Map(), listeners = new Map();
   const requests = [];
@@ -65,10 +65,12 @@ function harness({ running = false, statusRequest = () => snapshot(running) } = 
     async request(target) {
       requests.push({ target, at: now });
       if (target === "/api/v1/status") return await statusRequest();
-      if (target === "/api/v1/operations/current") return { current: state.operation };
+      if (target === "/api/v1/operations/current") return operationRequest ? await operationRequest() : { current: state.operation };
+      if (target === "/api/v1/schedule/operation") return scheduleRequest ? await scheduleRequest() : { current: state.scheduleOperation };
       throw new Error(`unexpected fixture request ${target}`);
     },
     operationIsActive: (operation) => ["queued", "running", "cancelling"].includes(operation?.state),
+    scheduleOperationIsActive: (operation) => ["queued", "running"].includes(operation?.state),
     titleCase: String, formatDate: String, yesNo: String, overallHeading: String, overallCopy: String,
     setText() {}, setChip() {}, setSwappingText() {}, setTimelineCardState() {},
     renderDashboardGreeting() {}, renderDashboardScheduleSummary() {}, renderIntegrationStatus() {}, renderDashboardConfigStatus() {},
@@ -79,18 +81,19 @@ function harness({ running = false, statusRequest = () => snapshot(running) } = 
     setGlobalStatus() {},
   };
   vm.createContext(context);
-  const functions = ["renderStatus", "productionDeliveryOperationIsActive", "productionDeliveryIsRunning", "productionDeliveryStartedAt", "manageDeliveryStatusPolling", "pollDeliveryStatus", "manageOperationPolling", "operationPollIsCurrent", "successfulPreviewGeneration", "pollOperation", "showAuthentication"].map(functionSource).join("\n");
+  const functions = ["renderStatus", "productionDeliveryOperationIsActive", "productionDeliveryIsRunning", "productionDeliveryStartedAt", "manageDeliveryStatusPolling", "pollDeliveryStatus", "manageOperationPolling", "operationPollIsCurrent", "successfulPreviewGeneration", "pollOperation", "manageSchedulePolling", "pollScheduleOperation", "showAuthentication"].map(functionSource).join("\n");
   const visibilityStart = source.indexOf('document.addEventListener("visibilitychange",');
   const visibilityEnd = source.indexOf("\nmaterializeMaterialIcons();", visibilityStart);
   assert.ok(visibilityStart >= 0 && visibilityEnd > visibilityStart, "missing visibility lifecycle");
   vm.runInContext(`let authenticationEpoch = 0, applicationRefreshPromise = null;
     let deliveryStatusPollTimer, deliveryStatusPollInFlight = false, operationPollTimer, schedulePollTimer;
-    let operationPollSequence = 0, operationCompletionProcessedID = "";
+    let operationPollSequence = 0, operationCompletionProcessedID = "", schedulePollSequence = 0;
     ${functions}
     ${source.slice(visibilityStart, visibilityEnd)}
     globalThis.fixture = {
       start: manageDeliveryStatusPolling, poll: pollDeliveryStatus, render: renderStatus,
-      startOperation: manageOperationPolling, expire: showAuthentication,
+      startOperation: manageOperationPolling, startSchedule: manageSchedulePolling,
+      pollOperation, pollSchedule: pollScheduleOperation, expire: showAuthentication,
     };`, context);
   return {
     state, requests, timers, fixture: context.fixture,
@@ -115,6 +118,24 @@ function harness({ running = false, statusRequest = () => snapshot(running) } = 
 }
 
 assert.match(functionSource("loadAll"), /manageDeliveryStatusPolling\(\);/, "application load must start status polling");
+
+// The fictional Windows profile exposes the same observed scheduler timestamp.
+{
+  const mock = fs.readFileSync(path.join(root, "docs/gui-preview/mock-api.js"), "utf8");
+  const start = mock.indexOf("  function status() {");
+  const end = mock.indexOf("\n  function configView()", start);
+  assert.ok(start >= 0 && end > start, "missing fictional status provider");
+  const stamp = "2031-04-18T16:31:00Z";
+  for (const service of [false, true]) {
+    const status = vm.runInNewContext(`${mock.slice(start, end)}\nstatus();`, {
+      now: () => stamp, serviceProfile: () => service,
+      profile: () => ({ label: "Fixture", runtimeMode: service ? "linux" : "windows" }),
+      model: { schedule: { installed: true, state: "ready" } }, DEMO_VERSION: "fixture", previews: [],
+    });
+    if (service) assert.equal(Object.hasOwn(status.schedule, "probeObservedAtUtc"), false, "embedded scheduler was given a fictional Windows probe");
+    else assert.equal(status.schedule.probeObservedAtUtc, status.observedAtUtc, "Windows preview omitted its observed probe timestamp");
+  }
+}
 
 // Actual operation polling renders every second; status must still run at 1.5s.
 {
@@ -158,6 +179,48 @@ assert.match(functionSource("loadAll"), /manageDeliveryStatusPolling\(\);/, "app
   assert.equal(test.statusRequests().length, 1);
   await test.advance(5000);
   assert.equal(test.statusRequests().length, 2);
+}
+
+// Hidden tabs stop all three loops; foregrounding resumes each active loop.
+{
+  const test = harness({ running: true });
+  test.state.scheduleOperation = { id: "fixture-schedule", state: "running" };
+  test.fixture.startOperation();
+  test.fixture.startSchedule();
+  await test.advance(1000);
+  const before = test.requests.length;
+  test.visibility(true);
+  await test.advance(10000);
+  assert.equal(test.requests.length, before, "hidden operation/schedule polling continued");
+  test.visibility(false);
+  await test.advance(1000);
+  assert.equal(test.requests.filter(({ target }) => target === "/api/v1/operations/current").length, 2);
+  assert.equal(test.requests.filter(({ target }) => target === "/api/v1/schedule/operation").length, 2);
+}
+
+// A response started before hiding cannot overwrite the resumed operation view.
+{
+  const pending = deferred();
+  const test = harness({ running: true, operationRequest: () => pending.promise });
+  const before = test.state.operation;
+  const request = test.fixture.pollOperation();
+  test.visibility(true);
+  test.visibility(false);
+  pending.resolve({ current: { ...before, state: "succeeded" } });
+  await request;
+  assert.equal(test.state.operation, before, "old operation response replaced the resumed view");
+}
+{
+  const pending = deferred();
+  const test = harness({ scheduleRequest: () => pending.promise });
+  const before = { id: "fixture-schedule", state: "running" };
+  test.state.scheduleOperation = before;
+  const request = test.fixture.pollSchedule();
+  test.visibility(true);
+  test.visibility(false);
+  pending.resolve({ current: { ...before, state: "succeeded" } });
+  await request;
+  assert.equal(test.state.scheduleOperation, before, "old schedule response replaced the resumed view");
 }
 
 // A status request is single-flight, and an old session cannot repaint a new one.
@@ -218,4 +281,40 @@ assert.match(functionSource("loadAll"), /manageDeliveryStatusPolling\(\);/, "app
   assert.equal(test.statusRequests().length, 3, "successful retry must return to active cadence");
 }
 
-console.log("[PASS] Manager status polling: operation/render starvation, idle/active cadence, visibility, single-flight, session isolation, authentication, and retry.");
+// Repeated identical dashboard evidence must not rewrite DOM text/classes.
+{
+  let writes = 0;
+  function textNode(initial) {
+    let text = initial;
+    return { get textContent() { return text; }, set textContent(value) { writes += 1; text = value; } };
+  }
+  const label = textNode("Healthy"), text = textNode("Current");
+  const classes = new Set(["state-card-good"]);
+  const card = { classList: {
+    contains: (value) => classes.has(value),
+    remove(...values) { writes += 1; values.forEach((value) => classes.delete(value)); },
+    add(value) { writes += 1; classes.add(value); },
+  } };
+  let chipClass = "state-chip good";
+  const chip = {
+    dataset: new Proxy({ iconName: "" }, { set(target, name, value) { writes += 1; target[name] = value; return true; } }),
+    querySelector: (selector) => selector === ".state-chip-label" ? label : null,
+    closest: () => card,
+    get className() { return chipClass; }, set className(value) { writes += 1; chipClass = value; },
+  };
+  const context = {
+    byId: (id) => id === "chip" ? chip : text,
+    setSwappingElementText(element, value) { if (element.textContent !== value) element.textContent = value; },
+  };
+  vm.createContext(context);
+  vm.runInContext(`${functionSource("setText")}\n${functionSource("setChip")}\n globalThis.fixture = { setText, setChip };`, context);
+  for (let index = 0; index < 100; index += 1) { context.fixture.setText("text", "Current"); context.fixture.setChip("chip", "Healthy", "good"); }
+  assert.equal(writes, 0, "unchanged evidence rewrote DOM properties");
+  context.fixture.setText("text", "Updated");
+  context.fixture.setChip("chip", "Warning", "bad");
+  assert.equal(text.textContent, "Updated");
+  assert.equal(label.textContent, "Warning");
+  assert.deepEqual([...classes], ["state-card-bad"]);
+}
+
+console.log("[PASS] Manager status polling: operation/render starvation, idle/active cadence, hidden status/operation/schedule, single-flight, session isolation, authentication, retry, and unchanged DOM.");

@@ -20,6 +20,12 @@ Manager operation history and configuration diagnostics each use count-only
 FIFO retention of the newest 20 completed records. Each new overflow record
 removes the oldest; record age does not otherwise expire an entry.
 
+## Newsletter resource evidence
+
+Artwork is reused only within the current renderer process for the same exact server, item identity and image transform. A later run still obtains fresh live artwork; recipient history and watched state stay isolated. Existing image sizes, animation frames, timing and visual output are preserved.
+
+Sanitized renderer results may include `emailSizeMetrics`: message count and maximum HTML bytes, serialized MIME bytes, inline-image count and largest inline-image bytes. The measurements describe messages prepared before SMTP and do not prove acceptance or inbox delivery. Synthetic active/quiet/welcome and maximum-content fixtures enforce message-size budgets in CI.
+
 ## Native Manager public access
 
 Windows and native Linux Funnel state is Manager-owned private state, not a `config.json`

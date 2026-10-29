@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "assets": {
+    "app.css": {
+      "sha256": "87411f767a313f8b951a10d23c74f777dc494369598d132c3986a833833ed972",
+      "bytes": 87081,
+      "gzip": {
+        "file": "precompressed/app.css.gz",
+        "bytes": 15673,
+        "sha256": "67fbc7b37438a8b331a9184053657f5b5a493ef918bc06833d6057aae0620d5e"
+      },
+      "br": {
+        "file": "precompressed/app.css.br",
+        "bytes": 13289,
+        "sha256": "9e2fd6988e2ae2873ff7dd839eb8d58b09f4365d02cec9a6a892b689be60a0b3"
+      }
+    },
+    "app.js": {
+      "sha256": "c4ce588621f749d0930bde77c9112a1386114086240882bad683c732186ff930",
+      "bytes": 261556,
+      "gzip": {
+        "file": "precompressed/app.js.gz",
+        "bytes": 56782,
+        "sha256": "4aa3a581116510e71554cce9c0d6592829b029d01b24d341089729d1abee32b9"
+      },
+      "br": {
+        "file": "precompressed/app.js.br",
+        "bytes": 46157,
+        "sha256": "c4948042e1ddcd9a36384842799fbe9120bd9078519a9080cd178a9c5694c3d1"
+      }
+    },
+    "favicon.ico": {
+      "sha256": "a55139823f3da079e270049ef232b7919979e94605734a7c0dc0864af4c0e83a",
+      "bytes": 5164
+    },
+    "manifest.webmanifest": {
+      "sha256": "e5ef1d39bf8546454eed20252602dca5c8fbad1c9e0ff6e7f9c39f47c5723d10",
+      "bytes": 514
+    },
+    "media/alert.gif": {
+      "sha256": "5519d94deaaa5f0cee21f5f2f2cbb589145820c86e47fcaa423c5a1a58561b37",
+      "bytes": 23213
+    },
+    "media/celebrate.gif": {
+      "sha256": "a142e1eb25d6277bf95a3086221ba141700e1ef96fc47c3b6a3e1919a4d18fb1",
+      "bytes": 18333
+    },
+    "media/construction.gif": {
+      "sha256": "08b3b20c4240e4eea16f3e72645b0d49a705314b8396bf2d7b8d853926855638",
+      "bytes": 5552
+    },
+    "media/rocket.gif": {
+      "sha256": "38fc98792f107c94eccb9de2b4561af9837644978e8fd35aa9950b4598d4522a",
+      "bytes": 14490
+    },
+    "media/tickets.gif": {
+      "sha256": "332193167c44d5b73de43db86b8ad11064eef61744df043a26a768e020eaf669",
+      "bytes": 18420
+    },
+    "media/warning.gif": {
+      "sha256": "ae9913885c0b0579a9548f30c0d06629a007175628f24d715e63e572feb749b8",
+      "bytes": 19796
+    },
+    "tautweekly-icon-180.png": {
+      "sha256": "e6430053355b69afb04e714a05e33a911aa3215d846f6afb09d43935508b4631",
+      "bytes": 30760
+    },
+    "tautweekly-icon-192.png": {
+      "sha256": "213be384357ffdf565df9a193c156cba21189cbdd4fca168cf9894767523a374",
+      "bytes": 34201
+    },
+    "tautweekly-icon-512.png": {
+      "sha256": "6f3995da01d9cc8d9141db4a31278865ee74935aa7de5792b643d556caa71070",
+      "bytes": 163965
+    },
+    "tautweekly-logo.png": {
+      "sha256": "226b979f443c2f2d4a12c5fdffdbefa47b042c550eac846ddc455ad3516b9c12",
+      "bytes": 53531
+    },
+    "update-ui.js": {
+      "sha256": "5a7c5b658904c3879f3b57fecf2da1289503f2a80445fa21cb41aae230765e98",
+      "bytes": 6358,
+      "gzip": {
+        "file": "precompressed/update-ui.js.gz",
+        "bytes": 2012,
+        "sha256": "3627c7e55a9194e6750bc251919562b7613bb558d1205bc03a081f9c229cefbe"
+      },
+      "br": {
+        "file": "precompressed/update-ui.js.br",
+        "bytes": 1708,
+        "sha256": "27e46430bc262a092e3965cd8bc9be61f88e50e7554271763c8455cbfadf57e8"
+      }
+    }
+  }
+}

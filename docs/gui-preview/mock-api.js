@@ -368,6 +368,7 @@
         supported: true,
         ...model.schedule,
         provider: serviceProfile() ? "embedded-" + profile().runtimeMode : "windows-task-scheduler",
+        ...(serviceProfile() ? {} : { probeObservedAtUtc: observedAtUtc }),
         state: serviceProfile() && model.schedule.state === "ready" ? "running" : model.schedule.state,
         nextRunUtc: model.schedule.installed ? next.toISOString() : "",
         nextRunLocal: model.schedule.installed ? next.toISOString() : "",

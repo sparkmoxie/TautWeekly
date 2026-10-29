@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"embed"
@@ -26,8 +27,8 @@ const (
 	sessionCookieName                     = "tautweekly_manager_session"
 	windowsManagerSocialImagePath         = "/manager-social-preview.jpg"
 	windowsManagerSocialImageRelativePath = "manager-assets/tautweekly-social-preview.jpg"
-	windowsManagerBrowserTitle            = "TautWeekly Manager — Your Plex week, delivered."
-	windowsManagerSocialTitle             = "TautWeekly — Your Plex week, delivered."
+	windowsManagerBrowserTitle            = "TautWeekly Manager â€” Your Plex week, delivered."
+	windowsManagerSocialTitle             = "TautWeekly â€” Your Plex week, delivered."
 	windowsManagerSocialDescription       = "Create, preview, schedule, and manage personalized weekly Plex recap emails from the password-protected TautWeekly Manager."
 	windowsManagerSocialImageAlt          = "TautWeekly product artwork with a weekly Plex recap dashboard."
 	windowsManagerDefaultDocumentHead     = "  <title>TautWeekly Manager</title>\n  <link rel=\"icon\" href=\"/favicon.ico\" sizes=\"any\">\n  <link rel=\"apple-touch-icon\" href=\"/tautweekly-icon-180.png\">\n  <link rel=\"manifest\" href=\"/manifest.webmanifest\">"
@@ -62,6 +63,7 @@ type Options struct {
 	updateMinimumCheckDelay   time.Duration
 	updateMinimumFailureDelay time.Duration
 	updateMaximumFailureDelay time.Duration
+	taskProbeCache            *windowsTaskProbeCache
 }
 
 type Server struct {
@@ -179,6 +181,9 @@ func New(options Options) (*Server, error) {
 	options.RuntimeRoot = filepath.Clean(runtimeRoot)
 	options.DataDir = filepath.Clean(dataDir)
 	options.RuntimeMode = normalizedRuntimeMode(options.RuntimeMode)
+	if options.taskProbeCache == nil {
+		options.taskProbeCache = newWindowsTaskProbeCache(options.Now, probeWindowsTask)
+	}
 	if err := normalizeConfigBackups(options.RuntimeRoot); err != nil {
 		return nil, fmt.Errorf("normalize configuration backups: %w", err)
 	}
@@ -342,6 +347,8 @@ func (s *Server) staticHandler() http.Handler {
 	if err != nil {
 		panic(err)
 	}
+	manifest := readStaticAssetManifest(webRoot)
+	staticIndexDocument := versionStaticAssetURLs(indexDocument, manifest)
 	files := http.FileServer(http.FS(webRoot))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -361,6 +368,7 @@ func (s *Server) staticHandler() http.Handler {
 					http.NotFound(w, r)
 					return
 				}
+				document = versionStaticAssetURLs(document, manifest)
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.Header().Set("Content-Length", strconv.Itoa(len(document)))
 				w.WriteHeader(http.StatusOK)
@@ -376,6 +384,18 @@ func (s *Server) staticHandler() http.Handler {
 			if cleaned == "/favicon.ico" {
 				w.Header().Set("Content-Type", "image/x-icon")
 			}
+		}
+		if cleaned == "/" || cleaned == "/index.html" {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(staticIndexDocument))
+			return
+		}
+		if serveStaticAsset(w, r, webRoot, manifest, strings.TrimPrefix(cleaned, "/")) {
+			return
+		}
+		if strings.HasPrefix(cleaned, "/precompressed/") {
+			http.NotFound(w, r)
+			return
 		}
 		files.ServeHTTP(w, r)
 	})
@@ -1007,6 +1027,7 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.Saved {
+		s.options.taskProbeCache.Invalidate()
 		if !result.PostSave.RunDiscovery {
 			retained, rebaseErr := s.discovery.Rebase(result.PreviousRevision, result.Editor.Revision)
 			result.PostSave.RetainedDiscovery = retained
@@ -1068,6 +1089,7 @@ func (s *Server) handleRestoreConfig(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, "backup-restore-failed", "The backup could not be restored safely.")
 		return
 	}
+	s.options.taskProbeCache.Invalidate()
 	if err := s.configuration.ResetNotRun(result.Editor.Revision); err != nil {
 		s.recordDiagnostic("configuration", "warning", "config-status-write-failed")
 	}

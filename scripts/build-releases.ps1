@@ -33,6 +33,10 @@ if ($Version -notmatch '^[0-9A-Za-z][0-9A-Za-z._-]*$') {
     throw "Version contains unsupported characters: $Version"
 }
 
+# The embedded variants are build inputs; stale compressed bytes must never ship.
+& node (Join-Path $Root 'scripts/precompress-manager-assets.mjs') --root $Root --check
+if ($LASTEXITCODE -ne 0) { throw 'Manager static assets are stale; regenerate them before packaging.' }
+
 function Find-ByteSequenceOffsets {
     param(
         [Parameter(Mandatory = $true)][byte[]]$Bytes,

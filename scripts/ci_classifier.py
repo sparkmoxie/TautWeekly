@@ -46,6 +46,8 @@ FAST_ONLY_SCRIPTS = {
 }
 
 RENDERER_TEST_MARKERS = (
+    "email-optimizations",
+    "email-size-budgets",
     "binge-champion",
     "cache-diagnostics",
     "deleted-item-cache",
@@ -207,6 +209,10 @@ def classify_path(raw_path: str) -> dict[str, bool]:
 
         if path == "scripts/validate-platforms.ps1":
             enable_all_validation(result)
+            return result
+
+        if path == "scripts/precompress-manager-assets.mjs":
+            enable(result, "manager", "package", "installer", "container", "container_arm64")
             return result
 
         if path == "scripts/test-linux-installer.py":

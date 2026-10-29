@@ -56,6 +56,13 @@ class ClassifierTests(unittest.TestCase):
             {"renderer"},
         )
 
+    def test_email_optimization_tests_require_renderer_validation(self):
+        for path in ["scripts/test-email-optimizations.ps1", "scripts/test-email-size-budgets.py"]:
+            self.assert_gates([path], {"powershell", "renderer"})
+
+    def test_static_compressor_selects_every_manager_consumer(self):
+        self.assert_gates(["scripts/precompress-manager-assets.mjs"], {"manager", "package", "installer", "container", "container_arm64"})
+
     def test_release_input_tests_select_artifact_validation(self):
         self.assert_gates(["scripts/test-release-package-inputs.ps1"], {"powershell", "renderer", "package", "installer"})
 

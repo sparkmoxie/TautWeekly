@@ -34,6 +34,17 @@ $script:TautWeeklyResultBccRejectedCount = 0
 $script:TautWeeklyResultSkippedCount = 0
 $script:TautWeeklyResultFailedCount = 0
 $script:TautWeeklyResultSmtpFailure = $null
+$script:TautWeeklyResultEmailSizeMetrics = [ordered]@{
+    messageCount = 0
+    maxHtmlBytes = 0L
+    maxMimeBytes = 0L
+    maxInlineImageCount = 0
+    maxInlineImageBytes = 0L
+}
+# Populated only by this process after a fresh fetch or exact recovery. Never
+# adopt files left in generated output by an earlier preview or delivery.
+$script:TautWeeklyRunPosterCache = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
+$script:TautWeeklyRunPosterPathKeys = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
 $script:TautWeeklyResultSkipReasons = [ordered]@{
     inactiveOrDeleted = 0
     missingEmail       = 0
@@ -88,7 +99,7 @@ function Write-TautWeeklyStructuredResult {
                 Sort-Object -Unique
         )
         $result = [ordered]@{
-            schemaVersion = 4
+            schemaVersion = 5
             mode = [string]$Mode
             outcome = $Outcome
             errorCategory = $(if ($Outcome -in @("failed", "partial")) { [string]$script:TautWeeklyResultErrorCategory } else { "" })
@@ -101,6 +112,7 @@ function Write-TautWeeklyStructuredResult {
             bccRejectedCount = [int]$script:TautWeeklyResultBccRejectedCount
             skippedCount = [Math]::Max(0, [int]$script:TautWeeklyResultSkippedCount)
             failedCount = [Math]::Max(0, [int]$script:TautWeeklyResultFailedCount)
+            emailSizeMetrics = $(if ($script:TautWeeklyResultEmailSizeMetrics.messageCount -gt 0) { $script:TautWeeklyResultEmailSizeMetrics } else { $null })
             smtpFailure = $script:TautWeeklyResultSmtpFailure
             skipReasonCounts = $script:TautWeeklyResultSkipReasons
             generatedPreviewFiles = $safePreviewFiles
@@ -6333,7 +6345,7 @@ function Get-DesignHeroAssets {
                 -Format "jpg"
         }
 
-        if (-not [string]::IsNullOrWhiteSpace($art)) {
+        if ([string]::IsNullOrWhiteSpace($result.BannerSrc) -and -not [string]::IsNullOrWhiteSpace($art)) {
             $result.ArtSrc = Get-DesignPmsImage `
                 -ImagePath $art `
                 -RatingKey $ratingKey `
@@ -7000,6 +7012,23 @@ function Get-PosterPath {
     $cid = "poster_" + (Get-SafeFilePart $RatingKey)
     $path = Join-Path $PosterDir ($cid + ".jpg")
 
+    $cacheKey = ConvertTo-Json -Compress -InputObject @(
+        [string]$TautulliBase, $RatingKey, $MetadataGuid, $MediaType,
+        $MatchTitle, $MatchYear, $ParentIndex, $Index, '300x450/jpg/poster'
+    )
+    if ($script:TautWeeklyRunPosterCache.ContainsKey($cacheKey) -and
+        $script:TautWeeklyRunPosterPathKeys.ContainsKey($path) -and
+        $script:TautWeeklyRunPosterPathKeys[$path] -ceq $cacheKey) {
+        $cached = $script:TautWeeklyRunPosterCache[$cacheKey]
+        if (Test-Path -LiteralPath $cached.Path -PathType Leaf) {
+            if ($null -ne $LivePlexPoster) { $LivePlexPoster.Value = [bool]$cached.LivePlexPoster }
+            return [string]$cached.Path
+        }
+    }
+    # Two identities can share an output filename. Invalidate the old provenance
+    # before replacing it, including a failed fetch for the newer identity.
+    $script:TautWeeklyRunPosterPathKeys[$path] = $cacheKey
+
     # Never promote a prior generated-output file into persistent state. A
     # cache capture must be backed by a fresh local Plex/Tautulli response.
     Remove-Item $path -Force -ErrorAction SilentlyContinue
@@ -7018,6 +7047,7 @@ function Get-PosterPath {
             $isGenericFallback = Test-IsTautulliDefaultPoster -Path $path
             if (-not $isGenericFallback) {
                 if ($null -ne $LivePlexPoster) { $LivePlexPoster.Value = $true }
+                $script:TautWeeklyRunPosterCache[$cacheKey] = [PSCustomObject]@{ Path = $path; LivePlexPoster = $true }
                 return $path
             }
 
@@ -7038,7 +7068,10 @@ function Get-PosterPath {
         -MediaType $MediaType `
         -MetadataGuid $MetadataGuid `
         -DestinationPath $path
-    if (-not [string]::IsNullOrWhiteSpace($cachedPath)) { return $cachedPath }
+    if (-not [string]::IsNullOrWhiteSpace($cachedPath)) {
+        $script:TautWeeklyRunPosterCache[$cacheKey] = [PSCustomObject]@{ Path = $cachedPath; LivePlexPoster = $false }
+        return $cachedPath
+    }
 
     $hostedPath = Get-PlexHostedPosterPath `
         -MetadataGuid $MetadataGuid `
@@ -7048,7 +7081,10 @@ function Get-PosterPath {
         -MatchYear $MatchYear `
         -ParentIndex $ParentIndex `
         -Index $Index
-    if (-not [string]::IsNullOrWhiteSpace($hostedPath)) { return $hostedPath }
+    if (-not [string]::IsNullOrWhiteSpace($hostedPath)) {
+        $script:TautWeeklyRunPosterCache[$cacheKey] = [PSCustomObject]@{ Path = $hostedPath; LivePlexPoster = $false }
+        return $hostedPath
+    }
 
     if (-not [string]::IsNullOrWhiteSpace($MetadataGuid)) {
         Write-Log "No stored pre-deletion $MediaType artwork matched the exact retained GUID; Plex hosted recovery also had no usable asset." "WARN"
@@ -9264,6 +9300,7 @@ function Send-NewsletterMail {
         throw "Recipient email is blank."
     }
 
+    $sizeMetrics = @{}
     $mail = New-Object System.Net.Mail.MailMessage
     $htmlView = $null
     $plainView = $null
@@ -9449,7 +9486,7 @@ function Send-NewsletterMail {
         $mail.AlternateViews.Add($plainView)
         $mail.AlternateViews.Add($htmlView)
 
-        $delivery = Send-TautWeeklySmtpMessage -MailMessage $mail -Config $Config -EnvelopeBcc $EnvelopeBcc
+        $delivery = Send-TautWeeklySmtpMessage -MailMessage $mail -Config $Config -EnvelopeBcc $EnvelopeBcc -SizeMetrics $sizeMetrics
         $script:TautWeeklyResultBccAcceptedCount += $delivery.BccAcceptedCount
         $script:TautWeeklyResultBccRejectedCount += $delivery.BccRejectedCount
         if ($delivery.BccRejectedCount -gt 0) {
@@ -9457,6 +9494,13 @@ function Send-NewsletterMail {
         }
     }
     finally {
+        if ($sizeMetrics.ContainsKey('mimeBytes')) {
+            $script:TautWeeklyResultEmailSizeMetrics.messageCount++
+            $script:TautWeeklyResultEmailSizeMetrics.maxHtmlBytes = [Math]::Max($script:TautWeeklyResultEmailSizeMetrics.maxHtmlBytes, [int64]$sizeMetrics.htmlBytes)
+            $script:TautWeeklyResultEmailSizeMetrics.maxMimeBytes = [Math]::Max($script:TautWeeklyResultEmailSizeMetrics.maxMimeBytes, [int64]$sizeMetrics.mimeBytes)
+            $script:TautWeeklyResultEmailSizeMetrics.maxInlineImageCount = [Math]::Max($script:TautWeeklyResultEmailSizeMetrics.maxInlineImageCount, [int]$sizeMetrics.inlineImageCount)
+            $script:TautWeeklyResultEmailSizeMetrics.maxInlineImageBytes = [Math]::Max($script:TautWeeklyResultEmailSizeMetrics.maxInlineImageBytes, [int64]$sizeMetrics.largestInlineImageBytes)
+        }
         if ($null -ne $mail) { $mail.Dispose() }
     }
 }

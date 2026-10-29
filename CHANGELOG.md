@@ -6,6 +6,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Serve fingerprinted public Manager assets using prebuilt Brotli/gzip variants with safe identity fallback, encoding-specific validators, and immutable caching for versioned URLs. Private responses remain uncached.
+- Share bounded Windows schedule observations, avoid redundant configuration conversion, and reduce hidden-tab polling and unchanged dashboard writes.
+- Reuse exact artwork within a newsletter run, request fallback hero art only when needed, and record numeric HTML/MIME size evidence without recipient details.
+
 ### Fixed
 
 - Expand FreeBSD image references in every packaged launcher and example, and document a complete repository context for local image builds.

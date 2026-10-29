@@ -77,6 +77,8 @@ function createHarness({ terminalState = "succeeded", previewResponse, selectedP
     generatedPreviewIds: terminalState === "succeeded" ? nextPreviews.map((preview) => preview.id) : [],
   };
   const context = {
+    document: { hidden: false },
+    byId() { return { hidden: false }; },
     state: {
       operation,
       previews: oldPreviews,

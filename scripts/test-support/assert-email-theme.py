@@ -46,6 +46,35 @@ def scoped_html_region(html: str, specification: str, label: str) -> tuple[str, 
     return html[start_index:end_index], value
 
 
+# Synthetic-fixture regression ceilings, not SMTP-provider limits. Keep these
+# comfortably above intended output; a change must explain a larger baseline.
+FIXTURE_SIZE_BUDGET = {
+    "htmlBytes": 128 * 1024,
+    "mimeBytes": 4 * 1024 * 1024,
+    "inlineImageCount": 64,
+    "largestInlineImageBytes": 512 * 1024,
+}
+
+
+def message_size_metrics(message, raw: bytes) -> dict[str, int]:
+    html_bytes = 0
+    image_sizes = []
+    for part in message.walk():
+        if part.get_content_type() == "text/html":
+            html_bytes += len(part.get_payload(decode=True) or b"")
+        if part.get_content_maintype() == "image" and part.get("Content-ID"):
+            image_sizes.append(len(part.get_payload(decode=True) or b""))
+    return {"htmlBytes": html_bytes, "mimeBytes": len(raw),
+            "inlineImageCount": len(image_sizes),
+            "largestInlineImageBytes": max(image_sizes, default=0)}
+
+
+def assert_fixture_size_budget(metrics: dict[str, int]) -> None:
+    for name, maximum in FIXTURE_SIZE_BUDGET.items():
+        if metrics[name] > maximum:
+            raise AssertionError(f"synthetic email {name} regression: {metrics[name]} > {maximum}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("message", type=Path)
@@ -62,7 +91,10 @@ def main() -> int:
     parser.add_argument("--forbid-html-between", action="append", default=[])
     args = parser.parse_args()
 
-    message = BytesParser(policy=policy.default).parsebytes(args.message.read_bytes())
+    raw = args.message.read_bytes()
+    message = BytesParser(policy=policy.default).parsebytes(raw)
+    size_metrics = message_size_metrics(message, raw)
+    assert_fixture_size_budget(size_metrics)
     html_parts = [part for part in message.walk() if part.get_content_type() == "text/html"]
     plain_parts = [part for part in message.walk() if part.get_content_type() == "text/plain"]
     if len(html_parts) != 1:
@@ -250,6 +282,7 @@ def main() -> int:
                 f"CID {cid} PNG dimensions mismatch: {actual_width}x{actual_height}"
             )
 
+    print("[PASS] Synthetic email size: " + ", ".join(f"{name}={value}" for name, value in size_metrics.items()))
     print("[PASS] Captured SMTP HTML advertises Apple-compatible schemes and preserves explicit dark fallbacks.")
     return 0
 

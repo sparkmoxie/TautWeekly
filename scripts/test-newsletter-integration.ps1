@@ -469,7 +469,7 @@ foreach ($engine in $engines) {
                 Assert-True (Test-Path -LiteralPath $managerResultPath) 'NAS Manager operation did not produce its structured result.'
                 $managerResultRaw = Get-Content -LiteralPath $managerResultPath -Raw -Encoding UTF8
                 $managerResult = $managerResultRaw | ConvertFrom-Json
-                Assert-True ($managerResult.schemaVersion -eq 4) 'NAS Manager result used the wrong schema version.'
+                Assert-True ($managerResult.schemaVersion -eq 5) 'NAS Manager result used the wrong schema version.'
                 Assert-True ($managerResult.mode -eq 'PreviewAll' -and $managerResult.outcome -eq 'succeeded') 'NAS Manager result reported the wrong operation outcome.'
                 Assert-True ([string]::IsNullOrEmpty([string]$managerResult.errorCategory)) 'NAS Manager success retained a renderer failure category.'
                 Assert-True ($managerResult.deliveryScope -eq 'none') 'NAS Manager preview result reported a delivery scope.'
@@ -1575,6 +1575,7 @@ foreach ($engine in $engines) {
                     $sendTestAllResult = $sendTestAllResultRaw | ConvertFrom-Json
                     Assert-True ($sendTestAllResult.mode -eq 'SendTestAll' -and $sendTestAllResult.outcome -eq 'succeeded') "$($engine.Name)/$scenario SendTestAll reported the wrong outcome."
                     Assert-True ($sendTestAllResult.deliveryScope -eq 'test' -and $sendTestAllResult.smtpAcceptedCount -eq 6) "$($engine.Name)/$scenario SendTestAll did not report six test-only SMTP acceptances."
+                    Assert-True ($sendTestAllResult.emailSizeMetrics.messageCount -eq 6 -and $sendTestAllResult.emailSizeMetrics.maxHtmlBytes -gt 0 -and $sendTestAllResult.emailSizeMetrics.maxMimeBytes -gt $sendTestAllResult.emailSizeMetrics.maxHtmlBytes -and $sendTestAllResult.emailSizeMetrics.maxInlineImageCount -gt 0 -and $sendTestAllResult.emailSizeMetrics.maxInlineImageBytes -gt 0) "$($engine.Name)/$scenario lost sanitized serialized-message size maxima."
                     Assert-True (-not $sendTestAllResultRaw.Contains('viewer@example.com') -and -not $sendTestAllResultRaw.Contains('virtual-api-key')) "$($engine.Name)/$scenario SendTestAll structured result exposed private fixture data."
 
                     $allCaptures = @(Get-ChildItem -LiteralPath $smtpDataDirectory -Filter 'message-*.eml' | Sort-Object Name)

@@ -164,6 +164,32 @@ function ConvertTo-TautWeeklyMimeText {
     }
 }
 
+function Get-TautWeeklyMimeSizeMetrics {
+    param(
+        [Parameter(Mandatory = $true)][System.Net.Mail.MailMessage]$MailMessage,
+        [Parameter(Mandatory = $true)][string]$MimeText
+    )
+    $htmlBytes = 0L
+    $inlineImageCount = 0
+    $largestInlineImageBytes = 0L
+    foreach ($view in $MailMessage.AlternateViews) {
+        if ($view.ContentType.MediaType -eq 'text/html') { $htmlBytes += $view.ContentStream.Length }
+        foreach ($resource in $view.LinkedResources) {
+            if ($resource.ContentType.MediaType.StartsWith('image/', [StringComparison]::OrdinalIgnoreCase)) {
+                $inlineImageCount++
+                $largestInlineImageBytes = [Math]::Max($largestInlineImageBytes, [int64]$resource.ContentStream.Length)
+            }
+        }
+    }
+    # Fixed aggregate numbers only: never include MIME content, paths or addresses.
+    return [ordered]@{
+        htmlBytes = [int64]$htmlBytes
+        mimeBytes = [int64][Text.Encoding]::UTF8.GetByteCount($MimeText)
+        inlineImageCount = [int]$inlineImageCount
+        largestInlineImageBytes = [int64]$largestInlineImageBytes
+    }
+}
+
 function Write-TautWeeklySmtpData {
     param(
         [Parameter(Mandatory = $true)][System.IO.StreamWriter]$Writer,
@@ -190,7 +216,8 @@ function Send-TautWeeklySmtpMessage {
     param(
         [Parameter(Mandatory = $true)][System.Net.Mail.MailMessage]$MailMessage,
         [Parameter(Mandatory = $true)][object]$Config,
-        [string[]]$EnvelopeBcc = @()
+        [string[]]$EnvelopeBcc = @(),
+        [hashtable]$SizeMetrics = $null
     )
 
     $hostName = ([string](Get-TautWeeklySmtpConfigValue -Config $Config -Name 'SmtpHost' -Default '')).Trim()
@@ -239,6 +266,10 @@ function Send-TautWeeklySmtpMessage {
     $bccRejected = 0
     try {
         $mimeText = ConvertTo-TautWeeklyMimeText -MailMessage $MailMessage
+        if ($null -ne $SizeMetrics) {
+            $measured = Get-TautWeeklyMimeSizeMetrics -MailMessage $MailMessage -MimeText $mimeText
+            foreach ($name in $measured.Keys) { $SizeMetrics[$name] = $measured[$name] }
+        }
     }
     catch {
         throw (New-TautWeeklySmtpException -Stage 'mime')

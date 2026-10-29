@@ -25,15 +25,16 @@ type ReadinessStatus struct {
 }
 
 type ScheduleStatus struct {
-	Supported    bool   `json:"supported"`
-	Provider     string `json:"provider"`
-	Installed    bool   `json:"installed"`
-	Enabled      bool   `json:"enabled"`
-	Owned        bool   `json:"owned"`
-	Ownership    string `json:"ownership"`
-	State        string `json:"state"`
-	NextRunUTC   string `json:"nextRunUtc,omitempty"`
-	NextRunLocal string `json:"nextRunLocal,omitempty"`
+	Supported          bool   `json:"supported"`
+	Provider           string `json:"provider"`
+	Installed          bool   `json:"installed"`
+	Enabled            bool   `json:"enabled"`
+	Owned              bool   `json:"owned"`
+	Ownership          string `json:"ownership"`
+	State              string `json:"state"`
+	NextRunUTC         string `json:"nextRunUtc,omitempty"`
+	NextRunLocal       string `json:"nextRunLocal,omitempty"`
+	ProbeObservedAtUTC string `json:"probeObservedAtUtc,omitempty"`
 }
 
 type DeliveryStatus struct {
@@ -48,6 +49,7 @@ type DeliveryStatus struct {
 	SkippedCount      int                       `json:"skippedCount"`
 	FailedCount       int                       `json:"failedCount"`
 	SMTPFailure       *SMTPFailureEvidence      `json:"smtpFailure,omitempty"`
+	EmailSizeMetrics  *EmailSizeMetrics         `json:"emailSizeMetrics,omitempty"`
 	SkipReasonCounts  *DeliverySkipReasonCounts `json:"skipReasonCounts,omitempty"`
 	ErrorCategory     string                    `json:"errorCategory,omitempty"`
 	ExitCode          *int64                    `json:"exitCode,omitempty"`
@@ -104,8 +106,11 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 	if strings.TrimSpace(runtimeRoot) == "" {
 		runtimeRoot = options.TautWeeklyRoot
 	}
-	config := ReadRedactedConfig(runtimeRoot)
-	editor := ReadConfigEditor(runtimeRoot)
+	values, raw, exists, configState := readConfigDocument(runtimeRoot)
+	configReadable := configState == "ready"
+	if configState == "ready" && len(existingConfigIssues(values)) > 0 {
+		configState = "needs-setup"
+	}
 	previews, _ := listPreviews(runtimeRoot)
 	activeDelivery := deliveryRunSignal{}
 
@@ -122,7 +127,7 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 			Scheduler: "not-installed",
 		},
 		Readiness: ReadinessStatus{
-			Configuration: editor.State,
+			Configuration: configState,
 			PrivateData:   dataReadiness(options.DataDir),
 		},
 		Schedule: ScheduleStatus{
@@ -147,15 +152,31 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 	if len(previews) > 0 {
 		snapshot.Runtime.Preview = "ready"
 	}
-	if !config.Exists || editor.State == "needs-setup" {
+	if !exists || configState == "needs-setup" {
 		snapshot.Overall = "unconfigured"
-	} else if !config.Valid {
+	} else if configState != "ready" {
 		snapshot.Overall = "blocked"
 	}
 
 	if capabilities.RuntimeMode == runtimeModeWindows && runtime.GOOS == "windows" {
-		taskName := configString(config, "ScheduledTaskName", "TautWeekly for Plex Newsletter")
-		probe, err := probeWindowsTask(ctx, taskName, options.TautWeeklyRoot)
+		taskName := strings.TrimSpace(configMapString(values, "ScheduledTaskName"))
+		if taskName == "" {
+			taskName = "TautWeekly for Plex Newsletter"
+		}
+		var probe windowsTaskProbe
+		var probeObservedAt time.Time
+		var err error
+		if options.taskProbeCache != nil {
+			probe, probeObservedAt, err = options.taskProbeCache.Get(ctx, taskName, options.TautWeeklyRoot, configRevision(raw, exists))
+		} else {
+			probeContext, cancel := context.WithTimeout(ctx, windowsTaskProbeTimeout)
+			probe, err = probeWindowsTask(probeContext, taskName, options.TautWeeklyRoot)
+			cancel()
+			probeObservedAt = now().UTC()
+		}
+		if !probeObservedAt.IsZero() {
+			snapshot.Schedule.ProbeObservedAtUTC = probeObservedAt.Format(time.RFC3339)
+		}
 		if err != nil {
 			snapshot.Runtime.Scheduler = "unknown"
 			snapshot.Schedule.State = "probe-failed"
@@ -173,15 +194,16 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 				}
 			}
 			snapshot.Schedule = ScheduleStatus{
-				Supported:    true,
-				Provider:     capabilities.ScheduleProvider,
-				Installed:    true,
-				Enabled:      probe.Enabled,
-				Owned:        probe.Owned,
-				Ownership:    probe.Ownership,
-				State:        strings.ToLower(probe.State),
-				NextRunUTC:   probe.NextRunUTC,
-				NextRunLocal: probe.NextRunLocal,
+				Supported:          true,
+				Provider:           capabilities.ScheduleProvider,
+				Installed:          true,
+				Enabled:            probe.Enabled,
+				Owned:              probe.Owned,
+				Ownership:          probe.Ownership,
+				State:              strings.ToLower(probe.State),
+				NextRunUTC:         probe.NextRunUTC,
+				NextRunLocal:       probe.NextRunLocal,
+				ProbeObservedAtUTC: snapshot.Schedule.ProbeObservedAtUTC,
 			}
 			snapshot.Delivery.LastAttemptUTC = probe.LastRunUTC
 			snapshot.Delivery.ExitCode = probe.LastTaskResult
@@ -193,7 +215,7 @@ func CollectStatus(ctx context.Context, options Options) StatusSnapshot {
 		}
 	}
 	if isManagedServiceRuntimeMode(capabilities.RuntimeMode) {
-		activeDelivery = applyEmbeddedScheduleStatus(&snapshot, runtimeRoot, observed, capabilities.ScheduleProvider)
+		activeDelivery = applyEmbeddedScheduleStatus(&snapshot, runtimeRoot, observed, capabilities.ScheduleProvider, values, exists && configReadable)
 	}
 	applyLatestRendererDelivery(&snapshot, runtimeRoot)
 	applyActiveDelivery(&snapshot, activeDelivery)
@@ -217,9 +239,8 @@ type containerSchedulerState struct {
 	LastExitCode   *int64 `json:"LastExitCode"`
 }
 
-func applyEmbeddedScheduleStatus(snapshot *StatusSnapshot, runtimeRoot string, observed time.Time, provider string) deliveryRunSignal {
-	values, _, exists, state := readConfigDocument(runtimeRoot)
-	enabled := exists && state == "ready" && configMapBool(values, "ScheduleEnabled", false)
+func applyEmbeddedScheduleStatus(snapshot *StatusSnapshot, runtimeRoot string, observed time.Time, provider string, values map[string]any, configReadable bool) deliveryRunSignal {
+	enabled := configReadable && configMapBool(values, "ScheduleEnabled", false)
 	snapshot.Schedule = ScheduleStatus{
 		Supported: true,
 		Provider:  provider,
@@ -308,6 +329,7 @@ func applyActiveDelivery(snapshot *StatusSnapshot, active deliveryRunSignal) {
 	snapshot.Delivery.SkippedCount = 0
 	snapshot.Delivery.FailedCount = 0
 	snapshot.Delivery.SMTPFailure = nil
+	snapshot.Delivery.EmailSizeMetrics = nil
 	snapshot.Delivery.SkipReasonCounts = nil
 	snapshot.Delivery.ErrorCategory = ""
 }
@@ -360,6 +382,7 @@ func applyLatestRendererDelivery(snapshot *StatusSnapshot, root string) {
 	snapshot.Delivery.SkippedCount = result.SkippedCount
 	snapshot.Delivery.FailedCount = result.FailedCount
 	snapshot.Delivery.SMTPFailure = result.SMTPFailure
+	snapshot.Delivery.EmailSizeMetrics = result.EmailSizeMetrics
 	snapshot.Delivery.SkipReasonCounts = result.SkipReasonCounts
 	snapshot.Delivery.ErrorCategory = result.ErrorCategory
 	switch {
