@@ -112,6 +112,16 @@ class CandidateTests(unittest.TestCase):
 
 
 class RuntimeContractTests(unittest.TestCase):
+    def test_go_builders_compile_each_target_on_the_native_build_platform(self):
+        root = Path(__file__).resolve().parents[1]
+        for relative in ("platforms/nas-docker/Dockerfile", "platforms/mac-docker/Dockerfile.registry"):
+            text = (root / relative).read_text()
+            self.assertTrue(text.startswith("FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm AS manager-build"), relative)
+            builder = text.split("FROM tailscale/", 1)[0]
+            self.assertIn("ARG TARGETARCH", builder)
+            self.assertIn('CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH:-amd64}"', builder)
+
+
     def test_mac_runtime_uses_canonical_powershell_download_and_dependency_bytes(self):
         root = Path(__file__).resolve().parents[1]
         canonical = (root / "platforms/nas-docker/Dockerfile").read_text()

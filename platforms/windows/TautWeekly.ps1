@@ -100,7 +100,7 @@ function Write-TautWeeklyStructuredResult {
                 Sort-Object -Unique
         )
         $result = [ordered]@{
-            schemaVersion         = 4
+            schemaVersion         = 5
             mode                  = [string]$Mode
             outcome               = $Outcome
             errorCategory         = $(if ($Outcome -in @("failed", "partial")) { [string]$script:TautWeeklyResultErrorCategory } else { "" })
@@ -113,6 +113,7 @@ function Write-TautWeeklyStructuredResult {
             bccRejectedCount      = [int]$script:TautWeeklyResultBccRejectedCount
             skippedCount          = [Math]::Max(0, [int]$script:TautWeeklyResultSkippedCount)
             failedCount           = [Math]::Max(0, [int]$script:TautWeeklyResultFailedCount)
+            emailSizeMetrics      = $(if ($script:TautWeeklyResultEmailSizeMetrics.messageCount -gt 0) { $script:TautWeeklyResultEmailSizeMetrics } else { $null })
             smtpFailure           = $script:TautWeeklyResultSmtpFailure
             skipReasonCounts      = $script:TautWeeklyResultSkipReasons
             generatedPreviewFiles = $safePreviewFiles

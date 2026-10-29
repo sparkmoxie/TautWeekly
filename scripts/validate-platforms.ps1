@@ -591,7 +591,7 @@ foreach ($relative in @('platforms/nas-docker/app/bin/tautweekly-funnel', 'platf
 }
 Write-Host '[PASS] Container packages use explicit userspace Funnel adapters with fixed operations, root-only state, and no stored authentication key.'
 Require-Text 'platforms/nas-docker/Dockerfile' @(
-    'FROM golang:1\.26\.6-bookworm AS manager-build',
+    'FROM --platform=\$BUILDPLATFORM golang:1\.26\.6-bookworm AS manager-build',
     'GOOS=linux GOARCH="\$\{TARGETARCH:-amd64\}"',
     'tautweekly-manager',
     'FROM tailscale/tailscale:v1\.102\.2 AS tailscale-runtime',
@@ -665,7 +665,7 @@ Require-Text 'platforms/mac-docker/Dockerfile' @(
     'XDG_DATA_HOME=/tmp/tautweekly/share'
 )
 Require-Text 'platforms/mac-docker/Dockerfile.registry' @(
-    'FROM golang:1\.26\.6-bookworm AS manager-build',
+    'FROM --platform=\$BUILDPLATFORM golang:1\.26\.6-bookworm AS manager-build',
     'GOARCH="\$\{TARGETARCH:-amd64\}"',
     'FROM debian:bookworm-slim',
     'ARG POWERSHELL_VERSION=7\.4\.16',

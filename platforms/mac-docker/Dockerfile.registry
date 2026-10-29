@@ -1,4 +1,4 @@
-FROM golang:1.26.6-bookworm AS manager-build
+FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm AS manager-build
 
 ARG TARGETARCH
 ARG BUILD_VERSION=dev

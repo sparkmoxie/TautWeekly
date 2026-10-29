@@ -20,6 +20,38 @@ try {
             Assert-True ($errors.Count -eq 0) "Parse failed: $relative"
             Invoke-Expression (Load-Function $ast 'Get-PosterPath')
             Invoke-Expression (Load-Function $ast 'Get-DesignHeroAssets')
+            Invoke-Expression (Load-Function $ast 'Write-TautWeeklyStructuredResult')
+            # Execute every writer rather than matching source whitespace: the
+            # Windows writer uses aligned assignments and must share schema 5.
+            $Mode = 'SendTestAll'
+            $ResultPath = Join-Path $testRoot 'synthetic-result.json'
+            $script:TautWeeklyResultStartedAtUtc = [DateTime]::UtcNow.AddSeconds(-1)
+            $script:TautWeeklyResultWritten = $false
+            $script:TautWeeklyResultWriting = $false
+            $script:TautWeeklyResultSmtpAcceptedCount = 6
+            $script:TautWeeklyResultBccAcceptedCount = 0
+            $script:TautWeeklyResultBccRejectedCount = 0
+            $script:TautWeeklyResultSkippedCount = 0
+            $script:TautWeeklyResultFailedCount = 0
+            $script:TautWeeklyResultSmtpFailure = $null
+            $script:TautWeeklyResultErrorCategory = ''
+            $script:TautWeeklyResultDeliveryScope = 'test'
+            $script:TautWeeklyResultGeneratedPreviewFiles = [Collections.Generic.List[string]]::new()
+            $script:TautWeeklyResultSkipReasons = [ordered]@{inactiveOrDeleted=0;missingEmail=0;excludedUserId=0;excludedEmail=0}
+            $script:TautWeeklyResultEmailSizeMetrics = [ordered]@{messageCount=6;maxHtmlBytes=2048L;maxMimeBytes=16384L;maxInlineImageCount=2;maxInlineImageBytes=1024L}
+            Write-TautWeeklyStructuredResult -Outcome succeeded
+            $written = [IO.File]::ReadAllText($ResultPath) | ConvertFrom-Json
+            Assert-True ($written.schemaVersion -eq 5 -and $written.smtpAcceptedCount -eq 6 -and $written.emailSizeMetrics.messageCount -eq 6 -and $written.emailSizeMetrics.maxHtmlBytes -eq 2048 -and $written.emailSizeMetrics.maxMimeBytes -eq 16384 -and $written.emailSizeMetrics.maxInlineImageCount -eq 2 -and $written.emailSizeMetrics.maxInlineImageBytes -eq 1024) "$relative did not serialize schema 5 email maxima"
+            Assert-True (($written.emailSizeMetrics.PSObject.Properties.Name | Sort-Object) -join ',' -ceq 'maxHtmlBytes,maxInlineImageBytes,maxInlineImageCount,maxMimeBytes,messageCount') "$relative serialized unsupported email metric fields"
+            $script:TautWeeklyResultEmailSizeMetrics.messageCount = 0
+            $script:TautWeeklyResultSmtpAcceptedCount = 0
+            $script:TautWeeklyResultDeliveryScope = 'none'
+            $Mode = 'CacheWarm'
+            $script:TautWeeklyResultWritten = $false
+            Write-TautWeeklyStructuredResult -Outcome succeeded
+            $written = [IO.File]::ReadAllText($ResultPath) | ConvertFrom-Json
+            Assert-True ($written.schemaVersion -eq 5 -and $null -eq $written.emailSizeMetrics) "$relative did not preserve an explicit absent-metrics state"
+            Write-Host "[PASS] $relative structured-result schema, numeric email metrics and absent-metrics parity."
             $script:TautWeeklyRunPosterCache = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
             $script:TautWeeklyRunPosterPathKeys = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
             $script:PosterDir = Join-Path $testRoot 'posters'

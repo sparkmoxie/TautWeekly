@@ -130,6 +130,10 @@ class WorkflowContractTests(unittest.TestCase):
         cls.pages = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
         cls.release = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
 
+    def test_fingerprinted_web_manifests_have_fixed_checkout_bytes(self):
+        attributes = Path(".gitattributes").read_text(encoding="utf-8")
+        self.assertIn("*.webmanifest text eol=lf", attributes)
+
     def test_ci_events_are_pr_main_and_manual_only(self):
         on_block = self.ci.split("\npermissions:", 1)[0]
         self.assertRegex(on_block, r"(?m)^  pull_request:\s*$")
