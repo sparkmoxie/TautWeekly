@@ -2,31 +2,31 @@
   "schemaVersion": 1,
   "assets": {
     "app.css": {
-      "sha256": "87411f767a313f8b951a10d23c74f777dc494369598d132c3986a833833ed972",
-      "bytes": 87081,
+      "sha256": "78f850366f169550bdba32c67c75b349ce48f1b59a797167fa161696319e928f",
+      "bytes": 87272,
       "gzip": {
         "file": "precompressed/app.css.gz",
-        "bytes": 15673,
-        "sha256": "67fbc7b37438a8b331a9184053657f5b5a493ef918bc06833d6057aae0620d5e"
+        "bytes": 15721,
+        "sha256": "54a8c6e810a3b3ae5cdd08c96de9abae265c62397e426ad26737aa8e5ca244bc"
       },
       "br": {
         "file": "precompressed/app.css.br",
-        "bytes": 13289,
-        "sha256": "9e2fd6988e2ae2873ff7dd839eb8d58b09f4365d02cec9a6a892b689be60a0b3"
+        "bytes": 13327,
+        "sha256": "ee7db8cc79f44a320e82a3802b2c294e6c9a4e2d0e826b5cba4575e3dc6806c4"
       }
     },
     "app.js": {
-      "sha256": "c4ce588621f749d0930bde77c9112a1386114086240882bad683c732186ff930",
-      "bytes": 261556,
+      "sha256": "b0f73a8caca1c673a1040638fcb0eea911a9f32d278a39c0490b77f3ca46f577",
+      "bytes": 253604,
       "gzip": {
         "file": "precompressed/app.js.gz",
-        "bytes": 56782,
-        "sha256": "4aa3a581116510e71554cce9c0d6592829b029d01b24d341089729d1abee32b9"
+        "bytes": 54850,
+        "sha256": "5e1ed862ce9066cfd8d7ead5a87bce2b0df3fb3326fd04e0b7b1f371bf7b81b1"
       },
       "br": {
         "file": "precompressed/app.js.br",
-        "bytes": 46157,
-        "sha256": "c4948042e1ddcd9a36384842799fbe9120bd9078519a9080cd178a9c5694c3d1"
+        "bytes": 44601,
+        "sha256": "a90776bef5566ca32811f6a01d4b4daef5afc8c75d3859a12606b66cf57c6da5"
       }
     },
     "favicon.ico": {
@@ -78,17 +78,17 @@
       "bytes": 53531
     },
     "update-ui.js": {
-      "sha256": "5a7c5b658904c3879f3b57fecf2da1289503f2a80445fa21cb41aae230765e98",
-      "bytes": 6358,
+      "sha256": "48135f609ea94cc445ce88fdd2ca9544d6e830987b94f5d735dbb9552e4901db",
+      "bytes": 6532,
       "gzip": {
         "file": "precompressed/update-ui.js.gz",
-        "bytes": 2012,
-        "sha256": "3627c7e55a9194e6750bc251919562b7613bb558d1205bc03a081f9c229cefbe"
+        "bytes": 2063,
+        "sha256": "eab427d58e060b234aec083a80196ae20c5ff69654b1832e36d29cb195d0bbd4"
       },
       "br": {
         "file": "precompressed/update-ui.js.br",
-        "bytes": 1708,
-        "sha256": "27e46430bc262a092e3965cd8bc9be61f88e50e7554271763c8455cbfadf57e8"
+        "bytes": 1758,
+        "sha256": "2ec0d9a2f89c6881ce24528a0631173d0ba0e09d72978ac2edf1cb14bd72e95f"
       }
     }
   }

@@ -497,24 +497,24 @@ switch ($Command) {
     }
     "send-test" {
         $id = Resolve-User $User
-        if (Confirm-Action "Send one message to TestEmail using $id?") {
+        if (Confirm-Action "Send one test message to TestEmail?") {
             Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","SendTest",$id)
         }
     }
     "send-test-all" {
         $id = Resolve-User $User
-        if (Confirm-Action "Send all six regression messages to TestEmail using $id?") {
+        if (Confirm-Action "Send six test messages to TestEmail?") {
             Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","SendTestAll",$id)
         }
     }
     "welcome" {
         $id = Resolve-User $User
-        if (Confirm-Action "Send a real one-off welcome to the selected Plex user?") {
+        if (Confirm-Action "Send a welcome newsletter to the selected user and their eligible household copies?") {
             Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","SendWelcome",$id,"--confirm-welcome")
         }
     }
     "send-all" {
-        if (Confirm-Action "Send one real newsletter to every eligible Plex user?") {
+        if (Confirm-Action "Send real email to all eligible users and their eligible household copies?") {
             Invoke-Compose @("exec","tautweekly","/opt/tautweekly/bin/run-mode.sh","SendAll","--confirm-send-all")
         }
     }

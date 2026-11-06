@@ -15,7 +15,7 @@ Tautulli reports an active user without native email. Assignments stay in
 private `/var/db/tautweekly/config.json` and its backups, may share an inbox,
 and never override a native address. Existing user-ID and effective-address
 exclusions still apply; TestEmail remains isolated. See the
-[configuration reference](../CONFIGURATION.md#interactive-user-exclusions).
+[configuration reference](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#interactive-user-exclusions).
 
 ## Supported target
 
@@ -93,7 +93,7 @@ when either is omitted. Line breaks are preserved, and content is escaped for
 normal and welcome HTML, the plain-text alternative, and generated previews.
 An empty or whitespace-only body blocks browser and Manager API validation,
 save, and verification. See the
-[configuration reference](../CONFIGURATION.md#optional-custom-text-card).
+[configuration reference](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#optional-custom-text-card).
 
 Manager Config asks for a direct Plex URL and administrator token. They remain optional
 for the core Tautulli activity flow, but are recommended for complete movie RT
@@ -233,7 +233,7 @@ These commands are host lifecycle, bootstrap, or expert/recovery fallbacks:
 sudo tautweekly manager-bootstrap      retrieve the one-time pairing token
 sudo tautweekly manager-reset-access   reset only Manager authentication
 sudo tautweekly setup                 expert fallback: replace private configuration
-sudo tautweekly verify                validate API, mail, storage, and schedule
+sudo tautweekly verify                check APIs, SMTP TCP, storage, and schedule
 sudo tautweekly cache-refresh         refresh every included user's cache window
 sudo tautweekly cache-status          report share-safe deleted-item cache health
 sudo tautweekly list-users            inspect Tautulli recipients
@@ -241,7 +241,8 @@ sudo tautweekly exclude-users         revise stable user exclusions
 sudo tautweekly list-libraries         inspect the global movie/TV scope
 sudo tautweekly manage-libraries       replace the global movie/TV scope
 sudo tautweekly preview-all USER_ID   render all deterministic browser states
-sudo tautweekly send-test-all USER_ID send only to TestEmail
+sudo tautweekly send-test USER_ID     send one message only to TestEmail
+sudo tautweekly send-test-all USER_ID send six messages only to TestEmail
 sudo tautweekly send-all              guarded production delivery
 sudo tautweekly schedule-status       inspect scheduler state
 sudo tautweekly status                inspect the rc.d service
@@ -298,33 +299,12 @@ missing or unsupported artwork uses the neutral local movie animation.
 Watched marks use only the selected recipient's all-time Tautulli movie history.
 Review the desktop poster shield and the title circles with uniform 6px spacing,
 vertical centering, and `title="Watched"`. Unwatched movies leave no icon gap and
-TV is unchanged. See the [watched-state rule and privacy boundary](../CONFIGURATION.md#recipient-movie-watched-markers).
+TV is unchanged. See the [watched-state rule and privacy boundary](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#recipient-movie-watched-markers).
 
 ## Update and pinning
 
-Manager **Settings > Updates** is the primary FreeBSD status source. It
-distinguishes the running container application/image from the installed
-FreeBSD Podman package, reports host-adapter compatibility, stable channel,
-latest stable release, check history, sanitized failure, and release notes.
-Authenticated entry renders cached status first and makes one non-blocking
-bounded check only when the last success is missing or at least 24 hours old
-and backoff permits. Successful results are reused for five minutes before
-**Check now** refreshes the same endpoint. The main header **Refresh** completes
-its local status reload first, repeats the saved-revision LAN-only Tautulli
-choices lookup when configuration is ready, and starts that check when its
-cooldown permits. It never generates previews or contacts Plex/SMTP, and scoped
-refresh controls remain isolated. Navigation, Dashboard rendering, and Manager
-health stay offline-capable. **Current** retains its green glow.
-The passive purple header SVG appears only for a validated newer running
-application; the card glows for every non-current state. The web process cannot
-run `sudo`, Podman, or rc.d; the
-card provides the copyable host command `sudo tautweekly update` but no install
-button.
-
-The FreeBSD package uses its rc.d-aware TautWeekly wrapper as the update
-authority. Podman's `io.containers.autoupdate=registry` mechanism requires a
-systemd-managed container, so the rc.d service deliberately has no auto-update
-label or timer. No update is applied periodically by default.
+Open **Settings > Updates** to see the running image, FreeBSD host package,
+and latest stable release. Apply updates with the FreeBSD wrapper.
 
 `check-update` compares installed release metadata with the latest stable
 package and asks Podman to pull the configured image for a read-only comparison;
@@ -333,17 +313,30 @@ backup and record the current image ID:
 
 ```sh
 sudo tautweekly backup
-sudo podman image inspect ghcr.io/sparkmoxie/tautweekly:0.25.0 --format '{{.Id}}'
+sudo podman container inspect --format '{{.Image}}' tautweekly
+sudoedit /usr/local/etc/tautweekly/tautweekly.env
 sudo tautweekly check-update
 sudo tautweekly update
-# sign back in; verify Settings > Updates, then Verify, PreviewAll, and TestEmail
+sudo podman container inspect --format '{{.Image}}' tautweekly
 ```
+
+In the environment file, record the old `TAUTWEEKLY_IMAGE` and replace it
+with the intended full stable tag or verified digest before running the
+update. The wrapper preserves this file and pulls the configured reference,
+so updating the host package alone leaves an existing image pin in place.
+After the update, compare the running image ID above with `sudo podman image
+inspect --format '{{.Id}}' IMAGE_REFERENCE`, using the new configured
+reference. Sign in to confirm the running version in **Settings > Updates**,
+then verify connections, previews, and TestEmail.
 
 The apply command downloads the matching stable TAR archive and checksum file,
 verifies both the published SHA-256 and internal `RELEASE-FILES.txt`, installs
 the current wrapper/rc.d adapter, and then updates the image. It refuses a busy
 TautWeekly operation, verifies the in-container health probe and version label,
-and retags/restarts the prior image automatically if the new container fails.
+and attempts to retag and restart the previous image if the new container
+fails. To restore a prior digest or undo a pin change, set
+`TAUTWEEKLY_IMAGE` back to the recorded reference and run the update again
+against the same data directory.
 Manager-triggered preview and delivery operations make one non-blocking lock
 attempt and report **Operation busy** immediately; terminal, scheduler, updater,
 and rc.d lifecycle waits retain their existing bounds.
@@ -365,9 +358,8 @@ sudo ./install-freebsd.sh --upgrade-and-update
 
 The current installer replaces release-owned application, wrapper, and rc.d
 files, preserves `/var/db/tautweekly` and the existing root-owned environment
-file, then verifies the updated image. Future `sudo tautweekly update` commands
-advance the verified host package and image together. Do not copy individual
-wrapper files from an unreleased branch.
+file, then verifies the configured image. To advance an existing image pin,
+edit it as described above. Use complete verified archives for host updates.
 
 If the update addresses missing ratings/artwork or output remains stale,
 complete metadata readiness before the listed verify/TestEmail checks.
@@ -379,7 +371,7 @@ is unchanged and the deleted backup cannot be recovered.
 The package defaults `TAUTWEEKLY_IMAGE` to the full release semver and
 sets `TAUTWEEKLY_RUNTIME_PROFILE=server`. For immutable automation, append the
 published manifest digest in
-`/usr/local/etc/tautweekly/tautweekly.env`, then restart the service.
+`/usr/local/etc/tautweekly/tautweekly.env`, then run `sudo tautweekly update`.
 
 The archive includes application files and a reference Dockerfile for inspection.
 A local image build requires a complete repository checkout because that
@@ -439,4 +431,4 @@ with, endorsed by, or sponsored by Plex, Tautulli, or the FreeBSD Project.
 Shipped email asset filenames are release-owned: updates may replace same-name
 custom artwork. Custom-only filenames and unrelated private/runtime data are
 preserved. For the bundle marker, restart behavior, explicit repair, and Windows
-update differences, see [bundled email assets](../EMAIL-ASSETS.md).
+update differences, see [bundled email assets](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/EMAIL-ASSETS.md).

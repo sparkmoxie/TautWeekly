@@ -321,10 +321,11 @@ Require-Text 'docs/nas-docker/README.md' @(
     "Unraid's Docker controls"
 )
 Require-Text 'docs/nas-docker/index.html' @('url=manager\.html', 'location\.replace\("manager\.html"')
-Require-Text 'docs/nas-docker/index.html' @('authenticated Manager is the setup source', 'controlled TestEmail delivery, scheduling, unified-image profile/status, v0\.22\.0 migration, rollback, recovery')
+Require-Text 'docs/nas-docker/index.html' @('authenticated Manager is the setup source', 'pairing, verification, six previews, TestEmail', 'updates, rollback, and password recovery')
 Forbid-Text 'docs/nas-docker/index.html' @('Setup-First\.ps1', '\.\/tautweekly\.sh setup', 'read-only preview viewer')
 Require-Text 'docs/nas-docker/manager.html' @(
     'Manager authentication',
+    'Migrate v0\.22\.0 without moving private data',
     'manager-bootstrap',
     'manager-reset-access',
     'MANAGER_ALLOWED_HOSTS',
@@ -333,9 +334,9 @@ Require-Text 'docs/nas-docker/manager.html' @(
     '\/health\/live',
     'same image and Manager core',
     'wrapper does not exist inside an Unraid Apps container',
-    'native QPKG is not part of this delivery',
+    'Native QPKG signing or App Center submission, which is not in scope',
     'docker build -f platforms\/nas-docker\/Dockerfile \.',
-    'docker compose down',
+    'During uninstall, keep the data unless you intend to erase it',
     '30 minutes',
     'QNAP firmware\/Container Station behavior on physical hardware'
 )
@@ -445,7 +446,8 @@ foreach ($relative in @(
         'UserEmailOverrides',
         'more than 2000 assignments',
         'invalid delivery address',
-        'SMTP authentication and sender authorization are not tested by verify',
+        'The SMTP check opens a TCP connection',
+        'SendTest with a numeric UserId to send one message to TestEmail',
         '-Mode VerifyPlex',
         'Direct Plex identity and authenticated library requests succeeded',
         'complete movie RT critic/audience ratings',

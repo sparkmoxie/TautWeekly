@@ -7,6 +7,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
+process.env.TZ = "America/Phoenix";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = fs.readFileSync(path.join(root, "manager/internal/manager/web/app.js"), "utf8");
 
@@ -71,17 +72,18 @@ function harness({ running = false, statusRequest = () => snapshot(running), ope
     },
     operationIsActive: (operation) => ["queued", "running", "cancelling"].includes(operation?.state),
     scheduleOperationIsActive: (operation) => ["queued", "running"].includes(operation?.state),
-    titleCase: String, formatDate: String, yesNo: String, overallHeading: String, overallCopy: String,
-    setText() {}, setChip() {}, setSwappingText() {}, setTimelineCardState() {},
+    titleCase: String, yesNo: String, overallHeading: String, overallCopy: String,
+    setText(id, value) { byId(id).textContent = value; }, setChip() {}, setSwappingText() {}, setTimelineCardState() {},
     renderDashboardGreeting() {}, renderDashboardScheduleSummary() {}, renderIntegrationStatus() {}, renderDashboardConfigStatus() {},
-    renderSchedule() {}, renderOperations() {}, scheduleHasUpcomingRun() { return false; },
+    renderSchedule() {}, renderOperations() {},
     isNAS() { return false; }, isLinuxService() { return false; }, isMacDocker() { return false; },
+    packageName() { return "Fixture package"; },
     clearHouseholdPrimary() {}, stopUpdateInstallPolling() {}, clearUpdateCheckAvailabilityTimer() {},
     clearAllRevealedSecrets() {}, closeSecretRevealDialog() {}, concealMaskedInputs() {}, renderUserComboboxes() {},
     setGlobalStatus() {},
   };
   vm.createContext(context);
-  const functions = ["renderStatus", "productionDeliveryOperationIsActive", "productionDeliveryIsRunning", "productionDeliveryStartedAt", "manageDeliveryStatusPolling", "pollDeliveryStatus", "manageOperationPolling", "operationPollIsCurrent", "successfulPreviewGeneration", "pollOperation", "manageSchedulePolling", "pollScheduleOperation", "showAuthentication"].map(functionSource).join("\n");
+  const functions = ["renderStatus", "formatDate", "scheduleHasUpcomingRun", "scheduleNextRunText", "productionDeliveryOperationIsActive", "productionDeliveryIsRunning", "productionDeliveryStartedAt", "manageDeliveryStatusPolling", "pollDeliveryStatus", "manageOperationPolling", "operationPollIsCurrent", "successfulPreviewGeneration", "pollOperation", "manageSchedulePolling", "pollScheduleOperation", "showAuthentication"].map(functionSource).join("\n");
   const visibilityStart = source.indexOf('document.addEventListener("visibilitychange",');
   const visibilityEnd = source.indexOf("\nmaterializeMaterialIcons();", visibilityStart);
   assert.ok(visibilityStart >= 0 && visibilityEnd > visibilityStart, "missing visibility lifecycle");
@@ -97,6 +99,7 @@ function harness({ running = false, statusRequest = () => snapshot(running), ope
     };`, context);
   return {
     state, requests, timers, fixture: context.fixture,
+    text(id) { return byId(id).textContent; },
     async advance(milliseconds) {
       for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
       const target = now + milliseconds;
@@ -118,6 +121,26 @@ function harness({ running = false, statusRequest = () => snapshot(running), ope
 }
 
 assert.match(functionSource("loadAll"), /manageDeliveryStatusPolling\(\);/, "application load must start status polling");
+
+{
+  const test = harness();
+  const schedule = test.state.status.schedule;
+  schedule.nextRunUtc = "2099-04-18T16:31:00Z";
+  schedule.nextRunLocal = "2099-04-18T12:31:00-04:00";
+  test.fixture.render();
+  const expected = (timeZone) => new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(schedule.nextRunUtc));
+  assert.notEqual(expected("UTC"), expected("America/Phoenix"));
+  assert.equal(test.text("next-run"), `${expected("America/Phoenix")} (your time)`);
+  assert.equal(test.text("next-run-utc"), `${expected("UTC")} UTC`);
+  schedule.state = "disabled";
+  schedule.enabled = false;
+  test.fixture.render();
+  assert.equal(test.text("next-run"), "Not scheduled");
+  assert.doesNotMatch(test.text("next-run-utc"), /2099/);
+  schedule.state = "heartbeat-stale";
+  test.fixture.render();
+  assert.equal(test.text("next-run"), "Unavailable");
+}
 
 // The fictional Windows profile exposes the same observed scheduler timestamp.
 {

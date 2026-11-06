@@ -1,8 +1,8 @@
 @echo off
 cd /d "%~dp0"
 echo ============================================================
-echo TAUTWEEKLY FOR PLEX - SEND ONE SAFE TEST
-echo The personalized message is sent ONLY to TestEmail in config.json.
+echo TAUTWEEKLY FOR PLEX - SEND ONE TEST MESSAGE
+echo This sends one personalized test message only to TestEmail in config.json.
 echo ============================================================
 echo.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0TautWeekly.ps1" -Mode ListUsers

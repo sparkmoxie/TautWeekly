@@ -146,3 +146,5 @@
 #household-copy-count { color: var(--muted); font-size: .72rem; }
 
 .manager-version-tooltip{font-weight:500;white-space:normal;line-height:1.4}.manager-version-tooltip strong{font-weight:850}.mode-pill:focus-visible{outline:2px solid var(--gold-bright);outline-offset:3px}@media(prefers-reduced-motion:reduce){.mode-pill:before,.manager-version-tooltip{transition:none}}
+.auth-boundary a,.access-recovery-note a{color:var(--gold-bright);text-underline-offset:3px}
+.auth-form .form-heading p,.auth-form .field-hint,.access-recovery-note p{overflow-wrap:anywhere}

@@ -125,7 +125,6 @@ function createHarness({
   const state = {
     updates: null,
     updateChecking: false,
-    updateCheckBackground: false,
     editor: { state: editorState, revision: configuredRevision },
     status: { observedAtUtc: "2031-04-18T16:31:00Z" },
     discovery: initialDiscovery,
@@ -138,6 +137,7 @@ function createHarness({
     state,
     appShell,
     authShell,
+    setText() {},
     async loadAll() {
       events.push("local:start");
       if (localGate) await localGate.promise;
@@ -153,9 +153,8 @@ function createHarness({
       if (target === "/api/v1/updates/check") {
         assert.equal(options.method, "POST", "update check method changed");
         assert.equal(options.body, "{}", "update check body changed");
-        const background = state.updateCheckBackground;
-        events.push(background ? "check:background" : "check:manual");
-        requests.push({ type: "update", target, options, background });
+        events.push("check:update");
+        requests.push({ type: "update", target, options });
         const result = checkResults[Math.min(checkIndex, checkResults.length - 1)];
         checkIndex += 1;
         return await Promise.resolve(result);
@@ -261,9 +260,8 @@ async function flushAsyncWork() {
   assert.equal(harness.requests.length, 2, "header Refresh did not start one update and one Tautulli request");
   const updateRequest = harness.requests.find((request) => request.type === "update");
   const discoveryRequest = harness.requests.find((request) => request.type === "discovery");
-  assert.equal(updateRequest.background, false, "header update request became a background check");
   assert.deepEqual(discoveryRequest.payload, { expectedRevision: configuredRevision, confirmRealNetwork: true });
-  assert.ok(harness.events.indexOf("check:manual") > harness.events.indexOf("local:complete"), "manual update check preceded local completion");
+  assert.ok(harness.events.indexOf("check:update") > harness.events.indexOf("local:complete"), "manual update check preceded local completion");
   assert.ok(harness.events.indexOf("discovery:manual") > harness.events.indexOf("local:complete"), "Tautulli discovery preceded local completion");
   assert.equal(harness.state.updateChecking, true, "header Refresh did not share Check now's in-flight state");
   assert.equal(harness.state.discoveryRunning, true, "header Refresh did not expose discovery's in-flight state");
@@ -273,7 +271,7 @@ async function flushAsyncWork() {
   assert.equal(harness.state.updateChecking, false);
   assert.equal(harness.state.discoveryRunning, false);
   assert.equal(harness.state.discovery, discoveredChoices);
-  assert.equal(harness.globalStatuses.at(-1).message, "Stable update check completed.");
+  assert.equal(harness.globalStatuses.at(-1).message, "Update check complete.");
   assert.equal(harness.events.includes("previews:recover"), false, "header Refresh inherited setup-preview recovery");
 }
 
@@ -409,8 +407,9 @@ async function flushAsyncWork() {
   await harness.context.testAPI.enterApplication();
   assert.equal(harness.requests.length, 1, "authenticated entry no longer performs the applicable background check");
   assert.equal(harness.requests[0].type, "update", "authenticated entry unexpectedly repeated Tautulli discovery");
-  assert.ok(harness.events.indexOf("check:background") > harness.events.indexOf("local:complete"));
+  assert.ok(harness.events.indexOf("check:update") > harness.events.indexOf("local:complete"));
   await flushAsyncWork();
+  assert.equal(harness.globalStatuses.at(-1).message, "Local status refreshed.", "background check displayed a manual check notice");
 }
 
 {
@@ -419,7 +418,6 @@ async function flushAsyncWork() {
   await harness.context.testAPI.checkForUpdates();
   assert.equal(harness.requests.length, 1, "explicit Check now no longer starts a check");
   assert.equal(harness.requests[0].type, "update", "explicit Check now inherited Tautulli discovery");
-  assert.equal(harness.requests[0].background, false, "explicit Check now became a background action");
   assert.equal(harness.globalStatuses.at(-1).message, "Stable update found.");
 }
 
@@ -524,19 +522,23 @@ for (const [name, source] of [["Manager", productionJS], ["preview", previewJS]]
       return nodes.get(id);
     };
     const state = {
-      status: { schedule: { provider, supported: true, installed: false, owned: true, state: "ready" } },
+      status: {
+        observedAtUtc: "2031-04-18T16:31:30Z",
+        schedule: { provider, supported: true, installed: false, owned: true, state: "ready", probeObservedAtUtc: "2031-04-18T16:31:00Z" },
+      },
       editor: { state: "ready", fields: [{ name: "ScheduleDay", value: "Friday" }, { name: "ScheduleTime", value: "15:30" }] },
       capabilities: { scheduleActions: ["install", "enable"] },
       schedulePendingAction: provider.startsWith("embedded-") ? "enable" : "install",
     };
     const context = vm.createContext({ state, byId: node, document: { querySelectorAll: () => [] },
       setText: (id, text) => { node(id).textContent = text; }, setChip() {},
-      setSwappingText() {}, setSwappingButtonText() {}, operationIsActive: () => false,
+      setSwappingText() {}, setSwappingButtonText() {},
+      operationIsActive: (operation) => operation?.state === "running",
       embeddedRuntimeLabel: () => "service", isServiceRuntime: () => provider.startsWith("embedded-"),
       isLinuxService: () => true, isMacDocker: () => false,
-      formatDate: () => "Not recorded", yesNo: String, titleCase: String, renderScheduleOperation() {},
+      formatDate: String, yesNo: String, titleCase: String, renderScheduleOperation() {},
     });
-    vm.runInContext(["formatScheduleTime", "configEditorValue", "scheduleOperationIsActive", "scheduleActionCopy", "renderSchedule"]
+    vm.runInContext(["formatScheduleTime", "configEditorValue", "scheduleOperationIsActive", "scheduleActionCopy", "scheduleHasUpcomingRun", "scheduleNextRunText", "renderSchedule"]
       .map((fn) => functionSource(source, fn)).join("\n"), context);
     for (const [saved, display] of [["15:30", "3:30 PM"], ["00:00", "12:00 AM"], ["00:05", "12:05 AM"],
       ["09:30", "9:30 AM"], ["11:59", "11:59 AM"], ["12:00", "12:00 PM"], ["12:05", "12:05 PM"], ["23:59", "11:59 PM"]]) {
@@ -549,6 +551,19 @@ for (const [name, source] of [["Manager", productionJS], ["preview", previewJS]]
         assert.equal(state.editor.fields[1].value, saved, "rendering must preserve saved HH:mm");
       }
     }
+    assert.equal(node("schedule-observed").textContent, `Checked ${provider.startsWith("embedded-") ? state.status.observedAtUtc : state.status.schedule.probeObservedAtUtc}`);
+    if (provider === "windows-task-scheduler") {
+      delete state.status.schedule.probeObservedAtUtc;
+      vm.runInContext("renderSchedule()", context);
+      assert.equal(node("schedule-observed").textContent, "No scheduler check recorded");
+    }
+    for (const type of ["preview-all", "send-test-all", "send-welcome", "send-all", "cache-warm"]) {
+      state.operation = { type, state: "running" };
+      vm.runInContext("renderSchedule()", context);
+      assert.equal(node("schedule-confirm-run").disabled, true, `${type} must block schedule changes`);
+      assert.match(node("schedule-warning").textContent, /preview, test, manual send, or cache refresh/);
+    }
+    state.operation = null;
     for (const invalid of ["24:00", "12:60", "bad", null]) {
       context.invalid = invalid;
       assert.equal(vm.runInContext("formatScheduleTime(invalid)", context), "Invalid time");
@@ -571,7 +586,7 @@ for (const path of ["manager/internal/manager/web/", "docs/gui-preview/"]) {
   const texts = {};
   const state = { editor: { state: "ready", revision: "current" }, discovery: { configRevision: "current", primaryRecipientCount: 12, completedAtUtc: "2026-01-01T12:00:00Z", retained: true }, status: { observedAtUtc: new Date().toISOString(), schedule: {} } };
   const context = vm.createContext({ state, Date, setText(id, value) { texts[id] = value; }, formatDate: (v) => v, titleCase: (v) => v });
-  vm.runInContext(["scheduleHasUpcomingRun", "renderDashboardScheduleSummary"].map(extract).join("\n"), context);
+  vm.runInContext(["scheduleHasUpcomingRun", "scheduleNextRunText", "renderDashboardScheduleSummary"].map(extract).join("\n"), context);
   const render = () => vm.runInContext("renderDashboardScheduleSummary()", context);
   for (const provider of ["windows-task-scheduler", "embedded-nas", "embedded-mac", "embedded-linux", "embedded-freebsd"]) {
     state.status.schedule = { provider, supported: true, installed: true, enabled: true, owned: true, state: provider.startsWith("embedded-") ? "running" : "ready", nextRunUtc: "2099-01-01T12:00:00Z" };
@@ -585,6 +600,13 @@ for (const path of ["manager/internal/manager/web/", "docs/gui-preview/"]) {
     }
     for (const key of ["installed", "enabled", "owned", "supported"]) {
       state.status.schedule[key] = false; render(); assert(!texts["schedule-state"].startsWith("Ready —")); state.status.schedule[key] = true;
+    }
+    if (provider.startsWith("embedded-")) {
+      state.status.schedule.enabled = false;
+      render();
+      assert.equal(texts["schedule-state"], "Disabled");
+      assert.equal(texts["schedule-next-run"], "Not scheduled");
+      state.status.schedule.enabled = true;
     }
   }
   for (const count of [0, 1, 200]) { state.discovery.primaryRecipientCount = count; render(); assert.match(texts["schedule-state"], new RegExp(`${count} recipient${count === 1 ? " " : "s "}`)); }

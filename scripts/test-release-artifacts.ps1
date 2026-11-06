@@ -636,6 +636,29 @@ foreach ($archiveName in $expected.Keys) {
         try { $releaseManifest = $manifestReader.ReadToEnd() }
         finally { $manifestReader.Dispose() }
         $packageName = $archiveName.Substring(0, $archiveName.Length - '.zip'.Length)
+        if ($packageName -eq 'TautWeekly-nas-docker') {
+            $nasComposeEntry = $archive.GetEntry("$packageName/compose.yaml")
+            Assert-True ($null -ne $nasComposeEntry) 'NAS archive is missing compose.yaml.'
+            $nasCompose = [Text.Encoding]::UTF8.GetString((Get-ZipEntryBytes $nasComposeEntry))
+            Assert-True ($nasCompose.Contains('TAUTWEEKLY_PACKAGE_KIND: "nas-docker"')) 'NAS archive Compose must identify the host wrapper.'
+            $qnapComposeEntry = $archive.GetEntry("$packageName/compose.qnap.yaml")
+            Assert-True ($null -ne $qnapComposeEntry) 'NAS archive is missing compose.qnap.yaml.'
+            $qnapCompose = [Text.Encoding]::UTF8.GetString((Get-ZipEntryBytes $qnapComposeEntry))
+            Assert-True ($qnapCompose.Contains('TAUTWEEKLY_PACKAGE_KIND: "qnap-container-station"')) 'QNAP template must identify Container Station ownership.'
+        }
+        $readmeEntry = $archive.GetEntry("$packageName/README.md")
+        Assert-True ($null -ne $readmeEntry) "$archiveName is missing its README."
+        $readme = [Text.Encoding]::UTF8.GetString((Get-ZipEntryBytes $readmeEntry))
+        $readmeBase = [uri]"https://archive.invalid/$packageName/README.md"
+        foreach ($link in [regex]::Matches($readme, '\]\((?<target>[^)\s]+)(?:\s+"[^"]*")?\)')) {
+            $target = $link.Groups['target'].Value
+            if ($target.StartsWith('#') -or $target -match '^(?:https?|mailto):') { continue }
+            $resolved = [uri]::new($readmeBase, $target)
+            $entryPath = [uri]::UnescapeDataString($resolved.AbsolutePath.TrimStart('/'))
+            Assert-True ($resolved.Host -ceq $readmeBase.Host -and
+                $entryPath.StartsWith("$packageName/", [StringComparison]::Ordinal) -and
+                $null -ne $archive.GetEntry($entryPath)) "$archiveName README has a broken archive-local link: $target"
+        }
         $zipReleaseManifests[$packageName] = ($releaseManifest -replace "`r`n", "`n").Trim()
         Assert-True ($releaseManifest -match '(?m)^[0-9a-f]{64}\s{2}RELEASE-METADATA\.txt\r?$') "$archiveName release manifest does not hash release metadata."
         Assert-True ($releaseManifest -notmatch '(?im)(?:^|/)(?:config\.json|state\.json|access-state\.json|scheduler-state\.json|\.tautweekly-operation\.lock)$') "$archiveName release manifest owns private runtime files."

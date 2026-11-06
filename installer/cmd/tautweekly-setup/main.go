@@ -93,7 +93,7 @@ func run(args []string) error {
 		}
 		if err := uninstall(opts, logger); err != nil {
 			logger.Printf("uninstall failed: %v", err)
-			return fmt.Errorf("Removal stopped safely. No private data was removed.\n\nReview the installer log for details:\n%s", opts.logPath)
+			return fmt.Errorf("Removal could not finish. Your private data was preserved.\n\nInstaller log:\n%s", opts.logPath)
 		}
 		return showCompletion("TautWeekly removed", "TautWeekly application files and shortcuts were removed. Private configuration and runtime data were preserved.", opts.testMode)
 	}
@@ -109,7 +109,7 @@ func run(args []string) error {
 	}
 	if err := install(opts, logger); err != nil {
 		logger.Printf("install failed: %v", err)
-		return fmt.Errorf("Installation stopped safely. Existing configuration and history were not removed.\n\nReview the installer log for details:\n%s", opts.logPath)
+		return fmt.Errorf("Setup could not finish. Your configuration and history were preserved.\n\nInstaller log:\n%s", opts.logPath)
 	}
 	return finishInstallation(opts, showCompletion, startDetached)
 }

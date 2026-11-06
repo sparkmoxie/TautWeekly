@@ -30,6 +30,16 @@ function Test-Target {
         return
     }
 
+    # Release staging copies the NAS guide next to the rendered QNAP Compose
+    # file. Resolve that archive-local link to its source for the repo check.
+    if ($Source.FullName -ceq (Join-Path $Root 'docs/nas-docker/README.md') -and $clean -ceq './compose.qnap.yaml') {
+        $candidate = Join-Path $Root 'platforms/nas-docker/compose.qnap.yaml'
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            $failures.Add("docs/nas-docker/README.md: missing package target: $Target")
+        }
+        return
+    }
+
     # The native Linux preview adapter is copied over the shared app landing
     # page during release staging. Product-branding siblings come from that
     # shared app payload and are verified by the packaged-artifact contract.

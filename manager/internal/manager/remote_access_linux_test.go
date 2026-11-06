@@ -158,10 +158,15 @@ func TestLinuxRuntimeSelectsIntegratedFunnelAdaptersForFixedNativeAndContainerSe
 
 func TestContainerFunnelAuthorizationCommandsAreFixedByPackage(t *testing.T) {
 	tests := map[string]string{
-		packageKindFreeBSD: "sudo tautweekly remote-access-authorize",
-		packageKindUnraid:  "/opt/tautweekly/bin/tautweekly-funnel login",
-		packageKindMac:     "./tautweekly.sh remote-access-login",
-		packageKindQNAP:    "./tautweekly.sh remote-access-login",
+		packageKindFreeBSD:          "sudo tautweekly remote-access-authorize",
+		packageKindUnraid:           "/opt/tautweekly/bin/tautweekly-funnel login",
+		packageKindMac:              "./tautweekly.sh remote-access-login",
+		packageKindNAS:              "./tautweekly.sh remote-access-login",
+		packageKindQNAP:             "/opt/tautweekly/bin/tautweekly-funnel login",
+		packageKindCompatibleDocker: "/opt/tautweekly/bin/tautweekly-funnel login",
+		packageKindMacRegistry:      "docker compose exec tautweekly /opt/tautweekly/bin/tautweekly-funnel login",
+		packageKindContainerDesktop: "docker compose exec tautweekly /opt/tautweekly/bin/tautweekly-funnel login",
+		packageKindContainerCompose: "docker compose exec tautweekly /opt/tautweekly/bin/tautweekly-funnel login",
 	}
 	for packageKind, want := range tests {
 		if got := containerFunnelAuthorizationCommand(packageKind); got != want {

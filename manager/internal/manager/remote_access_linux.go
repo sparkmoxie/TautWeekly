@@ -64,10 +64,12 @@ func containerFunnelAuthorizationCommand(packageKind string) string {
 	switch strings.TrimSpace(packageKind) {
 	case packageKindFreeBSD:
 		return "sudo tautweekly remote-access-authorize"
-	case packageKindUnraid:
-		return "/opt/tautweekly/bin/tautweekly-funnel login"
-	default:
+	case packageKindMac, packageKindNAS:
 		return "./tautweekly.sh remote-access-login"
+	case packageKindContainerDesktop, packageKindContainerCompose, packageKindMacRegistry:
+		return "docker compose exec tautweekly /opt/tautweekly/bin/tautweekly-funnel login"
+	default:
+		return "/opt/tautweekly/bin/tautweekly-funnel login"
 	}
 }
 

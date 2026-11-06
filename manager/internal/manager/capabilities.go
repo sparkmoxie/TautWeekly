@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"net"
 	"runtime"
 	"strings"
 )
@@ -25,6 +26,7 @@ type Capabilities struct {
 	RuntimeMode       string   `json:"runtimeMode"`
 	RuntimeProfile    string   `json:"runtimeProfile"`
 	PackageKind       string   `json:"packageKind"`
+	PackageLabel      string   `json:"packageLabel"`
 	Platform          string   `json:"platform"`
 	AccessLabel       string   `json:"accessLabel"`
 	NetworkScope      string   `json:"networkScope"`
@@ -73,13 +75,17 @@ func capabilitiesFor(options Options) Capabilities {
 	if runtimeProfile == runtimeProfileUnraid {
 		lifecycleProvider = "unraid-host"
 	}
+	if packageKind == packageKindFreeBSD {
+		lifecycleProvider = "podman-host"
+	}
 	if mode == runtimeModeNAS {
 		return Capabilities{
 			RuntimeMode:       runtimeModeNAS,
 			PackageKind:       packageKind,
+			PackageLabel:      packageLabel(packageKind),
 			Platform:          runtime.GOOS,
 			AccessLabel:       "Container access",
-			NetworkScope:      "trusted-lan",
+			NetworkScope:      "deployment-configured",
 			RuntimeProfile:    runtimeProfile,
 			Authentication:    "required",
 			ScheduleProvider:  "embedded-container",
@@ -91,12 +97,18 @@ func capabilitiesFor(options Options) Capabilities {
 		}
 	}
 	if mode == runtimeModeLinux {
+		networkScope := "listener-configured"
+		host, _, _ := net.SplitHostPort(options.ListenAddress)
+		if options.ListenAddress == "" || net.ParseIP(host).IsLoopback() {
+			networkScope = "host-loopback"
+		}
 		return Capabilities{
 			RuntimeMode:       runtimeModeLinux,
 			PackageKind:       packageKind,
+			PackageLabel:      packageLabel(packageKind),
 			Platform:          runtime.GOOS,
 			AccessLabel:       "Linux service access",
-			NetworkScope:      "host-loopback",
+			NetworkScope:      networkScope,
 			RuntimeProfile:    runtimeProfile,
 			Authentication:    "required",
 			ScheduleProvider:  "embedded-service",
@@ -108,26 +120,30 @@ func capabilitiesFor(options Options) Capabilities {
 		}
 	}
 	if mode == runtimeModeMac {
-		updateProvider := "mac-package"
-		pathStyle := "mac-bind-mount"
-		if packageKind == packageKindContainerDesktop {
-			updateProvider = packageKindContainerDesktop
-			pathStyle = "container-volume"
+		updateProvider := packageKind
+		pathStyle := "container-volume"
+		if packageKind == packageKindMac {
+			updateProvider = "mac-package"
+			pathStyle = "mac-bind-mount"
 		} else if packageKind == packageKindMacRegistry {
 			updateProvider = "mac-registry"
-			pathStyle = "container-volume"
+		}
+		lifecycleProvider := "container-host"
+		if packageKind == packageKindMac || packageKind == packageKindMacRegistry || packageKind == packageKindContainerDesktop {
+			lifecycleProvider = "docker-desktop"
 		}
 		return Capabilities{
 			RuntimeMode:       runtimeModeMac,
 			PackageKind:       packageKind,
+			PackageLabel:      packageLabel(packageKind),
 			Platform:          "macos-docker",
 			AccessLabel:       "macOS Docker Desktop access",
-			NetworkScope:      "host-loopback",
+			NetworkScope:      "deployment-configured",
 			Authentication:    "required",
 			RuntimeProfile:    runtimeProfile,
 			ScheduleProvider:  "embedded-container",
 			ScheduleActions:   []string{"enable", "disable"},
-			LifecycleProvider: "docker-desktop",
+			LifecycleProvider: lifecycleProvider,
 			UpdateProvider:    updateProvider,
 			PathStyle:         pathStyle,
 			SecureCookies:     options.SecureCookies,
@@ -136,6 +152,7 @@ func capabilitiesFor(options Options) Capabilities {
 	return Capabilities{
 		RuntimeMode:       runtimeModeWindows,
 		PackageKind:       packageKind,
+		PackageLabel:      packageLabel(packageKind),
 		Platform:          runtime.GOOS,
 		AccessLabel:       "Browser access",
 		NetworkScope:      "loopback",

@@ -331,18 +331,18 @@ account.
    `FromName` is display text and `ReplyToEmail` is the reply destination; they
    do not grant sender permission. Set `TestEmail` to one controlled mailbox
    you can inspect.
-6. Validate and save in Manager. **Verify** checks configuration shape and TCP
-   reachability but deliberately does not authenticate or submit a message.
-   Run one controlled TestEmail/`send-test` to verify STARTTLS, authentication,
-   sender authorization, recipient acceptance, final DATA acceptance, and
-   actual delivery before enabling or relying on the schedule.
+6. Validate and save in Manager. The SMTP connection check under **Verify**
+   checks the greeting, `EHLO`, and certificate-validated STARTTLS when enabled.
+   It sends no credentials or mail. The terminal `verify` checks configuration
+   and opens a TCP connection for SMTP.
+7. Run terminal `send-test USER_ID` to send one message to `TestEmail`, or use
+   **Previews** in Manager to send all six variants there. Test sends exercise
+   SMTP sign-in when configured, sender permission, and message submission.
+   Check the mailbox before enabling or relying on the schedule.
 
 Implicit SMTPS on port 465 is not the supported transport. Use a provider's
-STARTTLS settings. The SMTP transport completes authentication and requires a
-successful `235` response before it sends `MAIL FROM`. The platform verifier
-checks TCP reachability and configuration shape only; run a controlled
-`SendTest` with a numeric `USER_ID` to validate credentials and sender
-authorization.
+STARTTLS settings. When sign-in is enabled, the SMTP transport requires a
+successful `235` response before it sends `MAIL FROM`.
 
 ## Content and eligibility
 
@@ -558,11 +558,12 @@ control characters, malformed addresses, and duplicate normalized IDs are reject
 Empty lists are removed. Temporarily unavailable users retain their saved assignments
 and can be removed from the card. Missing configuration defaults to `{}`.
 
-Production and Manual Welcome sends first enforce source eligibility and exclusions,
-then remove individually excluded copy addresses. An excluded source suppresses all
-its copies. Copies never create a new activity identity, cache identity, or welcome
-state. Every TestEmail mode remains TestEmail-only. Saving copies changes addressing
-without generating previews, warming cache, refreshing discovery, or sending mail.
+Production and Manual Welcome send the same personalized newsletter to the user's
+primary address and eligible household copy addresses. Excluding a user skips
+their newsletter and all copies of it. Saved email exclusions can also remove
+individual copy addresses. Copies use the source user's viewing recap and welcome
+state. Every test send goes only to `TestEmail`. Saving copies changes addressing
+without generating previews, refreshing cache or discovery, or sending mail.
 
 SMTP sends the primary recipient first. A rejected primary prevents copies and DATA.
 Recipient-specific copy rejections can leave the primary and other copies accepted;

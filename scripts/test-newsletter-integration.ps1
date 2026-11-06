@@ -19,6 +19,8 @@ $emailThemeAssertion = Join-Path $Root 'scripts/test-support/assert-email-theme.
 $headlessRunner = Join-Path $Root 'scripts/test-support/invoke-renderer-headless.ps1'
 $windowsPowerShell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
 $powerShell7 = Get-Command pwsh -ErrorAction SilentlyContinue
+$householdPrivacyMarker = 'eligible household copy addresses your server admin set up for you'
+$anonymousChampionMarker = 'The champion remains anonymous.'
 
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
@@ -98,6 +100,27 @@ function Get-FreeTcpPort {
     $listener.Start()
     try { return ([Net.IPEndPoint]$listener.LocalEndpoint).Port }
     finally { $listener.Stop() }
+}
+
+function Wait-ForFixtureReady {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [string]$ReadyPath,
+        [string]$StderrPath,
+        [string]$Context
+    )
+
+    $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
+    while (-not $Process.HasExited -and $elapsed.Elapsed.TotalSeconds -lt 30) {
+        if (Test-Path -LiteralPath $ReadyPath -PathType Leaf) { return }
+        Start-Sleep -Milliseconds 50
+    }
+
+    $stderrText = Get-Content -LiteralPath $StderrPath -Raw -ErrorAction SilentlyContinue
+    if ($Process.HasExited) {
+        throw "$Context exited before it was ready (exit $($Process.ExitCode)).`n$stderrText"
+    }
+    throw "$Context did not become ready within 30 seconds.`n$stderrText"
 }
 
 $engines = @(
@@ -217,13 +240,7 @@ foreach ($engine in $engines) {
                 '--state-file', $scenarioState, '--call-log', $callLog, '--ready-file', $readyFile
             ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $serverStdout -RedirectStandardError $serverStderr
 
-            for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $readyFile); $attempt++) {
-                if ($server.HasExited) {
-                    throw "Virtual Tautulli exited early: $(Get-Content $serverStderr -Raw -ErrorAction SilentlyContinue)"
-                }
-                Start-Sleep -Milliseconds 50
-            }
-            Assert-True (Test-Path $readyFile) "Virtual Tautulli did not become ready for $($engine.Name)/$scenario."
+            Wait-ForFixtureReady -Process $server -ReadyPath $readyFile -StderrPath $serverStderr -Context "Virtual Tautulli for $($engine.Name)/$scenario"
             $baseUrl = (Get-Content $readyFile -Raw).Trim()
 
             $smtpPort = 0
@@ -235,13 +252,7 @@ foreach ($engine in $engines) {
                     '--data-file', $smtpDataFile,
                     '--data-directory', $smtpDataDirectory
                 ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $smtpStdout -RedirectStandardError $smtpStderr
-                for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $smtpReadyFile); $attempt++) {
-                    if ($smtpServer.HasExited) {
-                        throw "Virtual SMTP exited early: $(Get-Content $smtpStderr -Raw -ErrorAction SilentlyContinue)"
-                    }
-                    Start-Sleep -Milliseconds 50
-                }
-                Assert-True (Test-Path $smtpReadyFile) "Virtual SMTP did not become ready for $($engine.Name)/$scenario."
+                Wait-ForFixtureReady -Process $smtpServer -ReadyPath $smtpReadyFile -StderrPath $smtpStderr -Context "Virtual SMTP for $($engine.Name)/$scenario"
             }
 
             $examplePath = Join-Path $appRoot 'config.example.json'
@@ -494,7 +505,11 @@ foreach ($engine in $engines) {
             $normalHtml = Get-Content $normalPath -Raw -Encoding UTF8
             $quietHtml = Get-Content (Join-Path $outputRoot 'preview-all-05-established-quiet.html') -Raw -Encoding UTF8
             $scenarioPreviewHtml = @($manualHtml, $newNoHistoryHtml, $newWithHistoryHtml, $normalHtml, $quietHtml, $warmupHtml)
-            foreach ($stateHtml in $scenarioPreviewHtml) { Assert-FooterPresentation -Html $stateHtml -Context "$($engine.Name)/$scenario" }
+            foreach ($stateHtml in $scenarioPreviewHtml) {
+                Assert-FooterPresentation -Html $stateHtml -Context "$($engine.Name)/$scenario"
+                Assert-True ($stateHtml.Contains($householdPrivacyMarker) -and $stateHtml.Contains($anonymousChampionMarker)) "$($engine.Name)/$scenario omitted household copy scope or Binge Champion anonymity."
+                Assert-True ($stateHtml -notmatch 'stays in your email|Other users do not receive your detailed|Every \w+ morning') "$($engine.Name)/$scenario promised exclusive inbox access or a fixed send time."
+            }
             $previewThemeMarkers = @(
                 '<meta name="color-scheme" content="light dark">',
                 '<meta name="supported-color-schemes" content="light dark">',
@@ -1244,7 +1259,7 @@ foreach ($engine in $engines) {
                 if ($scenario -eq 'active') {
                     Assert-True ($sendTestTrendingMetadataDelta -eq 2) "$($engine.Name)/$scenario SendTest did not make exactly one Top Genre and one Trending hero metadata lookup (actual: $sendTestTrendingMetadataDelta)."
                 }
-                Assert-True ($sendLog.Contains('Test email sent successfully.')) "$($engine.Name)/$scenario SendTest did not complete delivery."
+                Assert-True ($sendLog.Contains('SMTP accepted one message for TestEmail.')) "$($engine.Name)/$scenario SendTest did not report acceptance."
                 if ($scenario -notin $directRatingScenarios -and $scenario -notin @('active', 'quiet', 'tv-only', $platformScenario, $lastPlatformScenario, $quietNoHistoryScenario, $quietNoGlobalHistoryScenario, $sparseEpisodeMetadataScenario)) {
                     Assert-True ($sendLog -match 'direct Plex .*404.*Not Found') "$($engine.Name)/$scenario SendTest did not preserve the direct Plex 404 warning."
                 }
@@ -1569,7 +1584,7 @@ foreach ($engine in $engines) {
                         throw "$($engine.Name)/$scenario SendTestAll failed ($($sendTestAllProcess.ExitCode))."
                     }
                     $sendTestAllLog = Get-Content -LiteralPath $sendTestAllStdout -Raw -Encoding UTF8
-                    Assert-True ($sendTestAllLog.Contains('All six email-state tests were sent to TestEmail only.')) "$($engine.Name)/$scenario SendTestAll did not complete its test-only delivery."
+                    Assert-True ($sendTestAllLog.Contains('SMTP accepted all six messages for TestEmail only.')) "$($engine.Name)/$scenario SendTestAll did not report test-only acceptance."
                     Assert-True (Test-Path -LiteralPath $sendTestAllResultPath) "$($engine.Name)/$scenario SendTestAll omitted its structured result."
                     $sendTestAllResultRaw = Get-Content -LiteralPath $sendTestAllResultPath -Raw -Encoding UTF8
                     $sendTestAllResult = $sendTestAllResultRaw | ConvertFrom-Json
@@ -1672,8 +1687,15 @@ foreach ($engine in $engines) {
                     for ($stateIndex = 0; $stateIndex -lt 6; $stateIndex++) {
                         $stateArgs = @($stateCaptures[$stateIndex].FullName, '--forbid-html', 'Sample Movie', '--forbid-html', 'Sample Series')
                         $stateArgs += @(
-                            '--forbid-plain', 'Selected Show - Watched'
+                            '--forbid-plain', 'Selected Show - Watched',
+                            '--require-html', $householdPrivacyMarker,
+                            '--require-html', $anonymousChampionMarker,
+                            '--forbid-plain', 'stays in your email',
+                            '--forbid-plain', 'Friday morning'
                         )
+                        if ($stateIndex -lt 3) {
+                            $stateArgs += @('--require-plain', $householdPrivacyMarker, '--require-plain', $anonymousChampionMarker)
+                        }
                         foreach ($requiredMarker in $stateExpectations[$stateIndex].Required) {
                             $stateArgs += @('--require-html', $requiredMarker)
                         }
@@ -1782,7 +1804,7 @@ foreach ($engine in $engines) {
                         throw "$($engine.Name)/$scenario SendWelcome failed ($($sendWelcomeProcess.ExitCode)).`nSTDOUT:`n$(Get-Content $sendWelcomeStdout -Raw)`nSTDERR:`n$(Get-Content $sendWelcomeStderr -Raw)"
                     }
                     $sendWelcomeLog = Get-Content -LiteralPath $sendWelcomeStdout -Raw -Encoding UTF8
-                    Assert-True ($sendWelcomeLog.Contains('Welcome email sent successfully')) "$($engine.Name)/$scenario SendWelcome did not report successful delivery."
+                    Assert-True ($sendWelcomeLog.Contains('SMTP accepted the primary welcome message.')) "$($engine.Name)/$scenario SendWelcome did not report primary acceptance."
                     Assert-True (Test-Path -LiteralPath $sendWelcomeResultPath) "$($engine.Name)/$scenario SendWelcome omitted its structured result."
                     $sendWelcomeResultRaw = Get-Content -LiteralPath $sendWelcomeResultPath -Raw -Encoding UTF8
                     $sendWelcomeResult = $sendWelcomeResultRaw | ConvertFrom-Json
@@ -1920,7 +1942,7 @@ foreach ($engine in $engines) {
                     $sendAllLog = Get-Content $sendAllStdout -Raw
                     Assert-True ($sendAllLog.Contains('Deleted-item cache hit for an exact movie GUID')) "$($engine.Name)/$scenario SendAll did not reuse cached movie metadata."
                     Assert-True ($sendAllLog.Contains('Restored deleted movie history artwork from the bounded pre-deletion cache.')) "$($engine.Name)/$scenario SendAll did not reuse cached movie artwork."
-                    Assert-True ($sendAllLog.Contains('Sent:    2') -and $sendAllLog.Contains('Failed:  0')) "$($engine.Name)/$scenario SendAll did not complete both normal deliveries."
+                    Assert-True ($sendAllLog.Contains('Primary messages accepted by SMTP: 2') -and $sendAllLog.Contains('Failed:  0')) "$($engine.Name)/$scenario SendAll did not report both primary acceptances."
                     $smtpCommands = @(Get-Content $smtpCallLog | ForEach-Object { ($_ | ConvertFrom-Json).command })
                     Assert-True (@($smtpCommands | Where-Object { $_ -eq 'DATA' }).Count -ge 3) "$($engine.Name)/$scenario did not submit SendTest plus both SendAll messages."
                     & $PythonPath $emailThemeAssertion $smtpDataFile --require-html 'Platform: Roku' --require-html 'cid:platform_roku' --require-html 'max-height:21px' --require-cid-sha256 'platform_roku=7E9EA9D59B16F92A5C80C72E1F8E92FB794FE57C4E97EC3A5B55E8943D0ED136' --forbid-html 'cid:recipient_watched' --forbid-plain ' - Watched'

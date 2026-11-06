@@ -303,11 +303,12 @@ jobs:
         with:
           go-version-file: manager/go.mod
           cache-dependency-path: manager/go.mod
-      - name: Test and vet the Manager
+      - name: Test the Manager
         working-directory: manager
-        run: |
-          go test ./...
-          go vet ./...
+        run: go test ./...
+      - name: Vet the Manager
+        working-directory: manager
+        run: go vet ./...
       - name: Race-test shared probes and rotating log concurrency
         if: matrix.os == 'ubuntu-latest'
         working-directory: manager

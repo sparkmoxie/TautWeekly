@@ -142,11 +142,11 @@ func TestLinuxCapabilitiesRequireAuthenticationAndDescribeNativeService(t *testi
 
 func TestMacCapabilitiesRequireAuthenticationAndDescribeDockerDesktop(t *testing.T) {
 	t.Parallel()
-	capabilities := capabilitiesFor(Options{RuntimeMode: runtimeModeMac, SecureCookies: true})
+	capabilities := capabilitiesFor(Options{RuntimeMode: runtimeModeMac, PackageKind: packageKindMac, SecureCookies: true})
 	if capabilities.RuntimeMode != runtimeModeMac || capabilities.Platform != "macos-docker" ||
 		capabilities.Authentication != "required" || capabilities.ScheduleProvider != "embedded-container" ||
 		capabilities.LifecycleProvider != "docker-desktop" || capabilities.UpdateProvider != "mac-package" ||
-		capabilities.PathStyle != "mac-bind-mount" || capabilities.NetworkScope != "host-loopback" ||
+		capabilities.PathStyle != "mac-bind-mount" || capabilities.NetworkScope != "deployment-configured" ||
 		capabilities.SupportsStartup || capabilities.SupportsTray || capabilities.OpensBrowser ||
 		strings.Join(capabilities.ScheduleActions, ",") != "enable,disable" || !capabilities.SecureCookies {
 		t.Fatalf("unexpected macOS capability boundary: %+v", capabilities)
@@ -163,6 +163,7 @@ func TestMacCapabilitiesRequireAuthenticationAndDescribeDockerDesktop(t *testing
 		TautWeeklyRoot: t.TempDir(),
 		RuntimeRoot:    t.TempDir(),
 		RuntimeMode:    runtimeModeMac,
+		PackageKind:    packageKindMac,
 		AllowedHosts:   []string{"weekly.mac.example"},
 		Version:        "test",
 	})
@@ -383,11 +384,14 @@ func TestContainerProfilesReportExplicitHostBoundaries(t *testing.T) {
 		wantNetworkScope   string
 		wantUpdateProvider string
 	}{
-		{"desktop", Options{RuntimeMode: runtimeModeMac, RuntimeProfile: runtimeProfileDesktop, PackageKind: packageKindContainerDesktop}, runtimeProfileDesktop, packageKindContainerDesktop, "docker-desktop", "host-loopback", packageKindContainerDesktop},
-		{"server", Options{RuntimeMode: runtimeModeNAS, RuntimeProfile: runtimeProfileServer, PackageKind: packageKindContainerCompose}, runtimeProfileServer, packageKindContainerCompose, "container-host", "trusted-lan", packageKindContainerCompose},
-		{"unraid", Options{RuntimeMode: runtimeModeNAS, RuntimeProfile: runtimeProfileUnraid, PackageKind: packageKindUnraid}, runtimeProfileUnraid, packageKindUnraid, "unraid-host", "trusted-lan", packageKindUnraid},
-		{"legacy NAS default", Options{RuntimeMode: runtimeModeNAS, PackageKind: packageKindNAS}, runtimeProfileServer, packageKindNAS, "container-host", "trusted-lan", packageKindNAS},
-		{"legacy Mac default", Options{RuntimeMode: runtimeModeMac, PackageKind: packageKindMacRegistry}, runtimeProfileDesktop, packageKindMacRegistry, "docker-desktop", "host-loopback", "mac-registry"},
+		{"desktop", Options{RuntimeMode: runtimeModeMac, RuntimeProfile: runtimeProfileDesktop, PackageKind: packageKindContainerDesktop}, runtimeProfileDesktop, packageKindContainerDesktop, "docker-desktop", "deployment-configured", packageKindContainerDesktop},
+		{"server", Options{RuntimeMode: runtimeModeNAS, RuntimeProfile: runtimeProfileServer, PackageKind: packageKindContainerCompose}, runtimeProfileServer, packageKindContainerCompose, "container-host", "deployment-configured", packageKindContainerCompose},
+		{"unraid", Options{RuntimeMode: runtimeModeNAS, RuntimeProfile: runtimeProfileUnraid, PackageKind: packageKindUnraid}, runtimeProfileUnraid, packageKindUnraid, "unraid-host", "deployment-configured", packageKindUnraid},
+		{"NAS archive", Options{RuntimeMode: runtimeModeNAS, PackageKind: packageKindNAS}, runtimeProfileServer, packageKindNAS, "container-host", "deployment-configured", packageKindNAS},
+		{"legacy Mac registry", Options{RuntimeMode: runtimeModeMac, PackageKind: packageKindMacRegistry}, runtimeProfileDesktop, packageKindMacRegistry, "docker-desktop", "deployment-configured", "mac-registry"},
+		{"FreeBSD", Options{RuntimeMode: runtimeModeNAS, PackageKind: packageKindFreeBSD}, runtimeProfileServer, packageKindFreeBSD, "podman-host", "deployment-configured", packageKindFreeBSD},
+		{"unknown Mac install", Options{RuntimeMode: runtimeModeMac}, runtimeProfileDesktop, "", "container-host", "deployment-configured", ""},
+		{"unknown NAS install", Options{RuntimeMode: runtimeModeNAS}, runtimeProfileServer, "", "container-host", "deployment-configured", ""},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

@@ -676,6 +676,8 @@ func (s *Server) handleSetup(w http.ResponseWriter, _ *http.Request) {
 		"pairingRequired":        access.PairingRequired,
 		"runtimeMode":            s.capabilities.RuntimeMode,
 		"runtimeProfile":         s.capabilities.RuntimeProfile,
+		"packageKind":            s.capabilities.PackageKind,
+		"packageLabel":           s.capabilities.PackageLabel,
 		"networkScope":           s.capabilities.NetworkScope,
 	})
 }
@@ -815,6 +817,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAbout(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name":           "TautWeekly Manager",
+		"packageLabel":   s.capabilities.PackageLabel,
 		"version":        s.options.Version,
 		"packageVersion": readPackageVersion(s.options.TautWeeklyRoot),
 		"mode":           s.capabilities.RuntimeMode + "-manager",
@@ -843,20 +846,45 @@ func (s *Server) handleConfig(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) configEditorView() ConfigEditorView {
 	editor := ReadConfigEditor(s.options.RuntimeRoot)
-	if editor.State != "unconfigured" || s.capabilities.RuntimeMode != runtimeModeMac {
-		return editor
+	s.applyPackageConnectionGuidance(&editor)
+	return editor
+}
+
+func (s *Server) applyPackageConnectionGuidance(editor *ConfigEditorView) {
+	var host, help string
+	prefill := false
+	switch s.capabilities.PackageKind {
+	case packageKindContainerDesktop, packageKindMac, packageKindMacRegistry:
+		host = "host.docker.internal"
+		help = "For %s on the Docker Desktop host, use %s. For a separate server, use a private address the container can reach."
+		prefill = true
+	default:
+		if isContainerRuntimeMode(s.capabilities.RuntimeMode) {
+			host = "192.168.1.10"
+			help = "Enter a private address for %s that the container can reach, such as %s with your server's address. In a container, 127.0.0.1 refers to that container."
+		} else {
+			host = "127.0.0.1"
+			help = "If %s runs on the same host as TautWeekly, use %s. For a separate server, use a reachable private address."
+			prefill = true
+		}
 	}
 	for index := range editor.Fields {
 		field := &editor.Fields[index]
-		if field.Name != "TautulliUrl" {
-			continue
+		switch field.Name {
+		case "TautulliUrl":
+			field.Placeholder = "http://" + host + ":8181"
+			field.Help = fmt.Sprintf(help, "Tautulli", field.Placeholder)
+			if editor.State == "unconfigured" {
+				field.Value = ""
+				if prefill {
+					field.Value = field.Placeholder
+				}
+			}
+		case "PlexServerUrl":
+			field.Placeholder = "http://" + host + ":32400"
+			field.Help = fmt.Sprintf(help, "Plex", field.Placeholder) + " Direct Plex provides more complete ratings, episode details and artwork."
 		}
-		field.Value = "http://host.docker.internal:8181"
-		field.Placeholder = "http://host.docker.internal:8181"
-		field.Help = "For Tautulli running on this Mac, use host.docker.internal. Another server must use an address reachable from Docker Desktop. Verification runs after a successful save."
-		break
 	}
-	return editor
 }
 
 func (s *Server) handleConfigEditor(w http.ResponseWriter, _ *http.Request) {
@@ -1026,6 +1054,7 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		writeAPIFieldErrors(w, http.StatusUnprocessableEntity, "config-validation-failed", "Review the highlighted configuration fields.", fieldErrors)
 		return
 	}
+	s.applyPackageConnectionGuidance(&result.Editor)
 	if result.Saved {
 		s.options.taskProbeCache.Invalidate()
 		if !result.PostSave.RunDiscovery {
@@ -1093,6 +1122,7 @@ func (s *Server) handleRestoreConfig(w http.ResponseWriter, r *http.Request) {
 	if err := s.configuration.ResetNotRun(result.Editor.Revision); err != nil {
 		s.recordDiagnostic("configuration", "warning", "config-status-write-failed")
 	}
+	s.applyPackageConnectionGuidance(&result.Editor)
 	s.recordDiagnostic("recovery", "passed", "backup-restored")
 	writeJSON(w, http.StatusOK, result)
 }

@@ -101,9 +101,8 @@
           <div class="card-icon windows">GUI</div>
           <span class="tag">Interactive · production-faithful</span>
           <h3>Manager GUI Preview</h3>
-          <p>Explore configuration and discovery, passing synthetic checks,
-            scheduler lifecycle, rich locally bundled media previews, guarded
-            delivery simulations, the optional lock, and diagnostics.</p>
+          <p>Try configuration, connection checks, previews, scheduling, and
+            password settings with fictional data.</p>
           <ul><li>No external requests</li><li>No saved values</li><li>Resets on reload</li></ul>
           <div class="card-actions"><a href="gui-preview/">Open GUI Preview</a></div>
         </article>
@@ -123,22 +122,18 @@
 
     <section id="platforms" class="section searchable" data-search="install platform windows nas docker qnap unraid macos apple silicon intel linux systemd freebsd podman">
       <div class="section-heading">
-        <div><div class="eyebrow">Installation tracks</div><h2>One renderer, five operating models</h2></div>
-        <p>Each Quickstart is standalone and keeps its platform's setup, scheduling,
-          preview, and recovery workflow intact. Linux Docker servers use the
-          NAS/Docker track—dedicated NAS hardware is not required—while the native
-          Linux track is Docker-free. Both are headless and use the same Manager
-          and newsletter behavior. Manager <strong>Settings &gt; Updates</strong> is the
-          shared status source, while installation remains owned by the verified
-          Windows updater or the documented host-native tool.</p>
+        <div><div class="eyebrow">Quickstarts</div><h2>Choose your installation method</h2></div>
+        <p>Follow the guide for your host. Choose NAS / Docker for a Linux
+          Docker server or NAS, or native Linux for a systemd service. Each
+          guide covers setup, previews, scheduling, updates, and recovery.</p>
       </div>
       <div class="cards platform-cards">
         <article class="card">
           <div class="platform-logo-card"><img class="windows-logo" src="assets/platforms/windows.svg" alt="" width="1000" height="184"></div>
           <span class="tag">PowerShell 5.1+</span>
           <h3>Windows Manager</h3>
-          <p>A one-click installer, local browser control surface, private previews,
-            and verified Windows Task Scheduler lifecycle on an always-on host.</p>
+          <p>Install with Setup, configure Manager in your browser, and use
+            Windows Task Scheduler for optional weekly delivery.</p>
           <ul><li>One Setup EXE</li><li>No Docker or Go required</li><li>Portable ZIP retained for recovery</li></ul>
           <div class="card-actions"><a href="windows/">Windows Quickstart</a><a href="https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-Setup.exe">Download Setup</a><a href="windows/README.md">Documentation</a></div>
         </article>
@@ -150,7 +145,7 @@
             scheduler for Debian, Ubuntu, other Linux servers, QNAP, and Unraid.
             Keep recovery on host loopback; use an SSH local forward when needed
             or the optional verified Funnel URL from an ordinary remote browser.</p>
-          <ul><li>Source baseline 1.7.0</li><li>Authenticated Manager + public Funnel + Unraid Apps + GHCR</li><li>x86-64 and ARM64</li></ul>
+          <ul><li>Standalone Compose and NAS archive</li><li>QNAP Container Station and Unraid Apps</li><li>x86-64 and ARM64</li></ul>
           <div class="card-actions"><a href="nas-docker/">NAS/Docker/QNAP/Unraid Quickstart</a><a href="https://ca.unraid.net/apps/tautweekly-for-plex-16l668j1jpt7jb">Unraid Apps</a><a href="nas-docker/README.md">Documentation</a></div>
         </article>
         <article class="card">
@@ -159,7 +154,7 @@
           <h3>macOS</h3>
           <p>Registry-first Intel and Apple silicon deployment with a standalone
             Compose file and loopback-only Manager by default.</p>
-          <ul><li>Source baseline 1.7.0</li><li>Mac-specific GHCR image + authenticated Manager + public Funnel</li><li>Intel + Apple silicon</li></ul>
+          <ul><li>Shared release image with desktop profile</li><li>Archive fallback</li><li>Intel and Apple silicon</li></ul>
           <div class="card-actions"><a href="mac/">macOS Quickstart</a><a href="mac/README.md">Documentation</a></div>
         </article>
         <article class="card">

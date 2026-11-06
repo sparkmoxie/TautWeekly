@@ -37,6 +37,7 @@ const (
 	packageKindContainerDesktop     = "container-desktop"
 	packageKindContainerCompose     = "container-compose"
 	packageKindWindows              = "windows-installer"
+	packageKindWindowsPortable      = "windows-portable"
 	packageKindLinux                = "linux-native"
 	packageKindMac                  = "mac-docker"
 	packageKindMacRegistry          = "mac-docker-registry"
@@ -96,6 +97,7 @@ type UpdateStatus struct {
 	LatestStableVersion        string         `json:"latestStableVersion,omitempty"`
 	UpdateAvailable            bool           `json:"updateAvailable"`
 	InstallSupported           bool           `json:"installSupported"`
+	WindowsUpdaterAvailable    bool           `json:"windowsUpdaterAvailable,omitempty"`
 	InstallState               string         `json:"installState"`
 	CheckInProgress            bool           `json:"checkInProgress"`
 	BackgroundCheckRecommended bool           `json:"backgroundCheckRecommended"`
@@ -239,6 +241,9 @@ func (c *updateCoordinator) CheckNow(ctx context.Context) (UpdateStatus, error) 
 		c.cache.LatestStableVersion = release.Version
 		c.cache.ReleaseNotesURL = release.ReleaseNotesURL
 		c.cache.LastSuccessfulCheckUTC = completedAt.Format(time.RFC3339)
+		if c.cache.LastFailure != nil && c.cache.LastFailure.Action == "check" {
+			c.cache.LastFailure = nil
+		}
 		c.cache.FailureCount = 0
 		c.nextCheckAllowed = completedAt.Add(c.minimumCheckDelay)
 	}
@@ -321,6 +326,7 @@ func (c *updateCoordinator) statusLocked(now time.Time) UpdateStatus {
 			hostAdapterState = "legacy"
 		}
 	}
+	windowsUpdaterAvailable := isWindowsPackage(packageKind) && c.installer.Supported()
 	status := UpdateStatus{
 		SchemaVersion:              updateStatusSchemaVersion,
 		ObservedAtUTC:              now.UTC().Format(time.RFC3339),
@@ -335,7 +341,8 @@ func (c *updateCoordinator) statusLocked(now time.Time) UpdateStatus {
 		HostAdapterState:           hostAdapterState,
 		UpdateChannel:              channel,
 		LatestStableVersion:        c.cache.LatestStableVersion,
-		InstallSupported:           packageKind == packageKindWindows && c.installer.Supported(),
+		InstallSupported:           windowsUpdaterAvailable,
+		WindowsUpdaterAvailable:    windowsUpdaterAvailable,
 		InstallState:               c.installState,
 		CheckInProgress:            c.checking,
 		BackgroundCheckRecommended: c.backgroundCheckRecommendedLocked(now, channel),
@@ -346,9 +353,11 @@ func (c *updateCoordinator) statusLocked(now time.Time) UpdateStatus {
 	}
 	if isContainerPackage(packageKind) {
 		status.ImageVersion = applicationVersion
-		status.ImageRepository = unifiedContainerImageRepository
 		status.MigrationState = containerMigrationState(packageKind)
-		status.ImagePinningPolicy = "Use a full semantic-version tag for reviewed deployments or append the published manifest digest for an immutable pin. Minor, latest, and edge tags are mutable."
+	}
+	if isContainerPackage(packageKind) && packageKind != packageKindMac {
+		status.ImageRepository = unifiedContainerImageRepository
+		status.ImagePinningPolicy = "Use a full version tag or the published manifest digest. Minor, latest, and edge tags can change."
 		referenceVersion := status.LatestStableVersion
 		if referenceVersion == "" {
 			referenceVersion = applicationVersion
@@ -447,6 +456,13 @@ func (c *updateCoordinator) readCache() updateCache {
 	var cached updateCache
 	if json.Unmarshal(raw, &cached) != nil || !validUpdateCache(cached) {
 		return updateCache{SchemaVersion: updateCacheSchemaVersion}
+	}
+	if cached.LastFailure != nil && cached.LastFailure.Action == "check" && cached.LastSuccessfulCheckUTC != "" {
+		checkedAt, _ := time.Parse(time.RFC3339, cached.LastSuccessfulCheckUTC)
+		failedAt, _ := time.Parse(time.RFC3339, cached.LastFailure.OccurredAtUTC)
+		if checkedAt.After(failedAt) {
+			cached.LastFailure = nil
+		}
 	}
 	return cached
 }
@@ -798,19 +814,26 @@ func normalizedPackageKind(value, mode string) string {
 		return packageKindLinux
 	case runtimeModeMac:
 		switch value {
-		case packageKindContainerDesktop, packageKindMacRegistry:
+		case packageKindContainerDesktop, packageKindMac, packageKindMacRegistry, packageKindCompatibleDocker:
 			return value
 		}
-		return packageKindMac
+		return ""
 	case runtimeModeNAS:
 		switch value {
 		case packageKindContainerCompose, packageKindFreeBSD, packageKindNAS, packageKindQNAP, packageKindUnraid, packageKindCompatibleDocker:
 			return value
 		}
-		return packageKindCompatibleDocker
+		return ""
 	default:
+		if value == packageKindWindowsPortable {
+			return value
+		}
 		return packageKindWindows
 	}
+}
+
+func isWindowsPackage(kind string) bool {
+	return kind == packageKindWindows || kind == packageKindWindowsPortable
 }
 
 func isContainerPackage(kind string) bool {
@@ -833,7 +856,7 @@ func requiresHostAdapter(kind string) bool {
 
 func expectedReleaseAsset(kind string) string {
 	switch kind {
-	case packageKindWindows:
+	case packageKindWindows, packageKindWindowsPortable:
 		return "TautWeekly-windows.zip"
 	case packageKindLinux:
 		return "TautWeekly-linux.tar.gz"
@@ -857,61 +880,71 @@ func expectedReleaseAsset(kind string) string {
 func packageLabel(kind string) string {
 	switch kind {
 	case packageKindWindows:
-		return "Windows installer package"
+		return "Windows package"
+	case packageKindWindowsPortable:
+		return "Windows portable ZIP"
 	case packageKindLinux:
 		return "Native Linux package"
 	case packageKindMac:
-		return "macOS Docker Desktop package"
+		return "Mac archive"
 	case packageKindContainerDesktop:
-		return "Unified desktop-container Compose deployment"
+		return "macOS Docker Desktop Compose"
 	case packageKindContainerCompose:
-		return "Unified server-container Compose deployment"
+		return "Server Docker Compose"
 	case packageKindMacRegistry:
-		return "macOS registry Compose deployment"
+		return "Legacy Mac registry Compose"
 	case packageKindFreeBSD:
 		return "FreeBSD Podman package"
 	case packageKindNAS:
-		return "Docker Compose host package"
+		return "NAS Docker archive"
 	case packageKindQNAP:
-		return "QNAP Container Station package"
+		return "QNAP Container Station"
 	case packageKindUnraid:
-		return "Unraid Community Apps template"
+		return "Unraid Community Apps"
+	case packageKindCompatibleDocker:
+		return "Docker deployment"
 	default:
-		return "Compatible Docker deployment"
+		return "Manager"
 	}
 }
 
 func updateGuidance(kind string) UpdateGuidance {
 	const docsBase = "https://sparkmoxie.github.io/TautWeekly/"
+	const nasUpdateGuide = docsBase + "nas-docker/manager.html#lifecycle"
+	const composeUpdate = "docker compose pull tautweekly && docker compose up -d --no-build --force-recreate tautweekly"
 	switch kind {
-	case packageKindWindows:
-		return UpdateGuidance{Owner: "TautWeekly Windows updater", Summary: "The Manager can start the existing checksum- and manifest-verified Windows updater. Windows requests administrator approval before package files or Task Scheduler state can change.", Steps: []string{"Back up private data.", "Review the stable release notes.", "Choose Install update and approve the Windows prompt."}, DocsURL: docsBase + "windows/#updates"}
+	case packageKindWindows, packageKindWindowsPortable:
+		return UpdateGuidance{Owner: "TautWeekly Windows updater", Summary: "The updater verifies the release archive and its file manifest. Windows requires administrator approval to apply an update.", Steps: []string{"Back up your private data and review the release notes.", "When Install update is available, select it and approve the Windows prompt."}, DocsURL: docsBase + "windows/#updates"}
 	case packageKindLinux:
-		return UpdateGuidance{Owner: "Linux host administrator", Summary: "The web process does not elevate or change systemd files. Run the verified package updater from the host.", Command: "sudo tautweekly update", Steps: []string{"Back up /var/lib/tautweekly.", "Run the host command.", "Return here to verify the new application and package versions."}, DocsURL: docsBase + "linux/#updates"}
+		return UpdateGuidance{Owner: "Linux host administrator", Summary: "Update from the Linux host. The updater verifies the package and restores the previous install if the upgrade fails.", Command: "sudo tautweekly update", Steps: []string{"Back up /var/lib/tautweekly.", "Run the host command when no newsletter operation is active.", "Reopen Manager and verify the new version."}, DocsURL: docsBase + "linux/#upgrade"}
 	case packageKindMac:
-		return UpdateGuidance{Owner: "Mac administrator and Docker Desktop", Summary: "This legacy local-build package remains supported for rollback and break-fix use. Migrate to the unified image without deleting the existing data bind mount; the containerized web process cannot change Docker.", Command: "./tautweekly.sh update", Steps: []string{"Back up the package data directory.", "Review the Mac migration guide before changing image references.", "Keep this exact package/image available for rollback until the unified deployment passes health and Manager acceptance."}, DocsURL: docsBase + "mac/#update"}
+		return UpdateGuidance{Owner: "Mac host administrator", Summary: "Run the Mac archive's updater on the host. It verifies the release and preserves .env and the existing data mount.", Command: "./tautweekly.sh update", Steps: []string{"Back up the package data directory.", "Run the command from the extracted Mac archive.", "Check container health and sign in again."}, DocsURL: docsBase + "mac/#update"}
 	case packageKindMacRegistry:
-		return UpdateGuidance{Owner: "Mac administrator and Docker Desktop", Summary: "This deployment still reports the retired Mac-specific image contract. Preserve /data and migrate the host-owned Compose reference to the unified image's desktop profile.", Command: "docker compose pull tautweekly && docker compose up -d --force-recreate tautweekly", Steps: []string{"Back up the persistent /data volume or mount.", "Change only the reviewed image reference and add the desktop profile; never delete the volume.", "Recreate, accept health and Manager state, then retain the previous exact image digest for rollback."}, DocsURL: docsBase + "mac/#update"}
+		return UpdateGuidance{Owner: "Mac host administrator", Summary: "Migrate the retired Mac registry image to the unified image with the desktop profile.", Command: composeUpdate, Steps: []string{"Back up the existing /data mount and record the old image digest.", "Follow the migration guide to change the image reference, package identity, and runtime profile before recreating.", "Check container health, then sign in with the existing password."}, DocsURL: docsBase + "mac/#update"}
 	case packageKindContainerDesktop:
-		return UpdateGuidance{Owner: "Desktop host administrator and Docker Desktop", Summary: "The unified image is active with the desktop profile. Docker Desktop owns pulls, recreation, and rollback; the Manager never receives Docker control.", Command: "docker compose pull tautweekly && docker compose up -d --no-build --force-recreate tautweekly", Steps: []string{"Back up the persistent /data volume or bind mount.", "Set the reviewed full-semver tag or immutable manifest digest.", "Pull and recreate, require healthy status, then verify profile, authentication, configuration, schedule, and history."}, DocsURL: docsBase + "mac/#updates"}
+		return UpdateGuidance{Owner: "Docker Desktop", Summary: "Update from the Mac's Compose project directory and keep the existing /data mount.", Command: composeUpdate, Steps: []string{"Back up the persistent data and record the old image pin.", "Set TAUTWEEKLY_IMAGE to the reviewed tag or digest before pulling and recreating.", "Check container health and sign in with the existing password."}, DocsURL: docsBase + "mac/#update"}
 	case packageKindContainerCompose:
-		return UpdateGuidance{Owner: "Docker Compose host administrator", Summary: "The unified image is active with the server profile. The host owns image pulls and service recreation; the Manager never receives Docker control.", Command: "docker compose pull tautweekly && docker compose up -d --no-build --force-recreate tautweekly", Steps: []string{"Back up the persistent /data mount.", "Set the reviewed full-semver tag or immutable manifest digest.", "Pull and recreate, require healthy status, then verify profile, authentication, configuration, schedule, and history."}, DocsURL: docsBase + "nas-docker/#updates"}
+		return UpdateGuidance{Owner: "Docker Compose host administrator", Summary: "Update from the Compose project directory on the host and keep the existing /data mount.", Command: composeUpdate, Steps: []string{"Back up the persistent data and record the old image pin.", "Set TAUTWEEKLY_IMAGE to the reviewed tag or digest before pulling and recreating.", "Check container health and sign in with the existing password."}, DocsURL: nasUpdateGuide}
 	case packageKindFreeBSD:
-		return UpdateGuidance{Owner: "FreeBSD host administrator", Summary: "The root-owned rc.d/Podman wrapper owns package and image updates. The Manager never invokes sudo or Podman.", Command: "sudo tautweekly update", Steps: []string{"Back up /var/db/tautweekly.", "Run the host command.", "Return through the SSH tunnel or TLS proxy to verify the result."}, DocsURL: docsBase + "freebsd/#updates"}
+		return UpdateGuidance{Owner: "FreeBSD host administrator", Summary: "The host updater preserves the configured Podman image pin. Review the FreeBSD guide to change the pin and verify the running image.", Command: "sudo tautweekly update", Steps: []string{"Back up /var/db/tautweekly and record the current image pin.", "Select a new pin in the host configuration if you also want to change the image.", "Run the host command, then check the running image and reopen Manager."}, DocsURL: docsBase + "freebsd/#updates"}
 	case packageKindQNAP:
-		return UpdateGuidance{Owner: "QNAP Container Station administrator", Summary: "Use Container Station to observe the application and run the verified release-package update from the trusted NAS host; the container cannot mutate QNAP.", Command: "./tautweekly.sh update", Steps: []string{"Back up the persistent data share.", "Run the command over trusted SSH from the extracted NAS package directory.", "Confirm the recreated application is healthy in Container Station, then return here."}, DocsURL: docsBase + "nas-docker/#updates"}
+		return UpdateGuidance{Owner: "QNAP Container Station", Summary: "Update the application in Container Station using the verified release's compose.qnap.yaml and the existing data share.", Steps: []string{"Back up the persistent data share and record the existing image pin.", "Review the new Compose file before recreating the application with the same /data mount.", "Check health in Container Station and reopen Manager through your SSH tunnel."}, DocsURL: nasUpdateGuide}
 	case packageKindUnraid:
-		return UpdateGuidance{Owner: "Unraid Docker / Apps", Summary: "Unraid owns image and saved-template updates. No container-side or Manager-side install is available.", Steps: []string{"Open Unraid Docker and choose Check for Updates.", "Apply the TautWeekly update through Docker or Apps.", "Edit the app and compare the current Community Apps template when the host adapter is legacy."}, DocsURL: docsBase + "nas-docker/#updates"}
+		return UpdateGuidance{Owner: "Unraid Docker / Apps", Summary: "Update the TautWeekly app through Unraid and keep the existing appdata mapping.", Steps: []string{"Back up appdata and record the current image pin.", "Check for updates from Unraid Docker or Apps.", "Review the current Community Apps template if Manager reports an older host adapter."}, DocsURL: nasUpdateGuide}
 	case packageKindNAS:
-		return UpdateGuidance{Owner: "Docker Compose host administrator", Summary: "The release wrapper verifies and advances the host package and image together. The container cannot invoke Docker or change host files.", Command: "./tautweekly.sh update", Steps: []string{"Back up the persistent data directory or volume.", "Run the command in the extracted NAS package directory.", "Return here after Compose recreates the service."}, DocsURL: docsBase + "nas-docker/#updates"}
+		return UpdateGuidance{Owner: "NAS Docker host administrator", Summary: "The archive updater verifies the release and updates the host files and image together while keeping .env and /data.", Command: "./tautweekly.sh update", Steps: []string{"Back up the persistent data.", "Run the command in the extracted NAS archive.", "Check container health and sign in again."}, DocsURL: nasUpdateGuide}
+	case packageKindCompatibleDocker:
+		return UpdateGuidance{Owner: "Container host administrator", Summary: "Select the reviewed image in the tool that created this container and keep the existing /data mount.", Steps: []string{"Back up the persistent data and record the old image pin.", "Pull and recreate through the original deployment tool.", "Check container health and sign in with the existing password."}, DocsURL: nasUpdateGuide}
 	default:
-		return UpdateGuidance{Owner: "Container host administrator", Summary: "Use the deployment tool that created this container. Preserve /data and recreate the service with the stable image; the Manager has no host control plane.", Command: "docker compose pull tautweekly && docker compose up -d --no-build --force-recreate tautweekly", Steps: []string{"Back up the persistent /data mount.", "Pull and recreate through the original host deployment tool.", "Do not add a Docker socket, privileged helper, or root web process."}, DocsURL: docsBase + "nas-docker/#updates"}
+		return UpdateGuidance{Owner: "Installation guide", Summary: "Choose your installation method for the update steps.", DocsURL: docsBase}
 	}
 }
 
 func containerMigrationState(kind string) string {
 	switch kind {
-	case packageKindMac, packageKindMacRegistry:
+	case packageKindMac:
+		return "local-mac-image"
+	case packageKindMacRegistry:
 		return "legacy-mac-image"
 	case packageKindContainerDesktop, packageKindContainerCompose, packageKindFreeBSD, packageKindNAS, packageKindQNAP, packageKindUnraid, packageKindCompatibleDocker:
 		return "unified-image"

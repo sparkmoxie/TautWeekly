@@ -71,11 +71,12 @@ for (const packageKind of ["windows-installer", "linux-native", "mac-docker", "f
 }
 
 assert.deepEqual(updateUI.routeFromHash("#settings/application-and-package-status"), { view: "about", section: "updates" });
+assert.deepEqual(updateUI.routeFromHash("#settings/updates"), { view: "about", section: "updates" });
 assert.deepEqual(updateUI.routeFromHash("#settings/tailscale-funnel"), { view: "about", section: "tailscale" });
 assert.deepEqual(updateUI.routeFromHash("#settings"), { view: "about", section: "" });
 assert.deepEqual(updateUI.routeFromHash("#configuration"), { view: "configuration", section: "" });
 assert.deepEqual(updateUI.routeFromHash("#pair=synthetic-token"), { view: "dashboard", section: "" });
-assert.equal(updateUI.hashForRoute("about", "updates"), "#settings/application-and-package-status");
+assert.equal(updateUI.hashForRoute("about", "updates"), "#settings/updates");
 assert.equal(updateUI.hashForRoute("about", "tailscale"), "#settings/tailscale-funnel");
 assert.equal(updateUI.hashForRoute("about"), "#settings");
 
@@ -86,6 +87,100 @@ const productionJS = fs.readFileSync(path.join(repositoryRoot, "manager", "inter
 const previewCSS = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "app.css"), "utf8");
 const previewJS = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "app.js"), "utf8");
 const previewMock = fs.readFileSync(path.join(repositoryRoot, "docs", "gui-preview", "mock-api.js"), "utf8");
+
+const packageContext = vm.createContext({ console, URL, updateUI });
+vm.runInContext(`
+  let state = {};
+  const elements = new Map();
+  const parentElement = { classList: { toggle() {} } };
+  const window = { TautWeeklyUpdateUI: updateUI };
+  const document = { createElement: () => ({ textContent: "" }) };
+  function byId(id) {
+    if (!elements.has(id)) elements.set(id, { parentElement, classList: { toggle() {} }, setAttribute() {}, replaceChildren() {}, append() {} });
+    return elements.get(id);
+  }
+  function setText(id, value) { byId(id).textContent = value; }
+  function setChip(id, label, tone) { Object.assign(byId(id), { label, tone }); }
+  function setSwappingButtonText(id, value) { setText(id, value); }
+  function formatDate(value) { return value || "Not recorded"; }
+  function titleCase(value) { return value || "Unknown"; }
+  function scheduleUpdateCheckAvailabilityRefresh() {}
+  function renderUpdateStatusButton() {}
+` + productionJS.slice(productionJS.indexOf("function packageKind()"), productionJS.indexOf("function renderCapabilities()"))
+  + productionJS.slice(productionJS.indexOf("function updateStatePresentation("), productionJS.indexOf("function renderUpdateStatusButton("))
+  + productionJS.slice(productionJS.indexOf("function validTailscaleURL("), productionJS.indexOf("function renderTailscaleSettings("))
+  + `
+  globalThis.renderPackage = (setup, update) => {
+    elements.clear();
+    state = { setup, updates: update, runtimeMode: "nas" };
+    renderAuthenticationBoundary();
+    renderUpdates();
+    return Object.fromEntries(elements);
+  };
+  globalThis.funnelAddress = verifiedTailscaleAddress;
+`, packageContext);
+
+for (const [kind, label, pairing, recovery, container, hasMigration] of [
+  ["windows-installer", "Windows package", /launch message/, /Reset-TautWeekly-Access\.cmd/, false, false],
+  ["windows-portable", "Windows portable ZIP", /launch message/, /18-RESET-MANAGER-ACCESS\.bat/, false, false],
+  ["linux-native", "Native Linux package", /Linux host.*sudo tautweekly manager-bootstrap/, /sudo tautweekly manager-reset-access/, false, false],
+  ["mac-docker", "Mac archive", /extracted Mac archive.*\.\/tautweekly\.sh manager-bootstrap/, /\.\/tautweekly\.sh manager-reset-access/, true, false],
+  ["freebsd-podman", "FreeBSD Podman package", /FreeBSD host.*sudo tautweekly manager-bootstrap/, /FreeBSD host.*sudo tautweekly manager-reset-access/, true, false],
+  ["nas-docker", "NAS Docker archive", /extracted NAS archive.*\.\/tautweekly\.sh manager-bootstrap/, /\.\/tautweekly\.sh manager-reset-access/, true, false],
+  ["container-desktop", "macOS Docker Desktop Compose", /docker compose exec -T tautweekly.*access-bootstrap/, /docker compose exec.*access-recover.*--runtime-mode mac/, true, false],
+  ["container-compose", "Server Docker Compose", /docker compose exec -T tautweekly.*access-bootstrap/, /docker compose exec.*access-recover.*--runtime-mode nas/, true, false],
+  ["qnap-container-station", "QNAP Container Station", /Container Station container Console.*access-bootstrap/, /access-recover.*--runtime-mode nas/, true, false],
+  ["unraid", "Unraid Community Apps", /Unraid container Console.*access-bootstrap/, /access-recover.*--runtime-mode nas/, true, false],
+  ["docker-compatible", "Docker deployment", /console with your deployment tool.*access-bootstrap/, /container console recovery steps/, true, false],
+  ["mac-docker-registry", "Legacy Mac registry Compose", /docker compose exec -T tautweekly.*access-bootstrap/, /docker compose exec.*access-recover.*--runtime-mode mac/, true, true],
+  ["", "Manager", /installation method/, /installation method/, false, false],
+]) {
+  const registryImage = container && kind !== "mac-docker";
+  const packageRows = registryImage ? {
+    runtimeProfile: "server", imageVersion: "1.2.3", imageRepository: "ghcr.io/sparkmoxie/tautweekly",
+    recommendedImageReference: "ghcr.io/sparkmoxie/tautweekly:1.3.0", imagePinningPolicy: "Use a full version or digest.",
+  } : kind === "mac-docker" ? { runtimeProfile: "desktop", imageVersion: "1.2.3" } : {};
+  const windowsUpdaterAvailable = kind.startsWith("windows-");
+  const dom = packageContext.renderPackage({ packageKind: kind, packageLabel: label }, {
+    ...checked, ...packageRows, packageKind: kind, packageLabel: label, migrationState: hasMigration ? "legacy-mac-image" : "unified-image",
+    installSupported: windowsUpdaterAvailable, windowsUpdaterAvailable,
+  });
+  assert.equal(dom["auth-runtime-eyebrow"].textContent, label);
+  assert.equal(dom["update-edition"].textContent, label);
+  assert.match(dom["auth-pairing-copy"].textContent, pairing, kind);
+  assert.match(dom["auth-recovery-copy"].textContent, recovery, kind);
+  if (!["container-desktop", "container-compose", "mac-docker-registry"].includes(kind)) {
+    assert.doesNotMatch(dom["auth-pairing-copy"].textContent + dom["auth-recovery-copy"].textContent, /docker compose exec/, kind);
+  }
+  const guide = new URL(dom["auth-setup-guide"].href);
+  const guidePath = guide.pathname.replace(/^\/TautWeekly\//, "");
+  const localGuide = fs.readFileSync(path.join(repositoryRoot, "docs", guidePath.endsWith("/") || !guidePath ? guidePath + "index.html" : guidePath), "utf8");
+  if (guide.hash) assert.ok(localGuide.includes(`id="${guide.hash.slice(1)}"`), `missing setup guide anchor for ${kind}`);
+  assert.equal(dom["update-runtime-profile-row"].hidden, !container, kind);
+  for (const row of ["update-image-repository-row", "update-image-reference-row", "update-image-pinning-policy"]) {
+    assert.equal(dom[row].hidden, !registryImage, `${kind} ${row}`);
+  }
+  assert.equal(dom["update-migration-state-row"].hidden, !hasMigration, kind);
+  assert.equal(dom["update-install-button"].hidden, !windowsUpdaterAvailable, kind);
+}
+const noUpdater = packageContext.renderPackage({ packageKind: "windows-portable", packageLabel: "Windows portable ZIP" },
+  { ...checked, packageKind: "windows-portable", installSupported: false });
+assert.match(noUpdater["update-guidance-summary"].textContent, /updater is unavailable/);
+assert.equal(noUpdater["update-install-button"].hidden, true);
+const loadingUpdate = packageContext.renderPackage({}, null);
+assert.equal(loadingUpdate["update-settings-chip"].label, "Loading");
+assert.equal(loadingUpdate["update-check-button"].disabled, true);
+const failedWithCache = packageContext.renderPackage({}, {
+  ...checked, lastFailure: { action: "check", code: "offline", message: "Offline" },
+});
+assert.equal(failedWithCache["update-settings-chip"].label, "Check failed");
+assert.match(failedWithCache["update-settings-summary"].textContent, /last successful check/);
+assert.equal(failedWithCache["update-latest-version"].textContent, "v1.3.0");
+const activeFunnel = { supported: true, enabled: true, active: true, state: "active", url: "https://manager.example.ts.net/" };
+assert.equal(packageContext.funnelAddress(activeFunnel), activeFunnel.url);
+assert.equal(packageContext.funnelAddress({ ...activeFunnel, active: false, state: "starting" }), "");
+assert.equal(packageContext.funnelAddress({ ...activeFunnel, state: "needs-attention" }), "");
+assert.equal(packageContext.funnelAddress({ ...activeFunnel, url: "http://manager.example.ts.net/" }), "");
 
 const funnelDefinitionsStart = productionJS.indexOf("const funnelIntegrationStates");
 const funnelDefinitionsEnd = productionJS.indexOf("\nfunction renderStatus()", funnelDefinitionsStart);
@@ -247,7 +342,7 @@ assert.match(productionCSS, /forced-colors:active/);
 assert.match(productionCSS, /max-width:420px[^}]+topbar \.brand-lockup>div/s);
 assert.match(productionCSS, /max-width:420px[^\n]+access-status-button:before[^\n]+display:none/);
 assert.match(productionJS, /checkForUpdatesInBackground\(\)/);
-assert.match(productionHTML, /id="refresh-button"[^>]+aria-label="Refresh Manager, Tautulli choices, and update status"/);
+assert.match(productionHTML, /id="refresh-button"[^>]+aria-label="Refresh Manager and Tautulli choices\. Check GitHub for updates when eligible\."/);
 assert.match(previewHTML, /id="refresh-button"[^>]+aria-label="Refresh synthetic Manager, Tautulli choices, and update status"/);
 assert.doesNotMatch(productionJS, /backgroundUpdateCheckAttempted/);
 assert.match(productionJS, /request\("\/api\/v1\/updates\/check", \{ method: "POST", body: "\{\}" \}\)/);
@@ -269,8 +364,9 @@ console.log("[PASS] Manager update indicator visibility, package matrix, routing
 const currentBadge = { ...checked, state: "current", updateAvailable: false, latestStableVersion: "1.2.3" };
 assert.deepEqual(updateUI.managerBadge(currentBadge), { version: "v1.2.3", status: "Latest" });
 for (const [changes, status] of [
-  [{ checkInProgress: true }, "Checking"], [{ lastFailure: { code: "offline" } }, "Check failed"],
-  [{ state: "legacy" }, "Legacy wrapper"], [{ state: "mismatched" }, "Version mismatch"],
+  [{ checkInProgress: true }, "Checking"], [{ lastFailure: { action: "check", code: "offline" } }, "Check failed · cached"],
+  [{ lastFailure: { action: "check", code: "offline" }, lastSuccessfulCheckUtc: "" }, "Check failed"],
+  [{ state: "legacy" }, "Older host adapter"], [{ state: "mismatched" }, "Version mismatch"],
   [{ latestStableVersion: "bad" }, "Not checked"], [{ lastSuccessfulCheckUtc: "" }, "Not checked"],
   [{ packageVersion: "1.2.2" }, "Not checked"], [{ imageVersion: "1.2.2" }, "Not checked"],
   [{ updateChannel: "unsupported" }, "Not checked"], [{ latestStableVersion: "1.3.0" }, "Not checked"],

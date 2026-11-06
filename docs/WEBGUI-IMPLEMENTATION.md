@@ -196,12 +196,13 @@ Neither mode contacts SMTP or updates the access roster or welcome state.
 `SendTestAll` requires a separate confirmation,
 delivers six variants only to the configured `TestEmail`, and cannot be
 cancelled after starting because a partial set may already have been accepted
-by SMTP. `SendWelcome` requires a selected user plus production confirmation,
-sends one real welcome newsletter, updates that user's welcome state, and
-retains no user identifier. `SendAll` requires a distinct production
-confirmation, runs the same fixed delivery contract as the weekly schedule,
-exposes no cancellation, and retains only aggregate accepted, skipped, and
-failed counts.
+by SMTP. `SendWelcome` requires a selected user and production confirmation.
+It sends the welcome newsletter to the user's primary address and any eligible
+household copy addresses and updates the selected user's welcome state after
+SMTP acceptance. `SendAll` requires a distinct production confirmation and
+applies the weekly schedule's live roster and eligibility rules, including
+household copies. Neither production send exposes a cancel action. History
+records aggregate counts separately for primary delivery and household copies.
 
 The renderer should gain an optional structured result path. On completion it
 writes a sanitized result containing mode, outcome, duration, sent count,
@@ -596,7 +597,10 @@ acceptance remains deferred to the live Windows host.
 
 Preview routes map opaque identifiers to files already indexed beneath the
 configured output root. User-supplied paths and path traversal are rejected.
-Newsletter HTML is displayed in a sandboxed frame without script permission.
+The local HTML files can contain personal viewing details. Manager shows them
+after sign-in in a sandboxed frame without script permission. Operation history
+can refer to those files by opaque ID. It excludes user IDs, email addresses, and
+newsletter content.
 
 ## 11. Operation behavior
 
@@ -620,10 +624,10 @@ progress and explains the safety restriction.
 
 Destructive or externally visible operations require confirmation:
 
-- Test delivery: confirm the configured test recipient.
-- Welcome delivery: confirm the selected account and one-off nature.
-- Production delivery: explicitly confirm the real-recipient scope and review
-  aggregate results.
+- Confirm test delivery to the configured `TestEmail` address.
+- Confirm welcome delivery to the selected user and eligible household copies.
+- Confirm production delivery to eligible users and their eligible household
+  copies, then review aggregate results.
 - Schedule enable: confirm timezone, next run, and successful test prerequisite.
 - Backup restore: show configuration revision and create a pre-restore backup.
 - Update check: authenticated and explicit, with a fixed stable endpoint,

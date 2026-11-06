@@ -18,8 +18,8 @@ tautweekly_select_runtime_profile() {
   case "$profile" in
     desktop)
       case "$package_kind" in
-        "") package_kind="container-desktop" ;;
-        container-desktop|mac-docker|mac-docker-registry) ;;
+        "") package_kind="docker-compatible" ;;
+        container-desktop|mac-docker|mac-docker-registry|docker-compatible) ;;
         *)
           echo "[ERROR] Runtime profile desktop is incompatible with package kind '$package_kind'." >&2
           return 64
