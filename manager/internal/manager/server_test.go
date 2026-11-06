@@ -124,9 +124,10 @@ func TestStaticRootServesIndexWithoutRedirect(t *testing.T) {
 	}
 	document := response.Body.String()
 	for _, expected := range []string{
-		"<title>" + windowsManagerBrowserTitle + "</title>",
+		"<title>TautWeekly Manager \u2014 Your Plex week, delivered.</title>",
 		`<meta name="description" content="` + windowsManagerSocialDescription + `">`,
-		`<meta property="og:title" content="` + windowsManagerSocialTitle + `">`,
+		"<meta property=\"og:title\" content=\"TautWeekly \u2014 Your Plex week, delivered.\">",
+		"<meta name=\"twitter:title\" content=\"TautWeekly \u2014 Your Plex week, delivered.\">",
 		`<meta property="og:type" content="website">`,
 		`<meta property="og:image" content="http://127.0.0.1:8788/manager-social-preview.jpg">`,
 		`<meta property="og:url" content="http://127.0.0.1:8788/">`,
