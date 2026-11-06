@@ -102,6 +102,27 @@ function Get-FreeTcpPort {
     finally { $listener.Stop() }
 }
 
+function Wait-ForFixtureReady {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [string]$ReadyPath,
+        [string]$StderrPath,
+        [string]$Context
+    )
+
+    $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
+    while (-not $Process.HasExited -and $elapsed.Elapsed.TotalSeconds -lt 30) {
+        if (Test-Path -LiteralPath $ReadyPath -PathType Leaf) { return }
+        Start-Sleep -Milliseconds 50
+    }
+
+    $stderrText = Get-Content -LiteralPath $StderrPath -Raw -ErrorAction SilentlyContinue
+    if ($Process.HasExited) {
+        throw "$Context exited before it was ready (exit $($Process.ExitCode)).`n$stderrText"
+    }
+    throw "$Context did not become ready within 30 seconds.`n$stderrText"
+}
+
 $engines = @(
     [PSCustomObject]@{ Name = 'windows'; Source = 'platforms/windows'; Renderer = 'TautWeekly.ps1'; Host = $windowsPowerShell; Container = $false },
     [PSCustomObject]@{ Name = 'nas-docker-linux-freebsd'; Source = 'platforms/nas-docker/app'; Renderer = 'TautWeekly.ps1'; Host = $(if ($null -ne $powerShell7) { $powerShell7.Source } else { '' }); Container = $true },
@@ -219,13 +240,7 @@ foreach ($engine in $engines) {
                 '--state-file', $scenarioState, '--call-log', $callLog, '--ready-file', $readyFile
             ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $serverStdout -RedirectStandardError $serverStderr
 
-            for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $readyFile); $attempt++) {
-                if ($server.HasExited) {
-                    throw "Virtual Tautulli exited early: $(Get-Content $serverStderr -Raw -ErrorAction SilentlyContinue)"
-                }
-                Start-Sleep -Milliseconds 50
-            }
-            Assert-True (Test-Path $readyFile) "Virtual Tautulli did not become ready for $($engine.Name)/$scenario."
+            Wait-ForFixtureReady -Process $server -ReadyPath $readyFile -StderrPath $serverStderr -Context "Virtual Tautulli for $($engine.Name)/$scenario"
             $baseUrl = (Get-Content $readyFile -Raw).Trim()
 
             $smtpPort = 0
@@ -237,13 +252,7 @@ foreach ($engine in $engines) {
                     '--data-file', $smtpDataFile,
                     '--data-directory', $smtpDataDirectory
                 ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $smtpStdout -RedirectStandardError $smtpStderr
-                for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path $smtpReadyFile); $attempt++) {
-                    if ($smtpServer.HasExited) {
-                        throw "Virtual SMTP exited early: $(Get-Content $smtpStderr -Raw -ErrorAction SilentlyContinue)"
-                    }
-                    Start-Sleep -Milliseconds 50
-                }
-                Assert-True (Test-Path $smtpReadyFile) "Virtual SMTP did not become ready for $($engine.Name)/$scenario."
+                Wait-ForFixtureReady -Process $smtpServer -ReadyPath $smtpReadyFile -StderrPath $smtpStderr -Context "Virtual SMTP for $($engine.Name)/$scenario"
             }
 
             $examplePath = Join-Path $appRoot 'config.example.json'

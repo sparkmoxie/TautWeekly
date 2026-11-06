@@ -846,6 +846,11 @@ func (s *Server) handleConfig(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) configEditorView() ConfigEditorView {
 	editor := ReadConfigEditor(s.options.RuntimeRoot)
+	s.applyPackageConnectionGuidance(&editor)
+	return editor
+}
+
+func (s *Server) applyPackageConnectionGuidance(editor *ConfigEditorView) {
 	var host, help string
 	prefill := false
 	switch s.capabilities.PackageKind {
@@ -869,15 +874,17 @@ func (s *Server) configEditorView() ConfigEditorView {
 		case "TautulliUrl":
 			field.Placeholder = "http://" + host + ":8181"
 			field.Help = fmt.Sprintf(help, "Tautulli", field.Placeholder)
-			if editor.State == "unconfigured" && prefill {
-				field.Value = field.Placeholder
+			if editor.State == "unconfigured" {
+				field.Value = ""
+				if prefill {
+					field.Value = field.Placeholder
+				}
 			}
 		case "PlexServerUrl":
 			field.Placeholder = "http://" + host + ":32400"
 			field.Help = fmt.Sprintf(help, "Plex", field.Placeholder) + " Direct Plex provides more complete ratings, episode details and artwork."
 		}
 	}
-	return editor
 }
 
 func (s *Server) handleConfigEditor(w http.ResponseWriter, _ *http.Request) {
@@ -1047,6 +1054,7 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		writeAPIFieldErrors(w, http.StatusUnprocessableEntity, "config-validation-failed", "Review the highlighted configuration fields.", fieldErrors)
 		return
 	}
+	s.applyPackageConnectionGuidance(&result.Editor)
 	if result.Saved {
 		s.options.taskProbeCache.Invalidate()
 		if !result.PostSave.RunDiscovery {
@@ -1114,6 +1122,7 @@ func (s *Server) handleRestoreConfig(w http.ResponseWriter, r *http.Request) {
 	if err := s.configuration.ResetNotRun(result.Editor.Revision); err != nil {
 		s.recordDiagnostic("configuration", "warning", "config-status-write-failed")
 	}
+	s.applyPackageConnectionGuidance(&result.Editor)
 	s.recordDiagnostic("recovery", "passed", "backup-restored")
 	writeJSON(w, http.StatusOK, result)
 }

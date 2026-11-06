@@ -141,7 +141,7 @@ func configDefinitions() []configDefinition {
 	bytesMin, bytesMax := integerBounds(16, 2048)
 	delayMin, delayMax := integerBounds(0, 3600)
 	return []configDefinition{
-		{Name: "TautulliUrl", Label: "Tautulli URL", Group: "Connections", Type: "url", Required: true, Help: "Enter a private address that TautWeekly can reach.", Default: ""},
+		{Name: "TautulliUrl", Label: "Tautulli URL", Group: "Connections", Type: "url", Required: true, Help: "Enter a private address that TautWeekly can reach.", Default: "http://127.0.0.1:8181"},
 		{Name: "ApiKey", Label: "Tautulli API key", Group: "Connections", Type: "secret", Required: true, Help: "Leave blank to preserve the stored key. Revealing it requires your Manager password and clears automatically."},
 		{Name: "PlexServerUrl", Label: "Direct Plex server URL", Group: "Connections", Type: "url", Help: "Enter a private address that TautWeekly can reach.", Default: ""},
 		{Name: "PlexToken", Label: "Plex token", Group: "Connections", Type: "secret", Help: "Recommended with the direct Plex URL. Leave blank to preserve it. A supported runtime token can be used without copying it into config.json."},
