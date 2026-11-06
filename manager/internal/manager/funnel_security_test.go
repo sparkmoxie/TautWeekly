@@ -179,7 +179,7 @@ func TestPublicFunnelPublishesHardenedSharingMetadataAndWindowsAssets(t *testing
 	}
 	document := response.Body.String()
 	for _, expected := range []string{
-		"<title>" + windowsManagerBrowserTitle + "</title>",
+		"<title>TautWeekly Manager \u2014 Your Plex week, delivered.</title>",
 		`<link rel="canonical" href="https://` + hostname + `/">`,
 		`<meta property="og:url" content="https://` + hostname + `/">`,
 		`<meta property="og:image" content="https://` + hostname + windowsManagerSocialImagePath + `">`,

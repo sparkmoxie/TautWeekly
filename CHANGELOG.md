@@ -6,6 +6,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.27.4] - 2026-11-06
+
+### Fixed
+
+- Restore the em dash in the Manager browser tab and shared-link titles.
+
 ## [0.27.3] - 2026-10-29
 
 ### Changed
