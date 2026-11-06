@@ -6,6 +6,18 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.27.5] - 2026-11-06
+
+### Fixed
+
+- Show setup, password recovery, and update instructions for the installed package, with working links to the matching guide.
+- Show the Windows Task Scheduler observation time and label browser-local time correctly. Use connection examples reachable from the service or container and preserve saved addresses.
+- Repair links in all five packaged READMEs and correct QNAP SSH access, Compose image selection, FreeBSD image pinning, and native Linux upgrade recovery instructions.
+
+### Changed
+
+- Explain household copies in Manual Welcome and production send confirmations and in the newsletter privacy copy. Distinguish connection checks from test sends, and SMTP acceptance from inbox delivery.
+
 ## [0.27.4] - 2026-11-06
 
 ### Fixed
