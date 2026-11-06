@@ -60,10 +60,9 @@ Manager release updates:
   VPN client. Native packages use fixed host adapters; container/NAS, macOS,
   Unraid, QNAP/Synology, and FreeBSD/Podman use the isolated opt-in userspace
   adapter with root-only provider state and explicit interactive sign-in.
-- Capability-aware **Settings > Updates** status for application, package, image,
-  and host-adapter layers. A header SVG appears only for a validated newer
-  release; Windows can launch its verified updater, while other packages keep
-  update authority with the host.
+- **Settings > Updates** shows the running version and latest stable release.
+  On Windows, Manager can launch the verified updater when it is installed.
+  Other packages show how to update from the host.
 - A responsive Dashboard with guided **Config**, **Verify**, **Previews**,
   **Schedule**, and **Settings** workflows, plus private backups and preview-first
   delivery controls.
@@ -129,14 +128,12 @@ The responsive Manager is the primary workflow on every maintained package:
   rolling backups, and the optional custom newsletter text card—including its
   six-choice local title GIF selector—without hand-editing JSON. Stored secrets
   remain write-only.
-- **Verify before sending:** one non-sending validation records connection,
-  library/user, SMTP preflight, and local-preview evidence. Previews renders six
-  newsletter states, and controlled TestEmail delivery stays separate from
-  production recipients.
-- **Operate deliberately:** Schedule reports and controls only the package's
-  supported delivery lifecycle; Settings covers access, public Tailscale Funnel
-  on every maintained package, capability-aware update status, release notes,
-  diagnostics, and recovery. The Dashboard Integrations card distinguishes
+- **Verify before sending.** Check connections, library and user discovery,
+  SMTP, and local previews. Review six newsletter states and send six test
+  messages only to TestEmail.
+- **Manage the schedule and access.** Schedule shows the next run and delivery
+  history. Settings covers access, public Tailscale Funnel, updates, release
+  notes, diagnostics, and recovery. Dashboard distinguishes
   retained Funnel **Off**, verified **Active**, publication-pending
   **Attention**, blocked **Failed**, and neutral non-applicable states without
   invoking Tailscale during rendering. Manual and scheduled production delivery

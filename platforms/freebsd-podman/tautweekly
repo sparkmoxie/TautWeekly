@@ -198,21 +198,21 @@ case "$cmd" in
   preview-all) user="$(prompt_user "${1:-}")"; run_mode PreviewAll "$user" ;;
   send-test)
     user="$(prompt_user "${1:-}")"
-    confirm "Send one test email to TestEmail using $user?" || exit 0
+    confirm "Send one test message to TestEmail?" || exit 0
     run_mode SendTest "$user"
     ;;
   send-test-all)
     user="$(prompt_user "${1:-}")"
-    confirm "Send all six regression emails to TestEmail using $user?" || exit 0
+    confirm "Send six test messages to TestEmail?" || exit 0
     run_mode SendTestAll "$user"
     ;;
   welcome)
     user="$(prompt_user "${1:-}")"
-    confirm "Send the real one-off welcome to the selected Plex user's email?" || exit 0
+    confirm "Send a welcome newsletter to the selected user and their eligible household copies?" || exit 0
     run_mode SendWelcome "$user" --confirm-welcome
     ;;
   send-all)
-    echo "WARNING: This sends one real newsletter to every eligible Plex user."
+    echo "This sends real email to all eligible users and their eligible household copies."
     confirm "Have you reviewed a current TestEmail and do you want to continue?" || exit 0
     run_mode SendAll --confirm-send-all
     ;;

@@ -258,6 +258,7 @@ if [[ "$manager_runtime_profile" == nas || "$manager_runtime_profile" == mac ]];
   setup_json="$(docker exec "$container_name" curl -fsS http://127.0.0.1:8080/api/v1/setup)"
   grep -Fq '"authenticationRequired":true' <<<"$setup_json" || fail "$runtime_profile Manager authentication is not mandatory."
   grep -Fq "\"runtimeMode\":\"$manager_runtime_profile\"" <<<"$setup_json" || fail "$runtime_profile Manager did not report its Manager runtime mode."
+  grep -Fq "\"packageKind\":\"$package_kind\"" <<<"$setup_json" || fail "$runtime_profile Manager setup did not report the package identity."
   bootstrap_token="$(docker exec "$container_name" /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager)"
   [[ "$bootstrap_token" =~ ^[A-Za-z0-9_-]{32,}$ ]] || fail 'Explicit bootstrap command did not return a one-time token.'
   if docker logs "$container_name" 2>&1 | grep -Fq "$bootstrap_token"; then
@@ -272,7 +273,7 @@ if [[ "$manager_runtime_profile" == nas || "$manager_runtime_profile" == mac ]];
     expected_path_style="container-volume"
     [[ "$package_kind" == mac-docker ]] && expected_path_style="mac-bind-mount"
     grep -Fq "\"pathStyle\":\"$expected_path_style\"" <<<"$capabilities_json" || fail "Desktop Manager did not report $expected_path_style path semantics."
-    grep -Fq '"networkScope":"host-loopback"' <<<"$capabilities_json" || fail 'Desktop Manager did not report loopback-first network semantics.'
+    grep -Fq '"networkScope":"deployment-configured"' <<<"$capabilities_json" || fail 'Desktop Manager inferred the host bind from its container settings.'
   fi
   setup_json="$(docker exec "$container_name" curl -fsS http://127.0.0.1:8080/api/v1/setup)"
   grep -Fq '"paired":true' <<<"$setup_json" || fail "$runtime_profile Manager did not persist first-run pairing."

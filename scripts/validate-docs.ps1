@@ -278,7 +278,7 @@ Write-Host '[PASS] Quickstarts publish platform-specific share-safe cache diagno
 $cacheRefreshPatterns = [ordered]@{
     'windows/index.html'      = '20-REFRESH-DELETED-ITEM-CACHE\.bat'
     'nas-docker/manager.html' = '\.\/tautweekly\.sh cache-refresh'
-    'mac/index.html'          = '\.\/tautweekly\.sh cache-refresh'
+    'mac/index.html'          = 'docker compose exec -T tautweekly /opt/tautweekly/bin/run-mode\.sh CacheWarm'
     'linux/index.html'        = 'sudo tautweekly cache-refresh'
     'freebsd/index.html'      = 'sudo tautweekly cache-refresh'
 }
@@ -289,6 +289,25 @@ foreach ($entry in $cacheRefreshPatterns.GetEnumerator()) {
     }
 }
 Write-Host '[PASS] Quickstarts publish platform-specific independent cache refresh commands'
+
+# These public fragments are consumed by Manager's package-specific guide links.
+$managerGuideSections = [ordered]@{
+    'windows/index.html'      = @('updates')
+    'linux/index.html'        = @('install', 'upgrade')
+    'freebsd/index.html'      = @('install', 'updates')
+    'mac/index.html'          = @('install', 'update')
+    'nas-docker/manager.html' = @('install', 'first-access', 'lifecycle')
+}
+foreach ($entry in $managerGuideSections.GetEnumerator()) {
+    $html = [IO.File]::ReadAllText((Join-Path $docs $entry.Key))
+    foreach ($fragment in $entry.Value) {
+        $section = '<section\b[^>]*\bid="' + [regex]::Escape($fragment) + '"'
+        if ([regex]::Matches($html, $section).Count -ne 1) {
+            throw "Manager guide link needs a unique section: $($entry.Key)#$fragment"
+        }
+    }
+}
+Write-Host '[PASS] Manager package guides expose their linked sections'
 
 & node (Join-Path $Root 'scripts/sync-gui-preview.mjs') --check
 if ($LASTEXITCODE -ne 0) { throw 'GUI preview differs from the current Manager/release. Regenerate it before deployment.' }
@@ -505,8 +524,8 @@ foreach ($pattern in @(
     'slice\(0, state\.historyMaximum\)',
     'slice\(0, diagnosticMaximum\)',
     'Rolling retention keeps the newest 10',
-    'Count-only FIFO keeps the newest 20 completed items',
-    'Count-only FIFO keeps the newest 20 events'
+    'Manager keeps the latest 20 completed runs',
+    'Manager keeps the latest 20 events'
 )) {
     if ($guiPreviewCombined -notmatch $pattern) {
         throw "GUI Preview rolling-retention contract is missing: $pattern"
@@ -524,11 +543,16 @@ Write-Host '[PASS] GUI Preview is static, relative, package-aware, locally enric
 $previewGallery = [IO.File]::ReadAllText((Join-Path $docs 'examples/preview-all-00-INDEX.html'))
 foreach ($previewCopy in @(
     'The real email layout, across every state.',
-    'Go ahead, shrink my window.'
+    'Go ahead, shrink my window.',
+    'eligible household copy addresses your server admin set up for you',
+    'The champion remains anonymous.'
 )) {
     if (-not $previewGallery.Contains($previewCopy)) {
         throw "Email States Preview is missing requested copy: $previewCopy"
     }
+}
+if ($previewGallery -match 'stays in your email|Other users do not receive your detailed|Every Friday morning') {
+    throw 'Email States Preview promises exclusive inbox access or a fixed send time.'
 }
 foreach ($pattern in @(
     'stats-title-cell',
@@ -651,6 +675,16 @@ foreach ($pattern in @(
     if ($nasInstall -notmatch $pattern) { throw "NAS user-selection guidance is missing: $pattern" }
 }
 
+$nasQuickstart = [IO.File]::ReadAllText((Join-Path $docs 'nas-docker/manager.html'))
+$qnapCard = [regex]::Match($nasQuickstart, '(?s)<h3>QNAP Container Station</h3>.*?</article>').Value
+if ($qnapCard -notmatch '(?s)SHA256SUMS\.txt.*compose\.qnap\.yaml') {
+    throw 'QNAP Quickstart must use the verified archive Compose file.'
+}
+if ($qnapCard -notmatch 'ssh -N -L 8787:127\.0\.0\.1:8787' -or
+    $qnapCard -match 'https?://QNAP_IP') {
+    throw 'QNAP Quickstart must use SSH forwarding to host loopback.'
+}
+
 foreach ($relative in @('mac/index.html', 'freebsd/index.html')) {
     $html = [IO.File]::ReadAllText((Join-Path $docs $relative))
     if ($html -notmatch 'USER_ID') { throw "Numeric USER_ID guidance is missing from $relative" }
@@ -697,7 +731,6 @@ foreach ($source in @($macQuickstart, $macReadme)) {
         '\.env',
         'data/',
         'docker compose down -v',
-        'v0\.24\.x',
         '30 minutes'
     )) {
         if ($source -notmatch $pattern) {
@@ -735,7 +768,7 @@ foreach ($pattern in @(
     'url=manager\.html',
     'location\.replace\("manager\.html"',
     'authenticated Manager is the setup source',
-    'Config, verification, six previews, controlled TestEmail delivery, scheduling, unified-image profile/status, v0\.22\.0 migration, rollback, recovery'
+    'pairing, verification, six previews, TestEmail, scheduling, updates, rollback, and password recovery'
 )) {
     if ($nasRedirect -notmatch $pattern) {
         throw "NAS canonical redirect is missing Manager source-of-truth guidance: $pattern"
@@ -830,7 +863,11 @@ foreach ($pattern in @(
     'FromEmail',
     'application password',
     'SmtpStripPasswordSpaces',
-    'does not authenticate or\s+submit mail'
+    'Terminal `verify` checks configuration and SMTP TCP reachability',
+    'certificate-validated STARTTLS when enabled',
+    'Neither check signs in or sends mail',
+    'with `send-test` to submit one message to\s+`TestEmail`',
+    'Manager \*\*Previews\*\* submits all six variants'
 )) {
     if ($smtpTroubleshootingContent -notmatch $pattern) {
         throw "Provider-neutral SMTP troubleshooting guidance is missing: $pattern"

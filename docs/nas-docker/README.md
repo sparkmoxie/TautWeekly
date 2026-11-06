@@ -25,7 +25,7 @@ Tautulli reports an active user without native email. Assignments stay in
 private `/data/config.json` and its backups, may share an inbox, and never
 override a native address. Existing user-ID and effective-address exclusions
 still apply; TestEmail remains isolated. See the
-[configuration reference](../CONFIGURATION.md#interactive-user-exclusions).
+[configuration reference](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#interactive-user-exclusions).
 
 > [!IMPORTANT]
 > The authenticated Manager is the setup source for every target in this
@@ -85,12 +85,10 @@ not change the password, newsletter schedule, or a newsletter already running.
 ## Install from Unraid Apps
 
 In Unraid Community Applications, search for **TautWeekly for Plex**, review
-the loopback recovery and appdata paths, and select **Install**. The maintained template is
-[`templates/tautweekly.xml`](../../templates/tautweekly.xml), selects the
-validated `unraid` profile, and pulls `ghcr.io/sparkmoxie/tautweekly:latest`
-for amd64 or arm64. This mutable reference is an Unraid Apps lifecycle
-exception, not the recommended CI/CD reference; review the digest change in
-Docker/Apps before applying it.
+the loopback recovery and appdata paths, and select **Install**. The
+[Community Apps template](https://github.com/sparkmoxie/TautWeekly/blob/main/templates/tautweekly.xml)
+selects the `unraid` profile and pulls the stable `latest` tag for amd64 or
+arm64. Review available image updates in Docker or Apps before applying them.
 
 After installation, open **Docker > TautWeekly for Plex > Console** and run:
 
@@ -132,42 +130,48 @@ and [repository XML format](https://ca.unraid.net/submit/help/repository-xml).
 
 ## Install on QNAP Container Station
 
-QNAP's Docker-native path is **Container Station > Create Application**. Paste
-[`compose.qnap.yaml`](../../platforms/nas-docker/compose.qnap.yaml), change the
-timezone and non-root PUID/PGID, and confirm the host data path before creating
-the application. The supplied Compose application binds Manager to QNAP
-loopback; use `ssh -N -L 8787:127.0.0.1:8787 ADMIN@QNAP_HOST` for setup and
-recovery. QNAP documents Compose applications in Container Station;
-App Center repositories distribute native QPKG applications instead, so this
-Docker edition is not presented as a QPKG.
+Download the NAS/Docker archive and `SHA256SUMS.txt` from the same
+[stable release](https://github.com/sparkmoxie/TautWeekly/releases/latest).
+Verify the archive against its checksum before extracting it. In **Container
+Station > Create Application**, paste the extracted
+[`compose.qnap.yaml`](./compose.qnap.yaml) beside this README in the archive.
+Set the timezone and non-root
+PUID/PGID and confirm the host data paths before creating the application.
 
-A native QPKG is not warranted for this delivery: it would add a second
-installer, signing and App Center review obligations, and hardware-specific
-lifecycle code without improving the Docker-native runtime. It may be scoped
-separately only with QNAP hardware and store-submission validation.
+Open the running container’s terminal and retrieve the pairing token:
+
+```sh
+/opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager \
+  access-bootstrap --data-dir /data/manager
+```
+
+From your workstation run `ssh -N -L 8787:127.0.0.1:8787 ADMIN@QNAP_HOST`
+and open `http://127.0.0.1:8787/` to pair. The supplied definition binds the
+Manager to QNAP loopback. Use the same tunnel for password recovery.
 
 References: [QNAP Container Station application creation](https://docs.qnap.com/operating-system/qne-network/1.0.x/en-us/container-creation-1A95801A.html)
 and [QNAP App Center repository settings](https://docs.qnap.com/operating-system/qts/5.0.x/en-us/app-center-settings-8C55F8A1.html).
 
-The guided SSH installer remains available from the release archive:
+As a separate install method, extract the verified archive over SSH and use
+the archive wrapper for pairing, recovery, cache, Funnel, and updates:
 
 ```bash
 ./qnap-install.sh
+./tautweekly.sh manager-bootstrap
 ```
 
 ## Preferred no-clone Compose install
 
-Download and verify the release's standalone server Compose asset. It pins the
+Download `TautWeekly-compose.yaml` and `SHA256SUMS.txt` from the same
+[stable release](https://github.com/sparkmoxie/TautWeekly/releases/latest) into
+a dedicated directory. Verify the standalone server Compose asset. It pins the
 full semantic version, explicitly selects `TAUTWEEKLY_RUNTIME_PROFILE=server`,
 uses the `container-compose` package identity, binds Manager only to host
 loopback, and bind-mounts `./data` at `/data`:
 
 ```bash
-mkdir -p TautWeekly && cd TautWeekly
-TAUTWEEKLY_VERSION=0.25.0
-curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/TautWeekly-compose.yaml"
-curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/SHA256SUMS.txt"
 grep '  TautWeekly-compose.yaml$' SHA256SUMS.txt | sha256sum -c -
+# Continue only if the checksum passes.
 mv TautWeekly-compose.yaml compose.yaml
 mkdir -p data
 # Set a private .env with TZ, PUID, PGID, UMASK, and the fixed loopback port.
@@ -179,18 +183,17 @@ docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
   /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager
 ```
 
-For reviewed deployments use
-`ghcr.io/sparkmoxie/tautweekly:0.25.0`. For unattended automation append the
+For reviewed deployments use the full release tag. For unattended automation append the
 published manifest digest. Minor, `latest`, and `edge` are mutable and are not
 recommended promotion pins. The host owns every pull and recreate; the Manager
 has no Docker socket or engine credentials.
 
 ## Archive/host-wrapper fallback on another Docker host
 
-Download the latest
+Download the stable release’s `SHA256SUMS.txt` and either
 [`TautWeekly-nas-docker.tar.gz`](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.tar.gz)
-or [ZIP archive](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.zip),
-then extract one format:
+or the [ZIP archive](https://github.com/sparkmoxie/TautWeekly/releases/latest/download/TautWeekly-nas-docker.zip).
+Verify the archive against its checksum, then extract it:
 
 ```bash
 tar -xzf TautWeekly-nas-docker.tar.gz
@@ -217,9 +220,11 @@ workstation, then pair the browser and complete guided setup. Keep the host
 mapping on loopback; ordinary remote-browser access is supplied only by the
 verified Funnel URL.
 
-Use a hostname reachable from inside the container, for example
-`http://media.example.test:8181`. Do not use `127.0.0.1` for Tautulli unless it
-runs in the same container, which is not the supported deployment model.
+Use a hostname or private address reachable from inside the container, for
+example `http://media.example.test:8181`. For Plex or Tautulli running on a
+Docker Desktop host, use `host.docker.internal`. For a separate NAS or server,
+use its private hostname or IP. Inside the container, `127.0.0.1` refers to
+TautWeekly itself.
 
 During setup, also enter a direct `PlexServerUrl` (normally port 32400) and an
 administrator `PlexToken` for full newsletter fidelity. These are TautWeekly
@@ -272,6 +277,11 @@ send only to TestEmail, and inspect **Schedule**. Before enabling delivery,
 confirm the configured timezone, scheduler timezone, and scheduler-local time
 agree. Recreate or restart the container after changing its timezone.
 
+Manager Verify checks the SMTP connection and STARTTLS when enabled, without
+signing in or sending mail. The Previews test send submits six messages only to
+TestEmail. The CLI `verify` checks SMTP TCP reachability, and CLI `send-test`
+sends one message to TestEmail.
+
 ### Optional custom newsletter text card
 
 The optional Config card immediately after **Cache** places administrator text
@@ -291,7 +301,7 @@ when either is omitted. Line breaks are preserved, and content is escaped for
 normal and welcome HTML, the plain-text alternative, and generated previews.
 An empty or whitespace-only body blocks browser and Manager API validation,
 save, and verification. See the
-[configuration reference](../CONFIGURATION.md#optional-custom-text-card).
+[configuration reference](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#optional-custom-text-card).
 
 The following release-archive commands are expert/recovery fallbacks. Run them
 from the extracted project directory on the Docker host, not in the container:
@@ -316,6 +326,13 @@ production-eligible included user's current newsletter window. `cache-status`
 prints only share-safe aggregate cache health. It does not print paths, titles,
 GUIDs, artwork, credentials, recipients, or manifest contents.
 
+For standalone Compose, run `docker compose exec -T tautweekly
+/opt/tautweekly/bin/run-mode.sh CacheWarm` to refresh. For the cache summary,
+run `docker compose exec -T tautweekly /opt/tautweekly/bin/run-script.sh
+Cache-Diagnostics.ps1 -DataRoot /data`. In Unraid, QNAP Container Station, or
+another tool’s container console, run the same commands without the
+`docker compose exec -T tautweekly` prefix.
+
 During preview review, confirm the supplied animated movie, TV, and Top Genre
 icons; uncapped qualifying personal titles; responsive full-width movie/TV
 cards; and matching supporting typography for personal total watch time, Binge
@@ -335,7 +352,7 @@ missing or unsupported art uses the neutral local movie animation.
 Watched marks use only the selected recipient's all-time Tautulli movie history.
 Review the desktop poster shield and the title circles with uniform 6px spacing,
 vertical centering, and `title="Watched"`. Unwatched movies leave no icon gap and
-TV is unchanged. See the [watched-state rule and privacy boundary](../CONFIGURATION.md#recipient-movie-watched-markers).
+TV is unchanged. See the [watched-state rule and privacy boundary](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#recipient-movie-watched-markers).
 
 Only after the previews and controlled TestEmail messages are approved, enable
 future delivery on Manager **Schedule**. The expert fallback is:
@@ -430,11 +447,11 @@ Secure-cookie decision remain backend-owned. An independently verified active
 Funnel hostname is admitted automatically. The Manager ignores `Forwarded` and
 `X-Forwarded-*` and never trusts them for host, origin, client identity, or TLS.
 
-For the generic Compose package, `./tautweekly.sh restart` performs that
-single-service recreation and applies current `.env` values while preserving
-the image, volumes, `.env`, and `data/`. NAS vendor controls must use their
-equivalent recreate/update-container action; a process-only restart cannot
-apply changed container environment values.
+For the NAS archive, `./tautweekly.sh restart` recreates the service. For
+standalone Compose, run `docker compose up -d --no-build --force-recreate tautweekly`.
+For vendor or other Docker installs, use the original deployment tool’s
+recreate action. A process restart cannot apply changed container environment
+values.
 
 ### Optional public Tailscale Funnel
 
@@ -452,11 +469,13 @@ host networking, added network capability, auth key, OAuth secret, arbitrary
 command, hostname, port, path, or CLI argument. Authentication is an explicit
 interactive administrator step; auth-key and token environments fail closed.
 
-For generic Compose, Synology, or another compatible NAS:
+For the NAS archive and standalone Compose:
 
 1. Set `TAUTWEEKLY_FUNNEL_ADAPTER=enabled` in the private `.env` file.
-2. Recreate the service with `./tautweekly.sh restart`.
-3. Run `./tautweekly.sh remote-access-login` and complete the official
+2. Recreate the service using the command for your installation above.
+3. For the archive, run `./tautweekly.sh remote-access-login`. For standalone
+   Compose, run `docker compose exec tautweekly /opt/tautweekly/bin/tautweekly-funnel login`.
+   Complete the official
    Tailscale browser sign-in. TautWeekly never sees the account credential.
 4. Create and enable the Manager password lock locally.
 5. Open **Settings > Tailscale Funnel** and choose **Enable**. Share the address
@@ -473,12 +492,13 @@ Station application and recreate it while preserving the configured
 
 For Unraid, set **Public Funnel adapter** to `enabled` in the Community Apps
 template, apply the container update, then run the same command in the
-container Console. Do not add an auth key or token to the template.
+container Console. For another deployment tool, set the adapter environment
+variable, recreate with that tool, and run the same command in its console.
 
-Disable from Manager Settings or run `./tautweekly.sh remote-access-disable`
-before a deliberate stop, reset, recovery, or removal. The supplied
-launchers also disable and verify the exact owned route before those lifecycle
-operations and fail closed if cleanup cannot be proven. Normal Manager restart,
+Disable from Manager Settings before a deliberate stop or removal. In a
+container console use `/opt/tautweekly/bin/tautweekly-funnel disable`. Prefix
+with `docker compose exec -T tautweekly` for standalone Compose, or use
+`./tautweekly.sh remote-access-disable` for the NAS archive. Manager restart,
 verified host-package/image update, recreate, and rollback preserve Funnel.
 Abrupt host power loss or `SIGKILL` cannot run cleanup, so retain local access
 and use the
@@ -589,36 +609,21 @@ progress. NAS, QNAP, and general Compose deployments share this behavior.
 
 ## Updates and recovery
 
-Manager **Settings > Updates** is the primary container update-status source.
-It identifies the running application/image, active runtime profile, unified
-image repository, recommended semver reference, immutable digest policy,
-migration state, release host package, stable channel, latest verified release,
-last successful check, sanitized failure, release notes, and whether the saved
-host adapter is current, legacy, or mismatched. Authenticated entry renders cached status first
-and makes one non-blocking bounded check only when the last success is missing
-or at least 24 hours old and backoff permits. Successful results are reused for
-five minutes before **Check now** refreshes the same endpoint. The main header
-**Refresh** completes its local status reload first, repeats the saved-revision
-LAN-only Tautulli choices lookup when configuration is ready, and starts that
-check when its cooldown permits. It never generates previews or contacts
-Plex/SMTP, and scoped refresh controls remain isolated. Navigation,
-Dashboard rendering, and health remain offline-capable. **Current** retains its
-green glow. A passive purple header SVG appears only for a validated newer
-running application, while the card glows for every non-current state; neither
-claims package ownership. The
-Manager remains non-root and has no Docker socket or host helper,
-so it never offers an install button for Docker/NAS packages.
+Open **Settings > Updates** to see the running image, installed host package
+when available, and latest stable release. **Check now** can contact GitHub.
+Apply updates with the tool that installed the service.
 
-The guidance is package-specific: Unraid points to Docker/Apps and its current
-Community Apps template; QNAP points to Container Station plus the verified
-release wrapper over trusted SSH; release-archive Compose/NAS installs show the
-copyable `./tautweekly.sh update`; and an otherwise compatible Docker host is
-directed to pull and recreate through the same deployment tool that created
-the service. Do not add a Docker socket, privileged container, or root web
-process to turn those instructions into a GUI update.
+Use the update path for the tool that installed TautWeekly. For Unraid, use
+Docker or Apps and review the current Community Apps template. For QNAP
+Container Station, use the verified new archive’s `compose.qnap.yaml` to review
+the image and application settings, then edit/recreate in Container Station
+with the same host data and Tailscale state paths. For another Docker deployment
+tool, choose the new image in that tool and recreate against the same mounts.
 
-For a compatible Compose deployment that did not use the release wrapper, run
-from the directory containing the original Compose definition:
+For standalone server Compose, back up `/data` and record the current image
+reference. In the original project’s `.env`, set `TAUTWEEKLY_IMAGE` to the new
+full tag or digest and `TAUTWEEKLY_VERSION` to match. The version variable
+alone leaves the image unchanged. Run from the original project directory:
 
 ```bash
 docker compose pull tautweekly
@@ -637,8 +642,8 @@ pin. Use full semver for a reviewed deployment or append the published manifest
 digest for an immutable reference. Unraid retains `latest` only because its
 host-owned Apps workflow detects and presents digest changes.
 
-For release-archive Compose and QNAP installations, checking and applying are
-separate host actions:
+For the NAS archive, including the guided SSH install on QNAP, checking and
+applying are separate host actions:
 
 ```bash
 ./tautweekly.sh check-update  # compare verified host package and image; do not restart
@@ -709,39 +714,44 @@ If a recreate is interrupted, rerun it against the same mount. If health fails,
 restore the recorded `:0.22.0` semver/digest and recreate. An unexpected pairing
 screen means the old `/data` is not attached; stop rather than pairing an empty
 volume. Never use `docker compose down -v` or delete Unraid appdata. See the
-[complete unified image migration contract](../CONTAINER-MIGRATION.md#migrate-the-v0220-nas-or-generic-image)
+[complete unified image migration contract](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONTAINER-MIGRATION.md#migrate-the-v0220-nas-or-generic-image)
 for named-volume backup, permissions, networking, rollback, interrupted
 delivery, and Manager recovery details.
 
 ### Password recovery
 
-Compose installations can reset only Manager authentication:
+For a NAS archive install, reset Manager authentication with the host wrapper:
 
 ```bash
 ./tautweekly.sh manager-reset-access
 ./tautweekly.sh manager-bootstrap
 ```
 
-For Unraid, open the Console of the running container or use an equivalent
-local `docker exec`, run the following recovery command, then restart the
-container and retrieve the new bootstrap token:
+For QNAP Container Station, Unraid, and other vendor installs, run this
+command in the running container’s terminal. For standalone Compose, prefix
+the command with `docker compose exec -T tautweekly`:
 
 ```bash
 /opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager \
-  access-recover --data-dir /data/manager --confirm
+  access-recover --data-dir /data/manager --tautweekly-root /opt/tautweekly \
+  --listen 0.0.0.0:8080 --runtime-mode nas --confirm
 ```
 
 Recovery removes only Manager authentication files. It preserves
 `config.json`, SMTP/Plex/Tautulli secrets, schedule settings, newsletter state,
-previews, cache, backups, and sanitized operation history. Restart is required
-to invalidate in-memory sessions and create the new one-time token. Never
-delete all of `/data` merely to recover Manager access.
+previews, cache, backups, and sanitized operation history. Restart with the
+original host controls or `docker compose restart tautweekly` for Compose,
+then retrieve the new token with the corresponding pairing command above.
 
 ### Rollback and incompatible data
 
 Before an upgrade, keep a private `/data` backup and record the current image
 digest. The host wrapper automatically returns to the prior image when the new
-container fails health checks. If a future package reports an unsupported data
+container fails health checks. For standalone Compose, restore the previous
+image reference and version in `.env`, then pull and recreate with the same
+mount. For Unraid, Container Station, or another Docker tool, select the
+recorded previous image and recreate through that tool with the same data
+paths. If a future package reports an unsupported data
 schema, stop it, preserve the failed `/data` tree, restore the matching private
 backup, and recreate with the recorded image digest. Do not start an older
 image repeatedly against newer data or copy only `config.json`; Manager access,
@@ -774,12 +784,12 @@ explicit data-destruction decision after verifying the backup; reinstalling
 against retained `/data` restores configuration, Manager credentials, schedule,
 and state.
 
-See [configuration](../CONFIGURATION.md), [security](../SECURITY.md), and
-[troubleshooting](../TROUBLESHOOTING.md).
+See [configuration](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md), [security](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/SECURITY.md), and
+[troubleshooting](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/TROUBLESHOOTING.md).
 
 ## Bundled asset updates
 
 Shipped email asset filenames are release-owned: updates may replace same-name
 custom artwork. Custom-only filenames and unrelated private/runtime data are
 preserved. For the bundle marker, restart behavior, explicit repair, and Windows
-update differences, see [bundled email assets](../EMAIL-ASSETS.md).
+update differences, see [bundled email assets](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/EMAIL-ASSETS.md).

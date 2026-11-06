@@ -13,6 +13,7 @@
     setText("preview-runner-copy", "Renders fictional local newsletter states only. No Plex, Tautulli, SMTP, or host process is contacted.");
     setText("about-secret-copy", "All displayed credentials are fictional. Entered values exist only in this page and reset on reload.");
     setText("access-recovery-copy", "Reload this page to reset the fictional access settings. No host credential is changed.");
+    byId("access-recovery-guide").hidden = true;
   });
   renderStartupSettings = wrap(renderStartupSettings, () => {
     if (!byId("startup-settings-panel").hidden) byId("startup-settings-message").textContent += " Simulation only; no sign-in entry is changed.";
@@ -21,10 +22,11 @@
     if (byId("tailscale-settings-panel").hidden) return;
     const remote = state.tailscale || {};
     const link = byId("tailscale-url");
+    const hasVerifiedAddress = remote.enabled && remote.active && remote.state === "active";
     link.removeAttribute("href");
-    link.hidden = !remote.enabled;
-    link.textContent = remote.enabled ? "https://manager.demo.invalid (fictional)" : "";
-    byId("tailscale-url-empty").hidden = Boolean(remote.enabled);
+    link.hidden = !hasVerifiedAddress;
+    link.textContent = hasVerifiedAddress ? "https://manager.demo.invalid (fictional)" : "";
+    byId("tailscale-url-empty").hidden = Boolean(hasVerifiedAddress);
     byId("tailscale-copy-button").hidden = true;
     byId("tailscale-settings-message").textContent = "Simulation only. Enabling, disabling, or verifying changes fictional page state; no Tailscale account, command, or network is contacted.";
     byId("tailscale-refresh-button").textContent = "Simulate verification";
@@ -33,7 +35,8 @@
     byId("update-install-button").textContent = "Simulate install";
     byId("update-release-notes").href = "../releases/v" + window.TautWeeklyDemoControls.version + ".md";
     byId("update-release-notes").hidden = false;
-    if (!state.updateChecking) byId("update-settings-message").textContent = "Fictional release metadata only. No GitHub request, download, installer, or host update runs.";
+    if (state.updateChecking) setText("update-settings-summary", "Checking fictional release information.");
+    byId("update-settings-message").textContent = "Fictional release metadata only. No GitHub request, download, installer, or host update runs.";
   });
   const funnelFixture = new URLSearchParams(window.location.search).get("funnel") || "off";
   if (["off", "active", "pending", "blocked", "not-configured", "unsupported"].includes(funnelFixture)) {

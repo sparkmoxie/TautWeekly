@@ -98,13 +98,13 @@ $tailscaleState = $configs | Where-Object { [string]$_.Target -ceq '/var/lib/tau
 if ($null -ne $tailscaleState -and [string]$tailscaleState.Default -cne '/mnt/user/appdata/tautweekly-tailscale') {
     Add-Failure 'Unraid Tailscale state must remain separate from Manager appdata.'
 }
-if ([string]$container.Overview -notmatch 'authenticated TautWeekly Manager' -or
+if ([string]$container.Description -notmatch 'authenticated Manager' -or
     [string]$container.Overview -notmatch 'use an SSH local forward' -or
     [string]$container.Overview -notmatch 'access-bootstrap') {
     Add-Failure 'Unraid overview must describe authenticated Manager bootstrap from the container Console.'
 }
-if ([string]$container.Overview -notmatch 'Unraid owns container lifecycle and stable image updates' -or
-    [string]$container.Description -notmatch 'no auth key, Docker socket, privileged mode, host executable, router port, or firewall change') {
+if ([string]$container.Overview -notmatch 'stable image updates in Unraid Docker or Apps' -or
+    [string]$container.Description -notmatch 'no auth key, Docker socket, privileged mode, or router port') {
     Add-Failure 'Unraid update policy must remain host-managed, stable-only, and socket-free.'
 }
 if ([string]$container.ExtraParams -notmatch '(?:^| )--tmpfs /run:rw,noexec,nosuid,size=16m,mode=0755(?: |$)' -or

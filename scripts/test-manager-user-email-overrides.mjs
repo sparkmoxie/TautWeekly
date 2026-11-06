@@ -201,6 +201,46 @@ for (const malformed of ["null", "[]", "bad-json"]) {
   assert.deepEqual(JSON.parse(JSON.stringify(copyContext.currentHouseholdCopies())), {}, "malformed saved copy map crashed guided editing");
 }
 
+const manualUserField = { hidden: true };
+const sendCopy = new Map();
+const sendContext = {
+  byId(id) {
+    assert.equal(id, "manual-send-user-field");
+    return manualUserField;
+  },
+  setText: (id, value) => sendCopy.set(id, value),
+  setSwappingText: (id, value) => sendCopy.set(id, value),
+  titleCase: (value) => value,
+};
+vm.createContext(sendContext);
+vm.runInContext([
+  "renderManualSendChoice", "operationSummary", "skipReasonCopy", "householdCopyReport",
+  "rendererFailureCopy", "smtpFailureEvidenceCopy",
+].map(functionSource).join("\n"), sendContext);
+
+sendContext.renderManualSendChoice("send-all");
+assert.equal(manualUserField.hidden, true);
+const weeklyConfirmation = sendCopy.get("manual-send-confirm-copy");
+assert.match(weeklyConfirmation, /each eligible user's primary address and any eligible household copy addresses/);
+assert.match(weeklyConfirmation, /can't be cancelled/);
+assert.equal(html.match(/id="manual-send-confirm-copy">([^<]+)</)?.[1], weeklyConfirmation, "initial confirmation differs from the weekly scope rendered by JavaScript");
+assert.match(sendCopy.get("manual-send-runner-copy"), /checks the live Tautulli roster/);
+
+sendContext.renderManualSendChoice("send-welcome");
+assert.equal(manualUserField.hidden, false);
+assert.match(sendCopy.get("manual-send-confirm-copy"), /selected user's primary address and any eligible household copy addresses/);
+assert.match(sendCopy.get("manual-send-confirm-copy"), /can't be cancelled/);
+assert.match(sendContext.operationSummary({ type: "send-welcome", state: "succeeded", smtpAcceptedCount: 1, bccAcceptedCount: 2 }).copy,
+  /SMTP accepted the primary message.*Household copies: 2 accepted, 0 rejected/);
+
+const unknownAcceptance = sendContext.operationSummary({
+  type: "send-test-all", state: "failed", smtpAcceptedCount: 1,
+  errorCategory: "smtp-acceptance-unknown",
+  smtpFailure: { stage: "data-acceptance", responseCode: 0, acceptance: "unknown" },
+}).copy;
+assert.match(unknownAcceptance, /SMTP accepted 1 test message.*after message submission.*without retrying to avoid a duplicate/);
+assert.equal(unknownAcceptance.match(/retr(?:y|ied)/g)?.length, 1, "ambiguous acceptance repeats the no-retry explanation");
+
 const [playwrightModule, browserExecutable, previewURL] = process.argv.slice(2);
 if (playwrightModule || browserExecutable || previewURL) {
   assert(playwrightModule && browserExecutable && previewURL, "browser QA requires PLAYWRIGHT_MODULE, BROWSER_EXE, and PREVIEW_URL");
@@ -243,6 +283,15 @@ if (playwrightModule || browserExecutable || previewURL) {
         assert.equal(JSON.parse(await page.locator("#config-UserBccAddresses").inputValue())["41003"][1], "second@example.org");
         await household.getByRole("button", { name: "Remove copy 2" }).click();
         assert.equal(await page.locator("#household-41003-1").count(), 0);
+        await page.locator('[data-view="previews"]').click();
+        const confirm = page.locator("#manual-send-confirm");
+        const mode = page.locator("#manual-send-mode");
+        await confirm.check();
+        await mode.selectOption("send-welcome");
+        assert.equal(await confirm.isChecked(), false, "switching the recipient scope must clear confirmation");
+        assert(await page.locator("#manual-send-user-field").isVisible());
+        assert.match(await page.locator("#manual-send-confirm-copy").textContent(), /selected user's primary address and any eligible household copy addresses/);
+        assert(await page.locator("#manual-send-run-button").isDisabled());
         const metrics = await page.evaluate(() => ({ documentWidth: document.documentElement.scrollWidth, viewportWidth: window.innerWidth }));
         assert(metrics.documentWidth <= metrics.viewportWidth, `${viewport.width}px browser view has horizontal overflow: ${JSON.stringify(metrics)}`);
       } finally {
@@ -252,7 +301,7 @@ if (playwrightModule || browserExecutable || previewURL) {
   } finally {
     await browser.close();
   }
-  console.log("[PASS] Managed-user delivery card rendered and interacted correctly in desktop and mobile Chromium views.");
+  console.log("[PASS] Managed-user delivery and welcome confirmation rendered correctly in desktop and mobile Chromium views.");
 }
 
-console.log("[PASS] Managed-user fallback address state, conditional accessible UI, retained mappings, TestEmail isolation, and redaction contracts.");
+console.log("[PASS] Managed-user and household copy scope, TestEmail isolation, SMTP result wording, and redaction contracts.");

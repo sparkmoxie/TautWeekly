@@ -76,8 +76,9 @@ administrator action.
 
 | Package | Explicit login command after enabling the adapter |
 |---|---|
-| Generic Compose, NAS, QNAP/Synology, macOS Docker | `./tautweekly.sh remote-access-login` |
-| Unraid | Container Console: `/opt/tautweekly/bin/tautweekly-funnel login` |
+| NAS or Mac archive, including QNAP SSH installer | `./tautweekly.sh remote-access-login` |
+| Standalone server or macOS Compose | `docker compose exec tautweekly /opt/tautweekly/bin/tautweekly-funnel login` |
+| Unraid, QNAP Container Station, or another Docker tool | Container console: `/opt/tautweekly/bin/tautweekly-funnel login` |
 | FreeBSD/Podman | `sudo tautweekly remote-access-authorize` |
 
 ## Public state and admission

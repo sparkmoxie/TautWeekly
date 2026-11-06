@@ -5,11 +5,11 @@
   const DEMO_VERSION = "0.27.4";
   const PREVIOUS_VERSION = "0.27.3";
   const PROFILES = {
-    windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows" },
-    nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker" },
-    mac: { runtimeMode: "mac", runtimeProfile: "desktop", packageKind: "container-desktop", label: "macOS Docker" },
-    linux: { runtimeMode: "linux", runtimeProfile: "native-linux", packageKind: "linux-native", label: "Native Linux" },
-    freebsd: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "freebsd-podman", label: "FreeBSD / Podman" },
+    windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows", packageLabel: "Windows package" },
+    nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker", packageLabel: "Server Docker Compose" },
+    mac: { runtimeMode: "mac", runtimeProfile: "desktop", packageKind: "container-desktop", label: "macOS Docker", packageLabel: "macOS Docker Desktop Compose" },
+    linux: { runtimeMode: "linux", runtimeProfile: "native-linux", packageKind: "linux-native", label: "Native Linux", packageLabel: "Native Linux package" },
+    freebsd: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "freebsd-podman", label: "FreeBSD / Podman", packageLabel: "FreeBSD Podman package" },
   };
   let profileName = "windows";
   const profile = () => PROFILES[profileName];
@@ -257,7 +257,8 @@
       packageVersion: DEMO_VERSION,
       runtimeProfile: "native-windows",
       packageKind: "windows-installer",
-      packageLabel: "Synthetic supported package",
+      packageLabel: "Windows package",
+      windowsUpdaterAvailable: true,
       hostAdapterState: "not-applicable",
       updateChannel: "stable",
       latestStableVersion: "",
@@ -293,7 +294,7 @@
       model.startup.supported = !serviceProfile();
       const authorizationCommand = name === "linux" || name === "freebsd"
         ? "sudo tautweekly remote-access-authorize"
-        : name === "windows" ? "" : "./tautweekly.sh remote-access-login";
+        : name === "windows" ? "" : "docker compose exec tautweekly /opt/tautweekly/bin/tautweekly-funnel login";
       Object.assign(model.tailscale, { supported: true, installed: true, enabled: false, active: false,
         state: name === "windows" ? "manager-password-required" : "authorization-required", url: "",
         provider: "tailscale", networkKind: "public-funnel",
@@ -301,7 +302,8 @@
         management: "integrated",
         hostAuthorizationRequired: name !== "windows", hostAuthorizationCommand: authorizationCommand });
       Object.assign(model.update, { managerVersion: DEMO_VERSION, applicationVersion: DEMO_VERSION,
-        packageVersion: DEMO_VERSION, runtimeProfile: profile().runtimeProfile, packageKind: profile().packageKind, packageLabel: profile().label + " (fictional)",
+        packageVersion: DEMO_VERSION, runtimeProfile: profile().runtimeProfile, packageKind: profile().packageKind, packageLabel: profile().packageLabel,
+        windowsUpdaterAvailable: name === "windows",
         imageVersion: ["nas", "mac", "freebsd"].includes(name) ? DEMO_VERSION : "",
         imageRepository: ["nas", "mac", "freebsd"].includes(name) ? "ghcr.io/sparkmoxie/tautweekly" : "",
         recommendedImageReference: ["nas", "mac", "freebsd"].includes(name) ? "ghcr.io/sparkmoxie/tautweekly:" + DEMO_VERSION : "",
@@ -596,7 +598,7 @@
     finishScheduleIfReady();
     finishUpdateIfReady();
 
-    if (path === "/api/v1/setup") return json({ paired: true, authenticationRequired: serviceProfile(), pairingRequired: false, runtimeMode: profile().runtimeMode });
+    if (path === "/api/v1/setup") return json({ paired: true, authenticationRequired: serviceProfile(), pairingRequired: false, ...profile() });
     if (path === "/api/v1/auth/session" || path === "/api/v1/auth/login" || path === "/api/v1/auth/pair") return json({ authenticated: true, csrfToken: "synthetic-demo-token", expiresAtUtc: new Date(Date.now() + 86400000).toISOString() });
     if (path === "/api/v1/auth/logout") return json({ signedOut: true });
     if (path === "/api/v1/auth/access" && method === "GET") return json(access());

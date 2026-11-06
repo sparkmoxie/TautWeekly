@@ -8862,19 +8862,19 @@ $mediaStatsRows
           <img src="$actionIconSrc" width="18" height="18" alt="Weekly Drops" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
           <span style="display:inline-block;vertical-align:middle;">$($deliveryDay.ToUpperInvariant()) DROPS</span>
         </div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Every $deliveryDay morning you’ll get the newest movies and TV additions.</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Each weekly newsletter covers the latest movie and TV additions.</div>
 
         <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">
-          <img src="$watchedIconSrc" width="18" height="18" alt="Your Private Readout" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
-          <span style="display:inline-block;vertical-align:middle;">YOUR PRIVATE READOUT</span>
+          <img src="$watchedIconSrc" width="18" height="18" alt="Your watch recap" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
+          <span style="display:inline-block;vertical-align:middle;">YOUR WATCH RECAP</span>
         </div>
         <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">As you stream, your weekly email builds a private recap with watch time, movies, TV shows, posters, and ratings.</div>
 
         <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">
-          <img src="$lockInfoIconSrc" width="18" height="18" alt="Just Your Stats" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
-          <span style="display:inline-block;vertical-align:middle;">JUST YOUR STATS</span>
+          <img src="$lockInfoIconSrc" width="18" height="18" alt="Who gets your recap" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:-4px;margin-right:6px;">
+          <span style="display:inline-block;vertical-align:middle;">WHO GETS YOUR RECAP</span>
         </div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion watch duration, total plays, and nonzero unique movie/TV-show counts are shared server-wide; when more than one episode qualifies, their cumulative count is included. The champion’s identity stays private.</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your viewing recap can also go to any eligible household copy addresses your server admin set up for you. The server-wide Binge Champion summary shares watch time, total plays, and nonzero counts of unique movies and TV shows. The episode total appears when more than one episode qualifies. The champion remains anonymous.</div>
       </td>
     </tr>
   </table>
@@ -8894,8 +8894,8 @@ $mediaStatsRows
 <tr>
 <td class="pad" align="center" style="padding:12px 20px 26px;color:#5f5f5f;font-size:11px;line-height:1.5;">
   Your watch recap is generated privately from $(HtmlEncode $footerServerName) server’s history.<br>
-  Other users do not receive your detailed individual viewing stats.<br>
-  The Binge Champion watch duration, total plays, and nonzero unique movie/TV-show counts are shared server-wide. A cumulative qualifying episode count is included when greater than one; the champion's identity stays private.
+  Your viewing recap can also go to any eligible household copy addresses your server admin set up for you.<br>
+  The server-wide Binge Champion summary shares watch time, total plays, and nonzero counts of unique movies and TV shows. The episode total appears when more than one episode qualifies. The champion remains anonymous.
 </td>
 </tr>
 "@
@@ -9169,14 +9169,15 @@ Your access to $serverName is live. This is your first $deliveryDay drop.
         $welcomeInfoText = @"
 
 $($deliveryDay.ToUpperInvariant()) DROPS
-Every $deliveryDay morning you'll get the newest movies and TV additions.
+Each weekly newsletter covers the latest movie and TV additions.
 
-YOUR PRIVATE READOUT
+YOUR WATCH RECAP
 As you stream, your weekly email builds a private recap with watch time, movies,
 episodes, and your most-watched title.
 
-JUST YOUR STATS
-Your individual viewing recap stays in your email. Other users don't receive it.
+WHO GETS YOUR RECAP
+Your viewing recap can also go to any eligible household copy addresses your server admin set up for you.
+The server-wide Binge Champion summary shares watch time, total plays, and nonzero counts of unique movies and TV shows. The episode total appears when more than one episode qualifies. The champion remains anonymous.
 "@
     }
 
@@ -9262,13 +9263,13 @@ function Build-WelcomeHtml {
     <tr>
       <td style="padding:20px 22px;">
         <div style="font-size:13px;color:#e5a00d;font-weight:800;">🍿 $($deliveryDay.ToUpperInvariant()) DROPS</div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Every $deliveryDay morning you’ll get the newest movies and TV additions.</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Each weekly newsletter covers the latest movie and TV additions.</div>
 
-        <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">📡 YOUR PRIVATE READOUT</div>
+        <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">📡 YOUR WATCH RECAP</div>
         <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">As you stream, your weekly email builds a private recap with watch time, movies, TV shows, posters, and ratings.</div>
 
-        <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">🔒 JUST YOUR STATS</div>
-        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your detailed viewing recap stays in your email. The Binge Champion watch duration, total plays, and nonzero unique movie/TV-show counts are shared server-wide; when more than one episode qualifies, their cumulative count is included. The champion’s identity stays private.</div>
+        <div style="padding-top:18px;font-size:13px;color:#e5a00d;font-weight:800;">🔒 WHO GETS YOUR RECAP</div>
+        <div style="padding-top:5px;font-size:14px;line-height:1.5;color:#a0a0a0;">Your viewing recap can also go to any eligible household copy addresses your server admin set up for you. The server-wide Binge Champion summary shares watch time, total plays, and nonzero counts of unique movies and TV shows. The episode total appears when more than one episode qualifies. The champion remains anonymous.</div>
       </td>
     </tr>
   </table>
@@ -9323,13 +9324,15 @@ $customTextCardBlock
 Your welcome email also includes the current New Releases from the server.
 
 $($deliveryDay.ToUpperInvariant()) DROPS
-Every $deliveryDay morning you'll get the newest movies and TV additions.
+Each weekly newsletter covers the latest movie and TV additions.
 
-YOUR PRIVATE READOUT
+YOUR WATCH RECAP
 As you stream, your weekly email builds a private recap with watch time, movies,
 episodes, and your most-watched title.
 
-Your individual viewing stats are not shared with other users.
+WHO GETS YOUR RECAP
+Your viewing recap can also go to any eligible household copy addresses your server admin set up for you.
+The server-wide Binge Champion summary shares watch time, total plays, and nonzero counts of unique movies and TV shows. The episode total appears when more than one episode qualifies. The champion remains anonymous.
 
 ${plexButtonLabel}: $plexWebUrl
 "@
@@ -9742,7 +9745,7 @@ if ($Mode -eq "SendWelcome") {
         throw "SendWelcome mode requires a user identifier. ListUsers only displays the roster; pass a numeric UserId from that table."
     }
     if (-not $ConfirmWelcome) {
-        throw "SendWelcome is intentionally locked. Re-run with -ConfirmWelcome."
+        throw "Review the selected user and any eligible household copies, then rerun with -ConfirmWelcome to send real email."
     }
 
     $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
@@ -9892,7 +9895,7 @@ if ($Mode -eq "SendWelcome") {
     $subject = Get-OneOffWelcomeSubject -User $user
 
     $script:TautWeeklyResultErrorCategory = "smtp-failed"
-    Write-Log "Sending ONE-OFF welcome to $($user.FriendlyName) <$($user.DeliveryEmail)>..."
+    Write-Log "Sending a welcome newsletter to the selected user's primary address and eligible household copies..."
     Send-NewsletterMail `
         -To $user.DeliveryEmail `
         -EnvelopeBcc @(Get-TautWeeklyHouseholdCopies -User $user) `
@@ -9904,7 +9907,7 @@ if ($Mode -eq "SendWelcome") {
 
     $script:TautWeeklyResultSmtpAcceptedCount = 1
     Mark-UserWelcomed -State $accessState -UserId $user.UserId
-    Write-Log "Welcome email sent successfully to $($user.FriendlyName)."
+    Write-Log "SMTP accepted the primary welcome message."
     Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0
 }
@@ -9913,7 +9916,7 @@ if ($Mode -eq "SendWelcome") {
 # COMMON DATA FOR FRIDAY PREVIEW / TEST / SEND
 # ---------------------------------------------------------------------------
 if ($Mode -eq "SendAll" -and -not $ConfirmSendAll) {
-    throw "SendAll is intentionally locked. Re-run with -ConfirmSendAll after reviewing a test email."
+    throw "Review a test email and the eligible users and household copies, then rerun with -ConfirmSendAll to send real email."
 }
 
 $script:TautWeeklyResultErrorCategory = "configuration-invalid"
@@ -10622,7 +10625,7 @@ if ($Mode -eq "SendTestAll") {
         }
     }
 
-    Write-Log "All six email-state tests were sent to TestEmail only."
+    Write-Log "SMTP accepted all six messages for TestEmail only."
     Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0
 }
@@ -10684,7 +10687,7 @@ if ($Mode -eq "SendTest") {
         -HeroAssets $activeDesignHero
 
     $script:TautWeeklyResultSmtpAcceptedCount = 1
-    Write-Log "Test email sent successfully."
+    Write-Log "SMTP accepted one message for TestEmail."
     Write-TautWeeklyStructuredResult -Outcome "succeeded"
     exit 0
 }
@@ -10772,7 +10775,7 @@ if ($Mode -eq "SendAll") {
 
     Write-Host ""
     Write-Host "Finished."
-    Write-Host ("Sent:    {0}" -f $sent)
+    Write-Host ("Primary messages accepted by SMTP: {0}" -f $sent)
     Write-Host ("Skipped: {0}" -f $skipped)
     Write-Host ("Failed:  {0}" -f $failed)
 

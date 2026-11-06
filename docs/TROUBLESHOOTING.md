@@ -42,8 +42,7 @@ logs into a support report.
 Use the exact SMTP submission hostname and STARTTLS submission port issued for
 the account; TautWeekly does not support implicit-TLS port 465. Confirm whether
 the username is a full address or another issued identifier and use an
-application password when account policy requires one. The normal `verify`
-operation does not authenticate or submit mail.
+application password when account policy requires one.
 
 | Stage | Provider-neutral checks |
 |---|---|
@@ -53,17 +52,18 @@ operation does not authenticate or submit mail.
 | `auth` | Use the exact issued username and an SMTP-capable password or application-specific credential. Keep `SmtpAuthenticationMethod=Auto` unless the administrator explicitly requires advertised `LOGIN` or `PLAIN`; keep `SmtpStripPasswordSpaces=false` unless displayed spaces are separators. |
 | `mail-from` | Set `FromEmail` to the authenticated account or another sender identity that account is explicitly authorized to use. Changing `FromName` or `ReplyToEmail` does not authorize a sender. |
 | `rcpt-to` | Confirm the controlled test address is valid and the account may send to it. Test with one recipient before a batch. |
-| `data-command` or `data-acceptance` | Check account quota/policy, message acceptance, and any temporary service condition. Unknown final-DATA acceptance is treated as batch-fatal so TautWeekly does not risk duplicate sends. |
+| `data-command` or `data-acceptance` | Check account quota, submission policy, and message acceptance. If the connection closes after submission and before SMTP confirms acceptance, TautWeekly stops the batch without retrying to avoid duplicates. |
 
 A 4xx response is temporary; stop repeated tests and allow the service's stated
 quiet period. A 5xx response is a permanent rejection of that attempt; correct
 the relevant account, sender, recipient, or policy setting before retrying.
-`verify` proves only configuration shape and TCP reachability. Use one numeric
-ID from `list-users` with `send-test` (or Manager TestEmail) for the authoritative
-STARTTLS/authentication/submission check. Listing users never saves a default.
-If Manager reports success but the message is absent, inspect the controlled
-mailbox's junk/quarantine and the mail administrator's delivery trace; do not
-increase batch volume to test delivery.
+Terminal `verify` checks configuration and SMTP TCP reachability. The SMTP
+connection check under Manager **Verify** also checks the greeting, `EHLO`, and
+certificate-validated STARTTLS when enabled. Neither check signs in or sends mail.
+Use a numeric ID from `list-users` with `send-test` to submit one message to
+`TestEmail`. Manager **Previews** submits all six variants to that same address.
+If SMTP accepts a message that never appears in the inbox, check junk or
+quarantine and ask the mail administrator to trace delivery.
 
 ## SMTP provider temporarily locks or limits the account
 

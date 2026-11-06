@@ -304,6 +304,17 @@ func TestBackgroundUpdateCheckRecommendationUsesFreshnessBackoffAndChannel(t *te
 	if status := coordinator.Status(); !status.BackgroundCheckRecommended || status.State != "update-available" {
 		t.Fatalf("stale cached result did not remain visible while recommending refresh: %+v", status)
 	}
+	checker.err = errors.New("synthetic offline")
+	cached, err := coordinator.CheckNow(t.Context())
+	if err != nil || cached.LastFailure == nil || cached.LastSuccessfulCheckUTC != checked.LastSuccessfulCheckUTC || cached.State != "update-available" {
+		t.Fatalf("failed check lost the cached stable result: %+v, %v", cached, err)
+	}
+	currentNow = currentNow.Add(time.Minute)
+	checker.err = nil
+	recovered, err := coordinator.CheckNow(t.Context())
+	if err != nil || recovered.LastFailure != nil || recovered.LastSuccessfulCheckUTC == checked.LastSuccessfulCheckUTC {
+		t.Fatalf("successful recheck did not replace failure: %+v, %v", recovered, err)
+	}
 
 	failureNow := now
 	failureChecker := &fixtureUpdateChecker{err: errors.New("synthetic offline")}
@@ -621,38 +632,62 @@ func TestUpdatePackageLanguageAndLegacyAdapterMatrix(t *testing.T) {
 		mode      string
 		command   string
 		owner     string
+		guide     string
 		container bool
 	}{
-		{packageKindWindows, runtimeModeWindows, "", "Windows", false},
-		{packageKindLinux, runtimeModeLinux, "sudo tautweekly update", "Linux", false},
-		{packageKindMac, runtimeModeMac, "./tautweekly.sh update", "Mac", true},
-		{packageKindContainerDesktop, runtimeModeMac, "docker compose pull", "Desktop", true},
-		{packageKindContainerCompose, runtimeModeNAS, "docker compose pull", "Docker Compose", true},
-		{packageKindMacRegistry, runtimeModeMac, "docker compose pull", "Mac", true},
-		{packageKindFreeBSD, runtimeModeNAS, "sudo tautweekly update", "FreeBSD", true},
-		{packageKindNAS, runtimeModeNAS, "./tautweekly.sh update", "Docker Compose", true},
-		{packageKindQNAP, runtimeModeNAS, "./tautweekly.sh update", "QNAP Container Station", true},
-		{packageKindUnraid, runtimeModeNAS, "", "Unraid", true},
-		{packageKindCompatibleDocker, runtimeModeNAS, "docker compose pull", "Container host", true},
+		{packageKindWindows, runtimeModeWindows, "", "Windows", "windows/#updates", false},
+		{packageKindWindowsPortable, runtimeModeWindows, "", "Windows", "windows/#updates", false},
+		{packageKindLinux, runtimeModeLinux, "sudo tautweekly update", "Linux", "linux/#upgrade", false},
+		{packageKindMac, runtimeModeMac, "./tautweekly.sh update", "Mac", "mac/#update", true},
+		{packageKindContainerDesktop, runtimeModeMac, "docker compose pull", "Desktop", "mac/#update", true},
+		{packageKindContainerCompose, runtimeModeNAS, "docker compose pull", "Docker Compose", "nas-docker/manager.html#lifecycle", true},
+		{packageKindMacRegistry, runtimeModeMac, "docker compose pull", "Mac", "mac/#update", true},
+		{packageKindFreeBSD, runtimeModeNAS, "sudo tautweekly update", "FreeBSD", "freebsd/#updates", true},
+		{packageKindNAS, runtimeModeNAS, "./tautweekly.sh update", "NAS Docker", "nas-docker/manager.html#lifecycle", true},
+		{packageKindQNAP, runtimeModeNAS, "", "QNAP Container Station", "nas-docker/manager.html#lifecycle", true},
+		{packageKindUnraid, runtimeModeNAS, "", "Unraid", "nas-docker/manager.html#lifecycle", true},
+		{packageKindCompatibleDocker, runtimeModeNAS, "", "Container host", "nas-docker/manager.html#lifecycle", true},
+		{"", runtimeModeMac, "", "Installation guide", "", false},
 	}
 	for _, test := range tests {
 		t.Run(test.kind, func(t *testing.T) {
 			guidance := updateGuidance(test.kind)
-			if !strings.Contains(guidance.Owner, test.owner) || (test.command != "" && !strings.Contains(guidance.Command, test.command)) {
+			if !strings.Contains(guidance.Owner, test.owner) || !strings.HasPrefix(guidance.Command, test.command) ||
+				(test.command == "" && guidance.Command != "") || guidance.DocsURL != "https://sparkmoxie.github.io/TautWeekly/"+test.guide {
 				t.Fatalf("guidance for %s: %+v", test.kind, guidance)
 			}
-			status := newUpdateCoordinator(Options{DataDir: t.TempDir(), TautWeeklyRoot: t.TempDir(), Version: "1.0.0", RuntimeMode: test.mode, PackageKind: test.kind, PackageVersion: "1.0.0", HostAdapterVersion: "2", updateChecker: &fixtureUpdateChecker{}}).Status()
+			server, err := New(Options{DataDir: t.TempDir(), TautWeeklyRoot: t.TempDir(), Version: "1.0.0", RuntimeMode: test.mode, PackageKind: test.kind, PackageVersion: "1.0.0", HostAdapterVersion: "2", updateChecker: &fixtureUpdateChecker{}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			status := server.updates.Status()
+			setupResponse := requestForTest(server, http.MethodGet, "/api/v1/setup", nil, nil)
+			var setup struct {
+				PackageKind  string `json:"packageKind"`
+				PackageLabel string `json:"packageLabel"`
+			}
+			if err := json.Unmarshal(setupResponse.Body.Bytes(), &setup); err != nil || setupResponse.Code != http.StatusOK ||
+				setup.PackageKind != test.kind || setup.PackageLabel != status.PackageLabel || setup.PackageLabel != server.capabilities.PackageLabel {
+				t.Fatalf("inconsistent setup and update identity for %s: setup=%+v status=%+v err=%v", test.kind, setup, status, err)
+			}
+			if token := server.BootstrapToken(); token != "" && strings.Contains(setupResponse.Body.String(), token) {
+				t.Fatal("public setup returned the private pairing token")
+			}
 			if (status.ImageVersion != "") != test.container {
 				t.Fatalf("image version presence for %s: %+v", test.kind, status)
 			}
-			if test.container {
+			if test.kind == packageKindMac {
+				if status.ImageRepository != "" || status.RecommendedImageReference != "" || status.ImagePinningPolicy != "" || status.MigrationState != "local-mac-image" {
+					t.Fatalf("Mac archive incorrectly reported registry details: %+v", status)
+				}
+			} else if test.container {
 				if status.ImageRepository != unifiedContainerImageRepository ||
 					status.RecommendedImageReference != unifiedContainerImageRepository+":1.0.0" ||
 					status.ImagePinningPolicy == "" || status.RuntimeProfile == "" {
 					t.Fatalf("unified image metadata for %s: %+v", test.kind, status)
 				}
 				wantMigration := "unified-image"
-				if test.kind == packageKindMac || test.kind == packageKindMacRegistry {
+				if test.kind == packageKindMacRegistry {
 					wantMigration = "legacy-mac-image"
 				}
 				if status.MigrationState != wantMigration {

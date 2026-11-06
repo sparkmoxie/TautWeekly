@@ -60,6 +60,11 @@ if (-not (Test-Path -LiteralPath $dataRoot -PathType Container)) {
 }
 
 $arguments = 'serve --listen=127.0.0.1:8788 --tautweekly-root="{0}" --data-dir="{1}"' -f $root, $dataRoot
+if (Test-Path -LiteralPath (Join-Path $root 'INSTALL-METADATA.txt') -PathType Leaf) {
+    $arguments += ' --package-kind=windows-installer'
+} else {
+    $arguments += ' --package-kind=windows-portable'
+}
 if (-not $Startup -or $OpenDashboard) {
     $arguments += ' --open-browser'
 }

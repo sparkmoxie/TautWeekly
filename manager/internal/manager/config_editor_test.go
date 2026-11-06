@@ -11,6 +11,52 @@ import (
 	"time"
 )
 
+func TestConnectionFieldsUsePackageReachability(t *testing.T) {
+	for _, test := range []struct {
+		mode, kind, host string
+		prefill          bool
+	}{
+		{runtimeModeWindows, packageKindWindows, "127.0.0.1", true},
+		{runtimeModeWindows, packageKindWindowsPortable, "127.0.0.1", true},
+		{runtimeModeLinux, packageKindLinux, "127.0.0.1", true},
+		{runtimeModeMac, packageKindMac, "host.docker.internal", true},
+		{runtimeModeMac, packageKindMacRegistry, "host.docker.internal", true},
+		{runtimeModeMac, packageKindContainerDesktop, "host.docker.internal", true},
+		{runtimeModeNAS, packageKindNAS, "192.168.1.10", false},
+		{runtimeModeNAS, packageKindContainerCompose, "192.168.1.10", false},
+		{runtimeModeNAS, packageKindFreeBSD, "192.168.1.10", false},
+		{runtimeModeNAS, packageKindQNAP, "192.168.1.10", false},
+		{runtimeModeNAS, packageKindUnraid, "192.168.1.10", false},
+		{runtimeModeNAS, packageKindCompatibleDocker, "192.168.1.10", false},
+		{runtimeModeNAS, "", "192.168.1.10", false},
+	} {
+		t.Run(test.mode+"/"+test.kind, func(t *testing.T) {
+			options := Options{RuntimeRoot: t.TempDir(), RuntimeMode: test.mode, PackageKind: test.kind}
+			server := Server{options: options, capabilities: capabilitiesFor(options)}
+			view := server.configEditorView()
+			tautulliURL := "http://" + test.host + ":8181"
+			plexURL := "http://" + test.host + ":32400"
+			tautulli := editorField(t, view, "TautulliUrl")
+			plex := editorField(t, view, "PlexServerUrl")
+			wantTautulli := ""
+			if test.prefill {
+				wantTautulli = tautulliURL
+			}
+			if tautulli.Value != wantTautulli || tautulli.Placeholder != tautulliURL || !strings.Contains(tautulli.Help, tautulliURL) ||
+				plex.Value != "" || plex.Placeholder != plexURL || !strings.Contains(plex.Help, plexURL) {
+				t.Fatalf("unexpected connection fields for fresh config: %+v %+v", tautulli, plex)
+			}
+			const savedTautulli = "http://192.168.99.42:8181"
+			const savedPlex = "http://192.168.99.42:32400"
+			server.options.RuntimeRoot = integrationConfigRoot(t, savedTautulli, "fixture-key", savedPlex, "fixture-token")
+			view = server.configEditorView()
+			if editorField(t, view, "TautulliUrl").Value != savedTautulli || editorField(t, view, "PlexServerUrl").Value != savedPlex {
+				t.Fatal("package guidance replaced a saved connection address")
+			}
+		})
+	}
+}
+
 func TestReadConfigEditorUsesSafeDefaultsWithoutSecrets(t *testing.T) {
 	root := t.TempDir()
 	view := ReadConfigEditor(root)

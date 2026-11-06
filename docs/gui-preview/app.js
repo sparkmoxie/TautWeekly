@@ -45,8 +45,8 @@ const state = {
   capabilities: null,
   updates: null,
   updateChecking: false,
-  updateCheckBackground: false,
   updateInstalling: false,
+  setup: null,
   runtimeMode: "windows",
 };
 const byId = (id) => document.getElementById(id);
@@ -224,6 +224,7 @@ function pairingTokenFromFragment() {
 
 async function initialize() {
   const setup = await request("/api/v1/setup");
+  state.setup = setup;
   state.runtimeMode = setup.runtimeMode || "windows";
   renderAuthenticationBoundary();
   try {
@@ -236,6 +237,7 @@ async function initialize() {
   }
   byId("auth-shell").hidden = false;
   if (setup.pairingRequired) {
+    setText("auth-title", "Set up TautWeekly");
     byId("pair-form").hidden = false;
     const token = pairingTokenFromFragment();
     byId("pair-token").value = token;
@@ -392,127 +394,131 @@ function isServiceRuntime() {
 }
 
 function embeddedRuntimeLabel() {
-  return isLinuxService() ? "Linux service" : isMacDocker() ? "Mac container" : "container";
+  return isLinuxService() ? "Linux service" : "container";
 }
 
 function configFieldIsHidden(field) {
   return field.type === "asset-id" || guidedConfigFields.has(field.name) || (isServiceRuntime() && field.name === "ScheduledTaskName");
 }
 
-function renderAuthenticationBoundary() {
-  const boundary = document.querySelector(".auth-boundary p");
-  const resetHint = document.querySelector("#login-form .field-hint");
-  if (isServiceRuntime()) {
-    const linux = isLinuxService();
-    const mac = isMacDocker();
-    setText("auth-runtime-eyebrow", linux ? "Private Linux administration" : mac ? "Private macOS administration" : "Private NAS administration");
-    setText("auth-runtime-copy", "Review health, embedded scheduling, persistent configuration, and authenticated previews without exposing TautWeekly to a cloud service.");
-    boundary.innerHTML = linux
-      ? "<strong>Loopback by design.</strong> This authenticated Manager listens on the Linux host loopback interface. Use an SSH tunnel for recovery or the independently verified Funnel URL for public access. It makes no analytics or cloud-management requests."
-      : mac
-        ? "<strong>Loopback by design.</strong> Docker Desktop publishes this authenticated Manager only to the Mac loopback interface. Optional public access uses the independently verified Funnel URL. It makes no analytics or cloud-management requests."
-        : "<strong>Loopback by design.</strong> This authenticated Manager uses the package's loopback recovery mapping. Use an SSH local forward for recovery or the independently verified Funnel URL for public access. It makes no analytics or cloud-management requests.";
-    resetHint.innerHTML = linux
-      ? "Forgot the password? Run <strong>sudo tautweekly manager-reset-access</strong> on the Linux host. Newsletter configuration and schedules are preserved."
-      : mac
-        ? "Forgot the password? Run <strong>./tautweekly.sh manager-reset-access</strong> in the Mac package directory. Newsletter configuration and schedules are preserved."
-        : "Forgot the password? Run the packaged <strong>manager-reset-access</strong> host command or the documented container Console recovery. Newsletter configuration and schedules are preserved.";
-    document.querySelector("#pair-form .form-heading p").textContent = linux
-      ? "Retrieve the one-time token with sudo tautweekly manager-bootstrap, then create the administrator password. The token is returned only to that explicit terminal command and is never written to service logs."
-      : mac
-        ? "Retrieve the one-time token with ./tautweekly.sh manager-bootstrap in the Mac package directory, then create the administrator password. The token is never written to Docker logs."
-        : "Retrieve the one-time token with the packaged host or container Console command, then create the administrator password. The token is never written to container logs.";
-  } else {
-    setText("auth-runtime-eyebrow", "Private local administration");
-    setText("auth-runtime-copy", "Review health, schedule state, configuration, and generated previews without exposing TautWeekly to a cloud service.");
+function packageKind() {
+  return state.capabilities?.packageKind || state.setup?.packageKind || "";
+}
+
+function packageName() {
+  return state.capabilities?.packageLabel || state.setup?.packageLabel || "Manager";
+}
+
+function packageAccessGuidance(kind) {
+  const guide = "https://sparkmoxie.github.io/TautWeekly/";
+  const containerGuide = "nas-docker/manager.html#first-access";
+  const hostDefault = "With the default host mapping, open Manager through an SSH tunnel to the host's loopback port.";
+  const desktopDefault = "With the default port mapping, open Manager on the Mac running Docker Desktop.";
+  const directCommands = (prefix, mode) => {
+    const manager = `${prefix}/opt/tautweekly/bin/run-as-user.sh /opt/tautweekly/bin/tautweekly-manager`;
+    return {
+      bootstrap: `${manager} access-bootstrap --data-dir /data/manager`,
+      recovery: `Run ${manager} access-recover --data-dir /data/manager --tautweekly-root /opt/tautweekly --listen 0.0.0.0:8080 --runtime-mode ${mode} --confirm, then restart the container and retrieve a new token.`,
+    };
+  };
+  const wrapperCommands = (command, location) => ({
+    location: `${location}, run`,
+    bootstrap: `${command} manager-bootstrap`,
+    recovery: `${location}, run ${command} manager-reset-access, then retrieve a new token.`,
+  });
+  switch (kind) {
+    case "windows-installer":
+    case "windows-portable":
+      return {
+        guide: `${guide}windows/#password`,
+        access: "Open Manager on the Windows computer running TautWeekly. For public access, use a verified Funnel address when enabled.",
+        recovery: kind === "windows-portable"
+          ? "Run 18-RESET-MANAGER-ACCESS.bat from the extracted Windows folder."
+          : "Use the Reset TautWeekly Manager Access shortcut or run Reset-TautWeekly-Access.cmd in the installed folder.",
+        pairing: "Use the one-time token from the Manager launch message, then create an administrator password.",
+      };
+    case "linux-native":
+      return { guide: `${guide}linux/#install`, access: "With the default Linux listener, open Manager on the host or forward its loopback port over SSH.", ...wrapperCommands("sudo tautweekly", "On the Linux host") };
+    case "freebsd-podman":
+      return { guide: `${guide}freebsd/#install`, access: hostDefault, ...wrapperCommands("sudo tautweekly", "On the FreeBSD host") };
+    case "mac-docker":
+      return { guide: `${guide}mac/#install`, access: desktopDefault, ...wrapperCommands("./tautweekly.sh", "From the extracted Mac archive") };
+    case "nas-docker":
+      return { guide: guide + containerGuide, access: hostDefault, ...wrapperCommands("./tautweekly.sh", "From the extracted NAS archive on the host") };
+    case "container-desktop":
+    case "mac-docker-registry":
+      return { guide: `${guide}mac/#install`, access: desktopDefault, location: "From the Mac's Compose project directory, run", ...directCommands("docker compose exec -T tautweekly ", "mac") };
+    case "container-compose":
+      return { guide: guide + containerGuide, access: hostDefault, location: "From the host's Compose project directory, run", ...directCommands("docker compose exec -T tautweekly ", "nas") };
+    case "unraid":
+    case "qnap-container-station":
+      return { guide: guide + containerGuide, access: hostDefault, location: `In the ${kind === "unraid" ? "Unraid" : "Container Station"} container Console, run`, ...directCommands("", "nas") };
+    case "docker-compatible":
+      return {
+        guide: guide + containerGuide,
+        access: "Use the Manager address configured in the tool that deployed this container.",
+        location: "Open a container console with your deployment tool and run",
+        bootstrap: directCommands("", "nas").bootstrap,
+        recovery: "Follow the container console recovery steps for your deployment, then restart and retrieve a new token.",
+      };
+    default:
+      return { guide, access: "Use the address configured for this installation.", pairing: "Get the one-time token using the steps for your installation method, then create an administrator password.", recovery: "Follow the password recovery steps for your installation method." };
   }
+}
+
+function renderAuthenticationBoundary() {
+  const guidance = packageAccessGuidance(packageKind());
+  setText("auth-runtime-eyebrow", packageName());
+  setText("auth-runtime-copy", guidance.access);
+  setText("auth-pairing-copy", guidance.pairing || `${guidance.location} ${guidance.bootstrap}. Enter the one-time token to create your administrator password.`);
+  setText("auth-recovery-copy", `Forgot the password? ${guidance.recovery}`);
+  byId("auth-setup-guide").href = guidance.guide;
 }
 
 function renderCapabilities() {
   renderAuthenticationBoundary();
-  const nas = isNAS();
+  const guidance = packageAccessGuidance(packageKind());
   const linux = isLinuxService();
-  const mac = isMacDocker();
   const service = isServiceRuntime();
-  setText("mode-pill-label", nas ? "NAS / container" : linux ? "Native Linux" : mac ? "macOS Docker" : "Windows Manager");
-  setText("schedule-nav-copy", service ? "Embedded scheduler" : "Windows lifecycle");
-  setText("configuration-platform-label", nas ? "Guided NAS setup" : linux ? "Guided Linux setup" : mac ? "Guided Mac setup" : "Guided Windows setup");
-  setText("config-nav-copy", nas ? "Guided NAS setup" : linux ? "Guided Linux setup" : mac ? "Guided Mac setup" : "Guided local setup");
-  setText("sidebar-connection-label", service ? "Manager connection" : "Local connection");
+  setText("mode-pill-label", packageName());
+  setText("schedule-nav-copy", "Scheduler status");
+  setText("configuration-platform-label", packageName());
+  setText("config-nav-copy", "Connections and newsletter");
   setText("upcoming-run-label", service ? "Upcoming scheduler run" : "Upcoming task run");
   setText("schedule-state-label", service ? "Scheduler state" : "Task state");
   setText("schedule-lifecycle-copy", service
     ? "Disabling future starts never cancels a newsletter delivery that is already running."
     : "Disabling or removing a schedule never cancels a newsletter process that is already running.");
-  setText("settings-page-heading", "Local access and truthful updates.");
-  setText("settings-platform-copy", nas
-    ? "This container requires an administrator password and keeps its recovery mapping on host loopback. Settings reports update and Funnel status; runtime lifecycle and installation remain under your NAS or container host."
-    : linux
-      ? "This systemd service requires an administrator password and listens on host loopback by default. Settings reports update status; installation remains an explicit, checksum-verified Linux package operation."
-    : mac
-      ? "This Docker Desktop service requires an administrator password and publishes only to Mac loopback by default. Settings reports update status; installation remains an explicit, checksum-verified Mac package operation."
-    : "Windows trusts this computer by default. Settings reports update status and can start only the existing verified updater; add a password lock when the extra access boundary is useful.");
-  setText("about-access-heading", "Loopback recovery and optional Funnel");
-  setText("about-access-copy", nas
-    ? "The Manager requires authentication and the package maps it only to host loopback. Use an SSH local forward for recovery or the independently verified Funnel URL for public access."
-    : linux
-      ? "The Manager requires authentication and listens on 127.0.0.1. Use an SSH tunnel for recovery or the independently verified Funnel URL for public access."
-    : mac
-      ? "Docker Desktop publishes the Manager only on 127.0.0.1. Optional public access uses the independently verified Funnel URL."
-    : "The Manager accepts browser connections only from this computer and rejects unrecognized hostnames.");
-  setText("update-edition", nas ? "NAS / Container Manager" : linux ? "Native Linux Manager" : mac ? "macOS Docker Desktop Manager" : "Windows Manager");
+  setText("settings-platform-copy", packageName());
+  setText("about-access-copy", guidance.access);
+  setText("diagnostics-package-label", packageName());
   setText("about-secret-copy", service
     ? "Secrets stay hidden during normal reads. Revealing returns only the selected credential, requires administrator password re-authentication, and automatically clears from the page."
     : "Secrets stay hidden during normal reads. Revealing returns only the selected credential, uses password re-authentication when the optional lock is enabled, and automatically clears from the page.");
-  setText("about-delivery-copy", service
-    ? "Renderer completion, SMTP acceptance, and inbox delivery remain distinct states in both API copy and interface labels."
-    : "Task execution, SMTP acceptance, and inbox delivery remain distinct states in both API copy and interface labels.");
-  setText("about-lifecycle-copy", nas
-    ? "For packaged Compose or QNAP installs, run ./tautweekly.sh check-update and ./tautweekly.sh update. The host verifies the stable release package and its internal manifest, refreshes release-owned Compose and wrapper files, preserves .env and /data, then health-checks the image with automatic package-and-image rollback. Unraid retains its Apps-owned update flow."
-    : linux
-      ? "Run tautweekly check-update, back up private data, then run sudo tautweekly update. The host downloads and verifies the stable Linux archive plus its internal file manifest, backs up /opt, preserves /var/lib/tautweekly, and restores a previously active systemd service."
-    : mac
-      ? "Back up the package data directory, then run ./tautweekly.sh update. The host downloads and verifies the stable Mac archive plus its internal file manifest, preserves .env and data, verifies container health and version, and restores prior package files and the prior local image on rollback."
-    : "Use the signed-in Windows installer workflow for verified update, migration, rollback, and removal while private Manager and newsletter data remain outside the replaceable application directory.");
-  setText("preview-runner-copy", nas
-    ? "Uses the saved configuration and Tautulli user ID to create local HTML in the persistent output volume. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state."
-    : linux
-      ? "Uses the saved configuration and Tautulli user ID to create local HTML under the protected Linux data directory. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state."
-    : mac
-      ? "Uses the saved configuration and Tautulli user ID to create local HTML under the package's persistent Mac data directory. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state."
-    : "Uses the saved configuration and Tautulli user ID to create local HTML in the package output folder. This action contacts the configured services, but does not contact SMTP, send email, or change welcome state.");
+  setText("about-delivery-copy", "The scheduler reports when a run starts. The newsletter reports what the mail server accepted. Check the recipient’s inbox to confirm delivery.");
   setText("access-settings-eyebrow", service ? "Required Manager authentication" : "Optional Manager lock");
   setText("access-settings-heading", service ? "Administrator password" : "Browser access");
-  byId("access-recovery-copy").innerHTML = nas
-    ? "<strong>Console recovery remains available.</strong> Run the packaged <code>manager-reset-access</code> command from the trusted NAS host or the documented container Console command. Recovery resets only Manager credentials and sessions; configuration, schedules, history, output, and newsletter state are preserved."
-    : linux
-      ? "<strong>Host recovery remains available.</strong> Run <code>sudo tautweekly manager-reset-access</code>. Recovery stops and restarts only the systemd control service, resets Manager credentials and sessions, and preserves configuration, schedules, history, output, and newsletter state."
-    : mac
-      ? "<strong>Mac package recovery remains available.</strong> Run <code>./tautweekly.sh manager-reset-access</code> in the extracted package directory. Recovery resets only Manager credentials and sessions, restarts the Docker Desktop service, and preserves configuration, schedules, history, output, and newsletter state."
-    : "<strong>Local recovery remains available.</strong> If the password is forgotten, run <code>18-RESET-MANAGER-ACCESS.bat</code> from the TautWeekly folder. Installed copies also include <code>Reset-TautWeekly-Access.cmd</code>. Recovery disables only the Manager lock and leaves configuration, credentials, schedules, history, and previews untouched.";
-  setText("foundation-schedule-copy", service
-    ? `A successful configuration save reruns only the discovery, non-sending checks, or previews affected by that card. Email delivery remains explicit, and schedule controls update only the embedded ${embeddedRuntimeLabel()} scheduler; they never stop a delivery already running.`
-    : "A successful configuration save reruns only the discovery, non-sending checks, or previews affected by that card. Email delivery remains limited to an explicit TestEmail action, and schedule changes use a fixed UAC helper that verifies task ownership.");
+  setText("access-recovery-copy", `${guidance.recovery} Recovery preserves newsletter configuration, schedules, and history.`);
+  byId("access-recovery-guide").href = guidance.guide;
+  setText("foundation-schedule-copy", "Set when the weekly newsletter goes out. You can disable future runs without interrupting a delivery in progress.");
   document.querySelectorAll("[data-windows-schedule-only]").forEach((element) => { element.hidden = service; });
   if (service) {
-    setText("schedule-page-eyebrow", linux ? "Linux service delivery lifecycle" : mac ? "Mac Docker delivery lifecycle" : "Container delivery lifecycle");
-    setText("schedule-page-copy", "Review the configured delivery window and explicitly enable or disable future starts in the embedded scheduler.");
-    setText("schedule-boundary-eyebrow", "Narrow configuration boundary");
-    setText("schedule-boundary-heading", "The browser never supplies a command.");
-    setText("schedule-boundary-copy", linux
-      ? "The Manager accepts only enable or disable for this package. It rechecks the saved configuration revision, writes a private backup, and changes no systemd unit, port, service account, application file, or host setting."
-      : "The Manager accepts only enable or disable for this package. It rechecks the saved configuration revision, writes a private backup, and changes no container, image, port, volume, UID, or host setting.");
-    setText("schedule-overview-heading", "Observed embedded scheduler state");
+    setText("schedule-page-eyebrow", "Weekly delivery");
+    setText("schedule-page-copy", "Review the delivery time and enable or disable future runs.");
+    setText("schedule-boundary-eyebrow", "Schedule settings");
+    setText("schedule-boundary-heading", "Change the weekly delivery time in Config");
+    setText("schedule-boundary-copy", "Enabling or disabling the schedule saves the setting and creates a private configuration backup.");
+    setText("schedule-overview-heading", "Scheduler status");
     setText("schedule-enable-copy", "Allow the embedded scheduler to begin a future newsletter run in the configured weekly window.");
     setText("schedule-disable-copy", "Prevent future scheduler starts while preserving configuration, history, output, and any delivery already running.");
-    byId("schedule-actions").setAttribute("aria-label", linux ? "Linux service schedule actions" : mac ? "Mac Docker schedule actions" : "Container schedule actions");
+    byId("schedule-actions").setAttribute("aria-label", linux ? "Linux service schedule actions" : "Container schedule actions");
   } else {
-    setText("schedule-page-eyebrow", "Windows delivery lifecycle");
-    setText("schedule-page-copy", "Review the configured delivery window, verify task ownership, and make one explicit elevated change at a time.");
-    setText("schedule-boundary-eyebrow", "Narrow elevation boundary");
-    setText("schedule-boundary-heading", "The browser never supplies a command.");
-    setText("schedule-boundary-copy", "The Manager accepts only install/refresh, enable, disable, or remove. Windows asks for administrator approval, and the helper rechecks configuration and task ownership.");
-    setText("schedule-overview-heading", "Observed Task Scheduler state");
+    setText("schedule-page-eyebrow", "Weekly delivery");
+    setText("schedule-page-copy", "Review the delivery time and manage the TautWeekly task in Windows Task Scheduler.");
+    setText("schedule-boundary-eyebrow", "Windows approval");
+    setText("schedule-boundary-heading", "Approve changes in Windows");
+    setText("schedule-boundary-copy", "Windows asks for administrator approval. The Manager checks that the task belongs to this installation before changing it.");
+    setText("schedule-overview-heading", "Task Scheduler status");
     setText("schedule-enable-copy", "Allow an installed, verified task to begin future scheduled newsletter runs.");
     setText("schedule-disable-copy", "Prevent future task starts while preserving configuration, history, output, and the task definition.");
     byId("schedule-actions").setAttribute("aria-label", "Windows schedule actions");
@@ -538,7 +544,7 @@ function setupWorkflowPresentation(workflow = state.setupWorkflow) {
       tone: "neutral",
       summary: state.editor?.state === "unconfigured"
         ? "Complete the guided configuration before setup checks can run."
-        : "Safe setup checks have not been recorded for this configuration.",
+        : "No setup checks recorded for this configuration.",
     };
   }
   const cacheDisabled = state.cache?.enabled === false && workflow.steps?.cache?.state === "skipped";
@@ -546,7 +552,7 @@ function setupWorkflowPresentation(workflow = state.setupWorkflow) {
   const steps = applicableStepNames.map((name) => workflow.steps?.[name]).filter(Boolean);
   const states = steps.map((step) => step.state);
   const active = state.setupWorkflowRunning || states.includes("running");
-  if (active) return { label: "Running", tone: "pending", summary: "Safe setup checks are running and each result is retained as it completes." };
+  if (active) return { label: "Running", tone: "pending", summary: "Setup checks are running. Results appear as each check finishes." };
   if (states.includes("failed")) {
     const retainedChoices = state.setupWorkflow?.steps?.choices?.state === "failed" &&
       state.discovery?.configRevision === state.editor?.revision;
@@ -554,11 +560,11 @@ function setupWorkflowPresentation(workflow = state.setupWorkflow) {
       label: "Needs review",
       tone: "bad",
       summary: retainedChoices
-        ? "Live Tautulli choice refresh failed. Cached library and user choices remain retained; other check labels are separate retained evidence."
+        ? "Tautulli refresh failed. The Manager is showing the last saved library and user choices."
         : "One or more saved setup checks need review before live delivery.",
     };
   }
-  if (states.every((stepState) => stepState === "not-run")) return { label: "Not run", tone: "neutral", summary: "Validate and save to run the five safe setup checks." };
+  if (states.every((stepState) => stepState === "not-run")) return { label: "Not run", tone: "neutral", summary: "Save your configuration to run setup checks." };
   if (states.includes("waiting")) return { label: "Waiting", tone: "waiting", summary: "One or more setup checks are waiting for a prerequisite." };
   if (states.some((stepState) => ["warning", "skipped"].includes(stepState))) return { label: "Completed with notes", tone: states.includes("warning") ? "warning" : "neutral", summary: "The saved configuration was checked; review the noted result before live delivery." };
   if (states.length === applicableStepNames.length && states.every((stepState) => stepState === "passed")) {
@@ -566,8 +572,8 @@ function setupWorkflowPresentation(workflow = state.setupWorkflow) {
       label: "Passed",
       tone: "good",
       summary: cacheDisabled
-        ? "All four applicable safe setup checks passed; the deleted-item cache is disabled."
-        : "All five safe setup checks passed for the saved configuration.",
+        ? "All enabled checks passed. The deleted-item cache is off."
+        : "All setup checks passed.",
     };
   }
   return { label: "Incomplete", tone: "neutral", summary: "Some setup checks have not completed for the saved configuration." };
@@ -715,10 +721,10 @@ function renderIntegrationStatus() {
   const overallLabel = verificationActive ? "Running" : overall === "not-run" ? "Not run" : overall === "warning" ? "Attention" : titleCase(overall);
   setChip("integration-chip", overallLabel, overallTone);
   setText("integration-copy", state.discoveryError && outcomes.length
-    ? "Tautulli/Plex and SMTP labels are retained checks with their own timestamps; the failed live choices refresh did not rerun them."
+    ? "The Tautulli choices refresh failed. These connection checks have separate results in Verify."
     : outcomes.length
-      ? "Latest checks from validation or a targeted retest are retained for this saved configuration."
-      : "Safe real checks run after a successful save or when you start a manual retest.");
+      ? "Latest connection checks for your saved configuration."
+      : "Save your configuration or open Verify to check connections.");
   return { overallLabel, overallTone, funnel };
 }
 
@@ -789,14 +795,16 @@ function renderStatus() {
   byId("delivery-status-icon").classList.toggle("delivery-icon-running", deliveryRunning);
   renderIntegrationStatus();
   renderDashboardConfigStatus();
-  setText("next-run", formatDate(snapshot.schedule.nextRunLocal));
-  setText("next-run-utc", snapshot.schedule.nextRunUtc ? `UTC: ${formatDate(snapshot.schedule.nextRunUtc)}` : embeddedSchedule ? "The embedded scheduler has not reported a valid upcoming run." : "Task Scheduler has not reported an upcoming run.");
+  const upcoming = scheduleHasUpcomingRun(snapshot);
+  setText("next-run", scheduleNextRunText(snapshot, upcoming));
+  setText("next-run-utc", upcoming && snapshot.schedule.nextRunUtc
+    ? `${formatDate(snapshot.schedule.nextRunUtc, "UTC")} UTC`
+    : embeddedSchedule ? "The scheduler has no upcoming run to show." : "Task Scheduler has no upcoming run to show.");
   setText("preview-count", snapshot.previewSummary);
-  setTimelineCardState("timeline-upcoming-card", "timeline-ready", scheduleHasUpcomingRun(snapshot));
+  setTimelineCardState("timeline-upcoming-card", "timeline-ready", upcoming);
   setTimelineCardState("timeline-last-attempt-card", "timeline-success", rendererEvidence && !deliveryRunning && snapshot.delivery.result === "smtp-accepted");
   setTimelineCardState("timeline-previews-card", "timeline-ready", state.previews.length > 0);
-  setText("sidebar-platform", `${titleCase(snapshot.platform)} · ${isNAS() ? "trusted LAN" : isLinuxService() ? "host loopback" : isMacDocker() ? "Mac loopback" : "local only"}`);
-  setText("update-platform", titleCase(snapshot.platform));
+  setText("sidebar-platform", packageName());
 }
 
 function productionDeliveryOperationIsActive() {
@@ -817,28 +825,35 @@ function renderDashboardScheduleSummary() {
   const snapshot = state.status;
   if (!snapshot) return;
   const schedule = snapshot.schedule;
-  const upcoming = schedule.supported && scheduleHasUpcomingRun(snapshot) && new Date(schedule.nextRunUtc || schedule.nextRunLocal).getTime() > Date.now();
-  const unscheduled = schedule.supported && ["not-installed", "notinstalled", "disabled"].includes(schedule.state);
-  setText("schedule-next-run", upcoming ? `${formatDate(schedule.nextRunUtc || schedule.nextRunLocal)} (your time)` : unscheduled ? "Not scheduled" : "Unavailable");
+  setText("schedule-next-run", scheduleNextRunText(snapshot));
   const ready = schedule.supported && schedule.installed && schedule.enabled && schedule.owned && state.editor?.state === "ready" && (schedule.provider?.startsWith("embedded-") ? schedule.state === "running" : schedule.state === "ready");
   const discovery = state.discovery;
   const count = discovery?.primaryRecipientCount;
   const known = discovery?.configRevision === state.editor?.revision && Number.isInteger(count) && count >= 0 && !Number.isNaN(Date.parse(discovery?.completedAtUtc));
-  setText("schedule-state", ready ? `Ready — ${known ? `${count} recipient${count === 1 ? "" : "s"} (last lookup)` : "recipients unknown"}` : titleCase(schedule.state));
+  const disabled = schedule.state === "running" && schedule.provider?.startsWith("embedded-") && !schedule.enabled;
+  setText("schedule-state", ready ? `Ready — ${known ? `${count} recipient${count === 1 ? "" : "s"} (last lookup)` : "recipients unknown"}` : disabled ? "Disabled" : titleCase(schedule.state));
   setText("schedule-recipient-evidence", ready ? known
     ? `Primary recipients as of ${formatDate(discovery.completedAtUtc)}. Household BCC copies are separate. ${state.discoveryError ? "Latest refresh failed. " : ""}Delivery rechecks the live roster; use Refresh to update this count.`
     : "Refresh to check eligible primary recipients. Delivery rechecks the live roster; household BCC copies are separate."
     : "");
 }
 
+function scheduleNextRunText(snapshot, upcoming = scheduleHasUpcomingRun(snapshot)) {
+  const schedule = snapshot.schedule;
+  if (upcoming) return `${formatDate(schedule.nextRunUtc || schedule.nextRunLocal)} (your time)`;
+  const disabled = schedule.state === "running" && schedule.provider?.startsWith("embedded-") && !schedule.enabled;
+  const unscheduled = schedule.supported && (disabled || ["not-installed", "notinstalled", "disabled"].includes(schedule.state));
+  return unscheduled ? "Not scheduled" : "Unavailable";
+}
+
 function scheduleHasUpcomingRun(snapshot) {
   const schedule = snapshot?.schedule;
-  if (!schedule?.installed || !schedule.enabled || !schedule.owned) return false;
+  if (!schedule?.supported || !schedule.installed || !schedule.enabled || !schedule.owned) return false;
   const embedded = schedule.provider?.startsWith("embedded-");
   if (embedded ? schedule.state !== "running" : schedule.state !== "ready") return false;
   const next = new Date(schedule.nextRunUtc || schedule.nextRunLocal || "");
   const observed = new Date(snapshot.observedAtUtc || Date.now());
-  return !Number.isNaN(next.getTime()) && !Number.isNaN(observed.getTime()) && next.getTime() > observed.getTime();
+  return next.getTime() > Math.max(observed.getTime(), Date.now());
 }
 
 function setTimelineCardState(id, className, active) {
@@ -878,7 +893,7 @@ function renderSchedule() {
   const owned = !schedule.installed || schedule.owned;
   const probeFailed = ["probe-failed", "heartbeat-stale", "starting"].includes(schedule.state);
   const scheduleActive = scheduleOperationIsActive(operation);
-  const managerActive = operationIsActive(state.operation);
+  const managerActive = state.operationStarting || operationIsActive(state.operation);
   const blocked = state.scheduleStarting || scheduleActive || managerActive || !ready || !schedule.supported || !owned || probeFailed;
 
   let chipText = "Not installed";
@@ -899,15 +914,16 @@ function renderSchedule() {
   setText("schedule-view-enabled", yesNo(schedule.enabled));
   setText("schedule-view-ownership", titleCase(schedule.ownership));
   setText("schedule-view-state", titleCase(schedule.state));
-  setText("schedule-view-next-run", formatDate(schedule.nextRunLocal));
-  setText("schedule-observed", `Observed ${formatDate(snapshot.observedAtUtc)}`);
+  setText("schedule-view-next-run", scheduleNextRunText(snapshot));
+  const observed = embeddedSchedule ? snapshot.observedAtUtc : schedule.probeObservedAtUtc;
+  setText("schedule-observed", observed ? `Checked ${formatDate(observed)}` : "No scheduler check recorded");
 
   const warning = byId("schedule-warning");
   warning.className = "schedule-warning";
   if (!schedule.supported) warning.textContent = "Schedule changes are unavailable on this platform.";
   else if (probeFailed) {
     warning.textContent = embeddedSchedule
-      ? `The embedded scheduler heartbeat is unavailable or stale. Restart the ${isLinuxService() ? "systemd service" : isMacDocker() ? "Docker Desktop service" : "container"} and confirm its timezone before enabling delivery.`
+      ? `Scheduler status is missing or stale. Restart the ${isLinuxService() ? "systemd service" : "container"} and check its timezone before enabling delivery.`
       : "Task Scheduler status could not be verified. The Manager will not request a schedule mutation until the local probe succeeds.";
     warning.classList.add("bad");
   }
@@ -915,9 +931,9 @@ function renderSchedule() {
   else if (!owned) {
     warning.textContent = "Safety stop: a same-named task exists but its action, working directory, or SYSTEM principal does not match this TautWeekly installation. The Manager will not modify it.";
     warning.classList.add("bad");
-  } else if (managerActive) warning.textContent = "Wait for the active preview or test-delivery operation before changing the schedule.";
-  else if (scheduleActive) warning.textContent = embeddedSchedule ? "A schedule configuration change is completing. No second change can start." : "A fixed schedule operation is waiting for UAC approval or completing. No second change can start.";
-  else warning.textContent = "Task execution is distinct from SMTP acceptance. The dashboard reports both signals separately.";
+  } else if (managerActive) warning.textContent = "Wait for the current preview, test, manual send, or cache refresh before changing the schedule.";
+  else if (scheduleActive) warning.textContent = embeddedSchedule ? "A schedule change is in progress." : "A schedule change is in progress. Check for a Windows approval prompt.";
+  else warning.textContent = "See Dashboard for the latest delivery result and SMTP acceptance.";
 
   const installLabel = schedule.installed ? "Refresh" : "Install";
   setSwappingText("schedule-install-heading", installLabel);
@@ -1001,7 +1017,7 @@ function scheduleActionCopy(action, day, time, scheduleInstalled = false) {
   case "enable": return { heading: "Enable future scheduled delivery", copy: "Allow the installed and ownership-verified task to start on its configured weekly window.", label: "Enable this verified schedule", help: "This does not send a newsletter immediately." };
   case "disable": return { heading: "Disable future scheduled starts", copy: "Keep the verified task definition but prevent it from starting future newsletter runs.", label: "Disable this verified schedule", help: "A newsletter process already running will not be cancelled." };
   case "remove": return { heading: "Remove the verified schedule", copy: "Delete only the ownership-verified Windows task while preserving configuration, state, history, previews, and logs.", label: "Remove this verified schedule", help: "This cannot be undone from operation history, but it can be installed again later." };
-  default: return { heading: "Confirm schedule change", copy: "Review this typed operation.", label: "Confirm this schedule change", help: "Windows will request administrator approval." };
+  default: return { heading: "Confirm schedule change", copy: "Review the requested change.", label: "Confirm this schedule change", help: "Windows will request administrator approval." };
   }
 }
 
@@ -1044,7 +1060,7 @@ function rendererFailureCopy(category, supportCode) {
   case "smtp-recipient-rejected": return "The SMTP provider returned an address/mailbox-specific permanent rejection for one recipient; later attempts remained individually isolated and spaced." + suffix;
   case "smtp-provider-rejected": return "The SMTP provider rejected a batch-wide protocol stage, so delivery stopped before another recipient attempt. Review the provider account or SMTP policy before retrying." + suffix;
   case "smtp-transport-failed": return "The SMTP connection ended before message acceptance could begin, so the batch stopped before another recipient attempt. Verify the provider endpoint, then retry cautiously." + suffix;
-  case "smtp-acceptance-unknown": return "The SMTP connection ended after message data was submitted but before acceptance could be confirmed. The message was not retried, and the batch stopped to prevent duplicates." + suffix;
+  case "smtp-acceptance-unknown": return "The SMTP connection closed after message submission but before the server confirmed acceptance. The batch stopped without retrying to avoid a duplicate." + suffix;
   case "user-roster-refresh-failed": return "Tautulli could not confirm a fresh Plex user roster, so production delivery stopped before SMTP. Confirm Tautulli can reach Plex, then retry." + suffix;
   case "platform-unsupported": return "This package does not expose the requested renderer operation." + suffix;
   case "manager-restarted": return "The Manager restarted before it could reconcile the renderer result. Refresh status, then retry." + suffix;
@@ -1054,9 +1070,9 @@ function rendererFailureCopy(category, supportCode) {
 
 function smtpFailureEvidenceCopy(evidence) {
   if (!evidence || !evidence.stage) return "";
-  const response = Number(evidence.responseCode) > 0 ? `; SMTP response ${Number(evidence.responseCode)}` : "; no SMTP response was available";
-  const acceptance = evidence.acceptance === "unknown" ? "; acceptance is unknown and was not retried" : "";
-  return ` Sanitized stage: ${titleCase(String(evidence.stage).replaceAll("-", " "))}${response}${acceptance}.`;
+  const stage = titleCase(String(evidence.stage).replaceAll("-", " "));
+  const response = Number(evidence.responseCode);
+  return ` SMTP stage ${stage}${response > 0 ? ` · response ${response}` : ""}.`;
 }
 
 function renderConfig() {
@@ -1138,8 +1154,8 @@ function renderConfigEditor() {
     sections.append(input);
   }
   byId("config-save-copy").textContent = editor.exists
-    ? "A private timestamped backup is created before config.json is replaced. Only affected discovery, connection checks, SMTP preflight, or local previews rerun; unrelated valid results remain connected."
-    : "A new private config.json is created only after validation, then the required discovery, connection checks, SMTP preflight, and six non-sending local previews run.";
+    ? "The Manager backs up your saved configuration and reruns the checks affected by your changes."
+    : "The Manager checks your settings, loads Tautulli choices, and generates local previews without sending email.";
   if (Object.keys(editor.issues || {}).length) {
     showConfigErrors("Complete the required setup fields before saving.", editor.issues, false);
   }
@@ -1156,16 +1172,14 @@ function renderDirectPlexNotice() {
   const visible = Boolean(state.editor?.exists && status && (!status.urlConfigured || (!status.tokenConfigured && !status.runtimeTokenAvailable)));
   notice.hidden = !visible;
   if (!visible) return;
-  const legacy = Boolean(status.legacyFieldsMissing);
-  setText("direct-plex-notice-heading", legacy ? "Legacy config needs one direct Plex review" : "Complete optional direct Plex access");
-  let copy = legacy
-    ? "This older config.json never contained one or both direct Plex fields; the updater preserved it instead of guessing. "
-    : "Direct Plex is optional, but one part of the connection is not available. ";
-  if (!status.urlConfigured) copy += "For Plex on this computer, use http://127.0.0.1:32400; otherwise enter the Plex URL reachable from this runtime. ";
-  if (!status.tokenConfigured && status.runtimeTokenAvailable) copy += "A trusted runtime Plex token is available and will be used without copying it into config.json. ";
-  else if (!status.tokenConfigured) copy += "Paste the Plex administrator token to enable authenticated direct-Plex checks. ";
-  copy += "Validate, save, and verify to normalize the legacy fields and re-run the safe checks.";
-  setText("direct-plex-notice-copy", copy);
+  setText("direct-plex-notice-heading", status.legacyFieldsMissing ? "Add optional Plex settings to an older configuration" : "Complete optional direct Plex access");
+  const copy = [];
+  if (!status.urlConfigured) {
+    copy.push(state.editor.fields?.find((field) => field.name === "PlexServerUrl")?.help || "Enter the Plex URL that TautWeekly can reach.");
+  }
+  if (!status.tokenConfigured && status.runtimeTokenAvailable) copy.push("TautWeekly can use the Plex token already available to it.");
+  else if (!status.tokenConfigured) copy.push("Add a Plex administrator token to connect.");
+  setText("direct-plex-notice-copy", copy.join(" "));
 }
 
 function reviewDirectPlexFields() {
@@ -2777,7 +2791,7 @@ function renderVerification() {
   const cache = state.cache;
   const ready = state.editor?.state === "ready";
   const networkBusy = state.verificationRunning || state.smtpVerificationRunning || state.discoveryRunning || state.cacheVerificationRunning;
-  const operationBusy = operationIsActive(state.operation) || scheduleOperationIsActive(state.scheduleOperation);
+  const operationBusy = state.operationStarting || operationIsActive(state.operation) || state.scheduleStarting || scheduleOperationIsActive(state.scheduleOperation);
   const cacheDisabled = cache?.enabled === false;
   const cacheWorkflowState = state.setupWorkflow?.steps?.cache?.state || "";
   const results = byId("verification-results");
@@ -2794,29 +2808,29 @@ function renderVerification() {
   runButton.disabled = networkBusy || !confirm.checked || !ready;
   smtpRunButton.disabled = networkBusy || !smtpConfirm.checked || !ready;
   cacheRunButton.disabled = cacheDisabled ? !ready : networkBusy || operationBusy || !ready;
-  setSwappingButtonText("verification-run-button", state.verificationRunning ? "Testing saved services..." : "Run connection test");
-  setSwappingButtonText("smtp-verification-run-button", state.smtpVerificationRunning ? "Testing SMTP..." : "Run SMTP preflight");
+  setSwappingButtonText("verification-run-button", state.verificationRunning ? "Testing saved services..." : "Test connections");
+  setSwappingButtonText("smtp-verification-run-button", state.smtpVerificationRunning ? "Checking SMTP..." : "Check SMTP connection");
   setSwappingButtonText("cache-verification-run-button", cacheDisabled
     ? "Enable Cache Storage"
     : state.cacheVerificationRunning ? "Checking cache..." : "Check deleted-item cache");
 
   if (!ready) {
     byId("verification-message").textContent = "Complete and save configuration before running a connection test.";
-    byId("smtp-verification-message").textContent = "Complete and save configuration before running SMTP preflight.";
+    byId("smtp-verification-message").textContent = "Save your configuration before checking SMTP.";
     byId("cache-verification-message").textContent = "Complete and save configuration before checking local cache storage.";
   } else {
     byId("verification-message").textContent = state.verificationRunning
       ? "Contacting the saved Tautulli and direct Plex services. This may take up to 45 seconds."
       : "No service request occurs until the confirmation is checked and the button is pressed.";
     byId("smtp-verification-message").textContent = state.smtpVerificationRunning
-      ? "Contacting the saved SMTP endpoint without authenticating or sending. This may take up to 45 seconds."
-      : "No SMTP request occurs until the confirmation is checked and the button is pressed.";
+      ? "Checking the SMTP connection without signing in or sending mail. This may take up to 45 seconds."
+      : "Confirm above to check the saved SMTP connection.";
     byId("cache-verification-message").textContent = cacheDisabled
       ? "Open Config to review the deleted-item cache settings. This action does not toggle or save anything."
       : state.cacheVerificationRunning
         ? "Checking the bounded manifest, local write access, and cached artwork without contacting any service."
         : operationBusy
-          ? "Wait for the active local operation; an active cache refresh will finish its verification automatically."
+          ? "Wait for the current preview, test, manual send, cache refresh, or schedule change. A cache refresh checks its result automatically."
           : cache?.verification === "full"
             ? "The latest full result is retained. Use this optional recheck after later filesystem or configuration changes."
             : "A successful save runs this full local check automatically; use the button for an optional recheck.";
@@ -2825,27 +2839,29 @@ function renderVerification() {
   const retainedLANState = retainedSetupCheckState("lan");
   const retainedSMTPState = retainedSetupCheckState("smtp");
   if (last) {
-    setText("verification-observed", `Completed ${formatDate(last.completedAtUtc)} · ${titleCase(last.networkBoundary)}.${state.discoveryError ? " Separate retained evidence from the failed live choices refresh." : ""}`);
+    setText("verification-observed", `Checked ${formatDate(last.completedAtUtc)}.${state.discoveryError ? " The failed Tautulli choices refresh did not rerun this check." : ""}`);
     for (const step of last.steps || []) {
       appendVerificationResult(results, step.service === "plex" ? "Direct Plex" : titleCase(step.service), step.state, step.summary);
     }
   } else if (retainedLANState) {
-    setText("verification-observed", "Retained from the latest safe setup validation for this configuration.");
-    appendVerificationResult(results, "Tautulli and direct Plex", retainedLANState, state.setupWorkflow.steps.lan.summary);
+    const checked = state.setupWorkflow.steps.lan.updatedAtUtc;
+    setText("verification-observed", checked ? `Checked ${formatDate(checked)} during setup.` : "From the saved setup checks.");
+    appendVerificationResult(results, "Tautulli and Plex", retainedLANState, state.setupWorkflow.steps.lan.summary);
   } else {
-    setText("verification-observed", "No integration result is retained for this saved configuration.");
-    appendVerificationEmpty(results, "Validate and save to run every safe setup check, or repeat this targeted connection test.");
+    setText("verification-observed", "No connection check recorded for this configuration.");
+    appendVerificationEmpty(results, "Save your configuration or run the connection test above.");
   }
 
   if (smtp) {
     setText("smtp-verification-observed", `Completed ${formatDate(smtp.completedAtUtc)} · ${titleCase(smtp.security)}.`);
-    appendVerificationResult(smtpResults, "SMTP preflight", smtp.state, smtp.summary);
+    appendVerificationResult(smtpResults, "SMTP connection", smtp.state, smtp.summary);
   } else if (retainedSMTPState) {
-    setText("smtp-verification-observed", "Retained from the latest safe setup validation for this configuration.");
-    appendVerificationResult(smtpResults, "SMTP preflight", retainedSMTPState, state.setupWorkflow.steps.smtp.summary);
+    const checked = state.setupWorkflow.steps.smtp.updatedAtUtc;
+    setText("smtp-verification-observed", checked ? `Checked ${formatDate(checked)} during setup.` : "From the saved setup checks.");
+    appendVerificationResult(smtpResults, "SMTP connection", retainedSMTPState, state.setupWorkflow.steps.smtp.summary);
   } else {
-    setText("smtp-verification-observed", "No SMTP preflight is retained for this saved configuration.");
-    appendVerificationEmpty(smtpResults, "Validate and save to run every safe setup check, or repeat this targeted SMTP preflight.");
+    setText("smtp-verification-observed", "No SMTP connection check recorded for this configuration.");
+    appendVerificationEmpty(smtpResults, "Save your configuration or check the SMTP connection above.");
   }
 
   if (["waiting", "running"].includes(cacheWorkflowState) && !cacheDisabled) {
@@ -2970,7 +2986,7 @@ async function runVerification() {
     setGlobalStatus(error.message, true);
   } finally {
     state.verificationRunning = false;
-    setSwappingButtonText("verification-run-button", "Run connection test");
+    setSwappingButtonText("verification-run-button", "Test connections");
     try {
       await refreshConfigurationStatus();
     } catch (_) {
@@ -2987,7 +3003,7 @@ async function runSMTPVerification() {
   state.smtpVerificationRunning = true;
   renderVerification();
   renderDiscovery();
-  setGlobalStatus("Running the non-sending SMTP reachability and STARTTLS preflight...");
+  setGlobalStatus("Checking the SMTP connection...");
   try {
     const result = await request("/api/v1/checks/smtp-network", {
       method: "POST",
@@ -2996,10 +3012,10 @@ async function runSMTPVerification() {
     state.verification = { ...state.verification, smtp: result };
     byId("smtp-verification-confirm").checked = false;
     const message = result.overall === "failed"
-      ? "SMTP preflight completed with a failure. No credentials or message data were sent."
+      ? "The SMTP connection check failed. The check did not sign in or send mail."
       : result.overall === "warning"
         ? "SMTP is reachable, but the saved configuration has STARTTLS disabled."
-        : "SMTP reachability and certificate-validated STARTTLS passed. Authentication still requires TestEmail.";
+        : "The SMTP connection check passed. Use a test send to check sign-in and message acceptance.";
     setGlobalStatus(message, true);
   } catch (error) {
     setGlobalStatus(error.message, true);
@@ -3106,7 +3122,7 @@ function renderPreviews(options = {}) {
 function renderOperations() {
   const operation = state.operation;
   const active = operationIsActive(operation);
-  const scheduleActive = scheduleOperationIsActive(state.scheduleOperation);
+  const scheduleActive = state.scheduleStarting || scheduleOperationIsActive(state.scheduleOperation);
   const manualSendType = byId("manual-send-mode").value === "send-welcome" ? "send-welcome" : "send-all";
   const manualWelcome = manualSendType === "send-welcome";
   const manualSendUserID = byId("manual-send-user-id").value.trim();
@@ -3126,9 +3142,9 @@ function renderOperations() {
 
   let message = "Enter a numeric Tautulli user ID, then confirm this preview-only run.";
   if (!ready) message = "Complete and save configuration before generating previews.";
-  else if (active) message = operation.type === "preview-all" ? (operation.state === "cancelling" ? "Stopping the local preview process safely..." : "Generating previews. You can leave this page while the Manager tracks the operation.") : operation.type === "cache-warm" ? "Refreshing deleted-item cache coverage locally. No email is sent." : "An email delivery is active. Wait for its aggregate SMTP result before starting another operation.";
+  else if (active) message = operation.type === "preview-all" ? (operation.state === "cancelling" ? "Stopping preview generation..." : "Generating previews. You can leave this page while they run.") : operation.type === "cache-warm" ? "Wait for the deleted-item cache refresh before generating previews." : "Wait for the current send before generating previews.";
   else if (scheduleActive) message = "Wait for the active schedule change before generating previews.";
-  else if (state.operationStarting) message = "Starting a fixed Manager operation...";
+  else if (state.operationStarting) message = "A Manager operation is starting...";
   else if (!userIDValid && userID) message = validPreviewUserID(userID) ? "Choose an included user from the saved Tautulli choices. Save exclusion changes before using an excluded user." : "Enter a numeric Tautulli user ID using no more than 20 digits.";
   else if (userIDValid && confirmed) message = "Ready to generate six local previews without sending email.";
   setText("preview-operation-message", message);
@@ -3138,9 +3154,9 @@ function renderOperations() {
   setSwappingButtonText("test-send-run-button", state.operationStarting && state.operationStartingType === "send-test-all" ? "Starting test delivery..." : active || scheduleActive ? "Another operation is active" : "Send six test messages");
   let testMessage = "Enter a numeric Tautulli user ID, then confirm the six-message test delivery.";
   if (!ready) testMessage = "Complete and save configuration before sending a test delivery.";
-  else if (active) testMessage = operation.type === "send-test-all" ? "Sending to the configured TestEmail. Cancellation is disabled because some messages may already be accepted by SMTP." : "Another Manager operation is active. Wait for it to finish before starting a test delivery.";
+  else if (active) testMessage = operation.type === "send-test-all" ? "Sending to TestEmail. A send cannot be cancelled after it starts." : "Wait for the current preview, send, or cache refresh before starting a test delivery.";
   else if (scheduleActive) testMessage = "Wait for the active schedule change before starting a test delivery.";
-  else if (state.operationStarting) testMessage = "Starting a fixed Manager operation...";
+  else if (state.operationStarting) testMessage = "A Manager operation is starting...";
   else if (!testUserIDValid && testUserID) testMessage = validPreviewUserID(testUserID) ? "Choose an included user from the saved Tautulli choices. Save exclusion changes before using an excluded user." : "Enter a numeric Tautulli user ID using no more than 20 digits.";
   else if (testUserIDValid && testConfirmed) testMessage = "Ready to send six real messages only to the configured TestEmail.";
   setText("test-send-operation-message", testMessage);
@@ -3149,33 +3165,34 @@ function renderOperations() {
   manualSendButton.disabled = state.operationStarting || active || scheduleActive || !ready || !manualSendConfirmed || !manualSendUserValid;
   const manualSendButtonLabel = manualWelcome ? "Send Manual Welcome" : "Send newsletter to all";
   setSwappingButtonText("manual-send-run-button", state.operationStarting && state.operationStartingType === manualSendType ? "Starting manual delivery..." : active || scheduleActive ? "Another operation is active" : manualSendButtonLabel);
-  let manualSendMessage = manualWelcome ? "Choose a Tautulli user, then explicitly confirm the one-message Manual Welcome delivery." : "Explicitly confirm the all-recipient production delivery to enable this action.";
+  let manualSendMessage = manualWelcome ? "Choose a Tautulli user, then confirm the welcome send." : "Confirm the recipient scope before sending.";
   if (!ready) manualSendMessage = "Complete and save configuration before sending a production newsletter.";
-  else if (active) manualSendMessage = ["send-welcome", "send-all"].includes(operation.type) ? "A production delivery is running. Cancellation is disabled because a message may already be accepted by SMTP." : "Another Manager operation is active. Wait for it to finish before sending a production newsletter.";
+  else if (active) manualSendMessage = ["send-welcome", "send-all"].includes(operation.type) ? "A newsletter send is running. A send cannot be cancelled after it starts." : "Wait for the current preview, test send, or cache refresh before sending a newsletter.";
   else if (scheduleActive) manualSendMessage = "Wait for the active schedule change before sending a production newsletter.";
-  else if (state.operationStarting) manualSendMessage = "Starting a fixed Manager operation...";
+  else if (state.operationStarting) manualSendMessage = "A Manager operation is starting...";
   else if (manualWelcome && manualSendUserID && !manualSendUserValid) manualSendMessage = validPreviewUserID(manualSendUserID) ? "Choose an included user from the saved Tautulli choices. Save exclusion changes before sending a Manual Welcome." : "Enter a numeric Tautulli user ID using no more than 20 digits.";
-  else if (manualSendConfirmed && manualSendUserValid) manualSendMessage = manualWelcome ? "Ready to send one real Manual Welcome message to the selected user." : "Ready to send real email to every currently eligible recipient.";
+  else if (manualSendConfirmed && manualSendUserValid) manualSendMessage = "Ready to send.";
   setText("manual-send-operation-message", manualSendMessage);
 
   renderCurrentOperation(operation);
   renderManualSendStatus(operation);
   renderOperationHistory();
   renderDashboardOperation(operation);
+  if (!byId("view-verification").hidden) renderVerification();
   if (state.status && state.editor) renderSchedule();
 }
 
 function renderManualSendChoice(type) {
   const manualWelcome = type === "send-welcome";
   byId("manual-send-user-field").hidden = !manualWelcome;
-  setSwappingText("manual-send-runner-heading", manualWelcome ? "Send one Manual Welcome" : "Send this week's newsletter now");
+  setSwappingText("manual-send-runner-heading", manualWelcome ? "Send a welcome newsletter" : "Send this week's newsletter now");
   setText("manual-send-runner-copy", manualWelcome
-    ? "Sends the renderer's Manual Welcome state to one selected Tautulli user, then updates that recipient's welcome and history state. It does not contact other Plex users."
-    : "Runs the same fixed production delivery used by the schedule, applies saved library and user exclusions, and updates recipient welcome and history state for every eligible recipient.");
-  setText("manual-send-confirm-heading", manualWelcome ? "Send one Manual Welcome newsletter" : "Send the production newsletter to all eligible recipients");
+    ? "When SMTP accepts the welcome newsletter, TautWeekly updates the selected user's welcome state."
+    : "Uses the scheduled delivery rules and saved exclusions. TautWeekly checks the live Tautulli roster before sending.");
+  setText("manual-send-confirm-heading", manualWelcome ? "Confirm welcome send" : "Confirm weekly newsletter send");
   setText("manual-send-confirm-copy", manualWelcome
-    ? "I understand this sends one real email to the selected Plex user and updates that user's welcome state. The operation cannot be cancelled after it starts."
-    : "I understand this may send real email to every eligible recipient and updates recipient state. The operation cannot be cancelled after it starts.");
+    ? "Send real email to the selected user's primary address and any eligible household copy addresses. Once started, this send can't be cancelled."
+    : "Send real email to each eligible user's primary address and any eligible household copy addresses. Once started, this send can't be cancelled.");
 }
 
 function renderManualSendStatus(operation) {
@@ -3208,7 +3225,7 @@ function renderCurrentOperation(operation) {
   setSwappingButtonText("preview-cancel-button", state.operationCancelling ? "Cancelling..." : operation?.type === "cache-warm" ? "Cancel cache refresh" : "Cancel preview generation");
   if (!operation) {
     setText("current-operation-heading", "No Manager operation recorded");
-    setText("current-operation-copy", "The Manager keeps sanitized operation state locally.");
+    setText("current-operation-copy", "The latest preview, test send, or cache refresh will appear here.");
     setText("current-operation-time", "Not recorded");
     setChip("current-operation-chip", "Idle", "neutral");
     return;
@@ -3224,20 +3241,21 @@ function renderCurrentOperation(operation) {
 function renderDashboardOperation(operation) {
   if (!operation) {
     setText("dashboard-operation-heading", "No Manager operation recorded");
-    setText("dashboard-operation-copy", "Generate local previews, send a guarded six-message test, or start a confirmed production delivery from the Preview center.");
+    setText("dashboard-operation-copy", "Open Previews to generate previews, send a test, or send a newsletter.");
     setChip("dashboard-operation-chip", "Idle", "neutral");
     return;
   }
   const summary = operationSummary(operation);
   setText("dashboard-operation-heading", summary.heading);
-  setText("dashboard-operation-copy", `${summary.copy} ${operation.finishedAtUtc ? formatDate(operation.finishedAtUtc) : formatDate(operation.startedAtUtc)}.`);
+  const time = operation.finishedAtUtc ? `Finished ${formatDate(operation.finishedAtUtc)}` : `Started ${formatDate(operation.startedAtUtc)}`;
+  setText("dashboard-operation-copy", `${summary.copy} ${time}.`);
   setChip("dashboard-operation-chip", titleCase(operation.state), operationTone(operation));
 }
 
 function renderOperationHistory() {
   const container = byId("operation-history");
   container.replaceChildren();
-  setText("operation-history-count", `${state.history.length} / ${state.historyMaximum} completed items shown`);
+  setText("operation-history-count", `${state.history.length} of ${state.historyMaximum} runs shown`);
   if (!state.history.length) {
     const empty = document.createElement("div");
     empty.className = "config-empty";
@@ -3253,7 +3271,8 @@ function renderOperationHistory() {
     heading.textContent = operationSummary(operation).heading;
     const detail = document.createElement("p");
     const version = operation.packageVersion ? `Package ${operation.packageVersion}` : "Package version unavailable";
-    detail.textContent = `${formatDate(operation.startedAtUtc)} · ${version}${operation.durationMs ? ` · ${formatDuration(operation.durationMs)}` : ""}${operation.supportCode ? ` · Support ${operation.supportCode}` : ""}`;
+    const time = operation.finishedAtUtc ? `Finished ${formatDate(operation.finishedAtUtc)}` : `Started ${formatDate(operation.startedAtUtc)}`;
+    detail.textContent = `${time} · ${version}${operation.durationMs ? ` · ${formatDuration(operation.durationMs)}` : ""}${operation.supportCode ? ` · Support ${operation.supportCode}` : ""}`;
     copy.append(heading, detail);
     if (operation.generatedPreviewIds?.length) {
       const links = document.createElement("div");
@@ -3279,9 +3298,9 @@ function renderOperationHistory() {
     chip.textContent = titleCase(operation.outcome || operation.state);
     const count = document.createElement("small");
     count.textContent = operation.type === "send-test-all" || operation.type === "send-welcome"
-      ? `${operation.smtpAcceptedCount || 0} accepted by SMTP${householdCopyReport(operation)}`
+      ? `${operation.smtpAcceptedCount || 0}${operation.type === "send-welcome" ? " primary" : ""} accepted by SMTP${householdCopyReport(operation)}`
       : operation.type === "send-all"
-        ? `${operation.smtpAcceptedCount || 0} accepted · ${operation.skippedCount || 0} skipped · ${operation.failedCount || 0} failed${householdCopyReport(operation)}`
+        ? `${operation.smtpAcceptedCount || 0} primary accepted by SMTP · ${operation.skippedCount || 0} skipped · ${operation.failedCount || 0} failed${householdCopyReport(operation)}`
         : operation.type === "cache-warm"
           ? "All included users and selected libraries"
         : `${operation.generatedPreviewIds?.length || 0} preview${operation.generatedPreviewIds?.length === 1 ? "" : "s"}`;
@@ -3295,23 +3314,23 @@ function operationSummary(operation) {
   const count = operation.generatedPreviewIds?.length || 0;
   if (operation.type === "cache-warm") {
     switch (operation.state) {
-    case "queued": return { heading: "Deleted-item cache refresh queued", copy: "The local all-included-user cache refresh is waiting to start." };
-    case "running": return { heading: "Refreshing deleted-item cache", copy: "Included users and selected-library newsletter items are being inspected locally; no email is sent." };
-    case "cancelling": return { heading: "Cancelling cache refresh", copy: "The Manager is stopping the local cache refresh and retaining a sanitized result." };
-    case "succeeded": return { heading: "Deleted-item cache refresh completed", copy: "Every eligible included user was checked and the full local cache verification completed." };
-    case "cancelled": return { heading: "Deleted-item cache refresh cancelled", copy: "The local refresh stopped before complete coverage could be verified." };
+    case "queued": return { heading: "Deleted-item cache refresh queued", copy: "The cache refresh is waiting to start." };
+    case "running": return { heading: "Refreshing deleted-item cache", copy: "TautWeekly is checking newsletter items for included users and selected libraries. No email is sent." };
+    case "cancelling": return { heading: "Cancelling cache refresh", copy: "The Manager is stopping the refresh." };
+    case "succeeded": return { heading: "Deleted-item cache refreshed", copy: "The cache refresh and local storage checks finished." };
+    case "cancelled": return { heading: "Deleted-item cache refresh cancelled", copy: "The refresh stopped before the checks finished." };
     case "failed": return { heading: "Deleted-item cache refresh failed", copy: rendererFailureCopy(operation.errorCategory, operation.supportCode) };
-    default: return { heading: "Deleted-item cache refresh recorded", copy: "Review the sanitized cache result under Verify." };
+    default: return { heading: "Deleted-item cache refresh recorded", copy: "See Verify for cache status." };
     }
   }
   if (operation.type === "send-welcome") {
     switch (operation.state) {
-    case "queued": return { heading: "Manual Welcome queued", copy: "One selected-user welcome newsletter is waiting to start." };
-    case "running": return { heading: "Sending one Manual Welcome", copy: "One selected Plex user is being processed. Cancellation is disabled once delivery begins." };
-    case "succeeded": return { heading: "Manual Welcome accepted by SMTP", copy: `One welcome message was accepted by SMTP.${householdCopyReport(operation)} The selected user's welcome state was updated; inbox delivery is not asserted.` };
-    case "partial": return { heading: "Welcome accepted with household copy warnings", copy: `The primary welcome was accepted and its welcome state updated.${householdCopyReport(operation)} Inbox delivery is not asserted.` };
+    case "queued": return { heading: "Manual Welcome queued", copy: "The welcome send is waiting to start." };
+    case "running": return { heading: "Sending Manual Welcome", copy: "Sending to the selected user and any eligible household copies. This send can't be cancelled." };
+    case "succeeded": return { heading: "Manual Welcome accepted by SMTP", copy: `SMTP accepted the primary message and TautWeekly updated the user's welcome state.${householdCopyReport(operation)} Check the mailbox for delivery.` };
+    case "partial": return { heading: "Welcome accepted with household copy warnings", copy: `SMTP accepted the primary message and TautWeekly updated the user's welcome state.${householdCopyReport(operation)}` };
     case "failed": return { heading: "Manual Welcome delivery failed", copy: `${rendererFailureCopy(operation.errorCategory, operation.supportCode)}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
-    default: return { heading: "Manual Welcome delivery recorded", copy: "Review aggregate SMTP acceptance without exposing the selected recipient." };
+    default: return { heading: "Manual Welcome delivery recorded", copy: "See the operation history for SMTP totals." };
     }
   }
   if (operation.type === "send-all") {
@@ -3320,33 +3339,33 @@ function operationSummary(operation) {
     const failed = operation.failedCount || 0;
     const reasonCopy = skipReasonCopy(operation.skipReasonCounts);
     switch (operation.state) {
-    case "queued": return { heading: "Manual newsletter delivery queued", copy: "The fixed production delivery is waiting to start." };
-    case "running": return { heading: "Sending the production newsletter", copy: "Eligible recipients are being processed. Cancellation is disabled once delivery begins." };
-    case "succeeded": return { heading: "Manual newsletter accepted by SMTP", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted by SMTP and ${skipped} recipient${skipped === 1 ? " was" : "s were"} skipped.${reasonCopy}${householdCopyReport(operation)} Inbox delivery is not asserted.` };
-    case "partial": return { heading: "Manual newsletter accepted with delivery warnings", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy} ${operation.errorCategory ? rendererFailureCopy(operation.errorCategory, operation.supportCode) : operation.bccRejectedCount ? "Some household copies were rejected." : "One or more recipient attempts failed."}${smtpFailureEvidenceCopy(operation.smtpFailure)}${householdCopyReport(operation)} Inbox delivery is not asserted.` };
+    case "queued": return { heading: "Manual newsletter delivery queued", copy: "The weekly newsletter send is waiting to start." };
+    case "running": return { heading: "Sending the weekly newsletter", copy: "Sending to eligible users and their eligible household copies. This send can't be cancelled." };
+    case "succeeded": return { heading: "Manual newsletter accepted by SMTP", copy: `SMTP accepted ${accepted} primary message${accepted === 1 ? "" : "s"}. TautWeekly skipped ${skipped} user${skipped === 1 ? "" : "s"}.${reasonCopy}${householdCopyReport(operation)}` };
+    case "partial": return { heading: "Manual newsletter accepted with delivery warnings", copy: `${accepted} primary accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy} ${operation.errorCategory ? rendererFailureCopy(operation.errorCategory, operation.supportCode) : operation.bccRejectedCount ? "Some household copies were rejected." : "One or more recipient attempts failed."}${smtpFailureEvidenceCopy(operation.smtpFailure)}${householdCopyReport(operation)}` };
     case "failed": return operation.errorCategory === "no-eligible-recipients"
       ? { heading: "No eligible production recipients", copy: `No message was accepted by SMTP.${reasonCopy} Checked exclusion boxes mean excluded.${operation.supportCode ? ` Support code: ${operation.supportCode}.` : ""}` }
-      : { heading: "Manual newsletter delivery failed", copy: `${accepted} message${accepted === 1 ? " was" : "s were"} accepted before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
-    default: return { heading: "Manual newsletter delivery recorded", copy: `${accepted} accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy}${householdCopyReport(operation)} Inbox delivery is not asserted.` };
+      : { heading: "Manual newsletter delivery failed", copy: `SMTP accepted ${accepted} primary message${accepted === 1 ? "" : "s"} before the failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
+    default: return { heading: "Manual newsletter delivery recorded", copy: `${accepted} primary accepted by SMTP, ${skipped} skipped, and ${failed} failed.${reasonCopy}${householdCopyReport(operation)}` };
     }
   }
   if (operation.type === "send-test-all") {
     switch (operation.state) {
-    case "queued": return { heading: "Test delivery queued", copy: "The fixed six-message TestEmail operation is waiting to start." };
-    case "running": return { heading: "Sending six test messages", copy: "Messages go only to the configured TestEmail; cancellation is disabled once sending begins." };
-    case "succeeded": return { heading: "Test delivery accepted by SMTP", copy: `${operation.smtpAcceptedCount || 0} test messages were accepted by SMTP. Inbox delivery is not asserted.` };
-    case "failed": return { heading: "Test delivery failed", copy: `${operation.smtpAcceptedCount || 0} test message${operation.smtpAcceptedCount === 1 ? " was" : "s were"} accepted before failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
-    default: return { heading: "Test delivery recorded", copy: "Review aggregate SMTP acceptance and failure counts." };
+    case "queued": return { heading: "Test send queued", copy: "The six-message test is waiting to start." };
+    case "running": return { heading: "Sending six test messages", copy: "All messages go to TestEmail. This send can't be cancelled." };
+    case "succeeded": return { heading: "Test messages accepted by SMTP", copy: `SMTP accepted ${operation.smtpAcceptedCount || 0} test messages. Check TestEmail to confirm inbox delivery.` };
+    case "failed": return { heading: "Test send failed", copy: `SMTP accepted ${operation.smtpAcceptedCount || 0} test message${operation.smtpAcceptedCount === 1 ? "" : "s"} before the failure. ${rendererFailureCopy(operation.errorCategory, operation.supportCode)}${smtpFailureEvidenceCopy(operation.smtpFailure)}` };
+    default: return { heading: "Test send recorded", copy: "See the operation history for SMTP totals." };
     }
   }
   switch (operation.state) {
-  case "queued": return { heading: "Preview generation queued", copy: "The fixed package preview operation is waiting to start." };
-  case "running": return { heading: "Generating newsletter previews", copy: "The package renderer is creating local HTML; no email is sent." };
-  case "cancelling": return { heading: "Cancelling preview generation", copy: "The Manager is stopping the local renderer and retaining a sanitized result." };
-  case "succeeded": return { heading: "Preview generation completed", copy: `${count} generated preview${count === 1 ? " is" : "s are"} available for authenticated review.` };
-  case "cancelled": return { heading: "Preview generation cancelled", copy: "The local renderer was stopped before normal completion; no email was sent." };
+  case "queued": return { heading: "Preview generation queued", copy: "Preview generation is waiting to start." };
+  case "running": return { heading: "Generating newsletter previews", copy: "TautWeekly is saving local HTML previews. No email is sent." };
+  case "cancelling": return { heading: "Cancelling preview generation", copy: "The Manager is stopping preview generation." };
+  case "succeeded": return { heading: "Preview generation completed", copy: `${count} preview file${count === 1 ? " is" : "s are"} available in Previews.` };
+  case "cancelled": return { heading: "Preview generation cancelled", copy: "Preview generation stopped. No email was sent." };
   case "failed": return { heading: "Preview generation failed", copy: rendererFailureCopy(operation.errorCategory, operation.supportCode) };
-  default: return { heading: "Preview operation recorded", copy: "Review the sanitized state and generated preview list." };
+  default: return { heading: "Preview run recorded", copy: "See the preview list for saved files." };
   }
 }
 
@@ -3416,7 +3435,7 @@ async function startTestSendOperation() {
   state.operationStarting = true;
   state.operationStartingType = "send-test-all";
   renderOperations();
-  setGlobalStatus("Starting the guarded six-message test delivery...");
+  setGlobalStatus("Starting the six-message test send...");
   try {
     state.operation = await request("/api/v1/operations", {
       method: "POST",
@@ -3771,20 +3790,27 @@ function renderAccessSettings() {
   renderTailscaleSettings();
 }
 
+const tailscaleAuthorizationCommands = new Set([
+  "sudo tautweekly remote-access-authorize",
+  "./tautweekly.sh remote-access-login",
+  "/opt/tautweekly/bin/tautweekly-funnel login",
+  "docker compose exec tautweekly /opt/tautweekly/bin/tautweekly-funnel login",
+]);
+
 function tailscaleStatePresentation(remote) {
   const windows = state.runtimeMode === "windows";
   const nativeLinux = state.runtimeMode === "linux";
   switch (remote.state) {
-    case "active": return { label: "Active", tone: "good", status: "Public HTTPS Funnel is active and points only to the loopback Manager." };
-    case "inactive": return { label: "Inactive", tone: "neutral", status: "Public Funnel is off." };
-    case "starting": return { label: "Publication pending", tone: "publication-pending", status: "The exact loopback Funnel is configured, but independent public DNS and certificate-validated TLS have not both passed. Local Funnel on is not proof of publication. Wait up to 10 minutes, confirm MagicDNS, HTTPS certificates, and the matching Funnel policy target, then Verify." };
+    case "active": return { label: "Active", tone: "good", status: "The last verification confirmed the public HTTPS address." };
+    case "inactive": return { label: "Off", tone: "neutral", status: "Public Funnel is off." };
+    case "starting": return { label: "Publication pending", tone: "publication-pending", status: "Funnel is configured. Wait for public DNS and HTTPS, then verify again. Publication can take up to 10 minutes." };
     case "stopping": return { label: "Stopping", tone: "pending", status: "The host adapter is stopping and verifying the exact TautWeekly Funnel." };
     case "manager-password-required": return { label: "Password required", tone: "pending", status: "Create and enable a unique Manager password before Funnel can be turned on." };
     case "approval-required": return remote.enabled
       ? { label: "Approval required", tone: "pending", status: "Funnel is saved. Approve Verify with Windows to confirm the current public route." }
       : { label: "Approval required", tone: "pending", status: "Windows approval is required only for an explicit Enable, Disable, or Verify action." };
     case "ready": return { label: "Ready", tone: "neutral", status: "The fixed host adapter is ready. Enable creates only the loopback Funnel after the Manager password lock is active." };
-    case "authorization-required": return { label: "Host approval required", tone: "pending", status: "Run the displayed fixed package authorization command, then retry. Manager remains unprivileged and receives no Tailscale credential." };
+    case "authorization-required": return { label: "Host setup required", tone: "pending", status: "Complete the Funnel setup for this installation, then verify again." };
     case "tailscale-required": return { label: "Tailscale required", tone: "neutral", status: windows ? "Install the official Tailscale Windows client, start it, and sign in before enabling Funnel." : nativeLinux ? "Install the official Tailscale Linux package, start it, and sign in before enabling Funnel." : "Enable the package's isolated Tailscale Funnel adapter, then sign in interactively with its fixed console command." };
     case "sign-in-required": return { label: "Sign in required", tone: "pending", status: windows ? "Sign in through the official Tailscale Windows app, then verify again." : nativeLinux ? "Sign in through the official Tailscale Linux CLI outside Manager, then verify again." : "Use the fixed package console command to sign in to the isolated official Tailscale runtime, then verify again." };
     case "not-running": return { label: "Tailscale stopped", tone: "bad", status: windows || nativeLinux ? `Start the official Tailscale ${windows ? "Windows" : "Linux"} service, then verify again.` : "Start the package's optional Funnel adapter, then verify again." };
@@ -3815,6 +3841,11 @@ function validTailscaleSetupURL(value) {
   }
 }
 
+function verifiedTailscaleAddress(remote) {
+  return remote?.supported && remote.enabled && remote.active && remote.state === "active" && validTailscaleURL(remote.url)
+    ? remote.url : "";
+}
+
 function renderTailscaleSettings() {
   const panel = byId("tailscale-settings-panel");
   if (!panel) return;
@@ -3834,8 +3865,8 @@ function renderTailscaleSettings() {
   const passwordLocked = Boolean(state.authAccess?.passwordLockEnabled);
   setText("tailscale-settings-eyebrow", "Optional public remote access");
   setText("tailscale-settings-heading", "Tailscale Funnel");
-  setText("tailscale-settings-copy", "Open the Manager from an ordinary remote browser through a stable public HTTPS address. The Manager remains local to its package boundary; Funnel proxies only the fixed Manager target.");
-  setText("tailscale-toggle-label", "Make the Manager remotely available");
+  setText("tailscale-settings-copy", "Open Manager remotely through a public HTTPS address.");
+  setText("tailscale-toggle-label", "Enable public Funnel");
   setText("tailscale-status-label", "Funnel status");
   setText("tailscale-address-label", "Public HTTPS address");
   panel.setAttribute("aria-busy", String(state.tailscaleSaving));
@@ -3852,28 +3883,24 @@ function renderTailscaleSettings() {
   setText("tailscale-toggle-help", windows
     ? "Tailscale must already be installed, running, and signed in. Windows asks for administrator approval only for an explicit Enable, Disable, or Verify operation."
     : state.runtimeMode === "linux"
-      ? "Tailscale must already be installed, running, and signed in. A Linux host administrator authorizes the fixed Inspect/Enable/Disable adapter once; Manager remains unprivileged."
-      : "The package's isolated official Tailscale userspace runtime must be explicitly enabled and signed in from its console. Manager remains non-root and receives no credential or provider CLI.");
+      ? "Install Tailscale, sign in on the Linux host, and authorize the adapter once."
+      : "Enable the container's Funnel adapter in its deployment settings, restart the container, then sign in to Tailscale.");
 
-  const allowedAuthorizationCommands = new Set([
-    "sudo tautweekly remote-access-authorize",
-    "./tautweekly.sh remote-access-login",
-    "/opt/tautweekly/bin/tautweekly-funnel login",
-  ]);
-  const authorizationCommand = allowedAuthorizationCommands.has(remote.hostAuthorizationCommand)
+  const authorizationCommand = tailscaleAuthorizationCommands.has(remote.hostAuthorizationCommand)
     ? remote.hostAuthorizationCommand : "";
   byId("tailscale-host-authorization").hidden = !remote.hostAuthorizationRequired || authorizationCommand === "";
-  setText("tailscale-host-authorization-command", authorizationCommand || "sudo tautweekly remote-access-authorize");
+  setText("tailscale-host-authorization-command", authorizationCommand);
   byId("tailscale-copy-authorization").disabled = state.tailscaleSaving || authorizationCommand === "";
 
-  const hasURL = validTailscaleURL(remote.url || "") && (!publicFunnel || Boolean(remote.enabled));
+  const verifiedAddress = verifiedTailscaleAddress(remote);
+  const hasURL = Boolean(verifiedAddress);
   const link = byId("tailscale-url");
   link.hidden = !hasURL;
   byId("tailscale-url-empty").hidden = hasURL;
   byId("tailscale-copy-button").hidden = !hasURL;
   if (hasURL) {
-    link.href = remote.url;
-    link.textContent = remote.url;
+    link.href = verifiedAddress;
+    link.textContent = verifiedAddress;
   } else {
     link.removeAttribute("href");
     link.textContent = "";
@@ -3907,7 +3934,7 @@ function renderTailscaleSettings() {
   else message.textContent = remote.enabled && remote.active
     ? "The public address opens the password-protected Manager; remote viewers do not need Tailscale."
     : presentation.status;
-  byId("tailscale-recovery-copy").innerHTML = "<strong>Local access remains the recovery path.</strong> Password-lock disable, local access reset, explicit stop, recovery, adapter revocation, and uninstall first turn off and verify only the exact TautWeekly Funnel. If verification fails, the password and application stay in place. Ordinary update and rollback preserve the retained Funnel preference and fixed route.";
+  setText("tailscale-recovery-copy", "Use the recovery instructions under Browser access or Administrator password. Recovery requires verified Funnel shutdown before resetting the password.");
 }
 
 async function updateTailscaleAccess() {
@@ -3939,7 +3966,7 @@ async function updateTailscaleAccess() {
 
 async function copyTailscaleAuthorizationCommand() {
   const command = state.tailscale?.hostAuthorizationCommand;
-  if (!["sudo tautweekly remote-access-authorize", "./tautweekly.sh remote-access-login", "/opt/tautweekly/bin/tautweekly-funnel login"].includes(command)) return;
+  if (!tailscaleAuthorizationCommands.has(command)) return;
   try {
     await navigator.clipboard.writeText(command);
     setGlobalStatus("Package authorization command copied.", true);
@@ -3989,9 +4016,10 @@ async function loadTailscaleAccess() {
 }
 
 async function copyTailscaleURL() {
-  if (!validTailscaleURL(state.tailscale?.url || "")) return;
+  const address = verifiedTailscaleAddress(state.tailscale);
+  if (!address) return;
   try {
-    await navigator.clipboard.writeText(state.tailscale.url);
+    await navigator.clipboard.writeText(address);
     setGlobalStatus("Public Funnel address copied.", true);
   } catch (_) {
     state.tailscaleError = "The browser could not copy the public address. Select it manually instead.";
@@ -4000,12 +4028,7 @@ async function copyTailscaleURL() {
 }
 
 function accessSurfaceLabel() {
-  if (state.capabilities?.accessLabel) return state.capabilities.accessLabel;
-  const platform = String(state.status?.platform || "").toLowerCase();
-  if (platform === "windows") return "Browser access";
-  if (platform === "linux") return "Linux service access";
-  if (platform === "freebsd") return "Container access";
-  return "Manager access";
+  return state.capabilities?.accessLabel || "Manager access";
 }
 
 function openAccessSettings() {
@@ -4091,14 +4114,22 @@ function scheduleUpdateCheckAvailabilityRefresh(cooldown) {
   }, delayMilliseconds);
 }
 
-function updateStatePresentation(update = state.updates || {}) {
+function updateStatePresentation(update = state.updates) {
+  if (!update) return { label: "Loading", tone: "pending", summary: "Loading update status." };
+  if (update.lastFailure?.action === "check") {
+    return {
+      label: "Check failed",
+      tone: "bad",
+      summary: update.lastSuccessfulCheckUtc ? "Showing the last successful check." : "No successful update check is available.",
+    };
+  }
   switch (update.state) {
-  case "current": return { label: "Current", tone: "good", summary: "The running application and every reported package layer match the latest stable release." };
-  case "update-available": return { label: "Update available", tone: "update-available", summary: "A newer verified stable release is available. Follow the update owner and package-specific steps below." };
-  case "legacy": return { label: "Legacy wrapper", tone: "bad", summary: "The running image reports an older or missing host-adapter contract. Update the host package or saved platform template through its owner." };
-  case "mismatched": return { label: "Version mismatch", tone: "bad", summary: "The reported application/image and host package versions do not match. Use the platform recovery/update path to advance them together." };
-  case "newer": return { label: "Newer than stable", tone: "neutral", summary: "This application is newer than the latest stable release. The Manager will not offer a rollback or downgrade." };
-  default: return { label: "Unknown", tone: "neutral", summary: "No verified stable comparison is available yet. Normal Manager and newsletter health remain local and independent." };
+  case "current": return { label: "Current", tone: "good", summary: "The installed versions match the latest stable release." };
+  case "update-available": return { label: "Update available", tone: "update-available", summary: "A newer stable release is available. Follow the steps for this installation." };
+  case "legacy": return { label: "Older host adapter", tone: "bad", summary: "Update the host package or saved deployment template." };
+  case "mismatched": return { label: "Version mismatch", tone: "bad", summary: "The running application and host package report different versions. Follow the update guide for this installation." };
+  case "newer": return { label: "Newer than stable", tone: "neutral", summary: "This installation is ahead of the latest stable release." };
+  default: return { label: "Not checked", tone: "neutral", summary: "A comparison with the latest stable release is unavailable." };
   }
 }
 
@@ -4117,7 +4148,7 @@ function releaseAlignmentSummary(update) {
   const layers = [
     ["Application", update.applicationVersion],
     ...(update.imageVersion ? [["Container image", update.imageVersion]] : []),
-    [update.packageLabel || "Host package", update.packageVersion],
+    ...(update.packageVersion ? [[packageName(), update.packageVersion]] : []),
   ];
   const matching = layers.filter(([, version]) => managerVersion && version === managerVersion).map(([label]) => label);
   const different = layers.filter(([, version]) => version && version !== managerVersion).map(([label, version]) => `${label} ${displayUpdateVersion(version)}`);
@@ -4134,18 +4165,26 @@ function renderUpdates() {
   const badge = window.TautWeeklyUpdateUI.managerBadge(update, state.about?.version);
   setText("manager-badge-version", badge.version);
   setText("manager-badge-status", badge.status);
-  byId("manager-version-badge").setAttribute("aria-label", `Application and package status: ${badge.version} — ${badge.status}${update.lastSuccessfulCheckUtc ? `. Last checked ${formatDate(update.lastSuccessfulCheckUtc)}` : ""}`);
+  byId("manager-version-badge").setAttribute("aria-label", `${packageName()} updates. ${badge.version} — ${badge.status}${update.lastSuccessfulCheckUtc ? `. Last successful check ${formatDate(update.lastSuccessfulCheckUtc)}` : ""}`);
   byId("update-settings-panel").classList.toggle("update-attention-glow", update.state !== "current");
-  const presentation = updateStatePresentation(update);
-  setChip("update-settings-chip", state.updateChecking || update.checkInProgress ? "Checking" : presentation.label, state.updateChecking || update.checkInProgress ? "pending" : presentation.tone);
-  setText("update-settings-summary", presentation.summary);
+  const presentation = updateStatePresentation();
+  const checking = state.updateChecking || update.checkInProgress;
+  setChip("update-settings-chip", checking ? "Checking" : presentation.label, checking ? "pending" : presentation.tone);
+  setText("update-settings-summary", checking ? "Checking GitHub for a stable release." : presentation.summary);
   setText("update-manager-version", displayUpdateVersion(update.managerVersion || state.about?.version));
   setText("update-latest-version", displayUpdateVersion(update.latestStableVersion, "Not checked"));
-  setText("update-platform", titleCase(state.status?.platform));
-  setText("update-runtime-profile", titleCase(update.runtimeProfile || state.capabilities?.runtimeProfile));
-  setText("update-image-repository", update.imageRepository || "Not applicable");
-  setText("update-image-reference", update.recommendedImageReference || "Not applicable");
-  setText("update-migration-state", titleCase(update.migrationState || "not-applicable"));
+  setText("update-edition", packageName());
+  const hasImage = Boolean(update.imageRepository);
+  byId("update-runtime-profile-row").hidden = !hasImage && !update.imageVersion;
+  byId("update-image-repository-row").hidden = !hasImage;
+  byId("update-image-reference-row").hidden = !update.recommendedImageReference;
+  byId("update-migration-state-row").hidden = update.migrationState !== "legacy-mac-image";
+  setText("update-runtime-profile", titleCase(update.runtimeProfile));
+  setText("update-image-repository", update.imageRepository);
+  setText("update-image-reference", update.recommendedImageReference);
+  setText("update-migration-state", "Retired Mac registry image");
+  byId("update-image-pinning-policy").hidden = !update.imagePinningPolicy;
+  setText("update-image-pinning-policy", update.imagePinningPolicy);
   setText("update-release-alignment", releaseAlignmentSummary(update));
   const hostAdapterApplicable = Boolean(update.hostAdapterState) && update.hostAdapterState !== "not-applicable";
   const hostAdapterRow = byId("update-host-adapter-row");
@@ -4160,25 +4199,29 @@ function renderUpdates() {
   const failure = byId("update-failure");
   failure.hidden = !update.lastFailure;
   if (update.lastFailure) {
+    setText("update-failure-heading", update.lastFailure.action === "install" ? "Install failed" : "Last check failed");
     setText("update-failure-message", update.lastFailure.message);
-    setText("update-failure-time", `${titleCase(update.lastFailure.action)} · ${formatDate(update.lastFailure.occurredAtUtc)}`);
+    setText("update-failure-time", formatDate(update.lastFailure.occurredAtUtc));
   }
 
   const guidance = update.guidance || {};
-  setText("update-owner", guidance.owner || "Host administrator");
-  setText("update-guidance-summary", guidance.summary || "Use the platform-owned update path for this package.");
+  setText("update-owner", guidance.owner || "Installation guide");
+  const missingWindowsUpdater = ["windows-installer", "windows-portable"].includes(update.packageKind) && !update.windowsUpdaterAvailable;
+  setText("update-guidance-summary", missingWindowsUpdater
+    ? "The verified updater is unavailable in this folder. Follow the Windows update guide."
+    : guidance.summary || "Choose your installation method for the update steps.");
   const steps = byId("update-guidance-steps");
   steps.replaceChildren();
-  for (const value of guidance.steps || []) {
+  for (const value of missingWindowsUpdater ? [] : guidance.steps || []) {
     const item = document.createElement("li");
     item.textContent = value;
     steps.append(item);
   }
   const commandPanel = byId("update-command-panel");
   commandPanel.hidden = !guidance.command;
-  setText("update-command", guidance.command || "No universal host command");
+  setText("update-command", guidance.command);
   const docsLink = byId("update-docs-link");
-  if (guidance.docsUrl) docsLink.href = guidance.docsUrl;
+  docsLink.href = guidance.docsUrl || "https://sparkmoxie.github.io/TautWeekly/";
 
   const notes = byId("update-release-notes");
   notes.hidden = !update.releaseNotesUrl;
@@ -4188,8 +4231,8 @@ function renderUpdates() {
   scheduleUpdateCheckAvailabilityRefresh(cooldown);
   const backoffActive = cooldown.active;
   const checkButton = byId("update-check-button");
-  checkButton.disabled = state.updateChecking || Boolean(update.checkInProgress) || Boolean(backoffActive);
-  setSwappingButtonText("update-check-button", state.updateChecking || update.checkInProgress ? "Checking..." : backoffActive ? "Check available shortly" : "Check now");
+  checkButton.disabled = !state.updates || checking || backoffActive;
+  setSwappingButtonText("update-check-button", checking ? "Checking…" : backoffActive ? "Try again shortly" : "Check now");
 
   const installAvailable = Boolean(update.installSupported);
   const installRow = byId("update-install-confirm-row");
@@ -4198,19 +4241,15 @@ function renderUpdates() {
   installRow.hidden = !installAvailable;
   installButton.hidden = !installAvailable;
   installButton.disabled = !installAvailable || !byId("update-install-confirm").checked || state.updateInstalling || ["starting", "running"].includes(update.installState);
-  setSwappingButtonText("update-install-button", state.updateInstalling ? "Starting verified updater..." : ["starting", "running"].includes(update.installState) ? "Verified updater running..." : "Install update");
+  setSwappingButtonText("update-install-button", state.updateInstalling ? "Starting…" : ["starting", "running"].includes(update.installState) ? "Installing…" : "Install update");
 
   const message = byId("update-settings-message");
-  if (state.updateChecking) message.textContent = state.updateCheckBackground
-    ? "Refreshing stale stable-release status in the background with an eight-second deadline. Dashboard rendering and local health remain independent."
-    : "Contacting the fixed stable-release endpoint with an eight-second deadline. No application or package file is being changed.";
-  else if (state.updateInstalling) message.textContent = "Starting the existing verified Windows updater. Approve the Windows administrator prompt if it appears.";
-  else if (["starting", "running"].includes(update.installState)) message.textContent = "The verified Windows updater is running. This page will reconnect and refresh automatically after the Manager restarts.";
-  else if (update.installState === "failed") message.textContent = "The verified Windows updater stopped before completing. Review the sanitized failure above, then check again before retrying.";
-  else if (update.installState === "completed") message.textContent = "The verified Windows updater completed. Refreshing local package status.";
-  else if (backoffActive) message.textContent = `The next manual check is available after ${formatDate(update.nextCheckAllowedAtUtc)}. This bounded delay prevents repeated upstream requests.`;
-  else if (update.lastFailure?.action === "check") message.textContent = "The last check failed safely. Cached local status remains available, and newsletter delivery is unaffected.";
-  else message.textContent = "Normal Manager and dashboard health never depend on Internet availability. Header Refresh reloads local status, repeats the saved Tautulli choices lookup when configuration is ready, and performs an eligible stable-release check; Check now remains update-only.";
+  if (state.updateInstalling) message.textContent = "Approve the Windows administrator prompt to continue.";
+  else if (["starting", "running"].includes(update.installState)) message.textContent = "Manager will reconnect when the updater finishes and the app restarts.";
+  else if (update.installState === "failed") message.textContent = "Review the error above, then check for an update before retrying.";
+  else if (update.installState === "completed") message.textContent = "Update complete. Refreshing local status.";
+  else if (backoffActive) message.textContent = `Check again after ${formatDate(update.nextCheckAllowedAtUtc)}.`;
+  else message.textContent = "Check now contacts GitHub. Header Refresh also checks for updates when eligible.";
 }
 
 function renderUpdateStatusButton(update) {
@@ -4238,13 +4277,17 @@ async function runUpdateCheck(background = false) {
   if (state.updateChecking) return;
   const updateAuthenticationEpoch = authenticationEpoch;
   state.updateChecking = true;
-  state.updateCheckBackground = background;
   renderUpdates();
   try {
     const updates = await request("/api/v1/updates/check", { method: "POST", body: "{}" });
     if (updateAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
     state.updates = updates;
-    if (!background) setGlobalStatus(state.updates.state === "update-available" ? "Stable update found." : "Stable update check completed.", true);
+    if (!background) {
+      const message = updates.lastFailure?.action === "check"
+        ? updates.lastFailure.message
+        : updates.state === "update-available" ? "Stable update found." : "Update check complete.";
+      setGlobalStatus(message, true);
+    }
   } catch (error) {
     if (updateAuthenticationEpoch !== authenticationEpoch || byId("app-shell").hidden) return;
     if (background && error.code === "check-in-progress") {
@@ -4263,7 +4306,6 @@ async function runUpdateCheck(background = false) {
   } finally {
     if (updateAuthenticationEpoch === authenticationEpoch && !byId("app-shell").hidden) {
       state.updateChecking = false;
-      state.updateCheckBackground = false;
       renderUpdates();
     }
   }
@@ -4374,7 +4416,7 @@ async function copyUpdateCommand() {
 function renderAbout() {
   const events = state.diagnostics?.events || [];
   setText("diagnostics-count", events.length ? `${events.length} retained` : "No events");
-  setText("diagnostics-retention", `Count-only FIFO keeps the newest ${state.diagnostics?.maximumEntries || 20} events; each new overflow event removes the oldest.`);
+  setText("diagnostics-retention", `Manager keeps the latest ${state.diagnostics?.maximumEntries || 20} events.`);
   const container = byId("diagnostics-list");
   container.replaceChildren();
   if (!events.length) {
@@ -4463,6 +4505,7 @@ function selectView(name, options = {}) {
   if (name !== "configuration") { clearAllRevealedSecrets(); clearHouseholdPrimary(); }
   document.querySelectorAll("[data-user-combobox].open").forEach((container) => setUserComboboxOpen(container, false));
   document.querySelectorAll("[data-panel]").forEach((panel) => { panel.hidden = panel.dataset.panel !== name; });
+  if (name === "verification") renderVerification();
   document.querySelectorAll("[data-view]").forEach((button) => {
     const active = button.dataset.view === name;
     button.classList.toggle("active", active);
@@ -4555,7 +4598,6 @@ function showAuthentication() {
   state.discoveryError = "";
   state.discoveryRunning = false;
   state.updateChecking = false;
-  state.updateCheckBackground = false;
   state.operationStarting = false;
   state.operationStartingType = "";
   byId("discovery-libraries").replaceChildren();
@@ -4568,6 +4610,7 @@ function showAuthentication() {
   clearTimeout(deliveryStatusPollTimer);
   byId("app-shell").hidden = true;
   byId("auth-shell").hidden = false;
+  setText("auth-title", "Sign in to TautWeekly");
   byId("pair-form").hidden = true;
   byId("login-form").hidden = false;
   byId("login-password").focus();
@@ -4654,18 +4697,18 @@ function setGlobalStatus(message, dismiss = false) {
 
 function overallHeading(overall) {
   switch (overall) {
-  case "healthy": return "The local management surface is responding.";
-  case "unconfigured": return "TautWeekly is ready for guided setup.";
-  case "blocked": return "Configuration needs attention before delivery.";
-  default: return "The manager is online with a degraded signal.";
+  case "healthy": return "Manager is online";
+  case "unconfigured": return "Set up TautWeekly";
+  case "blocked": return "Review configuration before delivery";
+  default: return "Manager is online with issues";
   }
 }
 function overallCopy(overall) {
   switch (overall) {
-  case "healthy": return "Status is read from this host. No settings were changed and no external connection tests were run.";
-  case "unconfigured": return "No private configuration was found. Automatic delivery remains unavailable until setup is completed.";
-  case "blocked": return "A configuration file exists but cannot be interpreted safely. The manager will not guess or coerce its values.";
-  default: return "One or more optional status probes could not be completed. Review the health cards below.";
+  case "healthy": return "See configuration, scheduler, and connection status below.";
+  case "unconfigured": return "Add your services and email settings before enabling weekly delivery.";
+  case "blocked": return "The Manager could not read the saved configuration. Review it in Config.";
+  default: return "One or more status checks need attention. See the cards below.";
   }
 }
 function formatScheduleTime(value) {
@@ -4675,11 +4718,11 @@ function formatScheduleTime(value) {
   const hour = Number(match[1]);
   return `${hour % 12 || 12}:${match[2]} ${hour < 12 ? "AM" : "PM"}`;
 }
-function formatDate(value) {
+function formatDate(value, timeZone) {
   if (!value) return "Not recorded";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not recorded";
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone }).format(date);
 }
 function formatBytes(value) {
   if (!Number.isFinite(value) || value < 1024) return `${value || 0} B`;
@@ -4810,6 +4853,7 @@ window.addEventListener("hashchange", applyLocationRoute);
     setText("preview-runner-copy", "Renders fictional local newsletter states only. No Plex, Tautulli, SMTP, or host process is contacted.");
     setText("about-secret-copy", "All displayed credentials are fictional. Entered values exist only in this page and reset on reload.");
     setText("access-recovery-copy", "Reload this page to reset the fictional access settings. No host credential is changed.");
+    byId("access-recovery-guide").hidden = true;
   });
   renderStartupSettings = wrap(renderStartupSettings, () => {
     if (!byId("startup-settings-panel").hidden) byId("startup-settings-message").textContent += " Simulation only; no sign-in entry is changed.";
@@ -4818,10 +4862,11 @@ window.addEventListener("hashchange", applyLocationRoute);
     if (byId("tailscale-settings-panel").hidden) return;
     const remote = state.tailscale || {};
     const link = byId("tailscale-url");
+    const hasVerifiedAddress = remote.enabled && remote.active && remote.state === "active";
     link.removeAttribute("href");
-    link.hidden = !remote.enabled;
-    link.textContent = remote.enabled ? "https://manager.demo.invalid (fictional)" : "";
-    byId("tailscale-url-empty").hidden = Boolean(remote.enabled);
+    link.hidden = !hasVerifiedAddress;
+    link.textContent = hasVerifiedAddress ? "https://manager.demo.invalid (fictional)" : "";
+    byId("tailscale-url-empty").hidden = Boolean(hasVerifiedAddress);
     byId("tailscale-copy-button").hidden = true;
     byId("tailscale-settings-message").textContent = "Simulation only. Enabling, disabling, or verifying changes fictional page state; no Tailscale account, command, or network is contacted.";
     byId("tailscale-refresh-button").textContent = "Simulate verification";
@@ -4830,7 +4875,8 @@ window.addEventListener("hashchange", applyLocationRoute);
     byId("update-install-button").textContent = "Simulate install";
     byId("update-release-notes").href = "../releases/v" + window.TautWeeklyDemoControls.version + ".md";
     byId("update-release-notes").hidden = false;
-    if (!state.updateChecking) byId("update-settings-message").textContent = "Fictional release metadata only. No GitHub request, download, installer, or host update runs.";
+    if (state.updateChecking) setText("update-settings-summary", "Checking fictional release information.");
+    byId("update-settings-message").textContent = "Fictional release metadata only. No GitHub request, download, installer, or host update runs.";
   });
   const funnelFixture = new URLSearchParams(window.location.search).get("funnel") || "off";
   if (["off", "active", "pending", "blocked", "not-configured", "unsupported"].includes(funnelFixture)) {

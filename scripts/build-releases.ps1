@@ -585,6 +585,12 @@ try {
     Build-WindowsManager -Destination $windowsDestination
     Build-WindowsUninstaller -Destination $windowsDestination
     $nasDestination = Copy-Platform -SourceName 'nas-docker' -FolderName 'TautWeekly-nas-docker' -GuidePath 'docs/nas-docker/README.md'
+    # The standalone Compose asset has no host wrapper. Give only the archive its wrapper identity.
+    $nasCompose = Join-Path $nasDestination 'compose.yaml'
+    $standaloneIdentity = 'TAUTWEEKLY_PACKAGE_KIND: "container-compose"'
+    $nasComposeContent = [IO.File]::ReadAllText($nasCompose)
+    if (-not $nasComposeContent.Contains($standaloneIdentity)) { throw 'The NAS Compose template is missing its standalone package identity.' }
+    [IO.File]::WriteAllText($nasCompose, $nasComposeContent.Replace($standaloneIdentity, 'TAUTWEEKLY_PACKAGE_KIND: "nas-docker"'), [Text.UTF8Encoding]::new($false))
     Copy-Item -LiteralPath (Join-Path $Root 'platforms/shared/package-update.sh') -Destination (Join-Path $nasDestination 'package-update.sh') -Force
     $macDestination = Copy-Platform -SourceName 'mac-docker' -FolderName 'TautWeekly-mac-docker' -GuidePath 'docs/mac/README.md'
     Remove-Item -LiteralPath (Join-Path $macDestination 'app') -Recurse -Force

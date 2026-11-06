@@ -225,11 +225,10 @@ def main() -> int:
         if marker not in combined:
             failures.append(f"rolling retention UI contract is missing: {marker}")
     for marker in (
-        'function isMacDocker()',
-        'runtimeMode() === "mac"',
-        'macOS Docker Desktop',
-        './tautweekly.sh manager-bootstrap',
-        './tautweekly.sh manager-reset-access',
+        'case "mac-docker":',
+        'case "container-desktop":',
+        'wrapperCommands("./tautweekly.sh", "From the extracted Mac archive")',
+        'directCommands("docker compose exec -T tautweekly ", "mac")',
     ):
         if marker not in javascript:
             failures.append(f"macOS Manager capability copy is missing: {marker}")
@@ -255,7 +254,7 @@ def main() -> int:
         failures.append("validated configuration saves do not follow the backend-scoped preview plan")
     for marker in (
         'cacheDisabled ? setupWorkflowSteps.filter((name) => name !== "cache")',
-        'All four applicable safe setup checks passed; the deleted-item cache is disabled.',
+        'All enabled checks passed. The deleted-item cache is off.',
         'name === "cache" && state.cache?.enabled === false ? "Disabled"',
         'cache storage was not inspected.',
         'appendVerificationResult(cacheResults, "Deleted-item cache", "disabled", cache.summary);',
@@ -279,8 +278,8 @@ def main() -> int:
         failures.append("Dashboard greeting lacks the unambiguous administrator-name fallback")
     if 'id="access-status-button"' not in combined or 'addEventListener("click", openAccessSettings)' not in javascript:
         failures.append("access lock status does not route to password settings")
-    if 'return "Container access"' not in javascript or 'return "Browser access"' not in javascript:
-        failures.append("access lock tooltip is not platform-aware")
+    if 'return state.capabilities?.accessLabel || "Manager access";' not in javascript:
+        failures.append("access lock tooltip does not use the reported access label")
     for control in ("startup-manager", "startup-dashboard", "startup-settings-controls", "startup-settings-message"):
         if f'id="{control}"' not in combined:
             failures.append(f"Manager startup settings omit accessible control: {control}")
@@ -399,9 +398,9 @@ def main() -> int:
         failures.append("Tailscale badge does not preserve the exact upstream active/default and uniform off SVG appearances")
     if '((remote.state === "active" && remote.active === true) || remote.state === "starting")' not in javascript:
         failures.append("Tailscale badge active color is not restricted to active or publication-pending state")
-    expected_mode_badge = 'setText("mode-pill-label", nas ? "NAS / container" : linux ? "Native Linux" : mac ? "macOS Docker" : "Windows Manager");'
+    expected_mode_badge = 'setText("mode-pill-label", packageName());'
     if expected_mode_badge not in javascript:
-        failures.append("Package badge does not use the Windows Manager and compact macOS Docker labels")
+        failures.append("Package badge does not use the reported package identity")
     if 'button.dataset.tooltip = tooltip;' not in javascript or 'button.setAttribute("aria-label", tooltip);' not in javascript:
         failures.append("Tailscale badge tooltip does not reflect its exact retained state")
     if "funnelValue.title" in javascript or "funnelLink.disabled" in javascript:
@@ -414,7 +413,9 @@ def main() -> int:
         'request("/api/v1/remote-access/tailscale")',
         'method: "PUT"',
         'JSON.stringify({ operation: state.tailscaleRequestedOperation })',
-        'navigator.clipboard.writeText(state.tailscale.url)',
+        'const address = verifiedTailscaleAddress(state.tailscale);',
+        'if (!address) return;',
+        'navigator.clipboard.writeText(address)',
         'parsed.search === "" && parsed.hash === "" && parsed.hostname.endsWith(".ts.net")',
         'panel.setAttribute("aria-busy", String(state.tailscaleSaving));',
     ):
@@ -436,10 +437,11 @@ def main() -> int:
         if marker not in combined:
             failures.append(f"Integrated Funnel disclosure or accessible state is missing: {marker}")
     for marker in (
-        "Manager remains non-root and receives no credential or provider CLI",
         '"sudo tautweekly remote-access-authorize"',
         '"./tautweekly.sh remote-access-login"',
         '"/opt/tautweekly/bin/tautweekly-funnel login"',
+        '"docker compose exec tautweekly /opt/tautweekly/bin/tautweekly-funnel login"',
+        'tailscaleAuthorizationCommands.has(remote.hostAuthorizationCommand)',
     ):
         if marker not in combined:
             failures.append(f"Funnel adapter credential/command boundary is missing: {marker}")
@@ -498,8 +500,11 @@ def main() -> int:
         "update-settings-chip",
         "update-manager-version",
         "update-latest-version",
-        "update-platform",
         "update-edition",
+        "update-runtime-profile-row",
+        "update-image-repository-row",
+        "update-image-reference-row",
+        "update-migration-state-row",
         "update-release-alignment",
         "update-host-adapter-row",
         "update-host-adapter",
@@ -530,9 +535,8 @@ def main() -> int:
     expected_update_labels = (
         "Manager build",
         "Latest stable",
-        "Platform",
-        "Edition",
-        "Release alignment",
+        "Installation",
+        "Installed versions",
         "Host adapter",
         "Update channel",
         "Last successful check",
@@ -610,13 +614,13 @@ def main() -> int:
     )
     if any(marker not in javascript for marker in header_refresh_markers):
         failures.append("header Refresh does not serialize isolated local-first discovery/update work with dedicated-only preview recovery and safe cooldown/auth cleanup")
-    if 'id="refresh-button" type="button" aria-label="Refresh Manager, Tautulli choices, and update status"' not in html:
+    if 'id="refresh-button" type="button" aria-label="Refresh Manager and Tautulli choices. Check GitHub for updates when eligible."' not in html:
         failures.append("header Refresh accessible name omits its Tautulli or update side effect")
     preview_html = Path("docs/gui-preview/index.html").read_text(encoding="utf-8")
     if 'id="refresh-button" type="button" aria-label="Refresh synthetic Manager, Tautulli choices, and update status"' not in preview_html:
         failures.append("GUI preview Refresh accessible name diverges from combined production behavior")
-    if "No connection is attempted on page load or passive dashboard rendering." not in html or "it does not run this direct-Plex verification." not in html:
-        failures.append("Manager connection-boundary copy still claims Header Refresh performs no network work")
+    if "Test Tautulli and Plex" not in html or "Check Tautulli and, if configured, direct Plex using the addresses saved in Config." not in html:
+        failures.append("Verify does not describe the saved Tautulli and optional direct Plex connection check")
     if 'Update available — Version' in args.html.read_text(encoding="utf-8"):
         failures.append("static header markup exposes a stale update version before validated state is rendered")
     if ".update-status-button" not in css or "color:var(--blue)" not in css or "rgba(114,174,247,.44)" not in css or "animation:hero-pulse" not in css:

@@ -50,6 +50,7 @@ expect_profile 'explicit Unraid' unraid unraid $'profile=unraid\npackage=unraid\
 expect_profile 'legacy Mac registry inference' '' mac-docker-registry $'profile=desktop\npackage=mac-docker-registry\nmanager=mac'
 expect_profile 'legacy NAS inference' '' nas-docker $'profile=server\npackage=nas-docker\nmanager=nas'
 expect_profile 'generic compatibility default' '' '' $'profile=server\npackage=docker-compatible\nmanager=nas'
+expect_profile 'desktop without a declared install method' desktop '' $'profile=desktop\npackage=docker-compatible\nmanager=mac'
 
 expect_refusal 'unknown profile refusal' future container-compose 'must be desktop, server, or unraid'
 expect_refusal 'desktop/package mismatch refusal' desktop container-compose 'desktop is incompatible'

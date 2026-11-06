@@ -85,7 +85,7 @@ cat <<'EOF'
 
 Installation is complete.
 
-The authenticated Manager is available only through QNAP loopback. From the
+With the default port mapping, Manager is available on QNAP loopback. From the
 administrator workstation, keep this local forward open while using Manager:
 
   ssh -N -L 8787:127.0.0.1:8787 ADMIN@QNAP_HOST

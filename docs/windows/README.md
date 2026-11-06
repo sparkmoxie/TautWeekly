@@ -14,7 +14,7 @@ Manager Config shows a separate **Managed-user delivery addresses** card when
 Tautulli reports an active user without native email. Assignments are private,
 may share an inbox, and never override a native address. The existing exclusion
 card still applies by user ID and by the effective delivery address; TestEmail
-remains isolated. See the [configuration reference](../CONFIGURATION.md#interactive-user-exclusions).
+remains isolated. See the [configuration reference](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#interactive-user-exclusions).
 
 ## Requirements
 
@@ -25,7 +25,7 @@ remains isolated. See the [configuration reference](../CONFIGURATION.md#interact
 - A Tautulli API key.
 - Optional but recommended direct Plex access for complete ratings, artwork,
   backgrounds, and selected logos.
-- Administrator approval only when changing the optional Windows Scheduled
+- Administrator approval to apply updates or change the optional Windows Scheduled
   Task. Setup and the Manager otherwise run for the current Windows account.
 
 Plex and Tautulli may run on this computer or on another reachable LAN host.
@@ -87,27 +87,13 @@ task and never follows GitHub `main` or a container `edge` tag.
 
 ### Check and install from Settings
 
-Manager **Settings > Updates** is the primary Windows version and update-status
-view. It shows the running Manager/application version, installed package
-version, stable channel, latest stable release, comparison state, last
-successful check, last sanitized failure, and release-notes link. Authenticated
-entry renders cached status first and makes one non-blocking bounded request
-only when the last success is missing or at least 24 hours old and backoff
-permits. The main header **Refresh** reloads local status, repeats the
-saved-revision LAN-only Tautulli choices lookup when configuration is ready,
-and starts the same update check when its cooldown permits. It never generates
-previews or contacts Plex/SMTP, and other refresh controls remain local to their
-own actions. Successful results are reused for five minutes, then **Check now**
-permits an explicit refresh. A purple header notification
-appears only for a validated newer running application and links to this view;
-the status card glows for every non-current state while the green **Current**
-chip remains unchanged. Neither cue starts installation.
+Open **Settings > Updates** to compare the running application and installed
+package with the latest stable release. **Check now** can contact GitHub.
+After a failed check, Manager can still show the last successful result.
 
-When a newer verified stable release is available, Windows alone shows
-**Install update** behind a separate confirmation. That action starts the
-existing fixed `Check-Update.ps1` workflow; it accepts no browser-supplied URL,
-path, version, command, or arguments, and Windows still requests administrator
-approval before files or Scheduled Task state can change. The updater verifies
+When Manager finds a newer stable release and the verified updater is
+available, select **Install update**, including on supported portable installs.
+Confirm in Manager and approve the Windows administrator prompt. The updater verifies
 the official release URL, published checksum, archive layout, and internal
 release manifest, preserves private data, checks post-update health, and rolls
 back release-owned files on failure. There is no unattended update task.
@@ -302,7 +288,7 @@ when either is omitted. Line breaks are preserved, and content is escaped for
 normal and welcome HTML, the plain-text alternative, and generated previews.
 An empty or whitespace-only body blocks browser and Manager API validation,
 save, and verification. See the
-[configuration reference](../CONFIGURATION.md#optional-custom-text-card).
+[configuration reference](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#optional-custom-text-card).
 
 ### Validate, save, and verify
 
@@ -334,7 +320,7 @@ status**. Each check remains available for an explicit manual retest under
 Use `20-REFRESH-DELETED-ITEM-CACHE.bat` for an explicit independent refresh and
 `19-CACHE-DIAGNOSTICS.bat` for the same share-safe aggregate cache summary,
 including optional artwork hashes, hidden exact-GUID hit/miss probing, and a
-restart-persistence marker. See the [cache troubleshooting commands](../TROUBLESHOOTING.md#deleted-item-still-has-no-poster-or-metadata).
+restart-persistence marker. See the [cache troubleshooting commands](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/TROUBLESHOOTING.md#deleted-item-still-has-no-poster-or-metadata).
 
 After discovery, select the libraries included in newsletter calculations and
 the users excluded from production delivery, then save. These selections remain
@@ -399,7 +385,7 @@ Open **Previews** after a successful Config validation:
 Watched marks use only the selected recipient's all-time Tautulli movie history.
 Review the desktop poster shield and the title circles with uniform 6px spacing,
 vertical centering, and `title="Watched"`. Unwatched movies leave no icon gap and
-TV is unchanged. See the [watched-state rule and privacy boundary](../CONFIGURATION.md#recipient-movie-watched-markers).
+TV is unchanged. See the [watched-state rule and privacy boundary](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#recipient-movie-watched-markers).
 
 This guarded six-message TestEmail action is the only Manager setup workflow
 that authenticates to SMTP or sends mail.
@@ -413,7 +399,8 @@ send control; it does not require a Windows Scheduled Task.
 The action runs only the packaged `SendAll` mode, applies the saved library and
 delivery exclusions, updates the same welcome/history state used by scheduled
 delivery, and requires a separate explicit confirmation. It can send real mail
-to every currently eligible recipient and cannot be cancelled after it starts.
+to every currently eligible recipient and their configured eligible household
+copies. Delivery cannot be cancelled after it starts.
 Once triggered, a dedicated **Current or latest manual send** card retains only
 aggregate accepted, skipped, and failed counts. SMTP acceptance does not prove
 inbox delivery, and recipient identities are never returned to the browser or
@@ -545,14 +532,21 @@ include:
 - `18-RESET-MANAGER-ACCESS.bat` for portable password-lock recovery.
 
 The Manager's confirmed manual-send card is the normal one-off production
-workflow. Choose **Manual Welcome** to send one real welcome newsletter to a
-selected Tautulli user, or **All eligible recipients** to run the same full
-production delivery as the schedule. The selected Manual Welcome user ID is
+workflow. Choose **Manual Welcome** to send a real welcome newsletter to the
+selected user’s primary address and configured eligible household copies, or
+**All eligible recipients** to run the same full production delivery as the
+schedule. The selected Manual Welcome user ID is
 never retained in Manager history. Both modes require their own explicit
 confirmation, cannot be cancelled after sending starts, and report SMTP
 acceptance separately from inbox delivery. `07-SEND-WELCOME-NOW.bat` and
 `11-SEND-ALL-NOW.bat` remain expert break/fix fallbacks. Terminal roster output
 can contain private names and email addresses; do not publish it.
+
+`01-VERIFY-SETUP.bat` uses the CLI verify checks, including a TCP connection to
+the SMTP host. Manager Verify also checks the SMTP greeting, EHLO, and
+certificate-validated STARTTLS when enabled, without signing in or sending
+mail. `04-SEND-TEST.bat` sends one message to TestEmail. The Manager Previews
+test send submits six messages only to TestEmail.
 
 ## Troubleshooting
 
@@ -576,13 +570,13 @@ can contain private names and email addresses; do not publish it.
   Windows startup apps for an older or modified TautWeekly entry. The Manager
   will not overwrite an entry it cannot identify as its own.
 
-See the full [configuration reference](../CONFIGURATION.md),
-[security guidance](../SECURITY.md), and
-[troubleshooting reference](../TROUBLESHOOTING.md).
+See the full [configuration reference](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md),
+[security guidance](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/SECURITY.md), and
+[troubleshooting reference](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/TROUBLESHOOTING.md).
 
 ## Bundled asset updates
 
 Shipped email asset filenames are release-owned: updates may replace same-name
 custom artwork. Custom-only filenames and unrelated private/runtime data are
 preserved. For the bundle marker, restart behavior, explicit repair, and Windows
-update differences, see [bundled email assets](../EMAIL-ASSETS.md).
+update differences, see [bundled email assets](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/EMAIL-ASSETS.md).

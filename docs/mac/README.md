@@ -25,7 +25,7 @@ Tautulli reports an active user without native email. Assignments stay in the
 private data volume and its backups, may share an inbox, and never override a
 native address. Existing user-ID and effective-address exclusions still apply;
 TestEmail remains isolated. See the
-[configuration reference](../CONFIGURATION.md#interactive-user-exclusions).
+[configuration reference](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#interactive-user-exclusions).
 
 ## Requirements
 
@@ -37,15 +37,14 @@ TestEmail remains isolated. See the
 
 ## Registry-first install
 
-The release Compose asset pins a full semantic version. `latest` is published
-only as a convenience and is not the supported automation pin. For v0.25.0:
+The release Compose asset pins a full semantic version. Open the
+[latest stable release](https://github.com/sparkmoxie/TautWeekly/releases/latest)
+and download `TautWeekly-mac-compose.yaml` and `SHA256SUMS.txt` from that same
+release into a dedicated folder. Run the following in that folder:
 
 ```bash
-mkdir -p ~/TautWeekly && cd ~/TautWeekly
-TAUTWEEKLY_VERSION=0.25.0
-curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/TautWeekly-mac-compose.yaml"
-curl -fLO "https://github.com/sparkmoxie/TautWeekly/releases/download/v${TAUTWEEKLY_VERSION}/SHA256SUMS.txt"
 grep '  TautWeekly-mac-compose.yaml$' SHA256SUMS.txt | shasum -a 256 -c -
+# Continue only if the checksum passes.
 mv TautWeekly-mac-compose.yaml compose.yaml
 docker compose pull tautweekly
 docker compose up -d tautweekly
@@ -61,13 +60,13 @@ startup may take up to the configured 90-second health start period.
 For CI/CD, keep the full tag or pin the same manifest by digest:
 
 ```yaml
-image: ghcr.io/sparkmoxie/tautweekly:0.25.0@sha256:<manifest-digest>
+image: ghcr.io/sparkmoxie/tautweekly:<release-version>@sha256:<manifest-digest>
 ```
 
 Inspect the release manifest with
-`docker buildx imagetools inspect ghcr.io/sparkmoxie/tautweekly:0.25.0`.
+`docker buildx imagetools inspect ghcr.io/sparkmoxie/tautweekly:<release-version>`.
 A digest pin is immutable; a full-semver pin is the readable supported default.
-The `0.25`, `latest`, and `edge` tags are mutable and unsuitable for unattended
+Minor, `latest`, and `edge` tags are mutable and unsuitable for unattended
 promotion.
 
 ## First-run Manager setup
@@ -88,17 +87,21 @@ The Manager is published only at `http://localhost:8787/` by default.
 4. Open **Config**, enter the Tautulli, Plex, SMTP, content, and schedule
    settings, then select **Validate, save, and verify**.
 5. Confirm the saved setup results for libraries/users, Tautulli and Plex,
-   non-sending SMTP preflight, local previews, and deleted-item cache health.
-6. In **Previews**, review all six newsletter states. In **Operations**, send
-   the explicit controlled TestEmail check. Enable **Schedule** only after the
-   configured timezone, next run, previews, and SMTP result are correct.
+   SMTP connection and STARTTLS when enabled, local previews, and deleted-item
+   cache health. Verification does not sign in to SMTP or send mail.
+6. In **Previews**, review all six newsletter states and send six messages
+   only to TestEmail. Enable **Schedule** after checking the timezone, next
+   run, previews, and test results. The CLI `verify` checks SMTP TCP
+   reachability and CLI `send-test` sends one message to TestEmail.
 
 When deleted-item cache storage is enabled or its coverage changes,
 **Validate, save, and verify** starts a separate no-email refresh for every
 production-eligible included user's current newsletter window in the selected
 movie/TV libraries. It does not depend on PreviewAll or one selected preview
-user. Run `./tautweekly.sh cache-refresh` for an explicit refresh. Disabling
-the cache stops reads and writes without deleting retained entries.
+user. To refresh explicitly, use `docker compose exec -T tautweekly
+/opt/tautweekly/bin/run-mode.sh CacheWarm`. In an extracted Mac archive, use
+`./tautweekly.sh cache-refresh`. Disabling the cache stops reads and writes
+without deleting retained entries.
 
 Pairing, login, CSRF protection, session expiry, throttling, credential reveal,
 and diagnostics use the shared Manager security contracts. Browser reads never
@@ -124,7 +127,7 @@ when either is omitted. Line breaks are preserved, and content is escaped for
 normal and welcome HTML, the plain-text alternative, and generated previews.
 An empty or whitespace-only body blocks browser and Manager API validation,
 save, and verification. See the
-[configuration reference](../CONFIGURATION.md#optional-custom-text-card).
+[configuration reference](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#optional-custom-text-card).
 
 ## Connect to Mac-hosted Plex and Tautulli
 
@@ -192,9 +195,8 @@ commands through `./tautweekly.sh`.
 
 ## Network and TLS
 
-Both macOS Compose paths keep the authenticated Manager on
-`127.0.0.1:8787`. Keep that fixed loopback mapping; do not override it with
-`0.0.0.0`, a LAN address, host networking, or a router/firewall rule. Local
+Both macOS Compose paths default to publishing the Manager on
+`127.0.0.1:8787`. Keep the loopback mapping for setup and recovery. Local
 recovery uses `http://127.0.0.1:8787/`; the selected public ingress is the
 fixed-target Tailscale Funnel below.
 
@@ -213,9 +215,12 @@ Manager password; the viewer does not install Tailscale or join a tailnet.
 Manager stays on its fixed container-local target.
 
 1. Set `TAUTWEEKLY_FUNNEL_ADAPTER=enabled` in `.env`.
-2. Run `./tautweekly.sh restart` to recreate the service.
-3. Run `./tautweekly.sh remote-access-login` and complete the official browser
-   sign-in. TautWeekly never receives an auth key, token, or account password.
+2. Recreate with `docker compose up -d --no-build --force-recreate tautweekly`.
+   For an archive install, use `./tautweekly.sh restart`.
+3. Run `docker compose exec tautweekly /opt/tautweekly/bin/tautweekly-funnel login`
+   and complete the official browser sign-in. For an archive install, run
+   `./tautweekly.sh remote-access-login` instead. TautWeekly never receives
+   an auth key, token, or account password.
 4. Create and enable the Manager password lock locally.
 5. In **Settings > Tailscale Funnel**, choose **Enable**. Use the public address
    only after status is green **Active**. Gold **Publication pending** means the
@@ -226,9 +231,10 @@ fixed target `http://127.0.0.1:8080`. The non-root Manager has no Docker socket,
 host executable, TUN device, host network, added networking capability,
 credential, arbitrary command, hostname, port, path, or CLI argument.
 
-Disable from Settings or run `./tautweekly.sh remote-access-disable` before
-maintenance. Stop, reset, recovery, and removal use the same verified
-cleanup and fail closed if the exact owned public route cannot be disabled.
+Disable from Settings before stopping or removing the service. For direct
+Compose maintenance, run `docker compose exec -T tautweekly
+/opt/tautweekly/bin/tautweekly-funnel disable`; the archive equivalent is
+`./tautweekly.sh remote-access-disable`.
 Normal Manager restart, verified package/image update, recreate, and rollback
 preserve Funnel. Retain local access for recovery after abrupt host power loss
 or `SIGKILL`, when no process can perform shutdown cleanup.
@@ -252,7 +258,7 @@ breakdown use the same supporting typography as personal total watch time.
 Watched marks use only the selected recipient's all-time Tautulli movie history.
 Review the desktop poster shield and the title circles with uniform 6px spacing,
 vertical centering, and `title="Watched"`. Unwatched movies leave no icon gap and
-TV is unchanged. See the [watched-state rule and privacy boundary](../CONFIGURATION.md#recipient-movie-watched-markers).
+TV is unchanged. See the [watched-state rule and privacy boundary](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#recipient-movie-watched-markers).
 
 ## Persistent data, permissions, and backup
 
@@ -293,33 +299,21 @@ filesystem backup.
 
 ## Unified image updates and rollback
 
-Manager **Settings > Updates** is the primary Mac status source. It separately
-reports the container application/image, registry Compose deployment,
-host-adapter compatibility, stable channel, latest stable release, check
-history, sanitized failure, and release notes. A stable release is accepted
-only when it contains the matching standalone Compose asset. Authenticated
-entry renders cached status first and makes one non-blocking bounded check only
-when the last success is missing or at least 24 hours old and backoff permits.
-Successful results are reused for five minutes before **Check now** refreshes
-the same endpoint. Navigation, Dashboard rendering, and Manager health remain
-offline-capable. The containerized web process cannot invoke Docker Desktop or
-change Compose, so the card exposes a copyable pull/recreate command but no
-install button.
-
-The release workflow publishes both the NAS and Mac multi-architecture
-manifests before it can publish the GitHub release and its Compose asset. This
-prevents a successful release from silently advertising a Mac image that did
-not publish. macOS does not enable unattended updates.
+Open **Settings > Updates** to see the running image and latest stable release.
+Use Docker Desktop or the host terminal to update the original Compose project.
+For an extracted Mac package, follow the archive update instructions below.
 
 To upgrade:
 
 1. Create a private `/data` backup and record the current exact image reference.
-2. Review the new release notes. Set both the readable version and, for an
-   immutable CI/CD pin, the reviewed manifest digest in `.env`:
+2. Review the new release notes. In the existing `.env`, set
+   `TAUTWEEKLY_IMAGE` to the new full release tag or tag plus manifest digest.
+   Set `TAUTWEEKLY_VERSION` to match. Changing `TAUTWEEKLY_VERSION` alone
+   changes the reported package version and leaves the image unchanged.
 
    ```dotenv
-   TAUTWEEKLY_VERSION=0.25.0
-   TAUTWEEKLY_IMAGE=ghcr.io/sparkmoxie/tautweekly:0.25.0@sha256:<manifest-digest>
+   TAUTWEEKLY_VERSION=<release-version>
+   TAUTWEEKLY_IMAGE=ghcr.io/sparkmoxie/tautweekly:<release-version>@sha256:<manifest-digest>
    ```
 
 3. Pull and recreate only the service:
@@ -356,9 +350,8 @@ recreate is interrupted, rerun it against the same mount; if health fails,
 restore the recorded v0.22.0 image reference and recreate. Never use
 `docker compose down -v`.
 
-The transitional `TautWeekly-mac-compose.yaml` remains through v0.24.x and may
-be retired no earlier than v0.25.0 with release-note notice. See the
-[complete unified image migration contract](../CONTAINER-MIGRATION.md#migrate-the-v0220-mac-specific-image)
+Releases through v0.24.x also shipped the standalone Mac Compose asset. See the
+[complete unified image migration contract](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONTAINER-MIGRATION.md#migrate-the-v0220-mac-specific-image)
 for named-volume and bind-mount backups, intentional LAN exposure,
 `host.docker.internal`, permission recovery, pairing, rollback, and
 interrupted-delivery guidance.
@@ -389,11 +382,12 @@ configuration unchanged and cannot be undone.
 
 ## Password recovery, reinstall, and uninstall
 
-If the Manager password is lost:
+If the Manager password is lost on a registry Compose install:
 
 ```bash
 docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
-  /opt/tautweekly/bin/tautweekly-manager access-recover --data-dir /data/manager --confirm
+  /opt/tautweekly/bin/tautweekly-manager access-recover --data-dir /data/manager --tautweekly-root /opt/tautweekly \
+  --listen 0.0.0.0:8080 --runtime-mode mac --confirm
 docker compose restart tautweekly
 docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
   /opt/tautweekly/bin/tautweekly-manager access-bootstrap --data-dir /data/manager
@@ -402,6 +396,11 @@ docker compose exec -T tautweekly /opt/tautweekly/bin/run-as-user.sh \
 Recovery resets only the administrator password and active sessions, waits for
 any active newsletter during the controlled restart, and preserves
 configuration, schedules, history, output, and delivery state.
+
+If you are still running the retired Mac v0.22.0 image, its
+`access-recover` command accepts only `--data-dir /data/manager --confirm`.
+Use the same Compose restart and bootstrap commands afterward. On the current
+image, use the full command above so recovery checks for an active Funnel.
 
 For repair/reinstall, pull the same exact tag or digest and run
 `docker compose up -d --force-recreate tautweekly`; `/data` remains attached.
@@ -450,12 +449,12 @@ during a provider account lock.
   and Docker-compatible lifecycle rules. A physical Intel/Apple-silicon Mac
   and Docker Desktop remain release acceptance gaps when unavailable in CI.
 
-See [configuration](../CONFIGURATION.md), [security](../SECURITY.md), and
-[troubleshooting](../TROUBLESHOOTING.md).
+See [configuration](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md), [security](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/SECURITY.md), and
+[troubleshooting](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/TROUBLESHOOTING.md).
 
 ## Bundled asset updates
 
 Shipped email asset filenames are release-owned: updates may replace same-name
 custom artwork. Custom-only filenames and unrelated private/runtime data are
 preserved. For the bundle marker, restart behavior, explicit repair, and Windows
-update differences, see [bundled email assets](../EMAIL-ASSETS.md).
+update differences, see [bundled email assets](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/EMAIL-ASSETS.md).

@@ -63,8 +63,9 @@
     const version = manager ? `v${manager.normalized}` : "Version not reported";
     let status = "Not checked";
     if (update.checkInProgress) status = "Checking";
-    else if (update.lastFailure) status = "Check failed";
-    else if (update.state === "legacy") status = "Legacy wrapper";
+    else if (update.lastFailure?.action === "check") status = update.lastSuccessfulCheckUtc ? "Check failed · cached" : "Check failed";
+    else if (update.lastFailure?.action === "install") status = "Install failed";
+    else if (update.state === "legacy") status = "Older host adapter";
     else if (update.state === "mismatched") status = "Version mismatch";
     else if (updateIndicator(update).visible) status = "Update available";
     else if (manager && update.updateChannel === "stable" && Number.isFinite(Date.parse(update.lastSuccessfulCheckUtc))) {
@@ -93,7 +94,7 @@
     let value = String(hash || "").replace(/^#/, "");
     try { value = decodeURIComponent(value); } catch (_) { return { view: "dashboard", section: "" }; }
     value = value.toLowerCase();
-    if (value === "settings/application-and-package-status") return { view: "about", section: "updates" };
+    if (value === "settings/updates" || value === "settings/application-and-package-status") return { view: "about", section: "updates" };
     if (value === "settings/tailscale-funnel") return { view: "about", section: "tailscale" };
     if (value === "settings") return { view: "about", section: "" };
     if (routedViews.has(value)) return { view: value, section: "" };
@@ -101,7 +102,7 @@
   }
 
   function hashForRoute(view, section = "") {
-    if (view === "about" && section === "updates") return "#settings/application-and-package-status";
+    if (view === "about" && section === "updates") return "#settings/updates";
     if (view === "about" && section === "tailscale") return "#settings/tailscale-funnel";
     if (view === "about") return "#settings";
     return routedViews.has(view) ? `#${view}` : "#dashboard";

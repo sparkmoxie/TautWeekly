@@ -1,9 +1,8 @@
 @echo off
 cd /d "%~dp0"
 echo ============================================================
-echo TAUTWEEKLY FOR PLEX - SEND ALL EMAIL TYPES TO TESTEMAIL ONLY
-echo This sends SIX messages, all to TestEmail in config.json.
-echo No Plex user receives them.
+echo TAUTWEEKLY FOR PLEX - SEND SIX TEST MESSAGES
+echo This sends six test messages only to TestEmail in config.json.
 echo ============================================================
 echo.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0TautWeekly.ps1" -Mode ListUsers
