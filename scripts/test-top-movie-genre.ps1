@@ -168,7 +168,7 @@ foreach ($relativePath in $rendererPaths) {
     }) -HotRelease $trendingHero -QuietReleaseMode $true
     Assert-True ($mixedTrendingDisplay.Movies.Count -eq 4 -and $mixedTrendingDisplay.TV.Count -eq 1) "$relativePath did not retain four recent movies plus new TV in a Trending state"
     Assert-True ($mixedTrendingDisplay.MovieSectionLabel -eq 'RECENT RELEASES' -and $mixedTrendingDisplay.TvSectionLabel -eq 'NEW RELEASES') "$relativePath did not keep separate Recent Movie and New TV labels"
-    Assert-True ($mixedTrendingDisplay.CountLine -eq '0 NEW MOVIES • 1 TV TITLE') "$relativePath returned the wrong mixed-source Trending count line"
+    Assert-True ($mixedTrendingDisplay.CountLine -eq '1 TV TITLE') "$relativePath returned the wrong mixed-source Trending count line"
 
     $recentOnlyDisplay = Get-NewsletterReleaseDisplayData -ReleaseData ([PSCustomObject]@{
         Movies = $recentMovies

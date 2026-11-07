@@ -367,10 +367,10 @@ Open **Previews** after a successful Config validation:
 3. In every Trending week, confirm **Recent Releases / Movies** retains up to
    four real movies different from the hero. With new TV, confirm **New Releases
    / TV** retains up to four series and both the line above the date and the inbox
-   preview text say `0 NEW MOVIES • X TV TITLE(S)`. Without new TV, confirm
+   preview text show only the TV count. Without new TV, confirm
    **Recent Releases / TV** retains up to four series strictly newer than one
-   month and both locations say
-   `1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)`.
+   month and both count locations show `1 TRENDING MOVIE` if the hero exists
+   and a recent movie count if any appear on the shelf.
 4. Confirm a Hot New Release hero has the server-wide Trending footer, while a
    Trending hero has the anonymous Top Genre footer. The Top Genre duration and
    movie count, and every Binge Champion breakdown, use the same supporting

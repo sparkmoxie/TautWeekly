@@ -11,12 +11,16 @@ const context = vm.createContext({
   window: {},
   document: { getElementById: () => null },
 });
-vm.runInContext(source.replace("  function showCard(item) {", "  window.fixtureShowCard = showCard;\n  function showCard(item) {"), context, { filename: rendererPath });
+vm.runInContext(source.replace("  window.TautWeeklyPreviewDemo = {", "  window.fixture = { showCard, movies, shows };\n  window.TautWeeklyPreviewDemo = {"), context, { filename: rendererPath });
 
 const preview = context.window.TautWeeklyPreviewDemo;
 assert.ok(preview && typeof preview.html === "function", "synthetic preview renderer was not registered");
 
 const occurrences = (value, marker) => value.split(marker).length - 1;
+const assertReleaseLine = (html, expected, fixture) => {
+  assert.equal(html.match(/display:none;max-height:0;overflow:hidden;opacity:0">([^<]*)<\/div>/)?.[1], expected, `${fixture} inbox preview count drifted`);
+  assert.equal(html.match(/(?:class="period"|letter-spacing:\.8px")>([^<]*)<\/div>/)?.[1], expected, `${fixture} visible release count drifted`);
+};
 const titleSegment = (html, title) => {
   const start = html.indexOf(title);
   assert.notEqual(start, -1, `missing synthetic personal row: ${title}`);
@@ -72,23 +76,34 @@ assert.ok(normal.includes(".imdb{font-size:12px;font-weight:700}") && normal.inc
 assert.ok(normal.includes('class="recipient-platform-icon"') && normal.includes('width="21" height="21"'), "white platform glyph is missing");
 preview.setReleaseScenario("tv-only");
 const tvOnly = preview.html("demo-normal");
-assert.ok(tvOnly.includes("0 NEW MOVIES &middot; 4 TV TITLES") && tvOnly.includes("TOP GENRE THIS WEEK"), "TV-only release scenario drifted");
+assertReleaseLine(normal, "4 NEW MOVIES &middot; 4 TV TITLES", "GUI mixed week");
+assertReleaseLine(tvOnly, "4 TV TITLES", "GUI TV-only week");
+assert.ok(tvOnly.includes("TOP GENRE THIS WEEK"), "TV-only release scenario lost the Top Genre footer");
 preview.setReleaseScenario("quiet");
-const noAdditions = preview.html("demo-normal");
-assert.ok(noAdditions.includes("1 TRENDING MOVIE &middot; 4 RECENT MOVIE RELEASES"), "quiet release header/shelf count drifted");
+assertReleaseLine(preview.html("demo-normal"), "1 TRENDING MOVIE &middot; 4 RECENT MOVIE RELEASES", "GUI quiet week");
+const richFixture = context.window.fixture;
+const recentMovies = richFixture.movies.splice(1);
+assertReleaseLine(preview.html("demo-normal"), "1 TRENDING MOVIE", "GUI Trending-only fallback");
+const heroMovies = richFixture.movies.splice(0);
+assertReleaseLine(preview.html("demo-normal"), undefined, "GUI no counted fallback");
+richFixture.movies.push(...heroMovies);
 preview.setReleaseScenario("new");
+const fixtureShows = richFixture.shows.splice(0);
+assertReleaseLine(preview.html("demo-normal"), "1 NEW MOVIE", "GUI movie-only week");
+richFixture.movies.push(...recentMovies);
+richFixture.shows.push(...fixtureShows);
 
 for (const episodes of [[], [["S01 EP01", "Episode", null]]]) {
-  const card = context.window.fixtureShowCard({title:"Fictional fallback", art:"local.jpg", genre:"Drama", imdb:"8.1", episodes});
+  const card = richFixture.showCard({title:"Fictional fallback", art:"local.jpg", genre:"Drama", imdb:"8.1", episodes});
   assert.ok(card.includes('alt="IMDb">8.1'), "GUI lost show-level IMDb fallback");
-  assert.ok(!context.window.fixtureShowCard({title:"Unrated", art:"local.jpg", episodes, imdb:null}).includes('alt="IMDb"'), "GUI invented an unavailable rating");
+  assert.ok(!richFixture.showCard({title:"Unrated", art:"local.jpg", episodes, imdb:null}).includes('alt="IMDb"'), "GUI invented an unavailable rating");
 }
 
 const gallerySource = fs.readFileSync(path.join(root, "docs/examples/preview-all-00-INDEX.html"), "utf8");
 const galleryScript = gallerySource.match(/<script>([\s\S]*?)<\/script>/)[1];
 const galleryContext = vm.createContext({ window: {} });
 vm.runInContext(galleryScript.slice(0, galleryScript.indexOf("    function nav(){")) +
-  "window.gallery = { states, email, statsBlock, heroBlock, tvCard, asset };})();", galleryContext);
+  "window.gallery = { states, email, statsBlock, heroBlock, tvCard, asset, movies, shows };})();", galleryContext);
 const gallery = galleryContext.window.gallery;
 const galleryNormal = gallery.email(gallery.states[3]);
 assert.ok(galleryNormal.includes('width="26" height="26" alt="Watched"') && galleryNormal.includes('width="16" height="16" alt="Watched"'), "gallery watched markers are stale");
@@ -100,6 +115,17 @@ assert.ok(gallery.tvCard({title:"Fictional fallback",poster:"local.jpg",episodes
 assert.ok(gallery.tvCard({title:"Fictional fallback",poster:"local.jpg",episodes:[],imdb:"8.1"}).includes(">8.1</span>"), "gallery lost no-episode IMDb fallback");
 assert.equal(gallery.asset("movies.gif"), "../gui-preview/media/movies.gif", "gallery uses remote or stale stock artwork");
 assert.ok(!gallerySource.includes("raw.githubusercontent.com"), "gallery still fetches bundled art from a separate source revision");
+const galleryQuiet = gallery.states.find(({ id }) => id === "established-quiet");
+const galleryTvOnly = gallery.states.find(({ id }) => id === "tv-only-releases");
+assertReleaseLine(galleryNormal, "7 NEW MOVIES • 4 TV TITLES", "gallery mixed week");
+assertReleaseLine(gallery.email(galleryTvOnly), "4 TV TITLES", "gallery TV-only week");
+assertReleaseLine(gallery.email(galleryQuiet), "1 TRENDING MOVIE • 4 RECENT MOVIE RELEASES", "gallery quiet week");
+gallery.movies.splice(1);
+assertReleaseLine(gallery.email(galleryQuiet), "1 TRENDING MOVIE", "gallery Trending-only fallback");
+gallery.shows.splice(0);
+assertReleaseLine(gallery.email(gallery.states[0]), "1 NEW MOVIE", "gallery movie-only week");
+gallery.movies.splice(0);
+assertReleaseLine(gallery.email(galleryQuiet), undefined, "gallery no counted fallback");
 
 let clock = Date.now();
 class FixtureDate extends Date {

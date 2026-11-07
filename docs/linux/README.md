@@ -346,11 +346,11 @@ server-wide Trending footer. A movie-empty week promotes an authentic Trending
 movie when server history supplies one, excludes it from up to four **Recent
 Releases / Movies** cards, and pairs it with the privacy-preserving Top Genre
 footer. With new TV, up to four series remain **New Releases / TV** and the
-visible count plus inbox preview text say `0 NEW MOVIES • X TV TITLE(S)`.
+visible count and inbox preview text show only the TV count.
 Without new TV, up to four series strictly newer than one month become **Recent
-Releases / TV**, while both count locations say
-`1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when the real hero exists. Top
-Genre reports only aggregate qualified movie watch time and unique movie count;
+Releases / TV**, while both count locations show `1 TRENDING MOVIE` if the
+hero exists and a recent movie count if any appear on the shelf. Top Genre
+reports only aggregate qualified movie watch time and unique movie count;
 missing or unsupported artwork uses the neutral local movie animation.
 
 Watched marks use only the selected recipient's all-time Tautulli movie history.

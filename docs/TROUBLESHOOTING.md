@@ -446,14 +446,15 @@ assets, SMTP providers, or email clients.
 
 ## Trending shelves or inbox preview text are wrong
 
-Update every maintained package component to v0.21.0 or newer; do not combine a
-new Manager/container wrapper with an older renderer. In a Trending week with
-new TV, **Recent Releases / Movies** holds up to four movies other than the hero,
-**New Releases / TV** holds up to four series, and both the visible count and
-inbox preview text must say `0 NEW MOVIES • X TV TITLE(S)`. Without new TV, the
-TV shelf is **Recent Releases**, limited to series strictly newer than one month,
-and both count locations say
-`1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when the real hero exists.
+Check that the Manager, wrapper, and renderer come from the same TautWeekly
+version. In a Trending week with new TV, **Recent Releases / Movies** holds up
+to four movies other than the hero, **New Releases / TV** holds up to four
+series, and the visible count and inbox preview text show only the TV count,
+such as `2 TV TITLES`. Without new TV, the TV shelf is **Recent Releases**,
+limited to series strictly newer than one month, and both count locations show
+`1 TRENDING MOVIE` if the hero exists and a recent movie count if any appear
+on the shelf. When neither qualifies, the count line and count preheader are
+omitted.
 
 Regenerate PreviewAll after the metadata refresh finishes; an older saved HTML
 file cannot change in place. Then send a controlled TestEmail and compare its

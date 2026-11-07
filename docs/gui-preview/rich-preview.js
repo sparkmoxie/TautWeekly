@@ -106,6 +106,7 @@
   }
 
   function heroBlock(item, state) {
+    if (!item) return "";
     const label = state.latest ? "TRENDING THIS WEEK" : "HOT NEW RELEASE";
     const icon = state.latest ? "popcorn.gif" : "hot.gif";
     const logo = item.logo ? `<img class="title-logo" src="${media(item.logo)}" alt="${esc(item.title)} logo">` : "";
@@ -229,15 +230,22 @@
     const hero = movieItems[0] || movies[0];
     const releaseMovies = movieItems.slice(1, 5);
     const newTv = state.latest && Boolean(state.newTv);
-    const headerLine = state.latest
-      ? (newTv
-        ? `0 NEW MOVIES &middot; ${showItems.length} ${plural(showItems.length, "TV TITLE", "TV TITLES")}`
-        : `1 TRENDING MOVIE &middot; ${releaseMovies.length} ${plural(releaseMovies.length, "RECENT MOVIE RELEASE", "RECENT MOVIE RELEASES")}`)
-      : `${state.movieCount} ${plural(state.movieCount, "NEW MOVIE", "NEW MOVIES")} &middot; ${state.showCount} ${plural(state.showCount, "TV TITLE", "TV TITLES")}`;
+    const quiet = state.latest && !newTv;
+    const movieCount = quiet ? releaseMovies.length : movieItems.length;
+    const counts = [];
+    if (quiet && hero) counts.push("1 TRENDING MOVIE");
+    if (!newTv && movieCount > 0) {
+      const movieLabel = quiet ? plural(movieCount, "RECENT MOVIE RELEASE", "RECENT MOVIE RELEASES") : plural(movieCount, "NEW MOVIE", "NEW MOVIES");
+      counts.push(`${movieCount} ${movieLabel}`);
+    }
+    if (!quiet && showItems.length > 0) counts.push(`${showItems.length} ${plural(showItems.length, "TV TITLE", "TV TITLES")}`);
+    const headerLine = counts.join(" &middot; ");
+    const preheader = headerLine ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${headerLine}</div>` : "";
+    const period = headerLine ? `<div class="period">${headerLine}</div>` : "";
     const movieGrid = releaseMovies.length ? `<div class="section-label">${state.latest ? "RECENT RELEASES" : "NEW RELEASES"}<span class="section-title">Movies</span></div><section class="grid">${releaseMovies.map((item) => movieCard(item, state)).join("")}</section>` : "";
     const showGrid = showItems.length ? `<div class="section-label">${state.latest && !newTv ? "RECENT RELEASES" : "NEW RELEASES"}<span class="section-title">TV</span></div><section class="grid">${showItems.map(showCard).join("")}</section>` : "";
     const intro = state.welcomeOnly ? "Welcome to the Friday drop - here is what is new and what to expect." : "Your Friday Plex drop is here - real media presentation with a fictional private recap.";
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(state.name)}</title><style>${styles}</style></head><body><div style="display:none;max-height:0;overflow:hidden;opacity:0">${headerLine}</div><main class="email-stage"><div class="email"><header class="header"><div class="plex">PLE<b>X</b></div><div class="hello">Hey Demo Viewer,</div><div class="intro">${intro}</div></header>${welcomeBlock(state)}${customTextCard()}<div class="release-meta"><div class="period">${headerLine}</div><div class="date">Aug 8 - Aug 14, 2026</div></div>${heroBlock(hero, state)}${movieGrid}${showGrid}${statsBlock(state, statsMovieItems, statsShowItems)}${complementaryFooter(state)}<div class="cta"><span>OPEN PLEX &middot; DEMO ONLY</span></div><p class="fixture-note">Local visual fixture only. Public media artwork, title logos, and Rotten Tomatoes / IMDb score snapshots are shown as they appeared on Aug 14, 2026. Viewer identity, server name, watch activity, counts, and delivery state are fictional. No affiliation or endorsement is implied; no service is contacted.</p></div></main></body></html>`;
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(state.name)}</title><style>${styles}</style></head><body>${preheader}<main class="email-stage"><div class="email"><header class="header"><div class="plex">PLE<b>X</b></div><div class="hello">Hey Demo Viewer,</div><div class="intro">${intro}</div></header>${welcomeBlock(state)}${customTextCard()}<div class="release-meta">${period}<div class="date">Aug 8 - Aug 14, 2026</div></div>${heroBlock(hero, state)}${movieGrid}${showGrid}${statsBlock(state, statsMovieItems, statsShowItems)}${complementaryFooter(state)}<div class="cta"><span>OPEN PLEX &middot; DEMO ONLY</span></div><p class="fixture-note">Local visual fixture only. Public media artwork, title logos, and Rotten Tomatoes / IMDb score snapshots are shown as they appeared on Aug 14, 2026. Viewer identity, server name, watch activity, counts, and delivery state are fictional. No affiliation or endorsement is implied; no service is contacted.</p></div></main></body></html>`;
   }
 
   function index() {
