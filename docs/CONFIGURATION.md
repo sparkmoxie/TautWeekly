@@ -428,7 +428,9 @@ date. The line is
 `Most-watched new release across <server> this week • N play(s)`; when no new
 movie has qualified activity, the newest movie is featured with `Freshly
 added!`. Its footer is the existing full-width **TRENDING THIS WEEK** movie
-card, and new movie/TV shelves retain their established behavior.
+card, and new movie/TV shelves retain their established behavior. The count
+above the date lists each category with new additions, separated by `•` when
+both are present. A movie-only week shows a count such as `1 NEW MOVIE`.
 
 **Binge Champion** considers qualified movie and episode rows and ranks users
 by qualified watch time, play count, unique movie/TV-show count, then recency.
@@ -442,14 +444,15 @@ A report window with no new movies is a Trending state. When new TV exists, one
 authentic movie-only **TRENDING THIS WEEK** result is used as the hero when
 server history supplies it. **RECENT RELEASES / Movies** then contains up to
 four different recent movies, and **NEW RELEASES / TV** contains up to four new
-series. The line above the date and the email preview/preheader are the same
-computed string: `0 NEW MOVIES • X TV TITLE(S)`.
+series. The line above the date and the email preheader show only the TV
+count, such as `1 TV TITLE` or `2 TV TITLES`.
 
-When there is no new TV either, the hero and recent movie shelf are unchanged;
-the TV shelf becomes **RECENT RELEASES / TV** with up to four series whose
-`added_at` value is strictly newer than one calendar month before generation.
-The shared count/preheader is
-`1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when the authentic hero exists.
+When there is no new TV either, the TV shelf becomes **RECENT RELEASES / TV**
+with up to four series whose `added_at` value is strictly newer than one
+calendar month before generation.
+The shared count and preheader include `1 TRENDING MOVIE` if the hero exists
+and the number of recent movies if any appear on the shelf. If neither
+qualifies, the count line and count preheader are omitted.
 The hero is excluded from the movie shelf. Its complementary footer is **TOP
 GENRE THIS WEEK**, so Trending never appears in both hero and footer.
 

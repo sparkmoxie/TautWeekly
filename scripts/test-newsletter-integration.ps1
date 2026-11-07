@@ -534,18 +534,10 @@ foreach ($engine in $engines) {
                 Assert-True ($previewHtml.Contains('Synthetic &lt;notice&gt; &amp; safe<br>Second line')) "$($engine.Name)/$scenario $($previewPath.Name) did not safely preserve custom text body formatting."
                 Assert-True ($previewHtml.Contains('border-color:rgba(114,174,247,0.34)')) "$($engine.Name)/$scenario $($previewPath.Name) lost the configured custom card border opacity."
                 $customCardIndex = $previewHtml.IndexOf('class="email-card custom-text-card"', [StringComparison]::Ordinal)
-                $releaseSearchStart = [Math]::Max(0, $customCardIndex + 1)
-                $releaseMetaIndexes = @(
-                    foreach ($releaseMarker in @('TRENDING MOVIE', 'NO NEW RELEASES THIS WEEK', 'RECENT MOVIE', 'NEW MOVIE')) {
-                        $candidateIndex = $previewHtml.IndexOf($releaseMarker, $releaseSearchStart, [StringComparison]::Ordinal)
-                        if ($candidateIndex -ge 0) { $candidateIndex }
-                    }
-                )
-                $releaseMetaIndex = if ($releaseMetaIndexes.Count -gt 0) {
-                    [int](($releaseMetaIndexes | Measure-Object -Minimum).Minimum)
-                }
-                else { -1 }
-                Assert-True ($customCardIndex -ge 0 -and $releaseMetaIndex -gt $customCardIndex) "$($engine.Name)/$scenario $($previewPath.Name) did not place the custom text card before release metadata."
+                $releaseCountIndex = $previewHtml.IndexOf('font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:0.8px;', [StringComparison]::Ordinal)
+                $releaseDateIndex = $previewHtml.IndexOf('font-size:12px;color:#666666;', [StringComparison]::Ordinal)
+                Assert-True ($customCardIndex -ge 0 -and $releaseDateIndex -gt $customCardIndex -and
+                    ($releaseCountIndex -lt 0 -or $releaseCountIndex -gt $customCardIndex)) "$($engine.Name)/$scenario $($previewPath.Name) did not place the custom text card before release metadata."
                 Assert-True (-not $previewHtml.Contains('background:#0f0f0f')) "$($engine.Name)/$scenario $($previewPath.Name) retained the outer background shorthand."
                 Assert-True (-not $previewHtml.Contains('background:#181818')) "$($engine.Name)/$scenario $($previewPath.Name) retained the card background shorthand."
                 Assert-True (-not $previewHtml.Contains('color-scheme:dark only')) "$($engine.Name)/$scenario $($previewPath.Name) retained the incompatible dark-only declaration."
@@ -644,7 +636,7 @@ foreach ($engine in $engines) {
             if ($scenario -eq 'active') {
                 $watchedPreviewBase = if ($engine.Container) { 'assets' } else { '../assets' }
                 foreach ($stateHtml in $scenarioPreviewHtml) {
-                    Assert-True ($stateHtml.Contains('1 NEW MOVIE') -and $stateHtml.Contains('1 TV TITLE')) "$($engine.Name)/$scenario did not share the active release-count line across all six states."
+                    Assert-True ($stateHtml.Contains('>1 NEW MOVIE • 1 TV TITLE</div>')) "$($engine.Name)/$scenario did not share the active release-count line across all six states."
                     Assert-True ($stateHtml.Contains('HOT NEW RELEASE') -and $stateHtml.Contains('NEW RELEASES')) "$($engine.Name)/$scenario did not preserve HOT/new-release behavior across all six states."
                     $heroStart = $stateHtml.IndexOf('<tr class="design-hot-desktop">', [StringComparison]::Ordinal)
                     $releaseStart = if ($heroStart -ge 0) { $stateHtml.IndexOf('NEW RELEASES', $heroStart + 1, [StringComparison]::Ordinal) } else { -1 }
@@ -684,8 +676,8 @@ foreach ($engine in $engines) {
             if ($scenario -eq 'quiet') {
                 $watchedPreviewBase = if ($engine.Container) { 'assets' } else { '../assets' }
                 foreach ($stateHtml in $scenarioPreviewHtml) {
-                    Assert-True ($stateHtml.Contains('1 TRENDING MOVIE') -and $stateHtml.Contains('4 RECENT MOVIE RELEASES')) "$($engine.Name)/$scenario did not share the exact quiet count line across all six states."
-                    Assert-True ($stateHtml.Contains('mso-hide:all;">1 TRENDING MOVIE • 4 RECENT MOVIE RELEASES')) "$($engine.Name)/$scenario did not inherit the quiet count line into email preview text."
+                    Assert-True ($stateHtml.Contains('>1 TRENDING MOVIE • 4 RECENT MOVIE RELEASES</div>')) "$($engine.Name)/$scenario did not share the exact quiet count line across all six states."
+                    Assert-True ($stateHtml.Contains('mso-hide:all;">1 TRENDING MOVIE • 4 RECENT MOVIE RELEASES&zwnj;')) "$($engine.Name)/$scenario did not inherit the quiet count line into email preview text."
                     Assert-True ($stateHtml.Contains('TRENDING THIS WEEK') -and $stateHtml.Contains('RECENT RELEASES') -and -not $stateHtml.Contains('HOT NEW RELEASE')) "$($engine.Name)/$scenario did not share quiet Trending/latest behavior across all six states."
                     $heroStart = $stateHtml.IndexOf('<tr class="design-hot-desktop">', [StringComparison]::Ordinal)
                     $releaseStart = if ($heroStart -ge 0) { $stateHtml.IndexOf('RECENT RELEASES', $heroStart + 1, [StringComparison]::Ordinal) } else { -1 }
@@ -756,6 +748,8 @@ foreach ($engine in $engines) {
                     Assert-True ($contentRichHtml.Contains('posters/poster_selected-movie.jpg') -and $contentRichHtml.Contains('posters/poster_selected-show.jpg')) "$($engine.Name)/$scenario lost latest release posters."
                 }
                 Assert-True ($quietHtml.Contains('TRENDING THIS WEEK') -and $quietHtml.Contains('RECENT RELEASES')) "$($engine.Name)/$scenario did not render Trending plus the latest-release fallback."
+                Assert-True ($quietHtml.Contains('>1 TRENDING MOVIE</div>') -and -not $quietHtml.Contains('0 RECENT MOVIE RELEASES')) "$($engine.Name)/$scenario did not omit the zero recent-movie count."
+                Assert-True ($quietHtml.Contains('mso-hide:all;">1 TRENDING MOVIE&zwnj;')) "$($engine.Name)/$scenario did not inherit the Trending-only count into email preview text."
                 $quietReleaseStart = $quietHtml.IndexOf('RECENT RELEASES', [StringComparison]::Ordinal)
                 Assert-True ($quietReleaseStart -ge 0) "$($engine.Name)/$scenario could not isolate the real quiet release shelf."
                 $quietReleaseHtml = $quietHtml.Substring($quietReleaseStart)
@@ -766,7 +760,7 @@ foreach ($engine in $engines) {
             }
             if ($scenario -eq $quietNoGlobalHistoryScenario) {
                 foreach ($stateHtml in $scenarioPreviewHtml) {
-                    Assert-True ($stateHtml.Contains('4 RECENT MOVIE RELEASES')) "$($engine.Name)/$scenario did not retain the exact real Recent counts across all six states."
+                    Assert-True ($stateHtml.Contains('>4 RECENT MOVIE RELEASES</div>')) "$($engine.Name)/$scenario did not retain the exact real Recent counts across all six states."
                     Assert-True ($stateHtml.Contains('RECENT RELEASES')) "$($engine.Name)/$scenario lost Recent Releases without global history."
                     Assert-True (-not $stateHtml.Contains('TRENDING MOVIE') -and -not $stateHtml.Contains('TRENDING THIS WEEK') -and -not $stateHtml.Contains('HOT NEW RELEASE')) "$($engine.Name)/$scenario invented a Trending/HOT hero or count without global history."
                     $latestHtml = Get-HtmlSection -Html $stateHtml -StartMarker 'RECENT RELEASES' -EndMarkers @('YOUR WEEK ON PLEX', 'FRIDAY DROPS')
@@ -787,7 +781,7 @@ foreach ($engine in $engines) {
             }
 
             if ($scenario -eq $sparseEpisodeMetadataScenario) {
-                Assert-True ($normalHtml.Contains('0 NEW MOVIES') -and $normalHtml.Contains('1 TV TITLE')) "$($engine.Name)/$scenario reported the wrong sparse release counts."
+                Assert-True ($normalHtml.Contains('>1 TV TITLE</div>') -and -not $normalHtml.Contains('0 NEW MOVIES')) "$($engine.Name)/$scenario reported the wrong sparse release counts."
                 $sparseHeroStart = $normalHtml.IndexOf('TRENDING THIS WEEK', [StringComparison]::Ordinal)
                 $sparseReleaseStart = if ($sparseHeroStart -ge 0) { $normalHtml.IndexOf('NEW RELEASES', $sparseHeroStart + 1, [StringComparison]::Ordinal) } else { -1 }
                 Assert-True ($sparseHeroStart -ge 0 -and $sparseReleaseStart -gt $sparseHeroStart -and -not $normalHtml.Contains('HOT NEW RELEASE')) "$($engine.Name)/$scenario did not keep a movie-only Trending hero beside the TV release shelf."
@@ -850,8 +844,8 @@ foreach ($engine in $engines) {
 
             if ($scenario -eq 'tv-only') {
                 foreach ($stateHtml in $scenarioPreviewHtml) {
-                    Assert-True ($stateHtml.Contains('0 NEW MOVIES') -and $stateHtml.Contains('1 TV TITLE')) "$($engine.Name)/$scenario did not share the weekly TV count across all six states."
-                    Assert-True ($stateHtml.Contains('mso-hide:all;">0 NEW MOVIES • 1 TV TITLE')) "$($engine.Name)/$scenario did not inherit the weekly TV count into email preview text."
+                    Assert-True ($stateHtml.Contains('>1 TV TITLE</div>') -and -not $stateHtml.Contains('0 NEW MOVIES')) "$($engine.Name)/$scenario did not share the weekly TV count across all six states."
+                    Assert-True ($stateHtml.Contains('mso-hide:all;">1 TV TITLE&zwnj;')) "$($engine.Name)/$scenario did not inherit the weekly TV count into email preview text."
                 }
                 Assert-True ($normalHtml.Contains('TRENDING THIS WEEK') -and $normalHtml.Contains('RECENT RELEASES') -and $normalHtml.Contains('NEW RELEASES')) "$($engine.Name)/$scenario lost the Trending, Recent Movies, or New TV sections."
                 Assert-True (-not $normalHtml.Contains('HOT NEW RELEASE')) "$($engine.Name)/$scenario promoted a TV release as HOT NEW RELEASE."
@@ -1172,7 +1166,7 @@ foreach ($engine in $engines) {
                     $singlePreviewHtml = Get-Content -LiteralPath $singlePreviewPaths[0].FullName -Raw -Encoding UTF8
                     $singleContractMarkers = if ($scenario -eq 'active') {
                         @(
-                            '1 NEW MOVIE', '1 TV TITLE', 'HOT NEW RELEASE', 'NEW RELEASES',
+                            '>1 NEW MOVIE • 1 TV TITLE</div>', 'HOT NEW RELEASE', 'NEW RELEASES',
                             'A release from the selected movie library.', 'Drama, Mystery',
                             'Rotten Tomatoes critic', 'Rotten Tomatoes audience',
                             '81%</span>', '92%</span>',
@@ -1183,7 +1177,7 @@ foreach ($engine in $engines) {
                     }
                     elseif ($scenario -eq 'quiet') {
                         @(
-                            '1 TRENDING MOVIE', '4 RECENT MOVIE RELEASES',
+                            '>1 TRENDING MOVIE • 4 RECENT MOVIE RELEASES</div>',
                             'TRENDING THIS WEEK', 'RECENT RELEASES',
                             'A complete quiet-week hero with real metadata.', 'Adventure, Comedy',
                             'Rotten Tomatoes critic', 'Rotten Tomatoes audience',
@@ -1195,7 +1189,7 @@ foreach ($engine in $engines) {
                     }
                     else {
                         @(
-                            '4 RECENT MOVIE RELEASES', 'RECENT RELEASES',
+                            '>4 RECENT MOVIE RELEASES</div>', 'RECENT RELEASES',
                             'Quiet Trending Movie', 'Recent Movie One', 'Selected Movie', 'Recent Movie Three',
                             'Selected Show', 'Recent Show Two', 'Recent Show Three', 'Recent Show Four'
                         )
@@ -1317,8 +1311,7 @@ foreach ($engine in $engines) {
                 }
                 if ($scenario -eq 'active') {
                     $emailThemeArgs += @(
-                        '--require-html', '1 NEW MOVIE',
-                        '--require-html', '1 TV TITLE',
+                        '--require-html', '>1 NEW MOVIE • 1 TV TITLE</div>',
                         '--require-preheader', '1 new movie • 1 new TV title!',
                         '--require-html', 'HOT NEW RELEASE',
                         '--require-html', 'NEW RELEASES',
@@ -1360,8 +1353,7 @@ foreach ($engine in $engines) {
                 }
                 if ($scenario -eq 'quiet') {
                     $emailThemeArgs += @(
-                        '--require-html', '1 TRENDING MOVIE',
-                        '--require-html', '4 RECENT MOVIE RELEASES',
+                        '--require-html', '>1 TRENDING MOVIE • 4 RECENT MOVIE RELEASES</div>',
                         '--require-preheader', '1 TRENDING MOVIE • 4 RECENT MOVIE RELEASES',
                         '--require-html', 'TRENDING THIS WEEK',
                         '--require-html', 'RECENT RELEASES',
@@ -1424,9 +1416,10 @@ foreach ($engine in $engines) {
                 }
                 if ($scenario -eq 'tv-only') {
                     $emailThemeArgs += @(
-                        '--require-html', '0 NEW MOVIES',
-                        '--require-html', '1 TV TITLE',
-                        '--require-preheader', '0 NEW MOVIES • 1 TV TITLE',
+                        '--require-html', '>1 TV TITLE</div>',
+                        '--require-preheader', '1 TV TITLE',
+                        '--forbid-html', '0 NEW MOVIES',
+                        '--forbid-plain', '0 NEW MOVIES',
                         '--require-html', 'TRENDING THIS WEEK',
                         '--require-html', 'RECENT RELEASES',
                         '--require-html', 'NEW RELEASES',
@@ -1441,6 +1434,10 @@ foreach ($engine in $engines) {
                 }
                 if ($scenario -eq $quietNoHistoryScenario) {
                     $emailThemeArgs += @(
+                        '--require-html', '>1 TRENDING MOVIE</div>',
+                        '--require-preheader', '1 TRENDING MOVIE',
+                        '--forbid-html', '0 RECENT MOVIE RELEASES',
+                        '--forbid-plain', '0 RECENT MOVIE RELEASES',
                         '--require-html', 'TRENDING THIS WEEK',
                         '--require-html', 'RECENT RELEASES',
                         '--require-html', 'Selected Movie',
@@ -1450,7 +1447,8 @@ foreach ($engine in $engines) {
                 }
                 if ($scenario -eq $quietNoGlobalHistoryScenario) {
                     $emailThemeArgs += @(
-                        '--require-html', '4 RECENT MOVIE RELEASES',
+                        '--require-html', '>4 RECENT MOVIE RELEASES</div>',
+                        '--require-preheader', '4 RECENT MOVIE RELEASES',
                         '--require-html', 'RECENT RELEASES',
                         '--require-html-between', 'RECENT RELEASES=YOUR WEEK ON PLEX=Quiet Trending Movie',
                         '--require-html-between', 'RECENT RELEASES=YOUR WEEK ON PLEX=Recent Movie One',
@@ -1476,8 +1474,10 @@ foreach ($engine in $engines) {
                 }
                 if ($scenario -eq $sparseEpisodeMetadataScenario) {
                     $emailThemeArgs += @(
-                        '--require-html', '0 NEW MOVIES',
-                        '--require-html', '1 TV TITLE',
+                        '--require-html', '>1 TV TITLE</div>',
+                        '--require-preheader', '1 TV TITLE',
+                        '--forbid-html', '0 NEW MOVIES',
+                        '--forbid-plain', '0 NEW MOVIES',
                         '--require-html', 'TRENDING THIS WEEK',
                         '--require-html', 'NEW RELEASES',
                         '--require-html-between', 'TRENDING THIS WEEK=NEW RELEASES=Selected-library viewing history.',
@@ -1607,8 +1607,7 @@ foreach ($engine in $engines) {
                     )
                     $sharedLifecycleArgs = if ($scenario -eq 'active') {
                         @(
-                            '--require-html', '1 NEW MOVIE',
-                            '--require-html', '1 TV TITLE',
+                            '--require-html', '>1 NEW MOVIE • 1 TV TITLE</div>',
                             '--require-preheader', '1 new movie • 1 new TV title!',
                             '--require-html', 'HOT NEW RELEASE',
                             '--require-html', 'NEW RELEASES',
@@ -1633,8 +1632,7 @@ foreach ($engine in $engines) {
                     }
                     elseif ($scenario -eq 'quiet') {
                         @(
-                        '--require-html', '1 TRENDING MOVIE',
-                        '--require-html', '4 RECENT MOVIE RELEASES',
+                        '--require-html', '>1 TRENDING MOVIE • 4 RECENT MOVIE RELEASES</div>',
                         '--require-preheader', '1 TRENDING MOVIE • 4 RECENT MOVIE RELEASES',
                         '--require-html', 'TRENDING THIS WEEK',
                         '--require-html', 'RECENT RELEASES',
@@ -1670,9 +1668,10 @@ foreach ($engine in $engines) {
                     }
                     else {
                         @(
-                            '--require-html', '0 NEW MOVIES',
-                            '--require-html', '1 TV TITLE',
-                            '--require-preheader', '0 NEW MOVIES • 1 TV TITLE',
+                            '--require-html', '>1 TV TITLE</div>',
+                            '--require-preheader', '1 TV TITLE',
+                            '--forbid-html', '0 NEW MOVIES',
+                            '--forbid-plain', '0 NEW MOVIES',
                             '--require-html', 'TRENDING THIS WEEK',
                             '--require-html', 'RECENT RELEASES',
                             '--require-html', 'NEW RELEASES',
@@ -1840,8 +1839,7 @@ foreach ($engine in $engines) {
                     )
                     if ($scenario -eq 'active') {
                         $welcomeArgs += @(
-                            '--require-html', '1 NEW MOVIE',
-                            '--require-html', '1 TV TITLE',
+                            '--require-html', '>1 NEW MOVIE • 1 TV TITLE</div>',
                             '--require-preheader', '1 new movie • 1 new TV title!',
                             '--require-html', 'HOT NEW RELEASE',
                             '--require-html', 'NEW RELEASES',
@@ -1869,8 +1867,7 @@ foreach ($engine in $engines) {
                     }
                     else {
                         $welcomeArgs += @(
-                            '--require-html', '1 TRENDING MOVIE',
-                            '--require-html', '4 RECENT MOVIE RELEASES',
+                            '--require-html', '>1 TRENDING MOVIE • 4 RECENT MOVIE RELEASES</div>',
                             '--require-html', 'TRENDING THIS WEEK',
                             '--require-html', 'RECENT RELEASES',
                             '--require-html', 'A complete quiet-week hero with real metadata.',

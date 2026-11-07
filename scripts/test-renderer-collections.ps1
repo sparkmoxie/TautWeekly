@@ -1605,7 +1605,7 @@ foreach ($relativePath in $rendererPaths) {
     $script:Config.MaxMovies = 0
     $script:Config.MaxTv = 0
     $zeroQuietDisplay = Get-NewsletterReleaseDisplayData -ReleaseData $quietReleaseFixture -HotRelease $quietHero -QuietReleaseMode $true
-    Assert-True ($zeroQuietDisplay.Movies.Count -eq 0 -and $zeroQuietDisplay.TV.Count -eq 0 -and $zeroQuietDisplay.CountLine -eq ("1 TRENDING MOVIE" + $quietCountSeparator + "0 RECENT MOVIE RELEASES")) "$relativePath did not honor valid zero content-card limits in quiet mode"
+    Assert-True ($zeroQuietDisplay.Movies.Count -eq 0 -and $zeroQuietDisplay.TV.Count -eq 0 -and $zeroQuietDisplay.CountLine -eq "1 TRENDING MOVIE") "$relativePath did not omit the zero Recent Movie count"
     $zeroPosterAssets = @(Prepare-PosterAssets `
         -ReleaseData $quietReleaseFixture `
         -FeaturedRatingKey $quietHero.Item.PosterRatingKey `
@@ -1628,29 +1628,45 @@ foreach ($relativePath in $rendererPaths) {
         -StartLabel "August 1" `
         -EndLabel "August 7"
     Assert-True (-not $noHistoryPlainText.Contains("TRENDING THIS WEEK") -and -not $noHistoryPlainText.Contains("Warp core preparing")) "$relativePath invented a compact Trending footer without authentic global history"
+    Assert-True ($noHistoryPlainText.StartsWith("4 RECENT MOVIE RELEASES")) "$relativePath did not keep positive Recent Movie counts without a Trending movie"
 
     Assert-True ((Get-DynamicPreheader -ReleaseData ([PSCustomObject]@{
         Movies = @(); TV = @($tvRelease, $tvRelease)
     })) -eq '2 new TV titles!') "$relativePath inbox preview counted TV episodes instead of titles"
     $mixedPreheader = '1 new movie ' + [char]0x2022 + ' 1 new TV title!'
     Assert-True ((Get-DynamicPreheader -ReleaseData $releaseFixture) -eq $mixedPreheader) "$relativePath inbox preview lost mixed release counts"
+    $mixedDisplay = Get-NewsletterReleaseDisplayData -ReleaseData $releaseFixture -HotRelease $movieOnlyHero -QuietReleaseMode $false
+    Assert-True ($mixedDisplay.CountLine -eq ("1 NEW MOVIE" + $quietCountSeparator + "1 TV TITLE")) "$relativePath lost mixed release counts or excluded the hero from the total"
 
     $twoTitleReleaseFixture = [PSCustomObject]@{
         Movies = @()
         TV = @([PSCustomObject]@{ Title = 'Show One' }, [PSCustomObject]@{ Title = 'Show Two' })
     }
-    $plainText = Build-PlainText `
-        -User ([PSCustomObject]@{ FriendlyName = 'Viewer' }) `
-        -Stats ([PSCustomObject]@{ TotalSeconds = 0; TotalTimeText = '0m'; MovieItems = @(); TvShowItems = @() }) `
-        -ReleaseData $twoTitleReleaseFixture `
-        -HotRelease $null `
-        -TrendingTitle '' `
-        -SystemWarmingUp $false `
-        -RecentAccess $false `
-        -StartLabel 'August 1' `
-        -EndLabel 'August 7'
-    Assert-True ($plainText.Contains('2 new TV titles!')) "$relativePath plain-text inbox preview lost TV title semantics"
-    Assert-True ($plainText.Contains('0 NEW MOVIES') -and $plainText.Contains('2 TV TITLES')) "$relativePath plain-text body counted TV episodes instead of shows"
+    $plainTextParams = @{
+        User = [PSCustomObject]@{ FriendlyName = 'Viewer' }
+        Stats = $empty
+        HotRelease = $null
+        TrendingTitle = ''
+        SystemWarmingUp = $false
+        RecentAccess = $false
+        StartLabel = 'August 1'
+        EndLabel = 'August 7'
+    }
+    $dateRange = 'August 1 ' + [char]0x2013 + ' August 7'
+    $plainText = Build-PlainText @plainTextParams -ReleaseData $twoTitleReleaseFixture
+    Assert-True ($plainText.StartsWith('2 new TV titles!')) "$relativePath plain-text inbox preview lost TV title semantics"
+    Assert-True ($plainText -match "(?m)^2 TV TITLES\r?\n$dateRange") "$relativePath plain-text body did not show only the TV title count"
+
+    $movieOnlyFixture = [PSCustomObject]@{ Movies = @($heroMovie); TV = @() }
+    $plainText = Build-PlainText @plainTextParams -ReleaseData $movieOnlyFixture
+    Assert-True ($plainText.StartsWith('1 new movie!')) "$relativePath movie-only inbox preview lost the singular movie count"
+    Assert-True ($plainText -match "(?m)^1 NEW MOVIE\r?\n$dateRange") "$relativePath plain-text body did not show only the movie count"
+
+    $recentTvOnlyFixture = [PSCustomObject]@{ Movies = @(); TV = @($tvRelease) }
+    $noCountDisplay = Get-NewsletterReleaseDisplayData -ReleaseData $recentTvOnlyFixture -HotRelease $null -QuietReleaseMode $true
+    Assert-True ($noCountDisplay.CountLine -eq '' -and $noCountDisplay.TV.Count -eq 1) "$relativePath did not omit the empty count while retaining the recent TV shelf"
+    $plainText = Build-PlainText @plainTextParams -ReleaseData $recentTvOnlyFixture -QuietReleaseMode $true
+    Assert-True ($plainText -notmatch 'NEW MOVIE|RECENT MOVIE RELEASE|TV TITLE|TRENDING MOVIE' -and $plainText.Contains($dateRange)) "$relativePath did not keep only the date when there was no counted fallback"
 
     $source = Get-Content -LiteralPath $path -Raw
     Assert-True ($source -match '\$hotRelease = if \(@\(\$releaseData\.Movies\)\.Count -gt 0\)') "$relativePath does not fall back from a movie-empty release hero"

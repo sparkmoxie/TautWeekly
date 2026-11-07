@@ -342,10 +342,11 @@ A Hot New Release movie hero pairs with the server-wide Trending footer. A
 Trending movie hero never repeats in the footer; it pairs with the anonymous
 Top Genre footer and is excluded from the up-to-four **Recent Releases /
 Movies** cards. If new TV exists, up to four series remain under **New Releases
-/ TV**, while the count above the date and the email preview text both say
-`0 NEW MOVIES • X TV TITLE(S)`. If no new TV exists, up to four series strictly
-newer than one month appear under **Recent Releases / TV**, and both locations
-say `1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when the real hero exists.
+/ TV**, while the count above the date and the email preview text show only
+the TV count. If no new TV exists, up to four series strictly newer than one
+month appear under **Recent Releases / TV**, and both count locations show
+`1 TRENDING MOVIE` if the hero exists and a recent movie count if any appear
+on the shelf.
 Top Genre exposes only aggregate qualified watch time and unique movie count;
 missing or unsupported art uses the neutral local movie animation.
 

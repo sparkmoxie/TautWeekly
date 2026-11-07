@@ -6,6 +6,10 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Omit zero release counts from the newsletter header, inbox preview, and public examples.
+
 ## [0.27.5] - 2026-11-06
 
 ### Fixed

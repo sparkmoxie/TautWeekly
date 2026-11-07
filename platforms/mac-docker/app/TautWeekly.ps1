@@ -8052,36 +8052,36 @@ function Get-NewsletterReleaseDisplayData {
         Select-Object -First $maxTv
     )
 
-    if ($QuietReleaseMode) {
-        if ($tvSectionLabel -eq "NEW RELEASES") {
-            $weeklyTvCount = @($ReleaseData.TV).Count
-            $weeklyTvWord = if ($weeklyTvCount -eq 1) { "TV TITLE" } else { "TV TITLES" }
-            $countLine = "0 NEW MOVIES • $weeklyTvCount $weeklyTvWord"
-        }
-        else {
-            $countParts = New-Object System.Collections.Generic.List[string]
+    $countParts = @(
+        if ($QuietReleaseMode -and $tvSectionLabel -ne "NEW RELEASES") {
             if ($trendingHeroMode -and
                 $null -ne $HotRelease.Item -and
                 [string]$HotRelease.Item.Type -eq "movie") {
-                $countParts.Add("1 TRENDING MOVIE")
+                "1 TRENDING MOVIE"
             }
-            $movieReleaseWord = if ($movies.Count -eq 1) { "RECENT MOVIE RELEASE" } else { "RECENT MOVIE RELEASES" }
-            $countParts.Add("$($movies.Count) $movieReleaseWord")
-            $countLine = $countParts -join " • "
+            if ($movies.Count -gt 0) {
+                $movieReleaseWord = if ($movies.Count -eq 1) { "RECENT MOVIE RELEASE" } else { "RECENT MOVIE RELEASES" }
+                "$($movies.Count) $movieReleaseWord"
+            }
         }
-    }
-    else {
-        $movieCount = @($ReleaseData.Movies).Count
-        $tvCount = @($ReleaseData.TV).Count
-        $movieWord = if ($movieCount -eq 1) { "NEW MOVIE" } else { "NEW MOVIES" }
-        $tvWord = if ($tvCount -eq 1) { "TV TITLE" } else { "TV TITLES" }
-        $countLine = "$movieCount $movieWord • $tvCount $tvWord"
-    }
+        else {
+            $movieCount = @($ReleaseData.Movies).Count
+            $tvCount = @($ReleaseData.TV).Count
+            if (-not $QuietReleaseMode -and $movieCount -gt 0) {
+                $movieWord = if ($movieCount -eq 1) { "NEW MOVIE" } else { "NEW MOVIES" }
+                "$movieCount $movieWord"
+            }
+            if ($tvCount -gt 0) {
+                $tvWord = if ($tvCount -eq 1) { "TV TITLE" } else { "TV TITLES" }
+                "$tvCount $tvWord"
+            }
+        }
+    )
 
     return [PSCustomObject]@{
         Movies            = $movies
         TV                = $tv
-        CountLine         = $countLine
+        CountLine         = $countParts -join " • "
         SectionLabel      = $movieSectionLabel
         MovieSectionLabel = $movieSectionLabel
         TvSectionLabel    = $tvSectionLabel
@@ -8176,25 +8176,33 @@ function Build-NewsletterHtml {
 "@
         }
     }
-    $headerReleaseMetaTopPadding = if ([string]::IsNullOrWhiteSpace($headerCustomTextCardBlock)) { "10px" } else { "18px" }
+    $releaseMetaTopPadding = if ($WelcomeOnly -or $RecentAccess) { "0px" }
+    elseif ([string]::IsNullOrWhiteSpace($headerCustomTextCardBlock)) { "10px" }
+    else { "18px" }
+    $releaseDateTopPadding = $releaseMetaTopPadding
+    $releaseCountHtml = ""
+    if ($releaseCountLine) {
+        $releaseCountHtml = "<div style=`"padding-top:$releaseMetaTopPadding;font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:0.8px;`">$(HtmlEncode $releaseCountLine)</div>"
+        $releaseDateTopPadding = "6px"
+    }
+    $releaseMetaHtml = @"
+  $releaseCountHtml
+  <div style="padding-top:$releaseDateTopPadding;font-size:12px;color:#666666;">$(HtmlEncode $StartLabel) – $(HtmlEncode $EndLabel)</div>
+"@
 
 
     $headerReleaseMetaBlock = if ($WelcomeOnly -or $RecentAccess) {
         ""
     }
     else {
-        @"
-  <div style="padding-top:$headerReleaseMetaTopPadding;font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:0.8px;">$(HtmlEncode $releaseCountLine)</div>
-  <div style="padding-top:6px;font-size:12px;color:#666666;">$(HtmlEncode $StartLabel) – $(HtmlEncode $EndLabel)</div>
-"@
+        $releaseMetaHtml
     }
 
     $welcomeReleaseMetaBlock = if ($WelcomeOnly -or $RecentAccess) {
         @"
 <tr>
 <td class="pad" style="padding:0 20px 18px;">
-  <div style="font-size:12px;color:#e5a00d;font-weight:800;letter-spacing:0.8px;">$(HtmlEncode $releaseCountLine)</div>
-  <div style="padding-top:6px;font-size:12px;color:#666666;">$(HtmlEncode $StartLabel) – $(HtmlEncode $EndLabel)</div>
+$releaseMetaHtml
 </td>
 </tr>
 "@
@@ -9024,7 +9032,10 @@ function Build-PlainText {
         $plainPreheader + "`r`n`r`n"
     }
 
-    $releaseMetaText = [string]$releaseDisplay.CountLine + [Environment]::NewLine + "$StartLabel – $EndLabel"
+    $releaseMetaText = "$StartLabel – $EndLabel"
+    if ($releaseDisplay.CountLine) {
+        $releaseMetaText = $releaseDisplay.CountLine + [Environment]::NewLine + $releaseMetaText
+    }
 
     $heroLine = ""
     $plainTrendingHero = $false

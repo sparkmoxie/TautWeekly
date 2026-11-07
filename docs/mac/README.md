@@ -244,11 +244,11 @@ or `SIGKILL`, when no process can perform shutdown cleanup.
 A Hot New Release movie hero pairs with the server-wide Trending footer. A
 movie-empty Trending week uses up to four other recent movies and instead pairs
 the hero with the privacy-preserving Top Genre footer. With new TV, up to four
-series appear under **New Releases / TV**, and the visible count plus inbox
-preview text say `0 NEW MOVIES • X TV TITLE(S)`. Without new TV, up to four
-series strictly newer than one month appear under **Recent Releases / TV**, and
-both count locations say
-`1 TRENDING MOVIE • X RECENT MOVIE RELEASE(S)` when the real hero exists.
+series appear under **New Releases / TV**, and the visible count and inbox
+preview text show only the TV count. Without new TV, up to four series strictly
+newer than one month appear under **Recent Releases / TV**, and both count
+locations show `1 TRENDING MOVIE` if the hero exists and a recent movie count
+if any appear on the shelf.
 
 Top Genre uses only aggregate qualified movie watch time and unique movie
 count; it never includes viewer identity and safely falls back to the neutral
