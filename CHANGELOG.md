@@ -10,6 +10,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Omit zero release counts from the newsletter header, inbox preview, and public examples.
 
+## [0.27.6] - 2026-11-06
+
+### Fixed
+
+- Omit zero counts from newsletter release summaries and inbox preview text. Quiet weeks still show qualifying Trending and Recent Releases counts. Hide the count line when none qualify.
+
 ## [0.27.5] - 2026-11-06
 
 ### Fixed
