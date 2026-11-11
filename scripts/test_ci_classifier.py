@@ -96,7 +96,7 @@ class ClassifierTests(unittest.TestCase):
         self.assert_gates(["scripts/test-manager-status-polling.mjs"], set())
 
     def test_tautulli_compatibility_regressions_select_renderer(self):
-        for path in ["scripts/test-tautulli-archives.ps1", "scripts/test-tautulli-api-artwork.ps1"]:
+        for path in ["scripts/test-tautulli-archives.ps1", "scripts/test-tautulli-history-window.ps1", "scripts/test-support/assert-history-date-sql.py", "scripts/test-tautulli-api-artwork.ps1"]:
             self.assert_gates([path], {"powershell", "renderer"})
         self.assert_gates(["scripts/test-manager-archive-policy.mjs"], set())
 

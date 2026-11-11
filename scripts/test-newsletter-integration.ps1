@@ -448,6 +448,7 @@ foreach ($engine in $engines) {
                 Assert-True ([string]$historyCall.query.user_id -in $expectedHistoryUserIds) "$($engine.Name)/$scenario did not scope watched state to an eligible recipient."
                 Assert-True ([string]$historyCall.query.include_activity -eq '0') "$($engine.Name)/$scenario included active sessions in historical watched state."
                 Assert-True ($null -eq $historyCall.query.PSObject.Properties['after'] -and $null -eq $historyCall.query.PSObject.Properties['before']) "$($engine.Name)/$scenario limited watched state to the newsletter window."
+                Assert-True ($historyCall.method -eq 'GET' -and $null -eq $historyCall.query.PSObject.Properties['start_date']) "$($engine.Name)/$scenario changed unwindowed watched-state requests."
             }
 
             $indexPath = Join-Path $outputRoot 'preview-all-00-INDEX.html'
@@ -930,6 +931,15 @@ foreach ($engine in $engines) {
             }
 
             $calls = @(Get-Content $callLog | ForEach-Object { $_ | ConvertFrom-Json })
+            $weeklyHistoryCalls = @($calls | Where-Object {
+                [string]$_.path -eq '/api/v2' -and
+                $null -ne $_.query.PSObject.Properties['start_date']
+            })
+            Assert-True ($weeklyHistoryCalls.Count -gt 0) "$($engine.Name)/$scenario omitted the calendar-date history filter."
+            foreach ($weeklyCall in $weeklyHistoryCalls) {
+                Assert-True ($weeklyCall.method -eq 'POST' -and $weeklyCall.request_target -eq '/api/v2?cmd=get_history' -and $weeklyCall.has_api_key) "$($engine.Name)/$scenario did not use a short header-authenticated history POST."
+                Assert-True (@($weeklyCall.body.start_date.Split(',')).Count -eq 7) "$($engine.Name)/$scenario changed the inclusive seven-day history window."
+            }
             $lastPlatformCalls = @($calls | Where-Object {
                 $null -ne $_.query.PSObject.Properties['cmd'] -and
                 [string]$_.query.cmd -eq 'get_users_table'

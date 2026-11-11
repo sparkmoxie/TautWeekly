@@ -180,7 +180,7 @@ foreach ($relative in @('platforms/windows', 'platforms/nas-docker/app', 'platfo
     $weeklyCalls = @($script:Calls | Where-Object Command -eq 'get_history')
     Assert-True (($weeklyCalls.Parameters.section_id | Sort-Object) -join ',' -eq '10,30') "$relative weekly history did not use frozen available sections"
     foreach ($call in $weeklyCalls) {
-        Assert-True ($call.Parameters.after -eq '2026-11-05' -and $call.Parameters.before -eq '2026-11-11' -and $call.Parameters.include_activity -eq 0 -and $call.Parameters.include_archived -eq 0) "$relative weekly query lost reporting or archive boundaries"
+        Assert-True ($call.Parameters.after -eq '2026-11-05' -and $call.Parameters.before -eq '2026-11-12' -and $call.Parameters.start_date -eq '2026-11-05,2026-11-06,2026-11-07,2026-11-08,2026-11-09,2026-11-10,2026-11-11' -and $call.Parameters.include_activity -eq 0 -and $call.Parameters.include_archived -eq 0) "$relative weekly query lost reporting or archive boundaries"
     }
     $personal = @(Get-History -AfterDate '2026-11-05' -BeforeDate '2026-11-11' -ForUserId '2')
     Assert-True ($personal.Count -eq 2) "$relative exact-recipient upstream-shaped history lost activity"

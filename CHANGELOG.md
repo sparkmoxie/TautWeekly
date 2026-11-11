@@ -6,9 +6,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-11-11
+
 ### Fixed
 
 - Restore weekly activity, personal recaps, and global rankings when Tautulli history omits library IDs. Query each available selected library explicitly while preserving archived-library and exact-recipient checks.
+- Include completed plays started on every selected reporting day, including the run date, using Tautulli's calendar date filter before history grouping.
 
 ### Removed
 
