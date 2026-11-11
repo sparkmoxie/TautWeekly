@@ -1965,7 +1965,9 @@ def main() -> None:
     server.call_log = args.call_log  # type: ignore[attr-defined]
     server.base_url = f"http://127.0.0.1:{args.port}"  # type: ignore[attr-defined]
     args.call_log.write_text("", encoding="utf-8")
-    args.ready_file.write_text(server.base_url, encoding="utf-8")
+    ready_temporary = args.ready_file.with_name(args.ready_file.name + ".tmp")
+    ready_temporary.write_text(server.base_url, encoding="utf-8")
+    ready_temporary.replace(args.ready_file)
     server.serve_forever()
 
 
