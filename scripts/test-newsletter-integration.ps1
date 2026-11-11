@@ -265,6 +265,7 @@ foreach ($engine in $engines) {
                 FooterServerName = 'Virtual Plex'
                 PlexWebUrl = 'https://requests.example.test/'
                 PlexButtonLabel = 'View & Request <Now>'
+                ShowLetterboxdLinks = ($scenario -eq 'active')
                 IncludedLibraryIds = @('10', '20')
                 ExcludedUserIds = @()
                 ExcludedEmails = @()
@@ -503,6 +504,12 @@ foreach ($engine in $engines) {
             $newWithHistoryHtml = Get-Content (Join-Path $outputRoot 'preview-all-03-new-user-with-history.html') -Raw -Encoding UTF8
             $warmupHtml = Get-Content (Join-Path $outputRoot 'preview-all-06-established-warmup.html') -Raw -Encoding UTF8
             $normalHtml = Get-Content $normalPath -Raw -Encoding UTF8
+            if ($scenario -eq 'active') {
+                Assert-True ($normalHtml.Contains('href="https://letterboxd.com/tmdb/1234567/"')) "$($engine.Name)/active omitted the optional movie identity link."
+            }
+            else {
+                Assert-True (-not $normalHtml.Contains('href="https://letterboxd.com/')) "$($engine.Name)/$scenario enabled optional movie links by default."
+            }
             $quietHtml = Get-Content (Join-Path $outputRoot 'preview-all-05-established-quiet.html') -Raw -Encoding UTF8
             $scenarioPreviewHtml = @($manualHtml, $newNoHistoryHtml, $newWithHistoryHtml, $normalHtml, $quietHtml, $warmupHtml)
             foreach ($stateHtml in $scenarioPreviewHtml) {
@@ -1277,6 +1284,9 @@ foreach ($engine in $engines) {
                 Assert-True ('DATA' -in $smtpCommands) "$($engine.Name)/$scenario SendTest did not submit an SMTP message."
                 Assert-True (Test-Path $smtpDataFile) "$($engine.Name)/$scenario SendTest did not preserve the captured MIME message."
                 $emailThemeArgs = @($smtpDataFile)
+                if ($scenario -eq 'active') {
+                    $emailThemeArgs += @('--require-html', 'href="https://letterboxd.com/tmdb/1234567/"', '--require-plain', 'https://letterboxd.com/tmdb/1234567/')
+                }
                 $emailThemeArgs += @(
                     '--require-html', 'CUSTOM &lt;TITLE&gt;</span><img',
                     '--require-html', 'cid:custom_title_celebrate',

@@ -238,6 +238,21 @@ Individual user lookups must match the requested ID; Tautulli's default Local
 response is not accepted as another user's identity. Failed matches use an
 exact bulk-roster match or fail closed before personalized generation or send.
 
+Tautulli 2.19 archived users are ineligible for personalized output and delivery,
+including explicit user lookups and saved fallback addresses. Current content
+and weekly statistics exclude archived users and unavailable libraries; saved
+library selections cannot silently expand when a section is archived. Only an
+exact active recipient's historical watched evidence may include prior archived
+history within the saved library policy. Backend archive status is rechecked
+before personalized output or delivery.
+
+Tautulli API credentials use `X-Api-Key` headers on the configured API origin,
+including artwork and binary exports. Authenticated redirects are refused rather
+than forwarding credentials. Image requests retain exact item identity and do
+not bypass Tautulli's external-image restrictions. Optional Letterboxd links use
+validated movie IMDb/TMDB identifiers already present in metadata and reveal no
+private server address, credential, or recipient activity in the URL.
+
 Scheduled weekly messages share only the Binge Champion's anonymous aggregate:
 total watch time, total plays, and nonzero unique movie and TV-show counts. When
 more than one episode qualifies, the cumulative episode count across those TV

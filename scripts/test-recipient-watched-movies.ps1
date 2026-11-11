@@ -32,7 +32,7 @@ $requiredFunctions = @(
     'Test-RecipientHasWatchedMovie', 'Get-RecipientWatchedAssetSource',
     'Get-RecipientWatchedTitleIconHtml', 'Get-RecipientWatchedTitleHtml', 'Get-RecipientWatchedDesktopHeroPosterHtml',
     'Get-RecipientWatchedPlainTextSuffix', 'Get-ReleaseCardsHtml', 'Get-StatsMovieRowsHtml',
-    'Get-StatsMovieRatingHtml', 'Get-StatsTvShowRowsHtml', 'Get-StatsTvShowRatingHtml', 'Get-StatsEpisodeRowsHtml'
+    'Get-StatsMovieRatingHtml', 'Get-MovieLetterboxdUrl', 'Get-MovieLetterboxdHtml', 'Get-StatsTvShowRowsHtml', 'Get-StatsTvShowRatingHtml', 'Get-StatsEpisodeRowsHtml'
 )
 
 $sharedDefinitions = @{}

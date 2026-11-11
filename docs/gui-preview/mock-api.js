@@ -2,8 +2,8 @@
 
 (() => {
   const now = () => new Date().toISOString();
-  const DEMO_VERSION = "0.27.6";
-  const PREVIOUS_VERSION = "0.27.5";
+  const DEMO_VERSION = "0.28.0";
+  const PREVIOUS_VERSION = "0.27.6";
   const PROFILES = {
     windows: { runtimeMode: "windows", runtimeProfile: "native-windows", packageKind: "windows-installer", label: "Windows", packageLabel: "Windows package" },
     nas: { runtimeMode: "nas", runtimeProfile: "server", packageKind: "container-compose", label: "NAS / Docker", packageLabel: "Server Docker Compose" },
@@ -54,7 +54,8 @@
   const users = userNames.map((name, index) => ({
     id: String(41001 + index),
     name,
-    eligibility: index === 2 ? "address-needed" : "eligible",
+    eligibility: index === 17 ? "archived" : index === 2 ? "address-needed" : "eligible",
+    ...(index === 17 ? { archived: true } : {}),
     ...(index === 2 ? { needsDeliveryAddress: true } : {}),
     ...(index === 0 ? { role: "administrator" } : {}),
   }));
@@ -62,6 +63,7 @@
     { id: "11", name: "Cinema", mediaType: "movie", itemCount: "642" },
     { id: "12", name: "Series", mediaType: "show", itemCount: "118" },
     { id: "13", name: "Family Matinee", mediaType: "movie", itemCount: "204" },
+    { id: "14", name: "Archived Cinema", mediaType: "movie", itemCount: "50", availability: "archived" },
   ];
   const field = (name, label, group, type, value, extras = {}) => ({ name, label, group, type, value, required: false, ...extras });
   const editorFields = [
@@ -96,6 +98,7 @@
     field("DeletedItemCacheRetentionDays", "Cache retention days", "Cache", "integer", 365, { required: true, min: 1, max: 3650 }),
     field("DeletedItemCacheMaxItems", "Maximum cached items", "Cache", "integer", 1000, { required: true, min: 1, max: 10000 }),
     field("DeletedItemCacheMaxBytesMB", "Maximum cache size (MB)", "Cache", "integer", 256, { required: true, min: 16, max: 2048 }),
+    field("ShowLetterboxdLinks", "Show Letterboxd links", "Newsletter", "boolean", false, { help: "Add movie links using existing IMDb/TMDB identities without extra metadata requests." }),
     field("CustomTextCardEnabled", "Enable custom text card", "Custom text card", "boolean", true, { help: "When enabled, the synthetic card appears before the newsletter release-count and date block in every state." }),
     field("CustomTextCardBorderColor", "Border color", "Custom text card", "color", "#72aef7", { help: "Choose the card accent color. Border opacity controls whether it is visible." }),
     field("CustomTextCardBorderOpacity", "Border opacity", "Custom text card", "range", 34, { min: 0, max: 100, help: "Set to 0% for no border." }),
@@ -161,7 +164,7 @@
     running: false,
     updatedAtUtc: now(),
     steps: {
-      choices: { state: "passed", summary: "3 fictional libraries and 18 fictional users loaded in memory." },
+      choices: { state: "passed", summary: "4 fictional libraries and 18 fictional users loaded in memory." },
       lan: { state: "passed", summary: "Synthetic Tautulli and direct Plex verification passed." },
       smtp: { state: "passed", summary: "Synthetic SMTP reachability and STARTTLS validation passed." },
       previews: { state: "passed", summary: "Six production-faithful newsletter states are available for review." },
@@ -172,7 +175,7 @@
     cache: cacheStatus,
   };
   const discovery = {
-    primaryRecipientCount: users.length - 2,
+    primaryRecipientCount: users.length - 4,
     mode: "synthetic-demo",
     networkBoundary: "no network",
     completedAtUtc: now(),
@@ -574,6 +577,7 @@
       else if (name.startsWith("CustomTextCard")) { categories.add("custom-text-card"); plan.generatePreviews = true; }
       else if (name === "IncludedLibraryIds") { categories.add("libraries"); plan.generatePreviews = true; plan.warmCache = plan.cacheEnabled; }
       else if (["ExcludedUserIds", "ExcludedEmails", "UserEmailOverrides"].includes(name)) { categories.add("recipients"); plan.generatePreviews = true; plan.warmCache = plan.cacheEnabled; }
+      else if (name === "ShowLetterboxdLinks") { categories.add("newsletter"); plan.generatePreviews = true; }
       else if (["DaysBack", "RecentAccessDays", "WatchedPercent", "MaxMovies", "MaxTv"].includes(name)) { categories.add("newsletter"); plan.generatePreviews = true; plan.warmCache = plan.cacheEnabled; }
       else categories.add("newsletter");
     }
@@ -717,7 +721,7 @@
       if (method === "POST") {
         const excluded = new Set(editorFields.find((item) => item.name === "ExcludedUserIds")?.value || []);
         const overrides = editorFields.find((item) => item.name === "UserEmailOverrides")?.value || {};
-        discovery.primaryRecipientCount = users.filter((user) => !excluded.has(user.id) && (user.eligibility === "eligible" || user.needsDeliveryAddress && overrides[user.id])).length;
+        discovery.primaryRecipientCount = users.filter((user) => !user.archived && !user.deleted && !excluded.has(user.id) && (user.eligibility === "eligible" || user.needsDeliveryAddress && overrides[user.id])).length;
         discovery.completedAtUtc = now();
       }
       return json(method === "POST" ? discovery : { last: discovery });

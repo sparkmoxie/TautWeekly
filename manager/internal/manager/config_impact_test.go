@@ -46,6 +46,7 @@ func TestEveryConfigFieldHasExplicitSaveImpact(t *testing.T) {
 		"ScheduledTaskName":             {category: "schedule"},
 		"DaysBack":                      {category: "newsletter", preview: true, warmCache: true},
 		"RecentAccessDays":              {category: "newsletter", preview: true, warmCache: true},
+		"ShowLetterboxdLinks":           {category: "newsletter", preview: true},
 		"WatchedPercent":                {category: "newsletter", preview: true, warmCache: true},
 		"MaxMovies":                     {category: "newsletter", preview: true, warmCache: true},
 		"MaxTv":                         {category: "newsletter", preview: true, warmCache: true},

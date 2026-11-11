@@ -82,6 +82,11 @@ class ClassifierTests(unittest.TestCase):
     def test_status_polling_test_is_in_fast_layer(self):
         self.assert_gates(["scripts/test-manager-status-polling.mjs"], set())
 
+    def test_tautulli_compatibility_regressions_select_renderer(self):
+        for path in ["scripts/test-tautulli-archives.ps1", "scripts/test-tautulli-api-artwork.ps1", "scripts/test-movie-letterboxd.ps1"]:
+            self.assert_gates([path], {"powershell", "renderer"})
+        self.assert_gates(["scripts/test-manager-archive-policy.mjs"], set())
+
     def test_native_linux_installer_test_selects_package_only(self):
         self.assert_gates(["scripts/test-linux-installer.py"], {"package"})
 

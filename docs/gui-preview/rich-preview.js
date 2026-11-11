@@ -6,8 +6,8 @@
   const fictionalWatchedMovies = new Set(["Spider-Man: Brand New Day", "Hadestown: The Musical"]);
   const hasWatchedMovie = (item, state) => state.hasHistory && fictionalWatchedMovies.has(item.title);
   const movies = [
-    { title: "Spider-Man: Brand New Day", year: 2026, genre: "Action, Adventure, and more", critic: 89, audience: 98, art: "spider-man-brand-new-day.jpg", logo: "spider-man-brand-new-day-logo.png", summary: "Peter Parker begins a new chapter in this latest big-screen adventure." },
-    { title: "The Odyssey", year: 2026, genre: "Adventure, Action, and Fantasy", critic: 94, audience: 97, art: "the-odyssey.jpg", logo: "the-odyssey-logo.png", summary: "A sweeping journey home unfolds across mythic seas and impossible trials." },
+    { imdbId: "tt22084616", title: "Spider-Man: Brand New Day", year: 2026, genre: "Action, Adventure, and more", critic: 89, audience: 98, art: "spider-man-brand-new-day.jpg", logo: "spider-man-brand-new-day-logo.png", summary: "Peter Parker begins a new chapter in this latest big-screen adventure." },
+    { imdbId: "tt33764258", title: "The Odyssey", year: 2026, genre: "Adventure, Action, and Fantasy", critic: 94, audience: 97, art: "the-odyssey.jpg", logo: "the-odyssey-logo.png", summary: "A sweeping journey home unfolds across mythic seas and impossible trials." },
     { title: "Hadestown: The Musical", year: 2026, genre: "Music, Musical, and Drama", critic: 97, audience: 99, art: "hadestown.jpg", logo: "hadestown-logo.png", summary: "The acclaimed stage musical brings its underworld love story to the screen." },
     { title: "Motor City", year: 2026, genre: "Action, Crime, and Drama", critic: 62, audience: 66, art: "motor-city.jpg", logo: "motor-city-logo.png", summary: "A hard-edged crime story races through the streets of Detroit." },
     { title: "Orbital Drift", year: 2025, genre: "Science Fiction and Adventure", critic: 81, audience: 88, art: "the-odyssey.jpg", summary: "A fictional deep-space rescue crosses an unstable orbit." },
@@ -93,8 +93,13 @@
     return `${prefix}<span class="recipient-watched-title-tail"><span style="vertical-align:middle;">${tail}</span><img class="recipient-watched-title-icon" src="${media("watched.png")}" width="16" height="16" alt="Watched" title="Watched" style="display:inline-block;width:16px;height:16px;border:0;vertical-align:middle;margin-left:8px;"></span>`;
   }
 
+  function letterboxd(item) {
+    if (!document.getElementById("config-ShowLetterboxdLinks")?.checked || !/^tt[0-9]+$/.test(item.imdbId || "")) return "";
+    return `<a href="https://letterboxd.com/imdb/${item.imdbId}/" target="_blank" rel="noopener noreferrer" style="color:#e5a00d;text-decoration:underline;white-space:nowrap">Letterboxd</a>`;
+  }
+
   function movieCard(item, state) {
-    return `<article class="media-card"><img class="card-art" src="${media(item.art)}" alt="${esc(item.title)} key art"><div class="card-copy"><div class="card-title">${watchedTitle(item, state)}</div><div class="card-genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}</div></div></article>`;
+    return `<article class="media-card"><img class="card-art" src="${media(item.art)}" alt="${esc(item.title)} key art"><div class="card-copy"><div class="card-title">${watchedTitle(item, state)}</div><div class="card-genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}${letterboxd(item)}</div></div></article>`;
   }
 
   function showCard(item) {
@@ -113,7 +118,7 @@
     const title = `<div class="hero-title${item.logo ? " has-logo" : ""}">${watchedTitle(item, state)}</div>`;
     const watched = hasWatchedMovie(item, state);
     const poster = `<div class="hero-poster-wrap${watched ? " is-watched" : ""}"><img class="hero-poster" src="${media(item.art)}" alt="${esc(item.title)} key art">${watched ? `<img class="recipient-watched-desktop-badge" src="${media("watched-desktop.png")}" width="26" height="26" alt="Watched" title="Watched">` : ""}</div>`;
-    return `<section class="panel hero">${poster}<div class="hero-copy"><img class="hero-icon" src="${media(icon)}" alt=""><div class="hero-kicker">${label}</div>${logo}${title}<div class="genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}</div><div class="summary">${esc(item.summary)}</div><div class="plays">${state.latest ? "Most watched across STARLIGHT CINEMA this week" : "Most-watched new release across STARLIGHT CINEMA this week"} &middot; ${state.latest ? 11 : 4} fictional plays</div></div></section>`;
+    return `<section class="panel hero">${poster}<div class="hero-copy"><img class="hero-icon" src="${media(icon)}" alt=""><div class="hero-kicker">${label}</div>${logo}${title}<div class="genre">${esc(item.genre)}</div><div class="ratings"><span>${item.year}</span>${score("critic", item.critic)}${score("audience", item.audience)}${letterboxd(item)}</div><div class="summary">${esc(item.summary)}</div><div class="plays">${state.latest ? "Most watched across STARLIGHT CINEMA this week" : "Most-watched new release across STARLIGHT CINEMA this week"} &middot; ${state.latest ? 11 : 4} fictional plays</div></div></section>`;
   }
 
   function personalRating(item, kind) {
@@ -121,6 +126,8 @@
       const ratings = [];
       if (Number.isFinite(item.critic)) ratings.push(score("critic", item.critic));
       if (Number.isFinite(item.audience)) ratings.push(score("audience", item.audience));
+      const movieLink = letterboxd(item);
+      if (movieLink) ratings.push(movieLink);
       return ratings.length ? `<div class="personal-ratings">${ratings.join("")}</div>` : "";
     }
     return item.imdb ? `<div class="personal-ratings"><span class="imdb"><img src="${media("imdb.png")}" alt="IMDb">${esc(item.imdb)}</span></div>` : "";
@@ -258,7 +265,7 @@
 
   window.TautWeeklyPreviewDemo = {
     signature() {
-      return JSON.stringify({ releaseScenario, card: customTextCardValues() });
+      return JSON.stringify({ releaseScenario, letterboxd: Boolean(document.getElementById("config-ShowLetterboxdLinks")?.checked), card: customTextCardValues() });
     },
     setReleaseScenario(value) {
       if (!["new", "tv-only", "quiet"].includes(value)) throw new Error("Unknown fictional release scenario.");

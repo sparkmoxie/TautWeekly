@@ -84,8 +84,31 @@ See [bundled asset behavior](EMAIL-ASSETS.md) before customizing stock files.
 | `ApiKey` | Yes | Tautulli API key; treat as a secret |
 | `PlexWebUrl` | Yes | Destination for the newsletter button; defaults to the Plex web app and may point to a custom service such as Seer |
 | `PlexButtonLabel` | No | Newsletter button text; missing or blank values safely default to `Open Plex` |
+| `ShowLetterboxdLinks` | No | Defaults to `false`. Add movie links using existing IMDb/TMDB identities, with no additional lookup; omit links for TV and unidentified movies |
 | `PlexServerUrl` | No; recommended | Direct Plex base URL reachable from the TautWeekly runtime for the complete alternate rating set, exact-episode metadata, backgrounds, and selected logos; a separate container must not use its own localhost |
 | `PlexToken` | No; recommended | Administrator/server Plex token for direct Plex access and exact-GUID deleted-item recovery; treat as a secret |
+
+### Tautulli 2.19 archives
+
+Tautulli 2.18 and 2.19 are supported. Archived or deleted accounts remain
+understandable in Manager configuration but are ineligible for newsletters,
+previews, test sends, and Manual Welcome. Delivery rechecks the backend;
+cached discovery and a saved fallback email cannot authorize an archived user.
+Saved exclusions, fallback addresses, household copies, and library IDs are
+preserved for editing and unarchiving.
+
+Library discovery joins live Plex sections with Tautulli's database archive
+status by section ID. Current additions and weekly statistics use active
+libraries and exclude archived users. An unavailable saved selection never
+broadens to all libraries; when no selected library remains available, the
+operation stops. Exact active recipients may still use historical watched
+evidence within the saved library policy. Archived history is never enabled
+globally. Missing archive fields on older servers mean unarchived.
+
+API requests use `X-Api-Key` headers and refuse redirects. Configure the final
+reachable `TautulliUrl`, including any reverse-proxy path, rather than a redirect.
+Tautulli 2.19 image-proxy restrictions remain enforced: artwork uses the exact
+item identity and can fall back to the same item's Plex image.
 
 TautWeekly for Plex's core activity flow uses Tautulli. Direct Plex access is
 optional for that core flow but recommended for full newsletter fidelity.

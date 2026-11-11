@@ -5,6 +5,7 @@
   "FooterServerName": "My Plex",
   "PlexWebUrl": "https://app.plex.tv/desktop/",
   "PlexButtonLabel": "Open Plex",
+  "ShowLetterboxdLinks": false,
   "PlexServerUrl": "",
   "PlexToken": "",
   "FromName": "TautWeekly for Plex",

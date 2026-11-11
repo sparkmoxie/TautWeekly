@@ -167,6 +167,7 @@ func configDefinitions() []configDefinition {
 		{Name: "ScheduledTaskName", Label: "Windows task name", Group: "Schedule", Type: "text", Required: true, Default: "TautWeekly for Plex Newsletter"},
 		{Name: "DaysBack", Label: "Newsletter history days", Group: "Newsletter", Type: "integer", Required: true, Default: int64(7), Min: portMin, Max: daysMax},
 		{Name: "RecentAccessDays", Label: "Recent-access days", Group: "Newsletter", Type: "integer", Required: true, Default: int64(7), Min: portMin, Max: daysMax},
+		{Name: "ShowLetterboxdLinks", Label: "Show Letterboxd movie links", Group: "Newsletter", Type: "boolean", Default: false, Help: "Add movie links using existing IMDb or TMDB identity. No extra metadata lookup is needed."},
 		{Name: "WatchedPercent", Label: "Watched threshold (%)", Group: "Newsletter", Type: "integer", Required: true, Default: int64(85), Min: percentMin, Max: percentMax},
 		{Name: "MaxMovies", Label: "Maximum movies", Group: "Newsletter", Type: "integer", Required: true, Default: int64(8), Min: countMin, Max: countMax},
 		{Name: "MaxTv", Label: "Maximum TV entries", Group: "Newsletter", Type: "integer", Required: true, Default: int64(8), Min: countMin, Max: countMax},
@@ -459,6 +460,9 @@ func classifyConfigPostSave(current, next map[string]any, existed bool) ConfigPo
 		case name == "DaysBack" || name == "RecentAccessDays" || name == "WatchedPercent" || name == "MaxMovies" || name == "MaxTv":
 			category["newsletter"] = true
 			cacheCoverageChanged = true
+			plan.GeneratePreviews = true
+		case name == "ShowLetterboxdLinks":
+			category["newsletter"] = true
 			plan.GeneratePreviews = true
 		case name == "SendDelaySeconds" || name == "TestSendDelaySeconds":
 			category["newsletter"] = true

@@ -542,7 +542,9 @@ function Sync-AccessRoster {
         if ([string]::IsNullOrWhiteSpace($id) -or (Test-TautulliLocalUserId -Id $id)) { continue }
 
         # Only baseline/track users that currently have active access.
-        if ((Safe-Int $u.is_active) -eq 0) { continue }
+        if ((Safe-Int $u.is_active) -eq 0 -or
+            (Safe-Int (Get-OptionalStringProperty -InputObject $u -Name 'is_archived')) -gt 0 -or
+            (Safe-Int (Get-OptionalStringProperty -InputObject $u -Name 'deleted_user')) -gt 0) { continue }
 
         $prop = $state.Users.PSObject.Properties[$id]
 
@@ -721,11 +723,20 @@ if ($script:LibraryFilterEnabled) {
 function Test-IncludedLibraryRow {
     param(
         [object]$Row,
-        [string]$ExpectedSectionId = ""
+        [string]$ExpectedSectionId = "",
+        [switch]$Historical
     )
 
     $sectionId = (Get-OptionalStringProperty -InputObject $Row -Name "section_id").Trim()
     $expectedSectionId = ([string]$ExpectedSectionId).Trim()
+
+    if (-not $Historical) {
+        if ((Safe-Int (Get-OptionalStringProperty -InputObject $Row -Name 'library_is_archived')) -gt 0) { return $false }
+        if (Get-Variable -Name AvailableLibraryIdSet -Scope Script -ErrorAction SilentlyContinue) {
+            $scopeId = if ($sectionId -ne '') { $sectionId } else { $expectedSectionId }
+            if ($scopeId -eq '' -or -not $script:AvailableLibraryIdSet.Contains($scopeId)) { return $false }
+        }
+    }
 
     if (-not $script:LibraryFilterEnabled) {
         # Unfiltered Recent Releases now uses per-section queries. Trust rows
@@ -752,11 +763,22 @@ function Test-IncludedLibraryRow {
 }
 
 function Get-IncludedLibraryQueryScopes {
+    param([switch]$Historical, [switch]$CurrentContent)
+
+    if (-not $Historical -and (Get-Variable -Name AvailableLibraryIdSet -Scope Script -ErrorAction SilentlyContinue)) {
+        if ($script:LibraryFilterEnabled) {
+            return @($script:IncludedLibraryIdSet | Where-Object { $script:AvailableLibraryIdSet.Contains($_) } | Sort-Object)
+        }
+        if ($CurrentContent) { return @($script:AvailableLibraryIdSet | Sort-Object) }
+    }
     if (-not $script:LibraryFilterEnabled) { return @('') }
     return @($script:IncludedLibraryIdSet | Sort-Object)
 }
 
 function Get-LatestReleaseQueryScopes {
+    if (Get-Variable -Name AvailableLibraryIdSet -Scope Script -ErrorAction SilentlyContinue) {
+        return @(Get-IncludedLibraryQueryScopes -CurrentContent)
+    }
     if ($script:LibraryFilterEnabled) {
         return @(Get-IncludedLibraryQueryScopes)
     }
@@ -1018,17 +1040,157 @@ function Get-CustomTextCardPlainText {
 }
 
 
+function Get-MovieLetterboxdHtml {
+    param([AllowNull()][object]$Item)
+    $url = Get-MovieLetterboxdUrl -Item $Item
+    if ([string]::IsNullOrWhiteSpace($url)) { return '' }
+    return '<a href="' + (HtmlEncode $url) + '" target="_blank" rel="noopener noreferrer" style="color:#e5a00d;text-decoration:underline;white-space:nowrap;">Letterboxd</a>'
+}
+
+function Get-MovieExternalGuids {
+    param([object]$Item, [AllowNull()][object]$Metadata)
+    if ($null -eq $Metadata -or
+        (Get-OptionalStringProperty -InputObject $Metadata -Name 'rating_key') -cne (Get-OptionalStringProperty -InputObject $Item -Name 'RatingKey') -or
+        (Get-OptionalStringProperty -InputObject $Metadata -Name 'media_type') -ne 'movie') { return @() }
+
+    $retainedGuid = Get-OptionalStringProperty -InputObject $Item -Name 'MetadataGuid'
+    $resolvedGuid = Get-OptionalStringProperty -InputObject $Metadata -Name 'guid'
+    if ($retainedGuid) {
+        # Plex can reuse a removed item's rating key. Its retained GUID must
+        # still match before attaching another provider's movie identity.
+        if ($retainedGuid -cne $resolvedGuid) { return @() }
+    }
+    else {
+        $title = Get-OptionalStringProperty -InputObject $Item -Name 'Title'
+        $year = Get-OptionalStringProperty -InputObject $Item -Name 'Year'
+        if (-not $title -or -not $year -or
+            $title.Trim() -ine (Get-OptionalStringProperty -InputObject $Metadata -Name 'title').Trim() -or
+            $year -ne (Get-OptionalStringProperty -InputObject $Metadata -Name 'year')) { return @() }
+    }
+    if ($null -ne $Metadata.PSObject.Properties['guids']) { return @($Metadata.guids) }
+    return @()
+}
+
+function Get-MovieLetterboxdUrl {
+    param([AllowNull()][object]$Item)
+
+    $configuration = Get-Variable -Name Config -ValueOnly -ErrorAction SilentlyContinue
+    if ($null -eq $Item -or $null -eq $configuration -or
+        $null -eq $configuration.PSObject.Properties['ShowLetterboxdLinks'] -or
+        -not [bool]$configuration.ShowLetterboxdLinks -or
+        (Get-OptionalStringProperty -InputObject $Item -Name 'Type') -ne 'movie') {
+        return ''
+    }
+
+    # Only identifiers already returned for this exact movie are accepted.
+    # Never trust a remote URL, construct title slugs, or request more metadata.
+    $identifiers = @((Get-OptionalStringProperty -InputObject $Item -Name 'MetadataGuid'))
+    if ($null -ne $Item.PSObject.Properties['ExternalGuids']) {
+        $identifiers += @($Item.ExternalGuids)
+    }
+    foreach ($identifier in $identifiers) {
+        if ([string]$identifier -match '^(?:com\.plexapp\.agents\.)?(?:themoviedb|tmdb)://([1-9][0-9]*)(?:\?[^\r\n]*)?$') {
+            return 'https://letterboxd.com/tmdb/' + $Matches[1] + '/'
+        }
+    }
+    foreach ($identifier in $identifiers) {
+        if ([string]$identifier -match '^(?:com\.plexapp\.agents\.)?imdb://(tt[0-9]+)(?:\?[^\r\n]*)?$') {
+            return 'https://letterboxd.com/imdb/' + $Matches[1] + '/'
+        }
+    }
+    return ''
+}
+
+function Initialize-TautWeeklyLibraryPolicy {
+    . (Join-Path $ScriptRoot 'Library-Selection.ps1')
+    $live = @(Invoke-TautulliApi -Command 'get_libraries')
+    $known = @(Invoke-TautulliApi -Command 'get_library_names' -Parameters @{ include_archived = 1 })
+    $libraries = @(ConvertTo-TautWeeklySelectableLibraries -LiveLibraries $live -KnownLibraries $known)
+    $script:AvailableLibraryIdSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    foreach ($library in $libraries) {
+        if ($library.Selectable) { [void]$script:AvailableLibraryIdSet.Add([string]$library.SectionId) }
+    }
+    $effective = @(Get-IncludedLibraryQueryScopes -CurrentContent)
+    if ($effective.Count -eq 0) {
+        throw 'The saved library scope has no available, unarchived movie or TV libraries. Review the library selection; it was not broadened or changed.'
+    }
+    if ($script:LibraryFilterEnabled -and $effective.Count -lt $script:IncludedLibraryIdSet.Count) {
+        Write-Log 'Unavailable or archived libraries were omitted from current newsletter content. Saved library IDs were preserved.' 'WARN'
+    }
+    # Freeze the libraries whose current content can enter this render. Later
+    # availability changes must invalidate that content rather than silently
+    # expand the run to a newly unarchived or newly created library.
+    $script:TautWeeklyCurrentLibraryTypes = @{}
+    foreach ($library in $libraries) {
+        if ($effective -contains [string]$library.SectionId) {
+            $script:TautWeeklyCurrentLibraryTypes[[string]$library.SectionId] = [string]$library.Type
+        }
+    }
+}
+
+function Assert-TautWeeklyRecipientCurrent {
+    param([object]$User, [switch]$Production)
+
+    # Rendering and artwork may take time. Re-read the exact account before
+    # releasing a personalized result or opening the SMTP connection.
+    $current = Get-NewsletterUser -Id ([string]$User.UserId)
+    $reason = if ($Production) { Get-UserSkipReason -User $current } else { Get-UserExclusionReason -User $current }
+    if (-not [string]::IsNullOrWhiteSpace($reason)) {
+        $script:TautWeeklyResultErrorCategory = 'user-excluded'
+        throw 'The selected account is no longer eligible under the current Tautulli and saved recipient policy.'
+    }
+    if (Get-Variable -Name TautWeeklyCurrentLibraryTypes -Scope Script -ErrorAction SilentlyContinue) {
+        # A live Plex enumeration is unnecessary here: Tautulli's small DB
+        # roster reports current archive/delete state. Recheck only the IDs
+        # used for this render, and leave the initial query scope unchanged.
+        $knownById = @{}
+        foreach ($library in @(Invoke-TautulliApi -Command 'get_library_names' -Parameters @{ include_archived = 1 })) {
+            $sectionId = (Get-OptionalStringProperty -InputObject $library -Name 'section_id').Trim()
+            if ($sectionId -ne '') {
+                if ($knownById.ContainsKey($sectionId)) { throw 'The current library roster contained duplicate section IDs.' }
+                $knownById[$sectionId] = $library
+            }
+        }
+        foreach ($sectionId in $script:TautWeeklyCurrentLibraryTypes.Keys) {
+            $library = $knownById[$sectionId]
+            $available = ($null -ne $library -and
+                (Get-OptionalStringProperty -InputObject $library -Name 'section_type') -eq $script:TautWeeklyCurrentLibraryTypes[$sectionId])
+            foreach ($flag in @('is_archived', 'deleted_section')) {
+                if ($null -ne $library -and $null -ne $library.PSObject.Properties[$flag] -and
+                    (Get-OptionalStringProperty -InputObject $library -Name $flag).ToLowerInvariant() -notin @('0', 'false')) {
+                    $available = $false
+                }
+            }
+            if (-not $available) {
+                $script:TautWeeklyResultErrorCategory = 'tautulli-unavailable'
+                throw 'A library used for this newsletter became unavailable or archived. Refresh the library selection and render again before delivery.'
+            }
+        }
+    }
+    return $current
+}
+
 function Build-TautulliUri {
     param(
         [string]$Command,
         [hashtable]$Parameters = @{}
     )
 
+    # Credentials belong only on this configured API endpoint. Refuse URL
+    # credentials/query fragments and redirects instead of forwarding the key.
+    $baseUri = $null
+    if (-not [Uri]::TryCreate($TautulliBase, [UriKind]::Absolute, [ref]$baseUri) -or
+        $baseUri.Scheme -notin @('http', 'https') -or
+        -not [string]::IsNullOrEmpty($baseUri.UserInfo) -or
+        -not [string]::IsNullOrEmpty($baseUri.Query) -or
+        -not [string]::IsNullOrEmpty($baseUri.Fragment)) {
+        throw 'TautulliUrl must be an HTTP(S) server URL without credentials, query, or fragment.'
+    }
     $parts = New-Object System.Collections.Generic.List[string]
-    $parts.Add("apikey=" + [Uri]::EscapeDataString([string]$Config.ApiKey))
     $parts.Add("cmd=" + [Uri]::EscapeDataString($Command))
 
     foreach ($key in ($Parameters.Keys | Sort-Object)) {
+        if ([string]$key -ieq 'apikey') { throw 'Tautulli API keys must be sent in the request header.' }
         $value = $Parameters[$key]
         if ($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string]$value)) {
             $parts.Add(
@@ -1049,10 +1211,10 @@ function Invoke-TautulliApi {
 
     $uri = Build-TautulliUri -Command $Command -Parameters $Parameters
     try {
-        $raw = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec 60
+        $raw = Invoke-RestMethod -Uri $uri -Headers @{ 'X-Api-Key' = [string]$Config.ApiKey } -MaximumRedirection 0 -Method Get -TimeoutSec 60
     }
     catch {
-        throw "Tautulli API request failed for '$Command': $($_.Exception.Message)"
+        throw "Tautulli API request failed for '$Command'. Check the configured URL, API key, network access, and redirect settings."
     }
 
     if ($null -eq $raw.response) {
@@ -1060,7 +1222,7 @@ function Invoke-TautulliApi {
     }
 
     if ([string]$raw.response.result -ne "success") {
-        throw "Tautulli '$Command' returned: $($raw.response.message)"
+        throw "Tautulli '$Command' rejected the request. Check Tautulli's logs for details."
     }
 
     return $raw.response.data
@@ -1160,15 +1322,37 @@ function Get-History {
     foreach ($sectionId in @(Get-IncludedLibraryQueryScopes)) {
         $start = 0
         while ($true) {
-            $params = @{ grouping = 1; include_activity = 0; after = $AfterDate; before = $BeforeDate; start = $start; length = $pageSize }
-            if (-not [string]::IsNullOrWhiteSpace($ForUserId)) { $params.user_id = $ForUserId }
-            if (-not [string]::IsNullOrWhiteSpace($sectionId)) { $params.section_id = $sectionId }
+            $params = @{
+                grouping         = 1
+                include_activity = 0
+                include_archived = 0
+                after            = $AfterDate
+                before           = $BeforeDate
+                start            = $start
+                length           = $pageSize
+            }
+            if (-not [string]::IsNullOrWhiteSpace($ForUserId)) {
+                $params.user_id = $ForUserId
+            }
+            if (-not [string]::IsNullOrWhiteSpace($sectionId)) {
+                $params.section_id = $sectionId
+            }
+
             $data = Invoke-TautulliApi -Command "get_history" -Parameters $params
             $rows = @($data.data)
+
             foreach ($row in $rows) {
-                if (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId) { $all.Add($row) }
+                # v2.19 deliberately retains archived history for explicit
+                # user/section scopes, even with include_archived=0.
+                if ((Safe-Int (Get-OptionalStringProperty -InputObject $row -Name 'user_is_archived')) -gt 0) { continue }
+                if ($ForUserId -ne '' -and (Get-OptionalStringProperty -InputObject $row -Name 'user_id') -ne $ForUserId) { continue }
+                if (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId) {
+                    $all.Add($row)
+                }
             }
+
             if ($rows.Count -lt $pageSize) { break }
+
             $start += $rows.Count
             $total = Safe-Int $data.recordsFiltered
             if ($total -gt 0 -and $start -ge $total) { break }
@@ -1201,7 +1385,7 @@ function Get-RecipientWatchedMovies {
         MetadataGuids  = $metadataGuids
     }
 
-    if ([string]::IsNullOrWhiteSpace($ExpectedUserId)) { return $state }
+    if ([string]::IsNullOrWhiteSpace($ExpectedUserId) -or $ExpectedUserId.Trim() -match '^0+$') { return $state }
 
     $candidateScoped = $PSBoundParameters.ContainsKey('Candidates')
     $pending = [Collections.Generic.List[object]]::new()
@@ -1241,7 +1425,7 @@ function Get-RecipientWatchedMovies {
     $pageSize = 1000
 
     try {
-        foreach ($sectionId in @(Get-IncludedLibraryQueryScopes)) {
+        foreach ($sectionId in @(Get-IncludedLibraryQueryScopes -Historical)) {
             $start = 0
             while ($true) {
                 # This query intentionally omits the newsletter's after/before
@@ -1251,6 +1435,10 @@ function Get-RecipientWatchedMovies {
                 $params = @{
                     grouping         = 1
                     include_activity = 0
+                    # Only this exact recipient's historical evidence may
+                    # include archived libraries. Saved section IDs still
+                    # bound the request and every response row is checked.
+                    include_archived = 1
                     media_type       = "movie"
                     user_id          = $ExpectedUserId
                     start            = $start
@@ -1264,7 +1452,7 @@ function Get-RecipientWatchedMovies {
                 $rows = @($data.data)
 
                 foreach ($row in $rows) {
-                    if (-not (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId)) { continue }
+                    if (-not (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId -Historical)) { continue }
 
                     # Fail closed when a row does not prove that it belongs to
                     # the requested recipient, even if an upstream API ever
@@ -1376,22 +1564,35 @@ function Get-RecentItems {
     $pageSize = 100
     $maxPages = 20
 
-    foreach ($sectionId in @(Get-IncludedLibraryQueryScopes)) {
+    foreach ($sectionId in @(Get-IncludedLibraryQueryScopes -CurrentContent)) {
         $start = 0
         for ($page = 0; $page -lt $maxPages; $page++) {
-            $params = @{ count = $pageSize; start = $start }
-            if (-not [string]::IsNullOrWhiteSpace($sectionId)) { $params.section_id = $sectionId }
+            $params = @{
+                count = $pageSize
+                start = $start
+            }
+            if (-not [string]::IsNullOrWhiteSpace($sectionId)) {
+                $params.section_id = $sectionId
+            }
+
             $data = Invoke-TautulliApi -Command "get_recently_added" -Parameters $params
             $rows = @($data.recently_added)
             if ($rows.Count -eq 0) { break }
+
             $oldest = [int64]::MaxValue
             foreach ($row in $rows) {
                 $added = Safe-Int64 $row.added_at
                 if ($added -lt $oldest) { $oldest = $added }
-                if ($added -ge $StartEpoch -and $added -lt $EndEpochExclusive -and (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId)) { $all.Add($row) }
+
+                if ($added -ge $StartEpoch -and $added -lt $EndEpochExclusive -and
+                    (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId)) {
+                    $all.Add($row)
+                }
             }
+
             if ($oldest -lt $StartEpoch) { break }
             if ($rows.Count -lt $pageSize) { break }
+
             $start += $rows.Count
         }
     }
@@ -5027,6 +5228,7 @@ function Get-DesignLogoExportSimple {
 
         Invoke-WebRequest `
             -Uri $downloadUri `
+            -Headers @{ 'X-Api-Key' = [string]$Config.ApiKey } -MaximumRedirection 0 `
             -OutFile $zipPath `
             -TimeoutSec 120 | Out-Null
 
@@ -5106,7 +5308,7 @@ function Get-DesignLogoExportSimple {
         Write-Log "TautWeekly for Plex: selected logo acquired through Tautulli exporter."
     }
     catch {
-        $diag.Error = $_.Exception.Message
+        $diag.Error = 'Logo export or download failed. Check Tautulli export, API, and network status.'
         Write-Log ("TautWeekly for Plex logo probe failed: " + $diag.Error) "WARN"
     }
     finally {
@@ -5272,6 +5474,7 @@ function Get-DesignRichExport {
 
         Invoke-WebRequest `
             -Uri $downloadUri `
+            -Headers @{ 'X-Api-Key' = [string]$Config.ApiKey } -MaximumRedirection 0 `
             -OutFile $downloadPath `
             -TimeoutSec 120 | Out-Null
 
@@ -5407,7 +5610,7 @@ function Get-DesignRichExport {
         )
     }
     catch {
-        Write-Log "Design rich export failed for rating key ${RatingKey}: $($_.Exception.Message)" "WARN"
+        Write-Log "Design rich export failed for rating key ${RatingKey}. Check Tautulli's export and network status." "WARN"
     }
     finally {
         Remove-Item $downloadPath -Force -ErrorAction SilentlyContinue
@@ -5600,6 +5803,10 @@ function Add-DesignRatingMetadata {
                 -not [string]::IsNullOrWhiteSpace($metadataIdentity) -and
                 -not [string]::IsNullOrWhiteSpace($metadataTitle)
             )
+
+            if ($mediaType -eq 'movie') {
+                $item | Add-Member -NotePropertyName 'ExternalGuids' -NotePropertyValue @(Get-MovieExternalGuids -Item $item -Metadata $meta) -Force
+            }
 
             $ratingImage = Get-OptionalStringProperty -InputObject $meta -Name "rating_image"
             $audienceImage = Get-OptionalStringProperty -InputObject $meta -Name "audience_rating_image"
@@ -6217,6 +6424,8 @@ function Get-DesignRatingLine {
         )
     }
 
+    $letterboxd = Get-MovieLetterboxdHtml -Item $Item
+    if ($letterboxd) { $pieces.Add($letterboxd) }
     return ($pieces -join '<span style="display:inline-block;width:7px;"></span>')
 }
 
@@ -6244,21 +6453,44 @@ function Get-DesignPmsImage {
         if (-not [string]::IsNullOrWhiteSpace($ImagePath)) {
             $params.img = $ImagePath
         }
-        elseif (-not [string]::IsNullOrWhiteSpace($RatingKey)) {
+        if (-not [string]::IsNullOrWhiteSpace($RatingKey)) {
             $params.rating_key = $RatingKey
         }
-        else {
+        if ([string]::IsNullOrWhiteSpace($ImagePath) -and [string]::IsNullOrWhiteSpace($RatingKey)) {
             return ""
         }
 
+        # Tautulli 2.19 validates remote images against its own stored metadata.
+        # Keep the item's key so that validation can use its indexed history.
+        # An unknown remote image must return empty instead of a generic image,
+        # allowing one safe retry for this item's Plex artwork below.
+        if ($ImagePath -match '(?i)^https?://') { $params.fallback = '' }
         $uri = Build-TautulliUri -Command "pms_image_proxy" -Parameters $params
-        Invoke-WebRequest -Uri $uri -OutFile $local -TimeoutSec 60 | Out-Null
+        Invoke-WebRequest -Uri $uri -Headers @{ 'X-Api-Key' = [string]$Config.ApiKey } -MaximumRedirection 0 -OutFile $local -TimeoutSec 60 | Out-Null
         if ((Test-Path $local) -and (Get-Item $local).Length -gt 512) {
             return "media/" + $OutputName
         }
     }
     catch {
-        Write-Log "Design image fetch failed ($OutputName): $($_.Exception.Message)" "WARN"
+        Write-Log "Design image fetch failed ($OutputName); trying the item's Plex artwork when available." "WARN"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ImagePath) -and $RatingKey -match '^[0-9]+$') {
+        Remove-Item -LiteralPath $local -Force -ErrorAction SilentlyContinue
+        try {
+            # Never download an unapproved external URL directly. Omitting img
+            # asks Tautulli for /library/metadata/{same key}/art or /thumb.
+            $params.Remove('img')
+            $params.fallback = $Fallback
+            $uri = Build-TautulliUri -Command 'pms_image_proxy' -Parameters $params
+            Invoke-WebRequest -Uri $uri -Headers @{ 'X-Api-Key' = [string]$Config.ApiKey } -MaximumRedirection 0 -OutFile $local -TimeoutSec 60 | Out-Null
+            if ((Test-Path -LiteralPath $local) -and (Get-Item -LiteralPath $local).Length -gt 512) {
+                return 'media/' + $OutputName
+            }
+        }
+        catch {
+            Write-Log "Design Plex artwork fallback failed ($OutputName)." 'WARN'
+        }
     }
 
     Remove-Item $local -Force -ErrorAction SilentlyContinue
@@ -6322,7 +6554,7 @@ function Get-DesignLogoFromExporter {
         }
 
         $downloadUri = Build-TautulliUri -Command "download_export" -Parameters @{ export_id = $exportId }
-        Invoke-WebRequest -Uri $downloadUri -OutFile $downloadPath -TimeoutSec 90 | Out-Null
+        Invoke-WebRequest -Uri $downloadUri -Headers @{ 'X-Api-Key' = [string]$Config.ApiKey } -MaximumRedirection 0 -OutFile $downloadPath -TimeoutSec 90 | Out-Null
 
         if (-not (Test-Path $downloadPath) -or (Get-Item $downloadPath).Length -lt 64) {
             return ""
@@ -6355,7 +6587,7 @@ function Get-DesignLogoFromExporter {
         Write-Log "TautWeekly for Plex: no logo PNG was present in the Tautulli export." "WARN"
     }
     catch {
-        Write-Log "TautWeekly for Plex logo export failed: $($_.Exception.Message)" "WARN"
+        Write-Log "TautWeekly for Plex logo export failed. Check Tautulli's export and network status." "WARN"
     }
     finally {
         Remove-Item $downloadPath -Force -ErrorAction SilentlyContinue
@@ -7036,13 +7268,13 @@ function Get-TautulliDefaultPosterHash {
         $uri = Build-TautulliUri -Command "pms_image_proxy" -Parameters @{
             fallback = "poster"
         }
-        Invoke-WebRequest -Uri $uri -OutFile $probePath -TimeoutSec 60 | Out-Null
+        Invoke-WebRequest -Uri $uri -Headers @{ 'X-Api-Key' = [string]$Config.ApiKey } -MaximumRedirection 0 -OutFile $probePath -TimeoutSec 60 | Out-Null
         if ((Test-Path -LiteralPath $probePath) -and (Get-Item -LiteralPath $probePath).Length -gt 0) {
             $script:TautulliDefaultPosterHash = Get-FileSha256 -Path $probePath
         }
     }
     catch {
-        Write-Log "Could not fingerprint Tautulli's generic poster fallback: $($_.Exception.Message)" "WARN"
+        Write-Log "Could not fingerprint Tautulli's generic poster fallback. Check its API and network status." "WARN"
     }
     finally {
         Remove-Item -LiteralPath $probePath -Force -ErrorAction SilentlyContinue
@@ -7111,7 +7343,7 @@ function Get-PosterPath {
     }
 
     try {
-        Invoke-WebRequest -Uri $uri -OutFile $path -TimeoutSec 60 | Out-Null
+        Invoke-WebRequest -Uri $uri -Headers @{ 'X-Api-Key' = [string]$Config.ApiKey } -MaximumRedirection 0 -OutFile $path -TimeoutSec 60 | Out-Null
         if ((Test-Path $path) -and (Get-Item $path).Length -gt 512) {
             $isGenericFallback = Test-IsTautulliDefaultPoster -Path $path
             if (-not $isGenericFallback) {
@@ -7129,7 +7361,7 @@ function Get-PosterPath {
         }
     }
     catch {
-        Write-Log "Poster fetch failed for rating key ${RatingKey}: $($_.Exception.Message)" "WARN"
+        Write-Log "Poster fetch failed for rating key ${RatingKey}. Check Tautulli's API and network status." "WARN"
     }
 
     Remove-Item $path -Force -ErrorAction SilentlyContinue
@@ -7471,6 +7703,8 @@ function Get-StatsMovieRatingHtml {
         )
     }
 
+    $letterboxd = Get-MovieLetterboxdHtml -Item $Item
+    if ($letterboxd) { $pieces.Add($letterboxd) }
     if ($pieces.Count -eq 0) {
         return ""
     }
@@ -9049,6 +9283,23 @@ function Build-PlainText {
         $heroLine = "`r`n${heroLabel}: $($HotRelease.Item.Title)$heroWatchedSuffix"
     }
 
+    $movieLinkLines = @(
+        $movieLinkItems = @($ReleaseData.Movies)
+        if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) { $movieLinkItems += $HotRelease.Item }
+        if ($null -ne $Stats.PSObject.Properties['MovieItems']) { $movieLinkItems += @($Stats.MovieItems) }
+        $seenMovieLinks = @{}
+        foreach ($movieLinkItem in $movieLinkItems) {
+            $movieLinkUrl = Get-MovieLetterboxdUrl -Item $movieLinkItem
+            if ($movieLinkUrl -and -not $seenMovieLinks.ContainsKey($movieLinkUrl)) {
+                $seenMovieLinks[$movieLinkUrl] = $true
+                '- ' + [string]$movieLinkItem.Title + ': ' + $movieLinkUrl
+            }
+        }
+    )
+    if ($movieLinkLines.Count -gt 0) {
+        $heroLine += "`r`n`r`nLETTERBOXD`r`n" + ($movieLinkLines -join "`r`n")
+    }
+
     $footerFeature = ""
 
     if (-not $plainTrendingHero -and
@@ -9615,6 +9866,7 @@ function Get-NewsletterUser {
         Email        = $nativeEmail
         DeliveryEmail = $deliveryEmail
         IsActive     = Safe-Int (Get-OptionalStringProperty -InputObject $u -Name "is_active")
+        IsArchived   = Safe-Int (Get-OptionalStringProperty -InputObject $u -Name "is_archived")
         DeletedUser  = Safe-Int (Get-OptionalStringProperty -InputObject $u -Name "deleted_user")
         DoNotify     = Safe-Int (Get-OptionalStringProperty -InputObject $u -Name "do_notify")
     }
@@ -9624,7 +9876,8 @@ function Get-UserSkipReason {
     param([object]$User)
 
     if (Test-TautulliLocalUserId -Id ([string]$User.UserId)) { return "excludedUserId" }
-    if ($User.DeletedUser -gt 0 -or $User.IsActive -eq 0) { return "inactiveOrDeleted" }
+    if ($User.DeletedUser -gt 0 -or $User.IsActive -eq 0 -or
+        (Safe-Int (Get-OptionalStringProperty -InputObject $User -Name 'IsArchived')) -gt 0) { return "inactiveOrDeleted" }
 
     $exclusionReason = Get-UserExclusionReason -User $User
     if (-not [string]::IsNullOrWhiteSpace($exclusionReason)) { return $exclusionReason }
@@ -9650,6 +9903,10 @@ function Get-UserExclusionReason {
             if ([string]$email -ieq [string]$User.DeliveryEmail) { return "excludedEmail" }
         }
     }
+
+    if ((Safe-Int (Get-OptionalStringProperty -InputObject $User -Name 'IsArchived')) -gt 0) { return 'archivedUser' }
+    if ((Safe-Int (Get-OptionalStringProperty -InputObject $User -Name 'DeletedUser')) -gt 0 -or
+        (Safe-Int (Get-OptionalStringProperty -InputObject $User -Name 'IsActive')) -eq 0) { return 'inactiveOrDeleted' }
 
     return ""
 }
@@ -9764,6 +10021,7 @@ if ($Mode -eq "SendWelcome") {
     $recipientPlatform = Get-NewsletterLastPlatform -ExpectedUserId $user.UserId
 
     $accessState = Sync-AccessRoster
+    Initialize-TautWeeklyLibraryPolicy
 
     $daysBack = if ($null -ne $Config.PSObject.Properties["DaysBack"]) { Safe-Int $Config.DaysBack } else { 7 }
     if ($daysBack -lt 1) { $daysBack = 7 }
@@ -9899,6 +10157,8 @@ if ($Mode -eq "SendWelcome") {
         -EndLabel $endLabel
     $subject = Get-OneOffWelcomeSubject -User $user
 
+    $user = Assert-TautWeeklyRecipientCurrent -User $user -Production
+
     $script:TautWeeklyResultErrorCategory = "smtp-failed"
     Write-Log "Sending a welcome newsletter to the selected user's primary address and eligible household copies..."
     Send-NewsletterMail `
@@ -9938,6 +10198,7 @@ else {
     Sync-AccessRoster -RequireFreshUsers:($Mode -eq "SendAll")
 }
 $script:TautWeeklyResultErrorCategory = "tautulli-unavailable"
+Initialize-TautWeeklyLibraryPolicy
 $daysBack = if ($null -ne $Config.PSObject.Properties["DaysBack"]) { Safe-Int $Config.DaysBack } else { 7 }
 if ($daysBack -lt 1) { $daysBack = 7 }
 
@@ -10042,7 +10303,7 @@ function Build-ForUser {
     $exclusionReason = Get-UserExclusionReason -User $user
     if (-not [string]::IsNullOrWhiteSpace($exclusionReason)) {
         $script:TautWeeklyResultErrorCategory = "user-excluded"
-        throw "The selected user is excluded by saved recipient policy. Include and save that user before previewing or sending a test."
+        throw "The selected account is unavailable in Tautulli or excluded by saved recipient policy. Restore the account or review saved exclusions before rendering."
     }
     $recentAccess = Test-UserNeedsWelcome -State $accessState -UserId $user.UserId
 
@@ -10106,6 +10367,7 @@ function Build-ForUser {
         -StartLabel $startLabel `
         -EndLabel $endLabel
 
+    $user = Assert-TautWeeklyRecipientCurrent -User $user
     return [PSCustomObject]@{
         User         = $user
         Stats        = $stats
@@ -10158,7 +10420,7 @@ function Build-AllEmailVariants {
     $exclusionReason = Get-UserExclusionReason -User $user
     if (-not [string]::IsNullOrWhiteSpace($exclusionReason)) {
         $script:TautWeeklyResultErrorCategory = "user-excluded"
-        throw "The selected user is excluded by saved recipient policy. Include and save that user before previewing or sending a test."
+        throw "The selected account is unavailable in Tautulli or excluded by saved recipient policy. Restore the account or review saved exclusions before rendering."
     }
 
     Write-Log "Loading real history for six-state email regression: $($user.FriendlyName)..."
@@ -10378,6 +10640,7 @@ function Build-AllEmailVariants {
         "Established user — no selected-user activity"
     }
 
+    $user = Assert-TautWeeklyRecipientCurrent -User $user
     return [PSCustomObject]@{
         User = $user
         RealStats = $realStats
@@ -10612,6 +10875,7 @@ if ($Mode -eq "SendTestAll") {
     }
 
     for ($i = 0; $i -lt $bundle.Variants.Count; $i++) {
+        $bundle.User = Assert-TautWeeklyRecipientCurrent -User $bundle.User
         $variant = $bundle.Variants[$i]
         $testSubject = "[TautWeekly for Plex TEST $($i + 1)/$($bundle.Variants.Count)] $($variant.Subject)"
         Write-Log "Sending $($variant.Label) test to $($Config.TestEmail)..."
@@ -10679,6 +10943,7 @@ if ($Mode -eq "SendTest") {
     Require-ConfigValue "TestEmail"
 
     $result = Build-ForUser -Id $UserId -ImageMode "Email"
+    $result.User = Assert-TautWeeklyRecipientCurrent -User $result.User
     $script:TautWeeklyResultErrorCategory = "smtp-failed"
     $subject = Get-NewsletterSubject -User $result.User -RecentAccess $result.RecentAccess
 
@@ -10729,6 +10994,7 @@ if ($Mode -eq "SendAll") {
 
             $script:TautWeeklyResultErrorCategory = "render-failed"
             $result = Build-ForUser -Id $user.UserId -ImageMode "Email"
+            $result.User = Assert-TautWeeklyRecipientCurrent -User $result.User -Production
             $subject = Get-NewsletterSubject -User $result.User -RecentAccess $result.RecentAccess
 
             $script:TautWeeklyResultErrorCategory = "smtp-failed"

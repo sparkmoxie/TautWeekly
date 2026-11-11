@@ -31,6 +31,7 @@ FAST_ONLY_SCRIPTS = {
     "scripts/test-asset-refresh.py",
     "scripts/test-gui-preview-personal-stats.mjs",
     "scripts/test-manager-accessibility.py",
+    "scripts/test-manager-archive-policy.mjs",
     "scripts/test-manager-cache-verification.mjs",
     "scripts/test-manager-header-refresh.mjs",
     "scripts/test-manager-status-polling.mjs",
@@ -46,6 +47,9 @@ FAST_ONLY_SCRIPTS = {
 }
 
 RENDERER_TEST_MARKERS = (
+    "tautulli-archives",
+    "tautulli-api-artwork",
+    "movie-letterboxd",
     "email-optimizations",
     "email-size-budgets",
     "binge-champion",

@@ -1287,7 +1287,7 @@ function renderHouseholdCopies() {
     const row = document.createElement("section"); row.className = "household-copy-row";
     const title = document.createElement("h4"); title.textContent = user?.name || `Unavailable user ${id}`;
     const status = document.createElement("p");
-    status.textContent = !user ? "Unavailable: assignment retained until the user returns." : userExcludedBySavedPolicy(user) ? "Excluded: no copies will be sent." : user.eligibility === "skipped" ? "Inactive: no copies will be sent." : user.needsDeliveryAddress && !savedUserEmailOverrides()[id] ? "No primary address: add a fallback delivery address first." : "Copies follow this user's production newsletter and Manual Welcome.";
+    status.textContent = !user ? "Unavailable: assignment retained until the user returns." : user.archived || user.deleted ? `${titleCase(user.eligibility)}: assignment retained; no copies will be sent.` : userExcludedBySavedPolicy(user) ? "Excluded: no copies will be sent." : user.eligibility === "skipped" ? "Inactive: no copies will be sent." : user.needsDeliveryAddress && !savedUserEmailOverrides()[id] ? "No primary address: add a fallback delivery address first." : "Copies follow this user's production newsletter and Manual Welcome.";
     const primary = document.createElement("p"); primary.dataset.householdPrimary = ""; primary.textContent = "Primary address hidden";
     const view = document.createElement("button"); view.type = "button"; view.className = "button button-secondary"; view.textContent = "View primary address";
     view.disabled = !user;
@@ -1374,7 +1374,7 @@ function userExcludedBySavedPolicy(user) {
 }
 
 function selectableNewsletterUsers() {
-  return discoveredNewsletterUsers().filter((user) => !userExcludedBySavedPolicy(user));
+  return discoveredNewsletterUsers().filter((user) => !user.archived && !user.deleted && user.eligibility !== "archived" && user.eligibility !== "deleted" && user.eligibility !== "skipped" && !userExcludedBySavedPolicy(user));
 }
 
 function validOperationUserID(value) {
@@ -1407,8 +1407,10 @@ function renderManagedUserDeliveryAddresses() {
   renderHouseholdCopies();
   const card = byId("managed-user-delivery-addresses");
   const container = byId("managed-user-delivery-list");
-  const users = discoveredNewsletterUsers()
-    .filter((user) => user.needsDeliveryAddress === true)
+  const assignments = currentUserEmailOverrides();
+  const discovered = discoveredNewsletterUsers();
+  const users = [...discovered.filter((user) => user.needsDeliveryAddress === true || Object.hasOwn(assignments, user.id)),
+    ...Object.keys(assignments).filter((id) => !discovered.some((user) => user.id === id)).map((id) => ({ id, name: `User ${id}`, eligibility: "unavailable" }))]
     .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
   card.hidden = !state.discovery || users.length === 0;
   container.replaceChildren();
@@ -1416,7 +1418,6 @@ function renderManagedUserDeliveryAddresses() {
     setText("managed-user-delivery-count", "");
     return;
   }
-  const assignments = currentUserEmailOverrides();
   const assignedCount = users.filter((user) => String(assignments[user.id] || "").trim() !== "").length;
   setText("managed-user-delivery-count", `${assignedCount} assigned · ${users.length - assignedCount} needed`);
   for (const user of users) {
@@ -1429,7 +1430,7 @@ function renderManagedUserDeliveryAddresses() {
     label.htmlFor = inputID;
     label.textContent = user.name;
     const detail = document.createElement("small");
-    detail.textContent = `Tautulli user ${user.id}`;
+    detail.textContent = `Tautulli user ${user.id}${user.archived || user.deleted || user.eligibility === "unavailable" ? ` · ${titleCase(user.eligibility)} · saved assignment retained` : ""}`;
     identity.append(label, detail);
     const input = document.createElement("input");
     input.id = inputID;
@@ -1459,27 +1460,36 @@ function renderManagedUserDeliveryAddresses() {
 function renderDiscoveredLibraries() {
   const container = byId("discovery-libraries");
   container.replaceChildren();
-  const libraries = state.discovery?.libraries || [];
-  setText("discovery-library-count", `${libraries.length} active`);
   const configured = new Set(currentListField("IncludedLibraryIds"));
-  const selected = configured.size ? configured : new Set(libraries.map((item) => item.id));
+  const discovered = state.discovery?.libraries || [];
+  const libraries = [...discovered, ...[...configured].filter((id) => !discovered.some((item) => item.id === id)).map((id) => ({ id, name: `Library ${id}`, mediaType: "unknown", availability: "unavailable" }))];
+  const active = libraries.filter((item) => !item.availability || item.availability === "active");
+  setText("discovery-library-count", `${active.length} active${libraries.length > active.length ? ` · ${libraries.length - active.length} unavailable` : ""}`);
+  const selected = configured.size ? configured : new Set(active.map((item) => item.id));
   for (const item of libraries) {
     const label = document.createElement("label");
     label.className = "choice-row";
     const input = document.createElement("input");
     input.type = "checkbox";
     input.checked = selected.has(item.id);
+    input.disabled = Boolean(item.availability && item.availability !== "active" && !configured.has(item.id));
     input.dataset.choiceId = item.id;
     const copy = document.createElement("span");
     const name = document.createElement("strong");
     name.textContent = item.name;
     const detail = document.createElement("small");
-    detail.textContent = `${titleCase(item.mediaType)} · section ${item.id}${item.itemCount ? ` · ${item.itemCount} items` : ""}`;
+    detail.textContent = `${titleCase(item.mediaType)} · section ${item.id}${item.itemCount ? ` · ${item.itemCount} items` : ""}${item.availability && item.availability !== "active" ? ` · ${titleCase(item.availability)}${configured.has(item.id) ? " · saved selection retained" : ""}` : ""}`;
     copy.append(name, detail);
     input.addEventListener("change", () => {
       const unknown = currentListField("IncludedLibraryIds").filter((id) => !libraries.some((library) => library.id === id));
       const known = [...container.querySelectorAll("input:checked")].map((choice) => choice.dataset.choiceId);
-      setListField("IncludedLibraryIds", [...unknown, ...known]);
+      const next = [...unknown, ...known];
+      if (next.length === 0) {
+        input.checked = true;
+        setText("discovery-message", "Keep at least one library selected. Select an active replacement before removing the last saved selection.");
+        return;
+      }
+      setListField("IncludedLibraryIds", next);
     });
     label.append(input, copy);
     container.append(label);
@@ -1568,7 +1578,7 @@ function renderUserComboboxOptions(container) {
   if (!users.length) {
     const empty = document.createElement("p");
     empty.className = "user-combobox-empty";
-    empty.textContent = state.discovery ? "No matching included Tautulli user. Save exclusion changes before selecting an excluded user." : "Load Tautulli choices from Config to browse users.";
+    empty.textContent = state.discovery ? "No matching active Tautulli user. Restore archived accounts in Tautulli and refresh choices, or save exclusion changes." : "Load Tautulli choices from Config to browse users.";
     list.append(empty);
     return;
   }
@@ -2285,7 +2295,8 @@ async function runPostSaveSetup(revision, plan) {
       state.discovery = discovered;
       state.discoveryError = "";
       if (state.status) renderDashboardGreeting(state.status.observedAtUtc);
-      updateSetupWorkflowStep("choices", "passed", `${discovered.libraries?.length || 0} active libraries and ${discovered.users?.length || 0} users loaded and retained locally.`);
+      const activeLibraryCount = (discovered.libraries || []).filter((library) => !library.availability || library.availability === "active").length;
+      updateSetupWorkflowStep("choices", "passed", `${activeLibraryCount} active libraries and ${discovered.users?.length || 0} users loaded and retained locally.`);
     } catch (error) {
       discoveryFailed = true;
       state.discoveryError = discoveryFailureMessage(error.message);

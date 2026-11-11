@@ -6,16 +6,21 @@ function Invoke-TautWeeklyLibraryApi {
         [hashtable]$Parameters = @{}
     )
 
+    $baseUri = $null
+    if (-not [Uri]::TryCreate($TautulliUrl, [UriKind]::Absolute, [ref]$baseUri) -or
+        $baseUri.Scheme -notin @('http', 'https') -or $baseUri.UserInfo -or $baseUri.Query -or $baseUri.Fragment) {
+        throw 'TautulliUrl must be an HTTP(S) server URL without credentials, query, or fragment.'
+    }
     $parts = New-Object System.Collections.Generic.List[string]
-    $parts.Add("apikey={0}" -f [Uri]::EscapeDataString($ApiKey))
     $parts.Add("cmd={0}" -f [Uri]::EscapeDataString($Command))
     foreach ($entry in $Parameters.GetEnumerator()) {
+        if ([string]$entry.Key -ieq 'apikey') { throw 'Tautulli API keys must be sent in the request header.' }
         $parts.Add("{0}={1}" -f [Uri]::EscapeDataString([string]$entry.Key), [Uri]::EscapeDataString([string]$entry.Value))
     }
 
     $uri = "{0}/api/v2?{1}" -f $TautulliUrl.TrimEnd('/'), ($parts -join '&')
     try {
-        $raw = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec 20
+        $raw = Invoke-RestMethod -Uri $uri -Headers @{ 'X-Api-Key' = $ApiKey } -MaximumRedirection 0 -Method Get -TimeoutSec 20
     }
     catch {
         throw 'Could not query Tautulli libraries. Check the Tautulli URL, API key, and network access.'
@@ -65,24 +70,47 @@ function Get-TautWeeklySelectableLibraries {
     )
 
     $rawLibraries = @(Invoke-TautWeeklyLibraryApi -TautulliUrl $TautulliUrl -ApiKey $ApiKey -Command 'get_libraries')
+    # get_libraries comes from Plex and does not carry Tautulli's archive state.
+    # Include archived names for editing, then join by section ID, never name.
+    $knownLibraries = @(Invoke-TautWeeklyLibraryApi -TautulliUrl $TautulliUrl -ApiKey $ApiKey -Command 'get_library_names' -Parameters @{ include_archived = 1 })
+    return @(ConvertTo-TautWeeklySelectableLibraries -LiveLibraries $rawLibraries -KnownLibraries $knownLibraries)
+}
+
+function ConvertTo-TautWeeklySelectableLibraries {
+    param([AllowEmptyCollection()][object[]]$LiveLibraries, [AllowEmptyCollection()][object[]]$KnownLibraries)
+
+    $liveById = @{}
+    $knownById = @{}
+    foreach ($library in $LiveLibraries) {
+        $id = ([string](Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'section_id' -Default '')).Trim()
+        if ($id -ne '') { $liveById[$id] = $library }
+    }
+    foreach ($library in $KnownLibraries) {
+        $id = ([string](Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'section_id' -Default '')).Trim()
+        if ($id -ne '') { $knownById[$id] = $library }
+    }
     $libraries = New-Object System.Collections.Generic.List[object]
 
-    foreach ($library in $rawLibraries) {
-        $sectionId = [string](Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'section_id' -Default '')
-        if ([string]::IsNullOrWhiteSpace($sectionId)) { continue }
-
+    foreach ($sectionId in @(@($liveById.Keys) + @($knownById.Keys) | Sort-Object -Unique)) {
+        $library = if ($liveById.ContainsKey($sectionId)) { $liveById[$sectionId] } else { $knownById[$sectionId] }
+        $known = $knownById[$sectionId]
         $sectionType = ([string](Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'section_type' -Default '')).ToLowerInvariant()
         $isActiveValue = Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'is_active' -Default 1
         [int]$isActive = 1
         [void][int]::TryParse([string]$isActiveValue, [ref]$isActive)
-        $selectable = ($isActive -gt 0 -and $sectionType -in @('movie','show'))
+        $archived = ([int](Get-TautWeeklyLibraryObjectValue -InputObject $known -Name 'is_archived' -Default 0) -gt 0)
+        $deleted = ([int](Get-TautWeeklyLibraryObjectValue -InputObject $known -Name 'deleted_section' -Default 0) -gt 0)
+        $active = ($liveById.ContainsKey($sectionId) -and $knownById.ContainsKey($sectionId) -and $isActive -gt 0 -and -not $deleted)
+        $selectable = ($active -and -not $archived -and $sectionType -in @('movie','show'))
 
         $libraries.Add([PSCustomObject]@{
             SectionId = $sectionId.Trim()
             Name = [string](Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'section_name' -Default "Library $sectionId")
             Type = $sectionType
             ItemCount = [string](Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'count' -Default '')
-            IsActive = ($isActive -gt 0)
+            IsActive = $active
+            IsArchived = $archived
+            DeletedSection = $deleted
             Selectable = $selectable
         })
     }
@@ -127,7 +155,7 @@ function Show-TautWeeklyLibrarySelection {
         }
         else {
             $number = '-'
-            $status = if (-not $library.IsActive) { 'inactive' } else { 'unsupported' }
+            $status = if ($null -ne $library.PSObject.Properties['IsArchived'] -and $library.IsArchived) { 'archived' } elseif (-not $library.IsActive) { 'unavailable' } else { 'unsupported' }
         }
         $type = if ([string]::IsNullOrWhiteSpace([string]$library.Type)) { 'unknown' } else { [string]$library.Type }
         $count = if ([string]::IsNullOrWhiteSpace([string]$library.ItemCount)) { '-' } else { [string]$library.ItemCount }

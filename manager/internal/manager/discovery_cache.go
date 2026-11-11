@@ -137,13 +137,16 @@ func sanitizeCachedDiscovery(stored TautulliDiscoveryResult) (TautulliDiscoveryR
 		if name == "" {
 			name = "Library " + id
 		}
-		clean.Libraries = append(clean.Libraries, DiscoveredLibrary{ID: id, Name: name, MediaType: mediaType, ItemCount: sanitizeNumericEvidence(library.ItemCount)})
+		availability := library.Availability
+		switch availability {
+		case "", "active", "archived", "deleted", "inactive", "unavailable":
+		default:
+			availability = "unavailable"
+		}
+		clean.Libraries = append(clean.Libraries, DiscoveredLibrary{ID: id, Name: name, MediaType: mediaType, ItemCount: sanitizeNumericEvidence(library.ItemCount), Availability: availability})
 		if len(clean.Libraries) == maximumDiscoveryChoices {
 			break
 		}
-	}
-	if len(clean.Libraries) == 0 {
-		return TautulliDiscoveryResult{}, false
 	}
 	seenUsers := map[string]struct{}{}
 	for _, user := range stored.Users {
@@ -160,15 +163,21 @@ func sanitizeCachedDiscovery(stored TautulliDiscoveryResult) (TautulliDiscoveryR
 			name = "User " + id
 		}
 		eligibility := user.Eligibility
-		if eligibility != "eligible" && eligibility != "address-needed" && eligibility != "skipped" && eligibility != "unknown" {
+		if eligibility != "eligible" && eligibility != "address-needed" && eligibility != "skipped" && eligibility != "unknown" && eligibility != "archived" && eligibility != "deleted" {
 			eligibility = "unknown"
+		}
+		if user.Archived {
+			eligibility = "archived"
+		}
+		if user.Deleted {
+			eligibility = "deleted"
 		}
 		needsDeliveryAddress := eligibility == "address-needed" && user.NeedsDeliveryAddress
 		role := user.Role
 		if role != "owner" && role != "administrator" {
 			role = ""
 		}
-		clean.Users = append(clean.Users, DiscoveredUser{ID: id, Name: name, Eligibility: eligibility, NeedsDeliveryAddress: needsDeliveryAddress, Role: role, LegacyRuleExcluded: user.LegacyRuleExcluded})
+		clean.Users = append(clean.Users, DiscoveredUser{ID: id, Name: name, Eligibility: eligibility, NeedsDeliveryAddress: needsDeliveryAddress, Role: role, LegacyRuleExcluded: user.LegacyRuleExcluded, Archived: user.Archived || eligibility == "archived", Deleted: user.Deleted || eligibility == "deleted"})
 		if len(clean.Users) == maximumDiscoveryChoices {
 			break
 		}

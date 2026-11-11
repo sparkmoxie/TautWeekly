@@ -6,9 +6,22 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-11
+
+### Added
+
+- Support Tautulli 2.19 archived users and libraries throughout Manager, CLI, previews, welcome messages, and scheduled delivery, while preserving saved settings for editing and later unarchiving.
+- Add optional Letterboxd movie links from existing IMDb/TMDB identities in email, plain text, and previews, with no additional metadata requests.
+
 ### Fixed
 
-- Omit zero release counts from the newsletter header, inbox preview, and public examples.
+- Exclude archived accounts and unavailable libraries from current newsletter content and weekly statistics, including explicitly scoped API requests. Keep exact-recipient historical watched evidence within the saved library policy.
+- Keep item identity attached to artwork requests and fall back to the same item's Plex artwork when Tautulli rejects an external image.
+
+### Changed
+
+- Send Tautulli API credentials in scoped `X-Api-Key` headers instead of URL queries and refuse authenticated redirects, including artwork and binary export downloads.
+- Keep existing movie/TV count wording and quiet-week Trending and Recent Releases behavior.
 
 ## [0.27.6] - 2026-11-06
 

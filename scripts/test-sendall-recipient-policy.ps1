@@ -38,19 +38,30 @@ function Get-FreeTcpPort {
     finally { $listener.Stop() }
 }
 
-function New-VirtualUser([string]$Id, [string]$Email, [int]$Active = 1, [int]$Notify = 1) {
+function New-VirtualUser([string]$Id, [string]$Email, [int]$Active = 1, [int]$Notify = 1, [int]$Archived = 0) {
     return [PSCustomObject]@{
         user_id = $Id
         username = "viewer-$Id"
         friendly_name = "Virtual Viewer $Id"
         email = $Email
         is_active = $Active
+        is_archived = $Archived
         deleted_user = 0
         do_notify = $Notify
     }
 }
 
 $scenarios = @(
+    [PSCustomObject]@{
+        Name = 'stale-discovery-archived-account-and-copies'
+        DiscoveryUsers = @((New-VirtualUser '1' 'primary@example.org'), (New-VirtualUser '2' 'archived@example.org'))
+        Users = @((New-VirtualUser '1' 'primary@example.org'), (New-VirtualUser '2' 'archived@example.org' -Archived 1))
+        UserBccAddresses = [ordered]@{ '2' = @('archived-copy@example.org') }
+        ExcludedUserIds = @(); ExcludedEmails = @(); RejectRecipient = ''; FreshAccessState = $false
+        ExitCode = 0; Outcome = 'succeeded'; ErrorCategory = ''
+        Accepted = 1; Skipped = 1; Failed = 0; Reasons = @(1,0,0,0)
+        ExpectedRecipients = @('primary@example.org'); ExpectedConnections = 1
+    },
     [PSCustomObject]@{
         Name = 'household-copies-isolation-and-exclusions'
         Users = @((New-VirtualUser '1' 'primary@example.org'), (New-VirtualUser '2' ''), (New-VirtualUser '3' 'excluded@example.org'), (New-VirtualUser '4' ''))
@@ -472,7 +483,7 @@ foreach ($engine in @($engines | Where-Object { $_.Name -like $EnginePattern }))
             else {
                 Remove-Item -LiteralPath $failRefreshFile -Force -ErrorAction SilentlyContinue
             }
-            $userProbe = Invoke-RestMethod -Uri ($baseUrl + '/api/v2?apikey=virtual-api-key&cmd=get_users') -Method Get
+            $userProbe = Invoke-RestMethod -Uri ($baseUrl + '/api/v2?cmd=get_users') -Headers @{ 'X-Api-Key' = 'virtual-api-key' } -MaximumRedirection 0 -Method Get
             Assert-True (@($userProbe.response.data).Count -eq @($discoveryUsers).Count) "$($engine.Name)/$($scenario.Name) virtual discovery roster did not load deterministically."
             $callBaseline = @(Get-Content -LiteralPath $tautulliLog -ErrorAction SilentlyContinue | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
             $smtpPort = Get-FreeTcpPort
