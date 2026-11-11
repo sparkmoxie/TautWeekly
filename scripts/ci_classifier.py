@@ -128,7 +128,7 @@ def classify_path(raw_path: str) -> dict[str, bool]:
         enable(result, "container", "container_arm64")
         return result
     if path == ".github/workflows/release.yml":
-        enable(result, "manager", "package", "installer", "container", "container_arm64")
+        enable(result, "manager", "package", "installer", "compose", "container", "container_arm64")
         return result
     if path == ".github/workflows/pages.yml":
         enable(result, "pages")
@@ -218,6 +218,10 @@ def classify_path(raw_path: str) -> dict[str, bool]:
 
         if path == "scripts/test-container-image.sh":
             enable(result, "package", "compose", "container", "container_arm64")
+            return result
+
+        if path == "scripts/test-packaged-compose.sh":
+            enable(result, "package", "compose")
             return result
 
         if path == "scripts/test-runtime-logs.ps1":

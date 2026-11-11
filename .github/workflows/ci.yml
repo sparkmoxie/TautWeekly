@@ -346,6 +346,8 @@ jobs:
       - name: Test package contracts and checksums
         shell: pwsh
         run: ./scripts/test-release-artifacts.ps1
+      - name: Parse exact packaged and standalone Compose assets
+        run: bash ./scripts/test-packaged-compose.sh
       - name: Boot-test the packaged native Linux Manager
         run: ./scripts/test-linux-manager-package.sh
       - name: Set up QEMU for packaged Mac fallback validation
