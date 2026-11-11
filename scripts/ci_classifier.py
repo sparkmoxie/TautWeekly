@@ -49,7 +49,6 @@ FAST_ONLY_SCRIPTS = {
 RENDERER_TEST_MARKERS = (
     "tautulli-archives",
     "tautulli-api-artwork",
-    "movie-letterboxd",
     "email-optimizations",
     "email-size-budgets",
     "binge-champion",

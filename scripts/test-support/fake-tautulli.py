@@ -1593,6 +1593,10 @@ class Handler(BaseHTTPRequestHandler):
                 rows = [row for row in rows if str(row.get("user_id", "")) == user_id]
             start = int(query.get("start", "0"))
             length = int(query.get("length", "1000"))
+            # Official v2.18/v2.19 history projects user_id, but not section_id.
+            # Keep library identity in fixture storage for server-side queries;
+            # never invent it in the API response (which masked v0.28.0's loss).
+            rows = [{key: value for key, value in row.items() if key != "section_id"} for row in rows]
             self.api_success({"data": rows[start : start + length], "recordsFiltered": len(rows)})
             return
         if command == "get_recently_added":

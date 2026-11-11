@@ -84,7 +84,6 @@ See [bundled asset behavior](EMAIL-ASSETS.md) before customizing stock files.
 | `ApiKey` | Yes | Tautulli API key; treat as a secret |
 | `PlexWebUrl` | Yes | Destination for the newsletter button; defaults to the Plex web app and may point to a custom service such as Seer |
 | `PlexButtonLabel` | No | Newsletter button text; missing or blank values safely default to `Open Plex` |
-| `ShowLetterboxdLinks` | No | Defaults to `false`. Add movie links using existing IMDb/TMDB identities, with no additional lookup; omit links for TV and unidentified movies |
 | `PlexServerUrl` | No; recommended | Direct Plex base URL reachable from the TautWeekly runtime for the complete alternate rating set, exact-episode metadata, backgrounds, and selected logos; a separate container must not use its own localhost |
 | `PlexToken` | No; recommended | Administrator/server Plex token for direct Plex access and exact-GUID deleted-item recovery; treat as a secret |
 

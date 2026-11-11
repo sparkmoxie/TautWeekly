@@ -35,7 +35,6 @@
     <div class="labbar-inner">
       <div class="labbrand"><div class="labmark">TW</div><div><strong>TautWeekly for Plex</strong><span>Production-faithful preview gallery</span></div></div>
       <div class="labactions">
-        <label class="labaction"><input id="letterboxd-links" type="checkbox"> Letterboxd</label>
         <button class="labaction" id="rotate" type="button" aria-label="Rotate real release titles"><span>Rotate releases</span> ↻</button>
         <button class="labaction" id="show-all" type="button" aria-pressed="false"><span>Show all</span> 9</button>
         <button class="labaction primary" type="button" onclick="window.print()"><span>Print / Save</span> ↓</button>
@@ -67,8 +66,8 @@
     const fictionalWatchedMovies=new Set(["Spider-Man: Brand New Day","Hadestown: The Musical"]);
     const hasWatchedMovie=(item,state)=>!state.welcomeOnly&&!["none","warmup"].includes(state.activity)&&fictionalWatchedMovies.has(item.title);
     const movies=[
-      {imdbId:"tt22084616",title:"Spider-Man: Brand New Day",year:2026,genre:"Action, Adventure, and more",critic:89,audience:98,page:"https://watch.plex.tv/en-GB/movie/spider-man-brand-new-day-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F2%2Fgracenote%2F2133a25098d005ea0977d902ba9d540d.jpg",logo:"https://metadata-static.plex.tv/3/683a142553/3bad437b599b2da6db72cd0e4c015d20.png",summary:"Peter Parker begins a new chapter in this latest big-screen adventure."},
-      {imdbId:"tt33764258",title:"The Odyssey",year:2026,genre:"Adventure, Action, and Fantasy",critic:94,audience:97,page:"https://watch.plex.tv/movie/the-odyssey-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2Fc%2Fgracenote%2Fcb1dd1409ea8ef188be9c04e8d1faad6.jpg",logo:"https://metadata-static.plex.tv/3/683a142553/321ea14806ea389a6e77027ec870ce49.png",summary:"A sweeping journey home unfolds across mythic seas and impossible trials."},
+      {title:"Spider-Man: Brand New Day",year:2026,genre:"Action, Adventure, and more",critic:89,audience:98,page:"https://watch.plex.tv/en-GB/movie/spider-man-brand-new-day-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F2%2Fgracenote%2F2133a25098d005ea0977d902ba9d540d.jpg",logo:"https://metadata-static.plex.tv/3/683a142553/3bad437b599b2da6db72cd0e4c015d20.png",summary:"Peter Parker begins a new chapter in this latest big-screen adventure."},
+      {title:"The Odyssey",year:2026,genre:"Adventure, Action, and Fantasy",critic:94,audience:97,page:"https://watch.plex.tv/movie/the-odyssey-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2Fc%2Fgracenote%2Fcb1dd1409ea8ef188be9c04e8d1faad6.jpg",logo:"https://metadata-static.plex.tv/3/683a142553/321ea14806ea389a6e77027ec870ce49.png",summary:"A sweeping journey home unfolds across mythic seas and impossible trials."},
       {title:"Hadestown: The Musical",year:2026,genre:"Music, Musical, and Drama",critic:97,audience:99,page:"https://watch.plex.tv/en-GB/movie/hadestown-the-musical-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2F2%2Fgracenote%2F26774a44c97892de55843819348f33db.jpg",logo:"https://metadata-static.plex.tv/3/683a142553/3cf15af64a8ee101215762cfe1a77eb9.png",summary:"The acclaimed stage musical brings its underworld love story to the screen."},
       {title:"Motor City",year:2026,genre:"Action, Crime, and Drama",critic:62,audience:66,page:"https://watch.plex.tv/en-GB/movie/motor-city",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2Ff%2Fgracenote%2Ff25321dcfbe6eb638742b445ea5fbeb0.jpg",logo:"https://metadata-static.plex.tv/a/683a142553/a8642e7ca570d7117e35fd2d9ff2a94a.png",summary:"A hard-edged crime story races through the streets of Detroit."},
       {title:"The Invite",year:2026,genre:"Drama and Thriller",critic:97,audience:89,page:"https://watch.plex.tv/movie/the-invite-2026",poster:"https://images.plex.tv/photo?size=large-1280&url=https%3A%2F%2Fmetadata-static.plex.tv%2Fd%2Fgracenote%2Fd3df9d69cadaa122a54fec29ef73a949.jpg",logo:"https://metadata-static.plex.tv/e/683a142553/ebd98116997dd1d6dc7027e1fd5a872b.png",summary:"An intimate gathering takes a tense and unexpected turn."},
@@ -104,8 +103,7 @@
       const label=source==="critic"?"Rotten Tomatoes critic":"Rotten Tomatoes audience";
       return `<span style="display:inline-block;margin-left:7px;white-space:nowrap"><img src="${asset(file)}" alt="${label}" width="18" height="18" style="display:inline-block;width:18px;height:18px;object-fit:contain;border:0;vertical-align:-4px;margin-right:4px">${value}%</span>`;
     }
-    function letterboxd(item){return document.getElementById("letterboxd-links").checked&&/^tt[0-9]+$/.test(item.imdbId||"")?`<a href="https://letterboxd.com/imdb/${item.imdbId}/" target="_blank" rel="noopener noreferrer" style="color:#e5a00d;text-decoration:underline;white-space:nowrap">Letterboxd</a>`:""}
-    function ratingLine(item){return `<span>${item.year}</span>${score("critic",item.critic)}${score("audience",item.audience)}${letterboxd(item)}`}
+    function ratingLine(item){return `<span>${item.year}</span>${score("critic",item.critic)}${score("audience",item.audience)}`}
     function poster(item,width,extra=""){return `<img src="${item.poster}" width="${width}" alt="${esc(item.title)} poster" style="display:block;width:${width}px;max-width:100%;height:auto;border:0;${extra}">`}
 
     function welcomeBlock(state){
@@ -159,7 +157,7 @@
         let details;
         if(type==="movie"){
           const miniScore=(source,value)=>{const file=source==="critic"?(value>=60?"rt_ripe.png":"rt_rotten.png"):(value>=60?"rt_upright.png":"rt_spilled.png"),label=source==="critic"?"Rotten Tomatoes critic":"Rotten Tomatoes audience";return `<span style="display:inline-block;white-space:nowrap"><img src="${asset(file)}" alt="${label}" width="16" height="16" style="display:inline-block;width:16px;height:16px;border:0;vertical-align:-3px;margin-right:3px">${value}%</span>`};
-          details=`<div style="font-size:12px;line-height:1.3;color:#fff;font-weight:800">${esc(item.title)}</div><div style="padding-top:3px;font-size:12px;line-height:1.3;color:#9b9b9b;font-weight:500">${esc(item.genre)}</div><div style="padding-top:4px;font-size:12px;line-height:1.35;color:#e5a00d;font-weight:700">${miniScore("critic",item.critic)}<span style="display:inline-block;width:6px"></span>${miniScore("audience",item.audience)}${letterboxd(item)}</div>`;
+          details=`<div style="font-size:12px;line-height:1.3;color:#fff;font-weight:800">${esc(item.title)}</div><div style="padding-top:3px;font-size:12px;line-height:1.3;color:#9b9b9b;font-weight:500">${esc(item.genre)}</div><div style="padding-top:4px;font-size:12px;line-height:1.35;color:#e5a00d;font-weight:700">${miniScore("critic",item.critic)}<span style="display:inline-block;width:6px"></span>${miniScore("audience",item.audience)}</div>`;
         }else{
           const episodeCounts=["3 episodes","1 episode","4 episodes","2 episodes"];
           const rating=item.imdb?`<div style="padding-top:4px;color:#e5a00d;font-size:12px;font-weight:700"><img src="${asset("imdb.png")}" alt="IMDb" width="28" height="14" style="display:inline-block;width:28px;height:14px;object-fit:contain;border:0;vertical-align:-3px;margin-right:5px">${item.imdb}</div>`:"";
@@ -268,7 +266,6 @@
     document.addEventListener("keydown",event=>{if(event.target.matches("button,a"))return;if(event.key==="ArrowLeft")document.getElementById("previous").click();if(event.key==="ArrowRight")document.getElementById("next").click()});
     if(new URLSearchParams(location.search).get("fixture")==="mobile")document.body.classList.add("mobile-fixture");
     const hashIndex=states.findIndex(state=>`#${state.id}`===location.hash);if(hashIndex>=0)active=hashIndex;render();
-    document.getElementById("letterboxd-links").addEventListener("change",()=>render());
   })();
   </script>
 </body>

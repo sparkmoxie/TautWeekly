@@ -13,7 +13,6 @@
   "SmtpPassword": "fictional-browser-qa-smtp-password",
   "ExcludedUserIds": [],
   "IncludedLibraryIds": ["1", "3", "99"],
-  "ShowLetterboxdLinks": true,
   "UserEmailOverrides": {
     "4": "archived-fixture@example.org",
     "999": "unavailable-fixture@example.org"

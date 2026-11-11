@@ -134,6 +134,49 @@ func TestReadConfigEditorNeverReturnsStoredSecrets(t *testing.T) {
 	}
 }
 
+func TestRemovedConfigFieldIsInertAndCannotBeResubmitted(t *testing.T) {
+	const retiredField = "ShowLetterboxdLinks"
+	root := t.TempDir()
+	request := validConfigSaveRequest(t, ReadConfigEditor(root))
+	request.Secrets["ApiKey"] = SecretChange{Action: "replace", Value: "fictional-api-key"}
+	request.Secrets["SmtpPassword"] = SecretChange{Action: "replace", Value: "fictional-smtp-password"}
+	if _, fields, err := SaveConfig(root, request, time.Now); err != nil || len(fields) != 0 {
+		t.Fatalf("create config: fields=%v err=%v", fields, err)
+	}
+	values, _, _, _ := readConfigDocument(root)
+	values[retiredField] = true
+	raw, err := json.Marshal(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "config.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	view := ReadConfigEditor(root)
+	encoded, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), retiredField) {
+		t.Fatal("removed configuration field was exposed in the editor")
+	}
+	request = validConfigSaveRequest(t, view)
+	request.Values[retiredField] = json.RawMessage(`true`)
+	if _, fields, err := SaveConfig(root, request, time.Now); err != nil || fields[retiredField] == "" {
+		t.Fatalf("removed field was accepted: fields=%v err=%v", fields, err)
+	}
+	delete(request.Values, retiredField)
+	result, fields, err := SaveConfig(root, request, time.Now)
+	if err != nil || len(fields) != 0 || result.PostSave.MaterialChange || result.PostSave.GeneratePreviews || result.PostSave.WarmCache {
+		t.Fatalf("inert stored field affected save behavior: result=%+v fields=%v err=%v", result, fields, err)
+	}
+	stored, _, _, _ := readConfigDocument(root)
+	if stored[retiredField] != true {
+		t.Fatal("saving supported fields discarded an unknown stored value")
+	}
+}
+
 func TestLegacyDirectPlexFieldsAreExplainedAndNormalizedWithoutCopyingRuntimeToken(t *testing.T) {
 	root := integrationConfigRoot(t, "http://127.0.0.1:8181", "fictional-api-key", "", "")
 	path := filepath.Join(root, "config.json")

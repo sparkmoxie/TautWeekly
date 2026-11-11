@@ -6,12 +6,19 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Restore weekly activity, personal recaps, and global rankings when Tautulli history omits library IDs. Query each available selected library explicitly while preserving archived-library and exact-recipient checks.
+
+### Removed
+
+- Remove optional external movie links and their configuration control from newsletters and previews.
+
 ## [0.28.0] - 2026-11-11
 
 ### Added
 
 - Support Tautulli 2.19 archived users and libraries throughout Manager, CLI, previews, welcome messages, and scheduled delivery, while preserving saved settings for editing and later unarchiving.
-- Add optional Letterboxd movie links from existing IMDb/TMDB identities in email, plain text, and previews, with no additional metadata requests.
 
 ### Fixed
 

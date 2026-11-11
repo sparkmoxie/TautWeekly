@@ -259,7 +259,6 @@ jobs:
           ./scripts/test-renderer-collections.ps1
           ./scripts/test-tautulli-archives.ps1
           ./scripts/test-tautulli-api-artwork.ps1
-          ./scripts/test-movie-letterboxd.ps1
           ./scripts/test-smtp-streaming.ps1
           ./scripts/test-recipient-watched-movies.ps1
           ./scripts/test-deleted-item-cache.ps1
@@ -281,7 +280,6 @@ jobs:
           .\scripts\test-renderer-collections.ps1
           .\scripts\test-tautulli-archives.ps1
           .\scripts\test-tautulli-api-artwork.ps1
-          .\scripts\test-movie-letterboxd.ps1
           .\scripts\test-smtp-streaming.ps1
           .\scripts\test-recipient-watched-movies.ps1
           .\scripts\test-deleted-item-cache.ps1

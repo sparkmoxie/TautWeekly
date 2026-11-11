@@ -98,7 +98,6 @@
     field("DeletedItemCacheRetentionDays", "Cache retention days", "Cache", "integer", 365, { required: true, min: 1, max: 3650 }),
     field("DeletedItemCacheMaxItems", "Maximum cached items", "Cache", "integer", 1000, { required: true, min: 1, max: 10000 }),
     field("DeletedItemCacheMaxBytesMB", "Maximum cache size (MB)", "Cache", "integer", 256, { required: true, min: 16, max: 2048 }),
-    field("ShowLetterboxdLinks", "Show Letterboxd links", "Newsletter", "boolean", false, { help: "Add movie links using existing IMDb/TMDB identities without extra metadata requests." }),
     field("CustomTextCardEnabled", "Enable custom text card", "Custom text card", "boolean", true, { help: "When enabled, the synthetic card appears before the newsletter release-count and date block in every state." }),
     field("CustomTextCardBorderColor", "Border color", "Custom text card", "color", "#72aef7", { help: "Choose the card accent color. Border opacity controls whether it is visible." }),
     field("CustomTextCardBorderOpacity", "Border opacity", "Custom text card", "range", 34, { min: 0, max: 100, help: "Set to 0% for no border." }),
@@ -577,7 +576,6 @@
       else if (name.startsWith("CustomTextCard")) { categories.add("custom-text-card"); plan.generatePreviews = true; }
       else if (name === "IncludedLibraryIds") { categories.add("libraries"); plan.generatePreviews = true; plan.warmCache = plan.cacheEnabled; }
       else if (["ExcludedUserIds", "ExcludedEmails", "UserEmailOverrides"].includes(name)) { categories.add("recipients"); plan.generatePreviews = true; plan.warmCache = plan.cacheEnabled; }
-      else if (name === "ShowLetterboxdLinks") { categories.add("newsletter"); plan.generatePreviews = true; }
       else if (["DaysBack", "RecentAccessDays", "WatchedPercent", "MaxMovies", "MaxTv"].includes(name)) { categories.add("newsletter"); plan.generatePreviews = true; plan.warmCache = plan.cacheEnabled; }
       else categories.add("newsletter");
     }

@@ -60,7 +60,7 @@ assert.ok(uneven.includes("2 TV shows: 7 episodes"), "non-winner preview lost th
 
 const quiet = preview.html("demo-quiet");
 assert.ok(!quiet.includes('class="stats-summary-grid"') && !quiet.includes("YOU CLOCKED"), "zero-activity preview rendered populated personal summary cards");
-assert.ok(!source.replaceAll('https://letterboxd.com/imdb/', '').match(/https?:\/\//i), "synthetic preview renderer contains an unapproved external URL");
+assert.ok(!source.match(/https?:\/\//i), "synthetic preview renderer contains an unapproved external URL");
 assert.ok(!normal.match(/(?:src|href)="https?:\/\//i), "default preview initiates an external request or enables outbound links");
 
 console.log("[PASS] GUI preview personal stats are uncapped, rated when eligible, responsively paired, and network-local.");
@@ -102,24 +102,11 @@ for (const episodes of [[], [["S01 EP01", "Episode", null]]]) {
 
 const gallerySource = fs.readFileSync(path.join(root, "docs/examples/preview-all-00-INDEX.html"), "utf8");
 const galleryScript = gallerySource.match(/<script>([\s\S]*?)<\/script>/)[1];
-let galleryLinksEnabled = false;
-const galleryContext = vm.createContext({ window: {}, document: { getElementById: () => ({ checked: galleryLinksEnabled }) } });
+const galleryContext = vm.createContext({ window: {}, document: { getElementById: () => null } });
 vm.runInContext(galleryScript.slice(0, galleryScript.indexOf("    function nav(){")) +
   "window.gallery = { states, email, statsBlock, heroBlock, tvCard, asset, movies, shows };})();", galleryContext);
 const gallery = galleryContext.window.gallery;
 const galleryNormal = gallery.email(gallery.states[3]);
-assert.ok(!galleryNormal.includes('href="https://letterboxd.com/'), "gallery enables optional links by default");
-galleryLinksEnabled = true;
-assert.ok(gallery.email(gallery.states[3]).includes('href="https://letterboxd.com/imdb/tt22084616/"'), "gallery omits enabled identity-derived movie link");
-galleryLinksEnabled = false;
-let previewLinksEnabled = true;
-const linkContext = vm.createContext({ window: {}, document: { getElementById: name => name === "config-ShowLetterboxdLinks" ? { checked: previewLinksEnabled } : null } });
-vm.runInContext(source, linkContext);
-assert.ok(linkContext.window.TautWeeklyPreviewDemo.html("demo-normal").includes('href="https://letterboxd.com/imdb/tt22084616/"'));
-const enabledSignature = linkContext.window.TautWeeklyPreviewDemo.signature();
-previewLinksEnabled = false;
-assert.ok(!linkContext.window.TautWeeklyPreviewDemo.html("demo-normal").includes('href="https://letterboxd.com/'));
-assert.notEqual(linkContext.window.TautWeeklyPreviewDemo.signature(), enabledSignature, "optional link change did not invalidate preview signature");
 assert.ok(galleryNormal.includes('width="26" height="26" alt="Watched"') && galleryNormal.includes('width="16" height="16" alt="Watched"'), "gallery watched markers are stale");
 assert.ok(!gallery.statsBlock(gallery.states[3]).includes('alt="Watched"'), "gallery footer contains a watched mark");
 assert.ok(gallery.statsBlock(gallery.states[3]).includes("font-size:27px;line-height:1.1;font-weight:800"), "gallery Binge value is stale");

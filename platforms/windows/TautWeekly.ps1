@@ -1152,7 +1152,10 @@ function Get-History {
     $all = New-Object System.Collections.Generic.List[object]
     $pageSize = 1000
 
-    foreach ($sectionId in @(Get-IncludedLibraryQueryScopes)) {
+    # get_history filters section_id server-side but omits it from returned
+    # rows (Tautulli 2.18/2.19). Use the frozen current library scopes so a
+    # missing field is backed by an explicit query, never an unscoped guess.
+    foreach ($sectionId in @(Get-IncludedLibraryQueryScopes -CurrentContent)) {
         $start = 0
         while ($true) {
             $params = @{
@@ -5624,10 +5627,6 @@ function Add-DesignRatingMetadata {
                 -not [string]::IsNullOrWhiteSpace($metadataTitle)
             )
 
-            if ($mediaType -eq 'movie') {
-                $item | Add-Member -NotePropertyName 'ExternalGuids' -NotePropertyValue @(Get-MovieExternalGuids -Item $item -Metadata $meta) -Force
-            }
-
             $ratingImage = Get-OptionalStringProperty -InputObject $meta -Name "rating_image"
             $audienceImage = Get-OptionalStringProperty -InputObject $meta -Name "audience_rating_image"
             $ratingValue = Get-OptionalStringProperty -InputObject $meta -Name "rating"
@@ -6148,67 +6147,6 @@ function Get-DesignProviderRatingHtml {
         '</span>'
 }
 
-function Get-MovieExternalGuids {
-    param([object]$Item, [AllowNull()][object]$Metadata)
-    if ($null -eq $Metadata -or
-        (Get-OptionalStringProperty -InputObject $Metadata -Name 'rating_key') -cne (Get-OptionalStringProperty -InputObject $Item -Name 'RatingKey') -or
-        (Get-OptionalStringProperty -InputObject $Metadata -Name 'media_type') -ne 'movie') { return @() }
-
-    $retainedGuid = Get-OptionalStringProperty -InputObject $Item -Name 'MetadataGuid'
-    $resolvedGuid = Get-OptionalStringProperty -InputObject $Metadata -Name 'guid'
-    if ($retainedGuid) {
-        # Plex can reuse a removed item's rating key. Its retained GUID must
-        # still match before attaching another provider's movie identity.
-        if ($retainedGuid -cne $resolvedGuid) { return @() }
-    }
-    else {
-        $title = Get-OptionalStringProperty -InputObject $Item -Name 'Title'
-        $year = Get-OptionalStringProperty -InputObject $Item -Name 'Year'
-        if (-not $title -or -not $year -or
-            $title.Trim() -ine (Get-OptionalStringProperty -InputObject $Metadata -Name 'title').Trim() -or
-            $year -ne (Get-OptionalStringProperty -InputObject $Metadata -Name 'year')) { return @() }
-    }
-    if ($null -ne $Metadata.PSObject.Properties['guids']) { return @($Metadata.guids) }
-    return @()
-}
-
-function Get-MovieLetterboxdUrl {
-    param([AllowNull()][object]$Item)
-
-    $configuration = Get-Variable -Name Config -ValueOnly -ErrorAction SilentlyContinue
-    if ($null -eq $Item -or $null -eq $configuration -or
-        $null -eq $configuration.PSObject.Properties['ShowLetterboxdLinks'] -or
-        -not [bool]$configuration.ShowLetterboxdLinks -or
-        (Get-OptionalStringProperty -InputObject $Item -Name 'Type') -ne 'movie') {
-        return ''
-    }
-
-    # Only identifiers already returned for this exact movie are accepted.
-    # Never trust a remote URL, construct title slugs, or request more metadata.
-    $identifiers = @((Get-OptionalStringProperty -InputObject $Item -Name 'MetadataGuid'))
-    if ($null -ne $Item.PSObject.Properties['ExternalGuids']) {
-        $identifiers += @($Item.ExternalGuids)
-    }
-    foreach ($identifier in $identifiers) {
-        if ([string]$identifier -match '^(?:com\.plexapp\.agents\.)?(?:themoviedb|tmdb)://([1-9][0-9]*)(?:\?[^\r\n]*)?$') {
-            return 'https://letterboxd.com/tmdb/' + $Matches[1] + '/'
-        }
-    }
-    foreach ($identifier in $identifiers) {
-        if ([string]$identifier -match '^(?:com\.plexapp\.agents\.)?imdb://(tt[0-9]+)(?:\?[^\r\n]*)?$') {
-            return 'https://letterboxd.com/imdb/' + $Matches[1] + '/'
-        }
-    }
-    return ''
-}
-
-function Get-MovieLetterboxdHtml {
-    param([AllowNull()][object]$Item)
-    $url = Get-MovieLetterboxdUrl -Item $Item
-    if ([string]::IsNullOrWhiteSpace($url)) { return '' }
-    return '<a href="' + (HtmlEncode $url) + '" target="_blank" rel="noopener noreferrer" style="color:#e5a00d;text-decoration:underline;white-space:nowrap;">Letterboxd</a>'
-}
-
 function Get-DesignRatingLine {
     param(
         [object]$Item,
@@ -6305,8 +6243,6 @@ function Get-DesignRatingLine {
         )
     }
 
-    $letterboxd = Get-MovieLetterboxdHtml -Item $Item
-    if ($letterboxd) { $pieces.Add($letterboxd) }
     return ($pieces -join '<span style="display:inline-block;width:7px;"></span>')
 }
 
@@ -7584,8 +7520,6 @@ function Get-StatsMovieRatingHtml {
         )
     }
 
-    $letterboxd = Get-MovieLetterboxdHtml -Item $Item
-    if ($letterboxd) { $pieces.Add($letterboxd) }
     if ($pieces.Count -eq 0) {
         return ""
     }
@@ -9162,23 +9096,6 @@ function Build-PlainText {
         $heroLabel = if ($plainTrendingHero) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }
         $heroWatchedSuffix = Get-RecipientWatchedPlainTextSuffix -Item $HotRelease.Item -RecipientWatchedMovies $RecipientWatchedMovies
         $heroLine = "`r`n${heroLabel}: $($HotRelease.Item.Title)$heroWatchedSuffix"
-    }
-
-    $movieLinkLines = @(
-        $movieLinkItems = @($ReleaseData.Movies)
-        if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) { $movieLinkItems += $HotRelease.Item }
-        if ($null -ne $Stats.PSObject.Properties['MovieItems']) { $movieLinkItems += @($Stats.MovieItems) }
-        $seenMovieLinks = @{}
-        foreach ($movieLinkItem in $movieLinkItems) {
-            $movieLinkUrl = Get-MovieLetterboxdUrl -Item $movieLinkItem
-            if ($movieLinkUrl -and -not $seenMovieLinks.ContainsKey($movieLinkUrl)) {
-                $seenMovieLinks[$movieLinkUrl] = $true
-                '- ' + [string]$movieLinkItem.Title + ': ' + $movieLinkUrl
-            }
-        }
-    )
-    if ($movieLinkLines.Count -gt 0) {
-        $heroLine += "`r`n`r`nLETTERBOXD`r`n" + ($movieLinkLines -join "`r`n")
     }
 
     $footerFeature = ""
