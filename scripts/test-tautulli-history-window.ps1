@@ -164,8 +164,17 @@ foreach ($relative in $RendererPaths) {
             foreach ($date in $chunkDates) { $longDates.Add($date) }
         }
         Assert-True ($script:HistoryRequests.Count -eq 10 -and $longDates.Count -eq 3650 -and @($longDates | Select-Object -Unique).Count -eq 3650 -and $longDates[0] -eq $first -and $longDates[-1] -eq '2026-11-11') "$relative maximum window overlapped or omitted dates"
-        @($script:HistoryRequests | ForEach-Object { $_.Parameters }) | ConvertTo-Json -Depth 5 -Compress | & $PythonPath (Join-Path $PSScriptRoot 'test-support/assert-history-date-sql.py')
-        Assert-True ($LASTEXITCODE -eq 0) "$relative history dates failed the real SQLite expression/variable limits"
+        $sqlRequestPath = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-history-sql-' + [Guid]::NewGuid().ToString('N') + '.json')
+        try {
+            $sqlRequests = @($script:HistoryRequests | ForEach-Object { $_.Parameters })
+            $sqlRequestJson = ConvertTo-Json -InputObject $sqlRequests -Depth 5 -Compress
+            [IO.File]::WriteAllText($sqlRequestPath, $sqlRequestJson, [Text.UTF8Encoding]::new($false))
+            & $PythonPath (Join-Path $PSScriptRoot 'test-support/assert-history-date-sql.py') $sqlRequestPath
+            Assert-True ($LASTEXITCODE -eq 0) "$relative history dates failed the real SQLite expression/variable limits"
+        }
+        finally {
+            [IO.File]::Delete($sqlRequestPath)
+        }
 
         # One resumed play crosses the 365-date query boundary. Recombining
         # query fragments must preserve one grouped play and decimal maxima.

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import json
+from pathlib import Path
 import sqlite3
 import sys
 
@@ -27,7 +28,7 @@ def history_query(dates: list[str]) -> tuple[str, list[object]]:
 
 
 def main() -> None:
-    requests = json.load(sys.stdin)
+    requests = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     assert isinstance(requests, list) and requests, "No emitted history requests"
     database = sqlite3.connect(":memory:")
     # Older maintained SQLite builds allow only 999 bind variables; the
