@@ -265,6 +265,7 @@ foreach ($engine in $engines) {
                 FooterServerName = 'Virtual Plex'
                 PlexWebUrl = 'https://requests.example.test/'
                 PlexButtonLabel = 'View & Request <Now>'
+                ShowLetterboxdLinks = ($scenario -eq 'active')
                 IncludedLibraryIds = @('10', '20')
                 ExcludedUserIds = @()
                 ExcludedEmails = @()
@@ -503,6 +504,12 @@ foreach ($engine in $engines) {
             $newWithHistoryHtml = Get-Content (Join-Path $outputRoot 'preview-all-03-new-user-with-history.html') -Raw -Encoding UTF8
             $warmupHtml = Get-Content (Join-Path $outputRoot 'preview-all-06-established-warmup.html') -Raw -Encoding UTF8
             $normalHtml = Get-Content $normalPath -Raw -Encoding UTF8
+            if ($scenario -eq 'active') {
+                Assert-True ($normalHtml.Contains('href="https://letterboxd.com/tmdb/1234567/"')) "$($engine.Name)/active omitted the optional movie identity link."
+            }
+            else {
+                Assert-True (-not $normalHtml.Contains('href="https://letterboxd.com/')) "$($engine.Name)/$scenario enabled optional movie links by default."
+            }
             $quietHtml = Get-Content (Join-Path $outputRoot 'preview-all-05-established-quiet.html') -Raw -Encoding UTF8
             $scenarioPreviewHtml = @($manualHtml, $newNoHistoryHtml, $newWithHistoryHtml, $normalHtml, $quietHtml, $warmupHtml)
             foreach ($stateHtml in $scenarioPreviewHtml) {
@@ -756,7 +763,6 @@ foreach ($engine in $engines) {
                 Assert-True (-not $quietReleaseHtml.Contains('Selected Movie') -and $quietReleaseHtml.Contains('Selected Show')) "$($engine.Name)/$scenario duplicated the Trending movie or lost the real TV fallback."
                 Assert-True (-not $quietHtml.Contains('Toy Story 5')) "$($engine.Name)/$scenario substituted an unrelated fallback shell."
                 Assert-True ($previewLog.Contains('Recent Releases candidates: 1 movies and 1 TV titles.')) "$($engine.Name)/$scenario did not load the bounded quiet-week fallback."
-                Assert-True ($previewLog.Contains('Recent Releases will query 2 active movie/TV library section(s).')) "$($engine.Name)/$scenario used the empty global hub instead of enumerated library sections."
             }
             if ($scenario -eq $quietNoGlobalHistoryScenario) {
                 foreach ($stateHtml in $scenarioPreviewHtml) {
@@ -1024,11 +1030,12 @@ foreach ($engine in $engines) {
             })
             Assert-True ($mediaCalls.Count -gt 0) "$($engine.Name)/$scenario made no media calls."
             if ($scenario -eq $quietNoHistoryScenario) {
+                Assert-True (@($calls | Where-Object { $null -ne $_.query.PSObject.Properties['cmd'] -and [string]$_.query.cmd -eq 'get_library_names' }).Count -gt 0) "$($engine.Name)/$scenario did not join archive status before querying current libraries."
                 $unscopedRecentCalls = @($mediaCalls | Where-Object {
                     [string]$_.query.cmd -eq 'get_recently_added' -and
                     $null -eq $_.query.PSObject.Properties['section_id']
                 })
-                Assert-True ($unscopedRecentCalls.Count -eq 1) "$($engine.Name)/$scenario did not limit the empty global recently-added hub to weekly quiet detection."
+                Assert-True ($unscopedRecentCalls.Count -eq 0) "$($engine.Name)/$scenario queried the global recently-added hub instead of the current archive-aware library scopes."
                 $scopedRecentSections = @($mediaCalls | Where-Object {
                     [string]$_.query.cmd -eq 'get_recently_added' -and
                     $null -ne $_.query.PSObject.Properties['section_id']
@@ -1277,6 +1284,12 @@ foreach ($engine in $engines) {
                 Assert-True ('DATA' -in $smtpCommands) "$($engine.Name)/$scenario SendTest did not submit an SMTP message."
                 Assert-True (Test-Path $smtpDataFile) "$($engine.Name)/$scenario SendTest did not preserve the captured MIME message."
                 $emailThemeArgs = @($smtpDataFile)
+                if ($scenario -eq 'active') {
+                    # Windows PowerShell strips embedded literal quotes when
+                    # passing native argv. The preview assertion above checks
+                    # the full anchor; MIME checks the exact decoded URL.
+                    $emailThemeArgs += @('--require-html', 'https://letterboxd.com/tmdb/1234567/', '--require-plain', 'https://letterboxd.com/tmdb/1234567/')
+                }
                 $emailThemeArgs += @(
                     '--require-html', 'CUSTOM &lt;TITLE&gt;</span><img',
                     '--require-html', 'cid:custom_title_celebrate',

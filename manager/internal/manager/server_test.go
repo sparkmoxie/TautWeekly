@@ -590,7 +590,7 @@ func TestDiscoveryCacheAPIRequiresAuthenticationAndSurvivesManagerRestart(t *tes
 func TestDiscoveryLiveFailureKeepsCacheAndReportsSanitizedStage(t *testing.T) {
 	const secret = "fictional-retained-discovery-secret"
 	tautulli := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v2" || r.URL.Query().Get("apikey") != secret {
+		if r.URL.Path != "/api/v2" || r.Header.Get("X-Api-Key") != secret || r.URL.Query().Has("apikey") {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}

@@ -178,6 +178,7 @@ jobs:
           node scripts/test-manager-header-refresh.mjs
           node scripts/test-manager-status-polling.mjs
           node scripts/test-manager-preview-refresh.mjs
+          node scripts/test-manager-archive-policy.mjs
           node scripts/test-manager-cache-verification.mjs
           node scripts/test-manager-user-email-overrides.mjs
           python3 scripts/test-manager-accessibility.py
@@ -256,6 +257,9 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/test-renderer-collections.ps1
+          ./scripts/test-tautulli-archives.ps1
+          ./scripts/test-tautulli-api-artwork.ps1
+          ./scripts/test-movie-letterboxd.ps1
           ./scripts/test-smtp-streaming.ps1
           ./scripts/test-recipient-watched-movies.ps1
           ./scripts/test-deleted-item-cache.ps1
@@ -275,6 +279,9 @@ jobs:
         shell: powershell
         run: |
           .\scripts\test-renderer-collections.ps1
+          .\scripts\test-tautulli-archives.ps1
+          .\scripts\test-tautulli-api-artwork.ps1
+          .\scripts\test-movie-letterboxd.ps1
           .\scripts\test-smtp-streaming.ps1
           .\scripts\test-recipient-watched-movies.ps1
           .\scripts\test-deleted-item-cache.ps1
@@ -339,6 +346,8 @@ jobs:
       - name: Test package contracts and checksums
         shell: pwsh
         run: ./scripts/test-release-artifacts.ps1
+      - name: Parse exact packaged and standalone Compose assets
+        run: bash ./scripts/test-packaged-compose.sh
       - name: Boot-test the packaged native Linux Manager
         run: ./scripts/test-linux-manager-package.sh
       - name: Set up QEMU for packaged Mac fallback validation

@@ -580,3 +580,15 @@ Shipped email asset filenames are release-owned: updates may replace same-name
 custom artwork. Custom-only filenames and unrelated private/runtime data are
 preserved. For the bundle marker, restart behavior, explicit repair, and Windows
 update differences, see [bundled email assets](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/EMAIL-ASSETS.md).
+
+## Tautulli 2.19 and movie links
+
+Archived users cannot receive newsletters, previews, test sends, or Manual Welcome.
+Archived/deleted libraries are excluded from current content and weekly statistics;
+saved selections and private addressing settings remain editable. An unavailable
+saved scope never expands to every library. Older 2.18 responses remain supported.
+
+Manager Config offers **Show Letterboxd links**, off by default, for movies with
+an existing IMDb/TMDB identity. No extra metadata lookup is needed. Tautulli API
+keys use request headers; configure the final URL because authenticated redirects
+are refused. See the [compatibility and configuration policy](https://github.com/sparkmoxie/TautWeekly/blob/main/docs/CONFIGURATION.md#tautulli-219-archives).

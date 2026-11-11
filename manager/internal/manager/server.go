@@ -1469,6 +1469,12 @@ func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
 		}
 		writeAPIError(w, http.StatusUnprocessableEntity, "operation-user-excluded", "The selected user is excluded by the saved recipient policy. Uncheck the exclusion and save before previewing, testing, or sending to that user.")
 		return
+	case errors.Is(err, ErrOperationUserUnavailable):
+		if request.Type == "preview-all" {
+			s.updateConfigurationStep(request.ExpectedRevision, "previews", "skipped", "The selected Tautulli user is archived, deleted, or inactive. Restore the account and refresh choices before generating previews.")
+		}
+		writeAPIError(w, http.StatusUnprocessableEntity, "operation-user-unavailable", "The selected user is archived, deleted, or inactive in the latest Tautulli choices. Restore the account in Tautulli and refresh choices before previewing, testing, or sending.")
+		return
 	case errors.Is(err, ErrOperationBusy):
 		if request.Type == "preview-all" {
 			s.updateConfigurationStep(request.ExpectedRevision, "previews", "skipped", "Another Manager operation was active. Generate previews manually after it finishes.")

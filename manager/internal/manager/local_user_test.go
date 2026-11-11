@@ -53,7 +53,7 @@ func TestDiscoveryLocalOnlyRosterIsValidAndEmpty(t *testing.T) {
 				var data any
 				local := []any{map[string]any{"user_id": 0, "friendly_name": "Local", "is_active": 1}}
 				switch r.URL.Query().Get("cmd") {
-				case "get_libraries":
+				case "get_libraries", "get_library_names":
 					data = []any{map[string]any{"section_id": 10, "section_name": "Movies", "section_type": "movie", "is_active": 1}}
 				case "get_users", "get_user_names":
 					data = local

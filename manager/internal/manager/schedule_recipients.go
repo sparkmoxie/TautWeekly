@@ -2,7 +2,6 @@ package manager
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -31,19 +30,28 @@ func countDiscoveredPrimaryRecipients(users []map[string]any, values map[string]
 			return nil
 		}
 		seen[id] = true
-		active, err := strconv.Atoi(fmt.Sprint(user["is_active"]))
-		if err != nil {
+		active, known := integrationFlag(user["is_active"])
+		if !known {
 			return nil
 		}
-		deleted := 0
+		deleted := false
 		if user["deleted_user"] != nil {
-			deleted, err = strconv.Atoi(fmt.Sprint(user["deleted_user"]))
-			if err != nil {
+			deleted, known = integrationFlag(user["deleted_user"])
+			if !known {
 				return nil
 			}
 		}
-		if active == 0 || deleted > 0 {
+		if !active || deleted {
 			continue
+		}
+		if value, present := user["is_archived"]; present {
+			archived, known := integrationFlag(value)
+			if !known {
+				return nil
+			}
+			if archived {
+				continue
+			}
 		}
 		if _, excluded := excludedIDs[id]; excluded {
 			continue

@@ -178,18 +178,13 @@ else {
 # Tautulli API verification.
 try {
     $base = ([string]$config.TautulliUrl).TrimEnd('/')
-    $key = [Uri]::EscapeDataString([string]$config.ApiKey)
-    $infoUri = "$base/api/v2?apikey=$key&cmd=get_tautulli_info"
-    $infoResponse = Invoke-RestMethod -Uri $infoUri -Method Get -TimeoutSec 20
-    if ([string]$infoResponse.response.result -ne "success") { throw $infoResponse.response.message }
-    $version = [string]$infoResponse.response.data.tautulli_version
+    $info = Invoke-TautWeeklyLibraryApi -TautulliUrl $base -ApiKey ([string]$config.ApiKey) -Command 'get_tautulli_info'
+    $version = [string]$info.tautulli_version
     if ([string]::IsNullOrWhiteSpace($version)) { $version = "version not reported" }
     OK "Tautulli API works ($version)"
 
-    $usersUri = "$base/api/v2?apikey=$key&cmd=get_user_names"
-    $usersResponse = Invoke-RestMethod -Uri $usersUri -Method Get -TimeoutSec 20
-    if ([string]$usersResponse.response.result -ne "success") { throw $usersResponse.response.message }
-    $userCount = @($usersResponse.response.data).Count
+    $users = @(Invoke-TautWeeklyLibraryApi -TautulliUrl $base -ApiKey ([string]$config.ApiKey) -Command 'get_user_names')
+    $userCount = $users.Count
     OK "Tautulli user lookup works ($userCount users found)"
 
     $libraries = @(Get-TautWeeklySelectableLibraries -TautulliUrl $base -ApiKey ([string]$config.ApiKey))
@@ -222,14 +217,13 @@ try {
     # test and fail only when previewing. The docs endpoint is itself optional,
     # so inability to query it is a warning rather than a hard failure.
     try {
-        $docsUri = "$base/api/v2?apikey=$key&cmd=docs"
-        $docsResponse = Invoke-RestMethod -Uri $docsUri -Method Get -TimeoutSec 20
-        if ([string]$docsResponse.response.result -eq "success" -and $null -ne $docsResponse.response.data) {
+        $docs = Invoke-TautWeeklyLibraryApi -TautulliUrl $base -ApiKey ([string]$config.ApiKey) -Command 'docs'
+        if ($null -ne $docs) {
             $requiredCommands = @(
                 "get_users", "get_user", "get_history", "get_recently_added", "get_libraries",
                 "get_metadata", "get_children_metadata", "get_user_names", "pms_image_proxy"
             )
-            $availableCommands = @($docsResponse.response.data.PSObject.Properties.Name)
+            $availableCommands = @($docs.PSObject.Properties.Name)
             $missingCommands = @($requiredCommands | Where-Object { $availableCommands -notcontains $_ })
             if ($missingCommands.Count -gt 0) {
                 FAIL ("Tautulli API is missing required command(s): " + ($missingCommands -join ", "))
@@ -246,10 +240,9 @@ try {
     }
 
     try {
-        $serverUri = "$base/api/v2?apikey=$key&cmd=get_server_info"
-        $serverResponse = Invoke-RestMethod -Uri $serverUri -Method Get -TimeoutSec 20
-        if ([string]$serverResponse.response.result -eq "success") {
-            $pmsUrl = [string]$serverResponse.response.data.pms_url
+        $server = Invoke-TautWeeklyLibraryApi -TautulliUrl $base -ApiKey ([string]$config.ApiKey) -Command 'get_server_info'
+        if ($null -ne $server) {
+            $pmsUrl = [string]$server.pms_url
             if (-not [string]::IsNullOrWhiteSpace($pmsUrl)) {
                 OK "Tautulli reports Plex server URL: $pmsUrl"
             }

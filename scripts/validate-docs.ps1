@@ -376,8 +376,9 @@ if ($guiPreviewAPI -match '(?i)https?://(?![^"'']*\.invalid(?:[:/]|["'']))') {
     throw 'GUI Preview mock API contains a non-fictional HTTP endpoint.'
 }
 
-if ($guiPreviewRich -match '(?i)https?://') {
-    throw 'GUI Preview rich newsletter renderer contains an external HTTP endpoint.'
+if ($guiPreviewRich.Replace('href="https://letterboxd.com/imdb/', 'href="movie-link/') -match '(?i)https?://' -or
+    $guiPreviewRich -match '(?i)\b(?:fetch|XMLHttpRequest|sendBeacon)\b') {
+    throw 'GUI Preview rich newsletter renderer contains an external request endpoint beyond the optional Letterboxd hyperlink.'
 }
 
 foreach ($pattern in @(

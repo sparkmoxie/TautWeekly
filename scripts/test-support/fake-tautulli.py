@@ -1038,9 +1038,10 @@ class Handler(BaseHTTPRequestHandler):
                     {
                         "method": method,
                         "path": path,
-                        "query": query,
+                        "query": {key: ("[redacted]" if key.lower() == "apikey" else value) for key, value in query.items()},
                         "body": body,
                         "has_plex_token": bool(self.headers.get("X-Plex-Token")),
+                        "has_api_key": bool(self.headers.get("X-Api-Key")),
                         "accept": self.headers.get("Accept", ""),
                     }
                 )
@@ -1192,6 +1193,15 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         query = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
         self.record_call("GET", parsed.path, query)
+
+        # All maintained requests use the header supported since Tautulli 2.18;
+        # this covers binary API commands as well as ordinary JSON calls.
+        if parsed.path == "/api/v2" and ("apikey" in query or not self.headers.get("X-Api-Key")):
+            self.write_json({"error": "virtual API requires a header-only credential"}, status=401)
+            return
+        if parsed.path != "/api/v2" and self.headers.get("X-Api-Key"):
+            self.write_json({"error": "virtual API credential escaped the API endpoint"}, status=400)
+            return
 
         if parsed.path in {"/identity", "/library/sections"}:
             if self.headers.get("X-Plex-Token") != "virtual-plex-token":
@@ -1555,7 +1565,7 @@ class Handler(BaseHTTPRequestHandler):
         if command == "get_server_info":
             self.api_success({"pms_url": self.server.base_url})  # type: ignore[attr-defined]
             return
-        if command == "get_libraries":
+        if command in ("get_libraries", "get_library_names"):
             libraries = [
                 {"section_id": "10", "section_name": "Selected Movies", "section_type": "movie", "count": 1, "is_active": 1},
                 {"section_id": "20", "section_name": "Selected TV", "section_type": "show", "count": 1, "is_active": 1},
@@ -1771,6 +1781,7 @@ class Handler(BaseHTTPRequestHandler):
                     "title": title,
                     "year": "2026",
                     "summary": "Virtual metadata for functional rendering.",
+                    "guids": ["tmdb://1234567", "imdb://tt1234567"] if media_type == "movie" and key == "selected-movie" else [],
                     "added_at": int(time.time()) - 120,
                     "rating": "8.7" if is_episode else "8.1",
                     "rating_image": "imdb://image.rating" if is_episode else "rottentomatoes://image.rating.ripe",

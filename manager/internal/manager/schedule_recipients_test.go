@@ -87,7 +87,7 @@ func TestDiscoveryReturnsOnlyAggregatePrimaryEvidence(t *testing.T) {
 		requests++
 		var data any
 		switch r.URL.Query().Get("cmd") {
-		case "get_libraries":
+		case "get_libraries", "get_library_names":
 			data = []any{map[string]any{"section_id": "1", "section_name": "Movies", "section_type": "movie", "is_active": 1}}
 		case "get_user_names":
 			data = []any{map[string]any{"user_id": "1", "friendly_name": "Viewer"}}
@@ -105,7 +105,7 @@ func TestDiscoveryReturnsOnlyAggregatePrimaryEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.PrimaryRecipientCount == nil || *result.PrimaryRecipientCount != 1 || requests != 3 {
+	if result.PrimaryRecipientCount == nil || *result.PrimaryRecipientCount != 1 || requests != 4 {
 		t.Fatalf("aggregate or bounded request contract: %+v, %d", result, requests)
 	}
 	encoded, err := json.Marshal(result)

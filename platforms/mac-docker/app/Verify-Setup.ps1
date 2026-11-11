@@ -164,16 +164,13 @@ try {
     if ($base -match '127\.0\.0\.1|localhost') {
         WARN "TautulliUrl points to localhost inside the container. Use host.docker.internal for a Mac-host service, a shared-network container name, or another reachable LAN address."
     }
-    $key = [Uri]::EscapeDataString([string]$config.ApiKey)
-    $info = Invoke-RestMethod -Uri "$base/api/v2?apikey=$key&cmd=get_tautulli_info" -TimeoutSec 20
-    if ([string]$info.response.result -ne "success") { throw $info.response.message }
-    $version = [string]$info.response.data.tautulli_version
+    $info = Invoke-TautWeeklyLibraryApi -TautulliUrl $base -ApiKey ([string]$config.ApiKey) -Command 'get_tautulli_info'
+    $version = [string]$info.tautulli_version
     if ([string]::IsNullOrWhiteSpace($version)) { $version = "version not reported" }
     OK "Tautulli API works ($version)"
 
-    $users = Invoke-RestMethod -Uri "$base/api/v2?apikey=$key&cmd=get_user_names" -TimeoutSec 20
-    if ([string]$users.response.result -ne "success") { throw $users.response.message }
-    OK "Tautulli user lookup works ($(@($users.response.data).Count) users found)"
+    $users = @(Invoke-TautWeeklyLibraryApi -TautulliUrl $base -ApiKey ([string]$config.ApiKey) -Command 'get_user_names')
+    OK "Tautulli user lookup works ($($users.Count) users found)"
 
     $libraries = @(Get-TautWeeklySelectableLibraries -TautulliUrl $base -ApiKey ([string]$config.ApiKey))
     $selectableLibraries = @($libraries | Where-Object { $_.Selectable })

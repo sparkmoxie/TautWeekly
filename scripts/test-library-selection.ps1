@@ -66,7 +66,7 @@ function Invoke-TautWeeklyLibraryApi {
     )
 }
 $discovered = @(Get-TautWeeklySelectableLibraries -TautulliUrl 'http://tautulli.example.test:8181' -ApiKey 'test-key')
-Assert-Equal -Name 'Discovery uses the documented libraries endpoint' -Actual ($script:libraryApiCalls -join ',') -Expected 'get_libraries'
+Assert-Equal -Name 'Discovery joins live libraries with database archive state' -Actual ($script:libraryApiCalls -join ',') -Expected 'get_libraries,get_library_names'
 Assert-Equal -Name 'Discovery marks only active movie/show libraries selectable' -Actual (@($discovered | Where-Object Selectable).Count) -Expected 1
 
 foreach ($relative in @(

@@ -59,6 +59,7 @@ try {
             [void][IO.Directory]::CreateDirectory($PosterDir)
             [void][IO.Directory]::CreateDirectory($DesignMediaDir)
             $script:TautulliBase = 'http://synthetic.test:8181'
+            $script:Config = [PSCustomObject]@{ ApiKey = 'synthetic-header-only-key' }
             $script:Fetches = 0; $script:Generic = $false; $script:Recovery = $false; $script:FetchFailure = $false
             function Get-SafeFilePart([string]$Value) { return $Value }
             function Build-TautulliUri { param($Command, $Parameters) return 'http://no-network.test/mock' }

@@ -49,6 +49,8 @@ expect_profile 'explicit server' server container-compose $'profile=server\npack
 expect_profile 'explicit Unraid' unraid unraid $'profile=unraid\npackage=unraid\nmanager=nas'
 expect_profile 'legacy Mac registry inference' '' mac-docker-registry $'profile=desktop\npackage=mac-docker-registry\nmanager=mac'
 expect_profile 'legacy NAS inference' '' nas-docker $'profile=server\npackage=nas-docker\nmanager=nas'
+expect_profile 'QNAP Container Station' server qnap-container-station $'profile=server\npackage=qnap-container-station\nmanager=nas'
+expect_profile 'FreeBSD Podman' server freebsd-podman $'profile=server\npackage=freebsd-podman\nmanager=nas'
 expect_profile 'generic compatibility default' '' '' $'profile=server\npackage=docker-compatible\nmanager=nas'
 expect_profile 'desktop without a declared install method' desktop '' $'profile=desktop\npackage=docker-compatible\nmanager=mac'
 

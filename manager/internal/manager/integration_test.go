@@ -353,7 +353,7 @@ func TestRealIntegrationCheckUsesLANServicesWithoutReturningSecrets(t *testing.T
 	defer plex.Close()
 
 	tautulli := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v2" || r.URL.Query().Get("apikey") != tautulliSecret {
+		if r.URL.Path != "/api/v2" || r.Header.Get("X-Api-Key") != tautulliSecret || r.URL.Query().Has("apikey") {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -363,7 +363,7 @@ func TestRealIntegrationCheckUsesLANServicesWithoutReturningSecrets(t *testing.T
 			data = map[string]any{"tautulli_version": "2.16.0-fixture"}
 		case "get_user_names":
 			data = []any{map[string]any{"user_id": "1"}, map[string]any{"user_id": "2"}}
-		case "get_libraries":
+		case "get_libraries", "get_library_names":
 			data = []any{
 				map[string]any{"section_id": "10", "section_type": "movie", "is_active": 1},
 				map[string]any{"section_id": "20", "section_type": "show", "is_active": 1},
@@ -448,13 +448,13 @@ func TestRealIntegrationCheckRequiresConfirmationRevisionAndLAN(t *testing.T) {
 func TestTautulliDiscoveryReturnsSanitizedChoicesWithoutEmailOrSecrets(t *testing.T) {
 	const secret = "fictional-discovery-secret"
 	tautulli := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v2" || r.URL.Query().Get("apikey") != secret {
+		if r.URL.Path != "/api/v2" || r.Header.Get("X-Api-Key") != secret || r.URL.Query().Has("apikey") {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		var data any
 		switch r.URL.Query().Get("cmd") {
-		case "get_libraries":
+		case "get_libraries", "get_library_names":
 			data = []any{
 				map[string]any{"section_id": "20", "section_name": "Fictional Shows", "section_type": "show", "is_active": 1, "count": 12},
 				map[string]any{"section_id": "10", "section_name": "Fictional Movies", "section_type": "movie", "is_active": true, "count": 34},
@@ -527,7 +527,7 @@ func TestTautulliDiscoveryFallsBackToTableBackedLibrariesAndUsers(t *testing.T) 
 	const secret = "fictional-table-fallback-secret"
 	commands := map[string]int{}
 	tautulli := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v2" || r.URL.Query().Get("apikey") != secret {
+		if r.URL.Path != "/api/v2" || r.Header.Get("X-Api-Key") != secret || r.URL.Query().Has("apikey") {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -536,7 +536,7 @@ func TestTautulliDiscoveryFallsBackToTableBackedLibrariesAndUsers(t *testing.T) 
 		var result = "success"
 		var data any
 		switch command {
-		case "get_libraries":
+		case "get_libraries", "get_library_names":
 			// Tautulli's live PMS-backed command can answer successfully with no
 			// current data while its local table still contains usable choices.
 			data = nil
@@ -600,14 +600,14 @@ func TestTautulliDiscoveryFallsBackToTableBackedLibrariesAndUsers(t *testing.T) 
 func TestTautulliDiscoveryReportsSanitizedUserStageAfterFallbacks(t *testing.T) {
 	const secret = "fictional-user-stage-secret"
 	tautulli := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v2" || r.URL.Query().Get("apikey") != secret {
+		if r.URL.Path != "/api/v2" || r.Header.Get("X-Api-Key") != secret || r.URL.Query().Has("apikey") {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		var result = "success"
 		var data any
 		switch r.URL.Query().Get("cmd") {
-		case "get_libraries":
+		case "get_libraries", "get_library_names":
 			data = []any{map[string]any{"section_id": 10, "section_name": "Fictional Movies", "section_type": "movie", "is_active": true}}
 		case "get_user_names", "get_users", "get_users_table":
 			result = "error"

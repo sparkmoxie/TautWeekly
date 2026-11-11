@@ -6,16 +6,21 @@ function Invoke-TautWeeklyUserApi {
         [hashtable]$Parameters = @{}
     )
 
+    $baseUri = $null
+    if (-not [Uri]::TryCreate($TautulliUrl, [UriKind]::Absolute, [ref]$baseUri) -or
+        $baseUri.Scheme -notin @('http', 'https') -or $baseUri.UserInfo -or $baseUri.Query -or $baseUri.Fragment) {
+        throw 'TautulliUrl must be an HTTP(S) server URL without credentials, query, or fragment.'
+    }
     $parts = New-Object System.Collections.Generic.List[string]
-    $parts.Add("apikey={0}" -f [Uri]::EscapeDataString($ApiKey))
     $parts.Add("cmd={0}" -f [Uri]::EscapeDataString($Command))
     foreach ($entry in $Parameters.GetEnumerator()) {
+        if ([string]$entry.Key -ieq 'apikey') { throw 'Tautulli API keys must be sent in the request header.' }
         $parts.Add("{0}={1}" -f [Uri]::EscapeDataString([string]$entry.Key), [Uri]::EscapeDataString([string]$entry.Value))
     }
 
     $uri = "{0}/api/v2?{1}" -f $TautulliUrl.TrimEnd('/'), ($parts -join '&')
     try {
-        $raw = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec 20
+        $raw = Invoke-RestMethod -Uri $uri -Headers @{ 'X-Api-Key' = $ApiKey } -MaximumRedirection 0 -Method Get -TimeoutSec 20
     }
     catch {
         throw "Could not query Tautulli users. Check the Tautulli URL, API key, and network access."
@@ -87,7 +92,9 @@ function ConvertTo-TautWeeklySelectableUsers {
 
         $email = [string](Get-TautWeeklyObjectValue -InputObject $detail -Name 'email' -Default '')
         $isActive = [int](Get-TautWeeklyObjectValue -InputObject $detail -Name 'is_active' -Default 0)
-        $eligible = $isActive -gt 0 -and -not [string]::IsNullOrWhiteSpace($email)
+        $isArchived = [int](Get-TautWeeklyObjectValue -InputObject $detail -Name 'is_archived' -Default 0)
+        $deletedUser = [int](Get-TautWeeklyObjectValue -InputObject $detail -Name 'deleted_user' -Default 0)
+        $eligible = $isActive -gt 0 -and $isArchived -eq 0 -and $deletedUser -eq 0 -and -not [string]::IsNullOrWhiteSpace($email)
 
         $users.Add([PSCustomObject]@{
             UserId = $userId
@@ -95,6 +102,8 @@ function ConvertTo-TautWeeklySelectableUsers {
             Username = $username
             Email = $email
             Eligible = $eligible
+            IsArchived = ($isArchived -gt 0)
+            DeletedUser = ($deletedUser -gt 0)
             DetailsAvailable = ($null -ne $detail)
         })
     }
@@ -235,13 +244,13 @@ function Read-TautWeeklyExcludedUserIds {
     Write-Host ('{0,-4} {1,-10} {2,-9} {3,-24} {4,-20} {5}' -f '--', '----------', '---------', '------------------------', '--------------------', '-----')
     for ($index = 0; $index -lt $Users.Count; $index++) {
         $user = $Users[$index]
-        $status = if ($currentSet.Contains([string]$user.UserId)) { 'EXCLUDED' } else { 'included' }
+        $status = if ($currentSet.Contains([string]$user.UserId)) { 'EXCLUDED' } elseif ($null -ne $user.PSObject.Properties['IsArchived'] -and $user.IsArchived) { 'archived' } else { 'included' }
         $delivery = if ([bool]$user.Eligible) { 'eligible' } else { 'skipped*' }
         $email = if ([string]::IsNullOrWhiteSpace([string]$user.Email)) { '(no email)' } else { [string]$user.Email }
         Write-Host ('{0,-4} {1,-10} {2,-9} {3,-24} {4,-20} {5}' -f ($index + 1), $status, $delivery, [string]$user.FriendlyName, [string]$user.UserId, $email)
     }
     Write-Host ''
-    Write-Host '* Inactive users and users without email are already skipped. Tautulli notification-agent settings do not control TautWeekly delivery.' -ForegroundColor DarkGray
+    Write-Host '* Archived, inactive, deleted users and users without email are already skipped. Archived users remain listed so saved exclusions can be edited. Tautulli notification-agent settings do not control TautWeekly delivery.' -ForegroundColor DarkGray
     Write-Host 'Enter the rows to exclude, for example 2,4-6. This replaces the known-user selection.'
     Write-Host "Press Enter (or type 'keep') to keep it unchanged; type 'none' to clear every exclusion."
 

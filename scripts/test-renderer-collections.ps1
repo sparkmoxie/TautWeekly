@@ -33,6 +33,9 @@ $requiredFunctions = @(
     'Get-TvEpisodeSnapshotFromTautulli',
     'Merge-TvEpisodeSnapshots',
     'Get-DesignRatingLine',
+    'Get-MovieLetterboxdUrl',
+    'Get-MovieExternalGuids',
+    'Get-MovieLetterboxdHtml',
     'Get-DesignGenreLine',
     'Get-StatsMovieRatingHtml',
     'Get-StatsMovieRowsHtml',
@@ -471,6 +474,7 @@ foreach ($relativePath in $rendererPaths) {
         New-Item -ItemType Directory -Force -Path $posterProbeRoot | Out-Null
         $script:PosterDir = $posterProbeRoot
         $script:TautulliDefaultPosterHash = ''
+        $script:Config = [PSCustomObject]@{ ApiKey = 'synthetic-header-only-key' }
         $script:posterProbeOutFile = ''
         $script:posterProbeRequestCount = 0
         $script:posterProbeWarnings = New-Object System.Collections.Generic.List[string]
@@ -680,7 +684,7 @@ foreach ($relativePath in $rendererPaths) {
     Assert-True ((Get-UserSkipReason -User $localRecipient) -eq 'excludedUserId') "$relativePath allowed a legacy fallback or native email to make reserved Local eligible"
     Assert-True ((Get-UserExclusionReason -User ([PSCustomObject]@{ UserId = '7'; DeliveryEmail = 'allowed@example.com' })) -eq 'excludedUserId') "$relativePath did not apply stable-ID exclusions to personalized modes"
     Assert-True ((Get-UserExclusionReason -User ([PSCustomObject]@{ UserId = '8'; DeliveryEmail = 'blocked@example.com' })) -eq 'excludedEmail') "$relativePath did not apply effective-email exclusions to personalized modes"
-    Assert-True ([string]::IsNullOrWhiteSpace((Get-UserExclusionReason -User ([PSCustomObject]@{ UserId = '9'; DeliveryEmail = '' })))) "$relativePath coupled exclusion-only sampling to a production delivery address"
+    Assert-True ([string]::IsNullOrWhiteSpace((Get-UserExclusionReason -User ([PSCustomObject]@{ UserId = '9'; DeliveryEmail = ''; IsActive = 1; DeletedUser = 0 })))) "$relativePath coupled active sampling to a production delivery address"
     $script:Config = [PSCustomObject]@{ UserEmailOverrides = [PSCustomObject]@{}; ExcludedUserIds = @(); ExcludedEmails = @() }
     Assert-True ([string]::IsNullOrWhiteSpace((Get-UserSkipReason -User (Get-NewsletterUser -Id '42')))) "$relativePath made a real Local-named profile ineligible"
     $state = [PSCustomObject]@{ Users = [PSCustomObject]@{} }

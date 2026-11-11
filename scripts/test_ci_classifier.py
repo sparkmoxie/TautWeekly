@@ -62,6 +62,19 @@ class ClassifierTests(unittest.TestCase):
     def test_container_smoke_helper_selects_packaged_mac_consumer(self):
         self.assert_gates(["scripts/test-container-image.sh"], {"package", "compose", "container", "container_arm64"})
 
+    def test_packaged_compose_parser_selects_package_and_configuration_only(self):
+        self.assert_gates(
+            ["scripts/test-packaged-compose.sh"], {"package", "compose"},
+            {"powershell", "renderer", "manager", "installer", "container", "container_arm64", "pages"},
+        )
+
+    def test_release_workflow_selects_packaged_compose_validation(self):
+        self.assert_gates(
+            [".github/workflows/release.yml"],
+            {"manager", "package", "installer", "compose", "container", "container_arm64"},
+            {"powershell", "renderer", "pages"},
+        )
+
     def test_runtime_log_tests_select_service_consumers(self):
         self.assert_gates(["scripts/test-runtime-logs.ps1"], {"powershell", "package", "container", "container_arm64"})
 
@@ -81,6 +94,11 @@ class ClassifierTests(unittest.TestCase):
 
     def test_status_polling_test_is_in_fast_layer(self):
         self.assert_gates(["scripts/test-manager-status-polling.mjs"], set())
+
+    def test_tautulli_compatibility_regressions_select_renderer(self):
+        for path in ["scripts/test-tautulli-archives.ps1", "scripts/test-tautulli-api-artwork.ps1", "scripts/test-movie-letterboxd.ps1"]:
+            self.assert_gates([path], {"powershell", "renderer"})
+        self.assert_gates(["scripts/test-manager-archive-policy.mjs"], set())
 
     def test_native_linux_installer_test_selects_package_only(self):
         self.assert_gates(["scripts/test-linux-installer.py"], {"package"})
@@ -236,6 +254,12 @@ class WorkflowContractTests(unittest.TestCase):
             "TautWeekly-mac-docker/app/bin/runtime-profile.sh | grep -q '^-rwx'",
             self.ci,
         )
+
+    def test_generated_compose_is_parsed_after_the_single_candidate_build(self):
+        for workflow in (self.ci, self.release):
+            self.assertEqual(workflow.count("bash ./scripts/test-packaged-compose.sh"), 1)
+            self.assertLess(workflow.index("run: ./scripts/build-releases.ps1"),
+                            workflow.index("bash ./scripts/test-packaged-compose.sh"))
 
 
 if __name__ == "__main__":

@@ -31,6 +31,7 @@ FAST_ONLY_SCRIPTS = {
     "scripts/test-asset-refresh.py",
     "scripts/test-gui-preview-personal-stats.mjs",
     "scripts/test-manager-accessibility.py",
+    "scripts/test-manager-archive-policy.mjs",
     "scripts/test-manager-cache-verification.mjs",
     "scripts/test-manager-header-refresh.mjs",
     "scripts/test-manager-status-polling.mjs",
@@ -46,6 +47,9 @@ FAST_ONLY_SCRIPTS = {
 }
 
 RENDERER_TEST_MARKERS = (
+    "tautulli-archives",
+    "tautulli-api-artwork",
+    "movie-letterboxd",
     "email-optimizations",
     "email-size-budgets",
     "binge-champion",
@@ -124,7 +128,7 @@ def classify_path(raw_path: str) -> dict[str, bool]:
         enable(result, "container", "container_arm64")
         return result
     if path == ".github/workflows/release.yml":
-        enable(result, "manager", "package", "installer", "container", "container_arm64")
+        enable(result, "manager", "package", "installer", "compose", "container", "container_arm64")
         return result
     if path == ".github/workflows/pages.yml":
         enable(result, "pages")
@@ -214,6 +218,10 @@ def classify_path(raw_path: str) -> dict[str, bool]:
 
         if path == "scripts/test-container-image.sh":
             enable(result, "package", "compose", "container", "container_arm64")
+            return result
+
+        if path == "scripts/test-packaged-compose.sh":
+            enable(result, "package", "compose")
             return result
 
         if path == "scripts/test-runtime-logs.ps1":

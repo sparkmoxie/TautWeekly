@@ -39,10 +39,11 @@ type TautulliDiscoveryRequest struct {
 }
 
 type DiscoveredLibrary struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	MediaType string `json:"mediaType"`
-	ItemCount string `json:"itemCount,omitempty"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	MediaType    string `json:"mediaType"`
+	ItemCount    string `json:"itemCount,omitempty"`
+	Availability string `json:"availability,omitempty"`
 }
 
 type DiscoveredUser struct {
@@ -52,6 +53,8 @@ type DiscoveredUser struct {
 	NeedsDeliveryAddress bool   `json:"needsDeliveryAddress,omitempty"`
 	Role                 string `json:"role,omitempty"`
 	LegacyRuleExcluded   bool   `json:"legacyRuleExcluded,omitempty"`
+	Archived             bool   `json:"archived,omitempty"`
+	Deleted              bool   `json:"deleted,omitempty"`
 }
 
 type TautulliDiscoveryResult struct {
@@ -133,7 +136,8 @@ type tautulliUsersTable struct {
 }
 
 type tautulliLibrariesTable struct {
-	Data []map[string]any `json:"data"`
+	Data            []map[string]any `json:"data"`
+	RecordsFiltered json.Number      `json:"recordsFiltered"`
 }
 
 func RunRealIntegrationCheck(ctx context.Context, root string, request RealIntegrationCheckRequest, now func() time.Time) (IntegrationCheckResult, error) {
@@ -212,33 +216,41 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 	client := newLANOnlyHTTPClient()
 	apiKey := configMapString(values, "ApiKey")
 
-	var rawLibraries []map[string]any
-	libraryErr := tautulliCommand(checkContext, client, base, apiKey, "get_libraries", &rawLibraries)
-	libraries := normalizeDiscoveredLibraries(rawLibraries)
-	if libraryErr != nil || len(libraries) == 0 {
-		var table tautulliLibrariesTable
-		tableErr := tautulliCommandWithParams(checkContext, client, base, apiKey, "get_libraries_table", discoveryTableParams(), &table)
-		if tableErr == nil {
-			libraries = normalizeDiscoveredLibraries(table.Data)
-		}
-		if len(libraries) == 0 {
-			cause := libraryErr
-			if cause == nil {
-				cause = tableErr
-			}
-			if cause == nil {
-				cause = errIntegrationResponse
-			}
-			return TautulliDiscoveryResult{}, wrapTautulliDiscoveryError("libraries", cause)
-		}
+	libraries, libraryErr := discoverTautulliLibraries(checkContext, client, base, apiKey)
+	if libraryErr != nil {
+		return TautulliDiscoveryResult{}, wrapTautulliDiscoveryError("libraries", libraryErr)
 	}
 	var rawNames []map[string]any
-	nameErr := tautulliCommand(checkContext, client, base, apiKey, "get_user_names", &rawNames)
+	nameErr := tautulliCommandWithParams(checkContext, client, base, apiKey, "get_user_names", url.Values{"include_archived": {"1"}}, &rawNames)
 	var rawUsers []map[string]any
 	detailErr := tautulliCommand(checkContext, client, base, apiKey, "get_users", &rawUsers)
+	legacyRules := normalizedLegacyExclusionRules(values["ExcludedEmails"])
+	emailOverrides := normalizedDiscoveryUserEmailOverrides(values["UserEmailOverrides"])
+	users, matchedLegacyRules := normalizeDiscoveredUsers(rawNames, rawUsers, legacyRules, emailOverrides)
 	var primaryRecipientCount *int
 	if detailErr == nil {
-		primaryRecipientCount = countDiscoveredPrimaryRecipients(rawUsers, values)
+		// Names and details are sequential snapshots. Keep the count aligned with
+		// the conservative joined choice policy if archival changes between them.
+		unavailableIDs := make(map[string]bool)
+		for _, user := range users {
+			if user.Archived || user.Deleted || user.Eligibility == "archived" || user.Eligibility == "deleted" {
+				unavailableIDs[user.ID] = true
+			}
+		}
+		countRoster := make([]map[string]any, 0, len(rawUsers))
+		for _, user := range rawUsers {
+			if unavailableIDs[discoveryUserID(user["user_id"])] {
+				copy := make(map[string]any, len(user)+1)
+				for key, value := range user {
+					copy[key] = value
+				}
+				copy["is_archived"] = true
+				countRoster = append(countRoster, copy)
+			} else {
+				countRoster = append(countRoster, user)
+			}
+		}
+		primaryRecipientCount = countDiscoveredPrimaryRecipients(countRoster, values)
 		// Names absent from the detailed roster make the aggregate incomplete.
 		detailedIDs := make(map[string]bool)
 		for _, user := range rawUsers {
@@ -250,9 +262,6 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 			}
 		}
 	}
-	legacyRules := normalizedLegacyExclusionRules(values["ExcludedEmails"])
-	emailOverrides := normalizedDiscoveryUserEmailOverrides(values["UserEmailOverrides"])
-	users, matchedLegacyRules := normalizeDiscoveredUsers(rawNames, rawUsers, legacyRules, emailOverrides)
 	// A successful roster containing only Local is valid but has no recipients.
 	hasReservedRosterEntry := nameErr == nil && hasReservedDiscoveredUser(rawNames) || detailErr == nil && hasReservedDiscoveredUser(rawUsers)
 	var tableErr error
@@ -296,9 +305,77 @@ func DiscoverTautulliChoices(ctx context.Context, root string, request TautulliD
 
 func discoveryTableParams() url.Values {
 	return url.Values{
-		"start":  {"0"},
-		"length": {strconv.Itoa(maximumDiscoveryChoices)},
+		"start":            {"0"},
+		"length":           {strconv.Itoa(maximumDiscoveryChoices)},
+		"include_archived": {"1"},
+		"include_deleted":  {"1"},
 	}
+}
+
+// get_libraries is a live Plex lookup and does not carry Tautulli archive flags.
+// Join the inexpensive DB roster by section ID; a failed DB lookup must never
+// turn archived libraries into active choices. These roster calls are supported
+// by older servers, where missing archive flags mean the feature is unavailable.
+func discoverTautulliLibraries(ctx context.Context, client *http.Client, base *url.URL, apiKey string) ([]DiscoveredLibrary, error) {
+	var live, roster []map[string]any
+	liveErr := tautulliCommand(ctx, client, base, apiKey, "get_libraries", &live)
+	rosterErr := tautulliCommandWithParams(ctx, client, base, apiKey, "get_library_names", url.Values{"include_archived": {"1"}}, &roster)
+	if liveErr == nil && len(live) > 0 && rosterErr == nil {
+		if len(live) >= maximumDiscoveryChoices || len(roster) >= maximumDiscoveryChoices {
+			return nil, errIntegrationResponse
+		}
+		byID := map[string]map[string]any{}
+		for _, item := range roster {
+			if id := discoveryID(item["section_id"]); id != "" {
+				if previous, duplicate := byID[id]; duplicate {
+					previous["availability_unknown"] = true
+				} else {
+					byID[id] = item
+				}
+			}
+		}
+		joined := make([]map[string]any, 0, len(live)+len(roster))
+		seen := map[string]bool{}
+		for _, item := range live {
+			id := discoveryID(item["section_id"])
+			copy := make(map[string]any, len(item)+2)
+			for key, value := range item {
+				copy[key] = value
+			}
+			if status, ok := byID[id]; ok {
+				copy["is_archived"] = status["is_archived"]
+				copy["availability_unknown"] = status["availability_unknown"]
+			} else {
+				copy["availability_unknown"] = true
+			}
+			joined = append(joined, copy)
+			seen[id] = true
+		}
+		for _, item := range roster {
+			if !seen[discoveryID(item["section_id"])] {
+				joined = append(joined, item)
+			}
+		}
+		return normalizeDiscoveredLibraries(joined), nil
+	}
+	var table tautulliLibrariesTable
+	if err := tautulliCommandWithParams(ctx, client, base, apiKey, "get_libraries_table", discoveryTableParams(), &table); err != nil {
+		return nil, err
+	}
+	if len(table.Data) >= maximumDiscoveryChoices {
+		return nil, errIntegrationResponse
+	}
+	if table.RecordsFiltered != "" {
+		count, err := table.RecordsFiltered.Int64()
+		if err != nil || count < 0 || count > int64(len(table.Data)) {
+			return nil, errIntegrationResponse
+		}
+	}
+	libraries := normalizeDiscoveredLibraries(table.Data)
+	if len(libraries) == 0 {
+		return nil, errIntegrationResponse
+	}
+	return libraries, nil
 }
 
 func normalizeDiscoveredLibraries(values []map[string]any) []DiscoveredLibrary {
@@ -307,7 +384,7 @@ func normalizeDiscoveredLibraries(values []map[string]any) []DiscoveredLibrary {
 	for _, value := range values {
 		id := discoveryID(value["section_id"])
 		mediaType := strings.ToLower(sanitizeEvidence(fmt.Sprint(value["section_type"]), 16))
-		if id == "" || mediaType != "movie" && mediaType != "show" || !integrationTruthy(value["is_active"]) {
+		if id == "" || mediaType != "movie" && mediaType != "show" {
 			continue
 		}
 		if _, exists := seen[id]; exists {
@@ -319,7 +396,26 @@ func normalizeDiscoveredLibraries(values []map[string]any) []DiscoveredLibrary {
 			name = "Library " + id
 		}
 		count := sanitizeNumericEvidence(value["count"])
-		result = append(result, DiscoveredLibrary{ID: id, Name: name, MediaType: mediaType, ItemCount: count})
+		availability := "active"
+		invalidPolicy := false
+		for _, key := range []string{"is_archived", "deleted_section"} {
+			if flag, present := value[key]; present && flag != nil {
+				if _, known := integrationFlag(flag); !known {
+					invalidPolicy = true
+				}
+			}
+		}
+		switch {
+		case integrationTruthy(value["deleted_section"]):
+			availability = "deleted"
+		case integrationTruthy(value["is_archived"]):
+			availability = "archived"
+		case invalidPolicy || integrationTruthy(value["availability_unknown"]):
+			availability = "unavailable"
+		case !integrationTruthy(value["is_active"]):
+			availability = "inactive"
+		}
+		result = append(result, DiscoveredLibrary{ID: id, Name: name, MediaType: mediaType, ItemCount: count, Availability: availability})
 		if len(result) == maximumDiscoveryChoices {
 			break
 		}
@@ -335,6 +431,7 @@ func normalizeDiscoveredLibraries(values []map[string]any) []DiscoveredLibrary {
 
 func normalizeDiscoveredUsers(names, details []map[string]any, legacyRules map[string]struct{}, emailOverrides map[string]string) ([]DiscoveredUser, int) {
 	detailsByID := make(map[string]map[string]any)
+	namesByID := make(map[string]map[string]any)
 	nameByID := make(map[string]string)
 	ids := make([]string, 0, len(names)+len(details))
 	seen := make(map[string]struct{})
@@ -358,6 +455,7 @@ func normalizeDiscoveredUsers(names, details []map[string]any, legacyRules map[s
 	for _, value := range names {
 		id := discoveryUserID(value["user_id"])
 		if id != "" {
+			namesByID[id] = value
 			nameByID[id] = sanitizeEvidence(fmt.Sprint(value["friendly_name"]), 100)
 			addID(id)
 		}
@@ -379,6 +477,8 @@ func normalizeDiscoveredUsers(names, details []map[string]any, legacyRules map[s
 		eligibility := "unknown"
 		needsDeliveryAddress := false
 		legacyRuleExcluded := false
+		archived := integrationTruthy(detail["is_archived"]) || integrationTruthy(namesByID[id]["is_archived"])
+		deleted := integrationTruthy(detail["deleted_user"])
 		if hasDetails {
 			eligibility = "skipped"
 			nativeEmail := discoveredUserEmail(detail)
@@ -399,7 +499,15 @@ func normalizeDiscoveredUsers(names, details []map[string]any, legacyRules map[s
 				matchedLegacyRules[effectiveEmail] = struct{}{}
 			}
 		}
-		result = append(result, DiscoveredUser{ID: id, Name: name, Eligibility: eligibility, NeedsDeliveryAddress: needsDeliveryAddress, Role: discoveredUserRole(detail), LegacyRuleExcluded: legacyRuleExcluded})
+		if archived {
+			eligibility = "archived"
+			needsDeliveryAddress = false
+		}
+		if deleted {
+			eligibility = "deleted"
+			needsDeliveryAddress = false
+		}
+		result = append(result, DiscoveredUser{ID: id, Name: name, Eligibility: eligibility, NeedsDeliveryAddress: needsDeliveryAddress, Role: discoveredUserRole(detail), LegacyRuleExcluded: legacyRuleExcluded, Archived: archived, Deleted: deleted})
 		if len(result) == maximumDiscoveryChoices {
 			break
 		}
@@ -535,7 +643,7 @@ func suggestedPreviewUserID(users []DiscoveredUser) string {
 	owners := []string{}
 	administrators := []string{}
 	for _, user := range users {
-		if !validTautulliUserID(user.ID) || user.LegacyRuleExcluded {
+		if !validTautulliUserID(user.ID) || user.LegacyRuleExcluded || user.Archived || user.Deleted || user.Eligibility == "skipped" {
 			continue
 		}
 		switch user.Role {
@@ -608,14 +716,13 @@ func verifyTautulli(ctx context.Context, client *http.Client, values map[string]
 	if err := tautulliCommand(ctx, client, base, apiKey, "get_user_names", &users); err != nil {
 		return failedIntegrationStep("tautulli", err), tautulliServerData{}
 	}
-	var libraries []map[string]any
-	if err := tautulliCommand(ctx, client, base, apiKey, "get_libraries", &libraries); err != nil {
+	libraries, err := discoverTautulliLibraries(ctx, client, base, apiKey)
+	if err != nil {
 		return failedIntegrationStep("tautulli", err), tautulliServerData{}
 	}
 	selectable := 0
 	for _, library := range libraries {
-		kind := strings.ToLower(strings.TrimSpace(fmt.Sprint(library["section_type"])))
-		if (kind == "movie" || kind == "show") && integrationTruthy(library["is_active"]) {
+		if library.Availability == "active" {
 			selectable++
 		}
 	}
@@ -681,9 +788,11 @@ func tautulliCommand(ctx context.Context, client *http.Client, base *url.URL, ap
 func tautulliCommandWithParams(ctx context.Context, client *http.Client, base *url.URL, apiKey, command string, params url.Values, target any) error {
 	endpoint := integrationEndpoint(base, "api/v2")
 	query := endpoint.Query()
-	query.Set("apikey", apiKey)
 	query.Set("cmd", command)
 	for key, values := range params {
+		if strings.EqualFold(key, "apikey") {
+			continue
+		}
 		query.Del(key)
 		for _, value := range values {
 			query.Add(key, value)
@@ -695,7 +804,12 @@ func tautulliCommandWithParams(ctx context.Context, client *http.Client, base *u
 		return errIntegrationResponse
 	}
 	request.Header.Set("Accept", "application/json")
-	response, err := client.Do(request)
+	request.Header.Set("X-Api-Key", apiKey)
+	// Refuse redirects even when a caller supplies its own client: custom
+	// headers otherwise survive redirects to a different host in net/http.
+	requestClient := *client
+	requestClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
+	response, err := requestClient.Do(request)
 	if err != nil {
 		return classifyIntegrationTransportError(err)
 	}
@@ -902,18 +1016,33 @@ func configMapString(values map[string]any, name string) string {
 }
 
 func integrationTruthy(value any) bool {
+	truthy, _ := integrationFlag(value)
+	return truthy
+}
+
+func integrationFlag(value any) (bool, bool) {
 	switch typed := value.(type) {
 	case bool:
-		return typed
+		return typed, true
+	case int:
+		return typed != 0, true
+	case int64:
+		return typed != 0, true
 	case float64:
-		return typed != 0
+		return typed != 0, true
 	case json.Number:
-		return typed.String() != "0"
+		value, err := typed.Int64()
+		return value != 0, err == nil
 	case string:
-		return typed == "1" || strings.EqualFold(typed, "true")
+		switch strings.ToLower(strings.TrimSpace(typed)) {
+		case "1", "true":
+			return true, true
+		case "0", "false":
+			return false, true
+		}
 	default:
-		return false
 	}
+	return false, false
 }
 
 func sanitizeEvidence(value string, maximum int) string {

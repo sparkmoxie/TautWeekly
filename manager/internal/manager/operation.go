@@ -25,15 +25,16 @@ const (
 )
 
 var (
-	ErrOperationBusy           = errors.New("another manager operation is active")
-	ErrOperationConfirmation   = errors.New("operation confirmation is required")
-	ErrOperationInvalid        = errors.New("operation request is invalid")
-	ErrOperationNotFound       = errors.New("operation was not found")
-	ErrOperationNotReady       = errors.New("configuration is not ready for the operation")
-	ErrOperationUserExcluded   = errors.New("selected user is excluded by saved recipient policy")
-	ErrOperationTerminal       = errors.New("operation is already complete")
-	ErrOperationNotCancellable = errors.New("operation cannot be cancelled safely")
-	ErrOperationUnsupported    = errors.New("operation is unsupported on this platform")
+	ErrOperationBusy            = errors.New("another manager operation is active")
+	ErrOperationConfirmation    = errors.New("operation confirmation is required")
+	ErrOperationInvalid         = errors.New("operation request is invalid")
+	ErrOperationNotFound        = errors.New("operation was not found")
+	ErrOperationNotReady        = errors.New("configuration is not ready for the operation")
+	ErrOperationUserExcluded    = errors.New("selected user is excluded by saved recipient policy")
+	ErrOperationUserUnavailable = errors.New("selected user is archived, deleted, or inactive")
+	ErrOperationTerminal        = errors.New("operation is already complete")
+	ErrOperationNotCancellable  = errors.New("operation cannot be cancelled safely")
+	ErrOperationUnsupported     = errors.New("operation is unsupported on this platform")
 )
 
 type CreateOperationRequest struct {
@@ -193,8 +194,14 @@ func (c *operationCoordinator) Start(request CreateOperationRequest) (OperationR
 	if request.ExpectedRevision == "" || request.ExpectedRevision != revision {
 		return OperationRecord{}, ErrConfigConflict
 	}
-	if requiresUser && (savedOperationUserExcluded(values, userID) || c.savedDiscoveryUserExcluded(revision, userID)) {
-		return OperationRecord{}, ErrOperationUserExcluded
+	if requiresUser {
+		excluded, unavailable := c.savedDiscoveryUserPolicy(revision, userID)
+		if savedOperationUserExcluded(values, userID) || excluded {
+			return OperationRecord{}, ErrOperationUserExcluded
+		}
+		if unavailable {
+			return OperationRecord{}, ErrOperationUserUnavailable
+		}
 	}
 
 	c.mu.Lock()
@@ -238,20 +245,20 @@ func (c *operationCoordinator) Start(request CreateOperationRequest) (OperationR
 	return record, nil
 }
 
-func (c *operationCoordinator) savedDiscoveryUserExcluded(revision, userID string) bool {
+func (c *operationCoordinator) savedDiscoveryUserPolicy(revision, userID string) (excluded, unavailable bool) {
 	if c.discovery == nil {
-		return false
+		return false, false
 	}
 	discovery := c.discovery.Load(revision)
 	if discovery == nil {
-		return false
+		return false, false
 	}
 	for _, user := range discovery.Users {
 		if user.ID == userID {
-			return user.LegacyRuleExcluded
+			return user.LegacyRuleExcluded, user.Archived || user.Deleted || user.Eligibility == "archived" || user.Eligibility == "deleted" || user.Eligibility == "skipped"
 		}
 	}
-	return false
+	return false, false
 }
 
 func savedOperationUserExcluded(values map[string]any, userID string) bool {
