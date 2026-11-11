@@ -119,7 +119,12 @@ try {
         $sourceCount = 0; $targetCount = 0; $sourceHeaderCount = 0; $queryKeyCount = 0
         $postCount = 0; $bodySecretCount = 0
         try {
-            @{ sourcePort = $source.LocalEndpoint.Port; targetPort = $target.LocalEndpoint.Port } | ConvertTo-Json | Set-Content -LiteralPath $readyPath
+            # Publish readiness only after the full JSON is closed. A reader
+            # can otherwise observe Set-Content's newly created empty file.
+            $readyJson = @{ sourcePort = $source.LocalEndpoint.Port; targetPort = $target.LocalEndpoint.Port } | ConvertTo-Json -Compress
+            $readyTemporary = $readyPath + '.tmp'
+            [IO.File]::WriteAllText($readyTemporary, $readyJson, (New-Object Text.UTF8Encoding($false)))
+            [IO.File]::Move($readyTemporary, $readyPath)
             $watch = [Diagnostics.Stopwatch]::StartNew()
             $doneAt = -1L
             while ($watch.ElapsedMilliseconds -lt 10000) {
