@@ -1285,7 +1285,10 @@ foreach ($engine in $engines) {
                 Assert-True (Test-Path $smtpDataFile) "$($engine.Name)/$scenario SendTest did not preserve the captured MIME message."
                 $emailThemeArgs = @($smtpDataFile)
                 if ($scenario -eq 'active') {
-                    $emailThemeArgs += @('--require-html', 'href="https://letterboxd.com/tmdb/1234567/"', '--require-plain', 'https://letterboxd.com/tmdb/1234567/')
+                    # Windows PowerShell strips embedded literal quotes when
+                    # passing native argv. The preview assertion above checks
+                    # the full anchor; MIME checks the exact decoded URL.
+                    $emailThemeArgs += @('--require-html', 'https://letterboxd.com/tmdb/1234567/', '--require-plain', 'https://letterboxd.com/tmdb/1234567/')
                 }
                 $emailThemeArgs += @(
                     '--require-html', 'CUSTOM &lt;TITLE&gt;</span><img',
