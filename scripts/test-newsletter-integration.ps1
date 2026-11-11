@@ -763,7 +763,6 @@ foreach ($engine in $engines) {
                 Assert-True (-not $quietReleaseHtml.Contains('Selected Movie') -and $quietReleaseHtml.Contains('Selected Show')) "$($engine.Name)/$scenario duplicated the Trending movie or lost the real TV fallback."
                 Assert-True (-not $quietHtml.Contains('Toy Story 5')) "$($engine.Name)/$scenario substituted an unrelated fallback shell."
                 Assert-True ($previewLog.Contains('Recent Releases candidates: 1 movies and 1 TV titles.')) "$($engine.Name)/$scenario did not load the bounded quiet-week fallback."
-                Assert-True ($previewLog.Contains('Recent Releases will query 2 active movie/TV library section(s).')) "$($engine.Name)/$scenario used the empty global hub instead of enumerated library sections."
             }
             if ($scenario -eq $quietNoGlobalHistoryScenario) {
                 foreach ($stateHtml in $scenarioPreviewHtml) {
@@ -1031,11 +1030,12 @@ foreach ($engine in $engines) {
             })
             Assert-True ($mediaCalls.Count -gt 0) "$($engine.Name)/$scenario made no media calls."
             if ($scenario -eq $quietNoHistoryScenario) {
+                Assert-True (@($calls | Where-Object { $null -ne $_.query.PSObject.Properties['cmd'] -and [string]$_.query.cmd -eq 'get_library_names' }).Count -gt 0) "$($engine.Name)/$scenario did not join archive status before querying current libraries."
                 $unscopedRecentCalls = @($mediaCalls | Where-Object {
                     [string]$_.query.cmd -eq 'get_recently_added' -and
                     $null -eq $_.query.PSObject.Properties['section_id']
                 })
-                Assert-True ($unscopedRecentCalls.Count -eq 1) "$($engine.Name)/$scenario did not limit the empty global recently-added hub to weekly quiet detection."
+                Assert-True ($unscopedRecentCalls.Count -eq 0) "$($engine.Name)/$scenario queried the global recently-added hub instead of the current archive-aware library scopes."
                 $scopedRecentSections = @($mediaCalls | Where-Object {
                     [string]$_.query.cmd -eq 'get_recently_added' -and
                     $null -ne $_.query.PSObject.Properties['section_id']
