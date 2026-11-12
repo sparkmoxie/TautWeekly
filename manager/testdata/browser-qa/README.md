@@ -25,10 +25,7 @@ last selection must keep it checked until an active replacement is selected.
 User `4` is archived, `5` is deleted, and `6` is inactive. They remain visible
 for editing but cannot be selected for Preview, TestEmail, or Manual Welcome.
 The fixture retains an archived user's fallback address and household copy,
-plus an unavailable user's fallback address, so all remain reviewable. The
-Letterboxd checkbox starts enabled; the placeholder PowerShell renderer does
-not render real movie links, so verify link rendering with the public rich
-preview or the renderer integration fixtures.
+plus an unavailable user's fallback address, so all remain reviewable.
 
 Browser QA copies these files to an ignored temporary directory and renames
 `fixture-config.json` to `config.json`. The temporary root and Manager data are

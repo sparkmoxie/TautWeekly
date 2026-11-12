@@ -1038,6 +1038,7 @@ class Handler(BaseHTTPRequestHandler):
                     {
                         "method": method,
                         "path": path,
+                        "request_target": self.path,
                         "query": {key: ("[redacted]" if key.lower() == "apikey" else value) for key, value in query.items()},
                         "body": body,
                         "has_plex_token": bool(self.headers.get("X-Plex-Token")),
@@ -1151,8 +1152,23 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         query = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
         content_length = int(self.headers.get("Content-Length", "0") or "0")
+        raw_body = self.rfile.read(content_length)
+        if parsed.path == "/api/v2":
+            if self.headers.get_content_type() != "application/x-www-form-urlencoded":
+                self.write_json({"error": "virtual API requires form data"}, status=400)
+                return
+            body = {key: values[-1] for key, values in parse_qs(raw_body.decode("utf-8")).items()}
+            parameters = {**query, **body}
+            if "apikey" in parameters or not self.headers.get("X-Api-Key"):
+                self.write_json({"error": "virtual API requires a header-only credential"}, status=401)
+                return
+            # query records effective API arguments for the existing isolation
+            # assertions; request_target retains the actual short wire URI.
+            self.record_call("POST", parsed.path, parameters, body)
+            self.handle_request(parsed, parameters)
+            return
         try:
-            body = json.loads(self.rfile.read(content_length).decode("utf-8"))
+            body = json.loads(raw_body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             self.write_json({"error": "invalid JSON body"}, status=400)
             return
@@ -1193,6 +1209,10 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         query = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
         self.record_call("GET", parsed.path, query)
+
+        self.handle_request(parsed, query)
+
+    def handle_request(self, parsed, query: dict[str, str]) -> None:
 
         # All maintained requests use the header supported since Tautulli 2.18;
         # this covers binary API commands as well as ordinary JSON calls.
@@ -1591,8 +1611,28 @@ class Handler(BaseHTTPRequestHandler):
             user_id = query.get("user_id", "")
             if user_id and self.current_scenario() != "platform-tie":
                 rows = [row for row in rows if str(row.get("user_id", "")) == user_id]
+            if not historical_movie_query:
+                # Existing small started values describe stable ordering.
+                # Place these completed plays on the run date, then model
+                # upstream's inclusive after/before and local start_date SQL.
+                # This makes the old midnight cutoff lose real fixture plays.
+                midnight = int(time.mktime(time.strptime(time.strftime("%Y-%m-%d"), "%Y-%m-%d")))
+                rows = [{**row, "started": midnight + int(row.get("started", 0))} for row in rows]
+                if query.get("after"):
+                    lower = int(time.mktime(time.strptime(query["after"], "%Y-%m-%d")))
+                    rows = [row for row in rows if int(row["started"]) >= lower]
+                if query.get("before"):
+                    upper = int(time.mktime(time.strptime(query["before"], "%Y-%m-%d")))
+                    rows = [row for row in rows if int(row["started"]) <= upper]
+                if query.get("start_date"):
+                    dates = set(query["start_date"].split(","))
+                    rows = [row for row in rows if time.strftime("%Y-%m-%d", time.localtime(int(row["started"]))) in dates]
             start = int(query.get("start", "0"))
             length = int(query.get("length", "1000"))
+            # Official v2.18/v2.19 history projects user_id, but not section_id.
+            # Keep library identity in fixture storage for server-side queries;
+            # never invent it in the API response (which masked v0.28.0's loss).
+            rows = [{key: value for key, value in row.items() if key != "section_id"} for row in rows]
             self.api_success({"data": rows[start : start + length], "recordsFiltered": len(rows)})
             return
         if command == "get_recently_added":
@@ -1925,7 +1965,9 @@ def main() -> None:
     server.call_log = args.call_log  # type: ignore[attr-defined]
     server.base_url = f"http://127.0.0.1:{args.port}"  # type: ignore[attr-defined]
     args.call_log.write_text("", encoding="utf-8")
-    args.ready_file.write_text(server.base_url, encoding="utf-8")
+    ready_temporary = args.ready_file.with_name(args.ready_file.name + ".tmp")
+    ready_temporary.write_text(server.base_url, encoding="utf-8")
+    ready_temporary.replace(args.ready_file)
     server.serve_forever()
 
 

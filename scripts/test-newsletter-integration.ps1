@@ -265,7 +265,6 @@ foreach ($engine in $engines) {
                 FooterServerName = 'Virtual Plex'
                 PlexWebUrl = 'https://requests.example.test/'
                 PlexButtonLabel = 'View & Request <Now>'
-                ShowLetterboxdLinks = ($scenario -eq 'active')
                 IncludedLibraryIds = @('10', '20')
                 ExcludedUserIds = @()
                 ExcludedEmails = @()
@@ -449,6 +448,7 @@ foreach ($engine in $engines) {
                 Assert-True ([string]$historyCall.query.user_id -in $expectedHistoryUserIds) "$($engine.Name)/$scenario did not scope watched state to an eligible recipient."
                 Assert-True ([string]$historyCall.query.include_activity -eq '0') "$($engine.Name)/$scenario included active sessions in historical watched state."
                 Assert-True ($null -eq $historyCall.query.PSObject.Properties['after'] -and $null -eq $historyCall.query.PSObject.Properties['before']) "$($engine.Name)/$scenario limited watched state to the newsletter window."
+                Assert-True ($historyCall.method -eq 'GET' -and $null -eq $historyCall.query.PSObject.Properties['start_date']) "$($engine.Name)/$scenario changed unwindowed watched-state requests."
             }
 
             $indexPath = Join-Path $outputRoot 'preview-all-00-INDEX.html'
@@ -504,12 +504,6 @@ foreach ($engine in $engines) {
             $newWithHistoryHtml = Get-Content (Join-Path $outputRoot 'preview-all-03-new-user-with-history.html') -Raw -Encoding UTF8
             $warmupHtml = Get-Content (Join-Path $outputRoot 'preview-all-06-established-warmup.html') -Raw -Encoding UTF8
             $normalHtml = Get-Content $normalPath -Raw -Encoding UTF8
-            if ($scenario -eq 'active') {
-                Assert-True ($normalHtml.Contains('href="https://letterboxd.com/tmdb/1234567/"')) "$($engine.Name)/active omitted the optional movie identity link."
-            }
-            else {
-                Assert-True (-not $normalHtml.Contains('href="https://letterboxd.com/')) "$($engine.Name)/$scenario enabled optional movie links by default."
-            }
             $quietHtml = Get-Content (Join-Path $outputRoot 'preview-all-05-established-quiet.html') -Raw -Encoding UTF8
             $scenarioPreviewHtml = @($manualHtml, $newNoHistoryHtml, $newWithHistoryHtml, $normalHtml, $quietHtml, $warmupHtml)
             foreach ($stateHtml in $scenarioPreviewHtml) {
@@ -937,6 +931,15 @@ foreach ($engine in $engines) {
             }
 
             $calls = @(Get-Content $callLog | ForEach-Object { $_ | ConvertFrom-Json })
+            $weeklyHistoryCalls = @($calls | Where-Object {
+                [string]$_.path -eq '/api/v2' -and
+                $null -ne $_.query.PSObject.Properties['start_date']
+            })
+            Assert-True ($weeklyHistoryCalls.Count -gt 0) "$($engine.Name)/$scenario omitted the calendar-date history filter."
+            foreach ($weeklyCall in $weeklyHistoryCalls) {
+                Assert-True ($weeklyCall.method -eq 'POST' -and $weeklyCall.request_target -eq '/api/v2?cmd=get_history' -and $weeklyCall.has_api_key) "$($engine.Name)/$scenario did not use a short header-authenticated history POST."
+                Assert-True (@($weeklyCall.body.start_date.Split(',')).Count -eq 7) "$($engine.Name)/$scenario changed the inclusive seven-day history window."
+            }
             $lastPlatformCalls = @($calls | Where-Object {
                 $null -ne $_.query.PSObject.Properties['cmd'] -and
                 [string]$_.query.cmd -eq 'get_users_table'
@@ -1284,12 +1287,6 @@ foreach ($engine in $engines) {
                 Assert-True ('DATA' -in $smtpCommands) "$($engine.Name)/$scenario SendTest did not submit an SMTP message."
                 Assert-True (Test-Path $smtpDataFile) "$($engine.Name)/$scenario SendTest did not preserve the captured MIME message."
                 $emailThemeArgs = @($smtpDataFile)
-                if ($scenario -eq 'active') {
-                    # Windows PowerShell strips embedded literal quotes when
-                    # passing native argv. The preview assertion above checks
-                    # the full anchor; MIME checks the exact decoded URL.
-                    $emailThemeArgs += @('--require-html', 'https://letterboxd.com/tmdb/1234567/', '--require-plain', 'https://letterboxd.com/tmdb/1234567/')
-                }
                 $emailThemeArgs += @(
                     '--require-html', 'CUSTOM &lt;TITLE&gt;</span><img',
                     '--require-html', 'cid:custom_title_celebrate',

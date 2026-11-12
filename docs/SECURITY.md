@@ -249,9 +249,7 @@ before personalized output or delivery.
 Tautulli API credentials use `X-Api-Key` headers on the configured API origin,
 including artwork and binary exports. Authenticated redirects are refused rather
 than forwarding credentials. Image requests retain exact item identity and do
-not bypass Tautulli's external-image restrictions. Optional Letterboxd links use
-validated movie IMDb/TMDB identifiers already present in metadata and reveal no
-private server address, credential, or recipient activity in the URL.
+not bypass Tautulli's external-image restrictions.
 
 Scheduled weekly messages share only the Binge Champion's anonymous aggregate:
 total watch time, total plays, and nonzero unique movie and TV-show counts. When

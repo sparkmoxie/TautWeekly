@@ -1040,67 +1040,6 @@ function Get-CustomTextCardPlainText {
 }
 
 
-function Get-MovieLetterboxdHtml {
-    param([AllowNull()][object]$Item)
-    $url = Get-MovieLetterboxdUrl -Item $Item
-    if ([string]::IsNullOrWhiteSpace($url)) { return '' }
-    return '<a href="' + (HtmlEncode $url) + '" target="_blank" rel="noopener noreferrer" style="color:#e5a00d;text-decoration:underline;white-space:nowrap;">Letterboxd</a>'
-}
-
-function Get-MovieExternalGuids {
-    param([object]$Item, [AllowNull()][object]$Metadata)
-    if ($null -eq $Metadata -or
-        (Get-OptionalStringProperty -InputObject $Metadata -Name 'rating_key') -cne (Get-OptionalStringProperty -InputObject $Item -Name 'RatingKey') -or
-        (Get-OptionalStringProperty -InputObject $Metadata -Name 'media_type') -ne 'movie') { return @() }
-
-    $retainedGuid = Get-OptionalStringProperty -InputObject $Item -Name 'MetadataGuid'
-    $resolvedGuid = Get-OptionalStringProperty -InputObject $Metadata -Name 'guid'
-    if ($retainedGuid) {
-        # Plex can reuse a removed item's rating key. Its retained GUID must
-        # still match before attaching another provider's movie identity.
-        if ($retainedGuid -cne $resolvedGuid) { return @() }
-    }
-    else {
-        $title = Get-OptionalStringProperty -InputObject $Item -Name 'Title'
-        $year = Get-OptionalStringProperty -InputObject $Item -Name 'Year'
-        if (-not $title -or -not $year -or
-            $title.Trim() -ine (Get-OptionalStringProperty -InputObject $Metadata -Name 'title').Trim() -or
-            $year -ne (Get-OptionalStringProperty -InputObject $Metadata -Name 'year')) { return @() }
-    }
-    if ($null -ne $Metadata.PSObject.Properties['guids']) { return @($Metadata.guids) }
-    return @()
-}
-
-function Get-MovieLetterboxdUrl {
-    param([AllowNull()][object]$Item)
-
-    $configuration = Get-Variable -Name Config -ValueOnly -ErrorAction SilentlyContinue
-    if ($null -eq $Item -or $null -eq $configuration -or
-        $null -eq $configuration.PSObject.Properties['ShowLetterboxdLinks'] -or
-        -not [bool]$configuration.ShowLetterboxdLinks -or
-        (Get-OptionalStringProperty -InputObject $Item -Name 'Type') -ne 'movie') {
-        return ''
-    }
-
-    # Only identifiers already returned for this exact movie are accepted.
-    # Never trust a remote URL, construct title slugs, or request more metadata.
-    $identifiers = @((Get-OptionalStringProperty -InputObject $Item -Name 'MetadataGuid'))
-    if ($null -ne $Item.PSObject.Properties['ExternalGuids']) {
-        $identifiers += @($Item.ExternalGuids)
-    }
-    foreach ($identifier in $identifiers) {
-        if ([string]$identifier -match '^(?:com\.plexapp\.agents\.)?(?:themoviedb|tmdb)://([1-9][0-9]*)(?:\?[^\r\n]*)?$') {
-            return 'https://letterboxd.com/tmdb/' + $Matches[1] + '/'
-        }
-    }
-    foreach ($identifier in $identifiers) {
-        if ([string]$identifier -match '^(?:com\.plexapp\.agents\.)?imdb://(tt[0-9]+)(?:\?[^\r\n]*)?$') {
-            return 'https://letterboxd.com/imdb/' + $Matches[1] + '/'
-        }
-    }
-    return ''
-}
-
 function Initialize-TautWeeklyLibraryPolicy {
     . (Join-Path $ScriptRoot 'Library-Selection.ps1')
     $live = @(Invoke-TautulliApi -Command 'get_libraries')
@@ -1206,12 +1145,30 @@ function Build-TautulliUri {
 function Invoke-TautulliApi {
     param(
         [string]$Command,
-        [hashtable]$Parameters = @{}
+        [hashtable]$Parameters = @{},
+        [switch]$Post
     )
 
-    $uri = Build-TautulliUri -Command $Command -Parameters $Parameters
+    # Large calendar-date history filters belong in a form body. Keep the
+    # command on the validated API endpoint and credentials only in headers.
+    foreach ($key in $Parameters.Keys) {
+        if ([string]$key -ieq 'apikey') { throw 'Tautulli API keys must be sent in the request header.' }
+    }
+    $queryParameters = if ($Post) { @{} } else { $Parameters }
+    $request = @{
+        Uri = Build-TautulliUri -Command $Command -Parameters $queryParameters
+        Headers = @{ 'X-Api-Key' = [string]$Config.ApiKey }
+        MaximumRedirection = 0
+        Method = 'Get'
+        TimeoutSec = 60
+    }
+    if ($Post) {
+        $request.Method = 'Post'
+        $request.ContentType = 'application/x-www-form-urlencoded'
+        $request.Body = $Parameters
+    }
     try {
-        $raw = Invoke-RestMethod -Uri $uri -Headers @{ 'X-Api-Key' = [string]$Config.ApiKey } -MaximumRedirection 0 -Method Get -TimeoutSec 60
+        $raw = Invoke-RestMethod @request
     }
     catch {
         throw "Tautulli API request failed for '$Command'. Check the configured URL, API key, network access, and redirect settings."
@@ -1319,46 +1276,145 @@ function Get-History {
     $all = New-Object System.Collections.Generic.List[object]
     $pageSize = 1000
 
-    foreach ($sectionId in @(Get-IncludedLibraryQueryScopes)) {
-        $start = 0
-        while ($true) {
-            $params = @{
-                grouping         = 1
-                include_activity = 0
-                include_archived = 0
-                after            = $AfterDate
-                before           = $BeforeDate
-                start            = $start
-                length           = $pageSize
-            }
-            if (-not [string]::IsNullOrWhiteSpace($ForUserId)) {
-                $params.user_id = $ForUserId
-            }
-            if (-not [string]::IsNullOrWhiteSpace($sectionId)) {
-                $params.section_id = $sectionId
-            }
+    # Tautulli's before date is inclusive midnight, not the end of that day.
+    # Server calendar-date predicates run before grouping and respect its own
+    # timezone. Bound each list below SQLite's expression/parameter limits.
+    $firstDay = [DateTime]::ParseExact($AfterDate, 'yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+    $lastDay = [DateTime]::ParseExact($BeforeDate, 'yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+    $dayCount = ($lastDay - $firstDay).Days + 1
+    if ($dayCount -lt 1 -or $dayCount -gt 3650) {
+        throw 'The newsletter history window must contain 1 to 3650 calendar days.'
+    }
+    $mergeChunks = $dayCount -gt 365
+    $groups = @{}
 
-            $data = Invoke-TautulliApi -Command "get_history" -Parameters $params
-            $rows = @($data.data)
-
-            foreach ($row in $rows) {
-                # v2.19 deliberately retains archived history for explicit
-                # user/section scopes, even with include_archived=0.
-                if ((Safe-Int (Get-OptionalStringProperty -InputObject $row -Name 'user_is_archived')) -gt 0) { continue }
-                if ($ForUserId -ne '' -and (Get-OptionalStringProperty -InputObject $row -Name 'user_id') -ne $ForUserId) { continue }
-                if (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId) {
-                    $all.Add($row)
+    # get_history filters section_id server-side but omits it from returned
+    # rows (Tautulli 2.18/2.19). Use the frozen current library scopes so a
+    # missing field is backed by an explicit query, never an unscoped guess.
+    foreach ($sectionId in @(Get-IncludedLibraryQueryScopes -CurrentContent)) {
+        for ($chunkFirst = $firstDay; $chunkFirst -le $lastDay; $chunkFirst = $chunkLast.AddDays(1)) {
+            $chunkLast = $chunkFirst.AddDays(364)
+            if ($chunkLast -gt $lastDay) { $chunkLast = $lastDay }
+            $dates = New-Object 'System.Collections.Generic.List[string]'
+            for ($day = $chunkFirst; $day -le $chunkLast; $day = $day.AddDays(1)) {
+                $dates.Add($day.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture))
+            }
+            $startDates = $dates -join ','
+            $beforeExclusive = $chunkLast.AddDays(1).ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+            $start = 0
+            while ($true) {
+                $params = @{
+                    grouping         = 1
+                    include_activity = 0
+                    include_archived = 0
+                    after            = $chunkFirst.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+                    before           = $beforeExclusive
+                    start_date       = $startDates
+                    start            = $start
+                    length           = $pageSize
                 }
+                if (-not [string]::IsNullOrWhiteSpace($ForUserId)) {
+                    $params.user_id = $ForUserId
+                }
+                if (-not [string]::IsNullOrWhiteSpace($sectionId)) {
+                    $params.section_id = $sectionId
+                }
+
+                $data = Invoke-TautulliApi -Command "get_history" -Parameters $params -Post
+                $rows = @($data.data)
+
+                foreach ($row in $rows) {
+                    # v2.19 deliberately retains archived history for explicit
+                    # user/section scopes, even with include_archived=0.
+                    if ((Safe-Int (Get-OptionalStringProperty -InputObject $row -Name 'user_is_archived')) -gt 0) { continue }
+                    if ($ForUserId -ne '' -and (Get-OptionalStringProperty -InputObject $row -Name 'user_id') -ne $ForUserId) { continue }
+                    if (-not (Test-IncludedLibraryRow -Row $row -ExpectedSectionId $sectionId)) { continue }
+                    if (-not $mergeChunks) {
+                        $all.Add($row)
+                        continue
+                    }
+
+                    # Disjoint calendar chunks can split one resumed play.
+                    # Rejoin only proven upstream group identities, never a
+                    # title, rating key, display name, or guessed recipient.
+                    $referenceId = (Get-OptionalStringProperty -InputObject $row -Name 'reference_id').Trim()
+                    $rowUserId = (Get-OptionalStringProperty -InputObject $row -Name 'user_id').Trim()
+                    if ($sectionId -notmatch '^[1-9][0-9]*$' -or
+                        $referenceId -notmatch '^[1-9][0-9]*$' -or
+                        $rowUserId -notmatch '^(?:0|[1-9][0-9]*)$') {
+                        throw 'Tautulli history did not prove the grouped identity needed for this extended calendar window.'
+                    }
+                    $numbers = @{}
+                    foreach ($field in @('duration', 'play_duration', 'paused_counter', 'group_count', 'started', 'stopped', 'date', 'percent_complete')) {
+                        $value = [int64]0
+                        if (-not [int64]::TryParse((Get-OptionalStringProperty -InputObject $row -Name $field), [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$value)) {
+                            throw 'Tautulli history contained an invalid grouped value for this extended calendar window.'
+                        }
+                        $numbers[$field] = $value
+                    }
+                    $watchedStatus = [decimal]0
+                    if (-not [decimal]::TryParse((Get-OptionalStringProperty -InputObject $row -Name 'watched_status'), [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$watchedStatus)) {
+                        throw 'Tautulli history contained an invalid watched value for this extended calendar window.'
+                    }
+                    $groupIds = (Get-OptionalStringProperty -InputObject $row -Name 'group_ids').Split(',')
+                    foreach ($groupId in $groupIds) {
+                        if ($groupId -notmatch '^[1-9][0-9]*$') {
+                            throw 'Tautulli history did not prove its grouped row IDs for this extended calendar window.'
+                        }
+                    }
+                    $groupKey = $sectionId + '/' + $rowUserId + '/' + $referenceId
+                    if (-not $groups.ContainsKey($groupKey)) {
+                        $groups[$groupKey] = [PSCustomObject]@{
+                            Scope = $sectionId
+                            ReferenceId = $referenceId
+                            Row = $row.PSObject.Copy()
+                            Numbers = $numbers
+                            WatchedStatus = $watchedStatus
+                            GroupIds = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+                        }
+                    }
+                    else {
+                        $group = $groups[$groupKey]
+                        if ($numbers.date -gt $group.Numbers.date) { $group.Row = $row.PSObject.Copy() }
+                        foreach ($field in @('duration', 'play_duration', 'paused_counter', 'group_count')) {
+                            $sum = [decimal]$group.Numbers[$field] + [decimal]$numbers[$field]
+                            if ($sum -gt [int64]::MaxValue -or $sum -lt [int64]::MinValue) {
+                                throw 'Tautulli history exceeded supported grouped totals for this extended calendar window.'
+                            }
+                            $group.Numbers[$field] = [int64]$sum
+                        }
+                        $group.Numbers.started = [Math]::Min([int64]$group.Numbers.started, [int64]$numbers.started)
+                        foreach ($field in @('stopped', 'date', 'percent_complete')) {
+                            $group.Numbers[$field] = [Math]::Max([int64]$group.Numbers[$field], [int64]$numbers[$field])
+                        }
+                        $group.WatchedStatus = [Math]::Max([decimal]$group.WatchedStatus, $watchedStatus)
+                    }
+                    foreach ($groupId in $groupIds) {
+                        if (-not $groups[$groupKey].GroupIds.Add($groupId)) {
+                            throw 'Tautulli history repeated a grouped row across disjoint calendar chunks.'
+                        }
+                    }
+                }
+
+                if ($rows.Count -lt $pageSize) { break }
+                $start += $rows.Count
+                $total = Safe-Int $data.recordsFiltered
+                if ($total -gt 0 -and $start -ge $total) { break }
             }
-
-            if ($rows.Count -lt $pageSize) { break }
-
-            $start += $rows.Count
-            $total = Safe-Int $data.recordsFiltered
-            if ($total -gt 0 -and $start -ge $total) { break }
         }
     }
 
+    if ($mergeChunks) {
+        foreach ($group in @($groups.Values | Sort-Object Scope, @{ Expression = { $_.Numbers.date }; Descending = $true }, ReferenceId)) {
+            foreach ($field in $group.Numbers.Keys) {
+                $group.Row | Add-Member -NotePropertyName $field -NotePropertyValue $group.Numbers[$field] -Force
+            }
+            $group.Row | Add-Member -NotePropertyName 'watched_status' -NotePropertyValue $group.WatchedStatus -Force
+            $ids = @($group.GroupIds | Sort-Object @{ Expression = { ([string]$_).Length } }, @{ Expression = { [string]$_ } }) -join ','
+            $group.Row | Add-Member -NotePropertyName 'group_ids' -NotePropertyValue $ids -Force
+            $all.Add($group.Row)
+        }
+    }
     return $all.ToArray()
 }
 
@@ -5804,10 +5860,6 @@ function Add-DesignRatingMetadata {
                 -not [string]::IsNullOrWhiteSpace($metadataTitle)
             )
 
-            if ($mediaType -eq 'movie') {
-                $item | Add-Member -NotePropertyName 'ExternalGuids' -NotePropertyValue @(Get-MovieExternalGuids -Item $item -Metadata $meta) -Force
-            }
-
             $ratingImage = Get-OptionalStringProperty -InputObject $meta -Name "rating_image"
             $audienceImage = Get-OptionalStringProperty -InputObject $meta -Name "audience_rating_image"
             $ratingValue = Get-OptionalStringProperty -InputObject $meta -Name "rating"
@@ -6424,8 +6476,6 @@ function Get-DesignRatingLine {
         )
     }
 
-    $letterboxd = Get-MovieLetterboxdHtml -Item $Item
-    if ($letterboxd) { $pieces.Add($letterboxd) }
     return ($pieces -join '<span style="display:inline-block;width:7px;"></span>')
 }
 
@@ -7703,8 +7753,6 @@ function Get-StatsMovieRatingHtml {
         )
     }
 
-    $letterboxd = Get-MovieLetterboxdHtml -Item $Item
-    if ($letterboxd) { $pieces.Add($letterboxd) }
     if ($pieces.Count -eq 0) {
         return ""
     }
@@ -9281,23 +9329,6 @@ function Build-PlainText {
         $heroLabel = if ($plainTrendingHero) { "TRENDING THIS WEEK" } else { "HOT NEW RELEASE" }
         $heroWatchedSuffix = Get-RecipientWatchedPlainTextSuffix -Item $HotRelease.Item -RecipientWatchedMovies $RecipientWatchedMovies
         $heroLine = "`r`n${heroLabel}: $($HotRelease.Item.Title)$heroWatchedSuffix"
-    }
-
-    $movieLinkLines = @(
-        $movieLinkItems = @($ReleaseData.Movies)
-        if ($null -ne $HotRelease -and $null -ne $HotRelease.Item) { $movieLinkItems += $HotRelease.Item }
-        if ($null -ne $Stats.PSObject.Properties['MovieItems']) { $movieLinkItems += @($Stats.MovieItems) }
-        $seenMovieLinks = @{}
-        foreach ($movieLinkItem in $movieLinkItems) {
-            $movieLinkUrl = Get-MovieLetterboxdUrl -Item $movieLinkItem
-            if ($movieLinkUrl -and -not $seenMovieLinks.ContainsKey($movieLinkUrl)) {
-                $seenMovieLinks[$movieLinkUrl] = $true
-                '- ' + [string]$movieLinkItem.Title + ': ' + $movieLinkUrl
-            }
-        }
-    )
-    if ($movieLinkLines.Count -gt 0) {
-        $heroLine += "`r`n`r`nLETTERBOXD`r`n" + ($movieLinkLines -join "`r`n")
     }
 
     $footerFeature = ""

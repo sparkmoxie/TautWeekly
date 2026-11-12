@@ -42,7 +42,7 @@ try {
             $script:Warnings = New-Object System.Collections.Generic.List[string]
             function Write-Log { param($Message, $Level) $script:Warnings.Add([string]$Message) }
             function Invoke-RestMethod {
-                param($Uri, $Headers, $MaximumRedirection, $Method, $TimeoutSec)
+                param($Uri, $Headers, $MaximumRedirection, $Method, $TimeoutSec, $Body, $ContentType)
                 Assert-True ($Uri -notmatch 'apikey=' -and -not $Uri.Contains($Config.ApiKey)) 'API key leaked into JSON URL'
                 Assert-True ($Headers['X-Api-Key'] -ceq $Config.ApiKey -and $Headers.Count -eq 1) 'JSON header missing or too broadly scoped'
                 Assert-True ($MaximumRedirection -eq 0) 'JSON request followed redirects'
@@ -69,6 +69,9 @@ try {
             $rejected = $false
             try { Build-TautulliUri -Command 'get_users' -Parameters @{ apikey = 'unwanted' } | Out-Null } catch { $rejected = $true }
             Assert-True $rejected 'Caller could add an API-key query parameter'
+            $rejected = $false
+            try { Invoke-TautulliApi -Command 'get_history' -Parameters @{ ApiKey = 'unwanted' } -Post | Out-Null } catch { $rejected = $true }
+            Assert-True $rejected 'Caller could add an API-key form parameter'
             function Invoke-WebRequest {
                 param($Uri, $Headers, $MaximumRedirection, $OutFile, $TimeoutSec)
                 Assert-True ($Uri.StartsWith($TautulliBase + '/api/v2?')) 'Artwork fetched outside configured Tautulli API'
@@ -114,8 +117,14 @@ try {
         $target = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0)
         $source.Start(); $target.Start()
         $sourceCount = 0; $targetCount = 0; $sourceHeaderCount = 0; $queryKeyCount = 0
+        $postCount = 0; $bodySecretCount = 0
         try {
-            @{ sourcePort = $source.LocalEndpoint.Port; targetPort = $target.LocalEndpoint.Port } | ConvertTo-Json | Set-Content -LiteralPath $readyPath
+            # Publish readiness only after the full JSON is closed. A reader
+            # can otherwise observe Set-Content's newly created empty file.
+            $readyJson = @{ sourcePort = $source.LocalEndpoint.Port; targetPort = $target.LocalEndpoint.Port } | ConvertTo-Json -Compress
+            $readyTemporary = $readyPath + '.tmp'
+            [IO.File]::WriteAllText($readyTemporary, $readyJson, (New-Object Text.UTF8Encoding($false)))
+            [IO.File]::Move($readyTemporary, $readyPath)
             $watch = [Diagnostics.Stopwatch]::StartNew()
             $doneAt = -1L
             while ($watch.ElapsedMilliseconds -lt 10000) {
@@ -125,15 +134,30 @@ try {
                     try {
                         $stream = $client.GetStream(); $stream.ReadTimeout = 2000
                         $reader = New-Object IO.StreamReader($stream)
-                        $line = $reader.ReadLine(); $hasKey = $false
+                        $line = $reader.ReadLine(); $hasKey = $false; $contentLength = 0
+                        $isPost = $line.StartsWith('POST ')
                         if ($line -match '(?i)apikey=') { $queryKeyCount++ }
                         while ($null -ne ($line = $reader.ReadLine()) -and $line.Length -gt 0) {
                             if ($line -match '(?i)^X-Api-Key:') { $hasKey = $true }
+                            if ($line -match '(?i)^Content-Length: (\d+)') { $contentLength = [int]$Matches[1] }
+                        }
+                        if ($isPost) {
+                            $postCount++
+                            $buffer = New-Object char[] $contentLength
+                            $read = 0
+                            while ($read -lt $contentLength) {
+                                $count = $reader.Read($buffer, $read, $contentLength - $read)
+                                if ($count -le 0) { break }
+                                $read += $count
+                            }
+                            $bodyText = -join $buffer
+                            if ($bodyText -match '(?i)apikey=' -or $bodyText.Contains('synthetic-real-redirect-header')) { $bodySecretCount++ }
                         }
                         if ($entry.source) {
                             $sourceCount++
                             if ($hasKey) { $sourceHeaderCount++ }
-                            $reply = "HTTP/1.1 302 Found`r`nLocation: http://127.0.0.1:$($target.LocalEndpoint.Port)/api/v2?cmd=get_users`r`nContent-Length: 0`r`nConnection: close`r`n`r`n"
+                            $status = if ($sourceCount -eq 4) { '307 Temporary Redirect' } else { '302 Found' }
+                            $reply = "HTTP/1.1 $status`r`nLocation: http://127.0.0.1:$($target.LocalEndpoint.Port)/api/v2?cmd=get_users`r`nContent-Length: 0`r`nConnection: close`r`n`r`n"
                         }
                         else {
                             $targetCount++
@@ -145,11 +169,11 @@ try {
                     }
                     finally { $client.Close() }
                 }
-                if ($sourceCount -ge 2 -and $doneAt -lt 0) { $doneAt = $watch.ElapsedMilliseconds + 300 }
+                if ($sourceCount -ge 4 -and $doneAt -lt 0) { $doneAt = $watch.ElapsedMilliseconds + 300 }
                 if ($doneAt -ge 0 -and $watch.ElapsedMilliseconds -ge $doneAt) { break }
                 Start-Sleep -Milliseconds 10
             }
-            [PSCustomObject]@{sourceCount=$sourceCount;targetCount=$targetCount;sourceHeaderCount=$sourceHeaderCount;queryKeyCount=$queryKeyCount}
+            [PSCustomObject]@{sourceCount=$sourceCount;targetCount=$targetCount;sourceHeaderCount=$sourceHeaderCount;queryKeyCount=$queryKeyCount;postCount=$postCount;bodySecretCount=$bodySecretCount}
         }
         finally { $source.Stop(); $target.Stop() }
     }
@@ -169,11 +193,16 @@ try {
         try { Invoke-TautulliApi -Command 'get_users' | Out-Null } catch { $refused = $true }
         Assert-True $refused 'JSON request accepted an HTTP redirect'
         Assert-True (-not (Get-DesignPmsImage -RatingKey '123' -OutputName 'redirect.jpg')) 'Binary request accepted an HTTP redirect'
+        foreach ($code in @(302, 307)) {
+            $refused = $false
+            try { Invoke-TautulliApi -Command 'get_history' -Parameters @{ start_date='2026-11-11'; section_id='10' } -Post | Out-Null } catch { $refused = $true }
+            Assert-True $refused "History POST accepted an HTTP $code redirect"
+        }
         [void](Wait-Job -Job $redirectJob -Timeout 15)
         Assert-True ($redirectJob.State -eq 'Completed') 'Redirect fixture did not finish'
         $observed = Receive-Job -Job $redirectJob
-        Assert-True ($observed.sourceCount -eq 2 -and $observed.sourceHeaderCount -eq 2 -and $observed.targetCount -eq 0 -and $observed.queryKeyCount -eq 0) ("Redirect scope failed: requests={0}, headers={1}, redirected={2}, query-keys={3}" -f $observed.sourceCount, $observed.sourceHeaderCount, $observed.targetCount, $observed.queryKeyCount)
-        Write-Host '[PASS] Real JSON and binary HTTP redirects refuse credential forwarding.'
+        Assert-True ($observed.sourceCount -eq 4 -and $observed.sourceHeaderCount -eq 4 -and $observed.targetCount -eq 0 -and $observed.queryKeyCount -eq 0 -and $observed.postCount -eq 2 -and $observed.bodySecretCount -eq 0) ("Redirect scope failed: requests={0}, headers={1}, redirected={2}, query-keys={3}, posts={4}, body-secrets={5}" -f $observed.sourceCount, $observed.sourceHeaderCount, $observed.targetCount, $observed.queryKeyCount, $observed.postCount, $observed.bodySecretCount)
+        Write-Host '[PASS] Real JSON/binary and history POST 302/307 redirects refuse credential/body forwarding.'
     }
     finally {
         Stop-Job -Job $redirectJob -ErrorAction SilentlyContinue

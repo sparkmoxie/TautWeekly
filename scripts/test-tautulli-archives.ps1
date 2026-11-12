@@ -84,6 +84,7 @@ foreach ($relative in @('platforms/windows', 'platforms/nas-docker/app', 'platfo
     $script:LibraryFilterEnabled = $true
     $script:Calls = New-Object 'System.Collections.Generic.List[object]'
     $script:FailLibraryNames = $false
+    $script:UpstreamHistoryShape = $false
     $script:HistoryRows = @(
         [PSCustomObject]@{section_id='10'; user_id='2'; rating_key='active'; media_type='movie'; user_is_archived=0; library_is_archived=0; watched_status=1; percent_complete=100; guid=''; added_at=100},
         [PSCustomObject]@{section_id='10'; user_id='3'; rating_key='archived-user'; media_type='movie'; user_is_archived=1; library_is_archived=0; watched_status=1; percent_complete=100; guid=''; added_at=100},
@@ -97,8 +98,22 @@ foreach ($relative in @('platforms/windows', 'platforms/nas-docker/app', 'platfo
             'get_libraries' { return $script:LiveLibraries }
             'get_library_names' { if ($script:FailLibraryNames) { throw 'DB discovery failed' }; return $script:KnownLibraries }
             'get_history' {
-                $page = @($script:HistoryRows | Select-Object -Skip ([int]$Parameters.start) -First ([int]$Parameters.length))
-                return [PSCustomObject]@{ data=$page; recordsFiltered=$script:HistoryRows.Count }
+                $rows = @($script:HistoryRows)
+                if ($script:UpstreamHistoryShape) {
+                    # Tautulli v2.18/v2.19 filters by the requested section in
+                    # SQL, but does not project section_id into history rows.
+                    # https://github.com/Tautulli/Tautulli/blob/v2.18.0/plexpy/datafactory.py#L328-L372
+                    # https://github.com/Tautulli/Tautulli/blob/v2.19.0/plexpy/datafactory.py#L575-L620
+                    if ($Parameters.ContainsKey('section_id')) {
+                        $rows = @($rows | Where-Object { [string]$_.section_id -eq [string]$Parameters.section_id })
+                    }
+                    if ($Parameters.ContainsKey('user_id')) {
+                        $rows = @($rows | Where-Object { [string]$_.user_id -eq [string]$Parameters.user_id })
+                    }
+                    $rows = @($rows | Select-Object -Property * -ExcludeProperty section_id)
+                }
+                $page = @($rows | Select-Object -Skip ([int]$Parameters.start) -First ([int]$Parameters.length))
+                return [PSCustomObject]@{ data=$page; recordsFiltered=$rows.Count }
             }
             'get_recently_added' { return [PSCustomObject]@{ recently_added=$script:HistoryRows } }
             default { throw "Unexpected fixture command $Command" }
@@ -151,6 +166,41 @@ foreach ($relative in @('platforms/windows', 'platforms/nas-docker/app', 'platfo
     Initialize-TautWeeklyLibraryPolicy
     Assert-True ((@(Get-IncludedLibraryQueryScopes) -join ',') -eq '20') "$relative library unarchive did not restore the saved selection"
 
+    # Exercise the actual upstream history shape with no saved library filter.
+    # v0.28.0 queried globally, then discarded every row for missing section_id.
+    $script:LibraryFilterEnabled = $false
+    $script:KnownLibraries[1].is_archived = 1
+    Initialize-TautWeeklyLibraryPolicy
+    $script:UpstreamHistoryShape = $true
+    $script:Calls.Clear()
+    $weekly = @(Get-History -AfterDate '2026-11-05' -BeforeDate '2026-11-11')
+    Assert-True (($weekly | ForEach-Object rating_key | Sort-Object) -join ',' -eq 'active,unselected') "$relative upstream-shaped unfiltered history lost current activity"
+    Assert-True (@($weekly | Where-Object { $null -ne $_.PSObject.Properties['section_id'] }).Count -eq 0) "$relative fixture invented section_id in the upstream response"
+    Assert-True (-not (Test-IncludedLibraryRow -Row $weekly[0])) "$relative missing unscoped library evidence was accepted"
+    $weeklyCalls = @($script:Calls | Where-Object Command -eq 'get_history')
+    Assert-True (($weeklyCalls.Parameters.section_id | Sort-Object) -join ',' -eq '10,30') "$relative weekly history did not use frozen available sections"
+    foreach ($call in $weeklyCalls) {
+        Assert-True ($call.Parameters.after -eq '2026-11-05' -and $call.Parameters.before -eq '2026-11-12' -and $call.Parameters.start_date -eq '2026-11-05,2026-11-06,2026-11-07,2026-11-08,2026-11-09,2026-11-10,2026-11-11' -and $call.Parameters.include_activity -eq 0 -and $call.Parameters.include_archived -eq 0) "$relative weekly query lost reporting or archive boundaries"
+    }
+    $personal = @(Get-History -AfterDate '2026-11-05' -BeforeDate '2026-11-11' -ForUserId '2')
+    Assert-True ($personal.Count -eq 2) "$relative exact-recipient upstream-shaped history lost activity"
+    $script:LibraryFilterEnabled = $true
+    $script:IncludedLibraryIdSet.Clear()
+    [void]$script:IncludedLibraryIdSet.Add('10')
+    [void]$script:IncludedLibraryIdSet.Add('20')
+    $selected = @(Get-History -AfterDate '2026-11-05' -BeforeDate '2026-11-11' -ForUserId '2')
+    Assert-True ($selected.Count -eq 1 -and $selected[0].rating_key -eq 'active') "$relative missing row section metadata broadened saved selections"
+    $modernRows = $script:HistoryRows
+    $script:HistoryRows = @(
+        [PSCustomObject]@{ section_id=10; user_id=2; rating_key='legacy-active' },
+        [PSCustomObject]@{ section_id=10; user_id=3; rating_key='other-recipient' },
+        [PSCustomObject]@{ section_id=20; user_id=2; rating_key='legacy-archived-library' },
+        [PSCustomObject]@{ section_id=30; user_id=2; rating_key='legacy-unselected' }
+    )
+    $legacyHistory = @(Get-History -AfterDate '2026-11-05' -BeforeDate '2026-11-11' -ForUserId '2')
+    Assert-True ($legacyHistory.Count -eq 1 -and $legacyHistory[0].rating_key -eq 'legacy-active') "$relative v2.18 history without archive fields lost numeric identity or library/recipient boundaries"
+    $script:HistoryRows = $modernRows
+
     # Keep the established page size and prove pagination is complete. Timings
     # are synthetic evidence only, never a claim about a user's database.
     $script:LibraryFilterEnabled = $false
@@ -159,8 +209,9 @@ foreach ($relative in @('platforms/windows', 'platforms/nas-docker/app', 'platfo
     $timer = [Diagnostics.Stopwatch]::StartNew()
     $paged = @(Get-History -AfterDate '2026-11-01' -BeforeDate '2026-11-07')
     $timer.Stop()
-    Assert-True ($paged.Count -eq 2105 -and $script:Calls.Count -eq 3) "$relative changed page size or truncated history"
-    Write-Host ("[PASS] {0}: archive/unarchive, stale recipient, explicit scope exceptions, saved IDs, old-server fields; synthetic history 2105 rows / 3 requests / {1} ms." -f $relative, $timer.ElapsedMilliseconds)
+    Assert-True ($paged.Count -eq 2105 -and $script:Calls.Count -eq 4) "$relative changed page size, omitted a current section, or truncated history"
+    Assert-True ((@($script:Calls | Where-Object { $_.Parameters.section_id -eq '10' } | ForEach-Object { $_.Parameters.start }) -join ',') -eq '0,1000,2000') "$relative pagination offsets changed"
+    Write-Host ("[PASS] {0}: archive/unarchive, stale recipient, upstream history shape, exact scopes, saved IDs; synthetic history 2105 rows / 4 scoped requests / {1} ms." -f $relative, $timer.ElapsedMilliseconds)
     Remove-Variable -Name AvailableLibraryIdSet -Scope Script -ErrorAction SilentlyContinue
     Remove-Variable -Name TautWeeklyCurrentLibraryTypes -Scope Script -ErrorAction SilentlyContinue
 }
