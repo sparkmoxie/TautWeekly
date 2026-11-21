@@ -69,52 +69,153 @@ function Get-TautWeeklySelectableLibraries {
         [Parameter(Mandatory = $true)][string]$ApiKey
     )
 
-    $rawLibraries = @(Invoke-TautWeeklyLibraryApi -TautulliUrl $TautulliUrl -ApiKey $ApiKey -Command 'get_libraries')
-    # get_libraries comes from Plex and does not carry Tautulli's archive state.
-    # Include archived names for editing, then join by section ID, never name.
-    $knownLibraries = @(Invoke-TautWeeklyLibraryApi -TautulliUrl $TautulliUrl -ApiKey $ApiKey -Command 'get_library_names' -Parameters @{ include_archived = 1 })
-    return @(ConvertTo-TautWeeklySelectableLibraries -LiveLibraries $rawLibraries -KnownLibraries $knownLibraries)
+    Get-TautWeeklyLibraryRoster -Query {
+        param($Command, $Parameters)
+        Invoke-TautWeeklyLibraryApi -TautulliUrl $TautulliUrl -ApiKey $ApiKey -Command $Command -Parameters $Parameters
+    }
+}
+
+function Group-TautWeeklyLibraryRows {
+    param([AllowEmptyCollection()][object[]]$Rows)
+
+    $byId = @{}
+    foreach ($row in $Rows) {
+        $id = ([string](Get-TautWeeklyLibraryObjectValue $row 'section_id')).Trim()
+        if ($id -eq '') { continue }
+        if (-not $byId.ContainsKey($id)) { $byId[$id] = [Collections.Generic.List[object]]::new() }
+        $byId[$id].Add($row)
+    }
+    return $byId
+}
+
+function Get-TautWeeklyLibraryRoster {
+    param([scriptblock]$Query, [object[]]$FrozenLibraries)
+
+    $live = if ($PSBoundParameters.ContainsKey('FrozenLibraries')) { $FrozenLibraries } else { & $Query 'get_libraries' @{} }
+    $known = @(& $Query 'get_library_names' @{ include_archived = 1 })
+    ConvertTo-TautWeeklySelectableLibraries -LiveLibraries @($live) -KnownLibraries $known -Query $Query
+}
+
+function Resolve-TautWeeklyTableLibrary {
+    param($Details, $Names, [string]$ServerId, [bool]$ArchiveCapable)
+
+    $active = $null
+    $nonDeleted = 0
+    foreach ($row in $Details) {
+        $isActive = [string](Get-TautWeeklyLibraryObjectValue $row 'is_active')
+        $deleted = [string](Get-TautWeeklyLibraryObjectValue $row 'deleted_section')
+        $archived = [string](Get-TautWeeklyLibraryObjectValue $row 'is_archived')
+        if ($isActive -notin @('0','1','false','true')) { return }
+        # Before 2.19 the table excludes deleted rows and has no archive flag.
+        if ($ArchiveCapable -and ($deleted -notin @('0','1','false','true') -or $archived -notin @('0','1','false','true'))) { return }
+        if ($deleted -notin @('1','true')) { $nonDeleted++ }
+        if ($isActive -in @('1','true')) {
+            if ($null -ne $active) { return }
+            $active = $row
+        }
+    }
+    if ($null -eq $active) { return }
+    if ($null -ne $Names -and $nonDeleted -lt $Names.Count) { return }
+    if ($ServerId -ceq '' -or $ServerId -cne [string](Get-TautWeeklyLibraryObjectValue $active 'server_id')) { return }
+
+    if ([string](Get-TautWeeklyLibraryObjectValue $active 'deleted_section') -in @('1','true')) { return $active }
+
+    # Other servers can have different types or archive settings under this ID.
+    $type = [string](Get-TautWeeklyLibraryObjectValue $active 'section_type')
+    $archived = [string](Get-TautWeeklyLibraryObjectValue $active 'is_archived' '0')
+    foreach ($name in $Names) {
+        $nameArchive = [string](Get-TautWeeklyLibraryObjectValue $name 'is_archived')
+        if ($ArchiveCapable -and $nameArchive -notin @('1','0','true','false')) { continue }
+        if ([string](Get-TautWeeklyLibraryObjectValue $name 'section_type') -eq $type -and
+            (($archived -in @('1','true')) -eq ($nameArchive -in @('1','true')))) { return $active }
+    }
 }
 
 function ConvertTo-TautWeeklySelectableLibraries {
-    param([AllowEmptyCollection()][object[]]$LiveLibraries, [AllowEmptyCollection()][object[]]$KnownLibraries)
+    param([AllowEmptyCollection()][object[]]$LiveLibraries, [AllowEmptyCollection()][object[]]$KnownLibraries, [scriptblock]$Query)
 
-    $liveById = @{}
-    $knownById = @{}
+    $liveById = Group-TautWeeklyLibraryRows $LiveLibraries
+    $knownById = Group-TautWeeklyLibraryRows $KnownLibraries
+    $archiveCapable = $false
+    foreach ($name in $KnownLibraries) {
+        if ($null -ne $name -and $null -ne $name.PSObject.Properties['is_archived']) { $archiveCapable = $true; break }
+    }
+    $useTable = $archiveCapable
     foreach ($library in $LiveLibraries) {
-        $id = ([string](Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'section_id' -Default '')).Trim()
-        if ($id -ne '') { $liveById[$id] = $library }
+        if ($null -eq $library) { continue }
+        if (Get-TautWeeklyLibraryObjectValue $library 'archive_capable' $false) { $archiveCapable = $true }
+        $id = ([string](Get-TautWeeklyLibraryObjectValue $library 'section_id')).Trim()
+        if (($knownById.ContainsKey($id) -and $knownById[$id].Count -gt 1) -or
+            (Get-TautWeeklyLibraryObjectValue $library 'server_id')) { $useTable = $true }
     }
-    foreach ($library in $KnownLibraries) {
-        $id = ([string](Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'section_id' -Default '')).Trim()
-        if ($id -ne '') { $knownById[$id] = $library }
-    }
-    $libraries = New-Object System.Collections.Generic.List[object]
 
+    $detailsById = @{}
+    $serverId = ''
+    if ($useTable -and $null -ne $Query) {
+        try {
+            # Even a singleton name can be stale: names omit deleted rows.
+            $table = & $Query 'get_libraries_table' @{ include_archived = 1; include_deleted = 1; start = 0; length = -1 }
+            if ($null -eq $table -or $null -eq $table.PSObject.Properties['data'] -or $table.data -isnot [array]) {
+                throw 'Missing library table.'
+            }
+            foreach ($row in $table.data) {
+                if ($null -ne $row -and $null -ne $row.PSObject.Properties['is_archived']) { $archiveCapable = $true; break }
+            }
+            [int]$count = 0
+            [int]$total = 0
+            if (-not [int]::TryParse([string](Get-TautWeeklyLibraryObjectValue $table 'recordsFiltered'), [ref]$count) -or
+                -not [int]::TryParse([string](Get-TautWeeklyLibraryObjectValue $table 'recordsTotal'), [ref]$total) -or
+                $count -ne $table.data.Count -or $total -lt $count -or ($archiveCapable -and $total -ne $count)) {
+                throw 'Incomplete library table.'
+            }
+            $identity = & $Query 'get_server_identity' @{}
+            $serverId = ([string](Get-TautWeeklyLibraryObjectValue $identity 'machine_identifier')).Trim()
+            $detailsById = Group-TautWeeklyLibraryRows $table.data
+        }
+        catch {
+            if ($archiveCapable) { throw 'Could not verify the complete archive-aware Tautulli library table and current Plex server identity.' }
+            # Older servers may lack detailed evidence. Their uniquely named
+            # sections remain usable; ambiguous IDs stay unavailable.
+        }
+    }
+
+    $libraries = [Collections.Generic.List[object]]::new()
     foreach ($sectionId in @(@($liveById.Keys) + @($knownById.Keys) | Sort-Object -Unique)) {
-        $library = if ($liveById.ContainsKey($sectionId)) { $liveById[$sectionId] } else { $knownById[$sectionId] }
-        $known = $knownById[$sectionId]
-        $sectionType = ([string](Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'section_type' -Default '')).ToLowerInvariant()
-        $isActiveValue = Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'is_active' -Default 1
-        [int]$isActive = 1
-        [void][int]::TryParse([string]$isActiveValue, [ref]$isActive)
-        $archived = ([int](Get-TautWeeklyLibraryObjectValue -InputObject $known -Name 'is_archived' -Default 0) -gt 0)
-        $deleted = ([int](Get-TautWeeklyLibraryObjectValue -InputObject $known -Name 'deleted_section' -Default 0) -gt 0)
-        $active = ($liveById.ContainsKey($sectionId) -and $knownById.ContainsKey($sectionId) -and $isActive -gt 0 -and -not $deleted)
-        $selectable = ($active -and -not $archived -and $sectionType -in @('movie','show'))
+        $live = if ($liveById.ContainsKey($sectionId) -and $liveById[$sectionId].Count -eq 1) { $liveById[$sectionId][0] }
+        $names = $knownById[$sectionId]
+        $name = if ($null -ne $names -and $names.Count -eq 1) { $names[0] }
+        $library = if ($null -ne $live) { $live } else { $name }
+        $type = ([string](Get-TautWeeklyLibraryObjectValue $library 'section_type')).ToLowerInvariant()
+        $expectedServer = [string](Get-TautWeeklyLibraryObjectValue $live 'server_id')
+        $needsDetails = ($archiveCapable -or $expectedServer -ne '' -or ($null -ne $names -and $names.Count -gt 1))
+        # Preserve the archive label for an inactive, DB-only singleton. It
+        # has no live counterpart and can never become selectable.
+        $known = if (-not $liveById.ContainsKey($sectionId) -and $null -ne $name -and
+            $detailsById.ContainsKey($sectionId) -and $detailsById[$sectionId].Count -eq 1) {
+            $detailsById[$sectionId][0]
+        } elseif ($needsDetails) {
+            Resolve-TautWeeklyTableLibrary -Details $detailsById[$sectionId] -Names $names -ServerId $serverId -ArchiveCapable $archiveCapable
+        } else { $name }
+        $archived = [string](Get-TautWeeklyLibraryObjectValue $known 'is_archived' '0') -notin @('0','false')
+        $deleted = [string](Get-TautWeeklyLibraryObjectValue $known 'deleted_section' '0') -notin @('0','false')
+        $active = ($null -ne $live -and $null -ne $known -and -not $deleted -and
+            [string](Get-TautWeeklyLibraryObjectValue $live 'is_active' '1') -in @('1','true') -and
+            $type -eq [string](Get-TautWeeklyLibraryObjectValue $known 'section_type') -and
+            ($expectedServer -eq '' -or $expectedServer -ceq $serverId))
 
         $libraries.Add([PSCustomObject]@{
-            SectionId = $sectionId.Trim()
-            Name = [string](Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'section_name' -Default "Library $sectionId")
-            Type = $sectionType
-            ItemCount = [string](Get-TautWeeklyLibraryObjectValue -InputObject $library -Name 'count' -Default '')
+            SectionId = [string]$sectionId
+            Name = [string](Get-TautWeeklyLibraryObjectValue $library 'section_name' "Library $sectionId")
+            Type = $type
+            ItemCount = [string](Get-TautWeeklyLibraryObjectValue $library 'count' '')
             IsActive = $active
             IsArchived = $archived
             DeletedSection = $deleted
-            Selectable = $selectable
+            Selectable = ($active -and -not $archived -and $type -in @('movie','show'))
+            ServerId = if ($needsDetails) { $serverId } else { '' }
+            ArchiveCapable = $archiveCapable
         })
     }
-
     return @($libraries | Sort-Object @{ Expression = { -not $_.Selectable } }, Type, Name, SectionId)
 }
 

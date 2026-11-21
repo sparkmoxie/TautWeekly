@@ -6,6 +6,12 @@ the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.28.2] - 2026-11-21
+
+### Fixed
+
+- Restore library selection and previews after Tautulli has been connected to multiple Plex servers that reuse section IDs. Manager and the renderer recognize a single active movie or TV library. Conflicting rows outside the selected libraries no longer abort a preview or delivery.
+
 ## [0.28.1] - 2026-11-11
 
 ### Fixed

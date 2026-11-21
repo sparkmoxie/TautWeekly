@@ -96,8 +96,16 @@ cached discovery and a saved fallback email cannot authorize an archived user.
 Saved exclusions, fallback addresses, household copies, and library IDs are
 preserved for editing and unarchiving.
 
-Library discovery joins live Plex sections with Tautulli's database archive
-status by section ID. Current additions and weekly statistics use active
+If Tautulli previously tracked another Plex server, both servers can have a
+library with the same section ID. TautWeekly checks the connected Plex server's
+identity, the live library type, and Tautulli's library records. A conflicting
+ID stays unavailable. After updating, open **Config**, check **Repeat this
+Tautulli lookup**, and click **Refresh Tautulli choices**. You can keep your
+Tautulli history and saved IDs. Tautulli reports play history by section ID.
+When servers reused an ID, an individual historical play can lack the evidence
+needed to identify its original server.
+
+Current additions and weekly statistics use active
 libraries and exclude archived users. An unavailable saved selection never
 broadens to all libraries; when no selected library remains available, the
 operation stops. Exact active recipients may still use historical watched

@@ -701,6 +701,7 @@ function Get-TautWeeklyHouseholdCopies {
 }
 
 Initialize-TautWeeklyHouseholdCopies
+. (Join-Path $ScriptRoot 'Library-Selection.ps1')
 . (Join-Path $ScriptRoot "DeletedItemCache.ps1")
 Initialize-TautWeeklyDeletedItemCache `
     -CacheRoot (Join-Path (Join-Path $DataRoot "cache") "deleted-items") `
@@ -1051,42 +1052,24 @@ function Assert-TautWeeklyRecipientCurrent {
         $script:TautWeeklyResultErrorCategory = 'user-excluded'
         throw 'The selected account is no longer eligible under the current Tautulli and saved recipient policy.'
     }
-    if (Get-Variable -Name TautWeeklyCurrentLibraryTypes -Scope Script -ErrorAction SilentlyContinue) {
-        # A live Plex enumeration is unnecessary here: Tautulli's small DB
-        # roster reports current archive/delete state. Recheck only the IDs
-        # used for this render, and leave the initial query scope unchanged.
-        $knownById = @{}
-        foreach ($library in @(Invoke-TautulliApi -Command 'get_library_names' -Parameters @{ include_archived = 1 })) {
-            $sectionId = (Get-OptionalStringProperty -InputObject $library -Name 'section_id').Trim()
-            if ($sectionId -ne '') {
-                if ($knownById.ContainsKey($sectionId)) { throw 'The current library roster contained duplicate section IDs.' }
-                $knownById[$sectionId] = $library
-            }
-        }
-        foreach ($sectionId in $script:TautWeeklyCurrentLibraryTypes.Keys) {
-            $library = $knownById[$sectionId]
-            $available = ($null -ne $library -and
-                (Get-OptionalStringProperty -InputObject $library -Name 'section_type') -eq $script:TautWeeklyCurrentLibraryTypes[$sectionId])
-            foreach ($flag in @('is_archived', 'deleted_section')) {
-                if ($null -ne $library -and $null -ne $library.PSObject.Properties[$flag] -and
-                    (Get-OptionalStringProperty -InputObject $library -Name $flag).ToLowerInvariant() -notin @('0', 'false')) {
-                    $available = $false
-                }
-            }
-            if (-not $available) {
-                $script:TautWeeklyResultErrorCategory = 'tautulli-unavailable'
+    if (Get-Variable -Name TautWeeklyFrozenLibraries -Scope Script -ErrorAction SilentlyContinue) {
+        # Recheck the IDs, types and server identity frozen for this render.
+        try {
+            $currentLibraries = @(Get-TautWeeklyLibraryRoster -FrozenLibraries $script:TautWeeklyFrozenLibraries -Query ${function:Invoke-TautulliApi})
+            if (@($currentLibraries | Where-Object Selectable).Count -ne $script:TautWeeklyFrozenLibraries.Count) {
                 throw 'A library used for this newsletter became unavailable or archived. Refresh the library selection and render again before delivery.'
             }
+        }
+        catch {
+            $script:TautWeeklyResultErrorCategory = 'tautulli-unavailable'
+            throw
         }
     }
     return $current
 }
 
 function Initialize-TautWeeklyLibraryPolicy {
-    . (Join-Path $ScriptRoot 'Library-Selection.ps1')
-    $live = @(Invoke-TautulliApi -Command 'get_libraries')
-    $known = @(Invoke-TautulliApi -Command 'get_library_names' -Parameters @{ include_archived = 1 })
-    $libraries = @(ConvertTo-TautWeeklySelectableLibraries -LiveLibraries $live -KnownLibraries $known)
+    $libraries = @(Get-TautWeeklyLibraryRoster -Query ${function:Invoke-TautulliApi})
     $script:AvailableLibraryIdSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
     foreach ($library in $libraries) {
         if ($library.Selectable) { [void]$script:AvailableLibraryIdSet.Add([string]$library.SectionId) }
@@ -1101,12 +1084,11 @@ function Initialize-TautWeeklyLibraryPolicy {
     # Freeze the libraries whose current content can enter this render. Later
     # availability changes must invalidate that content rather than silently
     # expand the run to a newly unarchived or newly created library.
-    $script:TautWeeklyCurrentLibraryTypes = @{}
-    foreach ($library in $libraries) {
+    $script:TautWeeklyFrozenLibraries = @(foreach ($library in $libraries) {
         if ($effective -contains [string]$library.SectionId) {
-            $script:TautWeeklyCurrentLibraryTypes[[string]$library.SectionId] = [string]$library.Type
+            [PSCustomObject]@{ section_id = $library.SectionId; section_type = $library.Type; server_id = $library.ServerId; archive_capable = $library.ArchiveCapable }
         }
-    }
+    })
 }
 
 function Build-TautulliUri {

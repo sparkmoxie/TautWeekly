@@ -1363,7 +1363,7 @@ func (s *Server) handleTautulliDiscovery(w http.ResponseWriter, r *http.Request)
 		s.updateConfigurationStep(result.ConfigRevision, "choices", "warning", "Tautulli libraries and users loaded, but their sanitized local cache could not be updated.")
 		s.recordDiagnostic("tautulli-discovery", "warning", "discovery-cache-failed")
 	} else {
-		s.updateConfigurationStep(result.ConfigRevision, "choices", "passed", fmt.Sprintf("%d active libraries and %d users loaded and retained locally.", len(result.Libraries), len(result.Users)))
+		s.updateConfigurationStep(result.ConfigRevision, "choices", "passed", fmt.Sprintf("%d active libraries and %d users loaded and retained locally.", activeLibraryCount(result.Libraries), len(result.Users)))
 		s.recordDiagnostic("tautulli-discovery", "passed", "discovery-completed")
 	}
 	w.Header().Set("Cache-Control", "no-store")

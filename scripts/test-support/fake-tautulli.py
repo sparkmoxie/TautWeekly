@@ -20,6 +20,54 @@ DELETED_HISTORY_SCENARIOS = (
     "cache-deleted",
 )
 
+REPOINTED_LIBRARY_SCENARIOS = {"active", "cache-prime", "cache-deleted", "quiet-no-history", "library-conflict"}
+
+
+def library_response(command: str, scenario: str, query: dict[str, str]) -> object:
+    """Project one synthetic database into the distinct upstream API shapes."""
+    modern = scenario in REPOINTED_LIBRARY_SCENARIOS
+    live = [
+        {"section_id": "10", "section_name": "Selected Movies", "section_type": "movie", "count": 1, "is_active": 1},
+        {"section_id": "20", "section_name": "Selected TV", "section_type": "show", "count": 1, "is_active": 1},
+        {"section_id": "99", "section_name": "Private", "section_type": "movie", "count": 1, "is_active": 1},
+    ]
+    if modern:
+        live.extend([
+            {"section_id": "98", "section_name": "Archived", "section_type": "movie", "count": 1, "is_active": 1},
+            {"section_id": "97", "section_name": "Deleted", "section_type": "show", "count": 1, "is_active": 1},
+        ])
+    if command == "get_libraries":
+        return live
+
+    table = [
+        dict(row, section_id=int(row["section_id"]), server_id="fixture-current", row_id=i,
+             deleted_section=int(row["section_id"] == "97"), last_played="Private table history")
+        for i, row in enumerate(live, start=1)
+    ]
+    if modern:
+        for row in table:
+            row["is_archived"] = int(row["section_id"] == 98)
+        # Two old servers reused 10. Two active claims on 99 remain ambiguous.
+        table.extend([
+            dict(table[0], server_id="fixture-retired", row_id=6, is_active=0),
+            dict(table[0], server_id="fixture-other", row_id=7, is_active=0, section_type="artist"),
+            dict(table[2], server_id="fixture-other", row_id=8, section_name="Conflicting private library"),
+        ])
+    if query.get("include_archived") != "1":
+        table = [row for row in table if not row.get("is_archived")]
+    if command == "get_library_names":
+        fields = ("section_id", "section_name", "section_type", "is_archived")
+        return [
+            {**{field: row[field] for field in fields if field in row}, "agent": "fixture.agent"}
+            for row in table if not row["deleted_section"]
+        ]
+    if query.get("include_deleted") != "1":
+        table = [row for row in table if not row["deleted_section"]]
+    start = int(query.get("start", 0))
+    length = int(query.get("length", 25))
+    return {"draw": 1, "recordsFiltered": len(table), "recordsTotal": len(table),
+            "data": table[start:] if length == -1 else table[start:start + length]}
+
 
 def virtual_clear_logo_png() -> bytes:
     """Return a deterministic, decodable, bright PNG larger than 256 bytes."""
@@ -1580,20 +1628,17 @@ class Handler(BaseHTTPRequestHandler):
             self.api_success({})
             return
         if command == "get_tautulli_info":
-            self.api_success({"tautulli_version": "2.18.0-virtual"})
+            version = "2.19.1" if self.current_scenario() in REPOINTED_LIBRARY_SCENARIOS else "2.18.0"
+            self.api_success({"tautulli_version": version})
             return
         if command == "get_server_info":
             self.api_success({"pms_url": self.server.base_url})  # type: ignore[attr-defined]
             return
-        if command in ("get_libraries", "get_library_names"):
-            libraries = [
-                {"section_id": "10", "section_name": "Selected Movies", "section_type": "movie", "count": 1, "is_active": 1},
-                {"section_id": "20", "section_name": "Selected TV", "section_type": "show", "count": 1, "is_active": 1},
-                {"section_id": "99", "section_name": "Private", "section_type": "movie", "count": 1, "is_active": 1},
-            ]
-            if self.current_scenario() == "quiet-no-history":
-                libraries = libraries[:2]
-            self.api_success(libraries)
+        if command == "get_server_identity":
+            self.api_success({"machine_identifier": "fixture-current", "version": "1.0"})
+            return
+        if command in ("get_libraries", "get_library_names", "get_libraries_table"):
+            self.api_success(library_response(command, self.current_scenario(), query))
             return
         if command == "get_history":
             section_id = query.get("section_id", "")
@@ -1927,6 +1972,7 @@ def main() -> None:
         "--scenario",
         choices=(
             "active",
+            "library-conflict",
             "personal-many",
             "platform-tie",
             "last-platform",

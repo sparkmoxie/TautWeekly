@@ -30,10 +30,15 @@ class ClassifierTests(unittest.TestCase):
         self.assert_gates(["docs/windows/README.md"], {"package", "pages"})
 
     def test_renderer_runtime_selects_platform_package_and_image_gates(self):
+        for name in ["TautWeekly.ps1", "Library-Selection.ps1"]:
+            self.assert_gates(
+                [f"platforms/nas-docker/app/{name}"],
+                {"powershell", "renderer", "package", "container"},
+                {"container_arm64"},
+            )
         self.assert_gates(
-            ["platforms/nas-docker/app/TautWeekly.ps1"],
-            {"powershell", "renderer", "package", "container"},
-            {"container_arm64"},
+            ["platforms/nas-docker/app/Manage-Library-Selection.ps1"],
+            {"powershell", "package", "container"},
         )
 
     def test_scheduler_does_not_select_full_renderer(self):

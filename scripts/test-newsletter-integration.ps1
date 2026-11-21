@@ -151,7 +151,7 @@ foreach ($engine in $engines) {
         continue
     }
 
-    foreach ($scenario in @('active', 'quiet', $quietNoHistoryScenario, $quietNoGlobalHistoryScenario, 'tv-only', 'personal-many', $platformScenario, $lastPlatformScenario, $sparseEpisodeMetadataScenario, 'optional-hero-metadata', 'rating-export-fallback') + $directRatingScenarios + $deletedHistoryScenarios) {
+    foreach ($scenario in @('active', 'library-conflict', 'quiet', $quietNoHistoryScenario, $quietNoGlobalHistoryScenario, 'tv-only', 'personal-many', $platformScenario, $lastPlatformScenario, $sparseEpisodeMetadataScenario, 'optional-hero-metadata', 'rating-export-fallback') + $directRatingScenarios + $deletedHistoryScenarios) {
         if ($ScenarioFilter.Count -gt 0 -and $scenario -notin $ScenarioFilter) { continue }
         $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('tautweekly-integration-' + [Guid]::NewGuid().ToString('N'))
         $appRoot = Join-Path $tempRoot 'app'
@@ -284,6 +284,10 @@ foreach ($engine in $engines) {
             if ($scenario -eq $quietNoHistoryScenario) {
                 $configOverrides['IncludedLibraryIds'] = @()
             }
+            if ($scenario -eq 'library-conflict') {
+                # Ambiguous, archived and deleted on the current server.
+                $configOverrides['IncludedLibraryIds'] = @('99', '98', '97')
+            }
             if ($scenario -in $sendTestScenarios) {
                 $configOverrides['SmtpHost'] = '127.0.0.1'
                 $configOverrides['SmtpPort'] = $smtpPort
@@ -415,7 +419,7 @@ foreach ($engine in $engines) {
                     '-RendererPath', (Join-Path $appRoot $engine.Renderer), '-ConfigPath', $configPath,
                     '-UserId', '1', '-Mode', 'PreviewAll'
                 )
-                if ($engine.Name -eq 'nas-docker-linux-freebsd' -and $scenario -in @('active', $platformScenario)) {
+                if ($scenario -eq 'library-conflict' -or ($engine.Name -eq 'nas-docker-linux-freebsd' -and $scenario -in @('active', $platformScenario))) {
                     $previewArguments += @('-ResultPath', $managerResultPath)
                 }
                 $process = Start-Process -FilePath $engine.Host -ArgumentList $previewArguments `
@@ -428,6 +432,19 @@ foreach ($engine in $engines) {
                 $env:TAUTWEEKLY_TEST_PLEX_WATCH_URL = $oldPlexWatch
             }
 
+            if ($scenario -eq 'library-conflict') {
+                Assert-True ($process.ExitCode -ne 0) "$($engine.Name) accepted an unavailable saved selection."
+                $result = Get-Content -LiteralPath $managerResultPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                Assert-True ($result.outcome -eq 'failed' -and $result.errorCategory -eq 'tautulli-unavailable') "$($engine.Name) returned the wrong library failure."
+                Assert-True ($result.generatedPreviewFiles.Count -eq 0 -and $result.smtpAcceptedCount -eq 0) "$($engine.Name) released content for an unavailable selection."
+                Assert-True (@(Get-ChildItem -LiteralPath $outputRoot -Filter 'preview*.html' -ErrorAction SilentlyContinue).Count -eq 0) "$($engine.Name) wrote an out-of-scope preview."
+                $commands = @(Get-Content $callLog | ForEach-Object { ($_ | ConvertFrom-Json).query.PSObject.Properties['cmd'] } | Where-Object { $_ } | ForEach-Object { $_.Value })
+                Assert-True ('get_libraries_table' -in $commands -and 'get_history' -notin $commands -and 'get_recently_added' -notin $commands) "$($engine.Name) queried media outside the saved selection."
+                $executed++
+                $casePassed = $true
+                Write-Host "[PASS] Full renderer: $($engine.Name) / $scenario"
+                continue
+            }
             if ($process.ExitCode -ne 0) {
                 throw "$($engine.Name)/$scenario renderer failed ($($process.ExitCode)).`nSTDOUT:`n$(Get-Content $stdout -Raw)`nSTDERR:`n$(Get-Content $stderr -Raw)"
             }
@@ -507,6 +524,7 @@ foreach ($engine in $engines) {
             $quietHtml = Get-Content (Join-Path $outputRoot 'preview-all-05-established-quiet.html') -Raw -Encoding UTF8
             $scenarioPreviewHtml = @($manualHtml, $newNoHistoryHtml, $newWithHistoryHtml, $normalHtml, $quietHtml, $warmupHtml)
             foreach ($stateHtml in $scenarioPreviewHtml) {
+                Assert-True (-not $stateHtml.Contains('Private table history') -and -not $stateHtml.Contains('Private Movie')) "$($engine.Name)/$scenario included an unselected library or its table metadata in a preview."
                 Assert-FooterPresentation -Html $stateHtml -Context "$($engine.Name)/$scenario"
                 Assert-True ($stateHtml.Contains($householdPrivacyMarker) -and $stateHtml.Contains($anonymousChampionMarker)) "$($engine.Name)/$scenario omitted household copy scope or Binge Champion anonymity."
                 Assert-True ($stateHtml -notmatch 'stays in your email|Other users do not receive your detailed|Every \w+ morning') "$($engine.Name)/$scenario promised exclusive inbox access or a fixed send time."
@@ -925,7 +943,7 @@ foreach ($engine in $engines) {
                 Assert-True ($normalHtml.Contains('posters/poster_selected-show.jpg')) "$($engine.Name)/$scenario did not render the cached TV poster."
                 $cacheRoot = if ($engine.Container) { Join-Path $dataRoot 'cache/deleted-items' } else { Join-Path $appRoot 'cache/deleted-items' }
                 $cacheText = Get-Content -LiteralPath (Join-Path $cacheRoot 'index.json') -Raw -Encoding UTF8
-                foreach ($privateMarker in @('virtual-api-key', 'virtual-plex-token', 'viewer@example.com', 'champion@example.com', 'play_duration', 'watched_status', 'percent_complete', 'friendly_name')) {
+                foreach ($privateMarker in @('virtual-api-key', 'virtual-plex-token', 'viewer@example.com', 'champion@example.com', 'play_duration', 'watched_status', 'percent_complete', 'friendly_name', 'Private table history', 'Private Movie')) {
                     Assert-True (-not $cacheText.Contains($privateMarker)) "$($engine.Name)/$scenario cache leaked private marker: $privateMarker"
                 }
             }
@@ -1031,6 +1049,13 @@ foreach ($engine in $engines) {
                 $null -ne $_.query.PSObject.Properties['cmd'] -and
                 [string]$_.query.cmd -in @('get_history', 'get_recently_added')
             })
+            if ($scenario -in @('active', $quietNoHistoryScenario, $cacheScenario)) {
+                $tableCalls = @($calls | Where-Object { $null -ne $_.query.PSObject.Properties['cmd'] -and $_.query.cmd -eq 'get_libraries_table' })
+                Assert-True ($tableCalls.Count -ge 2) "$($engine.Name)/$scenario did not recheck the resolved roster before releasing previews."
+                foreach ($call in $tableCalls) {
+                    Assert-True ($call.query.include_archived -eq '1' -and $call.query.include_deleted -eq '1') "$($engine.Name)/$scenario used an incomplete library roster."
+                }
+            }
             Assert-True ($mediaCalls.Count -gt 0) "$($engine.Name)/$scenario made no media calls."
             if ($scenario -eq $quietNoHistoryScenario) {
                 Assert-True (@($calls | Where-Object { $null -ne $_.query.PSObject.Properties['cmd'] -and [string]$_.query.cmd -eq 'get_library_names' }).Count -gt 0) "$($engine.Name)/$scenario did not join archive status before querying current libraries."
@@ -1045,12 +1070,15 @@ foreach ($engine in $engines) {
                 } | ForEach-Object { [string]$_.query.section_id } | Sort-Object -Unique)
                 Assert-True (($scopedRecentSections -join ',') -eq '10,20') "$($engine.Name)/$scenario did not query every active movie/TV section for Recent Releases."
             }
-            else {
-                Assert-True (@($mediaCalls | Where-Object {
-                    $null -eq $_.query.PSObject.Properties['section_id'] -or
-                    [string]$_.query.section_id -notin @('10', '20')
-                }).Count -eq 0) "$($engine.Name)/$scenario issued an unscoped/private media query."
-            }
+            # With no saved filter, only the recipient's historical watched
+            # lookup can span sections. Its exact user is verified above.
+            $scopedCalls = if ($scenario -eq $quietNoHistoryScenario) {
+                @($mediaCalls | Where-Object { $null -eq $_.query.PSObject.Properties['media_type'] -or $_.query.cmd -ne 'get_history' })
+            } else { $mediaCalls }
+            Assert-True (@($scopedCalls | Where-Object {
+                $null -eq $_.query.PSObject.Properties['section_id'] -or
+                [string]$_.query.section_id -notin @('10', '20')
+            }).Count -eq 0) "$($engine.Name)/$scenario issued an unscoped/private media query."
 
             if ($scenario -in $providerRecoveryScenarios) {
                 $hostedCalls = @($calls | Where-Object { [string]$_.path -like '/hosted/library/metadata/*' })

@@ -75,7 +75,23 @@ foreach ($relative in @('platforms/windows', 'platforms/nas-docker/app', 'platfo
         [PSCustomObject]@{ section_id='20'; section_name='Same name'; section_type='show'; is_archived=1 },
         [PSCustomObject]@{ section_id='30'; section_name='Same name'; section_type='movie'; is_archived=0 }
     )
-    $libraries = @(ConvertTo-TautWeeklySelectableLibraries -LiveLibraries $script:LiveLibraries -KnownLibraries $script:KnownLibraries)
+    $script:TableOverride = $null
+    $script:MachineId = 'current-fixture'
+    function Read-FixtureLibraryEvidence {
+        param($Command, $Parameters)
+        if ($Command -eq 'get_server_identity') { return [PSCustomObject]@{ machine_identifier=$script:MachineId } }
+        Assert-True ($Command -eq 'get_libraries_table' -and $Parameters.include_archived -eq 1 -and $Parameters.include_deleted -eq 1 -and $Parameters.start -eq 0 -and $Parameters.length -eq -1) 'Table lookup omitted flags or requested a partial page'
+        if ($null -ne $script:TableOverride) { return $script:TableOverride }
+        $data = @(foreach ($name in $script:KnownLibraries) {
+            [PSCustomObject]@{
+                section_id=[int]$name.section_id; section_type=$name.section_type; section_name=$name.section_name
+                server_id='current-fixture'; is_active=1; is_archived=$name.is_archived
+                deleted_section=Get-TautWeeklyLibraryObjectValue $name 'deleted_section' 0
+            }
+        })
+        return [PSCustomObject]@{ recordsFiltered=$data.Count; recordsTotal=$data.Count; data=$data }
+    }
+    $libraries = @(ConvertTo-TautWeeklySelectableLibraries -LiveLibraries $script:LiveLibraries -KnownLibraries $script:KnownLibraries -Query ${function:Read-FixtureLibraryEvidence})
     Assert-True ((@($libraries | Where-Object Selectable | ForEach-Object SectionId) | Sort-Object) -join ',' -eq '10,30') "$relative live libraries bypassed the DB archive join"
     Assert-True (($libraries | Where-Object SectionId -eq '20').IsArchived -and -not ($libraries | Where-Object SectionId -eq '40').Selectable) "$relative archived/deleted library state was lost"
     $script:IncludedLibraryIdSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
@@ -97,6 +113,8 @@ foreach ($relative in @('platforms/windows', 'platforms/nas-docker/app', 'platfo
         switch ($Command) {
             'get_libraries' { return $script:LiveLibraries }
             'get_library_names' { if ($script:FailLibraryNames) { throw 'DB discovery failed' }; return $script:KnownLibraries }
+            'get_libraries_table' { return Read-FixtureLibraryEvidence $Command $Parameters }
+            'get_server_identity' { return Read-FixtureLibraryEvidence $Command $Parameters }
             'get_history' {
                 $rows = @($script:HistoryRows)
                 if ($script:UpstreamHistoryShape) {
@@ -119,12 +137,67 @@ foreach ($relative in @('platforms/windows', 'platforms/nas-docker/app', 'platfo
             default { throw "Unexpected fixture command $Command" }
         }
     }
+    # get_library_names has no server or activity fields. Its projection can
+    # repeat a section ID, or hide the current row entirely if it was deleted.
+    $originalKnown = $script:KnownLibraries
+    $baseTable = Read-FixtureLibraryEvidence 'get_libraries_table' @{include_archived=1; include_deleted=1; start=0; length=-1}
+    $stale = [PSCustomObject]@{ section_id=10; section_type='movie'; section_name='Old movies'; server_id='other-fixture'; is_active=0; is_archived=0; deleted_section=0 }
+    $older = [PSCustomObject]@{ section_id=10; section_type='artist'; section_name='Old music'; server_id='older-fixture'; is_active=0; is_archived=1; deleted_section=0 }
+    $outside = [PSCustomObject]@{ section_id=30; section_type='movie'; section_name='Conflicting'; server_id='other-fixture'; is_active=1; is_archived=0; deleted_section=0 }
+    $data = @($stale, $older, $outside) + $baseTable.data
+    $script:TableOverride = [PSCustomObject]@{ recordsFiltered=$data.Count; recordsTotal=$data.Count; data=$data }
+    $script:KnownLibraries = @($data | Select-Object section_id,section_name,section_type,is_archived)
+    Initialize-TautWeeklyLibraryPolicy
+    Assert-True ((@(Get-IncludedLibraryQueryScopes) -join ',') -eq '10') "$relative did not resolve the live movie row among stale rows"
+    [void](Assert-TautWeeklyRecipientCurrent -User $user)
+    $stale.is_active = 1
+    Assert-Throws { Assert-TautWeeklyRecipientCurrent -User $user -Production } "$relative accepted two active server rows for a frozen section"
+    Assert-Throws { Initialize-TautWeeklyLibraryPolicy } "$relative conflicting selection broadened to another library"
+    $stale.is_active = 0
+    Initialize-TautWeeklyLibraryPolicy
+    $liveMovie = $baseTable.data[0]
+    $script:KnownLibraries = @($script:KnownLibraries | Where-Object section_name -ne 'Movies')
+    $liveMovie.deleted_section = 1
+    Assert-Throws { Assert-TautWeeklyRecipientCurrent -User $user } "$relative a stale name masked deletion of the frozen current library"
+    $script:KnownLibraries = @($script:KnownLibraries | Where-Object section_name -ne 'Old music')
+    $older.deleted_section = 1
+    Assert-Throws { Initialize-TautWeeklyLibraryPolicy } "$relative a solitary surviving inactive name masked a deleted current row"
+    $older.deleted_section = 0
+    $liveMovie.deleted_section = 0
+    $script:KnownLibraries = @($data | Select-Object section_id,section_name,section_type,is_archived)
+    Initialize-TautWeeklyLibraryPolicy
+    $script:MachineId = $stale.server_id
+    Assert-Throws { Initialize-TautWeeklyLibraryPolicy } "$relative an active row on the former server was trusted before Tautulli refreshed"
+    $liveMovie.is_active = 0
+    $stale.is_active = 1
+    Assert-Throws { Assert-TautWeeklyRecipientCurrent -User $user } "$relative a server switch preserved eligibility for already rendered content"
+    $script:MachineId = $liveMovie.server_id
+    $liveMovie.is_active = 1
+    $stale.is_active = 0
+    $older.is_active = $null
+    Assert-Throws { Initialize-TautWeeklyLibraryPolicy } "$relative a missing activity flag was treated as inactive"
+    $older.is_active = 0
+    $script:TableOverride.recordsFiltered++
+    Assert-Throws { Initialize-TautWeeklyLibraryPolicy } "$relative an incomplete table was used as unique evidence"
+    $script:TautWeeklyResultErrorCategory = 'render-failed'
+    Assert-Throws { Assert-TautWeeklyRecipientCurrent -User $user } "$relative an incomplete table was accepted at delivery"
+    Assert-True ($script:TautWeeklyResultErrorCategory -eq 'tautulli-unavailable') "$relative final table failure lost its Tautulli error category"
+    $script:TableOverride.recordsFiltered--
+    # Tautulli 2.18 omits archive/deletion flags and always filters deleted
+    # table rows, so recordsTotal may exceed recordsFiltered.
+    $script:TableOverride.data = @($data | Select-Object -Property * -ExcludeProperty is_archived,deleted_section)
+    $script:TableOverride.recordsTotal++
+    $script:KnownLibraries = @($data | Select-Object section_id,section_name,section_type)
+    $legacyCollision = @(ConvertTo-TautWeeklySelectableLibraries -LiveLibraries $script:LiveLibraries -KnownLibraries $script:KnownLibraries -Query ${function:Read-FixtureLibraryEvidence})
+    Assert-True (($legacyCollision | Where-Object SectionId -eq '10').Selectable -and -not ($legacyCollision | Where-Object SectionId -eq '30').Selectable) "$relative legacy collisions did not use current-server evidence"
+    $script:TableOverride = $null
+    $script:KnownLibraries = $originalKnown
     Initialize-TautWeeklyLibraryPolicy
     Assert-True ((@(Get-IncludedLibraryQueryScopes) -join ',') -eq '10' -and $script:IncludedLibraryIdSet.Contains('20')) "$relative unavailable saved library scope broadened or was rewritten"
     Assert-True ((@(Get-LatestReleaseQueryScopes) -join ',') -eq '10') "$relative quiet-week fallback included an archived library"
     $script:Calls.Clear()
     [void](Assert-TautWeeklyRecipientCurrent -User $user)
-    Assert-True ($script:Calls.Count -eq 1 -and $script:Calls[0].Command -eq 'get_library_names') "$relative final scope recheck repeated a live Plex enumeration"
+    Assert-True (($script:Calls.Command -join ',') -eq 'get_library_names,get_libraries_table,get_server_identity') "$relative final scope recheck repeated live library enumeration or omitted current server evidence"
     $script:KnownLibraries[0].is_archived = 1
     Assert-Throws { Assert-TautWeeklyRecipientCurrent -User $user -Production } "$relative a library archived during rendering remained deliverable"
     $script:KnownLibraries[0].is_archived = 0
@@ -213,5 +286,5 @@ foreach ($relative in @('platforms/windows', 'platforms/nas-docker/app', 'platfo
     Assert-True ((@($script:Calls | Where-Object { $_.Parameters.section_id -eq '10' } | ForEach-Object { $_.Parameters.start }) -join ',') -eq '0,1000,2000') "$relative pagination offsets changed"
     Write-Host ("[PASS] {0}: archive/unarchive, stale recipient, upstream history shape, exact scopes, saved IDs; synthetic history 2105 rows / 4 scoped requests / {1} ms." -f $relative, $timer.ElapsedMilliseconds)
     Remove-Variable -Name AvailableLibraryIdSet -Scope Script -ErrorAction SilentlyContinue
-    Remove-Variable -Name TautWeeklyCurrentLibraryTypes -Scope Script -ErrorAction SilentlyContinue
+    Remove-Variable -Name TautWeeklyFrozenLibraries -Scope Script -ErrorAction SilentlyContinue
 }

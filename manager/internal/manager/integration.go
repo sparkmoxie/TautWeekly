@@ -137,6 +137,7 @@ type tautulliUsersTable struct {
 
 type tautulliLibrariesTable struct {
 	Data            []map[string]any `json:"data"`
+	RecordsTotal    json.Number      `json:"recordsTotal"`
 	RecordsFiltered json.Number      `json:"recordsFiltered"`
 }
 
@@ -312,70 +313,196 @@ func discoveryTableParams() url.Values {
 	}
 }
 
-// get_libraries is a live Plex lookup and does not carry Tautulli archive flags.
-// Join the inexpensive DB roster by section ID; a failed DB lookup must never
-// turn archived libraries into active choices. These roster calls are supported
-// by older servers, where missing archive flags mean the feature is unavailable.
+// The live list supplies the display identity. The DB names list omits deleted
+// rows, so a single non-deleted name can mask a deleted current library. Use
+// the complete table for archive-aware servers and repeated legacy names.
 func discoverTautulliLibraries(ctx context.Context, client *http.Client, base *url.URL, apiKey string) ([]DiscoveredLibrary, error) {
-	var live, roster []map[string]any
+	var live, names []map[string]any
 	liveErr := tautulliCommand(ctx, client, base, apiKey, "get_libraries", &live)
-	rosterErr := tautulliCommandWithParams(ctx, client, base, apiKey, "get_library_names", url.Values{"include_archived": {"1"}}, &roster)
-	if liveErr == nil && len(live) > 0 && rosterErr == nil {
-		if len(live) >= maximumDiscoveryChoices || len(roster) >= maximumDiscoveryChoices {
-			return nil, errIntegrationResponse
+	namesErr := tautulliCommandWithParams(ctx, client, base, apiKey, "get_library_names", url.Values{"include_archived": {"1"}}, &names)
+	if liveErr != nil {
+		live = nil
+	}
+	if namesErr != nil {
+		names = nil
+	}
+	if len(live) >= maximumDiscoveryChoices || len(names) >= maximumDiscoveryChoices {
+		return nil, errIntegrationResponse
+	}
+	liveByID, namesByID := groupLibraryRows(live), groupLibraryRows(names)
+	fallback := liveErr != nil || len(live) == 0 || namesErr != nil
+	modern := hasLibraryArchiveField(names)
+	needTable := modern || fallback
+	for id, rows := range namesByID {
+		if len(rows) > 1 && len(liveByID[id]) == 1 {
+			needTable = true
 		}
-		byID := map[string]map[string]any{}
-		for _, item := range roster {
-			if id := discoveryID(item["section_id"]); id != "" {
-				if previous, duplicate := byID[id]; duplicate {
-					previous["availability_unknown"] = true
-				} else {
-					byID[id] = item
+	}
+
+	var detailsByID map[string][]map[string]any
+	var identity struct {
+		Machine string `json:"machine_identifier"`
+	}
+	if needTable {
+		var table tautulliLibrariesTable
+		params := discoveryTableParams()
+		params.Set("length", "-1")
+		err := tautulliCommandWithParams(ctx, client, base, apiKey, "get_libraries_table", params, &table)
+		modern = modern || hasLibraryArchiveField(table.Data)
+		if err == nil && !table.complete(modern) {
+			err = errIntegrationResponse
+		}
+		if err != nil && (modern || fallback) {
+			return nil, err
+		}
+		if err == nil {
+			detailsByID = groupLibraryRows(table.Data)
+			if len(live) != 0 {
+				// Missing identity leaves affected rows unavailable. Never expose it
+				// in the discovery result or the retained Manager cache.
+				if err := tautulliCommand(ctx, client, base, apiKey, "get_server_identity", &identity); err != nil {
+					identity.Machine = ""
 				}
 			}
 		}
-		joined := make([]map[string]any, 0, len(live)+len(roster))
-		seen := map[string]bool{}
-		for _, item := range live {
-			id := discoveryID(item["section_id"])
-			copy := make(map[string]any, len(item)+2)
-			for key, value := range item {
-				copy[key] = value
-			}
-			if status, ok := byID[id]; ok {
-				copy["is_archived"] = status["is_archived"]
-				copy["availability_unknown"] = status["availability_unknown"]
-			} else {
-				copy["availability_unknown"] = true
-			}
-			joined = append(joined, copy)
-			seen[id] = true
-		}
-		for _, item := range roster {
-			if !seen[discoveryID(item["section_id"])] {
-				joined = append(joined, item)
-			}
-		}
-		return normalizeDiscoveredLibraries(joined), nil
 	}
-	var table tautulliLibrariesTable
-	if err := tautulliCommandWithParams(ctx, client, base, apiKey, "get_libraries_table", discoveryTableParams(), &table); err != nil {
-		return nil, err
+
+	joined := make([]map[string]any, 0, len(liveByID))
+	for id, rows := range liveByID {
+		// Duplicate live entries leave no unique Plex library for this ID.
+		for _, row := range rows {
+			var policy map[string]any
+			if len(rows) == 1 {
+				if modern || fallback || len(namesByID[id]) > 1 {
+					policy = currentLibraryPolicy(row, namesByID[id], detailsByID[id], modern, namesErr == nil, identity.Machine)
+				} else if len(namesByID[id]) == 1 && sameLibraryType(row, namesByID[id][0]) {
+					policy = namesByID[id][0]
+				}
+			}
+			row["availability_unknown"] = policy == nil
+			for _, key := range []string{"deleted_section", "is_archived"} {
+				if flag, exists := policy[key]; exists {
+					row[key] = flag
+				}
+			}
+			joined = append(joined, row)
+		}
 	}
-	if len(table.Data) >= maximumDiscoveryChoices {
+	// Preserve table-only legacy choices when Plex is unreachable, but never
+	// infer a current library from duplicate database rows without a live match.
+	dbByID := namesByID
+	if detailsByID != nil {
+		dbByID = detailsByID
+	}
+	for id, rows := range dbByID {
+		if len(liveByID[id]) != 0 {
+			continue
+		}
+		for _, row := range rows {
+			dbOnlyActive := integrationTruthy(row["is_active"]) && !integrationTruthy(row["is_archived"]) && !integrationTruthy(row["deleted_section"])
+			row["availability_unknown"] = len(rows) > 1 || dbOnlyActive && (modern || len(live) > 0)
+			joined = append(joined, row)
+		}
+	}
+	choices := normalizeDiscoveredLibraries(joined)
+	if fallback && len(choices) == 0 {
 		return nil, errIntegrationResponse
 	}
-	if table.RecordsFiltered != "" {
-		count, err := table.RecordsFiltered.Int64()
-		if err != nil || count < 0 || count > int64(len(table.Data)) {
-			return nil, errIntegrationResponse
+	return choices, nil
+}
+
+func (table tautulliLibrariesTable) complete(modern bool) bool {
+	if table.Data == nil || len(table.Data) >= maximumDiscoveryChoices {
+		return false
+	}
+	count, err := table.RecordsFiltered.Int64()
+	if err != nil || count != int64(len(table.Data)) {
+		return false
+	}
+	// Pre-archive versions always filter deleted rows from recordsFiltered,
+	// but recordsTotal includes them.
+	total, err := table.RecordsTotal.Int64()
+	return err == nil && total >= count && (!modern || total == count)
+}
+
+func groupLibraryRows(rows []map[string]any) map[string][]map[string]any {
+	result := make(map[string][]map[string]any)
+	for _, row := range rows {
+		if id := discoveryID(row["section_id"]); id != "" {
+			result[id] = append(result[id], row)
 		}
 	}
-	libraries := normalizeDiscoveredLibraries(table.Data)
-	if len(libraries) == 0 {
-		return nil, errIntegrationResponse
+	return result
+}
+
+func hasLibraryArchiveField(rows []map[string]any) bool {
+	for _, row := range rows {
+		if _, exists := row["is_archived"]; exists {
+			return true
+		}
 	}
-	return libraries, nil
+	return false
+}
+
+func sameLibraryType(a, b map[string]any) bool {
+	first, _ := a["section_type"].(string)
+	second, _ := b["section_type"].(string)
+	return first != "" && strings.EqualFold(first, second)
+}
+
+func currentLibraryPolicy(live map[string]any, names, details []map[string]any, modern, haveNames bool, machine string) map[string]any {
+	var active map[string]any
+	visible := 0
+	for _, row := range details {
+		enabled, known := libraryFlag(row["is_active"])
+		if !known {
+			return nil
+		}
+		deleted := false
+		if modern {
+			_, knownArchive := libraryFlag(row["is_archived"])
+			var knownDeleted bool
+			deleted, knownDeleted = libraryFlag(row["deleted_section"])
+			if !knownArchive || !knownDeleted {
+				return nil
+			}
+		}
+		if !deleted {
+			visible++
+		}
+		if enabled {
+			if active != nil {
+				return nil
+			}
+			active = row
+		}
+	}
+	machine = strings.TrimSpace(machine)
+	if active == nil || !sameLibraryType(live, active) || machine == "" || active["server_id"] != machine {
+		return nil
+	}
+	if !haveNames {
+		return active
+	}
+	if visible < len(names) {
+		return nil
+	}
+	if integrationTruthy(active["deleted_section"]) {
+		return active // Deleted entries never appear in the names list.
+	}
+	// The two sequential snapshots must agree about an eligible name.
+	for _, name := range names {
+		archived, known := libraryFlag(name["is_archived"])
+		if sameLibraryType(name, active) && (!modern || known && archived == integrationTruthy(active["is_archived"])) {
+			return active
+		}
+	}
+	return nil
+}
+
+// Restrict identity evidence to Tautulli's explicit binary flags.
+func libraryFlag(value any) (bool, bool) {
+	return integrationFlag(fmt.Sprint(value))
 }
 
 func normalizeDiscoveredLibraries(values []map[string]any) []DiscoveredLibrary {
@@ -399,20 +526,23 @@ func normalizeDiscoveredLibraries(values []map[string]any) []DiscoveredLibrary {
 		availability := "active"
 		invalidPolicy := false
 		for _, key := range []string{"is_archived", "deleted_section"} {
-			if flag, present := value[key]; present && flag != nil {
-				if _, known := integrationFlag(flag); !known {
+			if flag, present := value[key]; present {
+				if _, known := libraryFlag(flag); !known {
 					invalidPolicy = true
 				}
 			}
 		}
+		active, knownActive := libraryFlag(value["is_active"])
 		switch {
+		case invalidPolicy || integrationTruthy(value["availability_unknown"]):
+			availability = "unavailable"
 		case integrationTruthy(value["deleted_section"]):
 			availability = "deleted"
 		case integrationTruthy(value["is_archived"]):
 			availability = "archived"
-		case invalidPolicy || integrationTruthy(value["availability_unknown"]):
+		case !knownActive && value["is_active"] != nil:
 			availability = "unavailable"
-		case !integrationTruthy(value["is_active"]):
+		case !active:
 			availability = "inactive"
 		}
 		result = append(result, DiscoveredLibrary{ID: id, Name: name, MediaType: mediaType, ItemCount: count, Availability: availability})
@@ -424,7 +554,11 @@ func normalizeDiscoveredLibraries(values []map[string]any) []DiscoveredLibrary {
 		if result[i].MediaType != result[j].MediaType {
 			return result[i].MediaType < result[j].MediaType
 		}
-		return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name)
+		first, second := strings.ToLower(result[i].Name), strings.ToLower(result[j].Name)
+		if first == second {
+			return result[i].ID < result[j].ID
+		}
+		return first < second
 	})
 	return result
 }
@@ -700,6 +834,16 @@ func sanitizeNumericEvidence(value any) string {
 	return text
 }
 
+func activeLibraryCount(libraries []DiscoveredLibrary) int {
+	count := 0
+	for _, library := range libraries {
+		if library.Availability == "active" {
+			count++
+		}
+	}
+	return count
+}
+
 func verifyTautulli(ctx context.Context, client *http.Client, values map[string]any) (IntegrationCheckStep, tautulliServerData) {
 	base, err := parseLANBaseURL(configMapString(values, "TautulliUrl"))
 	if err != nil {
@@ -720,12 +864,7 @@ func verifyTautulli(ctx context.Context, client *http.Client, values map[string]
 	if err != nil {
 		return failedIntegrationStep("tautulli", err), tautulliServerData{}
 	}
-	selectable := 0
-	for _, library := range libraries {
-		if library.Availability == "active" {
-			selectable++
-		}
-	}
+	selectable := activeLibraryCount(libraries)
 	if selectable == 0 {
 		return IntegrationCheckStep{Service: "tautulli", State: "failed", Summary: "API authentication worked, but no active movie or TV libraries were reported."}, tautulliServerData{}
 	}
