@@ -144,9 +144,12 @@ foreach ($relative in @('platforms/windows', 'platforms/nas-docker/app', 'platfo
     $stale = [PSCustomObject]@{ section_id=10; section_type='movie'; section_name='Old movies'; server_id='other-fixture'; is_active=0; is_archived=0; deleted_section=0 }
     $older = [PSCustomObject]@{ section_id=10; section_type='artist'; section_name='Old music'; server_id='older-fixture'; is_active=0; is_archived=1; deleted_section=0 }
     $outside = [PSCustomObject]@{ section_id=30; section_type='movie'; section_name='Conflicting'; server_id='other-fixture'; is_active=1; is_archived=0; deleted_section=0 }
-    $data = @($stale, $older, $outside) + $baseTable.data
+    $retired = [PSCustomObject]@{ section_id=60; section_type='movie'; section_name='Retired'; server_id='other-fixture'; is_active=0; is_archived=1; deleted_section=0 }
+    $data = @($stale, $older, $outside, $retired) + $baseTable.data
     $script:TableOverride = [PSCustomObject]@{ recordsFiltered=$data.Count; recordsTotal=$data.Count; data=$data }
     $script:KnownLibraries = @($data | Select-Object section_id,section_name,section_type,is_archived)
+    $retiredChoice = Get-TautWeeklyLibraryRoster -Query ${function:Invoke-TautulliApi} | Where-Object SectionId -eq '60'
+    Assert-True ($retiredChoice.IsArchived -and -not $retiredChoice.Selectable) "$relative a DB-only archive lost its label or became eligible"
     Initialize-TautWeeklyLibraryPolicy
     Assert-True ((@(Get-IncludedLibraryQueryScopes) -join ',') -eq '10') "$relative did not resolve the live movie row among stale rows"
     [void](Assert-TautWeeklyRecipientCurrent -User $user)
