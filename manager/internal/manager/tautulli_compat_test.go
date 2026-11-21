@@ -35,6 +35,16 @@ func TestTautulliArchiveDiscoveryCountCacheAndUnarchive(t *testing.T) {
 						item["is_archived"] = archived.Load()
 					}
 					data = []map[string]any{item}
+				case "get_libraries_table":
+					if version != "2.19" {
+						t.Error("unnecessary table request for unique pre-archive names")
+					}
+					data = map[string]any{"recordsFiltered": 1, "recordsTotal": 1, "data": []map[string]any{{
+						"section_id": json.Number("9007199254740993"), "section_type": "movie", "server_id": "fictional-current",
+						"is_active": 1, "is_archived": archived.Load(), "deleted_section": 0,
+					}}}
+				case "get_server_identity":
+					data = map[string]any{"machine_identifier": "fictional-current"}
 				case "get_user_names", "get_users":
 					item := map[string]any{"user_id": json.Number("1234567890123456789"), "friendly_name": "Synthetic Owner", "is_active": 1, "email": "synthetic@example.org", "is_owner": 1}
 					if version == "2.19" {
@@ -107,7 +117,12 @@ func TestTautulliLibraryArchiveLookupFailsClosed(t *testing.T) {
 					if r.URL.Query().Get("include_archived") != "1" || r.URL.Query().Get("include_deleted") != "1" {
 						t.Error("table fallback omitted archive/deletion policy")
 					}
-					data = map[string]any{"data": []map[string]any{{"section_id": "10", "section_type": "movie", "is_active": 1, "is_archived": 1}, {"section_id": "20", "section_type": "show", "is_active": 1, "deleted_section": 1}}}
+					data = map[string]any{"recordsFiltered": 2, "recordsTotal": 2, "data": []map[string]any{
+						{"section_id": "10", "section_type": "movie", "is_active": 1, "is_archived": 1, "deleted_section": 0, "server_id": "fictional-current"},
+						{"section_id": "20", "section_type": "show", "is_active": 1, "is_archived": 0, "deleted_section": 1, "server_id": "fictional-current"},
+					}}
+				case "get_server_identity":
+					data = map[string]any{"machine_identifier": "fictional-current"}
 				default:
 					http.Error(w, "unavailable", 500)
 					return
@@ -289,5 +304,157 @@ func TestTautulliRecipientCountMatchesConservativeJoinedArchiveChoices(t *testin
 				}
 			}
 		})
+	}
+}
+
+// A repointed Tautulli instance keeps other servers' DB rows. The live, names,
+// and table responses deliberately expose different fields, as upstream does.
+func TestTautulliRepointedLibraryDiscoveryVerificationAndCache(t *testing.T) {
+	const current = "fictional-current-machine"
+	type row = map[string]any
+	table := []row{
+		{"section_id": 1, "section_type": "movie", "server_id": "fictional-other", "is_active": 0, "is_archived": 1, "deleted_section": 0},
+		{"section_id": 1, "section_type": "movie", "server_id": current, "is_active": 1, "is_archived": 0, "deleted_section": 0},
+		{"section_id": 1, "section_type": "artist", "server_id": "fictional-retired", "is_active": 0, "is_archived": 0, "deleted_section": 0},
+		{"section_id": 2, "section_type": "show", "server_id": current, "is_active": 1, "is_archived": 0, "deleted_section": 0},
+		{"section_id": 2, "section_type": "artist", "server_id": "fictional-other", "is_active": 1, "is_archived": 0, "deleted_section": 0},
+		{"section_id": 3, "section_type": "show", "server_id": current, "is_active": 1, "is_archived": 1, "deleted_section": 0},
+		{"section_id": 4, "section_type": "movie", "server_id": current, "is_active": 1, "is_archived": 0, "deleted_section": 1},
+		{"section_id": 4, "section_type": "movie", "server_id": "fictional-retired", "is_active": 0, "is_archived": 0, "deleted_section": 0},
+		{"section_id": 5, "section_type": "movie", "server_id": "fictional-other", "is_active": 1, "is_archived": 0, "deleted_section": 0},
+		{"section_id": 6, "section_type": "show", "server_id": current, "is_active": 1, "is_archived": 0, "deleted_section": 0},
+	}
+	var names, live []row
+	for _, entry := range table {
+		if entry["deleted_section"] != 1 {
+			names = append(names, row{"section_id": entry["section_id"], "section_name": "DB display", "section_type": entry["section_type"], "agent": "fixture", "is_archived": entry["is_archived"]})
+		}
+	}
+	for id, mediaType := range map[int]string{1: "movie", 2: "show", 3: "show", 4: "movie", 5: "movie", 6: "show"} {
+		live = append(live, row{"section_id": id, "section_type": mediaType, "section_name": "Live display", "is_active": 1})
+	}
+	var hideLive atomic.Bool
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Api-Key") != "fictional-api-key" || r.URL.Query().Has("apikey") {
+			t.Error("credential transport changed")
+		}
+		var data any
+		switch r.URL.Query().Get("cmd") {
+		case "get_libraries":
+			data = live
+			if hideLive.Load() {
+				data = []row{}
+			}
+		case "get_library_names":
+			data = names
+		case "get_libraries_table":
+			params := r.URL.Query()
+			if params.Get("start") != "0" || params.Get("length") != "-1" || params.Get("include_deleted") != "1" || params.Get("include_archived") != "1" {
+				t.Error("table did not request every policy row")
+			}
+			data = row{"recordsTotal": len(table), "recordsFiltered": len(table), "data": table}
+		case "get_server_identity":
+			data = row{"machine_identifier": current}
+		case "get_tautulli_info":
+			data = row{"tautulli_version": "2.19.1"}
+		case "get_server_info":
+			data = row{}
+		case "get_user_names", "get_users":
+			data = []row{{"user_id": 7, "friendly_name": "Fixture user", "is_active": 1, "email": "fixture@example.org"}}
+		default:
+			t.Errorf("unexpected command %s", r.URL.Query().Get("cmd"))
+		}
+		_ = json.NewEncoder(w).Encode(row{"response": row{"result": "success", "data": data}})
+	}))
+	defer service.Close()
+	root := integrationConfigRoot(t, service.URL, "fictional-api-key", "", "")
+	setIntegrationConfigValues(t, root, row{"IncludedLibraryIds": []string{"1", "6"}})
+	revision := ReadConfigEditor(root).Revision
+	result, err := DiscoverTautulliChoices(context.Background(), root, TautulliDiscoveryRequest{ExpectedRevision: revision, ConfirmRealNetwork: true}, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := newTautulliDiscoveryStore(t.TempDir())
+	if err := store.Save(result); err != nil {
+		t.Fatal(err)
+	}
+	cached := store.Load(revision)
+	if cached == nil || len(cached.Libraries) != 6 {
+		t.Fatalf("missing choices: %+v", cached)
+	}
+	expected := map[string]string{"1": "active", "2": "unavailable", "3": "archived", "4": "deleted", "5": "unavailable", "6": "active"}
+	for _, choice := range cached.Libraries {
+		if expected[choice.ID] != choice.Availability || choice.Name != "Live display" {
+			t.Errorf("unexpected library choice %+v", choice)
+		}
+	}
+	encoded, _ := json.Marshal(cached)
+	for _, private := range []string{current, "fictional-other", "fictional-retired", "fictional-api-key", "fixture@example.org"} {
+		if strings.Contains(string(encoded), private) {
+			t.Error("raw table or user details escaped into cached choices")
+		}
+	}
+	values, _, _, _ := readConfigDocument(root)
+	check, _ := verifyTautulli(context.Background(), service.Client(), values)
+	if check.State != "passed" || !strings.Contains(check.Summary, "2 active movie/TV libraries") {
+		t.Fatalf("incorrect verification: %+v", check)
+	}
+	if ReadConfigEditor(root).Revision != revision {
+		t.Error("discovery modified saved configuration")
+	}
+	hideLive.Store(true)
+	base, _ := url.Parse(service.URL)
+	choices, err := discoverTautulliLibraries(context.Background(), service.Client(), base, "fictional-api-key")
+	if err != nil || len(choices) == 0 {
+		t.Fatalf("table-only policy lookup failed: %v", err)
+	}
+	for _, choice := range choices {
+		if choice.Availability == "active" {
+			t.Errorf("archive-aware DB-only row became active without a live library: %+v", choice)
+		}
+	}
+}
+
+func TestTautulliDuplicatePolicyNeedsCompleteEvidence(t *testing.T) {
+	type row = map[string]any
+	live := row{"section_id": 8, "section_type": "show"}
+	names := []row{{"section_id": 8, "section_type": "show", "is_archived": 0}, {"section_id": 8, "section_type": "show", "is_archived": 0}}
+	for _, test := range []struct {
+		name   string
+		change func([]row)
+	}{
+		{"unproven activity", func(rows []row) { delete(rows[1], "is_active") }},
+		{"nonbinary activity", func(rows []row) { rows[1]["is_active"] = 4 }},
+		{"missing archive evidence", func(rows []row) { delete(rows[0], "is_archived") }},
+		{"missing deletion evidence", func(rows []row) { delete(rows[0], "deleted_section") }},
+		{"missing server identity", func(rows []row) { delete(rows[0], "server_id") }},
+		{"wrong live section type", func(rows []row) { rows[0]["section_type"] = "artist" }},
+		{"insufficient nondeleted rows", func(rows []row) { rows[1]["deleted_section"] = 1 }},
+		{"no active row", func(rows []row) { rows[0]["is_active"] = 0 }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			rows := []row{
+				{"server_id": "fixture-current", "section_type": "show", "is_active": 1, "is_archived": 0, "deleted_section": 0},
+				{"server_id": "fixture-other", "section_type": "show", "is_active": 0, "is_archived": 0, "deleted_section": 0},
+			}
+			test.change(rows)
+			if currentLibraryPolicy(live, names, rows, true, true, "fixture-current") != nil {
+				t.Error("invalid evidence made duplicate eligible")
+			}
+		})
+	}
+	// In 2.18 get_libraries_table groups by server and section and always
+	// omits deleted DB rows. Archive and deleted flags are absent.
+	legacyNames := []row{{"section_type": "show"}, {"section_type": "show"}}
+	legacy := []row{{"section_type": "show", "is_active": 0, "server_id": "fixture-other"}, {"section_type": "show", "is_active": 1, "server_id": "fixture-current"}}
+	page := tautulliLibrariesTable{Data: legacy, RecordsTotal: "3", RecordsFiltered: "2"}
+	if !page.complete(false) || page.complete(true) || currentLibraryPolicy(live, legacyNames, legacy, false, true, "fixture-current") == nil {
+		t.Fatal("pre-archive table shape was not distinguished from a partial modern table")
+	}
+	for _, count := range []json.Number{"", "-1", "1", "3", "2.1"} {
+		page.RecordsFiltered = count
+		if page.complete(false) {
+			t.Errorf("invalid filtered count %q accepted", count)
+		}
 	}
 }

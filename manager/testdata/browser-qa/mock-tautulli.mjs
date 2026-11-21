@@ -50,6 +50,16 @@ const server = http.createServer((request, response) => {
       data = libraries.map(({ section_id, section_name, section_type }) => ({ section_id, section_name, section_type, is_archived: section_id === "3" ? 1 : 0 }))
         .filter((library) => includeArchived(target) || !library.is_archived);
       break;
+    case "get_libraries_table": {
+      const rows = libraries.map((row) => ({
+        ...row, server_id: "fictional-current", is_archived: row.section_id === "3" ? 1 : 0, deleted_section: 0,
+      })).filter((row) => includeArchived(target) || !row.is_archived);
+      data = { recordsTotal: libraries.length, recordsFiltered: rows.length, data: rows };
+      break;
+    }
+    case "get_server_identity":
+      data = { machine_identifier: "fictional-current" };
+      break;
     case "get_user_names":
       data = users.filter((user) => !user.deleted_user && (includeArchived(target) || !user.is_archived))
         .map(({ user_id, friendly_name, is_archived }) => ({ user_id, friendly_name, is_archived }));

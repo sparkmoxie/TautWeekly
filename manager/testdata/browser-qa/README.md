@@ -11,10 +11,11 @@ no network, SMTP, browser-launch, or scheduler operation.
 
 `mock-tautulli.mjs` is an optional loopback-only companion for interactive
 browser QA. It requires `X-Api-Key` authentication and rejects query-string API
-keys. It exposes exactly five read-only Tautulli discovery commands used by the
-Manager and returns three fictional libraries and 78 fictional users. The live
-`get_libraries` response deliberately omits archive flags; `get_library_names`
-provides the DB archive roster for the stable-ID join. Its primary user response omits two addresses so the bounded
+keys. It exposes the Manager's read-only Tautulli discovery commands and
+returns three fictional libraries and 78 fictional users. The live
+`get_libraries` response omits archive flags. The names list, complete library
+table and current Plex identity provide the archive and deletion evidence.
+Its primary user response omits two addresses so the bounded
 `get_users_table` compatibility fallback is exercised. Those two users match
 the fixture's legacy email exclusions, allowing the retained, checked exclusion
 presentation to be verified without exposing real addresses.

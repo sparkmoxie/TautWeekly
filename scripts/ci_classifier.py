@@ -70,6 +70,7 @@ RENDERER_TEST_MARKERS = (
 RENDERER_RUNTIME_NAMES = {
     "cache-diagnostics.ps1",
     "deleteditemcache.ps1",
+    "library-selection.ps1",
     "operation-lock.ps1",
     "smtp-transport.ps1",
     "tautweekly.ps1",

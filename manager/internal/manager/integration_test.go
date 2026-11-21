@@ -541,7 +541,7 @@ func TestTautulliDiscoveryFallsBackToTableBackedLibrariesAndUsers(t *testing.T) 
 			// current data while its local table still contains usable choices.
 			data = nil
 		case "get_libraries_table":
-			data = map[string]any{"data": []any{
+			data = map[string]any{"recordsFiltered": 2, "recordsTotal": 2, "data": []any{
 				map[string]any{"section_id": 10, "section_name": "Fictional Movies", "section_type": "Movie", "is_active": "1", "count": 34},
 				map[string]any{"section_id": 20, "section_name": "Fictional Shows", "section_type": "Show", "is_active": true, "count": "12"},
 			}}
